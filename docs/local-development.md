@@ -25,6 +25,14 @@
 | App user | `MYSQL_USER` / `MYSQL_PASSWORD` from `.env` |
 | Server settings | `utf8mb4` / `utf8mb4_0900_ai_ci`, time zone UTC (`+00:00`) |
 
+4. Give the API its connection string through .NET user secrets. They are stored in your Windows profile, not in the repository. Use the values from your `.env`:
+
+   ```bash
+   dotnet user-secrets set "ConnectionStrings:Default" "Server=127.0.0.1;Port=3308;Database=id_indetails;User=id_indetails_app;Password=<MYSQL_PASSWORD>;" --project ID-Indetails.api
+   ```
+
+   The API refuses to start without it. User secrets only load in the `Development` environment, so `dotnet ef` commands need `ASPNETCORE_ENVIRONMENT=Development`. Schema and migration commands are described in [database.md](database.md).
+
 ### Why port 3308 and all the separate names
 
 Other projects on this machine also run databases in Docker:
