@@ -22,7 +22,12 @@
     <Folder Include="Enums\" />
     <Folder Include="HealthChecks\" />
     <Folder Include="Models\" />
-    <Folder Include="Authorization\" />
+    <Folder Include="Authorization\Handlers\" />
+    <Folder Include="Authorization\Requirements\" />
+    <Folder Include="Business\" />
+    <Folder Include="Configuration\Options\" />
+    <Folder Include="Constants\" />
+    <Folder Include="Extensions\" />
     <Folder Include="RateLimiting\" />
     <Folder Include="Validators\" />
     <Folder Include="Repositories\Auth\Implementation\" />
