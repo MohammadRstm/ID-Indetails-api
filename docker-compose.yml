@@ -40,5 +40,15 @@ services:
       retries: 20
       start_period: 20s
 
+  # Local mail catcher. The API sends invitation and password emails here over SMTP
+  # (port 1025); nothing is delivered to real inboxes. Read them at http://127.0.0.1:8025.
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    container_name: id-indetails-mailpit
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+
 volumes:
   mysql_data:
