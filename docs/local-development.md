@@ -58,3 +58,13 @@ docker compose logs -f mysql   # follow server logs
 `docker compose down -v` **deletes the database volume and all its data.** Only use it when you mean to start from empty.
 
 Schema changes (EF Core migrations) are never applied without explicit approval. See CLAUDE.md §9.
+
+## Tests
+
+```bash
+dotnet test ID-Indetails.slnx
+```
+
+- **Unit tests** need nothing running.
+- **Integration tests need the Docker database running.** Each test class creates its own throwaway database (`idi_test_…`) on that server, applies the real migrations, and drops it at the end. Your `id_indetails` database is never touched.
+- **Credentials:** locally, the tests read the root password from `.env`. In CI, set `ID_INDETAILS_TEST_MYSQL_ADMIN` to an admin connection string without a database, for example `Server=127.0.0.1;Port=3306;User=root;Password=…;`.
