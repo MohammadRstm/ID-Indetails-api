@@ -1,14 +1,23 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>ID_Indetails.api</RootNamespace>
+    <UserSecretsId>4a6fab00-4657-4867-8ccb-ab9ea741843f</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.20" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.20">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.20" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -16,18 +25,13 @@
     <Folder Include="DTO\Response\" />
     <Folder Include="DTO\Request\" />
     <Folder Include="Exceptions\" />
-    <Folder Include="Data\" />
     <Folder Include="Middlewares\" />
     <Folder Include="Jobs\" />
-    <Folder Include="Enums\" />
     <Folder Include="HealthChecks\" />
-    <Folder Include="Models\" />
     <Folder Include="Authorization\Handlers\" />
     <Folder Include="Authorization\Requirements\" />
     <Folder Include="Business\" />
     <Folder Include="Configuration\Options\" />
-    <Folder Include="Constants\" />
-    <Folder Include="Extensions\" />
     <Folder Include="RateLimiting\" />
     <Folder Include="Validators\" />
     <Folder Include="Repositories\Auth\Implementation\" />

@@ -1,0 +1,81 @@
+using ID_Indetails.api.Enums;
+
+namespace ID_Indetails.api.Models;
+
+/// <summary>
+/// A project of one domain. Only the current status is stored here; status and progress
+/// history are recorded in <see cref="ActivityEvent"/>. Cost, profit and margin are never
+/// stored: they are calculated from entries, expenses, materials and labour.
+/// </summary>
+public class Project
+{
+    public long Id { get; set; }
+
+    public string DomainCode { get; set; } = string.Empty;
+
+    public string Title { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    public string? Icon { get; set; }
+
+    public string? Tint { get; set; }
+
+    public ProjectStatus Status { get; set; } = ProjectStatus.Active;
+
+    public BillingType BillingType { get; set; } = BillingType.Client;
+
+    /// <summary>Must be null for internal projects, and must belong to the same domain.</summary>
+    public long? ClientId { get; set; }
+
+    public long OwnerId { get; set; }
+
+    public DateOnly StartDate { get; set; }
+
+    public DateOnly? TargetDate { get; set; }
+
+    public DateTime? CompletedAt { get; set; }
+
+    /// <summary>Agreed contract value (not cash received). Always 0 for internal projects.</summary>
+    public decimal Revenue { get; set; }
+
+    public string RevenueCurrency { get; set; } = "USD";
+
+    public DateTime? RevenueLockedAt { get; set; }
+
+    public DateTime? FinalizedAt { get; set; }
+
+    /// <summary>Execution only: cost-plus markup (0.15 = 15%).</summary>
+    public decimal? Markup { get; set; }
+
+    /// <summary>Execution only: when the price was set. Freezes site costs and unlocks invoicing.</summary>
+    public DateTime? PriceSetAt { get; set; }
+
+    /// <summary>
+    /// Cached done / total requirements, 0–100. Updated in the same transaction as every
+    /// requirement change, which also records a progress_set event.
+    /// </summary>
+    public byte ProgressPct { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    public long? CreatedById { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public Domain Domain { get; set; } = null!;
+
+    public Client? Client { get; set; }
+
+    public User Owner { get; set; } = null!;
+
+    public ICollection<ProjectMember> Members { get; set; } = new List<ProjectMember>();
+
+    public ICollection<ProjectRequirement> Requirements { get; set; } = new List<ProjectRequirement>();
+
+    public ICollection<ProjectMeeting> Meetings { get; set; } = new List<ProjectMeeting>();
+
+    public ICollection<ProjectExpense> Expenses { get; set; } = new List<ProjectExpense>();
+
+    public ICollection<ProjectLabourDefault> LabourDefaults { get; set; } = new List<ProjectLabourDefault>();
+}

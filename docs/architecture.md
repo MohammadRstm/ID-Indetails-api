@@ -29,12 +29,12 @@ Request → Middleware → Controller → FluentValidation → Service → Busin
 | `Services/<Feature>/Abstraction/`, `Services/<Feature>/Implementation/` | Use-case orchestration, with the interface and the implementation kept apart. |
 | `Business/` | Pure business rules and calculations: finance and profitability, invoice state, timeline reconstruction, overtime, pay. No HTTP and no EF Core, so they can be unit tested directly. |
 | `Repositories/<Feature>/Abstraction/`, `Repositories/<Feature>/Implementation/` | Persistence and EF Core queries. No business decisions. |
-| `Data/` | The `DbContext`. EF Core generates migrations into `Data/Migrations/`, and only after the change has been approved (CLAUDE.md §9). |
-| `Models/` | EF Core entities. |
+| `Data/` | `IdIndetailsDbContext` plus the EF value converters (snake_case enums, UTC datetimes). Migrations live in `Data/Migrations/` and are created only after approval (CLAUDE.md §9). See [database.md](database.md). |
+| `Models/` | EF Core entities, one per table. |
 | `Configuration/ModelConfig/` | `IEntityTypeConfiguration<T>` classes: tables, keys, indexes, constraints. |
 | `Configuration/Options/` | Typed options bound from configuration (JWT, CORS, file storage). No secrets in `appsettings.json`. |
-| `Constants/` | Role, domain and permission codes. These strings must match the React client's `config/roles.ts` and `config/permissions.ts`. |
-| `Enums/` | C# enums (statuses, kinds). They are stored as strings in the database. |
+| `Constants/` | Role, domain and permission codes, and `PermissionCatalog` (which role holds which permission; seeded into the database). These strings must match the React client's `config/roles.ts` and `config/permissions.ts`. |
+| `Enums/` | C# enums (statuses, kinds). They are stored as snake_case strings limited by CHECK constraints. |
 | `Exceptions/` | Typed exceptions that centralized handling turns into the uniform error contract. The folder is plural on purpose: a folder named `Exception` creates a namespace that hides `System.Exception` (CS0118). |
 | `Authorization/Handlers/`, `Authorization/Requirements/` | Policy requirements and handlers for permission and domain checks. |
 | `Extensions/` | `IServiceCollection` and `WebApplication` extension methods, so `Program.cs` stays short. |

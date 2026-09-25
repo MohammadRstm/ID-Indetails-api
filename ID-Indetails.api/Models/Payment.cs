@@ -1,0 +1,53 @@
+using ID_Indetails.api.Enums;
+
+namespace ID_Indetails.api.Models;
+
+/// <summary>
+/// Cash received from a client. Billing is a separate ledger: payments never change
+/// revenue, profit or margin. Payments are voided, never deleted.
+/// </summary>
+public class Payment
+{
+    public long Id { get; set; }
+
+    public long ProjectId { get; set; }
+
+    public long ClientId { get; set; }
+
+    /// <summary>Null for a payment held on account.</summary>
+    public long? InvoiceId { get; set; }
+
+    /// <summary>Amount in the currency it was received in.</summary>
+    public decimal Amount { get; set; }
+
+    public string Currency { get; set; } = "USD";
+
+    /// <summary>Units of <see cref="Currency"/> per USD, as confirmed on the day of receipt.</summary>
+    public decimal FxRate { get; set; } = 1m;
+
+    public decimal AmountUsd { get; set; }
+
+    public DateOnly ReceivedOn { get; set; }
+
+    public PaymentMethod Method { get; set; }
+
+    public string? Reference { get; set; }
+
+    public string? Note { get; set; }
+
+    public DateTime RecordedAt { get; set; }
+
+    public long? RecordedById { get; set; }
+
+    public DateTime? VoidedAt { get; set; }
+
+    public string? VoidReason { get; set; }
+
+    public long? VoidedById { get; set; }
+
+    public Project Project { get; set; } = null!;
+
+    public Client Client { get; set; } = null!;
+
+    public Invoice? Invoice { get; set; }
+}
