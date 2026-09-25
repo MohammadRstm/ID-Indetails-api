@@ -15,9 +15,9 @@
     <Folder Include="Configuration\ModelConfig\" />
     <Folder Include="DTO\Response\" />
     <Folder Include="DTO\Request\" />
-    <Folder Include="Exception\" />
+    <Folder Include="Exceptions\" />
     <Folder Include="Data\" />
-    <Folder Include="MIddlewares\" />
+    <Folder Include="Middlewares\" />
     <Folder Include="Jobs\" />
     <Folder Include="Enums\" />
     <Folder Include="HealthChecks\" />
