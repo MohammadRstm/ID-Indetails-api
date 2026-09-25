@@ -309,7 +309,7 @@ namespace ID_Indetails.api.Data.Migrations
                     time_zone = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     week_start = table.Column<byte>(type: "tinyint unsigned", nullable: false),
-                    use24hour_time = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    use_24_hour_time = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     default_currency = table.Column<string>(type: "char(3)", fixedLength: true, maxLength: 3, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     overtime_multiplier = table.Column<decimal>(type: "decimal(4,2)", precision: 4, scale: 2, nullable: false),

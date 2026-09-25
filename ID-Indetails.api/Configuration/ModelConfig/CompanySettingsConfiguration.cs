@@ -22,6 +22,8 @@ public class CompanySettingsConfiguration : IEntityTypeConfiguration<CompanySett
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Name).IsRequired().HasMaxLength(150);
         builder.Property(x => x.TimeZone).IsRequired().HasMaxLength(64);
+        // The naming convention would produce "use24hour_time".
+        builder.Property(x => x.Use24HourTime).HasColumnName("use_24_hour_time");
         builder.Property(x => x.DefaultCurrency).IsCurrencyCode();
         builder.Property(x => x.OvertimeMultiplier).HasPrecision(4, 2);
 

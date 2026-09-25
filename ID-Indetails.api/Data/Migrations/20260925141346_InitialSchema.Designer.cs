@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ID_Indetails.api.Data.Migrations
 {
     [DbContext(typeof(IdIndetailsDbContext))]
-    [Migration("20260925140449_InitialSchema")]
+    [Migration("20260925141346_InitialSchema")]
     partial class InitialSchema
     {
         /// <inheritdoc />
@@ -353,7 +353,7 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.Property<bool>("Use24HourTime")
                         .HasColumnType("tinyint(1)")
-                        .HasColumnName("use24hour_time");
+                        .HasColumnName("use_24_hour_time");
 
                     b.Property<byte>("WeekStart")
                         .HasColumnType("tinyint unsigned")

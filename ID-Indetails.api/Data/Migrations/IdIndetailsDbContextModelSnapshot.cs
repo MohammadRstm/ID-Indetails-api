@@ -350,7 +350,7 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.Property<bool>("Use24HourTime")
                         .HasColumnType("tinyint(1)")
-                        .HasColumnName("use24hour_time");
+                        .HasColumnName("use_24_hour_time");
 
                     b.Property<byte>("WeekStart")
                         .HasColumnType("tinyint unsigned")
