@@ -1,3 +1,5 @@
 <Solution>
   <Project Path="ID-Indetails.api/ID-Indetails.api.csproj" />
+  <Project Path="ID-Indetails.UnitTests/ID-Indetails.UnitTests.csproj" />
+  <Project Path="ID-Indetails.IntegrationTests/ID-Indetails.IntegrationTests.csproj" />
 </Solution>

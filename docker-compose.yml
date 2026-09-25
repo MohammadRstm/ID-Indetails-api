@@ -1,0 +1,44 @@
+# Local development database for ID-Indetails (Hourline backend).
+#
+# Other projects on this machine already run MySQL/MariaDB in Docker:
+#   - MerchForge  (project "merchforge", container merchforge-db)   host port 3306
+#   - Handliz     (project "handlizaiapi", container handliz-mysql) host port 3307
+# Everything below is named so it can never collide with them:
+#   - "name" pins the Compose project, so this file never shares a project (and
+#     therefore containers or volumes) with another compose file.
+#   - container, volume and network names all get their own "id-indetails" prefix.
+#   - the host port is 3308. Only the host side changes; inside Docker, MySQL
+#     still listens on 3306.
+#
+# Credentials come from .env (gitignored). Copy .env.example to .env first.
+name: id-indetails
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: id-indetails-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # The schema stores every timestamp in UTC; make the server agree.
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+    ports:
+      # Bound to loopback only: reachable from this machine, not from the network.
+      - "127.0.0.1:${MYSQL_HOST_PORT:-3308}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  mysql_data:
