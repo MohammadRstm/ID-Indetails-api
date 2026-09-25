@@ -7,8 +7,10 @@ This describes where code lives in the ID-Indetails backend. The rules behind it
 | Project | Purpose |
 |---|---|
 | `ID-Indetails.api` | The ASP.NET Core Web API (.NET 10). |
-| `ID-Indetails.UnitTests` | Fast tests with no database: business rules, calculations, validators, authorization handlers. xUnit + Moq. |
-| `ID-Indetails.IntegrationTests` | Tests that go through several layers, including the real MySQL provider: auth, permission and domain boundaries, repositories, API contracts. xUnit. |
+| `ID-Indetails.UnitTests` | Fast tests with no database: business rules, calculations, validators, authorization handlers. xUnit + Moq + Shouldly. |
+| `ID-Indetails.IntegrationTests` | Tests that go through several layers, including the real MySQL provider: auth, permission and domain boundaries, repositories, API contracts. xUnit + Shouldly. |
+
+Assertions use **Shouldly** (`result.ShouldBe(42)`), not FluentAssertions: FluentAssertions v8 requires a paid licence for commercial use.
 
 ## Request flow
 
