@@ -15,6 +15,9 @@ public static class NotificationKinds
     /// <summary>Someone commented on your work entry (subject: the work entry).</summary>
     public const string EntryComment = "entry_comment";
 
+    /// <summary>Someone who doesn't manage meetings set one (subject: the meeting). Sent to the domain's meeting managers.</summary>
+    public const string MeetingScheduled = "meeting_scheduled";
+
     /// <summary>Someone recorded materials on a site (subject: the project; the count in the payload).</summary>
     public const string MaterialsAdded = "materials_added";
 

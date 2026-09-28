@@ -46,8 +46,9 @@ public class MeetingTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await (await Client.GetAsync("/api/meetings?mine=true", admin.AccessToken)).ReadAsync<List<MeetingResponse>>())
             .ShouldContain(m => m.Id == meeting.Id);
 
-        await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
+        await (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
             new { startsAt = start, endsAt = start.AddHours(1) }, employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.DeleteAsync($"/api/meetings/{meeting.Id}", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
             new { startsAt = start, endsAt = start.AddMinutes(4) }, admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
@@ -58,6 +59,48 @@ public class MeetingTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldBeEmpty();
         (await _steps.ScalarAsync<long>(
             "SELECT COUNT(*) FROM activity_events WHERE subject_type = 'meeting' AND subject_id = @id", ("@id", meeting.Id))).ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task Employees_set_meetings_change_only_their_own_and_admins_are_told()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, colleague) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, executionEmployee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var start = Start();
+
+        var response = await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1), topic = "Design review" }, employee.AccessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        var mine = await response.ReadAsync<MeetingResponse>();
+
+        Task<long> NotifiedAsync(long recipientId) => _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM notifications WHERE recipient_id = @r AND kind = 'meeting_scheduled' AND subject_id = @m",
+            ("@r", recipientId), ("@m", mine.Id));
+        (await NotifiedAsync(admin.User.Id)).ShouldBe(1);
+        (await NotifiedAsync(superAdmin.User.Id)).ShouldBe(1);
+        (await NotifiedAsync(employee.User.Id)).ShouldBe(0);
+        (await NotifiedAsync(colleague.User.Id)).ShouldBe(0);
+
+        (await (await Client.PutJsonAsync($"/api/meetings/{mine.Id}",
+            new { startsAt = start, endsAt = start.AddMinutes(45), topic = "Design review" }, employee.AccessToken)).ReadAsync<MeetingResponse>())
+            .Minutes.ShouldBe(45);
+        await (await Client.PutJsonAsync($"/api/meetings/{mine.Id}",
+            new { startsAt = start, endsAt = start.AddHours(1) }, colleague.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.DeleteAsync($"/api/meetings/{mine.Id}", colleague.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1) }, executionEmployee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        (await Client.DeleteAsync($"/api/meetings/{mine.Id}", employee.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+
+        // An admin's own meeting sends no notification.
+        var adminMeeting = await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1) }, admin.AccessToken)).ReadAsync<MeetingResponse>();
+        (await _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM notifications WHERE kind = 'meeting_scheduled' AND subject_id = @m", ("@m", adminMeeting.Id))).ShouldBe(0);
     }
 
     [Fact]

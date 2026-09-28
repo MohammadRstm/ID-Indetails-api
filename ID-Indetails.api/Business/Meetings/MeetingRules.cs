@@ -7,6 +7,7 @@ namespace ID_Indetails.api.Business.Meetings;
 /// <summary>
 /// <list type="bullet">
 /// <item>Meetings belong to Design projects that are active or on hold.</item>
+/// <item>People with <c>meeting:create</c> set meetings and move or remove their own; <c>meeting:manage</c> covers every meeting.</item>
 /// <item>A meeting starts and ends on the same company-time-zone day, and lasts at least 5 minutes. Past days are fine.</item>
 /// <item>Meetings are not work time: they never count in hours, and don't block logging.</item>
 /// </list>
@@ -16,6 +17,14 @@ public static class MeetingRules
     public const int MinMinutes = 5;
     public const int MaxTopicLength = 200;
     public const int MaxDescriptionLength = 2000;
+
+    /// <summary>
+    /// Anyone who manages meetings changes any of them; people who may only set meetings change the ones they set.
+    /// </summary>
+    public static RuleDenial? CheckChange(bool managesMeetings, bool setsMeetings, long? createdById, long actorId)
+        => managesMeetings || (setsMeetings && createdById == actorId)
+            ? null
+            : RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only whoever set this meeting, or someone who manages meetings, can change it.");
 
     public static RuleDenial? CheckProject(string domainCode, ProjectStatus status)
     {

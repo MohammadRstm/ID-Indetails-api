@@ -24,18 +24,18 @@ public sealed class MeetingsController(IMeetingService meetingService) : Control
         => meetingService.ListForProjectAsync(projectId, cancellationToken);
 
     [HttpPost("projects/{projectId:long}/meetings")]
-    [HasPermission(PermissionCodes.MeetingManage)]
+    [HasAnyPermission(PermissionCodes.MeetingCreate, PermissionCodes.MeetingManage)]
     public async Task<ActionResult<MeetingResponse>> Create(long projectId, SaveMeetingRequest request, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await meetingService.CreateAsync(projectId, request, cancellationToken));
 
-    /// <summary>Moves, resizes or renames a meeting.</summary>
+    /// <summary>Moves, resizes or renames a meeting: any with meeting:manage, your own with meeting:create.</summary>
     [HttpPut("meetings/{id:long}")]
-    [HasPermission(PermissionCodes.MeetingManage)]
+    [HasAnyPermission(PermissionCodes.MeetingCreate, PermissionCodes.MeetingManage)]
     public Task<MeetingResponse> Update(long id, SaveMeetingRequest request, CancellationToken cancellationToken)
         => meetingService.UpdateAsync(id, request, cancellationToken);
 
     [HttpDelete("meetings/{id:long}")]
-    [HasPermission(PermissionCodes.MeetingManage)]
+    [HasAnyPermission(PermissionCodes.MeetingCreate, PermissionCodes.MeetingManage)]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {
         await meetingService.DeleteAsync(id, cancellationToken);

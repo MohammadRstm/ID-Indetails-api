@@ -26,4 +26,13 @@ public class MeetingRulesTests
         MeetingRules.CheckTimes(Ten, Ten.AddMinutes(4), Day, Day)!.Field.ShouldBe("endsAt");
         MeetingRules.CheckTimes(Ten, Ten.AddHours(20), Day, Day.AddDays(1))!.Field.ShouldBe("endsAt");
     }
+
+    [Fact]
+    public void Meeting_setters_change_their_own_and_managers_change_any()
+    {
+        MeetingRules.CheckChange(managesMeetings: true, setsMeetings: false, createdById: 9, actorId: 1).ShouldBeNull();
+        MeetingRules.CheckChange(managesMeetings: false, setsMeetings: true, createdById: 1, actorId: 1).ShouldBeNull();
+        MeetingRules.CheckChange(managesMeetings: false, setsMeetings: true, createdById: 9, actorId: 1)!.Code.ShouldBe(ErrorCodes.Forbidden);
+        MeetingRules.CheckChange(managesMeetings: false, setsMeetings: true, createdById: null, actorId: 1).ShouldNotBeNull();
+    }
 }

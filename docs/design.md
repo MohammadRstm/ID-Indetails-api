@@ -115,9 +115,9 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 |---|---|---|
 | `GET /api/meetings?projectId=&mine=&from=&to=` | `project:view` | Meetings of every project the caller can see, earliest first. `mine=true` keeps those the caller set; `from`/`to` are company days a meeting overlaps |
 | `GET /api/projects/{id}/meetings` | `project:view` | A project's meetings, earliest first |
-| `POST /api/projects/{id}/meetings` | `meeting:manage` | `{ startsAt, endsAt, topic, description }`. Returns `201` |
-| `PUT /api/meetings/{id}` | `meeting:manage` | Moves, resizes or renames a meeting (the same body) |
-| `DELETE /api/meetings/{id}` | `meeting:manage` | Soft delete (`deleted_at`). Returns `204` |
+| `POST /api/projects/{id}/meetings` | `meeting:create` or `meeting:manage` | `{ startsAt, endsAt, topic, description }`. Returns `201` |
+| `PUT /api/meetings/{id}` | `meeting:manage`, or `meeting:create` for your own | Moves, resizes or renames a meeting (the same body) |
+| `DELETE /api/meetings/{id}` | `meeting:manage`, or `meeting:create` for your own | Soft delete (`deleted_at`). Returns `204` |
 
 Rules (`Business/Meetings/MeetingRules.cs`):
 
@@ -127,7 +127,7 @@ Rules (`Business/Meetings/MeetingRules.cs`):
 - A meeting has no attendees: it is a project-wide block. It is not work time and never counts in hours.
 - Events: `meeting_created`, `meeting_updated`, `meeting_deleted`, with the meeting as the subject and its topic and times in the payload.
 
-**Who manages meetings:** for now only holders of `meeting:manage` (Design admins and super admins by default). The prototype also lets employees set meetings and remove their own; that needs a new permission seeded for employees, which is a database change awaiting approval (business-rules-review.md, open question 4).
+**Who sets meetings:** everyone of Design holds `meeting:create` by default, so employees set meetings and move or remove the ones they set (someone else's is `403`). `meeting:manage` (admins and super admins) covers every meeting. When someone without `meeting:manage` sets a meeting, the active people of the domain who hold it (not the setter) get a `meeting_scheduled` notification with the setter's name, the project, topic and times, as in the prototype.
 
 ## Reports and dashboard
 

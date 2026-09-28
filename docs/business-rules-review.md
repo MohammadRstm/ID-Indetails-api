@@ -45,6 +45,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, only `notifyEntry` and `notifyIdle` (the dashboard's idle projects) are used for now; the others need scheduled jobs. |
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
+| D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
 
 ## Carried over from the prototype as-is
 
@@ -75,5 +76,4 @@ These have no decision yet. The schema doesn't depend on them.
 1. **Public holidays:** a company holiday calendar, or keep excusing per person?
 2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
 3. **Project pay and breaks:** should the project pay report include hourly staff's paid breaks? The prototype leaves them out, so it differs from Salaries.
-4. **Meetings** *(for now, only `meeting:manage` holders set, move and remove meetings; letting employees do it needs a new permission seeded, awaiting approval)*: the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
 7. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?

@@ -17,6 +17,7 @@ public static class PermissionCodes
     public const string RequirementView = "requirement:view";
     public const string RequirementManage = "requirement:manage";
     public const string MeetingManage = "meeting:manage";
+    public const string MeetingCreate = "meeting:create";
     public const string ExpenseManage = "expense:manage";
 
     // Design work tracking

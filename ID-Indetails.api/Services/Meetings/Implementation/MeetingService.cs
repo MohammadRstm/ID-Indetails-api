@@ -12,7 +12,9 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Meetings.Abstraction;
+using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
+using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Meetings.Abstraction;
@@ -20,14 +22,17 @@ using ID_Indetails.api.Services.Meetings.Abstraction;
 namespace ID_Indetails.api.Services.Meetings.Implementation;
 
 /// <summary>
-/// Project meetings (see <see cref="MeetingRules"/>). Everyone who sees a project sees its meetings; setting,
-/// moving and removing them needs <c>meeting:manage</c>. Meetings of a domain the caller can't see are not found.
+/// Project meetings (see <see cref="MeetingRules"/>). Everyone who sees a project sees its meetings. Meetings of a
+/// domain the caller can't see are not found. When someone who doesn't manage meetings sets one, the people who do
+/// (other than them) are notified.
 /// </summary>
 public sealed class MeetingService(
     ICurrentUser currentUser,
     IPermissionService permissions,
     IProjectRepository projects,
     IMeetingRepository meetings,
+    IWorkEntryRepository people,
+    INotificationRepository notifications,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IMeetingService
@@ -69,6 +74,11 @@ public sealed class MeetingService(
         meetings.Add(meeting);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         activity.Add(MeetingEvent(meeting, project.DomainCode, ActivityEventKinds.MeetingCreated, actor.UserId));
+        if (!actor.Has(PermissionCodes.MeetingManage))
+        {
+            await NotifyManagersAsync(meeting, project, actor.UserId, cancellationToken);
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -80,6 +90,7 @@ public sealed class MeetingService(
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var meeting = await VisibleMeetingAsync(actor, id, cancellationToken);
+        Throw(CheckChange(actor, meeting));
         Throw(MeetingRules.CheckProject(meeting.Project.DomainCode, meeting.Project.Status));
 
         Apply(meeting, request);
@@ -97,6 +108,7 @@ public sealed class MeetingService(
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var meeting = await VisibleMeetingAsync(actor, id, cancellationToken);
+        Throw(CheckChange(actor, meeting));
 
         meeting.DeletedAt = clock.UtcNow;
         activity.Add(MeetingEvent(meeting, meeting.Project.DomainCode, ActivityEventKinds.MeetingDeleted, actor.UserId));
@@ -116,6 +128,43 @@ public sealed class MeetingService(
     {
         var meeting = await meetings.GetForUpdateAsync(id, cancellationToken);
         return meeting is not null && actor.CanSee(meeting.Project.DomainCode) ? meeting : throw new NotFoundException("Meeting not found.");
+    }
+
+    private static RuleDenial? CheckChange(UserAccess actor, ProjectMeeting meeting)
+        => MeetingRules.CheckChange(
+            actor.Has(PermissionCodes.MeetingManage), actor.Has(PermissionCodes.MeetingCreate), meeting.CreatedById, actor.UserId);
+
+    private async Task NotifyManagersAsync(ProjectMeeting meeting, Project project, long actorId, CancellationToken cancellationToken)
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            authorName = currentUser.FullName,
+            projectTitle = project.Title,
+            topic = meeting.Topic,
+            startsAt = meeting.StartsAt,
+            endsAt = meeting.EndsAt,
+        });
+
+        foreach (var id in await people.PeopleWhoMayHoldAsync(project.DomainCode, PermissionCodes.MeetingManage, cancellationToken))
+        {
+            var access = await permissions.GetAccessAsync(id, cancellationToken);
+            if (id == actorId || !access.Has(PermissionCodes.MeetingManage) || !access.CanSee(project.DomainCode))
+            {
+                continue;
+            }
+
+            notifications.Add(new Notification
+            {
+                RecipientId = id,
+                Kind = NotificationKinds.MeetingScheduled,
+                ActorId = actorId,
+                ProjectId = project.Id,
+                SubjectType = "meeting",
+                SubjectId = meeting.Id,
+                Payload = payload,
+                CreatedAt = clock.UtcNow,
+            });
+        }
     }
 
     private void Apply(ProjectMeeting meeting, SaveMeetingRequest request)
