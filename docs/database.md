@@ -129,6 +129,8 @@ Permission and role strings match the React client's `config/permissions.ts` and
 
 The `ExecutionPricingAndWorkingTime` migration adds the default working-time policy row.
 
+The `TeamsAndTeamPermission` migration seeds the starting teams of each domain (`Constants/TeamSeed.cs`) and the `team:manage` permission.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Migrations

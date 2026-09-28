@@ -73,7 +73,7 @@ Their overrides are cleared, because the new role's defaults now describe them, 
 
 The check runs only when someone's permissions are changed, never on ordinary requests. It compares two small sets in memory inside the same transaction. The person's `users` row is locked (`SELECT … FOR UPDATE`) for the duration, so two simultaneous changes to the same person are applied one after the other and the check always sees the final set.
 
-**Manual role changes** (the employee-management feature, not built yet) must clear the person's overrides, so the new role's defaults take over.
+**Manual role changes** (`PUT /api/employees/{id}/role`) and moves to the other domain clear the person's overrides, so the new role's defaults take over (see [employees.md](employees.md)).
 
 ## Protecting an endpoint
 
@@ -88,6 +88,6 @@ The check runs only when someone's permissions are changed, never on ordinary re
 
 ## Caching
 
-`PermissionService` caches the catalogue and role defaults (they only change by migration) and each user's access for 10 minutes. A user's cached access is dropped whenever their overrides or role change through the API. Anything else that changes a user's role or status (deactivation, manual role changes) must call `IPermissionService.Forget(userId)`.
+`PermissionService` caches the catalogue and role defaults (they only change by migration) and each user's access for 10 minutes. A user's cached access is dropped whenever their overrides or role change through the API. Anything that changes a user's role, domain or status must call `IPermissionService.Forget(userId)`; the people-management endpoints already do.
 
 The cache is in-process. Running more than one API instance would need a shared cache or a per-user version stamp.

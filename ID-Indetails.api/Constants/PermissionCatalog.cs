@@ -57,6 +57,7 @@ public static class PermissionCatalog
         new(P.EmployeePayManage, "Set and change employee pay"),
         new(P.EmployeeInviteSuperAdmin, "Invite super admins"),
         new(P.PermissionManage, "Grant and revoke other people's permissions"),
+        new(P.TeamManage, "Create, rename and delete teams"),
 
         new(P.ActivityView, "View the domain activity feed"),
         new(P.ReportView, "View domain reports"),
