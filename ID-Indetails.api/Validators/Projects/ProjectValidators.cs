@@ -3,6 +3,7 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.Validators.Clients;
 using ID_Indetails.api.Validators.Common;
 using ID_Indetails.api.Validators.Employees;
+using ID_Indetails.api.Validators.Labour;
 
 namespace ID_Indetails.api.Validators.Projects;
 
@@ -47,6 +48,7 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
             payment.RuleFor(p => p.Reference).ClientText("Reference", 100);
             payment.RuleFor(p => p.Note).ClientText("Note", 500);
         }).When(x => x.InitialPayment is not null);
+        RuleFor(x => x.LabourDefaults!).SetValidator(new SetLabourDefaultsRequestValidator()).When(x => x.LabourDefaults is not null);
     }
 }
 

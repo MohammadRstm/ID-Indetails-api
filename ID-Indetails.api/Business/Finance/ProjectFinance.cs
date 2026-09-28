@@ -13,6 +13,7 @@ namespace ID_Indetails.api.Business.Finance;
 /// or has at least 10 hours logged.</item>
 /// <item>Projected cost = cost ÷ progress, while an open client project is at least 5% along.</item>
 /// <item>Revenue recognised to date = revenue × progress, or all of it once done.</item>
+/// <item>Cash by week = payments received and cost, added up week by week.</item>
 /// </list>
 /// </summary>
 public static class ProjectFinance
@@ -41,6 +42,21 @@ public static class ProjectFinance
     public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes);
 
     public sealed record Projection(decimal Cost, decimal Profit, decimal? Margin);
+
+    /// <summary>Where cash stood at the end of a week (Monday to Sunday), in USD, with what that week added.</summary>
+    /// <param name="Received">Payments received up to the end of the week.</param>
+    /// <param name="Spent">Every cost up to the end of the week.</param>
+    /// <param name="GroundLabour">Ground labour up to the end of the week.</param>
+    public sealed record CashWeek(
+        DateOnly WeekStart,
+        decimal Received,
+        decimal Spent,
+        decimal GroundLabour,
+        decimal ReceivedInWeek,
+        decimal GroundLabourInWeek)
+    {
+        public decimal Profit => Received - Spent;
+    }
 
     public sealed record Summary(
         decimal Revenue,
@@ -106,6 +122,40 @@ public static class ProjectFinance
     }
 
     /// <summary>
+    /// The running cash position week by week, from the week of <paramref name="from"/> to the week of
+    /// <paramref name="to"/>. Anything dated before the first week counts in it. Costs are converted as in
+    /// <see cref="ToUsd"/>, and one with no rate that day is left out.
+    /// </summary>
+    public static IReadOnlyList<CashWeek> CashByWeek(
+        IEnumerable<CostItem> items,
+        IEnumerable<(DateOnly Day, decimal Usd)> payments,
+        ExchangeRateTable rates,
+        DateOnly from,
+        DateOnly to)
+    {
+        var costs = items
+            .Select(i => (i.Day, i.Source, Usd: rates.ToUsd(i.Amount, i.Currency, i.Day)))
+            .Where(c => c.Usd is not null)
+            .ToList();
+        var paid = payments.ToList();
+        var weeks = new List<CashWeek>();
+
+        for (var week = MondayOf(from); week <= MondayOf(to); week = week.AddDays(7))
+        {
+            var end = week.AddDays(7);
+            weeks.Add(new CashWeek(
+                week,
+                Round(paid.Where(p => p.Day < end).Sum(p => p.Usd)),
+                Round(costs.Where(c => c.Day < end).Sum(c => c.Usd!.Value)),
+                Round(costs.Where(c => c.Day < end && c.Source == CostSource.GroundLabour).Sum(c => c.Usd!.Value)),
+                Round(paid.Where(p => p.Day >= week && p.Day < end).Sum(p => p.Usd)),
+                Round(costs.Where(c => c.Day >= week && c.Day < end && c.Source == CostSource.GroundLabour).Sum(c => c.Usd!.Value))));
+        }
+
+        return weeks;
+    }
+
+    /// <summary>
     /// What an Execution client is charged for materials, in USD: each client price converted at the rate
     /// on the day the material was added. Materials with no rate that day are left out and counted.
     /// </summary>
@@ -162,6 +212,8 @@ public static class ProjectFinance
 
     private static decimal? MarginOf(decimal profit, decimal revenue)
         => revenue > 0 ? Math.Round(profit / revenue, 4, MidpointRounding.AwayFromZero) : null;
+
+    private static DateOnly MondayOf(DateOnly day) => day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
 
     private static decimal Round(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
 }

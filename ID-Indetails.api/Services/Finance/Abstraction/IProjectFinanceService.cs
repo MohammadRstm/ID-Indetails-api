@@ -13,6 +13,9 @@ public interface IProjectFinanceService
     Task<IReadOnlyDictionary<long, ProjectFinancials>> GetAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken = default);
 
     Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default);
+
+    /// <summary>The project's cash position week by week, from its first week to the week of <paramref name="to"/>.</summary>
+    Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(Project project, DateOnly to, CancellationToken cancellationToken = default);
 }
 
 /// <param name="MaterialCharge">Execution: material client prices in USD.</param>

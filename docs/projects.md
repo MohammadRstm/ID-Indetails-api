@@ -1,6 +1,6 @@
 # Projects
 
-A project belongs to one domain. The rules live in `Business/Projects/`. A project of a domain the caller can't see reads as `404`, for every endpoint below.
+A project belongs to one domain. The rules live in `Business/Projects/`. A project of a domain the caller can't see reads as `404`, for every endpoint below. What is recorded on Execution sites (materials, ground labour, client statements) is in [execution.md](execution.md).
 
 ## Endpoints
 
@@ -20,7 +20,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 
 - The start date is today (company time zone). The owner defaults to the caller.
 - **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No fee or markup.
-- **Execution:** always client work, with a `clientId`, a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). `revenue` is never sent; it is calculated. An optional `initialPayment` (`amount`, `currency`, `fxRate`, `receivedOn`, `method`, `reference`, `note`) is recorded on account as the project's initial payment in the same transaction. It needs `payment:record`, and Design projects don't take one (`400`).
+- **Execution:** always client work, with a `clientId`, a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). `revenue` is never sent; it is calculated. An optional `initialPayment` (`amount`, `currency`, `fxRate`, `receivedOn`, `method`, `reference`, `note`) is recorded on account as the project's initial payment in the same transaction. It needs `payment:record`, and Design projects don't take one (`400`). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
 - The client must belong to the project's domain (`400`) and not be archived (`422 client_archived`).
 - **Owner:** anyone of the project's domain who isn't deactivated, or a super admin (`422 owner_not_allowed`).
 
@@ -46,6 +46,7 @@ Every project money figure comes from one place: `Business/Finance/ProjectFinanc
 - **Projected** cost, profit and margin = cost ÷ progress, for open client projects at least 5% along.
 - **Recognised to date** = revenue × progress, or all of it once completed or archived.
 - **Execution:** `cashProfit` = received − cost, and `materialProfit` = material charge − material cost.
+- **Cash by week** (`ProjectFinance.CashByWeek`): payments received and cost added up week by week, Monday to Sunday. Execution sites show it on `GET /api/projects/{id}/site-money/timeline` (see [execution.md](execution.md)).
 
 ## Status
 
