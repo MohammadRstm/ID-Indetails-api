@@ -81,6 +81,8 @@ public static class ErrorCodes
     public const string InitialPaymentExists = "initial_payment_exists";
     public const string PaymentAlreadyVoided = "payment_already_voided";
     public const string PaymentAlreadyApplied = "payment_already_applied";
+    public const string RateDateInFuture = "rate_date_in_future";
+    public const string RateNotAfterLatest = "rate_not_after_latest";
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";

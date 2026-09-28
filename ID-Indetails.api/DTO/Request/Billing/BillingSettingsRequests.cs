@@ -21,6 +21,18 @@ public sealed record SaveBillingSettingsRequest
     public string? Footer { get; init; }
 }
 
+public sealed record AddExchangeRateRequest
+{
+    /// <summary>ISO code of a currency other than USD, e.g. LBP.</summary>
+    public string Currency { get; init; } = string.Empty;
+
+    /// <summary>How many units of the currency one US dollar buys.</summary>
+    public decimal RatePerUsd { get; init; }
+
+    /// <summary>Today or earlier, after the currency's latest rate. Defaults to today.</summary>
+    public DateOnly? EffectiveFrom { get; init; }
+}
+
 public sealed record ExchangeRateListQuery
 {
     /// <summary>ISO code, e.g. LBP. Empty for every currency.</summary>

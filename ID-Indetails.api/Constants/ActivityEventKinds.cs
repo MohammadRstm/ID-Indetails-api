@@ -65,6 +65,9 @@ public static class ActivityEventKinds
     // Billing
     public const string BillingSettingsUpdated = "billing_settings_updated";
 
+    /// <summary>Company-wide (no domain); the rate in the amount column.</summary>
+    public const string ExchangeRateSet = "exchange_rate_set";
+
     // Invoices (subject: the invoice; project_id is set; the total in the amount column)
     public const string InvoiceCreated = "invoice_created";
     public const string InvoiceUpdated = "invoice_updated";

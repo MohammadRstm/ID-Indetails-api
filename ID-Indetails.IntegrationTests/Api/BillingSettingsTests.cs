@@ -66,6 +66,24 @@ public class BillingSettingsTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Only_super_admins_add_dated_exchange_rates()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+
+        var added = await Client.PostJsonAsync("/api/exchange-rates", new { currency = "lbp", ratePerUsd = 89_700m, effectiveFrom = "2026-07-01" }, superAdmin.AccessToken);
+        ((int)added.StatusCode).ShouldBe(201, await added.Content.ReadAsStringAsync());
+        (await added.ReadAsync<ExchangeRateResponse>()).Currency.ShouldBe("LBP");
+
+        await (await Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_000m, effectiveFrom = "2026-07-01" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.RateNotAfterLatest);
+        await (await Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_800m }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM activity_events WHERE kind = 'exchange_rate_set' AND domain_code IS NULL"))
+            .ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Exchange_rates_are_listed_newest_first_per_currency()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
@@ -73,12 +91,13 @@ public class BillingSettingsTests(ApiFactory api) : IClassFixture<ApiFactory>
         {
             await using var insert = new MySqlConnector.MySqlCommand(
                 "INSERT INTO exchange_rates (currency, rate_per_usd, effective_from, created_at) VALUES " +
-                "('LBP', 89000, '2026-01-01', UTC_TIMESTAMP()), ('LBP', 89500, '2026-06-01', UTC_TIMESTAMP())", connection);
+                "('EUR', 0.91, '2026-01-01', UTC_TIMESTAMP()), ('EUR', 0.92, '2026-06-01', UTC_TIMESTAMP())", connection);
             await insert.ExecuteNonQueryAsync();
         }
 
-        var rates = await (await Client.GetAsync("/api/exchange-rates?currency=lbp", superAdmin.AccessToken))
+        // Another test in this class adds LBP rates through the API, so this one lists a currency of its own.
+        var rates = await (await Client.GetAsync("/api/exchange-rates?currency=eur", superAdmin.AccessToken))
             .ReadAsync<List<ExchangeRateResponse>>();
-        rates.Select(r => r.RatePerUsd).ShouldBe([89500m, 89000m]);
+        rates.Select(r => r.RatePerUsd).ShouldBe([0.92m, 0.91m]);
     }
 }

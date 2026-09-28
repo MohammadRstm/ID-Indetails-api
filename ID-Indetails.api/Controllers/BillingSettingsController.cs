@@ -23,6 +23,12 @@ public sealed class BillingSettingsController(IBillingSettingsService billingSet
     public Task<BillingSettingsResponse> Save(string domainCode, SaveBillingSettingsRequest request, CancellationToken cancellationToken)
         => billingSettingsService.SaveAsync(domainCode, request, cancellationToken);
 
+    /// <summary>A new dated rate for a currency. Company-wide.</summary>
+    [HttpPost("exchange-rates")]
+    [HasPermission(PermissionCodes.ExchangeRateManage)]
+    public async Task<ActionResult<ExchangeRateResponse>> AddExchangeRate(AddExchangeRateRequest request, CancellationToken cancellationToken)
+        => StatusCode(StatusCodes.Status201Created, await billingSettingsService.AddExchangeRateAsync(request, cancellationToken));
+
     /// <summary>Every dated rate, newest first per currency.</summary>
     [HttpGet("exchange-rates")]
     [HasPermission(PermissionCodes.FinancialView)]

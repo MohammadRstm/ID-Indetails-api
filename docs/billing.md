@@ -19,8 +19,11 @@ Billing is a cash ledger kept apart from profitability: invoices and payments ne
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/exchange-rates?currency=` | `financial:view` | Every dated rate, newest first per currency |
+| `POST /api/exchange-rates` | `exchange_rate:manage` (super admins) | `{ currency, ratePerUsd, effectiveFrom }` adds a dated rate |
 
-A rate says how many units of a currency one US dollar buys, from its effective date. The rate in force on a day is the latest one effective on or before it. Rates are company-wide.
+A rate says how many units of a currency one US dollar buys, from its effective date. The rate in force on a day is the latest one effective on or before it. Rates are company-wide, so only super admins set them.
+
+Rates are append-only, like pay history (`Business/Billing/ExchangeRateRules.cs`): a new rate applies from today or earlier (`400 rate_date_in_future`) and after the currency's latest rate (`422 rate_not_after_latest`). Payments already recorded keep the rate they were recorded with. Adding one writes `exchange_rate_set` with no domain and the rate in the `amount` column.
 
 ## Invoices
 

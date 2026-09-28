@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.Validators.Clients;
+using ID_Indetails.api.Validators.Common;
 
 namespace ID_Indetails.api.Validators.Billing;
 
@@ -19,6 +20,19 @@ public sealed class SaveBillingSettingsRequestValidator : AbstractValidator<Save
             .Matches("^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$").WithMessage("SWIFT code must be 8 or 11 letters or digits.");
         RuleFor(x => x.TermsText).ClientText("Terms", 2000);
         RuleFor(x => x.Footer).ClientText("Footer", 500);
+    }
+}
+
+public sealed class AddExchangeRateRequestValidator : AbstractValidator<AddExchangeRateRequest>
+{
+    public AddExchangeRateRequestValidator()
+    {
+        RuleFor(x => x.Currency)
+            .Must(c => c is not null && c.ToUpperInvariant() != "USD" && MoneyRules.Currencies.Contains(c.ToUpperInvariant()))
+            .WithMessage($"Currency must be one of: {string.Join(", ", MoneyRules.Currencies.Where(c => c != "USD"))}.");
+        RuleFor(x => x.RatePerUsd)
+            .Must(r => r > 0 && decimal.Round(r, 6) == r && r < 1_000_000_000_000m)
+            .WithMessage("Rate must be more than zero with at most 6 decimals.");
     }
 }
 

@@ -1,4 +1,5 @@
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Response.Billing;
@@ -74,6 +75,46 @@ public sealed class BillingSettingsService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return ToResponse(row);
+    }
+
+    public async Task<ExchangeRateResponse> AddExchangeRateAsync(AddExchangeRateRequest request, CancellationToken cancellationToken = default)
+    {
+        var currency = request.Currency.ToUpperInvariant();
+        var today = clock.CompanyToday;
+        var effectiveFrom = request.EffectiveFrom ?? today;
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var denial = ExchangeRateRules.Check(effectiveFrom, today, await exchangeRates.GetLatestDateAsync(currency, cancellationToken));
+        if (denial is not null)
+        {
+            throw denial.ToException();
+        }
+
+        var rate = new ExchangeRate
+        {
+            Currency = currency,
+            RatePerUsd = request.RatePerUsd,
+            EffectiveFrom = effectiveFrom,
+            CreatedAt = clock.UtcNow,
+            CreatedById = currentUser.Id,
+        };
+        exchangeRates.Add(rate);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        activity.Add(new ActivityEvent
+        {
+            Kind = ActivityEventKinds.ExchangeRateSet,
+            OccurredAt = clock.UtcNow,
+            ActorId = currentUser.Id,
+            SubjectType = "exchange_rate",
+            SubjectId = rate.Id,
+            Amount = rate.RatePerUsd,
+            Payload = System.Text.Json.JsonSerializer.Serialize(new { currency, effectiveFrom }),
+        });
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new ExchangeRateResponse(rate.Id, rate.Currency, rate.RatePerUsd, rate.EffectiveFrom, rate.CreatedAt);
     }
 
     public async Task<IReadOnlyList<ExchangeRateResponse>> ListExchangeRatesAsync(

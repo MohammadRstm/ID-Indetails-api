@@ -9,5 +9,8 @@ public interface IBillingSettingsService
 
     Task<BillingSettingsResponse> SaveAsync(string domainCode, SaveBillingSettingsRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>A new dated rate, from today or earlier and after the currency's latest one.</summary>
+    Task<ExchangeRateResponse> AddExchangeRateAsync(AddExchangeRateRequest request, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ExchangeRateResponse>> ListExchangeRatesAsync(ExchangeRateListQuery query, CancellationToken cancellationToken = default);
 }

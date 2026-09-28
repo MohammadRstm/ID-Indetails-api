@@ -50,6 +50,7 @@ public static class PermissionCatalog
         new(P.PaymentRecord, "Record client payments"),
         new(P.PaymentVoid, "Void recorded payments"),
         new(P.BillingSettingsManage, "Edit invoice prefix, terms and bank details"),
+        new(P.ExchangeRateManage, "Set the company-wide exchange rates used for payments"),
 
         new(P.EmployeeView, "View employees and their work"),
         new(P.EmployeeManage, "Edit employee profiles, teams and status"),
@@ -76,7 +77,7 @@ public static class PermissionCatalog
     [
         P.CompanyView, P.OverheadManage, P.SalaryView, P.CompanySettingsManage,
         P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse,
-        P.EmployeeInviteSuperAdmin, P.PermissionManage,
+        P.EmployeeInviteSuperAdmin, P.PermissionManage, P.ExchangeRateManage,
     ];
 
     private static readonly string[] EmployeeGrants =

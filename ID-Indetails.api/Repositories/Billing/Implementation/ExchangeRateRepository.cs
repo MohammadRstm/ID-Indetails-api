@@ -21,4 +21,11 @@ public sealed class ExchangeRateRepository(IdIndetailsDbContext db) : IExchangeR
             .Where(r => r.Currency == currency && r.EffectiveFrom <= day)
             .OrderByDescending(r => r.EffectiveFrom)
             .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<DateOnly?> GetLatestDateAsync(string currency, CancellationToken cancellationToken = default)
+        => db.ExchangeRates
+            .Where(r => r.Currency == currency)
+            .MaxAsync(r => (DateOnly?)r.EffectiveFrom, cancellationToken);
+
+    public void Add(ExchangeRate rate) => db.ExchangeRates.Add(rate);
 }

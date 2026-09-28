@@ -44,6 +44,7 @@ public static class PermissionCodes
     public const string PaymentRecord = "payment:record";
     public const string PaymentVoid = "payment:void";
     public const string BillingSettingsManage = "billing_settings:manage";
+    public const string ExchangeRateManage = "exchange_rate:manage";
 
     // People
     public const string EmployeeView = "employee:view";

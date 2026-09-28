@@ -9,4 +9,8 @@ public interface IExchangeRateRepository
 
     /// <summary>The rate in force on <paramref name="day"/>: the latest one effective on or before it.</summary>
     Task<ExchangeRate?> GetInForceAsync(string currency, DateOnly day, CancellationToken cancellationToken = default);
+
+    Task<DateOnly?> GetLatestDateAsync(string currency, CancellationToken cancellationToken = default);
+
+    void Add(ExchangeRate rate);
 }
