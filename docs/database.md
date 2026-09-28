@@ -133,6 +133,23 @@ The `ExecutionPricingAndWorkingTime` migration adds the default working-time pol
 
 ## Migrations
 
+In **cmd**, set the environment once per window (see [local-development.md](local-development.md)):
+
+```bat
+set ASPNETCORE_ENVIRONMENT=Development
+
+rem Create a migration (after approval)
+dotnet ef migrations add <Name> --project ID-Indetails.api --output-dir Data/Migrations
+
+rem Review the SQL it will run
+dotnet ef migrations script --project ID-Indetails.api
+
+rem Apply it - only with explicit approval
+dotnet ef database update --project ID-Indetails.api
+```
+
+In bash (Git Bash, WSL, macOS or Linux):
+
 ```bash
 # Create a migration (after approval)
 ASPNETCORE_ENVIRONMENT=Development dotnet ef migrations add <Name> --project ID-Indetails.api --output-dir Data/Migrations

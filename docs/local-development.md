@@ -4,8 +4,8 @@
 
 1. Copy the example environment file and set real passwords:
 
-   ```bash
-   cp .env.example .env
+   ```bat
+   copy .env.example .env
    ```
 
    `.env` is gitignored. Never commit it.
@@ -25,13 +25,25 @@
 | App user | `MYSQL_USER` / `MYSQL_PASSWORD` from `.env` |
 | Server settings | `utf8mb4` / `utf8mb4_0900_ai_ci`, time zone UTC (`+00:00`) |
 
-4. Give the API its connection string through .NET user secrets. They are stored in your Windows profile, not in the repository. Use the values from your `.env`:
+4. Give the API its secrets through .NET user secrets. They are stored in your Windows profile (`%APPDATA%\Microsoft\UserSecrets`), not in the repository, so every developer sets their own. From the repository root, in **cmd**:
 
-   ```bash
+   ```bat
+   rem Database: use MYSQL_PASSWORD from your .env
    dotnet user-secrets set "ConnectionStrings:Default" "Server=127.0.0.1;Port=3308;Database=id_indetails;User=id_indetails_app;Password=<MYSQL_PASSWORD>;" --project ID-Indetails.api
+
+   rem JWT signing key: generates a random 64-character key without printing it
+   for /f %k in ('powershell -NoProfile -Command "$b=New-Object byte[] 48;[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b);[Convert]::ToBase64String($b)"') do @dotnet user-secrets set "Jwt:SigningKey" "%k" --project ID-Indetails.api
+
+   rem Setup key for creating the first super admin: choose your own and keep it
+   dotnet user-secrets set "Setup:SuperAdminKey" "<a long random key>" --project ID-Indetails.api
+
+   rem Check that all three are set
+   dotnet user-secrets list --project ID-Indetails.api
    ```
 
-   The API refuses to start without it. User secrets only load in the `Development` environment, so `dotnet ef` commands need `ASPNETCORE_ENVIRONMENT=Development`. Schema and migration commands are described in [database.md](database.md).
+   In a `.bat` file, write `%%k` instead of `%k`. The API refuses to start without the connection string and the signing key (see [authentication.md](authentication.md) for all settings).
+
+   User secrets only load in the `Development` environment, so `dotnet ef` needs `ASPNETCORE_ENVIRONMENT=Development` set in the same window. In cmd, run `set ASPNETCORE_ENVIRONMENT=Development` on its own line first, or put it on one line as `set ASPNETCORE_ENVIRONMENT=Development&& dotnet ef ...` (no space before `&&`). Without it, `dotnet ef` fails with "Connection string 'Default' is not configured". Schema and migration commands are described in [database.md](database.md).
 
 ### Why port 3308 and all the separate names
 
