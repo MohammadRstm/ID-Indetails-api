@@ -62,4 +62,7 @@ public class User
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 
     public ICollection<UserInvitation> Invitations { get; set; } = new List<UserInvitation>();
+
+    /// <summary>Personal differences from the role defaults (see <see cref="UserPermissionOverride"/>).</summary>
+    public ICollection<UserPermissionOverride> PermissionOverrides { get; set; } = new List<UserPermissionOverride>();
 }

@@ -55,6 +55,8 @@ public static class PermissionCatalog
         new(P.EmployeeManage, "Edit employee profiles, teams and status"),
         new(P.EmployeeInvite, "Invite new people"),
         new(P.EmployeePayManage, "Set and change employee pay"),
+        new(P.EmployeeInviteSuperAdmin, "Invite super admins"),
+        new(P.PermissionManage, "Grant and revoke other people's permissions"),
 
         new(P.ActivityView, "View the domain activity feed"),
         new(P.ReportView, "View domain reports"),
@@ -73,6 +75,7 @@ public static class PermissionCatalog
     [
         P.CompanyView, P.OverheadManage, P.SalaryView, P.CompanySettingsManage,
         P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse,
+        P.EmployeeInviteSuperAdmin, P.PermissionManage,
     ];
 
     private static readonly string[] EmployeeGrants =

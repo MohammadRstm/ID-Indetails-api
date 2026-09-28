@@ -1961,6 +1961,16 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "employee:invite_super_admin",
+                            Description = "Invite super admins"
+                        },
+                        new
+                        {
+                            Code = "permission:manage",
+                            Description = "Grant and revoke other people's permissions"
+                        },
+                        new
+                        {
                             Code = "activity:view",
                             Description = "View the domain activity feed"
                         },
@@ -2901,6 +2911,16 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "employee:invite_super_admin"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "permission:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "activity:view"
                         },
                         new
@@ -3553,6 +3573,57 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_user_pay_history_basis", "`basis` IN ('hourly', 'monthly')");
 
                             t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`hourly_cost_rate` >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.UserPermissionOverride", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("PermissionCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("permission_code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Effect")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("effect");
+
+                    b.Property<long>("GrantedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("granted_by_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId", "PermissionCode")
+                        .HasName("pk_user_permission_overrides");
+
+                    b.HasIndex("GrantedById")
+                        .HasDatabaseName("ix_user_permission_overrides_granted_by_id");
+
+                    b.HasIndex("PermissionCode")
+                        .HasDatabaseName("ix_user_permission_overrides_permission_code");
+
+                    b.ToTable("user_permission_overrides", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_user_permission_overrides_effect", "`effect` IN ('grant', 'revoke')");
                         });
                 });
 
@@ -4761,6 +4832,34 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.UserPermissionOverride", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_permission_overrides_users_granted_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Permission", "Permission")
+                        .WithMany()
+                        .HasForeignKey("PermissionCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_permission_overrides_permissions_permission_code");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany("PermissionOverrides")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_permission_overrides_users_user_id");
+
+                    b.Navigation("Permission");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.UserSchedule", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -4934,6 +5033,8 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Invitations");
 
                     b.Navigation("PayHistory");
+
+                    b.Navigation("PermissionOverrides");
 
                     b.Navigation("RefreshTokens");
                 });
