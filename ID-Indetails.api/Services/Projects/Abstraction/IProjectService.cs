@@ -1,0 +1,23 @@
+using ID_Indetails.api.DTO.Request.Projects;
+using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Projects;
+
+namespace ID_Indetails.api.Services.Projects.Abstraction;
+
+public interface IProjectService
+{
+    Task<PagedResponse<ProjectSummaryResponse>> ListAsync(ProjectListQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>Money is included only for callers with <c>financial:view</c>.</summary>
+    Task<ProjectResponse> GetAsync(long projectId, CancellationToken cancellationToken = default);
+
+    Task<ProjectResponse> CreateAsync(CreateProjectRequest request, CancellationToken cancellationToken = default);
+
+    Task<ProjectResponse> UpdateAsync(long projectId, UpdateProjectRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Design only, while revenue isn't locked.</summary>
+    Task<ProjectResponse> UpdateBillingAsync(long projectId, UpdateProjectBillingRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Execution only, while revenue isn't locked.</summary>
+    Task<ProjectResponse> UpdatePricingAsync(long projectId, UpdateProjectPricingRequest request, CancellationToken cancellationToken = default);
+}

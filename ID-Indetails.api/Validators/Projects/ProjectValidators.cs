@@ -1,0 +1,83 @@
+using FluentValidation;
+using ID_Indetails.api.DTO.Request.Projects;
+using ID_Indetails.api.Validators.Clients;
+using ID_Indetails.api.Validators.Common;
+using ID_Indetails.api.Validators.Employees;
+
+namespace ID_Indetails.api.Validators.Projects;
+
+public sealed class ProjectListQueryValidator : AbstractValidator<ProjectListQuery>
+{
+    public ProjectListQueryValidator()
+    {
+        RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
+        RuleFor(x => x.Status).IsInEnum().WithMessage("Status must be active, hold, completed or archived.");
+        RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
+        RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
+        RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
+            .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
+    }
+}
+
+public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProjectRequest>
+{
+    public CreateProjectRequestValidator()
+    {
+        RuleFor(x => x.Title).ClientText("Title", 200, required: true);
+        RuleFor(x => x.Description).ClientText("Description", 2000);
+        RuleFor(x => x.Icon).ClientText("Icon", 40);
+        RuleFor(x => x.Tint).ProjectTint();
+        RuleFor(x => x.DomainCode).ValidDomain().When(x => x.DomainCode is not null);
+        RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
+        RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
+        RuleFor(x => x.OwnerId).GreaterThan(0).When(x => x.OwnerId is not null).WithMessage("Owner is invalid.");
+        RuleFor(x => x.Revenue).Amount("Revenue");
+        RuleFor(x => x.ProjectFee).Amount("Project fee");
+        RuleFor(x => x.MaterialMarkup).MaterialMarkup();
+    }
+}
+
+public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProjectRequest>
+{
+    public UpdateProjectRequestValidator()
+    {
+        RuleFor(x => x.Title).ClientText("Title", 200, required: true);
+        RuleFor(x => x.Description).ClientText("Description", 2000);
+        RuleFor(x => x.Icon).ClientText("Icon", 40);
+        RuleFor(x => x.Tint).ProjectTint();
+        RuleFor(x => x.OwnerId).GreaterThan(0).WithMessage("Owner is required.");
+    }
+}
+
+public sealed class UpdateProjectBillingRequestValidator : AbstractValidator<UpdateProjectBillingRequest>
+{
+    public UpdateProjectBillingRequestValidator()
+    {
+        RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
+        RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
+        RuleFor(x => x.Revenue).Amount("Revenue");
+    }
+}
+
+public sealed class UpdateProjectPricingRequestValidator : AbstractValidator<UpdateProjectPricingRequest>
+{
+    public UpdateProjectPricingRequestValidator()
+    {
+        RuleFor(x => x.ProjectFee).Amount("Project fee");
+        RuleFor(x => (decimal?)x.MaterialMarkup).MaterialMarkup().OverridePropertyName("MaterialMarkup");
+    }
+}
+
+internal static class ProjectRuleExtensions
+{
+    public static IRuleBuilderOptions<T, string?> ProjectTint<T>(this IRuleBuilder<T, string?> rule)
+        => rule.Matches("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+            .WithMessage("Tint must be a colour like #1F6FEB.");
+
+    public static IRuleBuilderOptions<T, decimal?> MaterialMarkup<T>(this IRuleBuilder<T, decimal?> rule)
+        => rule
+            .Must(v => v is null || v is >= 0 and <= 5).WithMessage("Material markup must be between 0 and 5 (0% to 500%).")
+            .Must(v => v is null || decimal.Round(v.Value, 4) == v).WithMessage("Material markup can have at most 4 decimals.");
+}

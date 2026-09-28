@@ -52,6 +52,13 @@ public static class ErrorCodes
     public const string ClientAlreadyArchived = "client_already_archived";
     public const string ClientNotArchived = "client_not_archived";
 
+    // Projects
+    public const string ClientIsArchived = "client_archived";
+    public const string OwnerNotAllowed = "owner_not_allowed";
+    public const string ProjectLocked = "project_locked";
+    public const string ProjectHasBilling = "project_has_billing";
+    public const string NotForThisDomain = "not_for_this_domain";
+
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
 }

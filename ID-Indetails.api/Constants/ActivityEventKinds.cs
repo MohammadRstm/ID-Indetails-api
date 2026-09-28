@@ -29,4 +29,14 @@ public static class ActivityEventKinds
     public const string ClientArchived = "client_archived";
     public const string ClientRestored = "client_restored";
     public const string ClientDeleted = "client_deleted";
+
+    // Projects (subject: the project). Money goes in the amount columns, never the payload.
+    public const string ProjectCreated = "project_created";
+    public const string ProjectUpdated = "project_updated";
+    public const string ProjectOwnerSet = "project_owner_set";
+    public const string ProjectClientSet = "project_client_set";
+    public const string RevenueSet = "revenue_set";
+    public const string RevenueChanged = "revenue_changed";
+    public const string ProjectFeeSet = "project_fee_set";
+    public const string MaterialMarkupSet = "material_markup_set";
 }

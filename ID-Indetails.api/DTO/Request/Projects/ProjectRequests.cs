@@ -1,0 +1,91 @@
+using ID_Indetails.api.Enums;
+
+namespace ID_Indetails.api.DTO.Request.Projects;
+
+/// <summary>Filters for the project list. Everything is optional.</summary>
+public sealed record ProjectListQuery
+{
+    /// <summary>Matches the title; every word must match.</summary>
+    public string? Search { get; init; }
+
+    public ProjectStatus? Status { get; init; }
+
+    public long? ClientId { get; init; }
+
+    public BillingType? BillingType { get; init; }
+
+    /// <summary>Must be a domain the caller can see, or nothing is returned.</summary>
+    public string? Domain { get; init; }
+
+    public int Page { get; init; } = 1;
+
+    public int PageSize { get; init; } = 25;
+}
+
+public sealed record CreateProjectRequest
+{
+    public string Title { get; init; } = string.Empty;
+
+    public string? Description { get; init; }
+
+    public string? Icon { get; init; }
+
+    public string? Tint { get; init; }
+
+    /// <summary>May be empty when the caller works in only one domain.</summary>
+    public string? DomainCode { get; init; }
+
+    /// <summary>Execution projects are always client work.</summary>
+    public BillingType BillingType { get; init; } = BillingType.Client;
+
+    /// <summary>Required for client work, empty for internal projects.</summary>
+    public long? ClientId { get; init; }
+
+    /// <summary>Defaults to the caller.</summary>
+    public long? OwnerId { get; init; }
+
+    public DateOnly? TargetDate { get; init; }
+
+    /// <summary>Design client work only. Execution revenue is calculated from the fee and materials.</summary>
+    public decimal? Revenue { get; init; }
+
+    /// <summary>Execution only, and required there.</summary>
+    public decimal? ProjectFee { get; init; }
+
+    /// <summary>Execution only, and required there. A fraction: 0.10 is 10%, at most 5 (500%).</summary>
+    public decimal? MaterialMarkup { get; init; }
+}
+
+/// <summary>Replaces the project's details and owner.</summary>
+public sealed record UpdateProjectRequest
+{
+    public string Title { get; init; } = string.Empty;
+
+    public string? Description { get; init; }
+
+    public string? Icon { get; init; }
+
+    public string? Tint { get; init; }
+
+    public DateOnly? TargetDate { get; init; }
+
+    public long OwnerId { get; init; }
+}
+
+/// <summary>Design only: client work or internal, the client and the revenue.</summary>
+public sealed record UpdateProjectBillingRequest
+{
+    public BillingType BillingType { get; init; }
+
+    public long? ClientId { get; init; }
+
+    public decimal? Revenue { get; init; }
+}
+
+/// <summary>Execution only.</summary>
+public sealed record UpdateProjectPricingRequest
+{
+    public decimal ProjectFee { get; init; }
+
+    public decimal MaterialMarkup { get; init; }
+}
