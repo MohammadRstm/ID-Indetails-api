@@ -25,6 +25,22 @@ This file records the business decisions taken at the same time, so they're appl
 | 15 | **The Salaries page lists everyone with a pay record**, admins included. Super admins appear only if they have pay. | API |
 | 16 | **Company overhead:** amount changes are dated (past months keep their cost), totals are kept per currency, and "cancel" ends a line at the end of the current month. It can be resumed only before that date passes; after that, a new line is added. | API |
 
+## Decided for Design work (28 Sep 2026)
+
+Taken when the Design work API was built (see [design.md](design.md)).
+
+| # | Rule |
+|---|---|
+| D1 | **The timer runs in the client.** Stopping it logs an ordinary entry; nothing is stored while it runs. |
+| D2 | **Nobody edits someone else's entries**, admins included. Whoever holds `work_entry:create` logs their own work (Design admins included, by the role defaults). |
+| D3 | **Entry rules are enforced on the server.** An entry is locked once past the edit window (counted from when it was logged) or while its project no longer accepts work. 5 minutes to 16 hours, in whole minutes. With future entries allowed, any end time is accepted. |
+| D4 | **Entry attachments wait** for a file-upload feature. |
+| D5 | **Comments can't be edited or deleted.** Posting a comment to the team group chat is refused until messaging exists. |
+| D6 | **Logged-work notifications** go to active people holding `work_entry:view_all` in Design, never the author. |
+| D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, only `notifyEntry` and `notifyIdle` (the dashboard's idle projects) are used for now; the others need scheduled jobs. |
+| D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
+| D9 | **Logging doesn't add project members.** |
+
 ## Carried over from the prototype as-is
 
 - **Execution money:**
@@ -54,7 +70,7 @@ These have no decision yet. The schema doesn't depend on them.
 1. **Public holidays:** a company holiday calendar, or keep excusing per person?
 2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
 3. **Project pay and breaks:** should the project pay report include hourly staff's paid breaks? The prototype leaves them out, so it differs from Salaries.
-4. **Meetings:** the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
+4. **Meetings** *(for now, only `meeting:manage` holders set, move and remove meetings; letting employees do it needs a new permission seeded, awaiting approval)*: the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
 5. **Manual price equal to the automatic price:** store it as a manual price, or treat it as "automatic" (NULL)?
 6. **Material and labour timing:** costs are dated by when they were recorded (`added_at`, and the labour day). Is a separate delivery date needed?
 7. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?
