@@ -17,7 +17,7 @@ There is **no self-signup**. A developer creates the first super admin. After th
 | `POST /api/invitations/validate` | Anyone with a link | What the signup page shows (email, role, domain, team, position) |
 | `POST /api/invitations/accept` | Anyone with a link | Sets name, phone and password, activates the account, signs in |
 
-Login, refresh and the two public invitation endpoints are rate-limited per IP: 10 per minute by default. The setup endpoint allows 5 per hour.
+Every request counts against a global limit: 300 a minute per signed-in user, or 60 a minute per IP without a valid access token. Login, refresh and the two public invitation endpoints are also limited per IP to 10 a minute, and the setup endpoint to 5 an hour. All limits are in the `RateLimiting` configuration section; going over answers `429 too_many_requests`.
 
 ## Creating the first super admin
 

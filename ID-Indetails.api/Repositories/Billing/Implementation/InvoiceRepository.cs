@@ -112,10 +112,19 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
         return invoice;
     }
 
-    public async Task<decimal> PaidAsync(long invoiceId, CancellationToken cancellationToken = default)
-        => await db.Payments
-            .Where(p => p.InvoiceId == invoiceId && p.VoidedAt == null)
-            .SumAsync(p => (decimal?)p.AmountUsd, cancellationToken) ?? 0;
+    public async Task<Invoice?> GetForProjectForUpdateAsync(long projectId, long id, CancellationToken cancellationToken = default)
+        => (await db.Invoices
+            .FromSql($"SELECT * FROM `invoices` WHERE `id` = {id} AND `project_id` = {projectId} FOR UPDATE")
+            .ToListAsync(cancellationToken))
+            .SingleOrDefault();
+
+    // A plain SELECT would read the transaction's snapshot, which can predate a payment committed
+    // while this transaction waited for the invoice lock.
+    public async Task<decimal> PaidForUpdateAsync(long invoiceId, CancellationToken cancellationToken = default)
+        => (await db.Database
+            .SqlQuery<decimal>($"SELECT COALESCE(SUM(`amount_usd`), 0) AS `Value` FROM `payments` WHERE `invoice_id` = {invoiceId} AND `voided_at` IS NULL FOR UPDATE")
+            .ToListAsync(cancellationToken))
+            .Single();
 
     public async Task<int> NextSequenceAsync(string domainCode, int year, CancellationToken cancellationToken = default)
     {

@@ -281,10 +281,9 @@ public sealed class ProjectService(
 
     private async Task EnsureOwnerAsync(long ownerId, string domain, CancellationToken cancellationToken)
     {
-        var owner = await users.GetRoleSnapshotAsync(ownerId, cancellationToken)
-            ?? throw new RequestValidationException(ErrorCodes.ValidationFailed, "ownerId", "The owner does not exist.");
-
-        Throw(ProjectRules.CheckOwner(new ProjectRules.Person(owner.RoleCode, owner.DomainCode, owner.Status), domain));
+        var owner = await users.GetRoleSnapshotAsync(ownerId, cancellationToken);
+        Throw(ProjectRules.CheckOwner(
+            owner is null ? null : new ProjectRules.Person(owner.RoleCode, owner.DomainCode, owner.Status), domain));
     }
 
     private async Task<ProjectResponse> DescribeAsync(UserAccess actor, long projectId, CancellationToken cancellationToken)

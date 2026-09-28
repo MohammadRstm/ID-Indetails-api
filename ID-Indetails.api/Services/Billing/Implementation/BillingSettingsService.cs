@@ -39,11 +39,14 @@ public sealed class BillingSettingsService(
         CancellationToken cancellationToken = default)
     {
         var actorId = await EnsureVisibleAsync(domainCode, cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        await settings.LockAllAsync(cancellationToken);
 
         // Invoice numbers are unique across the company, so two domains can't share a prefix.
         if (await settings.PrefixUsedElsewhereAsync(request.InvoicePrefix, domainCode, cancellationToken))
         {
-            throw new ConflictException(ErrorCodes.InvoicePrefixTaken, "The other domain already uses this invoice prefix.");
+            throw new ConflictException(
+                ErrorCodes.InvoicePrefixTaken, "The other domain uses this invoice prefix, now or on invoices it has issued.");
         }
 
         var row = await settings.GetForUpdateAsync(domainCode, cancellationToken);
@@ -73,6 +76,7 @@ public sealed class BillingSettingsService(
             SubjectType = "billing_settings",
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return ToResponse(row);
     }

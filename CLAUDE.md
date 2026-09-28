@@ -47,6 +47,23 @@ When requirements, business rules, existing behavior, or architecture are unclea
 
 Do not invent requirements or silently choose behavior that could affect the system.
 
+### 1.1 Code style: simple and reviewable
+
+Code is written to be read and reviewed by a person.
+
+- **Proportional design.** Build what the requirement needs, nothing more. No speculative features, generic frameworks, extra layers or abstractions "for later". Plain, straightforward code beats clever code.
+- **Reuse before adding.** Extend existing services, repositories, endpoints and patterns instead of creating parallel ones.
+- **Small and focused.** Classes and methods have one clear responsibility. Split a method when it stops being easy to follow.
+- **Strict typing.** Use DTOs, records and enums rather than loose dictionaries, `object` or magic strings. Nullable reference types stay enabled and warnings are fixed, not suppressed.
+- **Clear naming** over explanatory comments.
+- **Concise comments.** No comments that restate the code or the member name. Add a short summary only where non-trivial business logic, a security decision or a non-obvious constraint needs explaining.
+- **No unrelated changes.** Don't refactor, reformat or rename code outside the task's scope.
+
+### 1.2 Rate limiting and caching
+
+- **Rate limiting.** A global limiter covers every endpoint automatically: per signed-in user, otherwise per IP (`Extensions/AuthServiceCollectionExtensions.cs`, limits in the `RateLimiting` configuration section). Endpoints that need a stricter limit (anything accepting passwords or tokens, heavy exports) also get a named policy from `RateLimiting/RateLimitPolicies.cs` via `[EnableRateLimiting]`. Rejections use the uniform error contract (`429 too_many_requests`).
+- **Caching.** Cache on the server only where it clearly pays off: data that rarely changes, or expensive calculations that are read often. Use `IMemoryCache` with a short lifetime, and drop the entry whenever the underlying data changes. Never cache in a way that could show one user another user's data or keep a revoked permission alive. Client-side state caching is the frontend's job.
+
 ---
 
 ## 2. Mandatory Git Commit Rule
@@ -842,6 +859,8 @@ A backend feature is complete only when, where applicable:
 
 - [ ] The agreed architecture is followed.
 - [ ] Controllers remain thin.
+- [ ] The code is proportional to the requirement: no speculative abstractions, no comment clutter (section 1.1).
+- [ ] Endpoints needing a stricter limit than the global one have a named rate-limit policy; any server cache is justified and invalidated on change (section 1.2).
 - [ ] FluentValidation is used appropriately.
 - [ ] Business logic is separated from HTTP/database concerns.
 - [ ] Repository responsibilities are respected.
