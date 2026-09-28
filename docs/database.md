@@ -33,7 +33,7 @@ The database is the second line of defence. The API must still filter every quer
 
 | Area | Tables |
 |---|---|
-| Identity and access | `domains`, `roles`, `permissions`, `role_permissions`, `users`, `teams`, `disciplines`, `user_pay_history`, `refresh_tokens`, `user_invitations`, `password_reset_tokens` |
+| Identity and access | `domains`, `roles`, `permissions`, `role_permissions`, `user_permission_overrides`, `users`, `teams`, `disciplines`, `user_pay_history`, `refresh_tokens`, `user_invitations`, `password_reset_tokens` |
 | Clients | `clients`, `client_contacts` |
 | Projects | `projects`, `project_members`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses` |
 | Design work | `work_entries`, `work_entry_comments` |
@@ -68,11 +68,12 @@ There is no self-signup.
 2. **Everyone else is invited.** The inviter creates a `users` row with `status = 'invited'` and sets email, role, domain, team, position and pay (`user_pay_history`). A `user_invitations` row holds the hash of a one-time, expiring signup token.
 3. **Accepting** the invitation sets first name, last name, phone and password, and makes the user `active`. `CHECK`: an active user always has a password hash and a name.
 
-Super admins may invite anyone into either domain (including other super admins). Admins may invite admins and employees into their own domain. This is enforced by the API, not the schema. Tokens (refresh, invitation, password reset) are stored only as unique hashes.
+Who may invite whom is decided by permissions (`employee:invite`, `employee:invite_super_admin`) and enforced by the API, not the schema. See [authorization.md](authorization.md). Tokens (refresh, invitation, password reset) are stored only as unique hashes.
 
 ## Rules the database enforces
 
 - A super admin has no domain; everyone else has exactly one.
+- A permission override is a grant or a revoke, at most one per user and permission.
 - An active user has a password and a name.
 - Internal projects have no client and zero revenue; revenue is never negative; progress is 0–100.
 - Execution projects are always client work and always have a fee and a material markup (0–500%); Design projects have neither.
@@ -121,6 +122,8 @@ The initial migration seeds:
 - **`domains`:** `design` and `execution`.
 - **`roles`:** `super_admin`, `admin` and `employee`.
 - **`permissions` and `role_permissions`:** from `Constants/PermissionCatalog.cs`.
+
+`user_permission_overrides` holds individual people's differences from their role defaults (see [authorization.md](authorization.md)). The `UserPermissionOverrides` migration adds it, with the `permission:manage` and `employee:invite_super_admin` permissions.
 
 Permission and role strings match the React client's `config/permissions.ts` and `config/roles.ts`.
 

@@ -11,9 +11,9 @@ There is **no self-signup**. A developer creates the first super admin. After th
 | `POST /api/auth/refresh` | Refresh cookie | Rotates the refresh cookie and returns a new access token |
 | `POST /api/auth/logout` | Refresh cookie | Revokes the refresh token and clears the cookie |
 | `POST /api/auth/change-password` | Signed in (allowed while a temporary password is pending) | Sets a new password and signs out every other session |
-| `GET /api/auth/me` | Signed in (allowed while a temporary password is pending) | Current user and effective permissions |
-| `POST /api/invitations` | `employee:invite` | Invites someone by email |
-| `POST /api/invitations/{userId}/resend` | `employee:invite` | Emails a fresh link; the previous one stops working |
+| `GET /api/auth/me` | Signed in (allowed while a temporary password is pending) | Current user, effective permissions, `isJoker` and `visibleDomains` |
+| `POST /api/invitations` | `employee:invite` or `employee:invite_super_admin` | Invites someone by email |
+| `POST /api/invitations/{userId}/resend` | `employee:invite` or `employee:invite_super_admin` | Emails a fresh link; the previous one stops working |
 | `POST /api/invitations/validate` | Anyone with a link | What the signup page shows (email, role, domain, team, position) |
 | `POST /api/invitations/accept` | Anyone with a link | Sets name, phone and password, activates the account, signs in |
 
@@ -37,17 +37,18 @@ At first sign-in the account has `mustChangePassword: true`. Every endpoint exce
 
 ## Invitations
 
-1. **Invite.** A super admin or admin calls `POST /api/invitations` with `email`, `role`, `domainCode`, and optionally `teamId`, `position` and `pay`. The person's `users` row is created with `status = invited` and no password.
+1. **Invite.** Someone allowed to invite calls `POST /api/invitations` with `email`, `role`, `domainCode`, and optionally `teamId`, `position` and `pay`. The person's `users` row is created with `status = invited` and no password.
 2. **Email.** They receive a link to `{Frontend:BaseUrl}{Frontend:AcceptInvitationPath}?token=…`. It is valid for 7 days (`Invitations:ExpirationDays`) and works once. If the email can't be sent, nothing is saved.
 3. **Signup page.** The client reads `token` from the URL, shows the details from `POST /api/invitations/validate`, and submits `POST /api/invitations/accept` with the token, first name, last name, optional phone and a password. The account becomes active and the person is signed in.
 
-Who may invite whom (see `Business/Auth/InvitationPolicy.cs`):
+Who may invite whom is decided by permissions, not roles (see `Business/Auth/InvitationPolicy.cs` and [authorization.md](authorization.md)):
 
-| Inviter | May invite | Into |
+| Inviting | Needs | Into |
 |---|---|---|
-| Super admin | super admins, admins, employees | Either domain. Super admins get no domain |
-| Admin | admins, employees | Their own domain only. `domainCode` may be omitted |
-| Employee | no one | — |
+| Super admins | `employee:invite_super_admin` | No domain |
+| Admins and employees | `employee:invite` | A domain the inviter can see. `domainCode` may be omitted when they see only one |
+
+By default only super admins hold `employee:invite_super_admin`, and super admins and admins hold `employee:invite`. Both can be granted to anyone.
 
 An unknown, used, revoked or expired link always answers `404 invitation_invalid` with the same message.
 
@@ -68,7 +69,7 @@ A JWT signed with HMAC-SHA256, valid for **3 hours** (`Jwt:AccessTokenMinutes`).
 | `position` | Job title. Absent if none |
 | `must_change_password` | `"true"` until a generated password is replaced |
 
-Permissions are **not** in the token. The server checks them against the database on every request, and the client gets them from `/me` and the login response.
+Permissions are **not** in the token, and the `role` claim is informational only. The server checks permissions against the database on every request, so a permission change or automatic role change applies immediately (see [authorization.md](authorization.md)). The client gets them from `/me` and the login response.
 
 ### Refresh token
 

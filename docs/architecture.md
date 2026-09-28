@@ -36,7 +36,7 @@ Request → Middleware → Controller → FluentValidation → Service → Busin
 | `Constants/` | Role, domain and permission codes, and `PermissionCatalog` (which role holds which permission; seeded into the database). These strings must match the React client's `config/roles.ts` and `config/permissions.ts`. |
 | `Enums/` | C# enums (statuses, kinds). They are stored as snake_case strings limited by CHECK constraints. |
 | `Exceptions/` | Typed exceptions that centralized handling turns into the uniform error contract. The folder is plural on purpose: a folder named `Exception` creates a namespace that hides `System.Exception` (CS0118). |
-| `Authorization/Handlers/`, `Authorization/Requirements/` | Policy requirements and handlers for permission and domain checks. |
+| `Authorization/Handlers/`, `Authorization/Requirements/` | Policy requirements and handlers for permission and domain checks. See [authorization.md](authorization.md). |
 | `Extensions/` | `IServiceCollection` and `WebApplication` extension methods, so `Program.cs` stays short. |
 | `HealthChecks/`, `RateLimiting/`, `Jobs/` | Health endpoints, rate-limit policies and background jobs. |
 
