@@ -65,6 +65,9 @@ public static class ActivityEventKinds
     // Billing
     public const string BillingSettingsUpdated = "billing_settings_updated";
 
+    // Domain settings (subject type only; no subject id)
+    public const string DomainSettingsUpdated = "domain_settings_updated";
+
     /// <summary>Company-wide (no domain); the rate in the amount column.</summary>
     public const string ExchangeRateSet = "exchange_rate_set";
 

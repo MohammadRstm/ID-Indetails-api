@@ -23,6 +23,8 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Implementation;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
 using ID_Indetails.api.Repositories.Requirements.Implementation;
+using ID_Indetails.api.Repositories.Settings.Abstraction;
+using ID_Indetails.api.Repositories.Settings.Implementation;
 using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Repositories.Teams.Implementation;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -49,6 +51,8 @@ using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Requirements.Abstraction;
 using ID_Indetails.api.Services.Requirements.Implementation;
+using ID_Indetails.api.Services.Settings.Abstraction;
+using ID_Indetails.api.Services.Settings.Implementation;
 using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
 using ID_Indetails.api.Services.Teams.Abstraction;
@@ -91,6 +95,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IDomainSettingsRepository, DomainSettingsRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -113,6 +118,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IBillingSettingsService, BillingSettingsService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IDomainSettingsService, DomainSettingsService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;
