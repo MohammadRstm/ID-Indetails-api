@@ -26,3 +26,23 @@ Rules (`Business/Materials/MaterialRules.cs`):
 - Adding materials sends one `materials_added` notification (the count in the payload) to every active person of the domain holding `material:manage`, except the person who added them.
 
 Material cost and client prices feed the shared finance calculator (`Business/Finance/ProjectFinance.cs`): cost is converted at the rate of the day a material was added.
+
+## Ground labour
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/labour-weeks` | `project:view` | Every week from the project's first to the current one (or the one it was finalised in), newest first, reported or not, with the labour total |
+| `GET /api/projects/{id}/labour-weeks/{weekStart}` | `project:view` | One week's days. A week not yet reported comes back filled in from the defaults, up to today (`isReported: false`) |
+| `PUT /api/projects/{id}/labour-weeks/{weekStart}` | `labour_report:create` (new or own weeks) or `labour_report:manage` (anyone's) | `{ days: [{ date, workers, dailyPay }], note }` submits the week, or replaces the days of one already reported |
+| `GET /api/projects/{id}/labour-defaults` | `project:view` | The defaults in force today and every change |
+| `POST /api/projects/{id}/labour-defaults` | `labour_report:manage` (admins) | `{ workers, dailyPay }`, applying from today |
+
+Rules (`Business/Labour/LabourRules.cs`):
+
+- A **site week** runs Monday to Saturday; `weekStart` is its Monday (`400` otherwise). Sunday is never a labour day. Each day is a different day of the week (`400 labour_day_outside_week`) and no later than today (`400 labour_day_in_future`).
+- Weeks can be reported from the project's first week to the current one (`422 labour_week_out_of_range`). There is one report per project and week; submitting it again replaces its days and keeps who first submitted it (the event records who changed it).
+- A day costs **workers × daily pay**, in USD (labour is recorded without a currency). Ground labour is never billed to the client; it feeds the shared finance calculator as ground-labour cost, dated by each day.
+- **Defaults** (the crew size and day rate new weeks start from) are admin-only and dated: a change applies from today, and a second change the same day replaces the first. An unreported week is filled in from the defaults in force on each of its days; before the first dated default, the first one applies. With no defaults, days start at zero. Weeks already reported keep their own numbers. An Execution project can be created with its first defaults (`labourDefaults` on `POST /api/projects`, needs `labour_report:manage`).
+- People change only the weeks they submitted; `labour_report:manage` changes anyone's (`403 forbidden`). `canEdit` says whether the caller may. Everyone who can see the project sees workers and day rates.
+- Events: `labour_week_submitted` and `labour_week_updated` (the week's total, and the previous one, in the amount columns) and `labour_defaults_set` (the daily pay in the amount columns, the crew sizes in the payload).
+- Submitting or updating a week sends a `labour_week_submitted` notification to every active person of the domain holding `labour_report:manage`, except the person who did it.

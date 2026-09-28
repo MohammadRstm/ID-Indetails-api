@@ -86,6 +86,9 @@ public static class ErrorCodes
 
     // Execution site costs
     public const string MaterialStated = "material_stated";
+    public const string LabourWeekOutOfRange = "labour_week_out_of_range";
+    public const string LabourDayOutsideWeek = "labour_day_outside_week";
+    public const string LabourDayInFuture = "labour_day_in_future";
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";

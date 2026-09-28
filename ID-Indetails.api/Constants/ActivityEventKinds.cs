@@ -88,4 +88,12 @@ public static class ActivityEventKinds
 
     /// <summary>A material's client price was set or returned to the markup; new and previous price in the amount columns.</summary>
     public const string MaterialPriced = "material_priced";
+
+    // Ground labour (project_id is set; money in the amount columns)
+    /// <summary>Subject: the labour week; its total in <c>amount</c> (and the previous total when updated).</summary>
+    public const string LabourWeekSubmitted = "labour_week_submitted";
+    public const string LabourWeekUpdated = "labour_week_updated";
+
+    /// <summary>Subject: the project; the new and previous daily pay in the amount columns, the crew sizes in the payload.</summary>
+    public const string LabourDefaultsSet = "labour_defaults_set";
 }

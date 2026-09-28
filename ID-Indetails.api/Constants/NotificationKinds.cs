@@ -8,4 +8,7 @@ public static class NotificationKinds
 
     /// <summary>Someone recorded materials on a site (subject: the project; the count in the payload).</summary>
     public const string MaterialsAdded = "materials_added";
+
+    /// <summary>Someone submitted or updated a labour week (subject: the project; the week and whether it was an update in the payload).</summary>
+    public const string LabourWeekSubmitted = "labour_week_submitted";
 }

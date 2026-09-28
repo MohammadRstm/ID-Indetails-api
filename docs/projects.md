@@ -20,7 +20,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 
 - The start date is today (company time zone). The owner defaults to the caller.
 - **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No fee or markup.
-- **Execution:** always client work, with a `clientId`, a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). `revenue` is never sent; it is calculated. An optional `initialPayment` (`amount`, `currency`, `fxRate`, `receivedOn`, `method`, `reference`, `note`) is recorded on account as the project's initial payment in the same transaction. It needs `payment:record`, and Design projects don't take one (`400`).
+- **Execution:** always client work, with a `clientId`, a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). `revenue` is never sent; it is calculated. An optional `initialPayment` (`amount`, `currency`, `fxRate`, `receivedOn`, `method`, `reference`, `note`) is recorded on account as the project's initial payment in the same transaction. It needs `payment:record`, and Design projects don't take one (`400`). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
 - The client must belong to the project's domain (`400`) and not be archived (`422 client_archived`).
 - **Owner:** anyone of the project's domain who isn't deactivated, or a super admin (`422 owner_not_allowed`).
 
