@@ -92,6 +92,13 @@ public static class ErrorCodes
     public const string RateDateInFuture = "rate_date_in_future";
     public const string RateNotAfterLatest = "rate_not_after_latest";
 
+    // Execution site costs
+    public const string MaterialStated = "material_stated";
+    public const string LabourWeekOutOfRange = "labour_week_out_of_range";
+    public const string LabourDayOutsideWeek = "labour_day_outside_week";
+    public const string LabourDayInFuture = "labour_day_in_future";
+    public const string StatementEmpty = "statement_empty";
+
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
 

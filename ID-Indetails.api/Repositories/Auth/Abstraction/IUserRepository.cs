@@ -22,6 +22,9 @@ public interface IUserRepository
 
     Task<bool> EmailExistsAsync(string normalizedEmail, CancellationToken cancellationToken = default);
 
+    /// <summary>Ids of the active people whose home domain is <paramref name="domain"/> (super admins have none).</summary>
+    Task<IReadOnlyList<long>> ActiveIdsInDomainAsync(string domain, CancellationToken cancellationToken = default);
+
     /// <summary>Stages a new user; saved by the unit of work.</summary>
     void Add(User user);
 

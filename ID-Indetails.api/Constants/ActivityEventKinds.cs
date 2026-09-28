@@ -98,6 +98,28 @@ public static class ActivityEventKinds
     public const string PaymentApplied = "payment_applied";
     public const string PaymentVoided = "payment_voided";
 
+    // Materials (subject: the material; project_id is set; the cost in the amount columns)
+    public const string MaterialAdded = "material_added";
+    public const string MaterialUpdated = "material_updated";
+    public const string MaterialRemoved = "material_removed";
+
+    /// <summary>A material's client price was set or returned to the markup; new and previous price in the amount columns.</summary>
+    public const string MaterialPriced = "material_priced";
+
+    // Ground labour (project_id is set; money in the amount columns)
+    /// <summary>Subject: the labour week; its total in <c>amount</c> (and the previous total when updated).</summary>
+    public const string LabourWeekSubmitted = "labour_week_submitted";
+    public const string LabourWeekUpdated = "labour_week_updated";
+
+    /// <summary>Subject: the project; the new and previous daily pay in the amount columns, the crew sizes in the payload.</summary>
+    public const string LabourDefaultsSet = "labour_defaults_set";
+
+    // Client statements (subject: the statement; project and client are set; the statement's total in the amount column)
+    public const string StatementCreated = "statement_created";
+
+    /// <summary>The channel in the payload.</summary>
+    public const string StatementSent = "statement_sent";
+
     // Company layer (no domain, except schedules, which carry the person's domain)
     public const string CompanySettingsUpdated = "company_settings_updated";
     public const string WorkingTimeChanged = "working_time_changed";

@@ -24,6 +24,8 @@ This file records the business decisions taken at the same time, so they're appl
 | 14 | **The hours ledger** applies to Design employees only, from the month they joined. Admins and Execution staff have none. | Payroll calculation |
 | 15 | **The Salaries page lists everyone with a pay record**, admins included. Super admins appear only if they have pay. | API |
 | 16 | **Company overhead:** amount changes are dated (past months keep their cost), totals are kept per currency, and "cancel" ends a line at the end of the current month. It can be resumed only before that date passes; after that, a new line is added. | API |
+| 17 | **A manual price equal to the automatic one is stored as automatic** (`client_price` NULL), so it keeps following the markup. *(Was open question 5.)* | API |
+| 18 | **No separate delivery date** for now: materials are dated by when they were added, labour by its day. *(Was open question 6.)* | Schema unchanged |
 
 ## Decided for Design work (28 Sep 2026)
 
@@ -71,6 +73,4 @@ These have no decision yet. The schema doesn't depend on them.
 2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
 3. **Project pay and breaks:** should the project pay report include hourly staff's paid breaks? The prototype leaves them out, so it differs from Salaries.
 4. **Meetings** *(for now, only `meeting:manage` holders set, move and remove meetings; letting employees do it needs a new permission seeded, awaiting approval)*: the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
-5. **Manual price equal to the automatic price:** store it as a manual price, or treat it as "automatic" (NULL)?
-6. **Material and labour timing:** costs are dated by when they were recorded (`added_at`, and the labour day). Is a separate delivery date needed?
 7. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?

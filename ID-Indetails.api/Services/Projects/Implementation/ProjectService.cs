@@ -83,6 +83,19 @@ public sealed class ProjectService(
             throw new ForbiddenException(ErrorCodes.Forbidden, "Recording the initial payment needs the permission to record payments.");
         }
 
+        if (request.LabourDefaults is not null)
+        {
+            if (domain != DomainCodes.Execution)
+            {
+                throw new RequestValidationException(ErrorCodes.ValidationFailed, "labourDefaults", "Only Execution projects have labour defaults.");
+            }
+
+            if (!actor.Has(PermissionCodes.LabourReportManage))
+            {
+                throw new ForbiddenException(ErrorCodes.Forbidden, "Setting labour defaults needs the permission to manage labour reports.");
+            }
+        }
+
         await EnsureClientAsync(request.ClientId, domain, cancellationToken);
         var ownerId = request.OwnerId ?? actor.UserId;
         await EnsureOwnerAsync(ownerId, domain, cancellationToken);
@@ -108,6 +121,19 @@ public sealed class ProjectService(
             CreatedById = actor.UserId,
         };
 
+        if (request.LabourDefaults is { } labour)
+        {
+            project.LabourDefaults.Add(new ProjectLabourDefault
+            {
+                EffectiveFrom = project.StartDate,
+                Workers = labour.Workers,
+                DailyPay = labour.DailyPay,
+                Currency = PaymentRules.BaseCurrency,
+                CreatedAt = now,
+                CreatedById = actor.UserId,
+            });
+        }
+
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         projects.Add(project);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -121,6 +147,12 @@ public sealed class ProjectService(
         if (project.ProjectFee is > 0)
         {
             activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectFeeSet, actor.UserId, amount: project.ProjectFee));
+        }
+
+        if (request.LabourDefaults is { } defaults)
+        {
+            activity.Add(ProjectEvent(project, ActivityEventKinds.LabourDefaultsSet, actor.UserId,
+                new { workers = defaults.Workers, previousWorkers = (int?)null, effectiveFrom = project.StartDate }, amount: defaults.DailyPay));
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

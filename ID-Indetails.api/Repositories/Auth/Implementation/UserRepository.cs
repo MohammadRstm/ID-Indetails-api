@@ -1,4 +1,5 @@
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,12 @@ public sealed class UserRepository(IdIndetailsDbContext db) : IUserRepository
 
     public Task<bool> EmailExistsAsync(string normalizedEmail, CancellationToken cancellationToken = default)
         => db.Users.AnyAsync(u => u.Email == normalizedEmail, cancellationToken);
+
+    public async Task<IReadOnlyList<long>> ActiveIdsInDomainAsync(string domain, CancellationToken cancellationToken = default)
+        => await db.Users
+            .Where(u => u.DomainCode == domain && u.Status == UserStatus.Active)
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
 
     public void Add(User user) => db.Users.Add(user);
 

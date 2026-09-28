@@ -41,6 +41,45 @@ public sealed class ProjectFinanceService(IProjectFinanceRepository sources, ICl
             rates));
     }
 
+    public async Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(Project project, DateOnly to, CancellationToken cancellationToken = default)
+    {
+        long[] ids = [project.Id];
+        var rates = new ExchangeRateTable(await sources.ExchangeRatesAsync(cancellationToken));
+        var entries = await sources.WorkEntriesAsync(ids, cancellationToken);
+        var payRates = await sources.PayRatesAsync(entries.Select(e => e.UserId).Distinct().ToList(), cancellationToken);
+        var (items, _) = CostItems(
+            entries,
+            payRates,
+            await sources.ExpensesAsync(ids, cancellationToken),
+            await sources.MaterialsAsync(ids, cancellationToken),
+            await sources.GroundLabourAsync(ids, cancellationToken));
+        var payments = await sources.PaymentsAsync(project.Id, cancellationToken);
+
+        return ProjectFinance.CashByWeek(items, payments.Select(p => (p.ReceivedOn, p.AmountUsd)), rates, project.StartDate, to);
+    }
+
+    /// <summary>Every cost of a project on its day, in its own currency; worked time is priced at each person's rate.</summary>
+    private (IReadOnlyList<Cost> Items, int UnpricedMinutes) CostItems(
+        IEnumerable<WorkEntryRow> entries,
+        IReadOnlyList<ProjectFinance.PayRate> payRates,
+        IEnumerable<ExpenseRow> expenses,
+        IEnumerable<MaterialRow> materials,
+        IEnumerable<GroundLabourRow> ground)
+    {
+        var (labour, unpricedMinutes) = ProjectFinance.PriceLabour(
+            entries.Select(e => new ProjectFinance.WorkedTime(e.UserId, clock.ToCompanyDate(e.StartedAt), e.Minutes)),
+            payRates);
+
+        var items = labour
+            .Concat(expenses.Select(x => new Cost(CostSource.Expenses, x.Currency, x.Amount, x.SpentOn)))
+            .Concat(materials.Select(m => new Cost(CostSource.Materials, m.Currency, m.Total, clock.ToCompanyDate(m.AddedAt))))
+            // Ground labour is recorded without a currency: daily pay is in USD.
+            .Concat(ground.Select(d => new Cost(CostSource.GroundLabour, PaymentRules.BaseCurrency, d.Cost, d.WorkDate)))
+            .ToList();
+
+        return (items, unpricedMinutes);
+    }
+
     private ProjectFinancials Calculate(
         Project project,
         IReadOnlyList<WorkEntryRow> entries,
@@ -51,17 +90,8 @@ public sealed class ProjectFinanceService(IProjectFinanceRepository sources, ICl
         decimal received,
         ExchangeRateTable rates)
     {
-        var (labour, unpricedMinutes) = ProjectFinance.PriceLabour(
-            entries.Select(e => new ProjectFinance.WorkedTime(e.UserId, clock.ToCompanyDate(e.StartedAt), e.Minutes)),
-            payRates);
-
-        var costs = ProjectFinance.ToUsd(
-            labour
-                .Concat(expenses.Select(x => new Cost(CostSource.Expenses, x.Currency, x.Amount, x.SpentOn)))
-                .Concat(materials.Select(m => new Cost(CostSource.Materials, m.Currency, m.Total, clock.ToCompanyDate(m.AddedAt))))
-                // Ground labour is recorded without a currency: daily pay is in USD.
-                .Concat(ground.Select(d => new Cost(CostSource.GroundLabour, PaymentRules.BaseCurrency, d.Cost, d.WorkDate))),
-            rates);
+        var (items, unpricedMinutes) = CostItems(entries, payRates, expenses, materials, ground);
+        var costs = ProjectFinance.ToUsd(items, rates);
 
         var isExecution = project.DomainCode == DomainCodes.Execution;
         decimal? materialCharge = null;
