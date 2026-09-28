@@ -31,6 +31,17 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
         => await (await Client.GetAsync($"/api/invoices/{invoiceId}", token)).ReadAsync<InvoiceResponse>();
 
     [Fact]
+    public async Task Only_execution_sites_take_an_initial_payment()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 5000m);
+
+        await (await Client.PostJsonAsync($"/api/projects/{project.Id}/payments",
+                new { amount = 100m, currency = "USD", isInitial = true }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
     public async Task Concurrent_payments_never_overpay_an_invoice()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
