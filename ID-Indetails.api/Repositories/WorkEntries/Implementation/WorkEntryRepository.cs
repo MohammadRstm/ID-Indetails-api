@@ -43,6 +43,9 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
     public async Task<WorkEntryView?> GetViewAsync(long id, CancellationToken cancellationToken = default)
         => (await ViewsAsync(db.WorkEntries.Where(e => e.Id == id && e.DeletedAt == null), cancellationToken)).SingleOrDefault();
 
+    public Task<IReadOnlyList<WorkEntryView>> ViewsByIdAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
+        => ViewsAsync(db.WorkEntries.Where(e => ids.Contains(e.Id) && e.DeletedAt == null), cancellationToken);
+
     public async Task<(IReadOnlyList<WorkEntryView> Items, int TotalCount)> SearchAsync(
         WorkEntrySearch search,
         CancellationToken cancellationToken = default)

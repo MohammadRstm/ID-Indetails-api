@@ -35,6 +35,8 @@ using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Repositories.Teams.Implementation;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Implementation;
+using ID_Indetails.api.Services.Activity.Abstraction;
+using ID_Indetails.api.Services.Activity.Implementation;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Auth.Implementation;
 using ID_Indetails.api.Services.Billing.Abstraction;
@@ -100,6 +102,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IActivityEventRepository, ActivityEventRepository>();
+        services.AddScoped<IActivityFeedRepository, ActivityFeedRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
         services.AddScoped<IProjectFinanceRepository, ProjectFinanceRepository>();
         services.AddScoped<ICompanyRepository, CompanyRepository>();
@@ -154,6 +157,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IWorkInsightsService, WorkInsightsService>();
         services.AddScoped<IMeetingService, MeetingService>();
         services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IActivityFeedService, ActivityFeedService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

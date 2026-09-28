@@ -82,6 +82,9 @@ public interface IWorkEntryRepository
     /// <summary>A live entry. Not tracked.</summary>
     Task<WorkEntryView?> GetViewAsync(long id, CancellationToken cancellationToken = default);
 
+    /// <summary>The live ones among the given entries. Not tracked.</summary>
+    Task<IReadOnlyList<WorkEntryView>> ViewsByIdAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
+
     /// <summary>Newest first (by start). Not tracked.</summary>
     Task<(IReadOnlyList<WorkEntryView> Items, int TotalCount)> SearchAsync(WorkEntrySearch search, CancellationToken cancellationToken = default);
 

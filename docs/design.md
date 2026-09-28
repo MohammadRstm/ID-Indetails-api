@@ -141,3 +141,13 @@ Callers who can't see Design (an Execution admin holds `report:view` too) get `4
 - **Needs attention** (at most 5, in this order): active projects with no work for 7 days or more (only while `notifyIdle` is on), active projects at 90% or more, projects on hold (with the days since they were put on hold), and how many employees haven't logged this week.
 - Overtime columns come once the working-time engine exists.
 
+## Activity feed
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/activity?group=&projectId=&clientId=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first |
+| `GET /api/activity/today` | `activity:view` and `work_entry:view_all` | Design work that started today: minutes, entries, people, and minutes by the hour they were logged |
+
+- **Groups** (the filter chips, `Business/Activity/ActivityGroups.cs`): `work` (work entries and their comments), `money` (revenue, expenses, fee, markup, finalising), `billing` (billing settings, exchange rates, invoices, payments), `projects` (projects, progress, requirements, meetings, clients), `people` (people, pay changes, permissions, teams) and `company` (company-level events with no domain).
+- **Who sees what:** work events only with `work_entry:view_all`; `amount` and `prevAmount` only with `financial:view` (payloads never hold money); company-level events (overhead, working time, schedules, company settings, exchange rates) only with `company:view`. The other domain's events never appear.
+- Each item has the actor, project and client by name, the subject, the payload as recorded, and for work events the entry as it is now (`null` once deleted). `clientId` matches the event's client or its project's client; `userId` matches who did it.
