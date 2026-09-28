@@ -62,6 +62,12 @@ public static class ActivityEventKinds
     public const string ExpenseAdded = "expense_added";
     public const string ExpenseRemoved = "expense_removed";
 
+    // Work entries (subject: the work entry; project_id is set; minutes in the payload)
+    public const string WorkEntryLogged = "work_entry_logged";
+    public const string WorkEntryUpdated = "work_entry_updated";
+    public const string WorkEntryDeleted = "work_entry_deleted";
+    public const string WorkEntryRestored = "work_entry_restored";
+
     // Billing
     public const string BillingSettingsUpdated = "billing_settings_updated";
 

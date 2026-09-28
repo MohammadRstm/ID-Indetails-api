@@ -27,6 +27,8 @@ using ID_Indetails.api.Repositories.Settings.Abstraction;
 using ID_Indetails.api.Repositories.Settings.Implementation;
 using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Repositories.Teams.Implementation;
+using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
+using ID_Indetails.api.Repositories.WorkEntries.Implementation;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Auth.Implementation;
 using ID_Indetails.api.Services.Billing.Abstraction;
@@ -57,6 +59,8 @@ using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
 using ID_Indetails.api.Services.Teams.Abstraction;
 using ID_Indetails.api.Services.Teams.Implementation;
+using ID_Indetails.api.Services.WorkEntries.Abstraction;
+using ID_Indetails.api.Services.WorkEntries.Implementation;
 
 namespace ID_Indetails.api.Extensions;
 
@@ -96,6 +100,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IDomainSettingsRepository, DomainSettingsRepository>();
+        services.AddScoped<IWorkEntryRepository, WorkEntryRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -119,6 +124,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IDomainSettingsService, DomainSettingsService>();
+        services.AddScoped<IWorkLogNotifier, WorkLogNotifier>();
+        services.AddScoped<IWorkEntryService, WorkEntryService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

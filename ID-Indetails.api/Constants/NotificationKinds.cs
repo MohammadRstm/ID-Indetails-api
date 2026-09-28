@@ -5,4 +5,10 @@ public static class NotificationKinds
 {
     /// <summary>Someone was assigned a requirement (subject: the requirement).</summary>
     public const string RequirementAssigned = "requirement_assigned";
+
+    /// <summary>Someone logged work (subject: the work entry). Sent to the domain's admins per its <c>notify_entry</c> setting.</summary>
+    public const string WorkLogged = "work_logged";
+
+    /// <summary>One rolling notification per admin per day summing the work logged (digest key <c>work-digest-YYYY-MM-DD</c>).</summary>
+    public const string WorkDigest = "work_digest";
 }

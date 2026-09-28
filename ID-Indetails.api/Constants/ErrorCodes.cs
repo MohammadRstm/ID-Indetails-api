@@ -65,6 +65,13 @@ public static class ErrorCodes
     public const string ProjectClosed = "project_closed";
     public const string AssigneeNotAllowed = "assignee_not_allowed";
 
+    // Work entries
+    public const string ProjectNotAcceptingWork = "project_not_accepting_work";
+    public const string EntryInFuture = "entry_in_future";
+    public const string EntryOverlaps = "entry_overlaps";
+    public const string DescriptionRequired = "description_required";
+    public const string EditWindowClosed = "edit_window_closed";
+
     // Billing
     public const string BillingSettingsMissing = "billing_settings_missing";
     public const string InvoicePrefixTaken = "invoice_prefix_taken";
