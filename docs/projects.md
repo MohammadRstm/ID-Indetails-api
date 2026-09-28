@@ -63,6 +63,20 @@ Anything else is `422 invalid_status_change`, and asking for the current status 
 - A requirement is **overdue** when it is open and its deadline is before today (company time zone).
 - Every change writes `requirement_added`, `requirement_updated`, `requirement_done`, `requirement_reopened` or `requirement_deleted` (the requirement is the subject, the text is in the payload). No notifications are sent yet.
 
+## Expenses
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/expenses` | `expense:manage` or `financial:view` | Newest first, with one total per currency |
+| `POST /api/projects/{id}/expenses` | `expense:manage` | `{ label, amount, currency, category, spentOn, note }` |
+| `DELETE /api/projects/{id}/expenses/{expId}` | `expense:manage` | Soft delete (`deleted_at`) |
+
+- Only while the project is open and its revenue isn't locked (`422 project_closed`). Expenses can't be edited: remove and add again.
+- `amount` is more than zero with at most 2 decimals. `currency` is USD or LBP. `spentOn` defaults to today.
+- `category` is one of `assets`, `services`, `contractor`, `software`, `travel`, `hardware` or `other` (the default).
+- **Totals are per currency** and are never converted or added across currencies. The project's `money.expenseTotals` shows the same totals.
+- Events: `expense_added` and `expense_removed`, with the amount in the `amount` column and the label, category and currency in the payload.
+
 ## Progress
 
 `progress_pct` is a cache of done ÷ live requirements, rounded to a whole percentage (`Business/Projects/ProgressCalculator.cs`). A project with no requirements is 0% while open and 100% once completed or archived. It is recalculated in the same transaction as every requirement or status change, which writes a `progress_set` event (new value in `amount`, previous in `prev_amount`) whenever it changes.

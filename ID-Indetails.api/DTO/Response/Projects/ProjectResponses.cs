@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Projects;
@@ -26,6 +27,9 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Execution: what the client is charged for materials.</summary>
     public decimal? MaterialCharge { get; init; }
+
+    /// <summary>Project expenses, one total per currency.</summary>
+    public IReadOnlyList<CurrencyTotalResponse> ExpenseTotals { get; init; } = [];
 }
 
 public sealed record ProjectSummaryResponse

@@ -3,10 +3,12 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Expenses;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
@@ -15,6 +17,7 @@ using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -29,6 +32,7 @@ public sealed class ProjectService(
     IProjectRepository projects,
     IClientRepository clients,
     IUserRepository users,
+    IExpenseRepository expenses,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectService
@@ -289,9 +293,13 @@ public sealed class ProjectService(
     private async Task<ProjectMoneyResponse> MoneyOfAsync(Project p, CancellationToken cancellationToken)
     {
         var locked = p.RevenueLockedAt is not null;
+        var expenseTotals = ExpenseRules.Totals(await expenses.AmountsAsync(p.Id, cancellationToken))
+            .Select(t => new CurrencyTotalResponse(t.Currency, t.Total))
+            .ToList();
+
         if (p.DomainCode != DomainCodes.Execution)
         {
-            return new ProjectMoneyResponse { Currency = p.RevenueCurrency, Revenue = p.Revenue, IsLocked = locked };
+            return new ProjectMoneyResponse { Currency = p.RevenueCurrency, Revenue = p.Revenue, IsLocked = locked, ExpenseTotals = expenseTotals };
         }
 
         var materials = await projects.GetMaterialsAsync(p.Id, p.RevenueCurrency, cancellationToken);
@@ -304,6 +312,7 @@ public sealed class ProjectService(
             ProjectFee = p.ProjectFee,
             MaterialMarkup = p.MaterialMarkup,
             MaterialCharge = ExecutionPricing.MaterialCharge(materials, markup),
+            ExpenseTotals = expenseTotals,
         };
     }
 

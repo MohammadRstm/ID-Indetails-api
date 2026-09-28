@@ -57,4 +57,8 @@ public static class ActivityEventKinds
     public const string RequirementDone = "requirement_done";
     public const string RequirementReopened = "requirement_reopened";
     public const string RequirementDeleted = "requirement_deleted";
+
+    // Expenses (subject: the expense; project_id is set; the amount in the amount column)
+    public const string ExpenseAdded = "expense_added";
+    public const string ExpenseRemoved = "expense_removed";
 }

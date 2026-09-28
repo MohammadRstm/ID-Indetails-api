@@ -9,6 +9,8 @@ using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Common.Implementation;
 using ID_Indetails.api.Repositories.Employees.Abstraction;
 using ID_Indetails.api.Repositories.Employees.Implementation;
+using ID_Indetails.api.Repositories.Expenses.Abstraction;
+using ID_Indetails.api.Repositories.Expenses.Implementation;
 using ID_Indetails.api.Repositories.Invitations.Abstraction;
 using ID_Indetails.api.Repositories.Invitations.Implementation;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
@@ -27,6 +29,8 @@ using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Employees.Implementation;
+using ID_Indetails.api.Services.Expenses.Abstraction;
+using ID_Indetails.api.Services.Expenses.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Invitations.Implementation;
 using ID_Indetails.api.Services.Permissions.Abstraction;
@@ -70,6 +74,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IClientRepository, ClientRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IRequirementRepository, RequirementRepository>();
+        services.AddScoped<IExpenseRepository, ExpenseRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -87,6 +92,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectProgress, ProjectProgress>();
         services.AddScoped<IProjectStatusService, ProjectStatusService>();
         services.AddScoped<IRequirementService, RequirementService>();
+        services.AddScoped<IExpenseService, ExpenseService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;
