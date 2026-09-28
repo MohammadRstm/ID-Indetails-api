@@ -1,0 +1,28 @@
+using ID_Indetails.api.Models;
+
+namespace ID_Indetails.api.Repositories.Payroll.Abstraction;
+
+/// <summary>What salaries are calculated from, loaded for everyone at once (one query per source).</summary>
+public interface IPayrollRepository
+{
+    /// <summary>Active people who have joined, in the given domains (super admins only when asked), with their team.</summary>
+    Task<IReadOnlyList<User>> PeopleAsync(
+        IReadOnlyList<string> domains,
+        bool includeSuperAdmins,
+        string? domain,
+        string? search,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<UserPayHistory>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<WorkEntryTime>> WorkAsync(
+        IReadOnlyCollection<long> userIds,
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Live excuses of the month, with their days.</summary>
+    Task<IReadOnlyList<HourExcuse>> ExcusesAsync(IReadOnlyCollection<long> userIds, DateOnly month, CancellationToken cancellationToken = default);
+}
+
+public sealed record WorkEntryTime(long Id, long UserId, DateTime StartedAt, int Minutes);

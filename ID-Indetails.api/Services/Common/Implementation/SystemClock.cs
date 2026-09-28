@@ -14,7 +14,8 @@ public sealed class SystemClock(IOptions<CompanyOptions> company) : IClock
 
     public DateOnly ToCompanyDate(DateTime utc) => DateOnly.FromDateTime(ToCompanyTime(utc));
 
-    public DateTime ToCompanyTime(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone);
+    public DateTime ToCompanyTime(DateTime utc)
+        => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone);
 
     public DateTime CompanyDayStartUtc(DateOnly day)
     {

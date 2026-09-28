@@ -11,7 +11,7 @@ public interface IClock
     /// <summary>The calendar day an instant falls on in the company time zone.</summary>
     DateOnly ToCompanyDate(DateTime utc);
 
-    /// <summary>The wall-clock time an instant shows in the company time zone.</summary>
+    /// <summary>An instant as a local date and time in the company time zone.</summary>
     DateTime ToCompanyTime(DateTime utc);
 
     /// <summary>The instant a company-time-zone day starts, in UTC.</summary>
