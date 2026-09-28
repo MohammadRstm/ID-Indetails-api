@@ -42,9 +42,6 @@ public sealed record WorkRow(long Id, long UserId, long ProjectId, DateTime Star
 
 public sealed record WorkPerson(long Id, string Name, string Email, string? TeamName, string? DomainCode);
 
-/// <param name="FirstDayOfWeek">Monday unless the company settings say Sunday.</param>
-public sealed record CompanyCalendar(DayOfWeek FirstDayOfWeek, bool Use24HourTime);
-
 /// <summary>A project as the Design work pages list it.</summary>
 public sealed record WorkProject(
     long Id,
@@ -99,9 +96,6 @@ public interface IWorkEntryRepository
 
     /// <summary>Names, emails, teams and domains of the given people. Not tracked.</summary>
     Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
-
-    /// <summary>The company's week start and clock format, or Monday and 12-hour time before the company settings exist.</summary>
-    Task<CompanyCalendar> CompanyCalendarAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Active people who might hold <paramref name="permissionCode"/> in the domain: its members, super admins,

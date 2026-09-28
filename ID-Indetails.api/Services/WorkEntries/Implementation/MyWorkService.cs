@@ -5,6 +5,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Meetings.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
@@ -25,6 +26,7 @@ public sealed class MyWorkService(
     IPermissionService permissions,
     IProjectRepository projects,
     IWorkEntryRepository entries,
+    ICompanyRepository company,
     IDomainSettingsService domainSettings,
     IMeetingRepository meetings,
     IClock clock) : IMyWorkService
@@ -107,7 +109,7 @@ public sealed class MyWorkService(
         }
 
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
-        var calendar = await entries.CompanyCalendarAsync(cancellationToken);
+        var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var today = clock.CompanyToday;
         var all = await entries.ListAsync(new WorkEntrySearch(ProjectId: projectId), cancellationToken);
         var mine = all.Where(e => e.UserId == actor.UserId).ToList();
@@ -152,7 +154,7 @@ public sealed class MyWorkService(
     private async Task<WorkSummaryResponse> SummaryAsync(WorkPerson person, WorkSummaryQuery query, CancellationToken cancellationToken)
     {
         var views = await entries.ListAsync(new WorkEntrySearch(UserId: person.Id), cancellationToken);
-        var calendar = await entries.CompanyCalendarAsync(cancellationToken);
+        var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var today = clock.CompanyToday;
         var worked = views.Select(ToWorked).ToList();
 

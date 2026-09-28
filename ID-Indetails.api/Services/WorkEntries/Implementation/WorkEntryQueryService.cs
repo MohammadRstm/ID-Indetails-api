@@ -8,6 +8,7 @@ using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -25,6 +26,7 @@ public sealed class WorkEntryQueryService(
     ICurrentUser currentUser,
     IPermissionService permissions,
     IWorkEntryRepository entries,
+    ICompanyRepository company,
     IWorkEntryCommentRepository comments,
     IDomainSettingsService domainSettings,
     IProjectFinanceRepository financeSources,
@@ -83,7 +85,7 @@ public sealed class WorkEntryQueryService(
 
         var userIds = rows.Select(e => e.UserId).Distinct().ToList();
         var people = (await entries.PeopleAsync(userIds, cancellationToken)).ToDictionary(p => p.Id);
-        var calendar = await entries.CompanyCalendarAsync(cancellationToken);
+        var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var withMoney = actor.Has(PermissionCodes.FinancialView);
         var rates = withMoney
             ? (await financeSources.PayRatesAsync(userIds, cancellationToken))

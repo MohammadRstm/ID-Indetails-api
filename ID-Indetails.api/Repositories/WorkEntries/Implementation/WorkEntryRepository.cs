@@ -113,17 +113,6 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .ToList();
     }
 
-    public async Task<CompanyCalendar> CompanyCalendarAsync(CancellationToken cancellationToken = default)
-    {
-        var settings = await db.CompanySettings.AsNoTracking()
-            .Select(c => new { c.WeekStart, c.Use24HourTime })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        return settings is null
-            ? new CompanyCalendar(DayOfWeek.Monday, false)
-            : new CompanyCalendar(settings.WeekStart == 0 ? DayOfWeek.Sunday : DayOfWeek.Monday, settings.Use24HourTime);
-    }
-
     public async Task<IReadOnlyList<long>> PeopleWhoMayHoldAsync(
         string domainCode,
         string permissionCode,
