@@ -65,6 +65,10 @@ public static class ErrorCodes
     public const string ProjectClosed = "project_closed";
     public const string AssigneeNotAllowed = "assignee_not_allowed";
 
+    // Billing
+    public const string BillingSettingsMissing = "billing_settings_missing";
+    public const string InvoicePrefixTaken = "invoice_prefix_taken";
+
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
 }

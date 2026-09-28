@@ -3,6 +3,8 @@ using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Activity.Implementation;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Implementation;
+using ID_Indetails.api.Repositories.Billing.Abstraction;
+using ID_Indetails.api.Repositories.Billing.Implementation;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Implementation;
 using ID_Indetails.api.Repositories.Common.Abstraction;
@@ -21,6 +23,8 @@ using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Repositories.Teams.Implementation;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Auth.Implementation;
+using ID_Indetails.api.Services.Billing.Abstraction;
+using ID_Indetails.api.Services.Billing.Implementation;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Clients.Implementation;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -75,6 +79,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IRequirementRepository, RequirementRepository>();
         services.AddScoped<IExpenseRepository, ExpenseRepository>();
+        services.AddScoped<IBillingSettingsRepository, BillingSettingsRepository>();
+        services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -93,6 +99,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectStatusService, ProjectStatusService>();
         services.AddScoped<IRequirementService, RequirementService>();
         services.AddScoped<IExpenseService, ExpenseService>();
+        services.AddScoped<IBillingSettingsService, BillingSettingsService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

@@ -61,4 +61,7 @@ public static class ActivityEventKinds
     // Expenses (subject: the expense; project_id is set; the amount in the amount column)
     public const string ExpenseAdded = "expense_added";
     public const string ExpenseRemoved = "expense_removed";
+
+    // Billing
+    public const string BillingSettingsUpdated = "billing_settings_updated";
 }
