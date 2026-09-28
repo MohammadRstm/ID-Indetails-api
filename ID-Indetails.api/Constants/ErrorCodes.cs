@@ -24,6 +24,12 @@ public static class ErrorCodes
     public const string InvitationNotAllowed = "invitation_not_allowed";
     public const string TeamNotInDomain = "team_not_in_domain";
     public const string UserNotInvited = "user_not_invited";
+    public const string UserDeactivated = "user_deactivated";
+
+    // Permissions
+    public const string PermissionsLocked = "permissions_locked";
+    public const string PermissionChangeNotAllowed = "permission_change_not_allowed";
+    public const string UnknownPermission = "unknown_permission";
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";

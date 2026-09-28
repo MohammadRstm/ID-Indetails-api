@@ -17,9 +17,12 @@ public sealed class InvitationsController(
     IInvitationService invitationService,
     RefreshTokenCookie refreshCookie) : ControllerBase
 {
-    /// <summary>Invites someone by email. Super admins: any role, either domain. Admins: their own domain.</summary>
+    /// <summary>
+    /// Invites someone by email: admins and employees need <c>employee:invite</c> (into a domain
+    /// the inviter works in), super admins need <c>employee:invite_super_admin</c>.
+    /// </summary>
     [HttpPost]
-    [HasPermission(PermissionCodes.EmployeeInvite)]
+    [HasAnyPermission(PermissionCodes.EmployeeInvite, PermissionCodes.EmployeeInviteSuperAdmin)]
     public async Task<ActionResult<InvitationResponse>> Create(CreateInvitationRequest request, CancellationToken cancellationToken)
     {
         var invitation = await invitationService.CreateAsync(request, cancellationToken);
@@ -28,7 +31,7 @@ public sealed class InvitationsController(
 
     /// <summary>Emails a fresh signup link; the previous link stops working.</summary>
     [HttpPost("{userId:long}/resend")]
-    [HasPermission(PermissionCodes.EmployeeInvite)]
+    [HasAnyPermission(PermissionCodes.EmployeeInvite, PermissionCodes.EmployeeInviteSuperAdmin)]
     public Task<InvitationResponse> Resend(long userId, CancellationToken cancellationToken)
         => invitationService.ResendAsync(userId, cancellationToken);
 

@@ -44,7 +44,10 @@ public sealed class SessionService(
     }
 
     public async Task<CurrentUserResponse> DescribeAsync(User user, CancellationToken cancellationToken = default)
-        => new()
+    {
+        var access = await permissions.ResolveAsync(user, cancellationToken);
+
+        return new CurrentUserResponse
         {
             Id = user.Id,
             Email = user.Email,
@@ -55,6 +58,9 @@ public sealed class SessionService(
             Team = user.Team is null ? null : new TeamSummaryResponse(user.Team.Id, user.Team.Name),
             Position = user.Position,
             MustChangePassword = user.MustChangePassword,
-            Permissions = await permissions.GetEffectiveAsync(user.RoleCode, user.DomainCode, cancellationToken),
+            Permissions = access.Permissions,
+            IsJoker = access.IsJoker,
+            VisibleDomains = access.VisibleDomains,
         };
+    }
 }

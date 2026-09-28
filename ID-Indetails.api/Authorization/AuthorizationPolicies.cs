@@ -12,6 +12,9 @@ public static class AuthorizationPolicies
     /// <summary>Prefix of the dynamic permission policies built by <see cref="PermissionPolicyProvider"/>.</summary>
     public const string PermissionPrefix = "permission:";
 
+    /// <summary>Separates the alternatives in a "permission:a|b" policy name.</summary>
+    public const char AnyOfSeparator = '|';
+
     /// <summary>The default for <c>[Authorize]</c>: signed in and not stuck on a generated password.</summary>
     public static AuthorizationPolicy Default { get; } = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
@@ -24,8 +27,15 @@ public sealed class HasPermissionAttribute(string permission)
     : AuthorizeAttribute(AuthorizationPolicies.PermissionPrefix + permission);
 
 /// <summary>
-/// Builds "permission:xyz" policies on demand (signed in, password change done, permission
-/// held), so each permission does not need its own registration.
+/// Lets in anyone holding at least one of the permissions, for endpoints whose finer rules
+/// are decided in the service: <c>[HasAnyPermission(PermissionCodes.A, PermissionCodes.B)]</c>.
+/// </summary>
+public sealed class HasAnyPermissionAttribute(params string[] permissions)
+    : AuthorizeAttribute(AuthorizationPolicies.PermissionPrefix + string.Join(AuthorizationPolicies.AnyOfSeparator, permissions));
+
+/// <summary>
+/// Builds "permission:xyz" (and "permission:a|b") policies on demand: signed in, password
+/// change done, permission held. Each permission does not need its own registration.
 /// </summary>
 public sealed class PermissionPolicyProvider(IOptions<AuthorizationOptions> options)
     : DefaultAuthorizationPolicyProvider(options)
@@ -37,10 +47,12 @@ public sealed class PermissionPolicyProvider(IOptions<AuthorizationOptions> opti
             return await base.GetPolicyAsync(policyName);
         }
 
-        var permission = policyName[AuthorizationPolicies.PermissionPrefix.Length..];
+        var anyOf = policyName[AuthorizationPolicies.PermissionPrefix.Length..]
+            .Split(AuthorizationPolicies.AnyOfSeparator, StringSplitOptions.RemoveEmptyEntries);
+
         return new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
-            .AddRequirements(new PasswordChangeCompletedRequirement(), new PermissionRequirement(permission))
+            .AddRequirements(new PasswordChangeCompletedRequirement(), new PermissionRequirement(anyOf))
             .Build();
     }
 }

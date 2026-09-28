@@ -11,6 +11,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<UserPermissionOverride> UserPermissionOverrides => Set<UserPermissionOverride>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<Discipline> Disciplines => Set<Discipline>();
@@ -109,6 +110,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<EntryNotificationMode>(configurationBuilder);
         StoreAsSnakeCase<ExcuseKind>(configurationBuilder);
         StoreAsSnakeCase<StatementMode>(configurationBuilder);
+        StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

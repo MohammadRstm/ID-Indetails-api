@@ -30,6 +30,7 @@ public sealed class InvitationService(
     IUnitOfWork unitOfWork,
     IPasswordService passwords,
     ISessionService sessions,
+    IPermissionService permissions,
     IEmailSender emailSender,
     IClock clock,
     IOptions<InvitationOptions> invitationOptions,
@@ -41,7 +42,8 @@ public sealed class InvitationService(
 
     public async Task<InvitationResponse> CreateAsync(CreateInvitationRequest request, CancellationToken cancellationToken = default)
     {
-        var decision = InvitationPolicy.Evaluate(currentUser.Role, currentUser.Domain, request.Role, request.DomainCode);
+        var inviter = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        var decision = InvitationPolicy.Evaluate(inviter, request.Role, request.DomainCode);
         if (!decision.Allowed)
         {
             throw new ForbiddenException(ErrorCodes.InvitationNotAllowed, decision.DenialReason!);
@@ -113,11 +115,12 @@ public sealed class InvitationService(
     public async Task<InvitationResponse> ResendAsync(long userId, CancellationToken cancellationToken = default)
     {
         var user = await users.GetByIdAsync(userId, cancellationToken);
+        var inviter = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
 
         // Someone the caller could not have invited reads as not found (no cross-domain peeking).
         var decision = user is null
             ? null
-            : InvitationPolicy.Evaluate(currentUser.Role, currentUser.Domain, user.RoleCode, user.DomainCode);
+            : InvitationPolicy.Evaluate(inviter, user.RoleCode, user.DomainCode);
         if (user is null || decision is not { Allowed: true })
         {
             throw new NotFoundException("User not found.");

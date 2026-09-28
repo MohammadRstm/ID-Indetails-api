@@ -6,8 +6,9 @@ using Microsoft.AspNetCore.Authorization;
 namespace ID_Indetails.api.Authorization.Handlers;
 
 /// <summary>
-/// Checks the permission against the database grants for the user's role and domain, so a
-/// change to role permissions applies immediately rather than when the token expires.
+/// Checks the permission against the user's current access in the database (role defaults
+/// plus their personal overrides), looked up by user id. The role in the token is never
+/// used, so grants, revokes and automatic role changes apply on the very next request.
 /// </summary>
 public sealed class PermissionHandler(IPermissionService permissions) : AuthorizationHandler<PermissionRequirement>
 {
@@ -15,16 +16,13 @@ public sealed class PermissionHandler(IPermissionService permissions) : Authoriz
         AuthorizationHandlerContext context,
         PermissionRequirement requirement)
     {
-        var role = context.User.FindFirst(AuthClaimTypes.Role)?.Value;
-        if (role is null)
+        if (!long.TryParse(context.User.FindFirst(AuthClaimTypes.UserId)?.Value, out var userId))
         {
             return;
         }
 
-        var domain = context.User.FindFirst(AuthClaimTypes.Domain)?.Value;
-        var effective = await permissions.GetEffectiveAsync(role, domain);
-
-        if (effective.Contains(requirement.Permission))
+        var access = await permissions.GetAccessAsync(userId);
+        if (requirement.AnyOf.Any(access.Has))
         {
             context.Succeed(requirement);
         }
