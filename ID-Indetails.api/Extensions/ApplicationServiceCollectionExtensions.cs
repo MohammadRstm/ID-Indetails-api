@@ -5,6 +5,8 @@ using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Implementation;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Common.Implementation;
+using ID_Indetails.api.Repositories.Employees.Abstraction;
+using ID_Indetails.api.Repositories.Employees.Implementation;
 using ID_Indetails.api.Repositories.Invitations.Abstraction;
 using ID_Indetails.api.Repositories.Invitations.Implementation;
 using ID_Indetails.api.Repositories.Teams.Abstraction;
@@ -15,12 +17,16 @@ using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Common.Implementation;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
+using ID_Indetails.api.Services.Employees.Abstraction;
+using ID_Indetails.api.Services.Employees.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Invitations.Implementation;
 using ID_Indetails.api.Services.Permissions.Abstraction;
 using ID_Indetails.api.Services.Permissions.Implementation;
 using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
+using ID_Indetails.api.Services.Teams.Abstraction;
+using ID_Indetails.api.Services.Teams.Implementation;
 
 namespace ID_Indetails.api.Extensions;
 
@@ -48,6 +54,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IActivityEventRepository, ActivityEventRepository>();
+        services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -57,6 +64,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IPermissionManagementService, PermissionManagementService>();
+        services.AddScoped<IEmployeeService, EmployeeService>();
+        services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
