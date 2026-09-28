@@ -62,8 +62,25 @@ public static class ActivityEventKinds
     public const string ExpenseAdded = "expense_added";
     public const string ExpenseRemoved = "expense_removed";
 
+    // Work entries (subject: the work entry; project_id is set; minutes in the payload)
+    public const string WorkEntryLogged = "work_entry_logged";
+    public const string WorkEntryUpdated = "work_entry_updated";
+    public const string WorkEntryDeleted = "work_entry_deleted";
+    public const string WorkEntryRestored = "work_entry_restored";
+
+    /// <summary>Subject: the work entry; the comment id in the payload.</summary>
+    public const string WorkEntryCommented = "work_entry_commented";
+
+    // Meetings (subject: the meeting; project_id is set; topic and times in the payload)
+    public const string MeetingCreated = "meeting_created";
+    public const string MeetingUpdated = "meeting_updated";
+    public const string MeetingDeleted = "meeting_deleted";
+
     // Billing
     public const string BillingSettingsUpdated = "billing_settings_updated";
+
+    // Domain settings (subject type only; no subject id)
+    public const string DomainSettingsUpdated = "domain_settings_updated";
 
     /// <summary>Company-wide (no domain); the rate in the amount column.</summary>
     public const string ExchangeRateSet = "exchange_rate_set";

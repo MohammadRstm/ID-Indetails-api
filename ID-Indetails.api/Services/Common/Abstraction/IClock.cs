@@ -13,4 +13,7 @@ public interface IClock
 
     /// <summary>An instant as a local date and time in the company time zone.</summary>
     DateTime ToCompanyTime(DateTime utc);
+
+    /// <summary>The instant a company-time-zone day starts, in UTC.</summary>
+    DateTime CompanyDayStartUtc(DateOnly day);
 }

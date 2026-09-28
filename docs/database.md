@@ -133,6 +133,8 @@ The `TeamsAndTeamPermission` migration seeds the starting teams of each domain (
 
 The `ExchangeRatePermission` migration seeds the `exchange_rate:manage` permission, held only by super admins.
 
+The `MeetingCreatePermission` migration seeds the Design `meeting:create` permission (set meetings, and move or remove your own), held by every role.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Migrations

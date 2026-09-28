@@ -1,0 +1,21 @@
+using ID_Indetails.api.Enums;
+
+namespace ID_Indetails.api.DTO.Request.Activity;
+
+public sealed record ActivityListQuery
+{
+    /// <summary>One filter chip: work, money, billing, projects, people or company. Everything when not given.</summary>
+    public ActivityGroup? Group { get; init; }
+
+    public long? ProjectId { get; init; }
+
+    /// <summary>The event's client, or its project's client.</summary>
+    public long? ClientId { get; init; }
+
+    /// <summary>Who did it.</summary>
+    public long? UserId { get; init; }
+
+    public int Page { get; init; } = 1;
+
+    public int PageSize { get; init; } = 40;
+}
