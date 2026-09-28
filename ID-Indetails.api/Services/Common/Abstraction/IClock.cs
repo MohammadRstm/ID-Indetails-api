@@ -7,4 +7,7 @@ public interface IClock
 
     /// <summary>Today's date in the company time zone (Asia/Beirut by default).</summary>
     DateOnly CompanyToday { get; }
+
+    /// <summary>The calendar day an instant falls on in the company time zone.</summary>
+    DateOnly ToCompanyDate(DateTime utc);
 }
