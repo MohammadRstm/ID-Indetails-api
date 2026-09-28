@@ -14,6 +14,12 @@ public interface IProjectFinanceService
 
     Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Each project's money plus every cost on its day in USD and who worked on which day, for period
+    /// and month-by-month figures. Same loading as <see cref="GetAsync(IReadOnlyCollection{Project}, CancellationToken)"/>.
+    /// </summary>
+    Task<IReadOnlyDictionary<long, ProjectCostHistory>> CostHistoryAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken = default);
+
     /// <summary>The project's cash position week by week, from its first week to the week of <paramref name="to"/>.</summary>
     Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(Project project, DateOnly to, CancellationToken cancellationToken = default);
 }
@@ -33,3 +39,7 @@ public sealed record ProjectFinancials(
     decimal Received,
     decimal? CashProfit,
     decimal? MaterialProfit);
+
+public sealed record WorkDay(long UserId, DateOnly Day);
+
+public sealed record ProjectCostHistory(ProjectFinancials Money, IReadOnlyList<Recognition.DatedCost> Costs, IReadOnlyList<WorkDay> Work);
