@@ -84,6 +84,23 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
             "ck_users_status");
     }
 
+    // ---------- permission overrides ----------
+
+    [Fact]
+    public async Task Permission_override_is_a_grant_or_a_revoke_once_per_user_and_permission()
+    {
+        var userId = await ActiveUserAsync(DomainCodes.Design);
+        string OverrideSql(string effect) =>
+            "INSERT INTO user_permission_overrides (user_id, permission_code, effect, granted_by_id, created_at) " +
+            $"VALUES ({userId}, '{PermissionCodes.ClientView}', '{effect}', {userId}, {Now})";
+
+        await ShouldViolateAsync(OverrideSql("maybe"), "ck_user_permission_overrides_effect");
+        await ExecuteAsync(OverrideSql("grant"));
+
+        var ex = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(OverrideSql("revoke")));
+        ex.Number.ShouldBe(1062); // one override per user and permission
+    }
+
     // ---------- projects and clients ----------
 
     [Fact]

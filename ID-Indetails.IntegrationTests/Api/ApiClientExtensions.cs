@@ -25,6 +25,12 @@ public static class ApiClientExtensions
         return client.SendAsync(Authorize(request, accessToken, refreshCookie));
     }
 
+    public static Task<HttpResponseMessage> PutJsonAsync(this HttpClient client, string url, object body, string accessToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, url) { Content = JsonContent.Create(body, options: Json) };
+        return client.SendAsync(Authorize(request, accessToken, null));
+    }
+
     public static Task<HttpResponseMessage> PostEmptyAsync(
         this HttpClient client, string url, string? accessToken = null, string? refreshCookie = null)
         => client.SendAsync(Authorize(new HttpRequestMessage(HttpMethod.Post, url), accessToken, refreshCookie));
