@@ -18,6 +18,10 @@ public sealed class RateLimitOptions
     [Range(1, 100_000)]
     public int AnonymousPermitsPerMinute { get; init; } = 60;
 
+    /// <summary>CSV exports, per signed-in user per minute.</summary>
+    [Range(1, 10_000)]
+    public int ExportPermitsPerMinute { get; init; } = 10;
+
     /// <summary>Login, refresh, invitation validate/accept: requests per IP per minute.</summary>
     [Range(1, 10_000)]
     public int AuthPermitsPerMinute { get; init; } = 10;

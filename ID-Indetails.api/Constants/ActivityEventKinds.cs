@@ -93,4 +93,8 @@ public static class ActivityEventKinds
     public const string OverheadCancelled = "overhead_cancelled";
     public const string OverheadResumed = "overhead_resumed";
     public const string OverheadRemoved = "overhead_removed";
+
+    // Hours ledger (subject: the person; no amounts)
+    public const string HoursExcused = "hours_excused";
+    public const string HoursExcuseRemoved = "hours_excuse_removed";
 }

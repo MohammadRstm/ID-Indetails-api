@@ -12,6 +12,8 @@ public sealed class SystemClock(IOptions<CompanyOptions> company) : IClock
 
     public DateOnly CompanyToday => ToCompanyDate(UtcNow);
 
-    public DateOnly ToCompanyDate(DateTime utc)
-        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone));
+    public DateOnly ToCompanyDate(DateTime utc) => DateOnly.FromDateTime(ToCompanyTime(utc));
+
+    public DateTime ToCompanyTime(DateTime utc)
+        => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone);
 }
