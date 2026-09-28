@@ -64,6 +64,22 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 
 **CSV export** (`work-entries-<from>-to-<to>.csv`): UTF-8 with a byte-order mark and CRLF line ends, oldest first, one row per entry. Columns: Date, Weekday, Start, End (company time zone, in the company's 12- or 24-hour format), Hours (2 decimals), Employee, Email, Team, Project, Client (`Internal` for internal projects), Task, then **Hourly rate, Currency, Labour cost** only for callers with `financial:view`, then Entry id. The rate is the person's hourly cost in force on the day worked, in its own currency (`ProjectFinance.RateOn`, the same rule as project cost); the cost is hours × rate, rounded to cents. The overtime column comes once the working-time engine exists. Exports use the `export` rate-limit policy: 10 a minute per user (`RateLimiting:ExportPermitsPerMinute`).
 
+## My work and a person's summary
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/me/work-summary?from=&to=&projectId=&search=` | `work_entry:view_own` | The caller's totals and series (below) |
+| `GET /api/employees/{userId}/work-summary?from=&to=&projectId=&search=` | `work_entry:view_all` | The same for someone else (their profile). A person of a domain the caller can't see reads as `404` |
+| `GET /api/me/projects` | `work_entry:view_own` | Every active and on-hold Design project, with the caller's own time on it |
+| `GET /api/me/projects/{id}/work` | `work_entry:view_own` | The caller's work on one project and the team's latest entries there |
+
+Everything is calculated from the entries on each request (`Business/WorkEntries/WorkStats.cs`); nothing is stored. An entry counts on the company-time-zone day it starts on, and weeks start on the company's week start (`company_settings.week_start`, Monday until the company settings exist).
+
+- **Summary:** today, each day of this week, this week, the whole of last week, this month, this quarter, and last quarter up to the same number of days (for a fair comparison); all-time minutes, entries, first day and projects; active days and the longest run of consecutive active days in the last 365 days; the last 16 weeks; every active day of the last 365 days (for the heat map); and time per project. `from`, `to`, `projectId` and `search` narrow only the time per project.
+- **My projects:** every open project, as the prototype shows them to employees (not only those they are members of): whether it accepts work, the caller's minutes and latest start, the people who logged on it (most time first, names only), and the latest activity. Other people's hours stay private. Projects the caller worked on come first, most recent first, then the newest.
+- **My project work:** the caller's minutes, entries and minutes this week on the project; how many people logged there and the project's total minutes; the caller's 12 latest entries; the caller's last 8 weeks there; and the 6 latest entries by other people (name, start and description, as the prototype's "Team activity").
+- The overtime figures of these pages come from the working-time engine once it exists.
+
 ## Comments
 
 | Method and path | Needs | Purpose |

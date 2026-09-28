@@ -40,10 +40,24 @@ public sealed record WorkEntrySearch(
 /// <summary>The few fields totals and charts are calculated from.</summary>
 public sealed record WorkRow(long Id, long UserId, long ProjectId, DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt);
 
-public sealed record WorkPerson(long Id, string Name, string Email, string? TeamName);
+public sealed record WorkPerson(long Id, string Name, string Email, string? TeamName, string? DomainCode);
 
 /// <param name="FirstDayOfWeek">Monday unless the company settings say Sunday.</param>
 public sealed record CompanyCalendar(DayOfWeek FirstDayOfWeek, bool Use24HourTime);
+
+/// <summary>A project as the Design work pages list it.</summary>
+public sealed record WorkProject(
+    long Id,
+    string Title,
+    string? Description,
+    string? ClientName,
+    ProjectStatus Status,
+    int ProgressPct,
+    DateOnly StartDate,
+    DateTime CreatedAt);
+
+/// <summary>One person's live work on one project.</summary>
+public sealed record Contribution(long ProjectId, long UserId, string UserName, int Minutes, int Entries, DateTime LastStartedAt);
 
 public interface IWorkEntryRepository
 {
@@ -77,7 +91,13 @@ public interface IWorkEntryRepository
     /// <summary>Every matching entry's totals fields, ignoring the search's text and paging. Not tracked.</summary>
     Task<IReadOnlyList<WorkRow>> RowsAsync(WorkEntrySearch search, CancellationToken cancellationToken = default);
 
-    /// <summary>Names, emails and teams of the given people. Not tracked.</summary>
+    /// <summary>Active and on-hold Design projects, newest first. Not tracked.</summary>
+    Task<IReadOnlyList<WorkProject>> OpenProjectsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Each person's minutes, entries and latest start on each of the projects. Not tracked.</summary>
+    Task<IReadOnlyList<Contribution>> ContributionsAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Names, emails, teams and domains of the given people. Not tracked.</summary>
     Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
 
     /// <summary>The company's week start and clock format, or Monday and 12-hour time before the company settings exist.</summary>

@@ -66,15 +66,51 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .Select(e => new WorkRow(e.Id, e.UserId, e.ProjectId, e.StartedAt, e.EndedAt, e.DurationMinutes, e.CreatedAt))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<WorkProject>> OpenProjectsAsync(CancellationToken cancellationToken = default)
+        => await db.Projects
+            .AsNoTracking()
+            .Where(p => p.DomainCode == DomainCodes.Design && (p.Status == ProjectStatus.Active || p.Status == ProjectStatus.Hold))
+            .OrderByDescending(p => p.CreatedAt)
+            .ThenByDescending(p => p.Id)
+            .Select(p => new WorkProject(
+                p.Id, p.Title, p.Description, p.Client != null ? p.Client.Name : null, p.Status, p.ProgressPct, p.StartDate, p.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Contribution>> ContributionsAsync(
+        IReadOnlyCollection<long> projectIds,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = await db.WorkEntries
+            .AsNoTracking()
+            .Where(e => projectIds.Contains(e.ProjectId) && e.DeletedAt == null)
+            .GroupBy(e => new { e.ProjectId, e.UserId })
+            .Select(g => new
+            {
+                g.Key.ProjectId,
+                g.Key.UserId,
+                Minutes = g.Sum(e => e.DurationMinutes),
+                Entries = g.Count(),
+                LastStartedAt = g.Max(e => e.StartedAt),
+            })
+            .ToListAsync(cancellationToken);
+
+        var names = (await PeopleAsync(rows.Select(r => r.UserId).Distinct().ToList(), cancellationToken)).ToDictionary(p => p.Id, p => p.Name);
+        return rows
+            .Select(r => new Contribution(r.ProjectId, r.UserId, names.GetValueOrDefault(r.UserId, ""), r.Minutes, r.Entries, r.LastStartedAt))
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
     {
         var rows = await db.Users
             .AsNoTracking()
             .Where(u => ids.Contains(u.Id))
-            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, TeamName = u.Team != null ? u.Team.Name : null })
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, TeamName = u.Team != null ? u.Team.Name : null, u.DomainCode })
             .ToListAsync(cancellationToken);
 
-        return rows.Select(u => new WorkPerson(u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.Email, u.TeamName)).ToList();
+        return rows
+            .Select(u => new WorkPerson(u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.Email, u.TeamName, u.DomainCode))
+            .ToList();
     }
 
     public async Task<CompanyCalendar> CompanyCalendarAsync(CancellationToken cancellationToken = default)

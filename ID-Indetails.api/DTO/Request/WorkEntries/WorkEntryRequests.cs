@@ -72,3 +72,16 @@ public sealed record AddWorkEntryCommentRequest
     /// <summary>Also post to the author's team group chat. Refused until group chats exist.</summary>
     public bool SendToGroup { get; init; }
 }
+
+/// <summary>Narrows only the summary's time-per-project breakdown. Days are company-time-zone days, both inclusive.</summary>
+public sealed record WorkSummaryQuery
+{
+    public DateOnly? From { get; init; }
+
+    public DateOnly? To { get; init; }
+
+    public long? ProjectId { get; init; }
+
+    /// <summary>Matches the description or project title; every word must match.</summary>
+    public string? Search { get; init; }
+}
