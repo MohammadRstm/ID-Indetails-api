@@ -1,3 +1,4 @@
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Extensions;
@@ -23,7 +24,20 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
             t.HasCheckConstraint("ck_projects_revenue_non_negative", "`revenue` >= 0");
             t.HasCheckConstraint("ck_projects_progress_range", "`progress_pct` <= 100");
-            t.HasCheckConstraint("ck_projects_markup_non_negative", "`markup` IS NULL OR `markup` >= 0");
+
+            // Execution sites are always for a client.
+            t.HasCheckConstraint(
+                "ck_projects_execution_is_client_work",
+                $"`domain_code` <> '{DomainCodes.Execution}' OR `billing_type` = 'client'");
+
+            // Execution projects have both a fee and a material markup; Design projects have neither.
+            t.HasCheckConstraint(
+                "ck_projects_execution_money_fields",
+                $"(`domain_code` = '{DomainCodes.Execution}' AND `project_fee` IS NOT NULL AND `material_markup` IS NOT NULL)"
+                + $" OR (`domain_code` <> '{DomainCodes.Execution}' AND `project_fee` IS NULL AND `material_markup` IS NULL)");
+
+            t.HasCheckConstraint("ck_projects_project_fee_non_negative", "`project_fee` IS NULL OR `project_fee` >= 0");
+            t.HasCheckConstraint("ck_projects_material_markup_range", "`material_markup` IS NULL OR `material_markup` BETWEEN 0 AND 5");
         });
 
         builder.HasKey(x => x.Id);
@@ -34,7 +48,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(x => x.Icon).HasMaxLength(40);
         builder.Property(x => x.Tint).HasMaxLength(9);
         builder.Property(x => x.RevenueCurrency).IsCurrencyCode();
-        builder.Property(x => x.Markup).HasPrecision(7, 4);
+        builder.Property(x => x.MaterialMarkup).HasPrecision(7, 4);
 
         builder.HasIndex(x => new { x.DomainCode, x.Status });
 

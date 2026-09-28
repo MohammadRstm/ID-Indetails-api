@@ -19,6 +19,11 @@ public class ProjectMeeting
 
     public long? CreatedById { get; set; }
 
+    /// <summary>Meetings can be moved or resized after creation.</summary>
+    public DateTime? UpdatedAt { get; set; }
+
+    public long? UpdatedById { get; set; }
+
     public DateTime? DeletedAt { get; set; }
 
     public Project Project { get; set; } = null!;

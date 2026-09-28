@@ -168,7 +168,7 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     public async Task Labour_week_must_start_on_a_monday_and_day_cost_is_generated()
     {
         var user = await ActiveUserAsync("execution");
-        var project = await InsertAsync(ProjectSql("execution", user, "NULL", "internal", 0));
+        var project = await SiteProjectAsync(user);
 
         // 2026-09-22 is a Tuesday.
         await ShouldViolateAsync(LabourWeekSql(project, user, "2026-09-22"), "ck_labour_weeks_starts_on_monday");
@@ -184,7 +184,7 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     public async Task One_labour_report_per_project_per_week()
     {
         var user = await ActiveUserAsync("execution");
-        var project = await InsertAsync(ProjectSql("execution", user, "NULL", "internal", 0));
+        var project = await SiteProjectAsync(user);
         await InsertAsync(LabourWeekSql(project, user, "2026-09-14"));
 
         var ex = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(LabourWeekSql(project, user, "2026-09-14")));
@@ -195,11 +195,11 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     public async Task Material_total_is_generated()
     {
         var user = await ActiveUserAsync("execution");
-        var project = await InsertAsync(ProjectSql("execution", user, "NULL", "internal", 0));
+        var project = await SiteProjectAsync(user);
 
         var material = await InsertAsync(
-            "INSERT INTO project_materials (project_id, name, quantity, unit, unit_cost, currency, category, added_at, added_by_id) " +
-            $"VALUES ({project}, 'Rebar', 2.5, 'tonne', 10.10, 'USD', 'steel', {Now}, {user})");
+            "INSERT INTO project_materials (project_id, name, quantity, unit, unit_cost, currency, added_at, added_by_id) " +
+            $"VALUES ({project}, 'Rebar', 2.5, 'tonne', 10.10, 'USD', {Now}, {user})");
 
         (await ScalarAsync<decimal>($"SELECT total FROM project_materials WHERE id = {material}")).ShouldBe(25.25m);
     }
@@ -229,8 +229,8 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     public async Task Company_settings_can_only_hold_one_row()
     {
         await ShouldViolateAsync(
-            "INSERT INTO company_settings (id, name, time_zone, week_start, use_24_hour_time, default_currency, overtime_multiplier) " +
-            "VALUES (2, 'Second company', 'Asia/Beirut', 1, 0, 'USD', 1)",
+            "INSERT INTO company_settings (id, name, time_zone, week_start, use_24_hour_time, default_currency) " +
+            "VALUES (2, 'Second company', 'Asia/Beirut', 1, 0, 'USD')",
             "ck_company_settings_single_row");
     }
 
@@ -248,6 +248,175 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
         (await InsertAsync(
             $"INSERT INTO conversations (type, dm_user_low_id, dm_user_high_id, created_at) VALUES ('dm', {low}, {high}, {Now})"))
             .ShouldBeGreaterThan(0);
+    }
+
+    // ---------- Execution money (ExecutionPricingAndWorkingTime) ----------
+
+    [Fact]
+    public async Task Execution_project_must_be_client_work()
+    {
+        var owner = await ActiveUserAsync("execution");
+
+        await ShouldViolateAsync(
+            ProjectSql("execution", owner, "NULL", "internal", 0),
+            "ck_projects_execution_is_client_work");
+    }
+
+    [Fact]
+    public async Task Fee_and_markup_exist_exactly_on_execution_projects()
+    {
+        var siteOwner = await ActiveUserAsync("execution");
+        var siteClient = await ClientAsync("execution");
+        await ShouldViolateAsync(
+            ProjectSql("execution", siteOwner, siteClient.ToString(), "client", 0, projectFee: "NULL", materialMarkup: "0.10"),
+            "ck_projects_execution_money_fields");
+
+        var designOwner = await ActiveUserAsync("design");
+        await ShouldViolateAsync(
+            ProjectSql("design", designOwner, "NULL", "internal", 0, projectFee: "500", materialMarkup: "NULL"),
+            "ck_projects_execution_money_fields");
+    }
+
+    [Fact]
+    public async Task Material_markup_is_limited_to_500_percent()
+    {
+        var owner = await ActiveUserAsync("execution");
+        var client = await ClientAsync("execution");
+
+        await ShouldViolateAsync(
+            ProjectSql("execution", owner, client.ToString(), "client", 0, projectFee: "0", materialMarkup: "5.5"),
+            "ck_projects_material_markup_range");
+    }
+
+    [Fact]
+    public async Task Material_needs_quantity_and_unit_cost_or_a_lump_sum()
+    {
+        var user = await ActiveUserAsync("execution");
+        var project = await SiteProjectAsync(user);
+
+        await ShouldViolateAsync(MaterialSql(project, user, quantity: "3", unitCost: "NULL", amount: "NULL"), "ck_project_materials_has_cost");
+
+        var lumpSum = await InsertAsync(MaterialSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "1250.00"));
+        (await ScalarAsync<decimal>($"SELECT total FROM project_materials WHERE id = {lumpSum}")).ShouldBe(1250.00m);
+
+        // Unit cost keeps 4 decimals (derived as total ÷ quantity); the total is rounded to cents.
+        var counted = await InsertAsync(MaterialSql(project, user, quantity: "3", unitCost: "33.3333", amount: "NULL"));
+        (await ScalarAsync<decimal>($"SELECT unit_cost FROM project_materials WHERE id = {counted}")).ShouldBe(33.3333m);
+        (await ScalarAsync<decimal>($"SELECT total FROM project_materials WHERE id = {counted}")).ShouldBe(100.00m);
+    }
+
+    [Fact]
+    public async Task Sunday_is_never_a_labour_day()
+    {
+        var user = await ActiveUserAsync("execution");
+        var project = await SiteProjectAsync(user);
+        var week = await InsertAsync(LabourWeekSql(project, user, "2026-09-21"));
+
+        // 2026-09-27 is the Sunday of that week.
+        await ShouldViolateAsync(
+            $"INSERT INTO labour_week_days (labour_week_id, work_date, workers, daily_pay) VALUES ({week}, '2026-09-27', 5, 40)",
+            "ck_labour_week_days_not_sunday");
+    }
+
+    [Fact]
+    public async Task One_live_initial_payment_per_project_and_voiding_frees_the_slot()
+    {
+        var user = await ActiveUserAsync("execution");
+        var client = await ClientAsync("execution");
+        var project = await InsertAsync(ProjectSql("execution", user, client.ToString(), "client", 0));
+
+        var first = await InsertAsync(PaymentSql(project, client, isInitial: true));
+        var duplicate = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(PaymentSql(project, client, isInitial: true)));
+        duplicate.Number.ShouldBe(1062);
+
+        // Ordinary payments are unaffected, and a voided initial payment can be replaced.
+        (await InsertAsync(PaymentSql(project, client, isInitial: false))).ShouldBeGreaterThan(0);
+        await ExecuteAsync($"UPDATE payments SET voided_at = {Now}, void_reason = 'wrong amount' WHERE id = {first}");
+        (await InsertAsync(PaymentSql(project, client, isInitial: true))).ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Stated_material_cannot_be_deleted_and_appears_once_per_statement()
+    {
+        var user = await ActiveUserAsync("execution");
+        var client = await ClientAsync("execution");
+        var project = await InsertAsync(ProjectSql("execution", user, client.ToString(), "client", 0));
+        var material = await InsertAsync(MaterialSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "500"));
+
+        var statement = await InsertAsync(
+            "INSERT INTO client_statements (number, project_id, client_id, mode, includes_earlier, received_usd, agreed_usd, created_at) " +
+            $"VALUES ('ST-2026-{Random.Shared.Next(100000, 999999)}', {project}, {client}, 'detail', 0, 0, 550, {Now})");
+        await InsertAsync(StatementLineSql(statement, material, position: 1));
+
+        (await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(StatementLineSql(statement, material, position: 2))))
+            .Number.ShouldBe(1062);
+        (await Should.ThrowAsync<MySqlException>(() => ExecuteAsync($"DELETE FROM project_materials WHERE id = {material}")))
+            .Number.ShouldBe(1451);
+
+        await ShouldViolateAsync(
+            "INSERT INTO client_statements (number, project_id, client_id, mode, includes_earlier, received_usd, agreed_usd, created_at) " +
+            $"VALUES ('ST-2026-X{Random.Shared.Next(100000, 999999)}', {project}, {client}, 'grouped', 0, 0, 0, {Now})",
+            "ck_client_statements_mode");
+    }
+
+    // ---------- working time (ExecutionPricingAndWorkingTime) ----------
+
+    [Fact]
+    public async Task Default_working_week_is_seeded_as_monday_to_friday_nine_to_five_with_a_paid_hour_break()
+    {
+        (await ScalarAsync<string>(
+                "SELECT CONCAT(work_start_minute, '-', work_end_minute, '/', work_days, '/', break_minutes, '/', overtime_multiplier) " +
+                "FROM working_time_policies WHERE effective_from = '2000-01-01'"))
+            .ShouldBe("540-1020/62/60/1.00");
+    }
+
+    [Fact]
+    public async Task Working_time_policy_rejects_impossible_hours_and_breaks()
+    {
+        // Each case breaks exactly one rule, so MySQL reports that rule's constraint.
+        await ShouldViolateAsync(PolicySql("2030-01-01", start: 540, end: 1500, days: 62, breakMinutes: 60), "ck_working_time_policies_hours");
+        await ShouldViolateAsync(PolicySql("2030-01-02", start: 540, end: 1020, days: 0, breakMinutes: 60), "ck_working_time_policies_work_days");
+        await ShouldViolateAsync(PolicySql("2030-01-03", start: 540, end: 600, days: 62, breakMinutes: 60), "ck_working_time_policies_break");
+
+        // Only one policy per effective date.
+        var ex = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(PolicySql("2000-01-01", 540, 1020, 62, 60)));
+        ex.Number.ShouldBe(1062);
+    }
+
+    [Fact]
+    public async Task Personal_schedule_is_dated_and_days_are_single_spans()
+    {
+        var user = await ActiveUserAsync("design");
+        var schedule = await InsertAsync(
+            $"INSERT INTO user_schedules (user_id, effective_from, follows_default, created_at) VALUES ({user}, '2026-10-01', 0, {Now})");
+
+        (await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(
+                $"INSERT INTO user_schedules (user_id, effective_from, follows_default, created_at) VALUES ({user}, '2026-10-01', 1, {Now})")))
+            .Number.ShouldBe(1062);
+
+        await ShouldViolateAsync(ScheduleDaySql(schedule, weekday: 7, start: 540, end: 780), "ck_user_schedule_days_weekday");
+        await ShouldViolateAsync(ScheduleDaySql(schedule, weekday: 1, start: 780, end: 540), "ck_user_schedule_days_hours");
+        await ExecuteAsync(ScheduleDaySql(schedule, weekday: 1, start: 540, end: 780));
+    }
+
+    [Fact]
+    public async Task Hour_excuse_is_for_a_month_and_minutes_go_with_the_minutes_kind()
+    {
+        var user = await ActiveUserAsync("design");
+
+        await ShouldViolateAsync(ExcuseSql(user, "2026-09-15", "whole_month", "NULL"), "ck_hour_excuses_month_start");
+        await ShouldViolateAsync(ExcuseSql(user, "2026-09-01", "minutes", "NULL"), "ck_hour_excuses_minutes");
+        await ShouldViolateAsync(ExcuseSql(user, "2026-09-01", "days", "120"), "ck_hour_excuses_minutes");
+        await ShouldViolateAsync(ExcuseSql(user, "2026-09-01", "sick", "NULL"), "ck_hour_excuses_kind");
+
+        (await InsertAsync(ExcuseSql(user, "2026-09-01", "minutes", "90"))).ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Obsolete_cost_plus_price_permission_is_gone()
+    {
+        (await ScalarAsync<int>("SELECT COUNT(*) FROM permissions WHERE code = 'project:set_price'")).ShouldBe(0);
+        (await ScalarAsync<int>("SELECT COUNT(*) FROM permissions WHERE code = 'project:pricing_manage'")).ShouldBe(1);
     }
 
     // ---------- EF Core mapping round trip ----------
@@ -297,13 +466,50 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     private Task<long> ClientAsync(string domain) =>
         InsertAsync($"INSERT INTO clients (domain_code, name, created_at) VALUES ('{domain}', 'Client', {Now})");
 
+    /// <summary>Execution projects get the fee and markup they require; Design projects get none.</summary>
     private static string ProjectSql(string domain, long ownerId, string clientId, string billing, decimal revenue) =>
-        "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, created_at) " +
-        $"VALUES ('{domain}', 'Project', 'active', '{billing}', {clientId}, {ownerId}, '2026-09-01', {revenue}, 'USD', 0, {Now})";
+        domain == "execution"
+            ? ProjectSql(domain, ownerId, clientId, billing, revenue, projectFee: "0", materialMarkup: "0.10")
+            : ProjectSql(domain, ownerId, clientId, billing, revenue, projectFee: "NULL", materialMarkup: "NULL");
+
+    private static string ProjectSql(
+        string domain, long ownerId, string clientId, string billing, decimal revenue, string projectFee, string materialMarkup) =>
+        "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, project_fee, material_markup, created_at) " +
+        $"VALUES ('{domain}', 'Project', 'active', '{billing}', {clientId}, {ownerId}, '2026-09-01', {revenue}, 'USD', 0, {projectFee}, {materialMarkup}, {Now})";
+
+    /// <summary>An Execution site project: always client work, with a fee and a material markup.</summary>
+    private async Task<long> SiteProjectAsync(long ownerId)
+    {
+        var client = await ClientAsync("execution");
+        return await InsertAsync(ProjectSql("execution", ownerId, client.ToString(), "client", 0));
+    }
 
     private static string WorkEntrySql(long userId, long projectId, string start, string end) =>
         "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
         $"VALUES ({userId}, {projectId}, 'Drawings', '{start}', '{end}', {Now})";
+
+    private static string MaterialSql(long projectId, long userId, string quantity, string unitCost, string amount) =>
+        "INSERT INTO project_materials (project_id, name, quantity, unit_cost, amount, currency, added_at, added_by_id) " +
+        $"VALUES ({projectId}, 'Concrete', {quantity}, {unitCost}, {amount}, 'USD', {Now}, {userId})";
+
+    private static string PaymentSql(long projectId, long clientId, bool isInitial) =>
+        "INSERT INTO payments (project_id, client_id, amount, currency, fx_rate, amount_usd, received_on, method, recorded_at, is_initial) " +
+        $"VALUES ({projectId}, {clientId}, 1000, 'USD', 1, 1000, '2026-09-28', 'bank', {Now}, {(isInitial ? 1 : 0)})";
+
+    private static string StatementLineSql(long statementId, long materialId, int position) =>
+        "INSERT INTO client_statement_lines (statement_id, material_id, position, description, price, is_earlier, is_listed) " +
+        $"VALUES ({statementId}, {materialId}, {position}, 'Concrete', 550, 0, 1)";
+
+    private static string PolicySql(string effectiveFrom, int start, int end, int days, int breakMinutes) =>
+        "INSERT INTO working_time_policies (effective_from, work_start_minute, work_end_minute, work_days, break_minutes, overtime_multiplier, created_at) " +
+        $"VALUES ('{effectiveFrom}', {start}, {end}, {days}, {breakMinutes}, 1, {Now})";
+
+    private static string ScheduleDaySql(long scheduleId, int weekday, int start, int end) =>
+        $"INSERT INTO user_schedule_days (schedule_id, weekday, start_minute, end_minute) VALUES ({scheduleId}, {weekday}, {start}, {end})";
+
+    private static string ExcuseSql(long userId, string monthStart, string kind, string minutes) =>
+        "INSERT INTO hour_excuses (user_id, month_start, kind, minutes, is_paid, note, created_at) " +
+        $"VALUES ({userId}, '{monthStart}', '{kind}', {minutes}, 1, 'Annual leave', {Now})";
 
     private static string LabourWeekSql(long projectId, long userId, string weekStart) =>
         "INSERT INTO labour_weeks (project_id, week_start, submitted_at, submitted_by_id) " +

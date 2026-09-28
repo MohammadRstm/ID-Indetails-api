@@ -27,6 +27,12 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.Property(x => x.Note).HasMaxLength(500);
         builder.Property(x => x.VoidReason).HasMaxLength(500);
 
+        // One live initial payment per project: NULL for every other payment, and MySQL
+        // allows any number of NULLs in a unique index.
+        builder.Property(x => x.InitialForProjectId)
+            .HasComputedColumnSql("IF(`is_initial` = 1 AND `voided_at` IS NULL, `project_id`, NULL)", stored: true);
+        builder.HasIndex(x => x.InitialForProjectId).IsUnique();
+
         builder.HasOne(x => x.Project)
             .WithMany()
             .HasForeignKey(x => x.ProjectId)

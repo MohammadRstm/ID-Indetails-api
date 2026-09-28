@@ -36,7 +36,12 @@ public class Project
 
     public DateTime? CompletedAt { get; set; }
 
-    /// <summary>Agreed contract value (not cash received). Always 0 for internal projects.</summary>
+    /// <summary>
+    /// Agreed contract value (not cash received). Always 0 for internal projects.
+    /// Design: typed in by an admin. Execution: 0 while open, because the agreed amount is
+    /// calculated live (material client prices + project fee); finalising writes the frozen
+    /// agreed amount here.
+    /// </summary>
     public decimal Revenue { get; set; }
 
     public string RevenueCurrency { get; set; } = "USD";
@@ -45,11 +50,14 @@ public class Project
 
     public DateTime? FinalizedAt { get; set; }
 
-    /// <summary>Execution only: cost-plus markup (0.15 = 15%).</summary>
-    public decimal? Markup { get; set; }
+    /// <summary>Execution only (required there, null for Design): fixed charge for doing the job.</summary>
+    public decimal? ProjectFee { get; set; }
 
-    /// <summary>Execution only: when the price was set. Freezes site costs and unlocks invoicing.</summary>
-    public DateTime? PriceSetAt { get; set; }
+    /// <summary>
+    /// Execution only (required there, null for Design): default markup on material cost,
+    /// 0.10 = 10%, up to 5 (500%). Materials without their own client price use it.
+    /// </summary>
+    public decimal? MaterialMarkup { get; set; }
 
     /// <summary>
     /// Cached done / total requirements, 0–100. Updated in the same transaction as every

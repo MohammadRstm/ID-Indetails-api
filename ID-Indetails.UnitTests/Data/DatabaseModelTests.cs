@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_45_tables_with_snake_case_names()
+    public void Model_has_all_54_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(45);
+        tables.Count.ShouldBe(54);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -32,6 +32,7 @@ public class DatabaseModelTests
         {
             "client_contacts", "invoice_lines", "invoice_deliveries", "labour_week_days",
             "requirement_assignees", "overhead_amounts", "message_mentions", "message_attachments",
+            "user_schedule_days", "hour_excuse_days", "client_statement_lines", "client_statement_deliveries",
         };
 
         var cascading = Model.GetEntityTypes()
@@ -109,7 +110,7 @@ public class DatabaseModelTests
         Entity<WorkEntry>().FindProperty(nameof(WorkEntry.DurationMinutes))!.GetComputedColumnSql()
             .ShouldBe("TIMESTAMPDIFF(MINUTE, `started_at`, `ended_at`)");
         Entity<ProjectMaterial>().FindProperty(nameof(ProjectMaterial.Total))!.GetComputedColumnSql()
-            .ShouldBe("ROUND(`quantity` * `unit_cost`, 2)");
+            .ShouldBe("CASE WHEN `quantity` > 0 AND `unit_cost` > 0 THEN ROUND(`quantity` * `unit_cost`, 2) ELSE `amount` END");
         Entity<LabourWeekDay>().FindProperty(nameof(LabourWeekDay.Cost))!.GetComputedColumnSql()
             .ShouldBe("`workers` * `daily_pay`");
     }
