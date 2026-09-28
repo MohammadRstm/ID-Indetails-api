@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace ID_Indetails.api.Authorization.Requirements;
 
-/// <summary>The signed-in user's role must currently hold <see cref="Permission"/> in their domain.</summary>
-public sealed class PermissionRequirement(string permission) : IAuthorizationRequirement
+/// <summary>The signed-in user must currently hold at least one of <see cref="AnyOf"/>.</summary>
+public sealed class PermissionRequirement(IReadOnlyList<string> anyOf) : IAuthorizationRequirement
 {
-    public string Permission { get; } = permission;
+    public IReadOnlyList<string> AnyOf { get; } = anyOf;
 }

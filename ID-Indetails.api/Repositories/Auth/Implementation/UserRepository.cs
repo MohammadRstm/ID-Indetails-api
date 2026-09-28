@@ -10,6 +10,19 @@ public sealed class UserRepository(IdIndetailsDbContext db) : IUserRepository
     public Task<User?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
         => db.Users.Include(u => u.Team).SingleOrDefaultAsync(u => u.Id == id, cancellationToken);
 
+    public async Task<User?> GetByIdForUpdateAsync(long id, CancellationToken cancellationToken = default)
+        => (await db.Users
+            .FromSql($"SELECT * FROM `users` WHERE `id` = {id} FOR UPDATE")
+            .ToListAsync(cancellationToken))
+            .SingleOrDefault();
+
+    public Task<UserRoleSnapshot?> GetRoleSnapshotAsync(long id, CancellationToken cancellationToken = default)
+        => db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == id)
+            .Select(u => new UserRoleSnapshot(u.Id, u.RoleCode, u.DomainCode, u.Status))
+            .SingleOrDefaultAsync(cancellationToken);
+
     public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default)
         => db.Users.Include(u => u.Team).SingleOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
 

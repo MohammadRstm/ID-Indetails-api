@@ -23,8 +23,17 @@ public sealed record CurrentUserResponse
     /// <summary>True until a generated password is replaced. Every other endpoint refuses until then.</summary>
     public required bool MustChangePassword { get; init; }
 
-    /// <summary>Effective permission codes, for showing and hiding UI. The server still checks every call.</summary>
+    /// <summary>
+    /// Effective permission codes (role defaults plus personal overrides), for showing and hiding
+    /// UI. The server still checks every call.
+    /// </summary>
     public required IReadOnlyList<string> Permissions { get; init; }
+
+    /// <summary>True when an admin or employee has been given or denied permissions beyond their role defaults.</summary>
+    public required bool IsJoker { get; init; }
+
+    /// <summary>Domains whose data the user may see: their own, plus the other once they hold one of its permissions.</summary>
+    public required IReadOnlyList<string> VisibleDomains { get; init; }
 }
 
 public sealed record TeamSummaryResponse(long Id, string Name);

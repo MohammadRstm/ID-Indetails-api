@@ -3,11 +3,11 @@ using ID_Indetails.api.Constants;
 namespace ID_Indetails.api.Business.Auth;
 
 /// <summary>
-/// Who may invite whom, and into which domain.
+/// Who may invite whom, and into which domain. Decided by permissions, not roles:
 /// <list type="bullet">
-/// <item>Super admins invite any role into either domain; a super admin gets no domain.</item>
-/// <item>Admins invite admins and employees into their own domain only.</item>
-/// <item>Employees invite no one.</item>
+/// <item><c>employee:invite_super_admin</c> invites super admins, who get no domain.</item>
+/// <item><c>employee:invite</c> invites admins and employees into a domain the inviter can
+/// see. With only one visible domain it is used when none is given; otherwise one must be chosen.</item>
 /// </list>
 /// </summary>
 public static class InvitationPolicy
@@ -19,14 +19,8 @@ public static class InvitationPolicy
         public static Decision Deny(string reason) => new(false, null, reason);
     }
 
-    /// <param name="requestedDomain">
-    /// Domain asked for in the request. Admins may leave it empty (their own domain is used).
-    /// </param>
-    public static Decision Evaluate(
-        string inviterRole,
-        string? inviterDomain,
-        string targetRole,
-        string? requestedDomain)
+    /// <param name="requestedDomain">Domain asked for in the request; may be empty (see above).</param>
+    public static Decision Evaluate(UserAccess inviter, string targetRole, string? requestedDomain)
     {
         if (!RoleCodes.All.Contains(targetRole))
         {
@@ -38,32 +32,31 @@ public static class InvitationPolicy
             return Decision.Deny("Unknown domain.");
         }
 
-        switch (inviterRole)
+        if (targetRole == RoleCodes.SuperAdmin)
         {
-            case RoleCodes.SuperAdmin when targetRole == RoleCodes.SuperAdmin:
-                return requestedDomain is null
-                    ? Decision.Allow(null)
-                    : Decision.Deny("Super admins do not belong to a domain.");
+            if (!inviter.Has(PermissionCodes.EmployeeInviteSuperAdmin))
+            {
+                return Decision.Deny("You are not allowed to invite super admins.");
+            }
 
-            case RoleCodes.SuperAdmin:
-                return requestedDomain is null
-                    ? Decision.Deny("Choose the domain the person will belong to.")
-                    : Decision.Allow(requestedDomain);
-
-            case RoleCodes.Admin when targetRole == RoleCodes.SuperAdmin:
-                return Decision.Deny("Only super admins can invite super admins.");
-
-            case RoleCodes.Admin when inviterDomain is null:
-                return Decision.Deny("Your account has no domain.");
-
-            case RoleCodes.Admin when requestedDomain is not null && requestedDomain != inviterDomain:
-                return Decision.Deny("You can only invite people into your own domain.");
-
-            case RoleCodes.Admin:
-                return Decision.Allow(inviterDomain);
-
-            default:
-                return Decision.Deny("You are not allowed to invite people.");
+            return requestedDomain is null
+                ? Decision.Allow(null)
+                : Decision.Deny("Super admins do not belong to a domain.");
         }
+
+        if (!inviter.Has(PermissionCodes.EmployeeInvite))
+        {
+            return Decision.Deny("You are not allowed to invite people.");
+        }
+
+        var domain = requestedDomain ?? (inviter.VisibleDomains.Count == 1 ? inviter.VisibleDomains[0] : null);
+        if (domain is null)
+        {
+            return Decision.Deny("Choose the domain the person will belong to.");
+        }
+
+        return inviter.CanSee(domain)
+            ? Decision.Allow(domain)
+            : Decision.Deny("You can only invite people into a domain you work in.");
     }
 }
