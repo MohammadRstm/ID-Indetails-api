@@ -52,6 +52,7 @@ public static class PermissionCodes
     public const string EmployeePayManage = "employee:pay_manage";
     public const string EmployeeInviteSuperAdmin = "employee:invite_super_admin";
     public const string PermissionManage = "permission:manage";
+    public const string TeamManage = "team:manage";
 
     // Domain workspace
     public const string ActivityView = "activity:view";

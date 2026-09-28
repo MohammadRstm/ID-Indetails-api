@@ -1971,6 +1971,11 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "team:manage",
+                            Description = "Create, rename and delete teams"
+                        },
+                        new
+                        {
                             Code = "activity:view",
                             Description = "View the domain activity feed"
                         },
@@ -2921,6 +2926,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "team:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "activity:view"
                         },
                         new
@@ -3136,6 +3146,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "admin",
+                            PermissionCode = "team:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
                             PermissionCode = "activity:view"
                         },
                         new
@@ -3289,6 +3304,85 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasDatabaseName("ix_teams_domain_code_name");
 
                     b.ToTable("teams", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "design",
+                            Name = "Engineering"
+                        },
+                        new
+                        {
+                            Id = 2L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "design",
+                            Name = "Design"
+                        },
+                        new
+                        {
+                            Id = 3L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "design",
+                            Name = "Data"
+                        },
+                        new
+                        {
+                            Id = 4L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "design",
+                            Name = "Marketing"
+                        },
+                        new
+                        {
+                            Id = 5L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "design",
+                            Name = "Operations"
+                        },
+                        new
+                        {
+                            Id = 6L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "design",
+                            Name = "Platform"
+                        },
+                        new
+                        {
+                            Id = 7L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "execution",
+                            Name = "Site Operations"
+                        },
+                        new
+                        {
+                            Id = 8L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "execution",
+                            Name = "Procurement"
+                        },
+                        new
+                        {
+                            Id = 9L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "execution",
+                            Name = "Quantity Surveying"
+                        },
+                        new
+                        {
+                            Id = 10L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "execution",
+                            Name = "Safety"
+                        },
+                        new
+                        {
+                            Id = 11L,
+                            CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DomainCode = "execution",
+                            Name = "Project Management"
+                        });
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.User", b =>
