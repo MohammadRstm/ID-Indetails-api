@@ -31,6 +31,30 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
         => await (await Client.GetAsync($"/api/invoices/{invoiceId}", token)).ReadAsync<InvoiceResponse>();
 
     [Fact]
+    public async Task Concurrent_payments_never_overpay_an_invoice()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 50_000m);
+        await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Design);
+
+        // Applying a payment on account races recording a new one: only one of them fits.
+        for (var round = 0; round < 5; round++)
+        {
+            var invoice = await IssuedInvoiceAsync(project.Id, admin.AccessToken, 1000m);
+            var onAccount = await RecordAsync(project.Id, admin.AccessToken, new { amount = 700m, currency = "USD" });
+
+            var results = await Task.WhenAll(
+                Client.PutJsonAsync($"/api/payments/{onAccount.Id}/invoice", new { invoiceId = invoice.Id }, admin.AccessToken),
+                Client.PostJsonAsync($"/api/projects/{project.Id}/payments",
+                    new { amount = 700m, currency = "USD", invoiceId = invoice.Id }, admin.AccessToken));
+
+            results.Count(r => r.IsSuccessStatusCode).ShouldBe(1);
+            (await InvoiceAsync(invoice.Id, admin.AccessToken)).Balance.ShouldBe(300m);
+        }
+    }
+
+    [Fact]
     public async Task Payments_need_no_invoice_and_settle_issued_invoices_up_to_their_balance()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

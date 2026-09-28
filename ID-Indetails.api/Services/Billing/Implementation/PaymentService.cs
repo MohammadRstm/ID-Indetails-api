@@ -176,13 +176,12 @@ public sealed class PaymentService(
     /// <summary>The invoice, locked so its balance can't change underneath, once the payment fits it.</summary>
     private async Task<Invoice> CheckInvoiceAsync(long projectId, long invoiceId, decimal amountUsd, CancellationToken cancellationToken)
     {
-        var invoice = await invoices.GetForUpdateAsync(invoiceId, cancellationToken);
-        if (invoice is null)
-        {
-            throw new RequestValidationException(ErrorCodes.ValidationFailed, "invoiceId", "The invoice does not exist.");
-        }
+        // Only this project's invoices are looked up (and locked), so another project's or domain's
+        // invoice ids can't be probed.
+        var invoice = await invoices.GetForProjectForUpdateAsync(projectId, invoiceId, cancellationToken)
+            ?? throw new RequestValidationException(ErrorCodes.ValidationFailed, "invoiceId", "This project has no such invoice.");
 
-        var balance = InvoiceRules.Balance(invoice.Total, await invoices.PaidAsync(invoice.Id, cancellationToken));
+        var balance = InvoiceRules.Balance(invoice.Total, await invoices.PaidForUpdateAsync(invoice.Id, cancellationToken));
         Throw(PaymentRules.CheckInvoice(
             projectId, invoice.ProjectId, invoice.IssuedAt is not null, invoice.VoidedAt is not null, balance, amountUsd));
         return invoice;

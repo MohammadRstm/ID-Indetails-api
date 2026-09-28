@@ -184,7 +184,7 @@ public sealed class InvoiceService(
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var (invoice, domain) = await VisibleInvoiceForUpdateAsync(actor, invoiceId, cancellationToken);
-        var hasPayments = await invoices.PaidAsync(invoice.Id, cancellationToken) > 0;
+        var hasPayments = await invoices.PaidForUpdateAsync(invoice.Id, cancellationToken) > 0;
         Throw(InvoiceRules.CheckVoid(invoice.IssuedAt is not null, invoice.VoidedAt is not null, hasPayments));
 
         invoice.VoidedAt = clock.UtcNow;
