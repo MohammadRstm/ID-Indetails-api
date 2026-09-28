@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Request.Labour;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Request.Projects;
@@ -57,6 +58,9 @@ public sealed record CreateProjectRequest
 
     /// <summary>Execution only: the client's initial payment, recorded on account. Needs <c>payment:record</c>.</summary>
     public InitialPaymentRequest? InitialPayment { get; init; }
+
+    /// <summary>Execution only: the crew size and day rate new labour weeks start from. Needs <c>labour_report:manage</c>.</summary>
+    public SetLabourDefaultsRequest? LabourDefaults { get; init; }
 }
 
 public sealed record InitialPaymentRequest

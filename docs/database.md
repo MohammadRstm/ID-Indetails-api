@@ -46,7 +46,7 @@ The database is the second line of defence. The API must still filter every quer
 
 An Execution project has a fixed **project fee** and a default **material markup** (`projects.project_fee`, `projects.material_markup`, 0–500%). Design projects have neither.
 
-- **Client price of a material:** `project_materials.client_price` when someone set it by hand. Otherwise it is calculated as cost × (1 + markup), and never stored.
+- **Client price of a material:** `project_materials.client_price` when someone set it by hand, or when a client statement froze it at the price shown. Otherwise it is calculated as cost × (1 + markup), and never stored. A price typed equal to the automatic one is stored as automatic (`NULL`).
 - **Material cost:** quantity × unit cost when both are known, otherwise the lump-sum `amount`. The generated `total` column holds whichever applies.
 - **Agreed amount:** the material client prices plus the project fee. It is calculated live while the project is open. Finalising writes the frozen amount into `projects.revenue`.
 - **Ground labour is never billed.** The fee and the markup cover it.

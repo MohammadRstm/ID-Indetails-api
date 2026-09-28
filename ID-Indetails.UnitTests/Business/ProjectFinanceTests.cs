@@ -125,4 +125,27 @@ public class ProjectFinanceTests
         charge.ShouldBe(201m);
         unconverted.ShouldBe(1);
     }
+
+    [Fact]
+    public void Cash_adds_up_week_by_week_from_the_first_week()
+    {
+        // 2 March 2026 is a Monday.
+        var weeks = CashByWeek(
+            [
+                new CostItem(CostSource.Materials, "USD", 200m, new DateOnly(2026, 2, 27)),
+                new CostItem(CostSource.GroundLabour, "USD", 400m, new DateOnly(2026, 3, 4)),
+                new CostItem(CostSource.Expenses, "LBP", 900_000m, new DateOnly(2026, 3, 10)),
+                new CostItem(CostSource.Expenses, "LBP", 900_000m, new DateOnly(2025, 3, 10)),
+            ],
+            [(new DateOnly(2026, 3, 2), 1000m), (new DateOnly(2026, 3, 9), 500m)],
+            Rates,
+            from: new DateOnly(2026, 3, 3),
+            to: new DateOnly(2026, 3, 12));
+
+        weeks.ShouldBe([
+            new CashWeek(new DateOnly(2026, 3, 2), Received: 1000m, Spent: 600m, GroundLabour: 400m, ReceivedInWeek: 1000m, GroundLabourInWeek: 400m),
+            new CashWeek(new DateOnly(2026, 3, 9), Received: 1500m, Spent: 610m, GroundLabour: 400m, ReceivedInWeek: 500m, GroundLabourInWeek: 0m),
+        ]);
+        weeks[^1].Profit.ShouldBe(890m);
+    }
 }
