@@ -10,6 +10,7 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -30,6 +31,7 @@ public sealed class RequirementService(
     IRequirementRepository requirements,
     IProjectProgress progress,
     IActivityEventRepository activity,
+    INotificationRepository notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IRequirementService
 {
@@ -72,6 +74,7 @@ public sealed class RequirementService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         activity.Add(RequirementEvent(project, requirement, ActivityEventKinds.RequirementAdded, actor.UserId));
+        NotifyAssigned(project, requirement, assignees, actor.UserId);
         await progress.RefreshAsync(project, actor.UserId, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -98,12 +101,14 @@ public sealed class RequirementService(
             requirement.Assignees.Remove(removed);
         }
 
-        foreach (var added in assignees.Where(id => requirement.Assignees.All(a => a.UserId != id)))
+        var added = assignees.Where(id => requirement.Assignees.All(a => a.UserId != id)).ToList();
+        foreach (var userId in added)
         {
-            requirement.Assignees.Add(new RequirementAssignee { UserId = added });
+            requirement.Assignees.Add(new RequirementAssignee { UserId = userId });
         }
 
         activity.Add(RequirementEvent(project, requirement, ActivityEventKinds.RequirementUpdated, actor.UserId));
+        NotifyAssigned(project, requirement, added, actor.UserId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -214,6 +219,26 @@ public sealed class RequirementService(
                 .ToList(),
             CreatedAt = r.CreatedAt,
         }).ToList();
+    }
+
+    /// <summary>Tells each newly assigned person (other than the caller) about the requirement.</summary>
+    private void NotifyAssigned(Project project, ProjectRequirement requirement, IEnumerable<long> userIds, long actorId)
+    {
+        var payload = JsonSerializer.Serialize(new { text = requirement.Text, deadline = requirement.Deadline, projectTitle = project.Title });
+        foreach (var userId in userIds.Where(id => id != actorId))
+        {
+            notifications.Add(new Notification
+            {
+                RecipientId = userId,
+                Kind = NotificationKinds.RequirementAssigned,
+                ActorId = actorId,
+                ProjectId = project.Id,
+                SubjectType = "requirement",
+                SubjectId = requirement.Id,
+                Payload = payload,
+                CreatedAt = clock.UtcNow,
+            });
+        }
     }
 
     private ActivityEvent RequirementEvent(Project project, ProjectRequirement requirement, string kind, long actorId) => new()

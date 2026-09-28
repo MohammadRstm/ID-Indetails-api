@@ -71,6 +71,26 @@ public class RequirementTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Assignees_are_notified_once_when_they_are_added()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, first) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, second) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+
+        var requirement = await AddAsync(project.Id, superAdmin.AccessToken, new { text = "Site survey", assigneeIds = new[] { first.User.Id } });
+        await Client.PutJsonAsync($"/api/projects/{project.Id}/requirements/{requirement.Id}",
+            new { text = "Site survey, both floors", assigneeIds = new[] { first.User.Id, second.User.Id } }, superAdmin.AccessToken);
+
+        async Task<int> NotificationsFor(long userId) => await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM notifications WHERE recipient_id = @u AND kind = 'requirement_assigned' AND subject_id = @r",
+            ("@u", userId), ("@r", requirement.Id));
+
+        (await NotificationsFor(first.User.Id)).ShouldBe(1);
+        (await NotificationsFor(second.User.Id)).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Only_employees_of_the_domain_can_be_assigned()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

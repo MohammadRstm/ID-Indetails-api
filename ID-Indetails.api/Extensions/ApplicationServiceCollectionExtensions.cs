@@ -14,6 +14,8 @@ using ID_Indetails.api.Repositories.Employees.Implementation;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Implementation;
 using ID_Indetails.api.Repositories.Invitations.Abstraction;
+using ID_Indetails.api.Repositories.Notifications.Abstraction;
+using ID_Indetails.api.Repositories.Notifications.Implementation;
 using ID_Indetails.api.Repositories.Invitations.Implementation;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Implementation;
@@ -83,6 +85,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();

@@ -63,7 +63,8 @@ Anything else is `422 invalid_status_change`, and asking for the current status 
 - Requirements of a completed or archived project can't change until it is reopened (`422 project_closed`). Projects on hold stay editable.
 - **Assignees** are employees (not admins) of the project's domain who are active or invited (`422 assignee_not_allowed`). They don't have to be project members. Employees can't tick requirements, not even their own.
 - A requirement is **overdue** when it is open and its deadline is before today (company time zone).
-- Every change writes `requirement_added`, `requirement_updated`, `requirement_done`, `requirement_reopened` or `requirement_deleted` (the requirement is the subject, the text is in the payload). No notifications are sent yet.
+- Every change writes `requirement_added`, `requirement_updated`, `requirement_done`, `requirement_reopened` or `requirement_deleted` (the requirement is the subject, the text is in the payload).
+- People newly assigned (on creation or an edit) get a `requirement_assigned` notification with the requirement text, deadline and project title. Removing someone, ticking and deleting send none.
 
 ## Expenses
 
