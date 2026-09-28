@@ -23,6 +23,21 @@ public interface IPayrollRepository
 
     /// <summary>Live excuses of the month, with their days.</summary>
     Task<IReadOnlyList<HourExcuse>> ExcusesAsync(IReadOnlyCollection<long> userIds, DateOnly month, CancellationToken cancellationToken = default);
+
+    /// <summary>Work on these projects started in the window.</summary>
+    Task<IReadOnlyList<WorkEntryTime>> WorkOnProjectsAsync(
+        IReadOnlyCollection<long> projectIds,
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>These people with their team, not tracked, whatever their status.</summary>
+    Task<IReadOnlyList<User>> UsersAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>A domain's projects, newest first, with their client's name.</summary>
+    Task<IReadOnlyList<ProjectLabel>> ProjectsAsync(string domain, CancellationToken cancellationToken = default);
 }
 
-public sealed record WorkEntryTime(long Id, long UserId, DateTime StartedAt, int Minutes);
+public sealed record WorkEntryTime(long Id, long UserId, long ProjectId, DateTime StartedAt, int Minutes);
+
+public sealed record ProjectLabel(long Id, string Title, string? ClientName, string? ClientOrganisation);

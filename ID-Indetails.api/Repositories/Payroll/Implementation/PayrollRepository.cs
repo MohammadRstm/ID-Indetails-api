@@ -50,7 +50,29 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
         => await db.WorkEntries
             .AsNoTracking()
             .Where(e => userIds.Contains(e.UserId) && e.DeletedAt == null && e.StartedAt >= fromUtc && e.StartedAt < toUtc)
-            .Select(e => new WorkEntryTime(e.Id, e.UserId, e.StartedAt, e.DurationMinutes))
+            .Select(e => new WorkEntryTime(e.Id, e.UserId, e.ProjectId, e.StartedAt, e.DurationMinutes))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<WorkEntryTime>> WorkOnProjectsAsync(
+        IReadOnlyCollection<long> projectIds,
+        DateTime fromUtc,
+        DateTime toUtc,
+        CancellationToken cancellationToken = default)
+        => await db.WorkEntries
+            .AsNoTracking()
+            .Where(e => projectIds.Contains(e.ProjectId) && e.DeletedAt == null && e.StartedAt >= fromUtc && e.StartedAt < toUtc)
+            .Select(e => new WorkEntryTime(e.Id, e.UserId, e.ProjectId, e.StartedAt, e.DurationMinutes))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<User>> UsersAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
+        => await db.Users.AsNoTracking().Include(u => u.Team).Where(u => userIds.Contains(u.Id)).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<ProjectLabel>> ProjectsAsync(string domain, CancellationToken cancellationToken = default)
+        => await db.Projects
+            .AsNoTracking()
+            .Where(p => p.DomainCode == domain)
+            .OrderByDescending(p => p.CreatedAt)
+            .Select(p => new ProjectLabel(p.Id, p.Title, p.Client != null ? p.Client.Name : null, p.Client != null ? p.Client.Organisation : null))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<HourExcuse>> ExcusesAsync(IReadOnlyCollection<long> userIds, DateOnly month, CancellationToken cancellationToken = default)

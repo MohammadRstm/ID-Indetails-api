@@ -145,6 +145,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ICompanyOverviewService, CompanyOverviewService>();
         services.AddScoped<ISalaryService, SalaryService>();
         services.AddScoped<IHourExcuseService, HourExcuseService>();
+        services.AddScoped<IProjectPayService, ProjectPayService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IClientService, ClientService>();
