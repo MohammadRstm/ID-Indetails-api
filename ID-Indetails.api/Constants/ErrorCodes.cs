@@ -101,4 +101,8 @@ public static class ErrorCodes
     public const string OverheadEnded = "overhead_ended";
     public const string OverheadAlreadyCancelled = "overhead_already_cancelled";
     public const string OverheadNotCancelled = "overhead_not_cancelled";
+
+    // Payroll
+    public const string SalaryMonthInFuture = "salary_month_in_future";
+    public const string ExcuseMonthInFuture = "excuse_month_in_future";
 }
