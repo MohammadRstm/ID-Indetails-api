@@ -20,7 +20,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 
 - The start date is today (company time zone). The owner defaults to the caller.
 - **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No fee or markup.
-- **Execution:** always client work, with a `clientId`, a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). `revenue` is never sent; it is calculated.
+- **Execution:** always client work, with a `clientId`, a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). `revenue` is never sent; it is calculated. An optional `initialPayment` (`amount`, `currency`, `fxRate`, `receivedOn`, `method`, `reference`, `note`) is recorded on account as the project's initial payment in the same transaction. It needs `payment:record`, and Design projects don't take one (`400`).
 - The client must belong to the project's domain (`400`) and not be archived (`422 client_archived`).
 - **Owner:** anyone of the project's domain who isn't deactivated, or a super admin (`422 owner_not_allowed`).
 
@@ -30,6 +30,8 @@ Employees hold `project:view`, so they see every project of their domain in any 
 - The Execution agreed amount is calculated live while the project is open, and frozen into `projects.revenue` when it is finalised.
 - While a project is finalised (`money.isLocked`), billing, revenue, fee and markup can't change (`422 project_locked`).
 - A project with any invoice or payment can't move to another client or become internal (`422 project_has_billing`), because invoices and payments keep the client they were made for.
+- `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed` and `paidAhead` (see [billing.md](billing.md)).
+- Profit, cost and margin aren't returned yet: they need labour cost from work entries, which come with that feature.
 
 ## Status
 

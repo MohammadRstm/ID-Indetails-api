@@ -30,7 +30,26 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Project expenses, one total per currency.</summary>
     public IReadOnlyList<CurrencyTotalResponse> ExpenseTotals { get; init; } = [];
+
+    public ProjectBillingResponse Billing { get; init; } = null!;
 }
+
+/// <summary>The project's cash position in USD, kept apart from revenue and profit.</summary>
+/// <param name="Invoiced">Issued, live invoices.</param>
+/// <param name="Outstanding">Left to pay on those invoices.</param>
+/// <param name="Received">Every live payment, on account or not.</param>
+/// <param name="OnAccount">Live payments not tied to an invoice.</param>
+/// <param name="NotYetInvoiced">Revenue minus invoiced, never below zero.</param>
+/// <param name="Owed">Revenue minus received, never below zero.</param>
+/// <param name="PaidAhead">Received beyond the revenue.</param>
+public sealed record ProjectBillingResponse(
+    decimal Invoiced,
+    decimal Outstanding,
+    decimal Received,
+    decimal OnAccount,
+    decimal NotYetInvoiced,
+    decimal Owed,
+    decimal PaidAhead);
 
 public sealed record ProjectSummaryResponse
 {

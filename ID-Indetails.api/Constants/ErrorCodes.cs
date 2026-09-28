@@ -74,6 +74,13 @@ public static class ErrorCodes
     public const string InvoiceVoided = "invoice_voided";
     public const string InvoiceHasPayments = "invoice_has_payments";
     public const string IssueDateInFuture = "issue_date_in_future";
+    public const string PaymentExceedsBalance = "payment_exceeds_balance";
+    public const string PaymentTooSmall = "payment_too_small";
+    public const string ExchangeRateMissing = "exchange_rate_missing";
+    public const string ReceivedDateInFuture = "received_date_in_future";
+    public const string InitialPaymentExists = "initial_payment_exists";
+    public const string PaymentAlreadyVoided = "payment_already_voided";
+    public const string PaymentAlreadyApplied = "payment_already_applied";
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";

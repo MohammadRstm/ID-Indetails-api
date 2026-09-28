@@ -78,6 +78,12 @@ public static class ProjectRules
             ? RuleDenial.BusinessRule(ErrorCodes.ClientIsArchived, "This client is archived. Restore it before starting work for it.")
             : null;
 
+    public static RuleDenial? CheckInitialPayment(string domain, bool hasInitialPayment)
+        => hasInitialPayment && domain != DomainCodes.Execution
+            ? RuleDenial.Invalid(
+                ErrorCodes.ValidationFailed, "initialPayment", "Only Execution projects take an initial payment when they are created.")
+            : null;
+
     public static RuleDenial? CheckOwner(Person owner, string projectDomain)
     {
         var allowed = owner.Status != UserStatus.Deactivated

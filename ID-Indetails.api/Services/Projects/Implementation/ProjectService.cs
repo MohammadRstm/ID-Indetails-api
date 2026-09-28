@@ -1,11 +1,13 @@
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Expenses;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Expenses;
@@ -15,11 +17,13 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
+using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
+using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 
@@ -33,6 +37,8 @@ public sealed class ProjectService(
     IClientRepository clients,
     IUserRepository users,
     IExpenseRepository expenses,
+    IPaymentRepository payments,
+    IPaymentService paymentService,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectService
@@ -69,6 +75,12 @@ public sealed class ProjectService(
 
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
             domain, request.BillingType, request.ClientId, request.Revenue, request.ProjectFee, request.MaterialMarkup)));
+        Throw(ProjectRules.CheckInitialPayment(domain, request.InitialPayment is not null));
+        if (request.InitialPayment is not null && !actor.Has(PermissionCodes.PaymentRecord))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Recording the initial payment needs the permission to record payments.");
+        }
+
         await EnsureClientAsync(request.ClientId, domain, cancellationToken);
         var ownerId = request.OwnerId ?? actor.UserId;
         await EnsureOwnerAsync(ownerId, domain, cancellationToken);
@@ -110,6 +122,21 @@ public sealed class ProjectService(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        if (request.InitialPayment is { } initial)
+        {
+            await paymentService.RecordForProjectAsync(project, new RecordPaymentRequest
+            {
+                Amount = initial.Amount,
+                Currency = initial.Currency,
+                FxRate = initial.FxRate,
+                ReceivedOn = initial.ReceivedOn,
+                Method = initial.Method,
+                Reference = initial.Reference,
+                Note = initial.Note,
+                IsInitial = true,
+            }, actor.UserId, cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, project.Id, cancellationToken);
@@ -297,22 +324,31 @@ public sealed class ProjectService(
             .Select(t => new CurrencyTotalResponse(t.Currency, t.Total))
             .ToList();
 
-        if (p.DomainCode != DomainCodes.Execution)
+        var revenue = p.Revenue;
+        decimal? materialCharge = null;
+        if (p.DomainCode == DomainCodes.Execution)
         {
-            return new ProjectMoneyResponse { Currency = p.RevenueCurrency, Revenue = p.Revenue, IsLocked = locked, ExpenseTotals = expenseTotals };
+            var materials = await projects.GetMaterialsAsync(p.Id, p.RevenueCurrency, cancellationToken);
+            var markup = p.MaterialMarkup ?? 0;
+            materialCharge = ExecutionPricing.MaterialCharge(materials, markup);
+            revenue = locked ? p.Revenue : ExecutionPricing.AgreedAmount(materials, markup, p.ProjectFee ?? 0);
         }
 
-        var materials = await projects.GetMaterialsAsync(p.Id, p.RevenueCurrency, cancellationToken);
-        var markup = p.MaterialMarkup ?? 0;
+        var (received, onAccount) = await payments.ProjectTotalsAsync(p.Id, cancellationToken);
+        var billing = ProjectBilling.Summarise(revenue, await payments.IssuedInvoicesAsync(p.Id, cancellationToken), received, onAccount);
+
         return new ProjectMoneyResponse
         {
             Currency = p.RevenueCurrency,
-            Revenue = locked ? p.Revenue : ExecutionPricing.AgreedAmount(materials, markup, p.ProjectFee ?? 0),
+            Revenue = revenue,
             IsLocked = locked,
             ProjectFee = p.ProjectFee,
             MaterialMarkup = p.MaterialMarkup,
-            MaterialCharge = ExecutionPricing.MaterialCharge(materials, markup),
+            MaterialCharge = materialCharge,
             ExpenseTotals = expenseTotals,
+            Billing = new ProjectBillingResponse(
+                billing.Invoiced, billing.Outstanding, billing.Received, billing.OnAccount,
+                billing.NotYetInvoiced, billing.Owed, billing.PaidAhead),
         };
     }
 

@@ -54,6 +54,29 @@ public sealed record CreateProjectRequest
 
     /// <summary>Execution only, and required there. A fraction: 0.10 is 10%, at most 5 (500%).</summary>
     public decimal? MaterialMarkup { get; init; }
+
+    /// <summary>Execution only: the client's initial payment, recorded on account. Needs <c>payment:record</c>.</summary>
+    public InitialPaymentRequest? InitialPayment { get; init; }
+}
+
+public sealed record InitialPaymentRequest
+{
+    public decimal Amount { get; init; }
+
+    /// <summary>USD or LBP.</summary>
+    public string Currency { get; init; } = "USD";
+
+    /// <summary>Units of the currency per US dollar. Defaults to the dated rate in force on the day received.</summary>
+    public decimal? FxRate { get; init; }
+
+    /// <summary>Today or earlier. Defaults to today.</summary>
+    public DateOnly? ReceivedOn { get; init; }
+
+    public PaymentMethod Method { get; init; } = PaymentMethod.Bank;
+
+    public string? Reference { get; init; }
+
+    public string? Note { get; init; }
 }
 
 /// <summary>Replaces the project's details and owner.</summary>

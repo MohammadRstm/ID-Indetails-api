@@ -72,4 +72,9 @@ public static class ActivityEventKinds
     public const string InvoiceIssued = "invoice_issued";
     public const string InvoiceSent = "invoice_sent";
     public const string InvoiceVoided = "invoice_voided";
+
+    // Payments (subject: the payment; project_id is set; the USD amount in the amount column)
+    public const string PaymentRecorded = "payment_recorded";
+    public const string PaymentApplied = "payment_applied";
+    public const string PaymentVoided = "payment_voided";
 }

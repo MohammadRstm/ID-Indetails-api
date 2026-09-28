@@ -82,6 +82,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IBillingSettingsRepository, BillingSettingsRepository>();
         services.AddScoped<IExchangeRateRepository, ExchangeRateRepository>();
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -102,6 +103,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IExpenseService, ExpenseService>();
         services.AddScoped<IBillingSettingsService, BillingSettingsService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
+        services.AddScoped<IPaymentService, PaymentService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

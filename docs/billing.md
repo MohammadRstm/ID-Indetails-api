@@ -45,3 +45,38 @@ Rules (`Business/Billing/InvoiceRules.cs`):
 - **Status** is calculated: `void`, else `draft` until issued, else `paid` when live payments reach the total, `partial` when some are recorded, otherwise `sent`. Comparisons are exact. `isOverdue` means sent or part-paid with a due date before today. Balance = total − paid, never below zero.
 - Voiding keeps the number and the reason. It is refused while live payments are attached (`422 invoice_has_payments`).
 - Events: `invoice_created`, `invoice_updated`, `invoice_discarded`, `invoice_issued`, `invoice_sent` (the channel in the payload), `invoice_voided` (the reason in the payload). The total is in the `amount` column.
+
+## Payments
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/payments?projectId=&clientId=&invoiceId=&includeVoided=&domain=&page=1&pageSize=25` | `financial:view` | Most recently received first. Voided payments only with `includeVoided=true` |
+| `GET /api/payments/{id}` | `financial:view` | A payment |
+| `POST /api/projects/{id}/payments` | `payment:record` | `{ amount, currency, fxRate, receivedOn, method, reference, note, invoiceId, isInitial }` |
+| `PUT /api/payments/{id}/invoice` | `payment:record` | `{ invoiceId }` applies a payment on account to an issued invoice |
+| `POST /api/payments/{id}/void` | `payment:void` | `{ reason }` |
+
+Rules (`Business/Billing/PaymentRules.cs`):
+
+- **No invoice is needed.** A payment with no `invoiceId` is held **on account**, whether or not anything has been invoiced or sent, in both domains. It counts as received for the project, and can later be applied to an issued invoice.
+- A payment tied to an invoice needs an issued, live invoice of the same project (`422 invoice_not_issued`, `422 invoice_voided`, `400` for another project's invoice). It can't be more than the invoice's balance (`422 payment_exceeds_balance`); record the rest on account. The invoice row is locked while the balance is checked.
+- Only client projects with a client take payments (`422 project_not_billable`). The project's status doesn't matter: payments after completion are normal.
+- **Currency:** USD or LBP. A payment keeps its amount, currency, the rate used and its USD value (amount ÷ rate, to cents). The rate is the one typed in (`fxRate`), otherwise the dated rate in force on the day received (`422 exchange_rate_missing` if there is none). USD uses 1. A payment worth less than a cent is refused (`400 payment_too_small`). Invoices, balances and project totals use the USD value.
+- `receivedOn` is today or earlier (`400 received_date_in_future`). `method` is `bank` (default), `cheque`, `cash` or `other`.
+- **Initial payment:** `isInitial` marks it. A project has at most one live initial payment (`422 initial_payment_exists`); voiding it frees the slot. Execution projects can record it when they are created.
+- Payments are never edited or deleted. They are voided with a reason (`422 payment_already_voided` twice). Only a live payment on account can be applied (`422 payment_already_applied`).
+- Events: `payment_recorded`, `payment_applied`, `payment_voided`. The USD value is in the `amount` column. The payload has only the invoice number, currency, method, initial flag or reason, never the amount.
+
+## A project's cash position
+
+`money.billing` on a project (`Business/Billing/ProjectBilling.cs`), in USD:
+
+| Field | Meaning |
+|---|---|
+| `invoiced` | Issued, live invoices |
+| `outstanding` | Left to pay on those invoices |
+| `received` | Every live payment, on account or not |
+| `onAccount` | Live payments not tied to an invoice |
+| `notYetInvoiced` | Revenue (Execution: the agreed amount) minus invoiced, never below zero |
+| `owed` | Revenue minus received, never below zero |
+| `paidAhead` | Received beyond the revenue |
