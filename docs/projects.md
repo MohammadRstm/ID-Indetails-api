@@ -26,12 +26,26 @@ Employees hold `project:view`, so they see every project of their domain in any 
 
 ## Money
 
-- **Design revenue** is typed in. **Execution revenue** is the agreed amount: material client prices plus the project fee. A material's client price is its manual price, otherwise cost × (1 + markup), rounded to cents. Ground labour is never billed. Only materials in the project's currency (USD) count.
-- The Execution agreed amount is calculated live while the project is open, and frozen into `projects.revenue` when it is finalised.
+- **Design revenue** is typed in. **Execution revenue** is the agreed amount: material client prices plus the project fee. A material's client price is its manual price, otherwise cost × (1 + markup), rounded to cents, then converted to USD at the exchange rate in force on the day the material was added. Ground labour is never billed.
+- The Execution agreed amount is calculated live while the project is open, and frozen into `projects.revenue` when it is finalised. A material with no exchange rate for its day is left out of the live amount (`money.unconvertedMaterials`), and finalising is refused until the rate is added (`422 exchange_rate_missing`).
 - While a project is finalised (`money.isLocked`), billing, revenue, fee and markup can't change (`422 project_locked`).
 - A project with any invoice or payment can't move to another client or become internal (`422 project_has_billing`), because invoices and payments keep the client they were made for.
 - `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed` and `paidAhead` (see [billing.md](billing.md)).
-- Profit, cost and margin aren't returned yet: they need labour cost from work entries, which come with that feature.
+- Cost, profit, margin and the projections come from the shared finance calculator (below).
+
+## Cost, profit and margin
+
+Every project money figure comes from one place: `Business/Finance/ProjectFinance.cs`, loaded by `IProjectFinanceService` with one query per cost source however many projects are asked for. Domain features add their costs to its sources; they never calculate their own.
+
+- **Cost** (`money.cost`) = employee labour + expenses + materials + ground labour, in USD.
+  - **Labour:** each work entry's hours × the person's hourly cost in force on the day it was worked (company time zone). Monthly pay costs salary ÷ 173.33 an hour; the overtime premium is not part of project cost. Time before someone's first pay record uses their earliest rate; time of someone with no pay record can't be priced and is counted in `unpricedLabourMinutes`.
+  - **Expenses and materials:** converted to USD at the company exchange rate in force on their day (`spentOn`, the day a material was added). An amount with no rate that day is left out and listed in `cost.unconverted`, in its own currency.
+  - **Ground labour:** workers × daily pay, in USD.
+- **Profit** = revenue − cost. Internal projects have no revenue.
+- **Margin** = profit ÷ revenue, only once it means something: the project is completed or archived, at least 5% along, or has at least 10 hours logged. Otherwise `null`.
+- **Projected** cost, profit and margin = cost ÷ progress, for open client projects at least 5% along.
+- **Recognised to date** = revenue × progress, or all of it once completed or archived.
+- **Execution:** `cashProfit` = received − cost, and `materialProfit` = material charge − material cost.
 
 ## Status
 
