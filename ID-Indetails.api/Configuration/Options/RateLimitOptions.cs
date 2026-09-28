@@ -2,10 +2,21 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ID_Indetails.api.Configuration.Options;
 
-/// <summary>Per-IP limits on endpoints that accept secrets (passwords, tokens, the setup key).</summary>
+/// <summary>
+/// Request limits. Every request counts against a global limit (per signed-in user, otherwise per IP);
+/// endpoints that accept secrets also have a stricter per-IP policy.
+/// </summary>
 public sealed class RateLimitOptions
 {
     public const string SectionName = "RateLimiting";
+
+    /// <summary>Every request of a signed-in user, per user per minute.</summary>
+    [Range(1, 100_000)]
+    public int UserPermitsPerMinute { get; init; } = 300;
+
+    /// <summary>Every request without a valid access token, per IP per minute.</summary>
+    [Range(1, 100_000)]
+    public int AnonymousPermitsPerMinute { get; init; } = 60;
 
     /// <summary>Login, refresh, invitation validate/accept: requests per IP per minute.</summary>
     [Range(1, 10_000)]

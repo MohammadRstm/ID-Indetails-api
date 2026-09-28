@@ -67,6 +67,18 @@ public static class AuthServiceCollectionExtensions
         var limits = configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>() ?? new RateLimitOptions();
         services.AddRateLimiter(options =>
         {
+            // Applies to every endpoint, so new endpoints are covered without an attribute.
+            // Runs after authentication (see Program.cs), so signed-in users get their own bucket.
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            {
+                var userId = context.User.FindFirst(AuthClaimTypes.UserId)?.Value;
+                return userId is not null
+                    ? RateLimitPartition.GetFixedWindowLimiter("user:" + userId, _ => PerMinute(limits.UserPermitsPerMinute))
+                    : RateLimitPartition.GetFixedWindowLimiter(
+                        "ip:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                        _ => PerMinute(limits.AnonymousPermitsPerMinute));
+            });
+
             options.AddPolicy(RateLimitPolicies.Auth, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.AuthPermitsPerMinute, Window = TimeSpan.FromMinutes(1) }));
@@ -79,10 +91,13 @@ public static class AuthServiceCollectionExtensions
                 context.HttpContext,
                 ErrorType.RateLimited,
                 ErrorCodes.TooManyRequests,
-                "Too many attempts. Please wait a minute and try again.",
+                "Too many requests. Please wait a minute and try again.",
                 cancellationToken: cancellationToken));
         });
 
         return services;
     }
+
+    private static FixedWindowRateLimiterOptions PerMinute(int permits)
+        => new() { PermitLimit = permits, Window = TimeSpan.FromMinutes(1) };
 }

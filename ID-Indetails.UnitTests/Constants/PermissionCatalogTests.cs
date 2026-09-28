@@ -10,7 +10,7 @@ public class PermissionCatalogTests
     private static readonly string[] CompanyLevel =
     [
         PermissionCodes.CompanyView, PermissionCodes.OverheadManage,
-        PermissionCodes.SalaryView, PermissionCodes.CompanySettingsManage,
+        PermissionCodes.SalaryView, PermissionCodes.CompanySettingsManage, PermissionCodes.ExchangeRateManage,
     ];
 
     [Fact]

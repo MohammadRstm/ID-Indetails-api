@@ -61,7 +61,7 @@ Code is written to be read and reviewed by a person.
 
 ### 1.2 Rate limiting and caching
 
-- **Rate limiting.** Every endpoint gets a rate-limit policy from `RateLimiting/RateLimitPolicies.cs`, with limits in configuration (`RateLimiting` section). Endpoints that accept secrets are limited per IP; signed-in endpoints are limited per user. Rejections use the uniform error contract (`429 too_many_requests`).
+- **Rate limiting.** A global limiter covers every endpoint automatically: per signed-in user, otherwise per IP (`Extensions/AuthServiceCollectionExtensions.cs`, limits in the `RateLimiting` configuration section). Endpoints that need a stricter limit (anything accepting passwords or tokens, heavy exports) also get a named policy from `RateLimiting/RateLimitPolicies.cs` via `[EnableRateLimiting]`. Rejections use the uniform error contract (`429 too_many_requests`).
 - **Caching.** Cache on the server only where it clearly pays off: data that rarely changes, or expensive calculations that are read often. Use `IMemoryCache` with a short lifetime, and drop the entry whenever the underlying data changes. Never cache in a way that could show one user another user's data or keep a revoked permission alive. Client-side state caching is the frontend's job.
 
 ---
@@ -860,7 +860,7 @@ A backend feature is complete only when, where applicable:
 - [ ] The agreed architecture is followed.
 - [ ] Controllers remain thin.
 - [ ] The code is proportional to the requirement: no speculative abstractions, no comment clutter (section 1.1).
-- [ ] New endpoints have a rate-limit policy; any server cache is justified and invalidated on change (section 1.2).
+- [ ] Endpoints needing a stricter limit than the global one have a named rate-limit policy; any server cache is justified and invalidated on change (section 1.2).
 - [ ] FluentValidation is used appropriately.
 - [ ] Business logic is separated from HTTP/database concerns.
 - [ ] Repository responsibilities are respected.

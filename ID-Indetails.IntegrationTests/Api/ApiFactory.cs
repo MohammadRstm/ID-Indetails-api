@@ -26,6 +26,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Per-IP auth requests per minute. High by default so tests don't trip it.</summary>
     protected virtual int AuthPermitsPerMinute => 10_000;
 
+    /// <summary>Per signed-in user requests per minute. High by default so tests don't trip it.</summary>
+    protected virtual int UserPermitsPerMinute => 100_000;
+
     public Task InitializeAsync() => _database.InitializeAsync();
 
     public new async Task DisposeAsync()
@@ -42,6 +45,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Setup:SuperAdminKey", SetupKey);
         builder.UseSetting("RateLimiting:AuthPermitsPerMinute", AuthPermitsPerMinute.ToString());
         builder.UseSetting("RateLimiting:SetupPermitsPerHour", "10000");
+        builder.UseSetting("RateLimiting:UserPermitsPerMinute", UserPermitsPerMinute.ToString());
+        builder.UseSetting("RateLimiting:AnonymousPermitsPerMinute", "100000");
 
         builder.ConfigureTestServices(services =>
         {
@@ -63,4 +68,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 public sealed class RateLimitedApiFactory : ApiFactory
 {
     protected override int AuthPermitsPerMinute => 3;
+}
+
+/// <summary>Same API with a tight per-user limit, to prove every signed-in endpoint is limited.</summary>
+public sealed class UserRateLimitedApiFactory : ApiFactory
+{
+    protected override int UserPermitsPerMinute => 5;
 }

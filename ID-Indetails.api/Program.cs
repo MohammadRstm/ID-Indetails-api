@@ -26,9 +26,11 @@ app.UseHttpsRedirection();
 
 app.UseCors(ClientCorsOptions.PolicyName);
 
+app.UseAuthentication();
+
+// After authentication so the global limit can count per signed-in user.
 app.UseRateLimiter();
 
-app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
