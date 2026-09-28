@@ -1,0 +1,107 @@
+using ID_Indetails.api.Business.Billing;
+using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Constants;
+using ID_Indetails.api.Enums;
+using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Finance.Abstraction;
+using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Finance.Abstraction;
+using Cost = ID_Indetails.api.Business.Finance.ProjectFinance.CostItem;
+
+namespace ID_Indetails.api.Services.Finance.Implementation;
+
+public sealed class ProjectFinanceService(IProjectFinanceRepository sources, IClock clock) : IProjectFinanceService
+{
+    public async Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default)
+        => (await GetAsync([project], cancellationToken))[project.Id];
+
+    public async Task<IReadOnlyDictionary<long, ProjectFinancials>> GetAsync(
+        IReadOnlyCollection<Project> projects,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = projects.Select(p => p.Id).ToList();
+        var rates = new ExchangeRateTable(await sources.ExchangeRatesAsync(cancellationToken));
+        var entries = await sources.WorkEntriesAsync(ids, cancellationToken);
+        var payRates = await sources.PayRatesAsync(entries.Select(e => e.UserId).Distinct().ToList(), cancellationToken);
+        var expenses = (await sources.ExpensesAsync(ids, cancellationToken)).ToLookup(x => x.ProjectId);
+        var materials = (await sources.MaterialsAsync(ids, cancellationToken)).ToLookup(m => m.ProjectId);
+        var ground = (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId);
+        var received = await sources.ReceivedAsync(ids, cancellationToken);
+        var entriesByProject = entries.ToLookup(e => e.ProjectId);
+
+        return projects.ToDictionary(p => p.Id, p => Calculate(
+            p,
+            entriesByProject[p.Id].ToList(),
+            payRates,
+            expenses[p.Id],
+            materials[p.Id].ToList(),
+            ground[p.Id],
+            received.GetValueOrDefault(p.Id),
+            rates));
+    }
+
+    private ProjectFinancials Calculate(
+        Project project,
+        IReadOnlyList<WorkEntryRow> entries,
+        IReadOnlyList<ProjectFinance.PayRate> payRates,
+        IEnumerable<ExpenseRow> expenses,
+        IReadOnlyList<MaterialRow> materials,
+        IEnumerable<GroundLabourRow> ground,
+        decimal received,
+        ExchangeRateTable rates)
+    {
+        var (labour, unpricedMinutes) = ProjectFinance.PriceLabour(
+            entries.Select(e => new ProjectFinance.WorkedTime(e.UserId, clock.ToCompanyDate(e.StartedAt), e.Minutes)),
+            payRates);
+
+        var costs = ProjectFinance.ToUsd(
+            labour
+                .Concat(expenses.Select(x => new Cost(CostSource.Expenses, x.Currency, x.Amount, x.SpentOn)))
+                .Concat(materials.Select(m => new Cost(CostSource.Materials, m.Currency, m.Total, clock.ToCompanyDate(m.AddedAt))))
+                // Ground labour is recorded without a currency: daily pay is in USD.
+                .Concat(ground.Select(d => new Cost(CostSource.GroundLabour, PaymentRules.BaseCurrency, d.Cost, d.WorkDate))),
+            rates);
+
+        var isExecution = project.DomainCode == DomainCodes.Execution;
+        decimal? materialCharge = null;
+        var unconvertedMaterials = 0;
+        var revenue = project.Revenue;
+
+        if (isExecution)
+        {
+            (var charge, unconvertedMaterials) = ProjectFinance.MaterialCharge(
+                materials.Select(m => (new ExecutionPricing.Material(m.Total, m.ClientPrice), m.Currency, clock.ToCompanyDate(m.AddedAt))),
+                project.MaterialMarkup ?? 0,
+                rates);
+            materialCharge = charge;
+
+            // Open Execution projects are priced live; finalising freezes the agreed amount into Revenue.
+            if (project.RevenueLockedAt is null)
+            {
+                revenue = charge + (project.ProjectFee ?? 0);
+            }
+        }
+
+        var labourMinutes = entries.Sum(e => e.Minutes);
+        var summary = ProjectFinance.Summarise(
+            new ProjectFinance.Facts(
+                project.BillingType == BillingType.Client,
+                project.Status is ProjectStatus.Completed or ProjectStatus.Archived,
+                project.ProgressPct,
+                revenue,
+                labourMinutes),
+            costs);
+
+        return new ProjectFinancials(
+            summary,
+            costs,
+            labourMinutes,
+            unpricedMinutes,
+            materialCharge,
+            unconvertedMaterials,
+            received,
+            isExecution ? received - costs.Total : null,
+            isExecution ? materialCharge - costs.Materials : null);
+    }
+}

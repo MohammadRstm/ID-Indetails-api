@@ -1,4 +1,3 @@
-using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
@@ -65,16 +64,6 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
             .FromSql($"SELECT * FROM `projects` WHERE `id` = {id} FOR UPDATE")
             .ToListAsync(cancellationToken))
             .SingleOrDefault();
-
-    public async Task<IReadOnlyList<ExecutionPricing.Material>> GetMaterialsAsync(
-        long projectId,
-        string currency,
-        CancellationToken cancellationToken = default)
-        => await db.ProjectMaterials
-            .AsNoTracking()
-            .Where(m => m.ProjectId == projectId && m.DeletedAt == null && m.Currency == currency)
-            .Select(m => new ExecutionPricing.Material(m.Total, m.ClientPrice))
-            .ToListAsync(cancellationToken);
 
     public async Task<bool> HasBillingRecordsAsync(long projectId, CancellationToken cancellationToken = default)
         => await db.Invoices.AnyAsync(i => i.ProjectId == projectId, cancellationToken)

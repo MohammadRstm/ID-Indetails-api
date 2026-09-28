@@ -32,7 +32,50 @@ public sealed record ProjectMoneyResponse
     public IReadOnlyList<CurrencyTotalResponse> ExpenseTotals { get; init; } = [];
 
     public ProjectBillingResponse Billing { get; init; } = null!;
+
+    public ProjectCostResponse Cost { get; init; } = null!;
+
+    public decimal Profit { get; init; }
+
+    /// <summary>Profit ÷ revenue; null until the project is done, 5% along or has 10 hours logged.</summary>
+    public decimal? Margin { get; init; }
+
+    public decimal RecognisedToDate { get; init; }
+
+    /// <summary>Where cost, profit and margin are heading at the current progress. Open client projects 5%+ along.</summary>
+    public ProjectProjectionResponse? Projected { get; init; }
+
+    public decimal LabourHours { get; init; }
+
+    public decimal CostPerHour { get; init; }
+
+    /// <summary>Execution: received − cost.</summary>
+    public decimal? CashProfit { get; init; }
+
+    /// <summary>Execution: material charge − material cost.</summary>
+    public decimal? MaterialProfit { get; init; }
+
+    /// <summary>Execution: materials left out of the charge because no exchange rate covered their day.</summary>
+    public int UnconvertedMaterials { get; init; }
 }
+
+/// <summary>
+/// Cost in USD, each amount converted at the exchange rate of its day. Amounts with no rate that day
+/// are listed in <see cref="Unconverted"/> (in their own currency) instead of being added in.
+/// </summary>
+/// <param name="UnpricedLabourMinutes">Worked time of people with no pay record.</param>
+public sealed record ProjectCostResponse(
+    decimal Labour,
+    decimal Expenses,
+    decimal Materials,
+    decimal GroundLabour,
+    decimal Total,
+    IReadOnlyList<UnconvertedCostResponse> Unconverted,
+    int UnpricedLabourMinutes);
+
+public sealed record UnconvertedCostResponse(CostSource Source, string Currency, decimal Amount);
+
+public sealed record ProjectProjectionResponse(decimal Cost, decimal Profit, decimal? Margin);
 
 /// <summary>The project's cash position in USD, kept apart from revenue and profit.</summary>
 /// <param name="Invoiced">Issued, live invoices.</param>
