@@ -26,6 +26,9 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
         (await context.Roles.CountAsync()).ShouldBe(RoleCodes.All.Count);
         (await context.Permissions.CountAsync()).ShouldBe(PermissionCatalog.Definitions.Count);
         (await context.RolePermissions.CountAsync()).ShouldBe(PermissionCatalog.Grants.Sum(g => g.Value.Count));
+
+        var seededTeams = TeamSeed.Teams.Select(t => t.Id).ToList();
+        (await context.Teams.CountAsync(t => seededTeams.Contains(t.Id))).ShouldBe(TeamSeed.Teams.Count);
     }
 
     // ---------- users ----------

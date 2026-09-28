@@ -31,6 +31,9 @@ public static class ApiClientExtensions
         return client.SendAsync(Authorize(request, accessToken, null));
     }
 
+    public static Task<HttpResponseMessage> DeleteAsync(this HttpClient client, string url, string accessToken)
+        => client.SendAsync(Authorize(new HttpRequestMessage(HttpMethod.Delete, url), accessToken, null));
+
     public static Task<HttpResponseMessage> PostEmptyAsync(
         this HttpClient client, string url, string? accessToken = null, string? refreshCookie = null)
         => client.SendAsync(Authorize(new HttpRequestMessage(HttpMethod.Post, url), accessToken, refreshCookie));
