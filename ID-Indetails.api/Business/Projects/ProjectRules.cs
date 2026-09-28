@@ -84,9 +84,11 @@ public static class ProjectRules
                 ErrorCodes.ValidationFailed, "initialPayment", "Only Execution projects take an initial payment when they are created.")
             : null;
 
-    public static RuleDenial? CheckOwner(Person owner, string projectDomain)
+    /// <param name="owner">Null when no such person exists; answered the same as a disallowed owner so ids can't be probed.</param>
+    public static RuleDenial? CheckOwner(Person? owner, string projectDomain)
     {
-        var allowed = owner.Status != UserStatus.Deactivated
+        var allowed = owner is not null
+            && owner.Status != UserStatus.Deactivated
             && (owner.Role == RoleCodes.SuperAdmin || owner.Domain == projectDomain);
 
         return allowed
