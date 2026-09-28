@@ -72,6 +72,15 @@ public class PermissionCatalogTests
         employee.ShouldNotContain(c => CompanyLevel.Contains(c));
     }
 
+    [Fact]
+    public void Design_employees_set_meetings_but_only_managers_change_anyones()
+    {
+        GrantsOf(RoleCodes.Employee).ShouldContain(PermissionCodes.MeetingCreate);
+        GrantsOf(RoleCodes.Employee).ShouldNotContain(PermissionCodes.MeetingManage);
+        GrantsOf(RoleCodes.Admin).ShouldContain(PermissionCodes.MeetingCreate);
+        PermissionCatalog.Definitions.Single(d => d.Code == PermissionCodes.MeetingCreate).DomainCode.ShouldBe(DomainCodes.Design);
+    }
+
     [Theory]
     // Strings already used by the React client (config/permissions.ts) must not change.
     [InlineData("project:view")]

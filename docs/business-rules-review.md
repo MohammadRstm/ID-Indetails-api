@@ -31,6 +31,23 @@ This file records the business decisions taken at the same time, so they're appl
 | 21 | **Admins who log hours** are paid overtime like employees, without an hours ledger. | Payroll calculation |
 | 22 | **Project pay leaves paid breaks out.** A break isn't worked on any project, so project pay covers logged hours and overtime only, and differs from Salaries for hourly staff by exactly their paid breaks. It needs `salary:view`. | Project pay report |
 
+## Decided for Design work (28 Sep 2026)
+
+Taken when the Design work API was built (see [design.md](design.md)).
+
+| # | Rule |
+|---|---|
+| D1 | **The timer runs in the client.** Stopping it logs an ordinary entry; nothing is stored while it runs. |
+| D2 | **Nobody edits someone else's entries**, admins included. Whoever holds `work_entry:create` logs their own work (Design admins included, by the role defaults). |
+| D3 | **Entry rules are enforced on the server.** An entry is locked once past the edit window (counted from when it was logged) or while its project no longer accepts work. 5 minutes to 16 hours, in whole minutes. With future entries allowed, any end time is accepted. |
+| D4 | **Entry attachments wait** for a file-upload feature. |
+| D5 | **Comments can't be edited or deleted.** Posting a comment to the team group chat is refused until messaging exists. |
+| D6 | **Logged-work notifications** go to active people holding `work_entry:view_all` in Design, never the author. |
+| D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, only `notifyEntry` and `notifyIdle` (the dashboard's idle projects) are used for now; the others need scheduled jobs. |
+| D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
+| D9 | **Logging doesn't add project members.** |
+| D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
+
 ## Carried over from the prototype as-is
 
 - **Execution money:**
@@ -59,5 +76,4 @@ These have no decision yet. The schema doesn't depend on them.
 
 1. **Public holidays:** a company holiday calendar, or keep excusing per person?
 2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
-3. **Meetings:** the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
-4. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?
+3. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?

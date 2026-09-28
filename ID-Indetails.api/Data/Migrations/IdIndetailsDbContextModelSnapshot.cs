@@ -1838,6 +1838,12 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "meeting:create",
+                            Description = "Set project meetings, and move or remove the ones you set",
+                            DomainCode = "design"
+                        },
+                        new
+                        {
                             Code = "expense:manage",
                             Description = "Add and remove project expenses"
                         },
@@ -2806,6 +2812,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "meeting:create"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "expense:manage"
                         },
                         new
@@ -3041,6 +3052,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "admin",
+                            PermissionCode = "meeting:create"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
                             PermissionCode = "expense:manage"
                         },
                         new
@@ -3182,6 +3198,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "employee",
                             PermissionCode = "requirement:view"
+                        },
+                        new
+                        {
+                            RoleCode = "employee",
+                            PermissionCode = "meeting:create"
                         },
                         new
                         {
