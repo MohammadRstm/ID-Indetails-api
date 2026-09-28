@@ -46,6 +46,12 @@ public static class ErrorCodes
     public const string TeamNameTaken = "team_name_taken";
     public const string TeamNotEmpty = "team_not_empty";
 
+    // Clients
+    public const string ContactTaken = "contact_taken";
+    public const string ClientHasProjects = "client_has_projects";
+    public const string ClientAlreadyArchived = "client_already_archived";
+    public const string ClientNotArchived = "client_not_archived";
+
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
 }

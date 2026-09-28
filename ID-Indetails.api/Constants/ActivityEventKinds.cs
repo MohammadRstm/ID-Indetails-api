@@ -22,4 +22,11 @@ public static class ActivityEventKinds
     public const string TeamCreated = "team_created";
     public const string TeamRenamed = "team_renamed";
     public const string TeamDeleted = "team_deleted";
+
+    // Clients (subject: the client)
+    public const string ClientAdded = "client_added";
+    public const string ClientUpdated = "client_updated";
+    public const string ClientArchived = "client_archived";
+    public const string ClientRestored = "client_restored";
+    public const string ClientDeleted = "client_deleted";
 }
