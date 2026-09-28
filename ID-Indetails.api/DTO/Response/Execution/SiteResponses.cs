@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Execution;
+using ID_Indetails.api.Business.Labour;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.Enums;
 
@@ -64,3 +65,32 @@ public sealed record SiteRecordsResponse
     /// <summary>The latest records, newest first.</summary>
     public IReadOnlyList<SiteRecordResponse> Recent { get; init; } = [];
 }
+
+/// <summary>Where cash stood at the end of a week, in USD. <c>Received</c>, <c>Spent</c> and <c>GroundLabour</c> add up from the start.</summary>
+public sealed record CashWeekResponse(
+    DateOnly WeekStart,
+    decimal Received,
+    decimal Spent,
+    decimal GroundLabour,
+    decimal Profit,
+    decimal ReceivedInWeek,
+    decimal GroundLabourInWeek);
+
+/// <summary>
+/// When cash profit would reach zero if the crew, their pay and the money received stayed as they are
+/// today. <c>ZeroOn</c> is set only when <c>State</c> is <c>ok</c>.
+/// </summary>
+public sealed record SiteProjectionResponse(
+    LabourRules.ProjectionState State,
+    int Workers,
+    decimal DailyPay,
+    decimal DailyCost,
+    decimal CashProfit,
+    decimal ExpectedProfit,
+    DateOnly? ZeroOn,
+    int? WorkingDays,
+    DateOnly? ZeroOnOncePaid,
+    int? WorkingDaysOncePaid);
+
+/// <param name="Weeks">From the project's first week to the current one (or the one it was finalised in), oldest first.</param>
+public sealed record SiteMoneyTimelineResponse(IReadOnlyList<CashWeekResponse> Weeks, SiteProjectionResponse Projection, string Currency);

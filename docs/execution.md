@@ -83,3 +83,14 @@ Site staff don't log hours; what they record on site stands in for it.
 
 - **Cards:** material cost and ground labour come from the shared finance calculator (in USD).
 - **Records** (`Business/Execution/SiteRecords.cs`): the materials a person added (dated by when they were added) and the labour weeks they submitted (dated by when they were submitted, valued at the week's total), on sites the caller can see. The response has the totals, this calendar quarter's value, the days with anything recorded, the last 16 weeks (oldest first, ending with the current one), a row per site (most recently recorded first) and the 20 latest records.
+
+## Site money
+
+A site's money (received, cost by source, cash profit, material profit, expected profit as `profit`, owed or paid ahead) is on `GET /api/projects/{id}` for callers with `financial:view`, from the shared finance calculator. Over time:
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/site-money/timeline` | `financial:view` | Cash week by week, and when profit would reach zero |
+
+- **Weeks** run Monday to Sunday, from the project's first week to the current one (or the one it was finalised in). Each has what was received, spent and paid in ground labour up to its end, the profit so far (received − spent), and what that week added in payments and ground labour. They come from the finance calculator (`ProjectFinance.CashByWeek`): costs on their day at that day's rate, payments by the day received.
+- **Projection** (`LabourRules.ProjectZero`): at today's labour defaults (workers × daily pay a working day), how many working days (Monday to Saturday, from tomorrow) until cash profit reaches zero, and until expected profit would, once the client has paid everything agreed. `state` is `done` for a finalised site, `losing` when cash profit is already below zero, `no_defaults` without a crew and day rate, otherwise `ok`. It assumes the crew, their pay and the money received stay as they are, and no new materials.

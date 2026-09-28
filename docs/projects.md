@@ -46,6 +46,7 @@ Every project money figure comes from one place: `Business/Finance/ProjectFinanc
 - **Projected** cost, profit and margin = cost ÷ progress, for open client projects at least 5% along.
 - **Recognised to date** = revenue × progress, or all of it once completed or archived.
 - **Execution:** `cashProfit` = received − cost, and `materialProfit` = material charge − material cost.
+- **Cash by week** (`ProjectFinance.CashByWeek`): payments received and cost added up week by week, Monday to Sunday. Execution sites show it on `GET /api/projects/{id}/site-money/timeline` (see [execution.md](execution.md)).
 
 ## Status
 

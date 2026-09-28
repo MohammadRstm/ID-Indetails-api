@@ -69,4 +69,57 @@ public class LabourRulesTests
         ]);
         LabourRules.Prefill(Monday, Thursday, []).ShouldAllBe(d => d.Workers == 0 && d.DailyPay == 0);
     }
+
+    [Fact]
+    public void The_projection_says_when_cash_profit_runs_out_at_today_s_crew()
+    {
+        LabourRules.Defaults crew = new(Monday, Workers: 10, DailyPay: 40);
+
+        var projection = LabourRules.ProjectZero(done: false, cashProfit: 1000, expectedProfit: 2200, crew, today: Thursday);
+
+        projection.State.ShouldBe(LabourRules.ProjectionState.Ok);
+        projection.DailyCost.ShouldBe(400m);
+        projection.WorkingDays.ShouldBe(3);
+        projection.ZeroOn.ShouldBe(new DateOnly(2026, 9, 28)); // Fri, Sat, then Monday: Sunday is skipped
+        projection.WorkingDaysOncePaid.ShouldBe(6);
+        projection.ZeroOnOncePaid.ShouldBe(new DateOnly(2026, 10, 1));
+    }
+
+    [Fact]
+    public void The_projection_stops_when_there_is_nothing_to_project()
+    {
+        LabourRules.Defaults crew = new(Monday, 10, 40);
+
+        LabourRules.ProjectZero(done: true, 1000, 2000, crew, Thursday).State.ShouldBe(LabourRules.ProjectionState.Done);
+        LabourRules.ProjectZero(done: false, -5, 2000, crew, Thursday).State.ShouldBe(LabourRules.ProjectionState.Losing);
+        LabourRules.ProjectZero(done: false, 1000, 2000, null, Thursday).State.ShouldBe(LabourRules.ProjectionState.NoDefaults);
+        LabourRules.ProjectZero(done: false, 1000, 2000, new(Monday, 0, 40), Thursday).State.ShouldBe(LabourRules.ProjectionState.NoDefaults);
+        LabourRules.ProjectZero(done: false, 1000, -10, crew, Thursday).ZeroOnOncePaid.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(21)]
+    [InlineData(22)]
+    [InlineData(26)]
+    [InlineData(27)]
+    public void Working_days_are_counted_monday_to_saturday_from_any_day(int september)
+    {
+        var today = new DateOnly(2026, 9, september);
+        for (var days = 1; days <= 20; days++)
+        {
+            var zeroOn = LabourRules.ProjectZero(false, days * 100m, 0, new(Monday, 1, 100), today).ZeroOn;
+
+            var expected = today;
+            for (var counted = 0; counted < days;)
+            {
+                expected = expected.AddDays(1);
+                if (expected.DayOfWeek != DayOfWeek.Sunday)
+                {
+                    counted++;
+                }
+            }
+
+            zeroOn.ShouldBe(expected, $"{days} working days from {today}");
+        }
+    }
 }

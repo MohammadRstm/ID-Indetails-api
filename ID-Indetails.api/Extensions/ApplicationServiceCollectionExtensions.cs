@@ -140,6 +140,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ILabourService, LabourService>();
         services.AddScoped<IStatementService, StatementService>();
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
+        services.AddScoped<ISiteMoneyService, SiteMoneyService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;
