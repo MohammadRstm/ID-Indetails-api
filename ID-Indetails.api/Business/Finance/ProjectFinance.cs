@@ -95,6 +95,14 @@ public static class ProjectFinance
         return (items, unpriced);
     }
 
+    /// <summary>Each cost on its day in USD; costs with no exchange rate that day are left out (as in <see cref="ToUsd"/>).</summary>
+    public static IReadOnlyList<Recognition.DatedCost> DatedUsd(IEnumerable<CostItem> items, ExchangeRateTable rates)
+        => items
+            .Select(i => (i.Source, i.Day, Usd: rates.ToUsd(i.Amount, i.Currency, i.Day)))
+            .Where(i => i.Usd is not null)
+            .Select(i => new Recognition.DatedCost(i.Source, i.Day, i.Usd!.Value))
+            .ToList();
+
     /// <summary>The rate in force on the day, from a person's history ordered by date; their earliest rate for days before it.</summary>
     public static PayRate RateOn(IReadOnlyList<PayRate> history, DateOnly day)
         => history.LastOrDefault(r => r.EffectiveFrom <= day) ?? history[0];

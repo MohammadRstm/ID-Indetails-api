@@ -130,6 +130,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ICompanyRepository, CompanyRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
         services.AddScoped<IOverheadRepository, OverheadRepository>();
+        services.AddScoped<ICompanyFinanceRepository, CompanyFinanceRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IHourExcuseRepository, HourExcuseRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
@@ -165,8 +166,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IWorkingTimeService, WorkingTimeService>();
         services.AddScoped<IScheduleService, ScheduleService>();
         services.AddScoped<IOverheadService, OverheadService>();
+        services.AddScoped<ICompanyOverviewService, CompanyOverviewService>();
         services.AddScoped<ISalaryService, SalaryService>();
         services.AddScoped<IHourExcuseService, HourExcuseService>();
+        services.AddScoped<IProjectPayService, ProjectPayService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IClientService, ClientService>();

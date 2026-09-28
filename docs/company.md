@@ -1,6 +1,6 @@
 # Company layer
 
-Settings, working time, personal schedules and company overhead. These belong to neither domain. Every permission here is a company permission, held by super admins by default and grantable to others (see [authorization.md](authorization.md)). The company overview and project pay are added when the domains' figures are in place.
+Settings, working time, personal schedules and company overhead. These belong to neither domain. Every permission here is a company permission, held by super admins by default and grantable to others (see [authorization.md](authorization.md)). Everything in the prototype's company area is covered.
 
 ## Endpoints
 
@@ -18,9 +18,13 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `PUT /api/company/overhead/{id}` | `overhead:manage` | Renames it or changes its group |
 | `POST /api/company/overhead/{id}/amounts` | `overhead:manage` | A new monthly amount from a month |
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
+| `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
+| `GET /api/company/overview/monthly?months=13` | `company:view` | Revenue, costs and overhead per month: the profit before and after company expenses (1–36 months) |
 | `GET /api/company/salaries?month=YYYY-MM&domain=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary |
 | `GET /api/company/salaries/{userId}?month=YYYY-MM` | `salary:view` | How one person's pay adds up |
 | `GET /api/company/salaries/export?month=YYYY-MM&domain=&search=` | `salary:view` | The filtered list as CSV, with a total per currency (10 a minute per user) |
+| `GET /api/company/project-pay?unit=week\|month\|quarter&date=&projectId=` | `salary:view` | What each Design project paid its people in a period |
+| `GET /api/company/project-pay/export?…` | `salary:view` | The same as CSV (10 a minute per user) |
 | `POST /api/employees/{id}/hour-excuses` | `hours:excuse` | Excuses minutes, days or the whole month, paid or unpaid |
 | `DELETE /api/hour-excuses/{id}` | `hours:excuse` | Removes an excuse (kept in history) |
 
@@ -85,3 +89,25 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 **Excuses:** `kind` is `minutes` (with `minutes`), `days` (with days of that month) or `whole_month`; `isPaid` defaults to true; the note defaults by kind. Never for a future month (`400 excuse_month_in_future`). Removing one is a soft delete.
 
 **Export:** UTF-8 CSV with a BOM. Values that start with `=`, `+`, `-` or `@` are prefixed with `'` so spreadsheets don't run them as formulas.
+
+## Company overview
+
+Always calculated, from the shared finance calculator (`Business/Finance/`), in USD.
+
+- **Period:** `from` and `to` are company dates, both included. `to` defaults to today and is never later; `from` defaults to the first of `to`'s month.
+- **Revenue recognised** (`Recognition.cs`): each client project's revenue recognised to date (revenue × progress, all of it once completed or archived) is spread over the months of its work: by employee labour cost when it has any, otherwise by its other costs (expenses, materials, ground labour). A period takes each month's share by the part of the month's elapsed days it covers.
+- **Cost:** every project cost dated inside the period, converted at the rate of its day.
+- **Per domain:** revenue, cost, profit and margin; projects with work or costs in the period and active projects; active employees and who logged work; clients served and all clients; invoiced (issued in the period), collected (received in the period) and outstanding today.
+- **Company:** both domains' profit less **company overhead**, charged by the calendar days of each month the period covers and converted at the rate on the first of the month. Overhead with no rate for its month is listed as unconverted instead of being added in.
+- **Monthly:** each month's recognised revenue, labour, expenses, materials, ground labour and overhead, with the profit before and after company expenses. This feeds the chart on the company expenses page.
+
+## Project pay
+
+What each Design project paid its people in a week, month or quarter (`Business/Payroll/ProjectPay.cs`).
+
+- **Period:** the week (following the company's week start), month or quarter containing `date` (today by default). Never a future period (`400 project_pay_period_in_future`).
+- **Each work entry** is paid at the person's hourly rate in force that day (salary ÷ 173.33 for monthly pay): its hours within schedule, plus any overtime that made up a shortfall in the month, at the plain rate, and the rest of its overtime at the multiplier.
+- **Left out:** paid breaks and salary deductions. They aren't worked on any project, so project pay differs from Salaries for hourly staff by exactly their paid breaks.
+- Overtime and made-up hours are worked out from the person's whole day and month, whichever projects they worked on.
+- Grouped by project, then person and currency; projects are ordered by USD pay. Someone with no pay record is listed with `priced: false` and paid 0.
+

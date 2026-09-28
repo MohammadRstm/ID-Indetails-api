@@ -13,6 +13,15 @@ namespace ID_Indetails.api.Services.Finance.Implementation;
 
 public sealed class ProjectFinanceService(IProjectFinanceRepository sources, IClock clock) : IProjectFinanceService
 {
+    private sealed record Loaded(
+        ExchangeRateTable Rates,
+        ILookup<long, WorkEntryRow> Entries,
+        IReadOnlyList<ProjectFinance.PayRate> PayRates,
+        ILookup<long, ExpenseRow> Expenses,
+        ILookup<long, MaterialRow> Materials,
+        ILookup<long, GroundLabourRow> Ground,
+        IReadOnlyDictionary<long, decimal> Received);
+
     public async Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default)
         => (await GetAsync([project], cancellationToken))[project.Id];
 
@@ -20,26 +29,51 @@ public sealed class ProjectFinanceService(IProjectFinanceRepository sources, ICl
         IReadOnlyCollection<Project> projects,
         CancellationToken cancellationToken = default)
     {
-        var ids = projects.Select(p => p.Id).ToList();
-        var rates = new ExchangeRateTable(await sources.ExchangeRatesAsync(cancellationToken));
-        var entries = await sources.WorkEntriesAsync(ids, cancellationToken);
-        var payRates = await sources.PayRatesAsync(entries.Select(e => e.UserId).Distinct().ToList(), cancellationToken);
-        var expenses = (await sources.ExpensesAsync(ids, cancellationToken)).ToLookup(x => x.ProjectId);
-        var materials = (await sources.MaterialsAsync(ids, cancellationToken)).ToLookup(m => m.ProjectId);
-        var ground = (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId);
-        var received = await sources.ReceivedAsync(ids, cancellationToken);
-        var entriesByProject = entries.ToLookup(e => e.ProjectId);
-
-        return projects.ToDictionary(p => p.Id, p => Calculate(
-            p,
-            entriesByProject[p.Id].ToList(),
-            payRates,
-            expenses[p.Id],
-            materials[p.Id].ToList(),
-            ground[p.Id],
-            received.GetValueOrDefault(p.Id),
-            rates));
+        var loaded = await LoadAsync(projects, cancellationToken);
+        return projects.ToDictionary(p => p.Id, p => Calculate(p, loaded));
     }
+
+    public async Task<IReadOnlyDictionary<long, ProjectCostHistory>> CostHistoryAsync(
+        IReadOnlyCollection<Project> projects,
+        CancellationToken cancellationToken = default)
+    {
+        var loaded = await LoadAsync(projects, cancellationToken);
+        return projects.ToDictionary(p => p.Id, p =>
+        {
+            var entries = loaded.Entries[p.Id].ToList();
+            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Expenses[p.Id], loaded.Materials[p.Id], loaded.Ground[p.Id]);
+            return new ProjectCostHistory(
+                Calculate(p, loaded),
+                ProjectFinance.DatedUsd(items, loaded.Rates),
+                entries.Select(e => new WorkDay(e.UserId, clock.ToCompanyDate(e.StartedAt))).ToList());
+        });
+    }
+
+    private async Task<Loaded> LoadAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken)
+    {
+        var ids = projects.Select(p => p.Id).ToList();
+        var entries = await sources.WorkEntriesAsync(ids, cancellationToken);
+
+        return new Loaded(
+            new ExchangeRateTable(await sources.ExchangeRatesAsync(cancellationToken)),
+            entries.ToLookup(e => e.ProjectId),
+            await sources.PayRatesAsync(entries.Select(e => e.UserId).Distinct().ToList(), cancellationToken),
+            (await sources.ExpensesAsync(ids, cancellationToken)).ToLookup(x => x.ProjectId),
+            (await sources.MaterialsAsync(ids, cancellationToken)).ToLookup(m => m.ProjectId),
+            (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId),
+            await sources.ReceivedAsync(ids, cancellationToken));
+    }
+
+    private ProjectFinancials Calculate(Project project, Loaded loaded)
+        => Calculate(
+            project,
+            loaded.Entries[project.Id].ToList(),
+            loaded.PayRates,
+            loaded.Expenses[project.Id],
+            loaded.Materials[project.Id].ToList(),
+            loaded.Ground[project.Id],
+            loaded.Received.GetValueOrDefault(project.Id),
+            loaded.Rates);
 
     public async Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(Project project, DateOnly to, CancellationToken cancellationToken = default)
     {

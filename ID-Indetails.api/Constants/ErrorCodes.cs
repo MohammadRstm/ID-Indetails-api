@@ -113,4 +113,5 @@ public static class ErrorCodes
     // Payroll
     public const string SalaryMonthInFuture = "salary_month_in_future";
     public const string ExcuseMonthInFuture = "excuse_month_in_future";
+    public const string ProjectPayPeriodInFuture = "project_pay_period_in_future";
 }

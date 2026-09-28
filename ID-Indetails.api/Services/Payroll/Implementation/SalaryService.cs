@@ -16,6 +16,7 @@ using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Common.Implementation;
 using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 
@@ -85,24 +86,24 @@ public sealed class SalaryService(
         var csv = new StringBuilder();
         var monthText = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
-        Line(csv, "Month", "Employee", "Email", "Domain", "Team", "Pay basis", "Monthly salary", "Hourly rate", "Currency",
+        Csv.Line(csv, "Month", "Employee", "Email", "Domain", "Team", "Pay basis", "Monthly salary", "Hourly rate", "Currency",
             "Expected hours", "Hours in schedule", "Overtime made up", "Overtime paid", "Excused hours", "Short hours", "Flagged",
             "Pro-rated", "Base pay", "Deduction", "Overtime pay", "To pay");
 
         foreach (var r in rows)
         {
-            Line(csv, monthText, r.Name, r.Email, r.Domain, r.Team?.Name, r.Basis.ToString().ToLowerInvariant(),
-                r.Basis == PayBasis.Monthly ? Money(r.Amount) : null, Money(r.HourlyRate), r.Currency,
-                Hours(r.ExpectedMinutes), Hours(r.NormalMinutes), Hours(r.MadeUpMinutes), Hours(r.OvertimeMinutes),
-                Hours(r.ExcusedMinutes), Hours(r.ShortMinutes), r.Flagged ? "yes" : r.Behind ? "behind so far" : "no",
+            Csv.Line(csv, monthText, r.Name, r.Email, r.Domain, r.Team?.Name, r.Basis.ToString().ToLowerInvariant(),
+                r.Basis == PayBasis.Monthly ? Csv.Money(r.Amount) : null, Csv.Money(r.HourlyRate), r.Currency,
+                Csv.Hours(r.ExpectedMinutes), Csv.Hours(r.NormalMinutes), Csv.Hours(r.MadeUpMinutes), Csv.Hours(r.OvertimeMinutes),
+                Csv.Hours(r.ExcusedMinutes), Csv.Hours(r.ShortMinutes), r.Flagged ? "yes" : r.Behind ? "behind so far" : "no",
                 r.ProRated ? $"{r.WorkingDaysPaid}/{r.WorkingDays} days" : "no",
-                Money(r.BasePay), Money(r.Deduction), Money(r.OvertimePay), Money(r.Total));
+                Csv.Money(r.BasePay), Csv.Money(r.Deduction), Csv.Money(r.OvertimePay), Csv.Money(r.Total));
         }
 
         foreach (var t in Totals(rows))
         {
-            Line(csv, monthText, "TOTAL", null, null, null, null, null, null, t.Currency, null, null, null, null, null, null, null, null,
-                Money(t.BasePay), Money(t.Deduction), Money(t.OvertimePay), Money(t.Total));
+            Csv.Line(csv, monthText, "TOTAL", null, null, null, null, null, null, t.Currency, null, null, null, null, null, null, null, null,
+                Csv.Money(t.BasePay), Csv.Money(t.Deduction), Csv.Money(t.OvertimePay), Csv.Money(t.Total));
         }
 
         var domain = query.Domain is null ? string.Empty : "-" + query.Domain;
@@ -217,27 +218,4 @@ public sealed class SalaryService(
             .OrderBy(g => g.Key)
             .Select(g => new SalaryTotalResponse(g.Key, g.Count(), g.Sum(r => r.BasePay), g.Sum(r => r.OvertimePay), g.Sum(r => r.Deduction), g.Sum(r => r.Total)))
             .ToList();
-
-    private static string? Hours(int? minutes) => minutes is { } m ? (m / 60m).ToString("0.##", CultureInfo.InvariantCulture) : null;
-
-    private static string Money(decimal amount) => amount.ToString("0.00", CultureInfo.InvariantCulture);
-
-    private static void Line(StringBuilder csv, params string?[] fields)
-        => csv.AppendLine(string.Join(',', fields.Select(Field)));
-
-    private static string Field(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return string.Empty;
-        }
-
-        // A leading =, +, - or @ would run as a formula in a spreadsheet (names are typed by users).
-        if ("=+-@".Contains(value[0]) && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
-        {
-            value = "'" + value;
-        }
-
-        return value.IndexOfAny([',', '"', '\n', '\r']) >= 0 ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
-    }
 }
