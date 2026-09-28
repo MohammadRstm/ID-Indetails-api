@@ -68,6 +68,9 @@ public static class ActivityEventKinds
     public const string WorkEntryDeleted = "work_entry_deleted";
     public const string WorkEntryRestored = "work_entry_restored";
 
+    /// <summary>Subject: the work entry; the comment id in the payload.</summary>
+    public const string WorkEntryCommented = "work_entry_commented";
+
     // Billing
     public const string BillingSettingsUpdated = "billing_settings_updated";
 

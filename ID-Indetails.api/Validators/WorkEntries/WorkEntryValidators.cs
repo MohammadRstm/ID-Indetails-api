@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.DTO.Request.WorkEntries;
+using ID_Indetails.api.Validators.Employees;
 
 namespace ID_Indetails.api.Validators.WorkEntries;
 
@@ -40,4 +41,41 @@ internal static class WorkEntryRuleExtensions
 
     private static double Minutes(DateTime start, DateTime end)
         => (WorkEntryRules.AsUtc(end) - WorkEntryRules.AsUtc(start)).TotalMinutes;
+}
+
+public sealed class WorkEntryListQueryValidator : AbstractValidator<WorkEntryListQuery>
+{
+    public WorkEntryListQueryValidator()
+    {
+        RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
+        RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
+            .WithMessage("The range must end on or after its start.");
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
+            .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
+    }
+}
+
+public sealed class MyWorkEntryListQueryValidator : AbstractValidator<MyWorkEntryListQuery>
+{
+    public MyWorkEntryListQueryValidator()
+    {
+        RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
+        RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
+            .WithMessage("The range must end on or after its start.");
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
+            .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
+    }
+}
+
+public sealed class AddWorkEntryCommentRequestValidator : AbstractValidator<AddWorkEntryCommentRequest>
+{
+    public const int MaxBodyLength = 2000;
+
+    public AddWorkEntryCommentRequestValidator()
+    {
+        RuleFor(x => x.Body).Must(b => !string.IsNullOrWhiteSpace(b)).WithMessage("Write a comment.")
+            .MaximumLength(MaxBodyLength).WithMessage($"A comment can be at most {MaxBodyLength} characters.");
+    }
 }

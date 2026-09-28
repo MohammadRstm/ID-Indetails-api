@@ -43,6 +43,29 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
     public async Task<WorkEntryView?> GetViewAsync(long id, CancellationToken cancellationToken = default)
         => (await ViewsAsync(db.WorkEntries.Where(e => e.Id == id && e.DeletedAt == null), cancellationToken)).SingleOrDefault();
 
+    public async Task<(IReadOnlyList<WorkEntryView> Items, int TotalCount)> SearchAsync(
+        WorkEntrySearch search,
+        CancellationToken cancellationToken = default)
+    {
+        var query = Filter(search, withText: true);
+        var total = await query.CountAsync(cancellationToken);
+        var page = query
+            .OrderByDescending(e => e.StartedAt)
+            .ThenByDescending(e => e.Id)
+            .Skip((search.Page - 1) * search.PageSize)
+            .Take(search.PageSize);
+
+        return (await ViewsAsync(page, cancellationToken), total);
+    }
+
+    public Task<IReadOnlyList<WorkEntryView>> ListAsync(WorkEntrySearch search, CancellationToken cancellationToken = default)
+        => ViewsAsync(Filter(search, withText: true).OrderBy(e => e.StartedAt).ThenBy(e => e.Id), cancellationToken);
+
+    public async Task<IReadOnlyList<WorkRow>> RowsAsync(WorkEntrySearch search, CancellationToken cancellationToken = default)
+        => await Filter(search, withText: false)
+            .Select(e => new WorkRow(e.Id, e.UserId, e.ProjectId, e.StartedAt, e.EndedAt, e.DurationMinutes, e.CreatedAt))
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<long>> PeopleWhoMayHoldAsync(
         string domainCode,
         string permissionCode,
@@ -60,6 +83,45 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
         => db.Database.ExecuteSqlAsync($"SELECT `code` FROM `domains` WHERE `code` = {domainCode} FOR UPDATE", cancellationToken);
 
     public void Add(WorkEntry entry) => db.WorkEntries.Add(entry);
+
+    private IQueryable<WorkEntry> Filter(WorkEntrySearch search, bool withText)
+    {
+        var query = db.WorkEntries.AsNoTracking().Where(e => e.DeletedAt == null && e.Project.DomainCode == DomainCodes.Design);
+        if (search.UserId is { } userId)
+        {
+            query = query.Where(e => e.UserId == userId);
+        }
+
+        if (search.ProjectId is { } projectId)
+        {
+            query = query.Where(e => e.ProjectId == projectId);
+        }
+
+        if (search.ClientId is { } clientId)
+        {
+            query = query.Where(e => e.Project.ClientId == clientId);
+        }
+
+        if (search.From is { } from)
+        {
+            query = query.Where(e => e.StartedAt >= from);
+        }
+
+        if (search.To is { } to)
+        {
+            query = query.Where(e => e.StartedAt < to);
+        }
+
+        if (withText && !string.IsNullOrWhiteSpace(search.Text))
+        {
+            foreach (var word in search.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                query = query.Where(e => e.Description.Contains(word) || e.Project.Title.Contains(word));
+            }
+        }
+
+        return query;
+    }
 
     private sealed record Raw(
         long Id, long UserId, string? FirstName, string? LastName, string Email, long ProjectId, string ProjectTitle,

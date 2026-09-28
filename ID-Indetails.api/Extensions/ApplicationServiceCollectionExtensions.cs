@@ -101,6 +101,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IDomainSettingsRepository, DomainSettingsRepository>();
         services.AddScoped<IWorkEntryRepository, WorkEntryRepository>();
+        services.AddScoped<IWorkEntryCommentRepository, WorkEntryCommentRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -126,6 +127,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IDomainSettingsService, DomainSettingsService>();
         services.AddScoped<IWorkLogNotifier, WorkLogNotifier>();
         services.AddScoped<IWorkEntryService, WorkEntryService>();
+        services.AddScoped<IWorkEntryQueryService, WorkEntryQueryService>();
+        services.AddScoped<IWorkEntryCommentService, WorkEntryCommentService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

@@ -32,6 +32,9 @@ Features of the Design domain: domain settings, work entries, comments, meetings
 | `PUT /api/work-entries/{id}` | `work_entry:create` | Replaces project, description and times of one of the caller's entries |
 | `DELETE /api/work-entries/{id}` | `work_entry:create` | Soft delete (`deleted_at`). Returns `204` |
 | `POST /api/work-entries/{id}/restore` | `work_entry:create` | Undoes a delete |
+| `GET /api/work-entries?from=&to=&projectId=&userId=&clientId=&search=&page=1&pageSize=25` | `work_entry:view_all` | Everyone's Design entries, newest first |
+| `GET /api/me/work-entries?from=&to=&projectId=&search=&page=1&pageSize=25` | `work_entry:view_own` | The caller's entries, newest first |
+| `GET /api/work-entries/{id}` | `work_entry:view_all`, or `work_entry:view_own` for your own | The entry, its comments, and the same person's other entries on the project that day |
 
 People log, edit, delete and restore only their **own** entries; anyone else's reads as `404`, whatever the caller may view. The rules are in `Business/WorkEntries/WorkEntryRules.cs`:
 
@@ -55,3 +58,17 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 | `long` | The same, only for entries of 3 hours or more |
 | `digest` | One `work_digest` notification per recipient per company day (digest key `work-digest-YYYY-MM-DD`). Each entry adds 1 to `count`, adds its minutes to the payload's `minutes`, and marks it unread again |
 | `off` | Nothing |
+
+**Reading:** `from` and `to` are company-time-zone days, both inclusive, matched on the start time. `search` matches the description or project title (every word). Each entry carries the person, the project, `minutes`, `commentCount` and `canEdit`.
+
+## Comments
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/work-entries/{id}/comments` | Whoever can read the entry | Oldest first, with the author's name and role |
+| `POST /api/work-entries/{id}/comments` | `work_entry:comment` | `{ body, sendToGroup }`. Returns `201` |
+
+- A comment is 1 to 2000 characters. Comments can't be edited or deleted.
+- `sendToGroup` (also post to the author's team group chat) is refused with `422 group_chat_unavailable` until group chats exist.
+- The entry's author gets an `entry_comment` notification (commenter's name, the text and the entry's description), unless they wrote it themselves.
+- Event: `work_entry_commented`, with the entry as the subject and the comment id in the payload.

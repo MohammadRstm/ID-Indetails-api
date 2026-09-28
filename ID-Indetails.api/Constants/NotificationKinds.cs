@@ -11,4 +11,7 @@ public static class NotificationKinds
 
     /// <summary>One rolling notification per admin per day summing the work logged (digest key <c>work-digest-YYYY-MM-DD</c>).</summary>
     public const string WorkDigest = "work_digest";
+
+    /// <summary>Someone commented on your work entry (subject: the work entry).</summary>
+    public const string EntryComment = "entry_comment";
 }

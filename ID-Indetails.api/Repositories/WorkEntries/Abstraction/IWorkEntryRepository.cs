@@ -23,6 +23,23 @@ public sealed record WorkEntryView(
     DateTime? UpdatedAt,
     int CommentCount);
 
+/// <summary>
+/// Live entries on Design projects. Times are UTC; <paramref name="From"/> is inclusive and <paramref name="To"/>
+/// exclusive, both on the start time. <paramref name="Text"/> matches the description or project title.
+/// </summary>
+public sealed record WorkEntrySearch(
+    long? UserId = null,
+    long? ProjectId = null,
+    long? ClientId = null,
+    DateTime? From = null,
+    DateTime? To = null,
+    string? Text = null,
+    int Page = 1,
+    int PageSize = 25);
+
+/// <summary>The few fields totals and charts are calculated from.</summary>
+public sealed record WorkRow(long Id, long UserId, long ProjectId, DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt);
+
 public interface IWorkEntryRepository
 {
     /// <summary>
@@ -45,6 +62,15 @@ public interface IWorkEntryRepository
 
     /// <summary>A live entry. Not tracked.</summary>
     Task<WorkEntryView?> GetViewAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>Newest first (by start). Not tracked.</summary>
+    Task<(IReadOnlyList<WorkEntryView> Items, int TotalCount)> SearchAsync(WorkEntrySearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>Every matching entry, oldest first, ignoring the search's paging. Not tracked.</summary>
+    Task<IReadOnlyList<WorkEntryView>> ListAsync(WorkEntrySearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>Every matching entry's totals fields, ignoring the search's text and paging. Not tracked.</summary>
+    Task<IReadOnlyList<WorkRow>> RowsAsync(WorkEntrySearch search, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Active people who might hold <paramref name="permissionCode"/> in the domain: its members, super admins,

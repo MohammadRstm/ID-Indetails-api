@@ -17,3 +17,14 @@ public sealed record WorkEntryResponse(
     DateTime? UpdatedAt,
     bool CanEdit,
     int CommentCount);
+
+/// <param name="Role">super_admin, admin or employee, for the badge next to the name.</param>
+public sealed record WorkEntryCommentAuthorResponse(long Id, string Name, string Role);
+
+public sealed record WorkEntryCommentResponse(long Id, WorkEntryCommentAuthorResponse Author, string Body, bool SentToGroup, DateTime CreatedAt);
+
+/// <param name="SameDay">The same person's other entries on the same project that day (company time zone), oldest first.</param>
+public sealed record WorkEntryDetailResponse(
+    WorkEntryResponse Entry,
+    IReadOnlyList<WorkEntryCommentResponse> Comments,
+    IReadOnlyList<WorkEntryResponse> SameDay);
