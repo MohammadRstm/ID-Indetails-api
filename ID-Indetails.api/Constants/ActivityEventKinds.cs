@@ -80,4 +80,17 @@ public static class ActivityEventKinds
     public const string PaymentRecorded = "payment_recorded";
     public const string PaymentApplied = "payment_applied";
     public const string PaymentVoided = "payment_voided";
+
+    // Company layer (no domain, except schedules, which carry the person's domain)
+    public const string CompanySettingsUpdated = "company_settings_updated";
+    public const string WorkingTimeChanged = "working_time_changed";
+    public const string ScheduleChanged = "schedule_changed";
+
+    // Company overhead (subject: the overhead line; money in the amount column)
+    public const string OverheadAdded = "overhead_added";
+    public const string OverheadUpdated = "overhead_updated";
+    public const string OverheadAmountChanged = "overhead_amount_changed";
+    public const string OverheadCancelled = "overhead_cancelled";
+    public const string OverheadResumed = "overhead_resumed";
+    public const string OverheadRemoved = "overhead_removed";
 }
