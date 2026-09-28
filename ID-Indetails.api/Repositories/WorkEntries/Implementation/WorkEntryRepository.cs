@@ -100,6 +100,23 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .ToList();
     }
 
+    public async Task<IReadOnlyList<DesignPerson>> DesignPeopleAsync(CancellationToken cancellationToken = default)
+    {
+        var rows = await db.Users
+            .AsNoTracking()
+            .Where(u => u.DomainCode == DomainCodes.Design && u.Status != UserStatus.Deactivated)
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, u.Position, u.TeamId, TeamName = u.Team != null ? u.Team.Name : null, u.RoleCode, u.Status })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(u => new DesignPerson(u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.Email, u.Position, u.TeamId, u.TeamName, u.RoleCode, u.Status))
+            .OrderBy(p => p.Name)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyDictionary<long, string>> ProjectTitlesAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
+        => await db.Projects.AsNoTracking().Where(p => ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Title, cancellationToken);
+
     public async Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
     {
         var rows = await db.Users

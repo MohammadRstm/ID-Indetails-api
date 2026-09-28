@@ -1,12 +1,6 @@
-namespace ID_Indetails.api.Business.WorkEntries;
+using ID_Indetails.api.Enums;
 
-public enum ActivityLevel
-{
-    None,
-    Quiet,
-    Steady,
-    Busy,
-}
+namespace ID_Indetails.api.Business.WorkEntries;
 
 /// <summary>
 /// Totals and series over logged work. Every entry counts on the company-time-zone day (and week) it starts on.

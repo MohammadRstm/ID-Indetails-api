@@ -56,6 +56,9 @@ public sealed record WorkProject(
 /// <summary>One person's live work on one project.</summary>
 public sealed record Contribution(long ProjectId, long UserId, string UserName, int Minutes, int Entries, DateTime LastStartedAt);
 
+/// <summary>Someone of the Design domain, as the Employees page lists them.</summary>
+public sealed record DesignPerson(long Id, string Name, string Email, string? Position, long? TeamId, string? TeamName, string Role, UserStatus Status);
+
 public interface IWorkEntryRepository
 {
     /// <summary>
@@ -93,6 +96,12 @@ public interface IWorkEntryRepository
 
     /// <summary>Each person's minutes, entries and latest start on each of the projects. Not tracked.</summary>
     Task<IReadOnlyList<Contribution>> ContributionsAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Everyone of the Design domain who isn't deactivated, by name. Not tracked.</summary>
+    Task<IReadOnlyList<DesignPerson>> DesignPeopleAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Titles of the given projects. Not tracked.</summary>
+    Task<IReadOnlyDictionary<long, string>> ProjectTitlesAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
 
     /// <summary>Names, emails, teams and domains of the given people. Not tracked.</summary>
     Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);

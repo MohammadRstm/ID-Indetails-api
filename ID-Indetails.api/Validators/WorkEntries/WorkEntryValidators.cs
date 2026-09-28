@@ -89,3 +89,20 @@ public sealed class WorkSummaryQueryValidator : AbstractValidator<WorkSummaryQue
             .WithMessage("The range must end on or after its start.");
     }
 }
+
+public sealed class ProjectWorkQueryValidator : AbstractValidator<ProjectWorkQuery>
+{
+    public ProjectWorkQueryValidator()
+    {
+        RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
+            .WithMessage("The range must end on or after its start.");
+    }
+}
+
+public sealed class PeopleWorkQueryValidator : AbstractValidator<PeopleWorkQuery>
+{
+    public PeopleWorkQueryValidator()
+    {
+        RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
+    }
+}

@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.WorkEntries;
+using ID_Indetails.api.Enums;
 using Shouldly;
 
 namespace ID_Indetails.UnitTests.Business;

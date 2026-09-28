@@ -81,6 +81,19 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 - **My project work:** the caller's minutes, entries and minutes this week on the project; how many people logged there and the project's total minutes; the caller's 12 latest entries; the caller's last 8 weeks there; and the 6 latest entries by other people (name, start and description, as the prototype's "Team activity").
 - The overtime figures of these pages come from the working-time engine once it exists.
 
+## Everyone's work by project and person
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/work?from=&to=` | `work_entry:view_all` | A Design project's work (the admin project page) |
+| `GET /api/projects/{id}/work/people/{userId}` | `work_entry:view_all` | One person's work on the project (the contributor drawer). `404` if they have none |
+| `GET /api/work/people?search=&teamId=` | `work_entry:view_all` | Everyone of the Design domain who isn't deactivated, with their hours (the Employees page), most this week first |
+
+- **Project work:** total minutes, entries, people and latest start; the activity level from the last 14 days (busy from 45 h a week, steady from 15 h, quiet with any work, otherwise none) with the last 14 and previous 14 days' minutes; weekly minutes from the project's start (4 to 30 weeks, ending today or on completion); minutes per weekday and hour of the day, each entry spread over the hours it covers; and the contributors within `from`/`to` (entries, minutes, share of the range, latest start, last 8 weeks).
+- **Contributor:** minutes, entries, share of the project's minutes, last 10 weeks, and the 40 latest entries.
+- **People:** each person's minutes this week, this quarter and in total, entries, latest start, focus (the project with the most time in the last 14 days) and last 8 weeks. `search` matches name, email or position.
+- **Labour cost** (contributors and people) is only returned to callers with `financial:view`. It comes from the shared finance calculator (`ProjectFinance.PriceLabour` and `ToUsd`): each hour at the person's hourly cost in force that day, in USD at that day's exchange rate, with any unconverted amount in its own currency and the minutes of people with no pay record counted apart. It therefore always agrees with the project's cost.
+
 ## Comments
 
 | Method and path | Needs | Purpose |

@@ -146,6 +146,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IWorkEntryQueryService, WorkEntryQueryService>();
         services.AddScoped<IWorkEntryCommentService, WorkEntryCommentService>();
         services.AddScoped<IMyWorkService, MyWorkService>();
+        services.AddScoped<IWorkInsightsService, WorkInsightsService>();
         services.AddScoped<IMeetingService, MeetingService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
