@@ -61,6 +61,10 @@ public static class ErrorCodes
     public const string StatusUnchanged = "status_unchanged";
     public const string InvalidStatusChange = "invalid_status_change";
 
+    // Requirements
+    public const string ProjectClosed = "project_closed";
+    public const string AssigneeNotAllowed = "assignee_not_allowed";
+
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
 }

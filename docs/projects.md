@@ -48,6 +48,21 @@ Anything else is `422 invalid_status_change`, and asking for the current status 
 - **Reopening** clears those dates, returns Execution revenue to being calculated live, and reopens exactly the `auto_done` requirements.
 - Archiving a completed project keeps its finalisation. Resuming from hold changes nothing else.
 
+## Requirements
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/requirements` | `requirement:view` | Open requirements first (oldest first), then done ones (most recently done first), with totals, the overdue count and progress |
+| `POST /api/projects/{id}/requirements` | `requirement:manage` | `{ text, deadline, assigneeIds }` |
+| `PUT /api/projects/{id}/requirements/{reqId}` | `requirement:manage` | Replaces text, deadline and assignees |
+| `POST /api/projects/{id}/requirements/{reqId}/done`, `/undone` | `requirement:manage` | Ticks or unticks. Asking for the current state changes nothing. A manual tick clears `autoDone` |
+| `DELETE /api/projects/{id}/requirements/{reqId}` | `requirement:manage` | Soft delete (`deleted_at`) |
+
+- Requirements of a completed or archived project can't change until it is reopened (`422 project_closed`). Projects on hold stay editable.
+- **Assignees** are employees (not admins) of the project's domain who are active or invited (`422 assignee_not_allowed`). They don't have to be project members. Employees can't tick requirements, not even their own.
+- A requirement is **overdue** when it is open and its deadline is before today (company time zone).
+- Every change writes `requirement_added`, `requirement_updated`, `requirement_done`, `requirement_reopened` or `requirement_deleted` (the requirement is the subject, the text is in the payload). No notifications are sent yet.
+
 ## Progress
 
 `progress_pct` is a cache of done ÷ live requirements, rounded to a whole percentage (`Business/Projects/ProgressCalculator.cs`). A project with no requirements is 0% while open and 100% once completed or archived. It is recalculated in the same transaction as every requirement or status change, which writes a `progress_set` event (new value in `amount`, previous in `prev_amount`) whenever it changes.

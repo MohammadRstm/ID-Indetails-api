@@ -33,6 +33,8 @@ using ID_Indetails.api.Services.Permissions.Abstraction;
 using ID_Indetails.api.Services.Permissions.Implementation;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Projects.Implementation;
+using ID_Indetails.api.Services.Requirements.Abstraction;
+using ID_Indetails.api.Services.Requirements.Implementation;
 using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
 using ID_Indetails.api.Services.Teams.Abstraction;
@@ -84,6 +86,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<IProjectProgress, ProjectProgress>();
         services.AddScoped<IProjectStatusService, ProjectStatusService>();
+        services.AddScoped<IRequirementService, RequirementService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

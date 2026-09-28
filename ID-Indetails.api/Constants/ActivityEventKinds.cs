@@ -50,4 +50,11 @@ public static class ActivityEventKinds
 
     /// <summary><c>amount</c> and <c>prev_amount</c> hold the new and previous progress percentage.</summary>
     public const string ProgressSet = "progress_set";
+
+    // Requirements (subject: the requirement; project_id is set)
+    public const string RequirementAdded = "requirement_added";
+    public const string RequirementUpdated = "requirement_updated";
+    public const string RequirementDone = "requirement_done";
+    public const string RequirementReopened = "requirement_reopened";
+    public const string RequirementDeleted = "requirement_deleted";
 }
