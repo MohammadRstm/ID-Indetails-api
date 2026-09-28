@@ -20,3 +20,24 @@ public class RateLimitTests(RateLimitedApiFactory api) : IClassFixture<RateLimit
             .ShouldFailWithAsync(429, ErrorCodes.TooManyRequests);
     }
 }
+
+public class UserRateLimitTests(UserRateLimitedApiFactory api) : IClassFixture<UserRateLimitedApiFactory>
+{
+    private readonly AuthTestSteps _steps = new(api);
+
+    [Fact]
+    public async Task Each_signed_in_user_has_their_own_request_limit()
+    {
+        var (_, _, first) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, second) = await _steps.ActiveSuperAdminAsync();
+
+        // Signing up used one request each (the password change); the limit is 5 a minute.
+        for (var i = 0; i < 4; i++)
+        {
+            (await _steps.Client.GetAsync("/api/teams", first.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        }
+
+        await (await _steps.Client.GetAsync("/api/teams", first.AccessToken)).ShouldFailWithAsync(429, ErrorCodes.TooManyRequests);
+        (await _steps.Client.GetAsync("/api/teams", second.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+    }
+}
