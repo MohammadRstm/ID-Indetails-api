@@ -1,4 +1,5 @@
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
@@ -11,7 +12,7 @@ namespace ID_Indetails.api.Controllers;
 /// <summary>Projects. Projects of a domain the caller can't see read as 404.</summary>
 [ApiController]
 [Route("api/projects")]
-public sealed class ProjectsController(IProjectService projectService) : ControllerBase
+public sealed class ProjectsController(IProjectService projectService, IProjectStatusService statusService) : ControllerBase
 {
     [HttpGet]
     [HasPermission(PermissionCodes.ProjectView)]
@@ -45,4 +46,32 @@ public sealed class ProjectsController(IProjectService projectService) : Control
     [HasPermission(PermissionCodes.ProjectPricingManage)]
     public Task<ProjectResponse> UpdatePricing(long projectId, UpdateProjectPricingRequest request, CancellationToken cancellationToken)
         => projectService.UpdatePricingAsync(projectId, request, cancellationToken);
+
+    [HttpPost("{projectId:long}/hold")]
+    [HasPermission(PermissionCodes.ProjectChangeStatus)]
+    public Task<ProjectResponse> Hold(long projectId, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Hold, cancellationToken);
+
+    [HttpPost("{projectId:long}/resume")]
+    [HasPermission(PermissionCodes.ProjectChangeStatus)]
+    public Task<ProjectResponse> Resume(long projectId, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Resume, cancellationToken);
+
+    /// <summary>Finalises the project: revenue is locked and open requirements are ticked.</summary>
+    [HttpPost("{projectId:long}/complete")]
+    [HasPermission(PermissionCodes.ProjectChangeStatus)]
+    public Task<ProjectResponse> Complete(long projectId, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Complete, cancellationToken);
+
+    /// <summary>Finalises the project too, unless it was already completed.</summary>
+    [HttpPost("{projectId:long}/archive")]
+    [HasPermission(PermissionCodes.ProjectChangeStatus)]
+    public Task<ProjectResponse> Archive(long projectId, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Archive, cancellationToken);
+
+    /// <summary>Unlocks revenue and reopens the requirements that completing ticked.</summary>
+    [HttpPost("{projectId:long}/reopen")]
+    [HasPermission(PermissionCodes.ProjectChangeStatus)]
+    public Task<ProjectResponse> Reopen(long projectId, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Reopen, cancellationToken);
 }

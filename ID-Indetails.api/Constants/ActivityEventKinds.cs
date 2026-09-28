@@ -39,4 +39,15 @@ public static class ActivityEventKinds
     public const string RevenueChanged = "revenue_changed";
     public const string ProjectFeeSet = "project_fee_set";
     public const string MaterialMarkupSet = "material_markup_set";
+    public const string ProjectHold = "project_hold";
+    public const string ProjectResumed = "project_resumed";
+    public const string ProjectCompleted = "project_completed";
+    public const string ProjectArchived = "project_archived";
+    public const string ProjectReopened = "project_reopened";
+
+    /// <summary>Revenue locked; <c>amount</c> is the revenue frozen at that moment.</summary>
+    public const string ProjectFinalized = "project_finalized";
+
+    /// <summary><c>amount</c> and <c>prev_amount</c> hold the new and previous progress percentage.</summary>
+    public const string ProgressSet = "progress_set";
 }

@@ -58,6 +58,8 @@ public static class ErrorCodes
     public const string ProjectLocked = "project_locked";
     public const string ProjectHasBilling = "project_has_billing";
     public const string NotForThisDomain = "not_for_this_domain";
+    public const string StatusUnchanged = "status_unchanged";
+    public const string InvalidStatusChange = "invalid_status_change";
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
