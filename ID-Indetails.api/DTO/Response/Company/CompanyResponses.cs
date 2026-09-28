@@ -1,0 +1,77 @@
+using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.Enums;
+
+namespace ID_Indetails.api.DTO.Response.Company;
+
+/// <param name="IsSetUp">False until a super admin first saves the settings; the other values are defaults until then.</param>
+/// <param name="TimeZone">From configuration; every calendar date in the system is in this zone.</param>
+public sealed record CompanySettingsResponse(
+    bool IsSetUp,
+    string Name,
+    string TimeZone,
+    byte WeekStart,
+    bool Use24HourTime,
+    string DefaultCurrency,
+    DateTime? UpdatedAt);
+
+/// <param name="RequiredMinutesPerDay">Hours required on a working day: the span minus the break (the break is paid).</param>
+public sealed record WorkingTimePolicyResponse(
+    long Id,
+    DateOnly EffectiveFrom,
+    IReadOnlyList<int> WorkDays,
+    int StartMinute,
+    int EndMinute,
+    int BreakMinutes,
+    decimal OvertimeMultiplier,
+    int RequiredMinutesPerDay,
+    int RequiredMinutesPerWeek);
+
+/// <param name="Policies">Every policy, newest first, including ones that haven't started yet.</param>
+public sealed record WorkingTimeResponse(WorkingTimePolicyResponse Current, IReadOnlyList<WorkingTimePolicyResponse> Policies);
+
+public sealed record ScheduleDayResponse(int Weekday, int StartMinute, int EndMinute, int RequiredMinutes);
+
+/// <param name="IsOwn">False when the person follows the company week.</param>
+/// <param name="NextChangeOn">A change that is set but hasn't started yet.</param>
+public sealed record PersonScheduleResponse(
+    long UserId,
+    string Name,
+    string? Position,
+    string Role,
+    string? Domain,
+    TeamSummaryResponse? Team,
+    bool IsOwn,
+    DateOnly? OwnSince,
+    IReadOnlyList<ScheduleDayResponse> Days,
+    int RequiredMinutesPerWeek,
+    DateOnly? NextChangeOn);
+
+public sealed record SchedulesResponse(WorkingTimePolicyResponse CompanyWeek, IReadOnlyList<PersonScheduleResponse> People);
+
+public sealed record OverheadAmountResponse(DateOnly EffectiveFrom, decimal Amount);
+
+/// <param name="CurrentAmount">What it costs this month; null when it isn't charged this month.</param>
+/// <param name="PerYear">Twelve months at the current amount, while it runs.</param>
+public sealed record OverheadLineResponse(
+    long Id,
+    string Name,
+    OverheadCostGroup CostGroup,
+    string Currency,
+    decimal? CurrentAmount,
+    decimal? PerYear,
+    DateOnly StartedOn,
+    DateOnly? EndedOn,
+    bool IsCancelled,
+    IReadOnlyList<OverheadAmountResponse> Amounts);
+
+public sealed record OverheadGroupTotalResponse(OverheadCostGroup CostGroup, string Currency, decimal Total);
+
+/// <param name="MonthTotals">This month's overhead, one total per currency.</param>
+public sealed record OverheadResponse(
+    IReadOnlyList<OverheadLineResponse> Lines,
+    IReadOnlyList<CurrencyTotalResponse> MonthTotals,
+    IReadOnlyList<OverheadGroupTotalResponse> GroupTotals);
+
+/// <param name="Month">First day of the month.</param>
+public sealed record OverheadMonthResponse(DateOnly Month, IReadOnlyList<CurrencyTotalResponse> Totals);
