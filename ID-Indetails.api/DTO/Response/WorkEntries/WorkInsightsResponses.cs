@@ -75,3 +75,30 @@ public sealed record PersonWorkResponse(
     FocusProjectResponse? Focus,
     IReadOnlyList<int> Weekly,
     LabourCostResponse? LabourCost);
+
+public sealed record TimelinePersonResponse(long UserId, string Name, int Minutes);
+
+public sealed record TimelineMeetingResponse(long Id, string? Topic, DateTime StartsAt, DateTime EndsAt);
+
+/// <summary>A company-time-zone day with work or a meeting. Work past midnight counts on each day it covers.</summary>
+public sealed record TimelineDayResponse(
+    DateOnly Day,
+    int Minutes,
+    IReadOnlyList<TimelinePersonResponse> People,
+    IReadOnlyList<TimelineMeetingResponse> Meetings);
+
+/// <param name="Amount">The new progress for progress_set; null otherwise.</param>
+public sealed record TimelineEventResponse(string Kind, DateTime OccurredAt, string? ActorName, decimal? Amount);
+
+public sealed record TimelineGapResponse(DateOnly From, DateOnly To, int Days);
+
+/// <summary>A Design project's history, day by day, for the admin Timeline tab.</summary>
+/// <param name="Events">Status changes and progress, oldest first.</param>
+/// <param name="Gaps">Runs of 4 days or more without work, between the start and the end.</param>
+public sealed record ProjectTimelineResponse(
+    long ProjectId,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    IReadOnlyList<TimelineDayResponse> Days,
+    IReadOnlyList<TimelineEventResponse> Events,
+    IReadOnlyList<TimelineGapResponse> Gaps);

@@ -21,7 +21,8 @@ Features of the Design domain: domain settings, work entries, comments, meetings
 | `timerEnabled` | `true` | | Shown by the client (the timer runs in the client) |
 | `logReminder` | `true` | | Shown by the client (the afternoon reminder) |
 | `notifyEntry` | `all` | `all`, `long` (3 hours or more), `digest`, `off` | Notifications to admins when work is logged |
-| `notifyProject`, `notifyIdle`, `weeklySummary`, `autoArchive` | `true`, `true`, `true`, `false` | | Stored only for now; the jobs that use them come later |
+| `notifyIdle` | `true` | | Whether the dashboard flags projects with no work for 7 days |
+| `notifyProject`, `weeklySummary`, `autoArchive` | `true`, `true`, `false` | | Stored only for now; the jobs that use them come later |
 | `holdLogging` | `false` | | Whether work may still be logged on a project on hold |
 
 ## Work entries
@@ -87,10 +88,12 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 |---|---|---|
 | `GET /api/projects/{id}/work?from=&to=` | `work_entry:view_all` | A Design project's work (the admin project page) |
 | `GET /api/projects/{id}/work/people/{userId}` | `work_entry:view_all` | One person's work on the project (the contributor drawer). `404` if they have none |
+| `GET /api/projects/{id}/timeline` | `work_entry:view_all` | The project's history day by day (the admin Timeline tab) |
 | `GET /api/work/people?search=&teamId=` | `work_entry:view_all` | Everyone of the Design domain who isn't deactivated, with their hours (the Employees page), most this week first |
 
 - **Project work:** total minutes, entries, people and latest start; the activity level from the last 14 days (busy from 45 h a week, steady from 15 h, quiet with any work, otherwise none) with the last 14 and previous 14 days' minutes; weekly minutes from the project's start (4 to 30 weeks, ending today or on completion); minutes per weekday and hour of the day, each entry spread over the hours it covers; and the contributors within `from`/`to` (entries, minutes, share of the range, latest start, last 8 weeks).
 - **Contributor:** minutes, entries, share of the project's minutes, last 10 weeks, and the 40 latest entries.
+- **Timeline:** every company day with work or a meeting, from the project's start to today (or its completion). Work that runs past midnight counts on each day it covers. Each day has its minutes, the people who worked (most first) and the meetings. It also lists the project's status changes and progress (`project_created`, `project_hold`, `project_resumed`, `project_completed`, `project_archived`, `project_reopened`, `progress_set` with the new progress), oldest first, and the quiet gaps: runs of 4 days or more without work. The client draws the timeline from these.
 - **People:** each person's minutes this week, this quarter and in total, entries, latest start, focus (the project with the most time in the last 14 days) and last 8 weeks. `search` matches name, email or position.
 - **Labour cost** (contributors and people) is only returned to callers with `financial:view`. It comes from the shared finance calculator (`ProjectFinance.PriceLabour` and `ToUsd`): each hour at the person's hourly cost in force that day, in USD at that day's exchange rate, with any unconverted amount in its own currency and the minutes of people with no pay record counted apart. It therefore always agrees with the project's cost.
 

@@ -24,6 +24,12 @@ public sealed class WorkInsightsController(IWorkInsightsService workInsightsServ
     public Task<ProjectContributorDetailResponse> Contributor(long projectId, long userId, CancellationToken cancellationToken)
         => workInsightsService.ContributorAsync(projectId, userId, cancellationToken);
 
+    /// <summary>A project's history day by day, with its status changes, progress and quiet gaps.</summary>
+    [HttpGet("projects/{projectId:long}/timeline")]
+    [HasPermission(PermissionCodes.WorkEntryViewAll)]
+    public Task<ProjectTimelineResponse> Timeline(long projectId, CancellationToken cancellationToken)
+        => workInsightsService.TimelineAsync(projectId, cancellationToken);
+
     /// <summary>Everyone of the Design domain with their hours, most this week first.</summary>
     [HttpGet("work/people")]
     [HasPermission(PermissionCodes.WorkEntryViewAll)]

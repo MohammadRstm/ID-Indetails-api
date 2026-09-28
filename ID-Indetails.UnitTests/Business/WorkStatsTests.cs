@@ -68,4 +68,21 @@ public class WorkStatsTests
         WorkStats.Minutes(worked, new DateOnly(2026, 9, 28), new DateOnly(2026, 9, 28)).ShouldBe(120);
         WorkStats.Daily(worked).ShouldBe([new(new DateOnly(2026, 9, 28), 120), new(new DateOnly(2026, 9, 29), 60)]);
     }
+
+    [Fact]
+    public void Work_past_midnight_is_split_between_the_days()
+    {
+        WorkStats.SplitByDay(new DateTime(2026, 9, 28, 23, 0, 0), 120)
+            .ShouldBe([new(new DateOnly(2026, 9, 28), 60), new(new DateOnly(2026, 9, 29), 60)]);
+        WorkStats.SplitByDay(new DateTime(2026, 9, 28, 9, 0, 0), 30).ShouldBe([new(new DateOnly(2026, 9, 28), 30)]);
+    }
+
+    [Fact]
+    public void Quiet_runs_of_four_days_or_more_are_gaps()
+    {
+        var worked = new HashSet<DateOnly> { new(2026, 9, 1), new(2026, 9, 6), new(2026, 9, 8) };
+
+        WorkStats.Gaps(worked, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 12))
+            .ShouldBe([new(new DateOnly(2026, 9, 2), new DateOnly(2026, 9, 5), 4), new(new DateOnly(2026, 9, 9), new DateOnly(2026, 9, 12), 4)]);
+    }
 }

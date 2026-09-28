@@ -101,4 +101,26 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync($"/api/projects/{project.Id}/work", executionAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync($"/api/projects/{site.Id}/work", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
     }
+
+    [Fact]
+    public async Task The_timeline_shows_each_day_with_people_meetings_and_status_changes()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken, holdLogging: true);
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var entry = await Work.LogAsync(employee.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 50);
+        (await Client.PostEmptyAsync($"/api/projects/{project.Id}/hold", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        var timeline = await (await Client.GetAsync($"/api/projects/{project.Id}/timeline", admin.AccessToken)).ReadAsync<ProjectTimelineResponse>();
+        var day = timeline.Days.Single(d => d.Minutes > 0);
+        day.Minutes.ShouldBe(50);
+        day.People.Single().UserId.ShouldBe(employee.User.Id);
+        timeline.Events.Select(e => e.Kind).ShouldContain(ActivityEventKinds.ProjectHold);
+        timeline.Events.First().Kind.ShouldBe(ActivityEventKinds.ProjectCreated);
+
+        await (await Client.GetAsync($"/api/projects/{project.Id}/timeline", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
+    }
 }

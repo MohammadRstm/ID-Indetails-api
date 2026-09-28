@@ -6,8 +6,10 @@ using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
+using ID_Indetails.api.Repositories.Meetings.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -29,6 +31,8 @@ public sealed class WorkInsightsService(
     ICompanyRepository company,
     IProjectFinanceRepository financeSources,
     IDomainSettingsService domainSettings,
+    IMeetingRepository meetings,
+    IActivityFeedRepository activityFeed,
     IClock clock) : IWorkInsightsService
 {
     public const int MinProjectWeeks = 4;
@@ -37,6 +41,18 @@ public sealed class WorkInsightsService(
     public const int ContributorWeeks = 10;
     public const int ContributorEntries = 40;
     public const int FocusDays = 14;
+    public const int MaxTimelineEvents = 1000;
+
+    private static readonly IReadOnlyList<string> TimelineKinds =
+    [
+        ActivityEventKinds.ProjectCreated,
+        ActivityEventKinds.ProjectHold,
+        ActivityEventKinds.ProjectResumed,
+        ActivityEventKinds.ProjectCompleted,
+        ActivityEventKinds.ProjectArchived,
+        ActivityEventKinds.ProjectReopened,
+        ActivityEventKinds.ProgressSet,
+    ];
 
     public async Task<ProjectWorkResponse> ProjectWorkAsync(long projectId, ProjectWorkQuery query, CancellationToken cancellationToken = default)
     {
@@ -112,6 +128,50 @@ public sealed class WorkInsightsService(
             ToWeeks(WorkStats.Weekly(theirs.Select(ToWorked), clock.CompanyToday, ContributorWeeks, calendar.FirstDayOfWeek)),
             theirs.OrderByDescending(e => e.StartedAt).Take(ContributorEntries)
                 .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList());
+    }
+
+    public async Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var project = await DesignProjectAsync(actor, projectId, cancellationToken);
+        var end = project.CompletedAt is { } completedAt ? clock.ToCompanyDate(completedAt) : clock.CompanyToday;
+
+        var parts = (await entries.ListAsync(new WorkEntrySearch(ProjectId: projectId), cancellationToken))
+            .SelectMany(e => WorkStats.SplitByDay(clock.ToCompanyTime(e.StartedAt), e.Minutes).Select(d => (d.Day, d.Minutes, e.UserId, e.UserName)))
+            .ToList();
+        var projectMeetings = (await meetings.ListAsync(new MeetingSearch([DomainCodes.Design], projectId), cancellationToken))
+            .ToLookup(m => clock.ToCompanyDate(m.StartsAt));
+        var byDay = parts.ToLookup(p => p.Day);
+
+        var days = byDay.Select(g => g.Key)
+            .Union(projectMeetings.Select(g => g.Key))
+            .Order()
+            .Select(day => new TimelineDayResponse(
+                day,
+                byDay[day].Sum(p => p.Minutes),
+                byDay[day]
+                    .GroupBy(p => p.UserId)
+                    .Select(g => new TimelinePersonResponse(g.Key, g.First().UserName, g.Sum(p => p.Minutes)))
+                    .OrderByDescending(p => p.Minutes)
+                    .ToList(),
+                projectMeetings[day].Select(m => new TimelineMeetingResponse(m.Id, m.Topic, m.StartsAt, m.EndsAt)).ToList()))
+            .ToList();
+
+        var (events, _) = await activityFeed.SearchAsync(
+            new ActivityFeedSearch([DomainCodes.Design], false, TimelineKinds, [], false, projectId, null, null, 1, MaxTimelineEvents),
+            cancellationToken);
+
+        return new ProjectTimelineResponse(
+            projectId,
+            project.StartDate,
+            end,
+            days,
+            events.OrderBy(e => e.OccurredAt).ThenBy(e => e.Id)
+                .Select(e => new TimelineEventResponse(e.Kind, e.OccurredAt, e.ActorName, e.Kind == ActivityEventKinds.ProgressSet ? e.Amount : null))
+                .ToList(),
+            WorkStats.Gaps(byDay.Select(g => g.Key).ToHashSet(), project.StartDate, end)
+                .Select(g => new TimelineGapResponse(g.From, g.To, g.Days))
+                .ToList());
     }
 
     public async Task<IReadOnlyList<PersonWorkResponse>> PeopleAsync(PeopleWorkQuery query, CancellationToken cancellationToken = default)

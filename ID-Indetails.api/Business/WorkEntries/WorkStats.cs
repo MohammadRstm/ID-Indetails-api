@@ -23,6 +23,11 @@ public static class WorkStats
 
     public sealed record HourCell(DayOfWeek Weekday, int Hour, int Minutes);
 
+    public sealed record Gap(DateOnly From, DateOnly To, int Days);
+
+    /// <summary>Runs of at least this many days without work are shown as quiet gaps on a project's timeline.</summary>
+    public const int MinGapDays = 4;
+
     public static DateOnly WeekStartOf(DateOnly day, DayOfWeek firstDay)
         => day.AddDays(-(((int)day.DayOfWeek - (int)firstDay + 7) % 7));
 
@@ -100,5 +105,50 @@ public static class WorkStats
             .ThenBy(c => c.Key.Item2)
             .Select(c => new HourCell(c.Key.Item1, c.Key.Item2, c.Value))
             .ToList();
+    }
+
+    /// <summary>An entry's minutes on each day it covers, for views that split work at midnight (the project timeline).</summary>
+    public static IReadOnlyList<DayTotal> SplitByDay(DateTime localStart, int minutes)
+    {
+        var parts = new List<DayTotal>();
+        var at = localStart;
+        var left = minutes;
+        while (left > 0)
+        {
+            var untilMidnight = (int)(at.Date.AddDays(1) - at).TotalMinutes;
+            var part = Math.Min(left, untilMidnight);
+            parts.Add(new DayTotal(DateOnly.FromDateTime(at), part));
+            at = at.AddMinutes(part);
+            left -= part;
+        }
+
+        return parts;
+    }
+
+    /// <summary>Runs of <see cref="MinGapDays"/> or more days between <paramref name="from"/> and <paramref name="to"/> with no work.</summary>
+    public static IReadOnlyList<Gap> Gaps(IReadOnlySet<DateOnly> workedDays, DateOnly from, DateOnly to)
+    {
+        var gaps = new List<Gap>();
+        DateOnly? start = null;
+        for (var day = from; day <= to.AddDays(1); day = day.AddDays(1))
+        {
+            var quiet = day <= to && !workedDays.Contains(day);
+            if (quiet)
+            {
+                start ??= day;
+            }
+            else if (start is { } s)
+            {
+                var days = day.DayNumber - s.DayNumber;
+                if (days >= MinGapDays)
+                {
+                    gaps.Add(new Gap(s, day.AddDays(-1), days));
+                }
+
+                start = null;
+            }
+        }
+
+        return gaps;
     }
 }
