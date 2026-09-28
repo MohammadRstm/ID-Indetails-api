@@ -47,6 +47,12 @@ The Compose project name is pinned (`name: id-indetails`), so this stack's conta
 
 If 3308 is ever taken, change `MYSQL_HOST_PORT` in `.env`. Only the host-side port changes.
 
+## Email (Mailpit)
+
+`docker compose up -d` also starts **Mailpit**, a local mail catcher. The API sends invitation and password emails to it over SMTP on `127.0.0.1:1025`. They never reach real inboxes. Read them in the Mailpit web inbox at **http://127.0.0.1:8025**.
+
+To change the ports, set `MAILPIT_SMTP_PORT` / `MAILPIT_UI_PORT` in `.env`, and update the API's `Email:Port` to match.
+
 ### Useful commands
 
 ```bash

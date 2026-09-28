@@ -1,0 +1,59 @@
+using ID_Indetails.api.Configuration.Options;
+using ID_Indetails.api.Repositories.Auth.Abstraction;
+using ID_Indetails.api.Repositories.Auth.Implementation;
+using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Common.Implementation;
+using ID_Indetails.api.Repositories.Invitations.Abstraction;
+using ID_Indetails.api.Repositories.Invitations.Implementation;
+using ID_Indetails.api.Repositories.Teams.Abstraction;
+using ID_Indetails.api.Repositories.Teams.Implementation;
+using ID_Indetails.api.Services.Auth.Abstraction;
+using ID_Indetails.api.Services.Auth.Implementation;
+using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Common.Implementation;
+using ID_Indetails.api.Services.Email.Abstraction;
+using ID_Indetails.api.Services.Email.Implementation;
+using ID_Indetails.api.Services.Invitations.Abstraction;
+using ID_Indetails.api.Services.Invitations.Implementation;
+using ID_Indetails.api.Services.Setup.Abstraction;
+using ID_Indetails.api.Services.Setup.Implementation;
+
+namespace ID_Indetails.api.Extensions;
+
+public static class ApplicationServiceCollectionExtensions
+{
+    /// <summary>Repositories, services and their settings.</summary>
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    {
+        services.AddOptions<CompanyOptions>().BindConfiguration(CompanyOptions.SectionName)
+            .ValidateDataAnnotations()
+            .Validate(o => TimeZoneInfo.TryFindSystemTimeZoneById(o.TimeZone, out _), "Company:TimeZone is not a known time zone.")
+            .ValidateOnStart();
+        services.AddOptions<InvitationOptions>().BindConfiguration(InvitationOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<FrontendOptions>().BindConfiguration(FrontendOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+
+        services.AddMemoryCache();
+        services.AddSingleton<IClock, SystemClock>();
+
+        // Repositories
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IPermissionRepository, PermissionRepository>();
+        services.AddScoped<IInvitationRepository, InvitationRepository>();
+        services.AddScoped<ITeamRepository, TeamRepository>();
+
+        // Services
+        services.AddSingleton<IPasswordService, PasswordService>();
+        services.AddSingleton<IAccessTokenService, AccessTokenService>();
+        services.AddScoped<IPermissionService, PermissionService>();
+        services.AddScoped<ISessionService, SessionService>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IInvitationService, InvitationService>();
+        services.AddScoped<ISetupService, SetupService>();
+        services.AddSingleton<IEmailSender, SmtpEmailSender>();
+
+        return services;
+    }
+}
