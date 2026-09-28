@@ -70,3 +70,16 @@ Rules (`Business/Statements/StatementRules.cs`):
 - **Numbers** are `ST-YYYY-NNN`, one sequence per year across the company, taken from `statement_sequences` under a row lock so a number is never handed out twice. A preview doesn't use one up. Statements can be made while a site is on hold or finalised.
 - The server records sends but doesn't email the statement; the client produces the PDF.
 - Events: `statement_created` and `statement_sent` (the statement's total in the `amount` column; the number, and the mode or channel, in the payload).
+
+## Site staff views
+
+Site staff don't log hours; what they record on site stands in for it.
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/site-summary?ids=1&ids=2` | `project:view` | One card per site among the ids (1–100, typically a page of the project list): material count and cost, reported weeks, ground labour, and when the caller last recorded something there. Projects the caller can't see and Design projects are left out |
+| `GET /api/me/site-records` | `material:create`, `material:manage`, `labour_report:create` or `labour_report:manage` | What the caller recorded |
+| `GET /api/employees/{userId}/site-records` | `employee:view` | What someone recorded. People of a domain the caller can't see read as `404` |
+
+- **Cards:** material cost and ground labour come from the shared finance calculator (in USD).
+- **Records** (`Business/Execution/SiteRecords.cs`): the materials a person added (dated by when they were added) and the labour weeks they submitted (dated by when they were submitted, valued at the week's total), on sites the caller can see. The response has the totals, this calendar quarter's value, the days with anything recorded, the last 16 weeks (oldest first, ending with the current one), a row per site (most recently recorded first) and the 20 latest records.
