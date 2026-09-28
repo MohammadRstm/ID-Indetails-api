@@ -37,9 +37,27 @@ The database is the second line of defence. The API must still filter every quer
 | Clients | `clients`, `client_contacts` |
 | Projects | `projects`, `project_members`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses` |
 | Design work | `work_entries`, `work_entry_comments` |
-| Execution site costs | `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults` |
+| Execution site costs and pricing | `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `client_statements`, `client_statement_lines`, `client_statement_deliveries`, `statement_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
+| Working time and hours ledger | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days` |
 | Company layer | `overhead_items`, `overhead_amounts`, `company_settings`, `domain_settings` |
+
+## Execution pricing
+
+An Execution project has a fixed **project fee** and a default **material markup** (`projects.project_fee`, `projects.material_markup`, 0–500%). Design projects have neither.
+
+- **Client price of a material:** `project_materials.client_price` when someone set it by hand. Otherwise it is calculated as cost × (1 + markup), and never stored.
+- **Material cost:** quantity × unit cost when both are known, otherwise the lump-sum `amount`. The generated `total` column holds whichever applies.
+- **Agreed amount:** the material client prices plus the project fee. It is calculated live while the project is open. Finalising writes the frozen amount into `projects.revenue`.
+- **Ground labour is never billed.** The fee and the markup cover it.
+- **Client statements** are immutable snapshots of materials supplied and payments received, numbered `ST-YYYY-NNN`. A material that appears on a statement is *stated*, and it can't be deleted while that statement exists.
+
+## Working time
+
+- **The company working week** (days, start and end), the **break** and the **overtime multiplier** live in `working_time_policies`. Each row is dated, and the row in force on a day is the latest with `effective_from` on or before it. A change never rewrites past months. The seed row is Monday–Friday, 09:00–17:00, a 60-minute break and a 1× multiplier.
+- **The break is paid.** It only reduces the hours required on a day longer than 6 hours, never pay: a 9–5 day requires 7 hours and pays 8.
+- **Personal schedules** (`user_schedules` with their `user_schedule_days`) override the company days and hours for one person from a date onward. A weekday with no row is a day off, and a row with `follows_default` returns the person to the company week.
+- **Excuses** (`hour_excuses`) cover minutes, specific days or a whole month in a person's hours ledger. They are paid unless `is_paid` is false.
 | Activity, messaging, files | `activity_events`, `notifications`, `conversations`, `messages`, `message_mentions`, `message_attachments`, `conversation_reads`, `files`, `user_board_layouts` |
 
 ## Accounts and sign-in
@@ -57,6 +75,13 @@ Super admins may invite anyone into either domain (including other super admins)
 - A super admin has no domain; everyone else has exactly one.
 - An active user has a password and a name.
 - Internal projects have no client and zero revenue; revenue is never negative; progress is 0–100.
+- Execution projects are always client work and always have a fee and a material markup (0–500%); Design projects have neither.
+- A material has either quantity and unit cost or a lump-sum amount; its client price is never negative.
+- No labour day falls on a Sunday.
+- At most one live (not voided) initial payment per project.
+- A statement lists each material once; a stated material cannot be deleted.
+- Working-time policies have valid hours (0–1440, start before end), at least one working day, and a break shorter than the day; one policy per effective date. Personal schedule days are single spans within a day, one change per person per date.
+- An excuse belongs to a month (first day of the month) and carries minutes exactly when it is a "minutes" excuse.
 - A project's client belongs to the same domain.
 - A work entry ends after it starts; a meeting ends after it starts.
 - Pay, labour defaults, overhead amounts and exchange rates are dated: one row per effective date.
@@ -80,7 +105,13 @@ These are calculated by the API from the tables above, so they can never drift:
 - Group chat membership
 - Unread counts
 
-Three values are computed **by MySQL** as stored generated columns: `work_entries.duration_minutes`, `project_materials.total` and `labour_week_days.cost`.
+Also derived: required hours per day, overtime (outside a person's hours, on days off, and beyond the day's required hours), the monthly hours ledger (expected, short, made up, flagged), paid breaks, shortfall deductions, project pay, "my pay", and in Execution the automatic material client prices, the agreed amount, what is owed or paid ahead, and cash and expected profit.
+
+These are computed **by MySQL** as stored generated columns:
+- `work_entries.duration_minutes`
+- `project_materials.total`
+- `labour_week_days.cost`
+- `payments.initial_for_project_id`, which backs the one-live-initial-payment rule
 
 One value is a deliberate cache: `projects.progress_pct` (done ÷ total requirements). It is updated in the same transaction as every requirement change, which also writes a `progress_set` event.
 
@@ -92,6 +123,8 @@ The initial migration seeds:
 - **`permissions` and `role_permissions`:** from `Constants/PermissionCatalog.cs`.
 
 Permission and role strings match the React client's `config/permissions.ts` and `config/roles.ts`.
+
+The `ExecutionPricingAndWorkingTime` migration adds the default working-time policy row.
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
