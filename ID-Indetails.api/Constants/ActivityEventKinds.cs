@@ -64,4 +64,12 @@ public static class ActivityEventKinds
 
     // Billing
     public const string BillingSettingsUpdated = "billing_settings_updated";
+
+    // Invoices (subject: the invoice; project_id is set; the total in the amount column)
+    public const string InvoiceCreated = "invoice_created";
+    public const string InvoiceUpdated = "invoice_updated";
+    public const string InvoiceDiscarded = "invoice_discarded";
+    public const string InvoiceIssued = "invoice_issued";
+    public const string InvoiceSent = "invoice_sent";
+    public const string InvoiceVoided = "invoice_voided";
 }

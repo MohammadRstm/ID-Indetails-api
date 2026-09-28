@@ -35,4 +35,15 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
         ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<ProjectResponse>();
     }
+
+    /// <summary>Billing settings with 45-day terms, prefix HL for Design and EX for Execution.</summary>
+    public async Task SetUpBillingAsync(string accessToken, string domain)
+    {
+        var response = await Client.PutJsonAsync($"/api/billing-settings/{domain}", new
+        {
+            invoicePrefix = domain == DomainCodes.Execution ? "EX" : "HL",
+            defaultTermsDays = 45,
+        }, accessToken);
+        ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+    }
 }

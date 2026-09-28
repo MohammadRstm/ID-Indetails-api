@@ -68,6 +68,12 @@ public static class ErrorCodes
     // Billing
     public const string BillingSettingsMissing = "billing_settings_missing";
     public const string InvoicePrefixTaken = "invoice_prefix_taken";
+    public const string ProjectNotBillable = "project_not_billable";
+    public const string InvoiceNotDraft = "invoice_not_draft";
+    public const string InvoiceNotIssued = "invoice_not_issued";
+    public const string InvoiceVoided = "invoice_voided";
+    public const string InvoiceHasPayments = "invoice_has_payments";
+    public const string IssueDateInFuture = "issue_date_in_future";
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
