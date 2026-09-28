@@ -3,8 +3,10 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.WorkEntries;
+using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ID_Indetails.api.Controllers;
 
@@ -21,6 +23,19 @@ public sealed class WorkEntriesController(
     [HasPermission(PermissionCodes.WorkEntryViewAll)]
     public Task<PagedResponse<WorkEntryResponse>> List([FromQuery] WorkEntryListQuery query, CancellationToken cancellationToken)
         => workEntryQueryService.ListAsync(query, cancellationToken);
+
+    /// <summary>
+    /// Everyone's matching entries as a CSV timesheet, oldest first. The hourly rate, currency and labour cost
+    /// columns are only included for callers with financial:view.
+    /// </summary>
+    [HttpGet("export")]
+    [HasPermission(PermissionCodes.WorkEntryViewAll)]
+    [EnableRateLimiting(RateLimitPolicies.Export)]
+    public async Task<IActionResult> Export([FromQuery] WorkEntryListQuery query, CancellationToken cancellationToken)
+    {
+        var export = await workEntryQueryService.ExportAsync(query, cancellationToken);
+        return File(export.Content, "text/csv; charset=utf-8", export.FileName);
+    }
 
     /// <summary>An entry with its comments and the same person's other entries on the project that day.</summary>
     [HttpGet("{id:long}")]

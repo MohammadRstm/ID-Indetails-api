@@ -1,10 +1,14 @@
+using System.Globalization;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -23,6 +27,7 @@ public sealed class WorkEntryQueryService(
     IWorkEntryRepository entries,
     IWorkEntryCommentRepository comments,
     IDomainSettingsService domainSettings,
+    IProjectFinanceRepository financeSources,
     IClock clock) : IWorkEntryQueryService
 {
     public async Task<PagedResponse<WorkEntryResponse>> ListAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
@@ -65,6 +70,73 @@ public sealed class WorkEntryQueryService(
                     c.Id, new WorkEntryCommentAuthorResponse(c.AuthorId, c.AuthorName, c.AuthorRole), c.Body, c.SentToGroup, c.CreatedAt))
                 .ToList(),
             sameDay.Where(e => e.Id != id).Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList());
+    }
+
+    public async Task<WorkEntryExport> ExportAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
+    {
+        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        var rows = actor.CanSee(DomainCodes.Design)
+            ? await entries.ListAsync(
+                new WorkEntrySearch(query.UserId, query.ProjectId, query.ClientId, DayStart(query.From), DayEnd(query.To), query.Search),
+                cancellationToken)
+            : [];
+
+        var userIds = rows.Select(e => e.UserId).Distinct().ToList();
+        var people = (await entries.PeopleAsync(userIds, cancellationToken)).ToDictionary(p => p.Id);
+        var calendar = await entries.CompanyCalendarAsync(cancellationToken);
+        var withMoney = actor.Has(PermissionCodes.FinancialView);
+        var rates = withMoney
+            ? (await financeSources.PayRatesAsync(userIds, cancellationToken))
+                .GroupBy(r => r.UserId)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<ProjectFinance.PayRate>)g.OrderBy(r => r.EffectiveFrom).ToList())
+            : [];
+
+        var header = new List<string> { "Date", "Weekday", "Start", "End", "Hours", "Employee", "Email", "Team", "Project", "Client", "Task" };
+        if (withMoney)
+        {
+            header.AddRange(["Hourly rate", "Currency", "Labour cost"]);
+        }
+
+        header.Add("Entry id");
+        var timeFormat = calendar.Use24HourTime ? "HH:mm" : "h:mm tt";
+        var lines = rows.Select(e =>
+        {
+            var start = clock.ToCompanyTime(e.StartedAt);
+            var person = people.GetValueOrDefault(e.UserId);
+            var line = new List<string>
+            {
+                start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                start.ToString("ddd", CultureInfo.InvariantCulture),
+                start.ToString(timeFormat, CultureInfo.InvariantCulture),
+                clock.ToCompanyTime(e.EndedAt).ToString(timeFormat, CultureInfo.InvariantCulture),
+                (e.Minutes / 60m).ToString("0.00", CultureInfo.InvariantCulture),
+                e.UserName,
+                person?.Email ?? string.Empty,
+                person?.TeamName ?? string.Empty,
+                e.ProjectTitle,
+                e.ClientName ?? "Internal",
+                e.Description,
+            };
+
+            if (withMoney)
+            {
+                var rate = rates.TryGetValue(e.UserId, out var history) ? ProjectFinance.RateOn(history, DateOnly.FromDateTime(start)) : null;
+                line.AddRange(rate is null
+                    ? ["", "", ""]
+                    : [
+                        rate.HourlyCost.ToString("0.00", CultureInfo.InvariantCulture),
+                        rate.Currency,
+                        Math.Round(e.Minutes / 60m * rate.HourlyCost, 2, MidpointRounding.AwayFromZero).ToString("0.00", CultureInfo.InvariantCulture),
+                    ]);
+            }
+
+            line.Add(e.Id.ToString(CultureInfo.InvariantCulture));
+            return (IReadOnlyList<string>)line;
+        });
+
+        var from = query.From?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "start";
+        var to = (query.To ?? clock.CompanyToday).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return new WorkEntryExport($"work-entries-{from}-to-{to}.csv", Csv.Write(header, lines));
     }
 
     /// <summary>Whether the caller may read this entry: anyone's with view_all, their own with view_own.</summary>

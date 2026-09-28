@@ -25,4 +25,8 @@ public sealed class RateLimitOptions
     /// <summary>Super-admin setup: requests per IP per hour.</summary>
     [Range(1, 10_000)]
     public int SetupPermitsPerHour { get; init; } = 5;
+
+    /// <summary>File exports: requests per signed-in user per minute.</summary>
+    [Range(1, 10_000)]
+    public int ExportPermitsPerMinute { get; init; } = 10;
 }

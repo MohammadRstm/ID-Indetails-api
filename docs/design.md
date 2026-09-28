@@ -34,6 +34,7 @@ Features of the Design domain: domain settings, work entries, comments, meetings
 | `POST /api/work-entries/{id}/restore` | `work_entry:create` | Undoes a delete |
 | `GET /api/work-entries?from=&to=&projectId=&userId=&clientId=&search=&page=1&pageSize=25` | `work_entry:view_all` | Everyone's Design entries, newest first |
 | `GET /api/me/work-entries?from=&to=&projectId=&search=&page=1&pageSize=25` | `work_entry:view_own` | The caller's entries, newest first |
+| `GET /api/work-entries/export?from=&to=&projectId=&userId=&clientId=&search=` | `work_entry:view_all` | The matching entries as a CSV timesheet (below) |
 | `GET /api/work-entries/{id}` | `work_entry:view_all`, or `work_entry:view_own` for your own | The entry, its comments, and the same person's other entries on the project that day |
 
 People log, edit, delete and restore only their **own** entries; anyone else's reads as `404`, whatever the caller may view. The rules are in `Business/WorkEntries/WorkEntryRules.cs`:
@@ -60,6 +61,8 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 | `off` | Nothing |
 
 **Reading:** `from` and `to` are company-time-zone days, both inclusive, matched on the start time. `search` matches the description or project title (every word). Each entry carries the person, the project, `minutes`, `commentCount` and `canEdit`.
+
+**CSV export** (`work-entries-<from>-to-<to>.csv`): UTF-8 with a byte-order mark and CRLF line ends, oldest first, one row per entry. Columns: Date, Weekday, Start, End (company time zone, in the company's 12- or 24-hour format), Hours (2 decimals), Employee, Email, Team, Project, Client (`Internal` for internal projects), Task, then **Hourly rate, Currency, Labour cost** only for callers with `financial:view`, then Entry id. The rate is the person's hourly cost in force on the day worked, in its own currency (`ProjectFinance.RateOn`, the same rule as project cost); the cost is hours × rate, rounded to cents. The overtime column comes once the working-time engine exists. Exports use the `export` rate-limit policy: 10 a minute per user (`RateLimiting:ExportPermitsPerMinute`).
 
 ## Comments
 

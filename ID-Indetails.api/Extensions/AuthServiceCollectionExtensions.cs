@@ -87,6 +87,10 @@ public static class AuthServiceCollectionExtensions
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.SetupPermitsPerHour, Window = TimeSpan.FromHours(1) }));
 
+            options.AddPolicy(RateLimitPolicies.Export, context => RateLimitPartition.GetFixedWindowLimiter(
+                "user:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => PerMinute(limits.ExportPermitsPerMinute)));
+
             options.OnRejected = (context, cancellationToken) => new ValueTask(ApiErrorWriter.WriteAsync(
                 context.HttpContext,
                 ErrorType.RateLimited,

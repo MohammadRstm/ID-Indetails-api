@@ -8,4 +8,7 @@ public static class RateLimitPolicies
 
     /// <summary>The developer-only setup endpoint.</summary>
     public const string Setup = "setup";
+
+    /// <summary>File exports: heavier than a normal read, limited per user.</summary>
+    public const string Export = "export";
 }

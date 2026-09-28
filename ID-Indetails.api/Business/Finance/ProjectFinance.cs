@@ -72,12 +72,16 @@ public static class ProjectFinance
                 continue;
             }
 
-            var rate = history.LastOrDefault(r => r.EffectiveFrom <= w.Day) ?? history[0];
+            var rate = RateOn(history, w.Day);
             items.Add(new CostItem(CostSource.Labour, rate.Currency, w.Minutes / 60m * rate.HourlyCost, w.Day));
         }
 
         return (items, unpriced);
     }
+
+    /// <summary>The rate in force on the day, from a person's history ordered by date; their earliest rate for days before it.</summary>
+    public static PayRate RateOn(IReadOnlyList<PayRate> history, DateOnly day)
+        => history.LastOrDefault(r => r.EffectiveFrom <= day) ?? history[0];
 
     public static Costs ToUsd(IEnumerable<CostItem> items, ExchangeRateTable rates)
     {

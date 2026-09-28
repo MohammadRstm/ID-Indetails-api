@@ -66,6 +66,28 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .Select(e => new WorkRow(e.Id, e.UserId, e.ProjectId, e.StartedAt, e.EndedAt, e.DurationMinutes, e.CreatedAt))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
+    {
+        var rows = await db.Users
+            .AsNoTracking()
+            .Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, TeamName = u.Team != null ? u.Team.Name : null })
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(u => new WorkPerson(u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.Email, u.TeamName)).ToList();
+    }
+
+    public async Task<CompanyCalendar> CompanyCalendarAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = await db.CompanySettings.AsNoTracking()
+            .Select(c => new { c.WeekStart, c.Use24HourTime })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return settings is null
+            ? new CompanyCalendar(DayOfWeek.Monday, false)
+            : new CompanyCalendar(settings.WeekStart == 0 ? DayOfWeek.Sunday : DayOfWeek.Monday, settings.Use24HourTime);
+    }
+
     public async Task<IReadOnlyList<long>> PeopleWhoMayHoldAsync(
         string domainCode,
         string permissionCode,

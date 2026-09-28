@@ -12,4 +12,9 @@ public interface IWorkEntryQueryService
     Task<PagedResponse<WorkEntryResponse>> ListMineAsync(MyWorkEntryListQuery query, CancellationToken cancellationToken = default);
 
     Task<WorkEntryDetailResponse> GetAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>Everyone's matching entries as CSV, oldest first, ignoring paging.</summary>
+    Task<WorkEntryExport> ExportAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default);
 }
+
+public sealed record WorkEntryExport(string FileName, byte[] Content);

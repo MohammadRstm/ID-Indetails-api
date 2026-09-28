@@ -40,6 +40,11 @@ public sealed record WorkEntrySearch(
 /// <summary>The few fields totals and charts are calculated from.</summary>
 public sealed record WorkRow(long Id, long UserId, long ProjectId, DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt);
 
+public sealed record WorkPerson(long Id, string Name, string Email, string? TeamName);
+
+/// <param name="FirstDayOfWeek">Monday unless the company settings say Sunday.</param>
+public sealed record CompanyCalendar(DayOfWeek FirstDayOfWeek, bool Use24HourTime);
+
 public interface IWorkEntryRepository
 {
     /// <summary>
@@ -71,6 +76,12 @@ public interface IWorkEntryRepository
 
     /// <summary>Every matching entry's totals fields, ignoring the search's text and paging. Not tracked.</summary>
     Task<IReadOnlyList<WorkRow>> RowsAsync(WorkEntrySearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>Names, emails and teams of the given people. Not tracked.</summary>
+    Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>The company's week start and clock format, or Monday and 12-hour time before the company settings exist.</summary>
+    Task<CompanyCalendar> CompanyCalendarAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Active people who might hold <paramref name="permissionCode"/> in the domain: its members, super admins,
