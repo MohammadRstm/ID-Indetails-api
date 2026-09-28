@@ -1,4 +1,3 @@
-using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 
@@ -24,9 +23,6 @@ public interface IProjectRepository
 
     /// <summary>Tracked, and locked (<c>SELECT … FOR UPDATE</c>) until the transaction ends. Call inside a transaction.</summary>
     Task<Project?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default);
-
-    /// <summary>The project's live materials recorded in <paramref name="currency"/>, for pricing.</summary>
-    Task<IReadOnlyList<ExecutionPricing.Material>> GetMaterialsAsync(long projectId, string currency, CancellationToken cancellationToken = default);
 
     /// <summary>Whether any invoice or payment (voided ones included) was made for the project.</summary>
     Task<bool> HasBillingRecordsAsync(long projectId, CancellationToken cancellationToken = default);

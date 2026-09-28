@@ -11,6 +11,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Services.Projects.Implementation;
@@ -23,6 +24,7 @@ public sealed class ProjectStatusService(
     IRequirementRepository requirements,
     IProjectProgress progress,
     IProjectService projectService,
+    IProjectFinanceService finance,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectStatusService
@@ -83,8 +85,16 @@ public sealed class ProjectStatusService(
     {
         if (project.DomainCode == DomainCodes.Execution)
         {
-            var materials = await projects.GetMaterialsAsync(project.Id, project.RevenueCurrency, cancellationToken);
-            project.Revenue = ExecutionPricing.AgreedAmount(materials, project.MaterialMarkup ?? 0, project.ProjectFee ?? 0);
+            // The agreed amount is frozen here, so it must include every material.
+            var money = await finance.GetAsync(project, cancellationToken);
+            if (money.UnconvertedMaterials > 0)
+            {
+                throw new BusinessRuleException(
+                    ErrorCodes.ExchangeRateMissing,
+                    $"{money.UnconvertedMaterials} material(s) have no exchange rate for the day they were added. Add the rate, then finalise.");
+            }
+
+            project.Revenue = money.Summary.Revenue;
         }
 
         project.CompletedAt = now;

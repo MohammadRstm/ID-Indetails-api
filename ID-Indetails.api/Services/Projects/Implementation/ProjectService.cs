@@ -25,6 +25,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Services.Projects.Implementation;
@@ -39,6 +40,7 @@ public sealed class ProjectService(
     IExpenseRepository expenses,
     IPaymentRepository payments,
     IPaymentService paymentService,
+    IProjectFinanceService finance,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectService
@@ -318,36 +320,44 @@ public sealed class ProjectService(
 
     private async Task<ProjectMoneyResponse> MoneyOfAsync(Project p, CancellationToken cancellationToken)
     {
-        var locked = p.RevenueLockedAt is not null;
+        var money = await finance.GetAsync(p, cancellationToken);
+        var summary = money.Summary;
+        var costs = money.Costs;
         var expenseTotals = ExpenseRules.Totals(await expenses.AmountsAsync(p.Id, cancellationToken))
             .Select(t => new CurrencyTotalResponse(t.Currency, t.Total))
             .ToList();
 
-        var revenue = p.Revenue;
-        decimal? materialCharge = null;
-        if (p.DomainCode == DomainCodes.Execution)
-        {
-            var materials = await projects.GetMaterialsAsync(p.Id, p.RevenueCurrency, cancellationToken);
-            var markup = p.MaterialMarkup ?? 0;
-            materialCharge = ExecutionPricing.MaterialCharge(materials, markup);
-            revenue = locked ? p.Revenue : ExecutionPricing.AgreedAmount(materials, markup, p.ProjectFee ?? 0);
-        }
-
         var (received, onAccount) = await payments.ProjectTotalsAsync(p.Id, cancellationToken);
-        var billing = ProjectBilling.Summarise(revenue, await payments.IssuedInvoicesAsync(p.Id, cancellationToken), received, onAccount);
+        var billing = ProjectBilling.Summarise(
+            summary.Revenue, await payments.IssuedInvoicesAsync(p.Id, cancellationToken), received, onAccount);
 
         return new ProjectMoneyResponse
         {
             Currency = p.RevenueCurrency,
-            Revenue = revenue,
-            IsLocked = locked,
+            Revenue = summary.Revenue,
+            IsLocked = p.RevenueLockedAt is not null,
             ProjectFee = p.ProjectFee,
             MaterialMarkup = p.MaterialMarkup,
-            MaterialCharge = materialCharge,
+            MaterialCharge = money.MaterialCharge,
             ExpenseTotals = expenseTotals,
             Billing = new ProjectBillingResponse(
                 billing.Invoiced, billing.Outstanding, billing.Received, billing.OnAccount,
                 billing.NotYetInvoiced, billing.Owed, billing.PaidAhead),
+            Cost = new ProjectCostResponse(
+                costs.Labour, costs.Expenses, costs.Materials, costs.GroundLabour, costs.Total,
+                costs.Unconverted.Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount)).ToList(),
+                money.UnpricedLabourMinutes),
+            Profit = summary.Profit,
+            Margin = summary.Margin,
+            RecognisedToDate = summary.RecognisedToDate,
+            Projected = summary.Projected is { } projected
+                ? new ProjectProjectionResponse(projected.Cost, projected.Profit, projected.Margin)
+                : null,
+            LabourHours = Math.Round(money.LabourMinutes / 60m, 2),
+            CostPerHour = summary.CostPerHour,
+            CashProfit = money.CashProfit,
+            MaterialProfit = money.MaterialProfit,
+            UnconvertedMaterials = money.UnconvertedMaterials,
         };
     }
 

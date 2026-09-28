@@ -98,7 +98,7 @@ Who may invite whom is decided by permissions (`employee:invite`, `employee:invi
 These are calculated by the API from the tables above, so they can never drift:
 
 - Invoice status and balances
-- Project cost, profit and margin
+- Project cost, profit and margin (`Business/Finance/ProjectFinance.cs`, see [projects.md](projects.md))
 - Revenue recognised
 - Overtime
 - Salaries owed
