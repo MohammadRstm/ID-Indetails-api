@@ -1,4 +1,6 @@
 using ID_Indetails.api.Configuration.Options;
+using ID_Indetails.api.Repositories.Activity.Abstraction;
+using ID_Indetails.api.Repositories.Activity.Implementation;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Implementation;
 using ID_Indetails.api.Repositories.Common.Abstraction;
@@ -15,6 +17,8 @@ using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Invitations.Implementation;
+using ID_Indetails.api.Services.Permissions.Abstraction;
+using ID_Indetails.api.Services.Permissions.Implementation;
 using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
 
@@ -43,6 +47,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPermissionRepository, PermissionRepository>();
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
+        services.AddScoped<IActivityEventRepository, ActivityEventRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -51,6 +56,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IInvitationService, InvitationService>();
+        services.AddScoped<IPermissionManagementService, PermissionManagementService>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
