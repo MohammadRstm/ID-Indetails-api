@@ -11,4 +11,12 @@ public static class RuleDenialExtensions
         DenialKind.Validation => new RequestValidationException(denial.Code, denial.Field ?? "request", denial.Message),
         _ => new BusinessRuleException(denial.Code, denial.Message),
     };
+
+    public static void ThrowIfDenied(this RuleDenial? denial)
+    {
+        if (denial is not null)
+        {
+            throw denial.ToException();
+        }
+    }
 }
