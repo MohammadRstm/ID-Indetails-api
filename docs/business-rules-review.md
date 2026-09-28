@@ -16,6 +16,14 @@ This file records the business decisions taken at the same time, so they're appl
 | 6 | **The initial payment is flagged** with `payments.is_initial`, not recognised from its note text. At most one live initial payment per project. | Schema (generated column + unique index) |
 | 7 | **Labour defaults are admin-only** (`labour_report:manage`), per the permission catalogue. *(The prototype lets employees change them; the backend won't.)* | API / permissions |
 | 8 | **One company-wide working week**, editable by super admins only (`working_time:manage`). People with different hours get a personal schedule (`schedule:manage`, super admins). Excusing hours is also super-admin only (`hours:excuse`). | Permissions |
+| 9 | **Working-time and schedule changes start today or later**, never in the past, so closed months never change. A change dated in the future may be replaced before it starts. | API |
+| 10 | **A missed working day deducts the full paid day.** In a closed month, each whole working day with no in-hours work and no excuse deducts required hours plus the break (8h on a 9–5 day) from salaried pay. Any other shortfall deducts the missing hours. | Payroll calculation |
+| 11 | **Made-up overtime** comes from all of the month's overtime, in date order (as in the prototype). | Payroll calculation |
+| 12 | **Salaries are always calculated.** No month-close snapshot for now. | Payroll calculation |
+| 13 | **Mid-month joiners are pro-rated on their own working days** (personal schedule, otherwise the company week), not a fixed Monday–Friday. Everyone's hourly equivalent stays salary ÷ 173.33. | Payroll calculation |
+| 14 | **The hours ledger** applies to Design employees only, from the month they joined. Admins and Execution staff have none. | Payroll calculation |
+| 15 | **The Salaries page lists everyone with a pay record**, admins included. Super admins appear only if they have pay. | API |
+| 16 | **Company overhead:** amount changes are dated (past months keep their cost), totals are kept per currency, and "cancel" ends a line at the end of the current month. It can be resumed only before that date passes; after that, a new line is added. | API |
 
 ## Carried over from the prototype as-is
 
@@ -43,15 +51,10 @@ This file records the business decisions taken at the same time, so they're appl
 
 These have no decision yet. The schema doesn't depend on them.
 
-1. **Shortfall value:** a missed day deducts 7h (required hours), but a paid day is 8h. Should a missed day also deduct the break?
-2. **Public holidays:** a company holiday calendar, or keep excusing per person?
-3. **Month close:** freeze a month's salary results (a payroll snapshot), or keep them fully calculated?
-4. **Part-time salaried staff:** is their hourly equivalent still salary ÷ 173.33? Should mid-month joiners be pro-rated on Monday–Friday (prototype) or on their own schedule?
-5. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
-6. **Made-up overtime:** should it be taken from all of the month's overtime in date order (prototype), or only overtime worked after the shortfall?
-7. **Project pay and breaks:** should the project pay report include hourly staff's paid breaks? The prototype leaves them out, so it differs from Salaries.
-8. **Hours-ledger start:** from which date does the ledger apply? The prototype uses a demo date. Does it apply to admins who log hours? It never applies to Execution.
-9. **Meetings:** the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
-10. **Manual price equal to the automatic price:** store it as a manual price, or treat it as "automatic" (NULL)?
-11. **Material and labour timing:** costs are dated by when they were recorded (`added_at`, and the labour day). Is a separate delivery date needed?
-12. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?
+1. **Public holidays:** a company holiday calendar, or keep excusing per person?
+2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
+3. **Project pay and breaks:** should the project pay report include hourly staff's paid breaks? The prototype leaves them out, so it differs from Salaries.
+4. **Meetings:** the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
+5. **Manual price equal to the automatic price:** store it as a manual price, or treat it as "automatic" (NULL)?
+6. **Material and labour timing:** costs are dated by when they were recorded (`added_at`, and the labour day). Is a separate delivery date needed?
+7. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?
