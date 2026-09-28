@@ -16,6 +16,8 @@ using ID_Indetails.api.Repositories.Finance.Implementation;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Implementation;
 using ID_Indetails.api.Repositories.Invitations.Abstraction;
+using ID_Indetails.api.Repositories.Materials.Abstraction;
+using ID_Indetails.api.Repositories.Materials.Implementation;
 using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Notifications.Implementation;
 using ID_Indetails.api.Repositories.Invitations.Implementation;
@@ -43,6 +45,10 @@ using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Expenses.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Invitations.Implementation;
+using ID_Indetails.api.Services.Materials.Abstraction;
+using ID_Indetails.api.Services.Materials.Implementation;
+using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Notifications.Implementation;
 using ID_Indetails.api.Services.Permissions.Abstraction;
 using ID_Indetails.api.Services.Permissions.Implementation;
 using ID_Indetails.api.Services.Projects.Abstraction;
@@ -91,6 +97,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IMaterialRepository, MaterialRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -113,6 +120,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IBillingSettingsService, BillingSettingsService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<INotificationRecipients, NotificationRecipients>();
+        services.AddScoped<IMaterialService, MaterialService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

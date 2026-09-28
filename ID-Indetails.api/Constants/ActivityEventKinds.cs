@@ -80,4 +80,12 @@ public static class ActivityEventKinds
     public const string PaymentRecorded = "payment_recorded";
     public const string PaymentApplied = "payment_applied";
     public const string PaymentVoided = "payment_voided";
+
+    // Materials (subject: the material; project_id is set; the cost in the amount columns)
+    public const string MaterialAdded = "material_added";
+    public const string MaterialUpdated = "material_updated";
+    public const string MaterialRemoved = "material_removed";
+
+    /// <summary>A material's client price was set or returned to the markup; new and previous price in the amount columns.</summary>
+    public const string MaterialPriced = "material_priced";
 }

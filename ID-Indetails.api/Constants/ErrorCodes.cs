@@ -84,6 +84,9 @@ public static class ErrorCodes
     public const string RateDateInFuture = "rate_date_in_future";
     public const string RateNotAfterLatest = "rate_not_after_latest";
 
+    // Execution site costs
+    public const string MaterialStated = "material_stated";
+
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
 }

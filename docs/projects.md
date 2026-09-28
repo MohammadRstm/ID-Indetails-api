@@ -1,6 +1,6 @@
 # Projects
 
-A project belongs to one domain. The rules live in `Business/Projects/`. A project of a domain the caller can't see reads as `404`, for every endpoint below.
+A project belongs to one domain. The rules live in `Business/Projects/`. A project of a domain the caller can't see reads as `404`, for every endpoint below. What is recorded on Execution sites (materials, ground labour, client statements) is in [execution.md](execution.md).
 
 ## Endpoints
 
