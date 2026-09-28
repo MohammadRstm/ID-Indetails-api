@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Response.Meetings;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.WorkEntries;
@@ -75,3 +76,6 @@ public sealed record MyProjectWorkResponse(
     IReadOnlyList<WorkEntryResponse> Recent,
     IReadOnlyList<WeekTotalResponse> Weekly,
     IReadOnlyList<TeamActivityResponse> Team);
+
+/// <summary>One company-time-zone day: the caller's entries and the domain's meetings, earliest first. Meetings are not work time.</summary>
+public sealed record MyDayResponse(DateOnly Date, int LoggedMinutes, IReadOnlyList<WorkEntryResponse> Entries, IReadOnlyList<MeetingResponse> Meetings);

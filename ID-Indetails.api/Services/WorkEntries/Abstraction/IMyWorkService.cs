@@ -13,4 +13,7 @@ public interface IMyWorkService
     Task<IReadOnlyList<MyProjectResponse>> MyProjectsAsync(CancellationToken cancellationToken = default);
 
     Task<MyProjectWorkResponse> MyProjectWorkAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>The caller's entries and the domain's meetings on a day (today when not given).</summary>
+    Task<MyDayResponse> MyDayAsync(DateOnly? date, CancellationToken cancellationToken = default);
 }

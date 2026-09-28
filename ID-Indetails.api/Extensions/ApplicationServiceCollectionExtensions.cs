@@ -16,6 +16,8 @@ using ID_Indetails.api.Repositories.Finance.Implementation;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Implementation;
 using ID_Indetails.api.Repositories.Invitations.Abstraction;
+using ID_Indetails.api.Repositories.Meetings.Abstraction;
+using ID_Indetails.api.Repositories.Meetings.Implementation;
 using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Notifications.Implementation;
 using ID_Indetails.api.Repositories.Invitations.Implementation;
@@ -47,6 +49,8 @@ using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Expenses.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Invitations.Implementation;
+using ID_Indetails.api.Services.Meetings.Abstraction;
+using ID_Indetails.api.Services.Meetings.Implementation;
 using ID_Indetails.api.Services.Permissions.Abstraction;
 using ID_Indetails.api.Services.Permissions.Implementation;
 using ID_Indetails.api.Services.Projects.Abstraction;
@@ -102,6 +106,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IDomainSettingsRepository, DomainSettingsRepository>();
         services.AddScoped<IWorkEntryRepository, WorkEntryRepository>();
         services.AddScoped<IWorkEntryCommentRepository, WorkEntryCommentRepository>();
+        services.AddScoped<IMeetingRepository, MeetingRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -130,6 +135,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IWorkEntryQueryService, WorkEntryQueryService>();
         services.AddScoped<IWorkEntryCommentService, WorkEntryCommentService>();
         services.AddScoped<IMyWorkService, MyWorkService>();
+        services.AddScoped<IMeetingService, MeetingService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

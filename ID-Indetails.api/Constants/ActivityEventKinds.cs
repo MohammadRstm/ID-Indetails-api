@@ -71,6 +71,11 @@ public static class ActivityEventKinds
     /// <summary>Subject: the work entry; the comment id in the payload.</summary>
     public const string WorkEntryCommented = "work_entry_commented";
 
+    // Meetings (subject: the meeting; project_id is set; topic and times in the payload)
+    public const string MeetingCreated = "meeting_created";
+    public const string MeetingUpdated = "meeting_updated";
+    public const string MeetingDeleted = "meeting_deleted";
+
     // Billing
     public const string BillingSettingsUpdated = "billing_settings_updated";
 

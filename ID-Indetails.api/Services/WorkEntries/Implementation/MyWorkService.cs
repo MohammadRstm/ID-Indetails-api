@@ -5,10 +5,12 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Repositories.Meetings.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Meetings.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -24,6 +26,7 @@ public sealed class MyWorkService(
     IProjectRepository projects,
     IWorkEntryRepository entries,
     IDomainSettingsService domainSettings,
+    IMeetingRepository meetings,
     IClock clock) : IMyWorkService
 {
     public const int SummaryWeeks = 16;
@@ -123,6 +126,25 @@ public sealed class MyWorkService(
             ToWeeks(WorkStats.Weekly(myWorked, today, WeeksOnProject, calendar.FirstDayOfWeek)),
             all.Where(e => e.UserId != actor.UserId).OrderByDescending(e => e.StartedAt).Take(TeamActivityOnProject)
                 .Select(e => new TeamActivityResponse(e.UserName, e.StartedAt, e.Description)).ToList());
+    }
+
+    public async Task<MyDayResponse> MyDayAsync(DateOnly? date, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var day = date ?? clock.CompanyToday;
+        var from = clock.CompanyDayStartUtc(day);
+        var to = clock.CompanyDayStartUtc(day.AddDays(1));
+        var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
+        var mine = await entries.ListAsync(new WorkEntrySearch(actor.UserId, From: from, To: to), cancellationToken);
+        var domainMeetings = actor.CanSee(DomainCodes.Design)
+            ? await meetings.ListAsync(new MeetingSearch([DomainCodes.Design], From: from, To: to), cancellationToken)
+            : [];
+
+        return new MyDayResponse(
+            day,
+            mine.Sum(e => e.Minutes),
+            mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList(),
+            domainMeetings.Select(MeetingMapper.ToResponse).ToList());
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken) => permissions.GetAccessAsync(currentUser.Id, cancellationToken);

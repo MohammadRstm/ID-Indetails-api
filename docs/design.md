@@ -72,6 +72,7 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 | `GET /api/employees/{userId}/work-summary?from=&to=&projectId=&search=` | `work_entry:view_all` | The same for someone else (their profile). A person of a domain the caller can't see reads as `404` |
 | `GET /api/me/projects` | `work_entry:view_own` | Every active and on-hold Design project, with the caller's own time on it |
 | `GET /api/me/projects/{id}/work` | `work_entry:view_own` | The caller's work on one project and the team's latest entries there |
+| `GET /api/me/day?date=` | `work_entry:view_own` | One day (today by default): the caller's entries and the domain's meetings, earliest first, for the day timeline |
 
 Everything is calculated from the entries on each request (`Business/WorkEntries/WorkStats.cs`); nothing is stored. An entry counts on the company-time-zone day it starts on, and weeks start on the company's week start (`company_settings.week_start`, Monday until the company settings exist).
 
@@ -91,3 +92,23 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 - `sendToGroup` (also post to the author's team group chat) is refused with `422 group_chat_unavailable` until group chats exist.
 - The entry's author gets an `entry_comment` notification (commenter's name, the text and the entry's description), unless they wrote it themselves.
 - Event: `work_entry_commented`, with the entry as the subject and the comment id in the payload.
+
+## Meetings
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/meetings?projectId=&mine=&from=&to=` | `project:view` | Meetings of every project the caller can see, earliest first. `mine=true` keeps those the caller set; `from`/`to` are company days a meeting overlaps |
+| `GET /api/projects/{id}/meetings` | `project:view` | A project's meetings, earliest first |
+| `POST /api/projects/{id}/meetings` | `meeting:manage` | `{ startsAt, endsAt, topic, description }`. Returns `201` |
+| `PUT /api/meetings/{id}` | `meeting:manage` | Moves, resizes or renames a meeting (the same body) |
+| `DELETE /api/meetings/{id}` | `meeting:manage` | Soft delete (`deleted_at`). Returns `204` |
+
+Rules (`Business/Meetings/MeetingRules.cs`):
+
+- Meetings belong to Design projects (`422 not_for_this_domain`) that are active or on hold (`422 project_closed`).
+- Times are UTC instants in whole minutes. A meeting lasts at least 5 minutes and starts and ends on the same company-time-zone day (`400`). Past days are allowed.
+- Topic up to 200 characters, description up to 2000; both optional.
+- A meeting has no attendees: it is a project-wide block. It is not work time and never counts in hours.
+- Events: `meeting_created`, `meeting_updated`, `meeting_deleted`, with the meeting as the subject and its topic and times in the payload.
+
+**Who manages meetings:** for now only holders of `meeting:manage` (Design admins and super admins by default). The prototype also lets employees set meetings and remove their own; that needs a new permission seeded for employees, which is a database change awaiting approval (business-rules-review.md, open question 4).
