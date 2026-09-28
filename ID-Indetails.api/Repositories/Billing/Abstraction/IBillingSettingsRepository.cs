@@ -10,8 +10,14 @@ public interface IBillingSettingsRepository
     /// <summary>Tracked.</summary>
     Task<BillingSettings?> GetForUpdateAsync(string domainCode, CancellationToken cancellationToken = default);
 
-    /// <summary>Whether another domain already numbers its invoices with this prefix.</summary>
+    /// <summary>
+    /// Whether another domain uses this prefix now, or used it on invoices it already numbered
+    /// (reusing it would collide with those numbers).
+    /// </summary>
     Task<bool> PrefixUsedElsewhereAsync(string prefix, string domainCode, CancellationToken cancellationToken = default);
+
+    /// <summary>Serialises billing-settings saves until the transaction ends, so two domains can't take the same prefix at once.</summary>
+    Task LockAllAsync(CancellationToken cancellationToken = default);
 
     void Add(BillingSettings settings);
 }

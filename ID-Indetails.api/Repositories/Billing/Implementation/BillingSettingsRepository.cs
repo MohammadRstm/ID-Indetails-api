@@ -13,8 +13,18 @@ public sealed class BillingSettingsRepository(IdIndetailsDbContext db) : IBillin
     public Task<BillingSettings?> GetForUpdateAsync(string domainCode, CancellationToken cancellationToken = default)
         => db.BillingSettings.SingleOrDefaultAsync(s => s.DomainCode == domainCode, cancellationToken);
 
-    public Task<bool> PrefixUsedElsewhereAsync(string prefix, string domainCode, CancellationToken cancellationToken = default)
-        => db.BillingSettings.AnyAsync(s => s.InvoicePrefix == prefix && s.DomainCode != domainCode, cancellationToken);
+    public async Task<bool> PrefixUsedElsewhereAsync(string prefix, string domainCode, CancellationToken cancellationToken = default)
+    {
+        var numberStart = prefix + "-";
+        return await db.BillingSettings.AnyAsync(s => s.InvoicePrefix == prefix && s.DomainCode != domainCode, cancellationToken)
+            || await db.Invoices.AnyAsync(
+                i => i.Number != null && i.Number.StartsWith(numberStart) && i.Project.DomainCode != domainCode,
+                cancellationToken);
+    }
+
+    // The domain rows always exist, unlike a domain's first billing-settings row.
+    public Task LockAllAsync(CancellationToken cancellationToken = default)
+        => db.Database.ExecuteSqlAsync($"SELECT `code` FROM `domains` FOR UPDATE", cancellationToken);
 
     public void Add(BillingSettings settings) => db.BillingSettings.Add(settings);
 }

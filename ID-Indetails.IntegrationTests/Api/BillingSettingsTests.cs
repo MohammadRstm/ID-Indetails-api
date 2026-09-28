@@ -49,6 +49,24 @@ public class BillingSettingsTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_prefix_the_other_domain_numbered_invoices_with_stays_taken_after_it_changes()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var projects = new ProjectTestSteps(_steps);
+        var project = await projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 5000m);
+        (await Client.PutJsonAsync("/api/billing-settings/design", Settings("PX"), superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        var draft = await (await Client.PostJsonAsync($"/api/projects/{project.Id}/invoices",
+            new { lines = new[] { new { description = "Stage", amount = 1000m } } }, superAdmin.AccessToken)).ReadAsync<InvoiceResponse>();
+        (await Client.PostEmptyAsync($"/api/invoices/{draft.Id}/issue", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        (await Client.PutJsonAsync("/api/billing-settings/design", Settings("PY"), superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        await (await Client.PutJsonAsync("/api/billing-settings/execution", Settings("PX"), superAdmin.AccessToken))
+            .ShouldFailWithAsync(409, ErrorCodes.InvoicePrefixTaken);
+    }
+
+    [Fact]
     public async Task Other_domains_read_as_not_found_and_employees_are_refused()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
