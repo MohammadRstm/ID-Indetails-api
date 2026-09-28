@@ -1941,6 +1941,11 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "exchange_rate:manage",
+                            Description = "Set the company-wide exchange rates used for payments"
+                        },
+                        new
+                        {
                             Code = "employee:view",
                             Description = "View employees and their work"
                         },
@@ -2892,6 +2897,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "super_admin",
                             PermissionCode = "billing_settings:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "exchange_rate:manage"
                         },
                         new
                         {

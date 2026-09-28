@@ -46,6 +46,44 @@ public static class ErrorCodes
     public const string TeamNameTaken = "team_name_taken";
     public const string TeamNotEmpty = "team_not_empty";
 
+    // Clients
+    public const string ContactTaken = "contact_taken";
+    public const string ClientHasProjects = "client_has_projects";
+    public const string ClientAlreadyArchived = "client_already_archived";
+    public const string ClientNotArchived = "client_not_archived";
+
+    // Projects
+    public const string ClientIsArchived = "client_archived";
+    public const string OwnerNotAllowed = "owner_not_allowed";
+    public const string ProjectLocked = "project_locked";
+    public const string ProjectHasBilling = "project_has_billing";
+    public const string NotForThisDomain = "not_for_this_domain";
+    public const string StatusUnchanged = "status_unchanged";
+    public const string InvalidStatusChange = "invalid_status_change";
+
+    // Requirements
+    public const string ProjectClosed = "project_closed";
+    public const string AssigneeNotAllowed = "assignee_not_allowed";
+
+    // Billing
+    public const string BillingSettingsMissing = "billing_settings_missing";
+    public const string InvoicePrefixTaken = "invoice_prefix_taken";
+    public const string ProjectNotBillable = "project_not_billable";
+    public const string InvoiceNotDraft = "invoice_not_draft";
+    public const string InvoiceNotIssued = "invoice_not_issued";
+    public const string InvoiceVoided = "invoice_voided";
+    public const string InvoiceHasPayments = "invoice_has_payments";
+    public const string IssueDateInFuture = "issue_date_in_future";
+    public const string PaymentExceedsBalance = "payment_exceeds_balance";
+    public const string PaymentTooSmall = "payment_too_small";
+    public const string ExchangeRateMissing = "exchange_rate_missing";
+    public const string ReceivedDateInFuture = "received_date_in_future";
+    public const string InitialPaymentExists = "initial_payment_exists";
+    public const string PaymentAlreadyVoided = "payment_already_voided";
+    public const string PaymentAlreadyApplied = "payment_already_applied";
+    public const string RateDateInFuture = "rate_date_in_future";
+    public const string RateNotAfterLatest = "rate_not_after_latest";
+
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
 }
