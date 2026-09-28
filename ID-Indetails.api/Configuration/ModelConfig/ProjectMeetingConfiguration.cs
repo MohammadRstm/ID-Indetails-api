@@ -28,5 +28,10 @@ public class ProjectMeetingConfiguration : IEntityTypeConfiguration<ProjectMeeti
             .WithMany()
             .HasForeignKey(x => x.CreatedById)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.UpdatedById)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

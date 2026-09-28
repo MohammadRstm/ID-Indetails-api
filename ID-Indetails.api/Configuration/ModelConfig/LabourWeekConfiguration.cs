@@ -8,7 +8,7 @@ public class LabourWeekConfiguration : IEntityTypeConfiguration<LabourWeek>
 {
     public void Configure(EntityTypeBuilder<LabourWeek> builder)
     {
-        // WEEKDAY() is 0 for Monday: every report covers a Monday-to-Sunday week.
+        // WEEKDAY() is 0 for Monday: every report covers the site week, Monday to Saturday.
         builder.ToTable("labour_weeks", t =>
             t.HasCheckConstraint("ck_labour_weeks_starts_on_monday", "WEEKDAY(`week_start`) = 0"));
 

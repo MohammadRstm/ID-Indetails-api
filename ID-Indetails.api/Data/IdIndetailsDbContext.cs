@@ -38,6 +38,17 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<LabourWeek> LabourWeeks => Set<LabourWeek>();
     public DbSet<LabourWeekDay> LabourWeekDays => Set<LabourWeekDay>();
     public DbSet<ProjectLabourDefault> ProjectLabourDefaults => Set<ProjectLabourDefault>();
+    public DbSet<ClientStatement> ClientStatements => Set<ClientStatement>();
+    public DbSet<ClientStatementLine> ClientStatementLines => Set<ClientStatementLine>();
+    public DbSet<ClientStatementDelivery> ClientStatementDeliveries => Set<ClientStatementDelivery>();
+    public DbSet<StatementSequence> StatementSequences => Set<StatementSequence>();
+
+    // Working time and the hours ledger
+    public DbSet<WorkingTimePolicy> WorkingTimePolicies => Set<WorkingTimePolicy>();
+    public DbSet<UserSchedule> UserSchedules => Set<UserSchedule>();
+    public DbSet<UserScheduleDay> UserScheduleDays => Set<UserScheduleDay>();
+    public DbSet<HourExcuse> HourExcuses => Set<HourExcuse>();
+    public DbSet<HourExcuseDay> HourExcuseDays => Set<HourExcuseDay>();
 
     // Billing
     public DbSet<Invoice> Invoices => Set<Invoice>();
@@ -96,6 +107,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<ConversationType>(configurationBuilder);
         StoreAsSnakeCase<EditWindow>(configurationBuilder);
         StoreAsSnakeCase<EntryNotificationMode>(configurationBuilder);
+        StoreAsSnakeCase<ExcuseKind>(configurationBuilder);
+        StoreAsSnakeCase<StatementMode>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

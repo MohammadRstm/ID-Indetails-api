@@ -21,7 +21,9 @@ public static class PermissionCatalog
         new(P.ProjectCreate, "Create projects"),
         new(P.ProjectEdit, "Edit project details, owner, client and revenue"),
         new(P.ProjectChangeStatus, "Put projects on hold, complete, reopen or archive them"),
-        new(P.ProjectSetPrice, "Set the cost-plus price of an Execution project", DomainCodes.Execution),
+        new(P.ProjectPricingManage, "Set the project fee, default material markup and material client prices", DomainCodes.Execution),
+        new(P.StatementCreate, "Create client statements of materials supplied", DomainCodes.Execution),
+        new(P.StatementSend, "Send client statements", DomainCodes.Execution),
         new(P.RequirementView, "View project requirements"),
         new(P.RequirementManage, "Add, edit, assign, tick and remove requirements"),
         new(P.MeetingManage, "Record and remove project meetings", DomainCodes.Design),
@@ -62,11 +64,15 @@ public static class PermissionCatalog
         new(P.OverheadManage, "Manage company overhead"),
         new(P.SalaryView, "View what each employee is owed"),
         new(P.CompanySettingsManage, "Edit company-wide settings"),
+        new(P.WorkingTimeManage, "Set the company working week, break and overtime multiplier"),
+        new(P.ScheduleManage, "Set personal work schedules"),
+        new(P.HoursExcuse, "Excuse hours and days off in the hours ledger"),
     ];
 
     private static readonly string[] CompanyOnly =
     [
         P.CompanyView, P.OverheadManage, P.SalaryView, P.CompanySettingsManage,
+        P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse,
     ];
 
     private static readonly string[] EmployeeGrants =

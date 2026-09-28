@@ -24,7 +24,7 @@ public class CompanySettings
 
     public string DefaultCurrency { get; set; } = "USD";
 
-    public decimal OvertimeMultiplier { get; set; } = 1m;
+    // The working week, break and overtime multiplier are dated: see WorkingTimePolicy.
 
     public DateTime? UpdatedAt { get; set; }
 

@@ -12,6 +12,9 @@ public class LabourWeekDayConfiguration : IEntityTypeConfiguration<LabourWeekDay
         {
             t.HasCheckConstraint("ck_labour_week_days_workers_non_negative", "`workers` >= 0");
             t.HasCheckConstraint("ck_labour_week_days_pay_non_negative", "`daily_pay` >= 0");
+
+            // Site weeks run Monday to Saturday: Sunday is never a labour day (WEEKDAY() = 6).
+            t.HasCheckConstraint("ck_labour_week_days_not_sunday", "WEEKDAY(`work_date`) <> 6");
         });
 
         builder.HasKey(x => x.Id);

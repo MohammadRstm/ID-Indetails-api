@@ -11,7 +11,9 @@ public static class PermissionCodes
     public const string ProjectCreate = "project:create";
     public const string ProjectEdit = "project:edit";
     public const string ProjectChangeStatus = "project:change_status";
-    public const string ProjectSetPrice = "project:set_price";
+    public const string ProjectPricingManage = "project:pricing_manage";
+    public const string StatementCreate = "statement:create";
+    public const string StatementSend = "statement:send";
     public const string RequirementView = "requirement:view";
     public const string RequirementManage = "requirement:manage";
     public const string MeetingManage = "meeting:manage";
@@ -59,4 +61,7 @@ public static class PermissionCodes
     public const string OverheadManage = "overhead:manage";
     public const string SalaryView = "salary:view";
     public const string CompanySettingsManage = "company_settings:manage";
+    public const string WorkingTimeManage = "working_time:manage";
+    public const string ScheduleManage = "schedule:manage";
+    public const string HoursExcuse = "hours:excuse";
 }

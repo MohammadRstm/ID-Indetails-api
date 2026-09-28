@@ -14,7 +14,6 @@ public class CompanySettingsConfiguration : IEntityTypeConfiguration<CompanySett
             // Single-company system: the table can physically hold only one row.
             t.HasCheckConstraint("ck_company_settings_single_row", $"`id` = {CompanySettings.SingletonId}");
             t.HasCheckConstraint("ck_company_settings_week_start", "`week_start` IN (0, 1)");
-            t.HasCheckConstraint("ck_company_settings_overtime_multiplier", "`overtime_multiplier` >= 1");
         });
 
         builder.HasKey(x => x.Id);
@@ -25,7 +24,6 @@ public class CompanySettingsConfiguration : IEntityTypeConfiguration<CompanySett
         // The naming convention would produce "use24hour_time".
         builder.Property(x => x.Use24HourTime).HasColumnName("use_24_hour_time");
         builder.Property(x => x.DefaultCurrency).IsCurrencyCode();
-        builder.Property(x => x.OvertimeMultiplier).HasPrecision(4, 2);
 
         builder.HasOne<StoredFile>()
             .WithMany()
