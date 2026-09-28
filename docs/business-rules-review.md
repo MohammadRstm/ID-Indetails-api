@@ -29,6 +29,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 19 | **Unpaid excuses** are deducted from salaried pay: unpaid minutes at the hourly rate, an unpaid day off as the full paid day, an unpaid whole month as the whole salary. | Payroll calculation |
 | 20 | **Hourly staff** are paid for what they log; excuses only clear their shortfall and never add pay. | Payroll calculation |
 | 21 | **Admins who log hours** are paid overtime like employees, without an hours ledger. | Payroll calculation |
+| 22 | **Project pay leaves paid breaks out.** A break isn't worked on any project, so project pay covers logged hours and overtime only, and differs from Salaries for hourly staff by exactly their paid breaks. It needs `salary:view`. | Project pay report |
 
 ## Carried over from the prototype as-is
 
@@ -58,6 +59,5 @@ These have no decision yet. The schema doesn't depend on them.
 
 1. **Public holidays:** a company holiday calendar, or keep excusing per person?
 2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
-3. **Project pay and breaks:** should the project pay report include hourly staff's paid breaks? The prototype leaves them out, so it differs from Salaries.
-4. **Meetings:** the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
-7. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?
+3. **Meetings:** the prototype now has meetings in both domains and lets employees create them, and anyone can drag any meeting on their timeline, while delete is limited to the creator and admins. The permission catalogue still has `meeting:manage` as Design- and admin-only. Who may create, move and delete meetings?
+4. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?
