@@ -96,4 +96,10 @@ public static class ActivityEventKinds
 
     /// <summary>Subject: the project; the new and previous daily pay in the amount columns, the crew sizes in the payload.</summary>
     public const string LabourDefaultsSet = "labour_defaults_set";
+
+    // Client statements (subject: the statement; project and client are set; the statement's total in the amount column)
+    public const string StatementCreated = "statement_created";
+
+    /// <summary>The channel in the payload.</summary>
+    public const string StatementSent = "statement_sent";
 }

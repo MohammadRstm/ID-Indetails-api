@@ -46,3 +46,27 @@ Rules (`Business/Labour/LabourRules.cs`):
 - People change only the weeks they submitted; `labour_report:manage` changes anyone's (`403 forbidden`). `canEdit` says whether the caller may. Everyone who can see the project sees workers and day rates.
 - Events: `labour_week_submitted` and `labour_week_updated` (the week's total, and the previous one, in the amount columns) and `labour_defaults_set` (the daily pay in the amount columns, the crew sizes in the payload).
 - Submitting or updating a week sends a `labour_week_submitted` notification to every active person of the domain holding `labour_report:manage`, except the person who did it.
+
+## Client statements
+
+A statement tells the client which materials were supplied, at the prices they are charged, and where payment stands. It is **not an invoice**: it records no payment and changes nothing that is owed. Once made it is an immutable snapshot of that day's figures; there is no edit, void or delete.
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/statements?page=1&pageSize=10` | `statement:create`, `statement:send` or `financial:view` | Newest first, with each one's total, material count and last delivery |
+| `POST /api/projects/{id}/statements/preview` | `statement:create` | The statement as it would be made now, with a provisional number; nothing is saved |
+| `POST /api/projects/{id}/statements` | `statement:create` | `{ mode: detail \| total, includeEarlier, excludedMaterialIds, unlistedTypeKeys }` makes and numbers it |
+| `GET /api/statements/{statementId}` | `statement:create`, `statement:send` or `financial:view` | The statement as the client reads it |
+| `POST /api/statements/{statementId}/deliveries` | `statement:send` | `{ channel: email \| whatsapp \| download, recipient, note }` records a send. Repeatable. Saving the PDF counts as a `download` |
+
+Rules (`Business/Statements/StatementRules.cs`):
+
+- **New materials** are those on no earlier statement. A detailed statement takes them all except `excludedMaterialIds`; a total-only statement takes them all.
+- **Earlier materials** come back with `includeEarlier`. They always count in the total. In a detailed statement, a type with nothing new can be left unlisted (`unlistedTypeKeys`, the type keys of the materials list); unlisted types are shown as one line (`hiddenTypes`). A type with new materials is always listed (`400`).
+- A statement needs at least one material (`422 statement_empty`).
+- The client reads **one row per material type** (grouped like the materials list), with what it came to on earlier statements, what is new and the total, plus the quantity added up when every delivery has the same unit. A total-only statement has no rows, just the total. `since` is the day of the previous statement.
+- **Prices are frozen.** Each line keeps the client price shown, and every material a statement shows becomes *stated*: its price is written to the material and no markup change or manual price moves it again (see Materials).
+- The **payment summary** is snapshotted: what was received and the agreed amount (material client prices plus the fee, from the shared finance calculator), with what remains or was paid ahead.
+- **Numbers** are `ST-YYYY-NNN`, one sequence per year across the company, taken from `statement_sequences` under a row lock so a number is never handed out twice. A preview doesn't use one up. Statements can be made while a site is on hold or finalised.
+- The server records sends but doesn't email the statement; the client produces the PDF.
+- Events: `statement_created` and `statement_sent` (the statement's total in the `amount` column; the number, and the mode or channel, in the payload).

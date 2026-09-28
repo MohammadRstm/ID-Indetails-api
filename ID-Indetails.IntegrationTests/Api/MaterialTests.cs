@@ -151,7 +151,7 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var material = (await AddAsync(project.Id, superAdmin.AccessToken, new { name = "Paint", quantity = 10m, unit = "litre", unitCost = 5m }))[0];
-        await StateAsync(project, material.Id, superAdmin.User.Id);
+        await StateAsync(project.Id, superAdmin.AccessToken);
 
         await (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{material.Id}",
                 new { name = "Paint", quantity = 12m, unit = "litre", unitCost = 5m }, superAdmin.AccessToken))
@@ -226,15 +226,9 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         return await response.ReadAsync<MaterialListResponse>();
     }
 
-    /// <summary>Puts the material on a statement straight in the database, as statements are built separately.</summary>
-    private Task StateAsync(ProjectResponse project, long materialId, long userId)
-        => _steps.ScalarAsync<long>(
-            """
-            INSERT INTO client_statements (number, project_id, client_id, mode, includes_earlier, received_usd, agreed_usd, created_at, created_by_id)
-            VALUES (CONCAT('ST-T-', @p), @p, @c, 'detail', FALSE, 0, 0, UTC_TIMESTAMP(3), @u);
-            INSERT INTO client_statement_lines (statement_id, material_id, position, description, price, is_earlier, is_listed)
-            VALUES (LAST_INSERT_ID(), @m, 1, 'Paint', 55, FALSE, TRUE);
-            SELECT LAST_INSERT_ID();
-            """,
-            ("@p", project.Id), ("@c", project.Client!.Id), ("@u", userId), ("@m", materialId));
+    private async Task StateAsync(long projectId, string accessToken)
+    {
+        var response = await Client.PostJsonAsync($"/api/projects/{projectId}/statements", new { mode = "detail" }, accessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+    }
 }

@@ -18,6 +18,9 @@ public sealed class MaterialRepository(IdIndetailsDbContext db) : IMaterialRepos
         => db.ProjectMaterials.SingleOrDefaultAsync(
             m => m.Id == materialId && m.ProjectId == projectId && m.DeletedAt == null, cancellationToken);
 
+    public async Task<IReadOnlyList<ProjectMaterial>> GetManyForUpdateAsync(IReadOnlyCollection<long> materialIds, CancellationToken cancellationToken = default)
+        => await db.ProjectMaterials.Where(m => materialIds.Contains(m.Id) && m.DeletedAt == null).ToListAsync(cancellationToken);
+
     public Task<bool> IsStatedAsync(long materialId, CancellationToken cancellationToken = default)
         => db.ClientStatementLines.AnyAsync(l => l.MaterialId == materialId, cancellationToken);
 

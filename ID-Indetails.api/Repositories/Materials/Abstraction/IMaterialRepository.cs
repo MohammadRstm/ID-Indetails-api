@@ -13,6 +13,9 @@ public interface IMaterialRepository
     /// <summary>A live material of the project, tracked.</summary>
     Task<ProjectMaterial?> GetForUpdateAsync(long projectId, long materialId, CancellationToken cancellationToken = default);
 
+    /// <summary>The given live materials, tracked.</summary>
+    Task<IReadOnlyList<ProjectMaterial>> GetManyForUpdateAsync(IReadOnlyCollection<long> materialIds, CancellationToken cancellationToken = default);
+
     /// <summary>Whether the material is on any client statement.</summary>
     Task<bool> IsStatedAsync(long materialId, CancellationToken cancellationToken = default);
 
