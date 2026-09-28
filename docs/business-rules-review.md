@@ -24,6 +24,9 @@ This file records the business decisions taken at the same time, so they're appl
 | 14 | **The hours ledger** applies to Design employees only, from the month they joined. Admins and Execution staff have none. | Payroll calculation |
 | 15 | **The Salaries page lists everyone with a pay record**, admins included. Super admins appear only if they have pay. | API |
 | 16 | **Company overhead:** amount changes are dated (past months keep their cost), totals are kept per currency, and "cancel" ends a line at the end of the current month. It can be resumed only before that date passes; after that, a new line is added. | API |
+| 17 | **Unpaid excuses** are deducted from salaried pay: unpaid minutes at the hourly rate, an unpaid day off as the full paid day, an unpaid whole month as the whole salary. | Payroll calculation |
+| 18 | **Hourly staff** are paid for what they log; excuses only clear their shortfall and never add pay. | Payroll calculation |
+| 19 | **Admins who log hours** are paid overtime like employees, without an hours ledger. | Payroll calculation |
 
 ## Carried over from the prototype as-is
 

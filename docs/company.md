@@ -1,6 +1,6 @@
 # Company layer
 
-Settings, working time, personal schedules and company overhead. These belong to neither domain. Every permission here is a company permission, held by super admins by default and grantable to others (see [authorization.md](authorization.md)). Salaries, the company overview and project pay are documented separately when they are built.
+Settings, working time, personal schedules and company overhead. These belong to neither domain. Every permission here is a company permission, held by super admins by default and grantable to others (see [authorization.md](authorization.md)). The company overview and project pay are added when the domains' figures are in place.
 
 ## Endpoints
 
@@ -18,6 +18,11 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `PUT /api/company/overhead/{id}` | `overhead:manage` | Renames it or changes its group |
 | `POST /api/company/overhead/{id}/amounts` | `overhead:manage` | A new monthly amount from a month |
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
+| `GET /api/company/salaries?month=YYYY-MM&domain=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary |
+| `GET /api/company/salaries/{userId}?month=YYYY-MM` | `salary:view` | How one person's pay adds up |
+| `GET /api/company/salaries/export?month=YYYY-MM&domain=&search=` | `salary:view` | The filtered list as CSV, with a total per currency (10 a minute per user) |
+| `POST /api/employees/{id}/hour-excuses` | `hours:excuse` | Excuses minutes, days or the whole month, paid or unpaid |
+| `DELETE /api/hour-excuses/{id}` | `hours:excuse` | Removes an excuse (kept in history) |
 
 ## Settings
 
@@ -49,3 +54,34 @@ Settings, working time, personal schedules and company overhead. These belong to
 - **Cancelling** ends the line at the end of this month. It can be resumed until that date passes; after that, add a new line. A line that hasn't started yet is removed instead (`204`).
 - **Totals are per currency** and never converted.
 - Every change writes an `overhead_*` activity event (company level, no domain), with the amount in the `amount` column.
+
+## Salaries
+
+Always calculated from the records, never stored (`Business/Payroll/`). The month defaults to this one and can't be in the future.
+
+**Who is listed:** every active person who has joined and has a pay record, in the caller's domains. Super admins appear only if they have pay and the caller sees both domains. People who joined after the month are left out.
+
+**Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay is salary ÷ 173.33.
+
+**Overtime** (`Overtime.cs`), day by day, using the person's schedule or the company week in force that day:
+- all time on a day off;
+- time before the day's start or after its end;
+- time within hours beyond the day's required hours, taken from the latest work of the day.
+
+**The hours ledger** (`HoursLedger.cs`) applies to Design employees only, from the day they joined, and up to today while the month is in progress:
+- *Expected* is the required hours of every working day.
+- *Excused* minutes and days (paid or not) reduce what is owed; a whole-month excuse clears it.
+- Overtime first *makes up* any shortfall, taken from the month's overtime in date order; the rest is paid as overtime.
+- A closed month still short is *flagged*; the month in progress is *behind*.
+
+**Pay** (`SalaryCalculator.cs`):
+- **Monthly:** the salary, pro-rated on the person's own working days if they joined mid-month, plus overtime at the multiplier in force that day.
+  - In a closed, flagged month the shortfall is deducted at the hourly rate. Whole missed days still owed also lose their paid break, so each costs the full paid day (8h on a 9–5 day); a partly made-up remainder costs only its hours. Example: 21 missed days with one hour made up is 20 whole days (8h each) plus 6h.
+  - Unpaid excuses are deducted too: unpaid minutes at the hourly rate, each unpaid day off as the full paid day, an unpaid whole month as the whole salary. The deduction never exceeds the salary.
+- **Hourly:** hours within schedule and made-up hours at the rate in force each day, plus the paid break of each working day they worked, plus overtime at the rate × multiplier. Excuses don't change their pay (they are paid for what they log).
+- Admins who log hours are paid overtime the same way, without an hours ledger. Execution staff don't log hours: they are paid their salary.
+- Totals are per currency and never converted. Deactivated people aren't listed (there is no record of when they were deactivated yet).
+
+**Excuses:** `kind` is `minutes` (with `minutes`), `days` (with days of that month) or `whole_month`; `isPaid` defaults to true; the note defaults by kind. Never for a future month (`400 excuse_month_in_future`). Removing one is a soft delete.
+
+**Export:** UTF-8 CSV with a BOM. Values that start with `=`, `+`, `-` or `@` are prefixed with `'` so spreadsheets don't run them as formulas.
