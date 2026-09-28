@@ -93,4 +93,12 @@ public static class ErrorCodes
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
+
+    // Company layer
+    public const string WorkingTimeInPast = "working_time_in_past";
+    public const string WorkingTimeAlreadyChanged = "working_time_already_changed";
+    public const string OverheadMonthInPast = "overhead_month_in_past";
+    public const string OverheadEnded = "overhead_ended";
+    public const string OverheadAlreadyCancelled = "overhead_already_cancelled";
+    public const string OverheadNotCancelled = "overhead_not_cancelled";
 }

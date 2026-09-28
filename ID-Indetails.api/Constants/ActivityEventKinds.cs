@@ -102,4 +102,17 @@ public static class ActivityEventKinds
 
     /// <summary>The channel in the payload.</summary>
     public const string StatementSent = "statement_sent";
+
+    // Company layer (no domain, except schedules, which carry the person's domain)
+    public const string CompanySettingsUpdated = "company_settings_updated";
+    public const string WorkingTimeChanged = "working_time_changed";
+    public const string ScheduleChanged = "schedule_changed";
+
+    // Company overhead (subject: the overhead line; money in the amount column)
+    public const string OverheadAdded = "overhead_added";
+    public const string OverheadUpdated = "overhead_updated";
+    public const string OverheadAmountChanged = "overhead_amount_changed";
+    public const string OverheadCancelled = "overhead_cancelled";
+    public const string OverheadResumed = "overhead_resumed";
+    public const string OverheadRemoved = "overhead_removed";
 }
