@@ -17,6 +17,9 @@ public interface IProjectFinanceRepository
 
     Task<IReadOnlyList<GroundLabourRow>> GroundLabourAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
+    /// <summary>Live payments of one project: the day each was received and its USD value.</summary>
+    Task<IReadOnlyList<(DateOnly ReceivedOn, decimal AmountUsd)>> PaymentsAsync(long projectId, CancellationToken cancellationToken = default);
+
     /// <summary>Live payments per project, in USD.</summary>
     Task<IReadOnlyDictionary<long, decimal>> ReceivedAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 }

@@ -48,6 +48,15 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
             .Select(d => new GroundLabourRow(d.LabourWeek.ProjectId, d.WorkDate, d.Cost))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<(DateOnly ReceivedOn, decimal AmountUsd)>> PaymentsAsync(long projectId, CancellationToken cancellationToken = default)
+        => (await db.Payments
+                .AsNoTracking()
+                .Where(p => p.ProjectId == projectId && p.VoidedAt == null)
+                .Select(p => new { p.ReceivedOn, p.AmountUsd })
+                .ToListAsync(cancellationToken))
+            .Select(p => (p.ReceivedOn, p.AmountUsd))
+            .ToList();
+
     public async Task<IReadOnlyDictionary<long, decimal>> ReceivedAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
         => await db.Payments
             .AsNoTracking()
