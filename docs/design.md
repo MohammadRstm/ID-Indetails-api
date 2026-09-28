@@ -125,3 +125,19 @@ Rules (`Business/Meetings/MeetingRules.cs`):
 - Events: `meeting_created`, `meeting_updated`, `meeting_deleted`, with the meeting as the subject and its topic and times in the payload.
 
 **Who manages meetings:** for now only holders of `meeting:manage` (Design admins and super admins by default). The prototype also lets employees set meetings and remove their own; that needs a new permission seeded for employees, which is a database change awaiting approval (business-rules-review.md, open question 4).
+
+## Reports and dashboard
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/reports/work?from=&to=&projectId=&userId=` | `report:view` | The Reports page for a range of company days (default: this quarter so far; at most three years) |
+| `GET /api/reports/overview?period=quarter\|month\|last30` | `report:view` | The Design dashboard for a period and the one before it |
+
+Callers who can't see Design (an Execution admin holds `report:view` too) get `404`. Money is only included for callers with `financial:view`, and comes from the shared finance calculator.
+
+- **Work report:** total minutes, entries, projects, people, the average entry and the busiest week; weekly minutes (3 to 20 weeks ending with the range); minutes by project (status, entries, people, share, weekly), by client (`null` for internal work) and by person; people against the six busiest projects; Design projects completed in the range (their dates, days taken, and all their minutes and people, whatever the filters); the last 6 quarters of all Design work (whatever the range and filters).
+- **Money** (`financial:view`): labour cost of the range's work; expenses of every Design project dated in the range, in USD (whatever the project and person filters, as in the prototype); their total; the all-time profit of every client project; revenue, cost and profit of each project worked on in the range; and labour cost by person. The prototype's monthly "revenue against cost" chart needs past progress, which isn't kept, so it isn't returned.
+- **Overview:** the period so far against the one before (quarter to date against the same number of days of last quarter, month to date against the whole last month, the last 30 days against the 30 before): minutes, entries, the average entry, weekly minutes of both, how many active people logged this week, minutes by project (top 8), projects by status, and the busiest project this week.
+- **Needs attention** (at most 5, in this order): active projects with no work for 7 days or more (only while `notifyIdle` is on), active projects at 90% or more, projects on hold (with the days since they were put on hold), and how many employees haven't logged this week.
+- Overtime columns come once the working-time engine exists.
+
