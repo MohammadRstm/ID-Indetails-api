@@ -12,6 +12,7 @@ public sealed class SaveWorkEntryRequestValidator : AbstractValidator<SaveWorkEn
     public SaveWorkEntryRequestValidator()
     {
         RuleFor(x => x.ProjectId).GreaterThan(0).WithMessage("Pick a project.");
+        RuleFor(x => x.AttachmentFileId).GreaterThan(0).When(x => x.AttachmentFileId is not null).WithMessage("Attach an uploaded file.");
         RuleFor(x => x.Description).MaximumLength(WorkEntryRules.MaxDescriptionLength)
             .WithMessage($"Description must be at most {WorkEntryRules.MaxDescriptionLength} characters.");
         RuleFor(x => x).EntryTimes(x => x.StartedAt, x => x.EndedAt).OverridePropertyName("endedAt");

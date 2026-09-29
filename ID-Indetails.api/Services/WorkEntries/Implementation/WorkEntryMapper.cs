@@ -1,3 +1,4 @@
+using ID_Indetails.api.Services.Files.Implementation;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Models;
@@ -20,5 +21,6 @@ internal static class WorkEntryMapper
         e.UserId == viewerId
             && WorkEntryRules.IsWithinEditWindow(e.CreatedAt, now, settings.EditWindow)
             && WorkEntryRules.AcceptsWork(e.ProjectStatus, settings.HoldLogging),
-        e.CommentCount);
+        e.CommentCount,
+        e.Attachment is { } file ? FileMapper.ToResponse(file) : null);
 }

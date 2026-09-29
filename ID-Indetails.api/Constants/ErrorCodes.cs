@@ -76,6 +76,11 @@ public static class ErrorCodes
     public const string NoTeamChat = "no_team_chat";
     public const string TeamHasChat = "team_has_chat";
 
+    // Files
+    public const string FileTypeNotAllowed = "file_type_not_allowed";
+    public const string FileTooLarge = "file_too_large";
+    public const string FileInUse = "file_in_use";
+
     // Billing
     public const string BillingSettingsMissing = "billing_settings_missing";
     public const string InvoicePrefixTaken = "invoice_prefix_taken";

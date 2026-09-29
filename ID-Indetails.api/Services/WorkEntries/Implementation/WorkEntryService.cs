@@ -14,6 +14,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -32,6 +33,7 @@ public sealed class WorkEntryService(
     IDomainSettingsService domainSettings,
     IWorkLogNotifier notifier,
     IActivityEventRepository activity,
+    IFileClaims fileClaims,
     IUnitOfWork unitOfWork,
     IClock clock) : IWorkEntryService
 {
@@ -51,6 +53,7 @@ public sealed class WorkEntryService(
             StartedAt = WorkEntryRules.AsUtc(request.StartedAt),
             EndedAt = WorkEntryRules.AsUtc(request.EndedAt),
             CreatedAt = clock.UtcNow,
+            AttachmentFileId = request.AttachmentFileId is { } fileId ? (await fileClaims.ClaimAsync(fileId, null, cancellationToken)).Id : null,
         };
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
 
@@ -87,6 +90,11 @@ public sealed class WorkEntryService(
         entry.StartedAt = WorkEntryRules.AsUtc(request.StartedAt);
         entry.EndedAt = WorkEntryRules.AsUtc(request.EndedAt);
         entry.UpdatedAt = clock.UtcNow;
+        if (request.AttachmentFileId != entry.AttachmentFileId)
+        {
+            // A replaced or removed file is attached to nothing now, so the cleanup job deletes it.
+            entry.AttachmentFileId = request.AttachmentFileId is { } fileId ? (await fileClaims.ClaimAsync(fileId, null, cancellationToken)).Id : null;
+        }
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
 
         var moved = await ApplyMovesAsync(actor, request.Moves.Where(m => m.Id != entry.Id).ToList(), settings, cancellationToken);

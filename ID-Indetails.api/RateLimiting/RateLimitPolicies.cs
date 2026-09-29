@@ -11,4 +11,7 @@ public static class RateLimitPolicies
 
     /// <summary>Heavy exports (CSV): per signed-in user.</summary>
     public const string Export = "export";
+
+    /// <summary>File uploads: per signed-in user.</summary>
+    public const string Upload = "upload";
 }

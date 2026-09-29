@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Files.Abstraction;
 
 namespace ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 
@@ -21,7 +22,8 @@ public sealed record WorkEntryView(
     int Minutes,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
-    int CommentCount);
+    int CommentCount,
+    FileView? Attachment);
 
 /// <summary>
 /// Live entries on Design projects. Times are UTC; <paramref name="From"/> is inclusive and <paramref name="To"/>

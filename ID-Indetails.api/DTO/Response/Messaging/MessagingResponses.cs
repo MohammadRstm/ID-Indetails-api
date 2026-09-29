@@ -1,4 +1,5 @@
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Files;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Messaging;
@@ -29,6 +30,7 @@ public sealed record MessageResponse(
     string? Body,
     string Kind,
     IReadOnlyList<ChatPersonResponse> Mentions,
+    IReadOnlyList<FileResponse> Attachments,
     TaskCommentResponse? TaskComment,
     DateTime CreatedAt);
 

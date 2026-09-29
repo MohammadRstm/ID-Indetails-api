@@ -20,6 +20,7 @@ public static class MessagingRules
 {
     public const int MaxBodyLength = 4000;
     public const int MaxMentions = 50;
+    public const int MaxAttachments = 10;
 
     public sealed record Person(long Id, string Role, string? Domain, long? TeamId, UserStatus Status);
 

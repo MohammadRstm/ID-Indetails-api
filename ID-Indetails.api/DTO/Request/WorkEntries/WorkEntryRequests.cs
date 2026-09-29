@@ -11,6 +11,9 @@ public sealed record SaveWorkEntryRequest
 
     public DateTime EndedAt { get; init; }
 
+    /// <summary>A photo or video the caller uploaded (<c>POST /api/files</c>). Null removes it.</summary>
+    public long? AttachmentFileId { get; init; }
+
     /// <summary>
     /// Other entries of the caller moved to make room, saved together with this one (the timeline's swap).
     /// Each must still be changeable.

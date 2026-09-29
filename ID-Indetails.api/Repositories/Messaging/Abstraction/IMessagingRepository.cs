@@ -1,5 +1,6 @@
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Files.Abstraction;
 
 namespace ID_Indetails.api.Repositories.Messaging.Abstraction;
 
@@ -27,6 +28,7 @@ public sealed record MessageView(
     long? RefEntryId,
     long? RefCommentId,
     IReadOnlyList<MessagePerson> Mentions,
+    IReadOnlyList<FileView> Attachments,
     DateTime CreatedAt);
 
 /// <summary>An existing conversation of the user, with where they read up to and what is still unread.</summary>
@@ -49,6 +51,9 @@ public interface IMessagingRepository
 
     /// <summary>Every team, by domain then name. Not tracked.</summary>
     Task<IReadOnlyList<ChatTeam>> TeamsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>A conversation by id. Not tracked.</summary>
+    Task<Conversation?> ConversationAsync(long id, CancellationToken cancellationToken = default);
 
     /// <summary>The team's group chat, if anyone wrote in it yet. Tracked.</summary>
     Task<Conversation?> TeamConversationAsync(long teamId, CancellationToken cancellationToken = default);

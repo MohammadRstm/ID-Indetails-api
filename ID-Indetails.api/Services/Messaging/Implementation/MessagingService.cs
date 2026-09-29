@@ -11,6 +11,8 @@ using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Messaging.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Files.Abstraction;
+using ID_Indetails.api.Services.Files.Implementation;
 using ID_Indetails.api.Services.Messaging.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 
@@ -25,6 +27,7 @@ public sealed class MessagingService(
     ICurrentUser currentUser,
     IMessagingRepository messaging,
     IWorkEntryRepository entries,
+    IFileClaims fileClaims,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IClock clock) : IMessagingService
@@ -101,7 +104,8 @@ public sealed class MessagingService(
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var conversation = await TeamConversationForWriteAsync(team, cancellationToken);
-        var message = await PostAsync(conversation, me.Id, request.Body.Trim(), MessageKinds.Text, mentionIds, null, null, cancellationToken);
+        var message = await PostAsync(
+            conversation, me.Id, request.Body, MessageKinds.Text, mentionIds, request.AttachmentIds, null, null, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         TeamChanged(team, memberIds);
 
@@ -145,7 +149,7 @@ public sealed class MessagingService(
             messaging.Add(conversation);
         }
 
-        var message = await PostAsync(conversation, me.Id, request.Body.Trim(), MessageKinds.Text, [], null, null, cancellationToken);
+        var message = await PostAsync(conversation, me.Id, request.Body, MessageKinds.Text, [], request.AttachmentIds, null, null, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         live.ChatChanged(other.Id, new LiveChat(null, me.Id));
         live.ChatChanged(me.Id, new LiveChat(null, other.Id));
@@ -160,6 +164,25 @@ public sealed class MessagingService(
         await MarkReadAsync(me, await messaging.DirectConversationAsync(me.Id, other.Id, cancellationToken), cancellationToken);
         live.ChatChanged(me.Id, new LiveChat(null, other.Id));
         return await BadgeAsync(cancellationToken);
+    }
+
+    public async Task<bool> CanReadConversationAsync(long conversationId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var conversation = await messaging.ConversationAsync(conversationId, cancellationToken);
+        if (conversation?.TeamId is { } teamId)
+        {
+            return (await VisibleTeamsAsync(me, cancellationToken)).Any(t => t.Id == teamId);
+        }
+
+        if (conversation is null || (conversation.DmUserLowId != me.Id && conversation.DmUserHighId != me.Id))
+        {
+            return false;
+        }
+
+        var otherId = conversation.DmUserLowId == me.Id ? conversation.DmUserHighId!.Value : conversation.DmUserLowId!.Value;
+        var other = (await messaging.PeopleAsync([otherId], cancellationToken)).SingleOrDefault();
+        return other is not null && MessagingRules.CanReach(Rule(me), Rule(other));
     }
 
     public async Task<long> PostTaskCommentAsync(
@@ -190,7 +213,7 @@ public sealed class MessagingService(
         var memberIds = (await MembersAsync(team, cancellationToken)).Select(p => p.Id).ToList();
         var conversation = await TeamConversationForWriteAsync(team, cancellationToken);
         var message = await PostAsync(
-            conversation, commenterId, body, MessageKinds.TaskComment, memberIds.Where(id => id != commenterId).ToList(), entryId, commentId, cancellationToken);
+            conversation, commenterId, body, MessageKinds.TaskComment, memberIds.Where(id => id != commenterId).ToList(), [], entryId, commentId, cancellationToken);
         TeamChanged(team, memberIds);
         return message.Id;
     }
@@ -243,27 +266,35 @@ public sealed class MessagingService(
         return conversation;
     }
 
-    /// <summary>Saves the message, and moves the sender's read marker to it.</summary>
+    /// <summary>Saves the message with the uploads it takes, and moves the sender's read marker to it.</summary>
     private async Task<Message> PostAsync(
         Conversation conversation,
         long senderId,
         string body,
         string kind,
         IReadOnlyCollection<long> mentionIds,
+        IReadOnlyCollection<long> attachmentIds,
         long? entryId,
         long? commentId,
         CancellationToken cancellationToken)
     {
+        var attachments = new List<MessageAttachment>();
+        foreach (var fileId in attachmentIds)
+        {
+            attachments.Add(new MessageAttachment { FileId = (await fileClaims.ClaimAsync(fileId, null, cancellationToken)).Id });
+        }
+
         var message = new Message
         {
             Conversation = conversation,
             SenderId = senderId,
-            Body = body,
+            Body = string.IsNullOrWhiteSpace(body) ? null : body.Trim(),
             Kind = kind,
             RefEntryId = entryId,
             RefCommentId = commentId,
             CreatedAt = clock.UtcNow,
             Mentions = mentionIds.Select(id => new MessageMention { UserId = id }).ToList(),
+            Attachments = attachments,
         };
         messaging.Add(message);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -326,6 +357,7 @@ public sealed class MessagingService(
                 m.Body,
                 m.Kind,
                 m.Mentions.Select(p => new ChatPersonResponse(p.Id, p.Name)).ToList(),
+                m.Attachments.Select(FileMapper.ToResponse).ToList(),
                 m.RefEntryId is { } entryId && shared.TryGetValue(entryId, out var e)
                     ? new TaskCommentResponse(
                         e.Id, m.RefCommentId ?? 0, new ChatPersonResponse(e.UserId, e.UserName), e.ProjectId, e.ProjectTitle, e.Description, e.StartedAt, e.Minutes)

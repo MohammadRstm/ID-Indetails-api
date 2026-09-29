@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Response.Files;
 namespace ID_Indetails.api.DTO.Response.WorkEntries;
 
 public sealed record WorkEntryProjectResponse(long Id, string Title);
@@ -16,7 +17,8 @@ public sealed record WorkEntryResponse(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     bool CanEdit,
-    int CommentCount);
+    int CommentCount,
+    FileResponse? Attachment);
 
 /// <param name="Role">super_admin, admin or employee, for the badge next to the name.</param>
 public sealed record WorkEntryCommentAuthorResponse(long Id, string Name, string Role);

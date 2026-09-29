@@ -363,3 +363,6 @@ MigrationBackup/
 FodyWeavers.xsd
 # Local environment secrets (docker compose credentials). Commit .env.example instead.
 .env
+
+# Uploaded files (FileStorage:RootPath)
+ID-Indetails.api/App_Data/

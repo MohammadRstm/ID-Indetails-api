@@ -2,6 +2,7 @@ using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Files.Abstraction;
 using ID_Indetails.api.Repositories.Messaging.Abstraction;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,9 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
             .OrderBy(t => t.DomainCode).ThenBy(t => t.Name)
             .Select(t => new ChatTeam(t.Id, t.Name, t.DomainCode))
             .ToListAsync(cancellationToken);
+
+    public Task<Conversation?> ConversationAsync(long id, CancellationToken cancellationToken = default)
+        => db.Conversations.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, cancellationToken);
 
     public Task<Conversation?> TeamConversationAsync(long teamId, CancellationToken cancellationToken = default)
         => db.Conversations.SingleOrDefaultAsync(c => c.TeamId == teamId, cancellationToken);
@@ -177,6 +181,10 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
                     m.RefCommentId,
                     m.CreatedAt,
                     Mentions = m.Mentions.Select(x => new { x.UserId, x.User.FirstName, x.User.LastName, x.User.Email }).ToList(),
+                    Attachments = m.Attachments
+                        .OrderBy(a => a.FileId)
+                        .Select(a => new FileView(a.FileId, a.File.OriginalName, a.File.MimeType, a.File.SizeBytes, a.File.CreatedAt))
+                        .ToList(),
                 })
                 .ToListAsync(cancellationToken))
             .Select(m => new MessageView(
@@ -188,6 +196,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
                 m.RefEntryId,
                 m.RefCommentId,
                 m.Mentions.Select(x => new MessagePerson(x.UserId, PersonName.Of(x.FirstName, x.LastName, x.Email))).OrderBy(x => x.Name).ToList(),
+                m.Attachments,
                 m.CreatedAt))
             .ToList();
 }

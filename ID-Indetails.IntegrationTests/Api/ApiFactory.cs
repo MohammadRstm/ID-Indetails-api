@@ -24,6 +24,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public CapturingLivePublisher Live { get; } = new();
 
+    /// <summary>Uploads of this API, deleted with it.</summary>
+    public string FilesRoot { get; } = Path.Combine(Path.GetTempPath(), $"idi_test_files_{Guid.NewGuid():N}");
+
     public MigratedDatabaseFixture Database => _database;
 
     /// <summary>Per-IP auth requests per minute. High by default so tests don't trip it.</summary>
@@ -38,6 +41,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         await base.DisposeAsync();
         await _database.DisposeAsync();
+        if (Directory.Exists(FilesRoot))
+        {
+            Directory.Delete(FilesRoot, recursive: true);
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -53,6 +60,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
         // Tests run the scheduled checks themselves, once their data is ready.
         builder.UseSetting("NotificationScheduler:Enabled", "false");
+        builder.UseSetting("FileStorage:RootPath", FilesRoot);
+        builder.UseSetting("FileStorage:CleanupEnabled", "false");
 
         builder.ConfigureTestServices(services =>
         {
