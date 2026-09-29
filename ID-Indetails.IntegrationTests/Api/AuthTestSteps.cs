@@ -65,6 +65,16 @@ public sealed class AuthTestSteps(ApiFactory api)
         return (email, password, auth);
     }
 
+    /// <summary>Puts someone in a team directly, without the fields the employee edit needs.</summary>
+    public async Task PutInTeamAsync(long userId, long teamId)
+    {
+        await using var connection = await api.Database.OpenConnectionAsync();
+        await using var command = new MySqlCommand("UPDATE users SET team_id = @t WHERE id = @u", connection);
+        command.Parameters.AddWithValue("@t", teamId);
+        command.Parameters.AddWithValue("@u", userId);
+        await command.ExecuteNonQueryAsync();
+    }
+
     public async Task<T> ScalarAsync<T>(string sql, params (string Name, object Value)[] parameters)
     {
         await using var connection = await api.Database.OpenConnectionAsync();

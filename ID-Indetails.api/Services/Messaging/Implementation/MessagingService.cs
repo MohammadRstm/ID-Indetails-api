@@ -12,6 +12,7 @@ using ID_Indetails.api.Repositories.Messaging.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Messaging.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 
 namespace ID_Indetails.api.Services.Messaging.Implementation;
 
@@ -25,6 +26,7 @@ public sealed class MessagingService(
     IMessagingRepository messaging,
     IWorkEntryRepository entries,
     IUnitOfWork unitOfWork,
+    ILiveUpdates live,
     IClock clock) : IMessagingService
 {
     private const string ChatNotFound = "Chat not found.";
@@ -94,16 +96,14 @@ public sealed class MessagingService(
         var me = await ViewerAsync(cancellationToken);
         var team = await TeamChatAsync(me, teamId, cancellationToken);
         var mentionIds = request.MentionIds.Distinct().ToList();
-        if (mentionIds.Count > 0)
-        {
-            var memberIds = (await MembersAsync(team, cancellationToken)).Select(p => p.Id).ToHashSet();
-            MessagingRules.CheckMentions(mentionIds, memberIds).ThrowIfDenied();
-        }
+        var memberIds = (await MembersAsync(team, cancellationToken)).Select(p => p.Id).ToHashSet();
+        MessagingRules.CheckMentions(mentionIds, memberIds).ThrowIfDenied();
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var conversation = await TeamConversationForWriteAsync(team, cancellationToken);
         var message = await PostAsync(conversation, me.Id, request.Body.Trim(), MessageKinds.Text, mentionIds, null, null, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        TeamChanged(team, memberIds);
 
         return await OneAsync(message.Id, cancellationToken);
     }
@@ -113,6 +113,7 @@ public sealed class MessagingService(
         var me = await ViewerAsync(cancellationToken);
         var team = await TeamChatAsync(me, teamId, cancellationToken);
         await MarkReadAsync(me, await messaging.TeamConversationAsync(team.Id, cancellationToken), cancellationToken);
+        live.ChatChanged(me.Id, new LiveChat(team.Id, null));
         return await BadgeAsync(cancellationToken);
     }
 
@@ -146,6 +147,8 @@ public sealed class MessagingService(
 
         var message = await PostAsync(conversation, me.Id, request.Body.Trim(), MessageKinds.Text, [], null, null, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        live.ChatChanged(other.Id, new LiveChat(null, me.Id));
+        live.ChatChanged(me.Id, new LiveChat(null, other.Id));
 
         return await OneAsync(message.Id, cancellationToken);
     }
@@ -155,6 +158,7 @@ public sealed class MessagingService(
         var me = await ViewerAsync(cancellationToken);
         var other = await ReachableAsync(me, userId, cancellationToken);
         await MarkReadAsync(me, await messaging.DirectConversationAsync(me.Id, other.Id, cancellationToken), cancellationToken);
+        live.ChatChanged(me.Id, new LiveChat(null, other.Id));
         return await BadgeAsync(cancellationToken);
     }
 
@@ -183,9 +187,11 @@ public sealed class MessagingService(
         }
 
         // The card speaks to the whole chat (the prototype's @all).
-        var mentionIds = (await MembersAsync(team, cancellationToken)).Select(p => p.Id).Where(id => id != commenterId).ToList();
+        var memberIds = (await MembersAsync(team, cancellationToken)).Select(p => p.Id).ToList();
         var conversation = await TeamConversationForWriteAsync(team, cancellationToken);
-        var message = await PostAsync(conversation, commenterId, body, MessageKinds.TaskComment, mentionIds, entryId, commentId, cancellationToken);
+        var message = await PostAsync(
+            conversation, commenterId, body, MessageKinds.TaskComment, memberIds.Where(id => id != commenterId).ToList(), entryId, commentId, cancellationToken);
+        TeamChanged(team, memberIds);
         return message.Id;
     }
 
@@ -326,6 +332,14 @@ public sealed class MessagingService(
                     : null,
                 m.CreatedAt))
             .ToList();
+    }
+
+    private void TeamChanged(ChatTeam team, IEnumerable<long> memberIds)
+    {
+        foreach (var id in memberIds)
+        {
+            live.ChatChanged(id, new LiveChat(team.Id, null));
+        }
     }
 
     private static MessagingRules.Person Rule(ChatPerson p) => new(p.Id, p.Role, p.Domain, p.TeamId, p.Status);

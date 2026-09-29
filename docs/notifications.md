@@ -9,7 +9,7 @@ All of them need only a signed-in user and act on the caller's own notifications
 | Method and path | Purpose |
 |---|---|
 | `GET /api/notifications?unreadOnly=&page=&pageSize=` | Newest first, 20 a page by default (1–100) |
-| `GET /api/notifications/unread-count` | `{ unread }`, for the badge. The client polls it until live updates arrive with messaging |
+| `GET /api/notifications/unread-count` | `{ unread }`, for the badge. Reload it on the live `notifications` signal (see [messaging.md](messaging.md#live-updates)) |
 | `POST /api/notifications/{id}/read` | Marks one read and returns the unread count left |
 | `POST /api/notifications/read-all` | Marks all read and returns `{ unread: 0 }` |
 

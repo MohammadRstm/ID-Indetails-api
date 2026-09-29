@@ -31,3 +31,16 @@ All of them need only a signed-in, active user. Who may read and write each chat
 - **Shared comments.** A work-entry comment posted with `sendToGroup: true` also goes to the entry author's team chat as a `task_comment` message: the comment text, the entry as it is now (`taskComment`: author, project, description, start and minutes; null once the entry is deleted), and a mention of everyone in the chat, the prototype's @all. If the author is in no team, the comment is refused (`422 no_team_chat`).
 - **Teams.** A team whose chat has messages can't be deleted (`422 team_has_chat`), so history is never lost. Rename it instead.
 - Messages don't send bell notifications: the messages badge covers them, as in the prototype.
+
+## Live updates
+
+A SignalR connection at `/hubs/live` tells signed-in clients that something changed, so they reload it instead of polling. It carries no content.
+
+| Signal | Payload | Sent to | Reload |
+|---|---|---|---|
+| `notifications` | — | Whoever got a notification, or read theirs (for their other devices) | `GET /api/notifications/unread-count`, and the open list |
+| `messages` | `{ teamId, userId }`, one of them set | Everyone in a team chat that got a message; both sides of a direct message; whoever read a chat (for their other devices) | `GET /api/messages/badge`, the conversation list, and that chat if it's open |
+
+- **Connecting.** It needs a signed-in user. Browsers pass the access token as the `access_token` query parameter, because WebSockets can't send headers; that parameter is only read on `/hubs/live`, and request logging stays at Warning so query strings aren't logged. The React client uses `@microsoft/signalr` with `accessTokenFactory`.
+- **When.** Signals are staged while a request runs and sent only once it has succeeded (`Middlewares/LiveUpdatesMiddleware`), so a refused or failed request signals nobody. The scheduled notification checks send theirs after each check. A signal that can't be sent is logged and dropped; the request still succeeds.
+- **Scale.** One API instance for now. Several would need a SignalR backplane such as Redis.

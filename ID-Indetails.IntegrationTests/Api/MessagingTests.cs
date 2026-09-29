@@ -4,7 +4,6 @@ using ID_Indetails.api.DTO.Response.Messaging;
 using ID_Indetails.api.DTO.Response.Teams;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
-using MySqlConnector;
 using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
@@ -24,11 +23,7 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<AuthResponse> InTeamAsync(AuthResponse superAdmin, string domain, long teamId)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, domain);
-        await using var connection = await api.Database.OpenConnectionAsync();
-        await using var command = new MySqlCommand("UPDATE users SET team_id = @t WHERE id = @u", connection);
-        command.Parameters.AddWithValue("@t", teamId);
-        command.Parameters.AddWithValue("@u", person.User.Id);
-        await command.ExecuteNonQueryAsync();
+        await _steps.PutInTeamAsync(person.User.Id, teamId);
         return person;
     }
 

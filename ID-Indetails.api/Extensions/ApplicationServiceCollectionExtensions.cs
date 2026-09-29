@@ -1,4 +1,5 @@
 using ID_Indetails.api.Configuration.Options;
+using ID_Indetails.api.Hubs;
 using ID_Indetails.api.Jobs;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Activity.Implementation;
@@ -104,10 +105,13 @@ using ID_Indetails.api.Services.Statements.Abstraction;
 using ID_Indetails.api.Services.Statements.Implementation;
 using ID_Indetails.api.Services.Messaging.Abstraction;
 using ID_Indetails.api.Services.Messaging.Implementation;
+using ID_Indetails.api.Services.Realtime.Abstraction;
+using ID_Indetails.api.Services.Realtime.Implementation;
 using ID_Indetails.api.Services.Teams.Abstraction;
 using ID_Indetails.api.Services.Teams.Implementation;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
+using Microsoft.AspNetCore.SignalR;
 
 namespace ID_Indetails.api.Extensions;
 
@@ -128,6 +132,10 @@ public static class ApplicationServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddMemoryCache();
+        services.AddSignalR();
+        services.AddSingleton<IUserIdProvider, LiveUserIdProvider>();
+        services.AddSingleton<ILivePublisher, SignalRLivePublisher>();
+        services.AddScoped<ILiveUpdates, LiveUpdates>();
         services.AddSingleton<IClock, SystemClock>();
 
         // Repositories

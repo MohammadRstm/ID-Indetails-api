@@ -71,7 +71,7 @@ See [finance.md](finance.md).
 | N3 | **Super admins get admin-level notifications** (work logged, materials, labour, clients, billing, ticked requirements) but not the broadcasts to a domain's people (new projects, status changes, added requirements). |
 | N4 | **Added requirements roll into one notification** per person per project per day, and follow `notifyProject` like the other project news. |
 | N5 | **No money in notifications.** Billing notifications name the invoice or project, never the amount. |
-| N6 | **Live push arrives with messaging.** Until then the client polls the unread count. |
+| N6 | **Live push** came with messaging: a `notifications` signal over the live connection tells the client to reload the bell (see C5). |
 | N7 | **Scheduled notifications** run on an hourly timer and are keyed so each goes once: last week's summary, idle Design projects, requirements due tomorrow or overdue (deadlines up to a week old), overdue invoices, and the month-end short-hours alert. `notifyIdle` now also sends `project_idle`, and `weeklySummary` sends the summary. |
 | N8 | **The month-end short-hours alert** goes to whoever holds `salary:view` (super admins by default), from the first of the month, naming the five people most short. This settles the old open question. |
 
@@ -85,7 +85,7 @@ See [messaging.md](messaging.md).
 | C2 | **Moving someone moves their chats.** They lose the old team's chat, history included, and see the new team's whole history. |
 | C3 | **No bell notifications for messages.** The messages badge (unread count and the "@" flag) covers them, as in the prototype. |
 | C4 | **A team with chat history can't be deleted**, so history is never lost. |
-| C5 | **Live updates** will push small "something changed" signals over SignalR for messages and the bell; the client then reloads what changed. |
+| C5 | **Live updates** push small "something changed" signals over SignalR for messages and the bell, only once a request has succeeded; the client reloads what changed. One API instance for now: several would need a SignalR backplane. |
 
 ## Carried over from the prototype as-is
 
