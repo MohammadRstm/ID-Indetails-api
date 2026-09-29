@@ -48,25 +48,51 @@ public class MyTimeTests
         days.Select(d => d.Date.Day).ShouldBe([3, 2]);
     }
 
-    [Fact]
-    public void A_salaried_month_in_progress_accrues_with_the_hours_required_so_far()
+    /// <summary>1,733.30 a month (10 an hour), worked 9 to 4 on the given days of September, as seen on <paramref name="today"/>.</summary>
+    private static (SalaryCalculator.Result Pay, SalaryCalculator.Input Input) SeptemberPay(DateOnly today, bool ledgerApplies, params int[] worked)
     {
-        // Up to the 14th: 10 working days, 70h required. Two missed days leave 14h behind.
-        int[] worked = [1, 2, 3, 4, 7, 8, 9, 10];
-        var pay = SalaryCalculator.Calculate(new SalaryCalculator.Input(
+        var input = new SalaryCalculator.Input(
             September,
-            new DateOnly(2026, 9, 15),
+            today,
             new DateOnly(2025, 1, 1),
-            LedgerApplies: true,
+            ledgerApplies,
             [new SalaryCalculator.PayTerms(new DateOnly(2025, 1, 1), PayBasis.Monthly, 1733.30m, "USD", 10m)],
             Calendar,
             worked.Select((day, i) => Work(i + 1, day, 540, 420)).ToList(),
-            []))!;
+            []);
+        return (SalaryCalculator.Calculate(input)!, input);
+    }
 
-        var estimate = MyTime.EstimateOf(pay, inProgress: true, MyTime.ExpectedFullMonth(September, new DateOnly(2025, 1, 1), Calendar));
+    [Fact]
+    public void A_salaried_month_in_progress_accrues_with_the_hours_required_so_far()
+    {
+        // Up to the 14th: 10 working days, 70h required. The 11th and the 14th are missed: 14h behind, and each whole
+        // missed day would also cost its paid hour of break - 16h at 10 an hour, as Salaries would deduct it.
+        var (pay, input) = SeptemberPay(new DateOnly(2026, 9, 15), ledgerApplies: true, 1, 2, 3, 4, 7, 8, 9, 10);
 
-        estimate.ShouldBe(new MyTime.Estimate(EarnedSoFar: 787.86m, FullMonth: 1593.30m, WouldLose: 140m));
-        MyTime.EstimateOf(pay, inProgress: false, 22 * 420).ShouldBe(new MyTime.Estimate(pay.Total, null, 0));
+        MyTime.EstimateOf(pay, input, inProgress: true)
+            .ShouldBe(new MyTime.Estimate(EarnedSoFar: 787.86m, FullMonth: 1573.30m, WouldLose: 160m));
+        MyTime.EstimateOf(pay, input, inProgress: false).ShouldBe(new MyTime.Estimate(pay.Total, null, 0));
+    }
+
+    [Fact]
+    public void Without_an_hours_ledger_a_salaried_month_accrues_with_the_working_days_passed()
+    {
+        // 10 of September's 22 working days have passed by the 15th; nothing is owed on the 1st.
+        var (pay, input) = SeptemberPay(new DateOnly(2026, 9, 15), ledgerApplies: false);
+        MyTime.EstimateOf(pay, input, inProgress: true).ShouldBe(new MyTime.Estimate(EarnedSoFar: 787.86m, FullMonth: 1733.30m, WouldLose: 0));
+
+        var (firstDay, firstInput) = SeptemberPay(September, ledgerApplies: false);
+        MyTime.EstimateOf(firstDay, firstInput, inProgress: true).EarnedSoFar.ShouldBe(0m);
+    }
+
+    [Fact]
+    public void A_whole_missed_day_costs_its_paid_break_on_top_of_its_required_hours()
+    {
+        var (pay, input) = SeptemberPay(new DateOnly(2026, 9, 15), ledgerApplies: true, 1, 2, 3, 4, 7, 8, 9, 10);
+
+        pay.Ledger!.Short.ShouldBe(2 * 420);
+        SalaryCalculator.ShortfallMinutes(pay.Ledger, input.Calendar).ShouldBe(2 * 480);
     }
 
     [Fact]

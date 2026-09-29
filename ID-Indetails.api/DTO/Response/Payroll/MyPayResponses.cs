@@ -134,13 +134,20 @@ public sealed record MySalaryResponse
 
     public required decimal Total { get; init; }
 
-    /// <summary>What has been earned by today while the month runs; the total once it has closed.</summary>
+    /// <summary>
+    /// What has been earned by today while the month runs: for salaried staff, the salary accrued so far (by the hours
+    /// required so far, or by the working days passed where the hours ledger doesn't apply) plus overtime pay. The
+    /// total once the month has closed.
+    /// </summary>
     public required decimal EarnedSoFar { get; init; }
 
-    /// <summary>Salaried, month in progress: salary + overtime so far − what the caller is behind. An estimate.</summary>
+    /// <summary>Salaried, month in progress: salary + overtime so far − <see cref="WouldLose"/>. An estimate.</summary>
     public decimal? FullMonthEstimate { get; init; }
 
-    /// <summary>Salaried, month in progress: what would come off if the month closed as short as it is now.</summary>
+    /// <summary>
+    /// Salaried, month in progress: what would come off if the month closed as short as it is now - the shortfall
+    /// plus the paid break of each whole missed day, at the hourly rate, as Salaries deducts it.
+    /// </summary>
     public required decimal WouldLose { get; init; }
 }
 

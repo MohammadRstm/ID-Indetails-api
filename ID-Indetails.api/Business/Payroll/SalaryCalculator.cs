@@ -80,7 +80,7 @@ public static class SalaryCalculator
             basePay = proRated && monthDays.Count > 0 ? terms.Amount * paidDays / monthDays.Count : terms.Amount;
             overtimePay = work.Sum(w => (w.Overtime - MadeUp(w)) / 60m * terms.HourlyRate * input.Calendar.PolicyOn(w.Day).OvertimeMultiplier);
 
-            deductionMinutes = ShortfallMinutes(ledger, input.Calendar) + UnpaidMinutes(input, next);
+            deductionMinutes = (ledger is { Flagged: true } ? ShortfallMinutes(ledger, input.Calendar) : 0) + UnpaidMinutes(input, next);
             deduction = input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth && !e.IsPaid)
                 ? basePay
                 : Math.Min(basePay, deductionMinutes / 60m * terms.HourlyRate);
@@ -134,16 +134,12 @@ public static class SalaryCalculator
         => history.Where(t => t.EffectiveFrom <= day).OrderBy(t => t.EffectiveFrom).LastOrDefault();
 
     /// <summary>
-    /// A closed month's shortfall, plus the paid break of each missed day the shortfall still covers:
-    /// a whole missed day costs the full paid day, not just its required hours.
+    /// The shortfall, plus the paid break of each missed day the shortfall still covers: a whole missed day costs
+    /// the full paid day, not just its required hours. Deducted once the month closes; while it runs, it is what
+    /// would come off.
     /// </summary>
-    private static int ShortfallMinutes(HoursLedger.Result? ledger, PersonCalendar calendar)
+    public static int ShortfallMinutes(HoursLedger.Result ledger, PersonCalendar calendar)
     {
-        if (ledger is not { Flagged: true })
-        {
-            return 0;
-        }
-
         var remaining = ledger.Short;
         var breaks = 0;
         foreach (var hours in ledger.MissedDays.Select(calendar.HoursOn).OfType<WorkHours>())

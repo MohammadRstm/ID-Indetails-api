@@ -225,7 +225,7 @@ public sealed class SalaryService(
     private MySalaryResponse MySalary(SalaryCalculator.Result pay, SalaryCalculator.Input input, bool inProgress)
     {
         var lastDay = inProgress ? clock.CompanyToday : input.Month.AddMonths(1).AddDays(-1);
-        var estimate = MyTime.EstimateOf(pay, inProgress, MyTime.ExpectedFullMonth(input.Month, input.JoinedOn, input.Calendar));
+        var estimate = MyTime.EstimateOf(pay, input, inProgress);
 
         return new MySalaryResponse
         {
