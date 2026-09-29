@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
@@ -35,7 +36,7 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var theirs = await OkAsync<PagedResponse<WorkEntryResponse>>(
             $"/api/work-entries?userId={designer.User.Id}&from=2026-06-01&to=2026-06-30", superAdmin);
-        OvertimeOf(theirs.Items).ShouldBe(new Dictionary<string, int> { ["Floor plans"] = 0, ["Late render"] = 120, ["Weekend renders"] = 120 });
+        OvertimeOf(theirs.Items).ShouldBe([("Floor plans", 0), ("Late render", 120), ("Weekend renders", 120)]);
 
         var mine = await OkAsync<PagedResponse<WorkEntryResponse>>("/api/me/work-entries?from=2026-06-01&to=2026-06-30", designer);
         OvertimeOf(mine.Items).ShouldBe(OvertimeOf(theirs.Items));
@@ -81,7 +82,7 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await OkAsync<MyProjectWorkResponse>($"/api/me/projects/{first.Id}/work", designer);
         project.MyMinutes.ShouldBe(540);
         project.MyOvertimeMinutes.ShouldBe(120);
-        OvertimeOf(project.Recent).ShouldBe(new Dictionary<string, int> { ["Floor plans"] = 0, ["Weekend renders"] = 120 });
+        OvertimeOf(project.Recent).ShouldBe([("Floor plans", 0), ("Weekend renders", 120)]);
     }
 
     [Fact]
@@ -189,7 +190,11 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         }
 
         var start = TimeZoneInfo.ConvertTimeToUtc(saturday.ToDateTime(new TimeOnly(9, 0)), Beirut);
-        await Work.InsertAsync(designer.User.Id, project.Id, $"{start:yyyy-MM-dd HH:mm:ss}", $"{start.AddHours(2):yyyy-MM-dd HH:mm:ss}");
+        await Work.InsertAsync(
+            designer.User.Id,
+            project.Id,
+            start.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+            start.AddHours(2).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
 
         var after = await OkAsync<OverviewResponse>("/api/reports/overview?period=last30", superAdmin);
         (after.Minutes - before.Minutes).ShouldBe(120);
@@ -328,8 +333,9 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
 
     private static DateOnly TodayInBeirut() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut));
 
-    private static Dictionary<string, int> OvertimeOf(IEnumerable<WorkEntryResponse> entries)
-        => entries.ToDictionary(e => e.Description, e => e.OvertimeMinutes);
+    /// <summary>Each entry's description and overtime, by description.</summary>
+    private static IReadOnlyList<(string Description, int Overtime)> OvertimeOf(IEnumerable<WorkEntryResponse> entries)
+        => entries.OrderBy(e => e.Description).Select(e => (e.Description, e.OvertimeMinutes)).ToList();
 
     private async Task<T> OkAsync<T>(string url, AuthResponse viewer)
     {
