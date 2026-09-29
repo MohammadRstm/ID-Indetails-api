@@ -51,6 +51,24 @@ public sealed class NotificationSender(
         }
     }
 
+    public async Task SendOnceAsync(NotificationDraft draft, string key, IEnumerable<long> recipientIds, CancellationToken cancellationToken = default)
+    {
+        var allowed = await AllowedAsync(draft, recipientIds, cancellationToken);
+        if (allowed.Count == 0)
+        {
+            return;
+        }
+
+        var payload = Serialise(draft);
+        var alreadySent = await notifications.RecipientsWithKeyAsync(key, allowed, cancellationToken);
+        foreach (var recipientId in allowed.Where(id => !alreadySent.Contains(id)))
+        {
+            var created = New(draft, recipientId, payload);
+            created.DigestKey = key;
+            notifications.Add(created);
+        }
+    }
+
     public Task<IReadOnlyList<long>> DomainMembersAsync(string domain, CancellationToken cancellationToken = default)
         => users.ActiveIdsInDomainAsync(domain, cancellationToken);
 

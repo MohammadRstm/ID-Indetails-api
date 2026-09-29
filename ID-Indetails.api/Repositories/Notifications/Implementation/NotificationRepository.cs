@@ -15,6 +15,16 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
     public Task<Notification?> GetDigestForUpdateAsync(long recipientId, string digestKey, CancellationToken cancellationToken = default)
         => db.Notifications.SingleOrDefaultAsync(n => n.RecipientId == recipientId && n.DigestKey == digestKey, cancellationToken);
 
+    public async Task<IReadOnlySet<long>> RecipientsWithKeyAsync(
+        string digestKey,
+        IReadOnlyCollection<long> recipientIds,
+        CancellationToken cancellationToken = default)
+        => (await db.Notifications.AsNoTracking()
+                .Where(n => recipientIds.Contains(n.RecipientId) && n.DigestKey == digestKey)
+                .Select(n => n.RecipientId)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+
     public async Task<IReadOnlyList<long>> PeopleWhoMayHoldAsync(
         string domainCode,
         string permissionCode,

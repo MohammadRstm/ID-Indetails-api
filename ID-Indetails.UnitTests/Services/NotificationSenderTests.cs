@@ -89,6 +89,24 @@ public class NotificationSenderTests
     }
 
     [Fact]
+    public async Task A_keyed_notification_skips_whoever_already_has_it()
+    {
+        var sender = CreateSender();
+        _repository.Setup(r => r.RecipientsWithKeyAsync("weekly", It.IsAny<IReadOnlyCollection<long>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HashSet<long> { DesignEmployee });
+
+        await sender.SendOnceAsync(
+            new NotificationDraft(NotificationKinds.WeeklySummary, null, DomainCodes.Design, null, null, null, new { minutes = 0 }),
+            "weekly",
+            [DesignEmployee, SuperAdmin]);
+
+        _staged.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            n => n.RecipientId.ShouldBe(SuperAdmin),
+            n => n.DigestKey.ShouldBe("weekly"),
+            n => n.ActorId.ShouldBeNull());
+    }
+
+    [Fact]
     public async Task Company_level_notifications_reach_any_active_person()
     {
         var sender = CreateSender();

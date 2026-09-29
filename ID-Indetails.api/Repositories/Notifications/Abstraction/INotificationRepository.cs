@@ -26,6 +26,12 @@ public interface INotificationRepository
     /// <summary>A recipient's rolling digest notification. Tracked.</summary>
     Task<Notification?> GetDigestForUpdateAsync(long recipientId, string digestKey, CancellationToken cancellationToken = default);
 
+    /// <summary>Which of <paramref name="recipientIds"/> already have a notification with this digest key.</summary>
+    Task<IReadOnlySet<long>> RecipientsWithKeyAsync(
+        string digestKey,
+        IReadOnlyCollection<long> recipientIds,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Active people who might hold <paramref name="permissionCode"/> in the domain: its members, super admins,
     /// and anyone granted it personally. The caller still checks each one's effective permissions.
