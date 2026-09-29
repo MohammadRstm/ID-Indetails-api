@@ -150,7 +150,7 @@ Callers who can't see Design (an Execution admin holds `report:view` too) get `4
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/activity?group=&projectId=&clientId=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first |
+| `GET /api/activity?group=&domain=&projectId=&clientId=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first. `domain` (`design` or `execution`) keeps that domain's events only, without company-level ones; a domain the caller can't see gives an empty page |
 | `GET /api/activity/today` | `activity:view` and `work_entry:view_all` | Design work that started today: minutes, entries, people, and minutes by the hour they were logged |
 
 - **Groups** (the filter chips, `Business/Activity/ActivityGroups.cs`): `work` (work entries and their comments), `money` (revenue, expenses, fee, markup, finalising), `billing` (billing settings, exchange rates, invoices, payments), `projects` (projects, progress, requirements, meetings, clients), `people` (people, pay changes, permissions, teams) and `company` (company-level events with no domain).
