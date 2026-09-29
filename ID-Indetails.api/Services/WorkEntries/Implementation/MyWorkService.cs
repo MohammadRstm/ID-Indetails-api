@@ -122,6 +122,7 @@ public sealed class MyWorkService(
             projectId,
             WorkEntryRules.AcceptsWork(project.Status, settings.HoldLogging),
             mine.Sum(e => e.Minutes),
+            mine.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
             mine.Count,
             WorkStats.Minutes(myWorked, WorkStats.WeekStartOf(today, calendar.FirstDayOfWeek), today),
             all.Select(e => e.UserId).Distinct().Count(),
@@ -149,6 +150,7 @@ public sealed class MyWorkService(
         return new MyDayResponse(
             day,
             mine.Sum(e => e.Minutes),
+            mine.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
             mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
             domainMeetings.Select(MeetingMapper.ToResponse).ToList());
     }
@@ -158,6 +160,7 @@ public sealed class MyWorkService(
     private async Task<WorkSummaryResponse> SummaryAsync(WorkPerson person, WorkSummaryQuery query, CancellationToken cancellationToken)
     {
         var views = await entries.ListAsync(new WorkEntrySearch(UserId: person.Id), cancellationToken);
+        var overtimeById = await overtime.OvertimeOfAsync(views, cancellationToken);
         var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var today = clock.CompanyToday;
         var worked = views.Select(ToWorked).ToList();
@@ -195,6 +198,7 @@ public sealed class MyWorkService(
             WorkStats.Minutes(worked, quarterStart, today),
             WorkStats.Minutes(worked, lastQuarterStart, Min(lastQuarterStart.AddDays(elapsedDays), quarterStart.AddDays(-1))),
             views.Sum(e => e.Minutes),
+            views.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
             views.Count,
             worked.Count > 0 ? worked.Min(w => w.Day) : null,
             views.Select(e => e.ProjectId).Distinct().Count(),
@@ -204,7 +208,13 @@ public sealed class MyWorkService(
             WorkStats.Daily(worked.Where(w => w.Day >= yearAgo)).Select(d => new DayTotalResponse(d.Day, d.Minutes)).ToList(),
             inRange
                 .GroupBy(e => e.ProjectId)
-                .Select(g => new ProjectTimeResponse(g.Key, g.First().ProjectTitle, g.Sum(e => e.Minutes), g.Count(), g.Max(e => e.StartedAt)))
+                .Select(g => new ProjectTimeResponse(
+                    g.Key,
+                    g.First().ProjectTitle,
+                    g.Sum(e => e.Minutes),
+                    g.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
+                    g.Count(),
+                    g.Max(e => e.StartedAt)))
                 .OrderByDescending(p => p.Minutes)
                 .ToList());
     }

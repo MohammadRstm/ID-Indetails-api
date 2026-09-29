@@ -83,10 +83,11 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 
 Everything is calculated from the entries on each request (`Business/WorkEntries/WorkStats.cs`); nothing is stored. An entry counts on the company-time-zone day it starts on, and weeks start on the company's week start (`company_settings.week_start`, Monday until the company settings exist).
 
-- **Summary:** today, each day of this week, this week, the whole of last week, this month, this quarter, and last quarter up to the same number of days (for a fair comparison); all-time minutes, entries, first day and projects; active days and the longest run of consecutive active days in the last 365 days; the last 16 weeks; every active day of the last 365 days (for the heat map); and time per project. `from`, `to`, `projectId` and `search` narrow only the time per project.
+- **Summary:** today, each day of this week, this week, the whole of last week, this month, this quarter, and last quarter up to the same number of days (for a fair comparison); all-time minutes (with `totalOvertimeMinutes`), entries, first day and projects; active days and the longest run of consecutive active days in the last 365 days; the last 16 weeks; every active day of the last 365 days (for the heat map); and time per project (with each project's `overtimeMinutes`). `from`, `to`, `projectId` and `search` narrow only the time per project.
 - **My projects:** every open project, as the prototype shows them to employees (not only those they are members of): whether it accepts work, the caller's minutes and latest start, the people who logged on it (most time first, names only), and the latest activity. Other people's hours stay private. Projects the caller worked on come first, most recent first, then the newest.
-- **My project work:** the caller's minutes, entries and minutes this week on the project; how many people logged there and the project's total minutes; the caller's 12 latest entries; the caller's last 8 weeks there; and the 6 latest entries by other people (name, start and description, as the prototype's "Team activity").
-- The overtime figures of these pages come from the working-time engine once it exists.
+- **My project work:** the caller's minutes (with `myOvertimeMinutes`), entries and minutes this week on the project; how many people logged there and the project's total minutes; the caller's 12 latest entries; the caller's last 8 weeks there; and the 6 latest entries by other people (name, start and description, as the prototype's "Team activity").
+- **My day:** the day's logged minutes with `overtimeMinutes`, and each entry with its own.
+- **Overtime** figures are the overtime part of the minutes next to them (see "Overtime" above); the rest is normal time. The prototype shows them as normal and overtime columns.
 
 ## Everyone's work by project and person
 

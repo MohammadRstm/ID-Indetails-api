@@ -57,6 +57,51 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         lines.Single(l => l.Contains("Weekend renders")).ShouldContain(",2.00,2.00,");
     }
 
+    [Fact]
+    public async Task My_work_splits_normal_time_and_overtime()
+    {
+        var (_, designer, first, _) = await JuneAsync();
+
+        var summary = await OkAsync<WorkSummaryResponse>("/api/me/work-summary", designer);
+        summary.ShouldSatisfyAllConditions(
+            s => s.TotalMinutes.ShouldBe(660),
+            s => s.TotalOvertimeMinutes.ShouldBe(240));
+        summary.ByProject.Single(p => p.ProjectId == first.Id).ShouldSatisfyAllConditions(
+            p => p.Minutes.ShouldBe(540),
+            p => p.OvertimeMinutes.ShouldBe(120));
+
+        var day = await OkAsync<MyDayResponse>("/api/me/day?date=2026-06-15", designer);
+        day.LoggedMinutes.ShouldBe(540);
+        day.OvertimeMinutes.ShouldBe(120);
+
+        var project = await OkAsync<MyProjectWorkResponse>($"/api/me/projects/{first.Id}/work", designer);
+        project.MyMinutes.ShouldBe(540);
+        project.MyOvertimeMinutes.ShouldBe(120);
+        OvertimeOf(project.Recent).ShouldBe(new Dictionary<string, int> { ["Floor plans"] = 0, ["Weekend renders"] = 120 });
+    }
+
+    [Fact]
+    public async Task A_person_s_summary_splits_their_overtime_and_outlasts_their_account()
+    {
+        var (superAdmin, designer, _, second) = await JuneAsync();
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+
+        var theirs = await OkAsync<WorkSummaryResponse>($"/api/employees/{designer.User.Id}/work-summary?projectId={second.Id}", designAdmin);
+        theirs.TotalOvertimeMinutes.ShouldBe(240);
+        theirs.ByProject.ShouldHaveSingleItem().OvertimeMinutes.ShouldBe(120);
+
+        await (await Client.GetAsync($"/api/employees/{siteWorker.User.Id}/work-summary", designAdmin.AccessToken))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.GetAsync($"/api/employees/{designer.User.Id}/work-summary", siteWorker.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        // Someone who left keeps their history, and their own sessions end.
+        (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await OkAsync<WorkSummaryResponse>($"/api/employees/{designer.User.Id}/work-summary", designAdmin)).TotalOvertimeMinutes.ShouldBe(240);
+        await (await Client.GetAsync("/api/me/work-summary", designer.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
+    }
+
     /// <summary>A Design employee with the June work described above, on two new projects.</summary>
     private async Task<(AuthResponse SuperAdmin, AuthResponse Designer, ProjectResponse First, ProjectResponse Second)> JuneAsync()
     {
