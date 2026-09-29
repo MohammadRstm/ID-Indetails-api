@@ -11,6 +11,8 @@ namespace ID_Indetails.api.Business.WorkEntries;
 /// <item>A person's entries may not overlap unless the domain allows it. Back-to-back entries don't overlap.</item>
 /// <item>An entry can be edited, deleted or restored within the edit window, counted from when it was logged,
 /// and only while its project still accepts work.</item>
+/// <item>Past months never change: work that starts before the current company month can't be logged, edited, moved,
+/// deleted or restored, by anyone. Excusing hours is how a closed month is corrected.</item>
 /// </list>
 /// </summary>
 public static class WorkEntryRules
@@ -81,6 +83,17 @@ public static class WorkEntryRules
         EditWindow.SevenDays => now - createdAt < TimeSpan.FromDays(7),
         _ => true,
     };
+
+    /// <param name="monthStartUtc">When the current company month began, in UTC.</param>
+    public static bool IsInOpenMonth(DateTime startUtc, DateTime monthStartUtc) => startUtc >= monthStartUtc;
+
+    /// <summary>Checks each start time given: an entry's current start and, when it moves, its new one.</summary>
+    public static RuleDenial? CheckOpenMonth(DateTime monthStartUtc, params DateTime[] startsUtc)
+        => startsUtc.All(start => IsInOpenMonth(start, monthStartUtc))
+            ? null
+            : RuleDenial.BusinessRule(
+                ErrorCodes.MonthClosed,
+                "That work is in a closed month. Past months never change: ask for the hours to be excused instead.");
 
     public static RuleDenial? CheckChangeable(DateTime createdAt, DateTime now, EditWindow window, ProjectStatus projectStatus, bool holdLogging)
     {

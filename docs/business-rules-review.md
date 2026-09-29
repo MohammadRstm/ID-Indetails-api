@@ -47,6 +47,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
 | D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
+| D11 | **Past months never change** (29 Sep 2026). Work entries that start before the current company month can no longer be logged, edited, moved (the day timeline's swaps and moves included), deleted or restored, by anyone (`422 month_closed`). Excusing hours stays the way to correct a closed month. Known exception: a backdated pay change still changes a closed month's salary; it is out of scope for now. |
 
 ## Decided for the money summaries (29 Sep 2026)
 

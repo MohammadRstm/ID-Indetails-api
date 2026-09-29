@@ -124,7 +124,7 @@ public sealed class MyWorkService(
             all.Select(e => e.UserId).Distinct().Count(),
             all.Sum(e => e.Minutes),
             mine.OrderByDescending(e => e.StartedAt).Take(RecentOnProject)
-                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList(),
+                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock)).ToList(),
             ToWeeks(WorkStats.Weekly(myWorked, today, WeeksOnProject, calendar.FirstDayOfWeek)),
             all.Where(e => e.UserId != actor.UserId).OrderByDescending(e => e.StartedAt).Take(TeamActivityOnProject)
                 .Select(e => new TeamActivityResponse(e.UserName, e.StartedAt, e.Description)).ToList());
@@ -145,7 +145,7 @@ public sealed class MyWorkService(
         return new MyDayResponse(
             day,
             mine.Sum(e => e.Minutes),
-            mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList(),
+            mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock)).ToList(),
             domainMeetings.Select(MeetingMapper.ToResponse).ToList());
     }
 

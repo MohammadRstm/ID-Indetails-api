@@ -71,6 +71,7 @@ public static class ErrorCodes
     public const string EntryOverlaps = "entry_overlaps";
     public const string DescriptionRequired = "description_required";
     public const string EditWindowClosed = "edit_window_closed";
+    public const string MonthClosed = "month_closed";
     public const string GroupChatUnavailable = "group_chat_unavailable";
 
     // Billing
