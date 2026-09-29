@@ -102,6 +102,52 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync("/api/me/work-summary", designer.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
     }
 
+    [Fact]
+    public async Task Project_work_splits_each_contributor_s_hours_and_filters_them_by_work_text()
+    {
+        var (superAdmin, designer, first, _) = await JuneAsync();
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+
+        var work = await OkAsync<ProjectWorkResponse>($"/api/projects/{first.Id}/work", designAdmin);
+        work.TotalMinutes.ShouldBe(540);
+        work.TotalOvertimeMinutes.ShouldBe(120);
+        work.Contributors.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            c => c.Minutes.ShouldBe(540),
+            c => c.OvertimeMinutes.ShouldBe(120));
+
+        // The work text narrows the contributors (every word, in the description), never the project's totals.
+        var weekend = await OkAsync<ProjectWorkResponse>($"/api/projects/{first.Id}/work?search=RENDERS%20weekend", designAdmin);
+        weekend.TotalMinutes.ShouldBe(540);
+        weekend.Contributors.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            c => c.Entries.ShouldBe(1),
+            c => c.Minutes.ShouldBe(120),
+            c => c.OvertimeMinutes.ShouldBe(120));
+        (await OkAsync<ProjectWorkResponse>($"/api/projects/{first.Id}/work?search=elevations", designAdmin)).Contributors.ShouldBeEmpty();
+
+        // The contributor drawer takes the same filters; its share is of all the project's time (420 of 540).
+        var drawer = await OkAsync<ProjectContributorDetailResponse>(
+            $"/api/projects/{first.Id}/work/people/{designer.User.Id}?search=floor&to=2026-06-19", designAdmin);
+        drawer.ShouldSatisfyAllConditions(
+            d => d.Minutes.ShouldBe(420),
+            d => d.OvertimeMinutes.ShouldBe(0),
+            d => d.SharePct.ShouldBe(78),
+            d => d.RecentEntries.ShouldHaveSingleItem().Description.ShouldBe("Floor plans"));
+        (await OkAsync<ProjectContributorDetailResponse>($"/api/projects/{first.Id}/work/people/{designer.User.Id}", designAdmin))
+            .OvertimeMinutes.ShouldBe(120);
+
+        await (await Client.GetAsync($"/api/projects/{first.Id}/work?search={new string('a', 101)}", designAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.GetAsync($"/api/projects/{site.Id}/work?search=floor", designAdmin.AccessToken))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.GetAsync($"/api/projects/{first.Id}/work/people/{designer.User.Id}?search=floor", designer.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        // Work of someone who has left still counts.
+        (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await OkAsync<ProjectWorkResponse>($"/api/projects/{first.Id}/work", designAdmin)).Contributors.ShouldHaveSingleItem().OvertimeMinutes.ShouldBe(120);
+    }
+
     /// <summary>A Design employee with the June work described above, on two new projects.</summary>
     private async Task<(AuthResponse SuperAdmin, AuthResponse Designer, ProjectResponse First, ProjectResponse Second)> JuneAsync()
     {

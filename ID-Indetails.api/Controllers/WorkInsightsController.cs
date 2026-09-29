@@ -18,11 +18,15 @@ public sealed class WorkInsightsController(IWorkInsightsService workInsightsServ
     public Task<ProjectWorkResponse> ProjectWork(long projectId, [FromQuery] ProjectWorkQuery query, CancellationToken cancellationToken)
         => workInsightsService.ProjectWorkAsync(projectId, query, cancellationToken);
 
-    /// <summary>One person's work on a project.</summary>
+    /// <summary>One person's work on a project, narrowed like the contributors table.</summary>
     [HttpGet("projects/{projectId:long}/work/people/{userId:long}")]
     [HasPermission(PermissionCodes.WorkEntryViewAll)]
-    public Task<ProjectContributorDetailResponse> Contributor(long projectId, long userId, CancellationToken cancellationToken)
-        => workInsightsService.ContributorAsync(projectId, userId, cancellationToken);
+    public Task<ProjectContributorDetailResponse> Contributor(
+        long projectId,
+        long userId,
+        [FromQuery] ProjectWorkQuery query,
+        CancellationToken cancellationToken)
+        => workInsightsService.ContributorAsync(projectId, userId, query, cancellationToken);
 
     /// <summary>A project's history day by day, with its status changes, progress and quiet gaps.</summary>
     [HttpGet("projects/{projectId:long}/timeline")]
