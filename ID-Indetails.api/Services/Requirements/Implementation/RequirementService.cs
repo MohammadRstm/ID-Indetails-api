@@ -54,6 +54,35 @@ public sealed class RequirementService(
             project.ProgressPct);
     }
 
+    public async Task<MyRequirementsResponse> ListMineAsync(CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var today = clock.CompanyToday;
+        var rows = (await requirements.AssignedToAsync(actor.UserId, actor.VisibleDomains, cancellationToken)).ToDictionary(r => r.Id);
+        var summary = MyRequirements.Summarise(
+            rows.Values.Select(r => new MyRequirements.Item(r.Id, r.ProjectId, r.Deadline, r.IsDone, r.CreatedAt)).ToList(), today);
+
+        return new MyRequirementsResponse(
+            summary.Open.Select(i => rows[i.Id]).Select(r => new MyRequirementResponse(
+                r.Id,
+                r.Text,
+                r.Deadline,
+                RequirementRules.IsOverdue(r.Deadline, r.IsDone, today),
+                r.Deadline is { } deadline ? deadline.DayNumber - today.DayNumber : null,
+                new MyRequirementProjectResponse(r.Project.Id, r.Project.Title, r.Project.Icon, r.Project.Tint, r.Project.Status),
+                r.Assignees
+                    .Where(a => a.UserId != actor.UserId)
+                    .Select(a => new RequirementPersonResponse(a.UserId, $"{a.User.FirstName} {a.User.LastName}".Trim() is { Length: > 0 } name ? name : a.User.Email))
+                    .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                r.CreatedAt))
+                .ToList(),
+            summary.Projects,
+            summary.Overdue,
+            summary.DueSoon,
+            summary.Done);
+    }
+
     public async Task<RequirementResponse> CreateAsync(long projectId, SaveRequirementRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
