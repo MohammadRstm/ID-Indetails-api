@@ -6,8 +6,8 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/company/settings` | Signed in | Name, time zone, week start, time format, default currency |
-| `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row |
+| `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices and statements), time zone, week start, time format, default currency |
+| `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row. Address (up to 300 characters) and website (a web address such as `indetails.com`) are optional; leaving one out clears it |
 | `GET /api/company/working-time` | Signed in | The policy in force today and every dated policy, newest first |
 | `POST /api/company/working-time` | `working_time:manage` | A new working week, break and overtime multiplier from a date |
 | `GET /api/company/schedules?domain=&search=` | `schedule:manage` | Everyone's week (their own or the company's) and the hours it requires |

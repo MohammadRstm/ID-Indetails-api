@@ -514,6 +514,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("id");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)")
+                        .HasColumnName("address");
+
                     b.Property<string>("DefaultCurrency")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -549,6 +554,11 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Property<bool>("Use24HourTime")
                         .HasColumnType("tinyint(1)")
                         .HasColumnName("use_24_hour_time");
+
+                    b.Property<string>("Website")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("website");
 
                     b.Property<byte>("WeekStart")
                         .HasColumnType("tinyint unsigned")

@@ -138,6 +138,8 @@ The `MeetingCreatePermission` migration seeds the Design `meeting:create` permis
 
 The `MaterialMarkupEventPayload` migration only moves data: existing `material_markup_set` events get their markup in the payload (`markup`, `prevMarkup`) and empty amount columns. Each project's latest event takes the project's current markup, which is exact; older events and every `prevMarkup` keep the 2-decimal value they were saved with (12.5% stays 0.13), since the exact one was never stored.
 
+The `CompanyAddressAndWebsite` migration adds the optional `address` and `website` columns to `company_settings`, for the letterhead of invoices and statements.
+
 The `DropProjectMembers` migration drops `project_members` and `disciplines`. Nothing used them, and projects have no member list: anyone in the domain may work on any project (30 Sep 2026).
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.

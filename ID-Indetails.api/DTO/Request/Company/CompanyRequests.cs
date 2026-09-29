@@ -6,6 +6,12 @@ public sealed record UpdateCompanySettingsRequest
 {
     public string Name { get; init; } = string.Empty;
 
+    /// <summary>For the letterhead of invoices and statements; empty clears it.</summary>
+    public string? Address { get; init; }
+
+    /// <summary>A web address such as indetails.com; empty clears it.</summary>
+    public string? Website { get; init; }
+
     /// <summary>0 = Sunday, 1 = Monday.</summary>
     public byte WeekStart { get; init; } = 1;
 

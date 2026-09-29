@@ -28,19 +28,31 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var body = new { name = "  Indetails  ", weekStart = 0, use24HourTime = true, defaultCurrency = "lbp" };
+        var body = new
+        {
+            name = "  Indetails  ",
+            address = " Hamra Street, Beirut, Lebanon ",
+            website = "indetails.com",
+            weekStart = 0,
+            use24HourTime = true,
+            defaultCurrency = "lbp",
+        };
 
         await (await Client.PutJsonAsync("/api/company/settings", body, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         var saved = await OkAsync<CompanySettingsResponse>(Client.PutJsonAsync("/api/company/settings", body, superAdmin.AccessToken));
         saved.IsSetUp.ShouldBeTrue();
         saved.Name.ShouldBe("Indetails");
+        saved.Address.ShouldBe("Hamra Street, Beirut, Lebanon");
+        saved.Website.ShouldBe("indetails.com");
         saved.DefaultCurrency.ShouldBe("LBP");
         saved.TimeZone.ShouldBe("Asia/Beirut");
 
         (await OkAsync<CompanySettingsResponse>(Client.GetAsync("/api/company/settings", admin.AccessToken))).WeekStart.ShouldBe((byte)0);
 
         await (await Client.PutJsonAsync("/api/company/settings", new { name = "", weekStart = 3, defaultCurrency = "EUR" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.PutJsonAsync("/api/company/settings", new { name = "Indetails", website = "not a site" }, superAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
