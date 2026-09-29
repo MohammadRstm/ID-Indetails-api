@@ -61,7 +61,7 @@ public sealed class DashboardService(
                     r.Text,
                     r.Deadline!.Value,
                     RequirementRules.IsOverdue(r.Deadline, r.IsDone, today),
-                    r.Deadline.Value.DayNumber - today.DayNumber,
+                    r.Deadline!.Value.DayNumber - today.DayNumber,
                     new DeadlineProjectResponse(r.Project.Id, r.Project.Title, r.Project.Icon, r.Project.Tint),
                     r.Assignees
                         .Select(a => new PersonRefResponse(a.UserId, PersonName.Of(a.User.FirstName, a.User.LastName, a.User.Email)))

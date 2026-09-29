@@ -61,10 +61,11 @@ public sealed class ClientService(
         {
             // The money of every matching client is needed to filter and sort, so they are paged here.
             var (all, _) = await clients.SearchAsync(search with { Page = 1, PageSize = int.MaxValue }, cancellationToken);
-            money = await MoneyOfAsync(all, cancellationToken);
-            var matching = all.Where(r => query.Filter != ClientFilter.Owing || money[r.Client.Id].Billing.Outstanding > 0).ToList();
-            rows = SortedByMoney(matching, money, query.Sort).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToList();
+            var allMoney = await MoneyOfAsync(all, cancellationToken);
+            var matching = all.Where(r => query.Filter != ClientFilter.Owing || allMoney[r.Client.Id].Billing.Outstanding > 0).ToList();
+            rows = SortedByMoney(matching, allMoney, query.Sort).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToList();
             total = matching.Count;
+            money = allMoney;
         }
         else
         {
