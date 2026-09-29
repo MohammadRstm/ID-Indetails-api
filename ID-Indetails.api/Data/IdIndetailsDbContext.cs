@@ -14,7 +14,6 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<UserPermissionOverride> UserPermissionOverrides => Set<UserPermissionOverride>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Team> Teams => Set<Team>();
-    public DbSet<Discipline> Disciplines => Set<Discipline>();
     public DbSet<UserPayHistory> UserPayHistory => Set<UserPayHistory>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
@@ -24,7 +23,6 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<Client> Clients => Set<Client>();
     public DbSet<ClientContact> ClientContacts => Set<ClientContact>();
     public DbSet<Project> Projects => Set<Project>();
-    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<ProjectRequirement> ProjectRequirements => Set<ProjectRequirement>();
     public DbSet<RequirementAssignee> RequirementAssignees => Set<RequirementAssignee>();
     public DbSet<ProjectMeeting> ProjectMeetings => Set<ProjectMeeting>();

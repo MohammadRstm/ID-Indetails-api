@@ -664,37 +664,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("conversation_reads", (string)null);
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.Discipline", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("DomainCode")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("varchar(16)")
-                        .HasColumnName("domain_code");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
-                        .HasColumnName("name");
-
-                    b.HasKey("Id")
-                        .HasName("pk_disciplines");
-
-                    b.HasIndex("DomainCode", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("ix_disciplines_domain_code_name");
-
-                    b.ToTable("disciplines", (string)null);
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.Domain", b =>
                 {
                     b.Property<string>("Code")
@@ -2515,44 +2484,6 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.ProjectMember", b =>
-                {
-                    b.Property<long>("ProjectId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("project_id");
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("user_id");
-
-                    b.Property<DateTime>("AddedAt")
-                        .HasPrecision(3)
-                        .HasColumnType("datetime(3)")
-                        .HasColumnName("added_at");
-
-                    b.Property<long?>("AddedById")
-                        .HasColumnType("bigint")
-                        .HasColumnName("added_by_id");
-
-                    b.Property<long?>("DisciplineId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("discipline_id");
-
-                    b.HasKey("ProjectId", "UserId")
-                        .HasName("pk_project_members");
-
-                    b.HasIndex("AddedById")
-                        .HasDatabaseName("ix_project_members_added_by_id");
-
-                    b.HasIndex("DisciplineId")
-                        .HasDatabaseName("ix_project_members_discipline_id");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_project_members_user_id");
-
-                    b.ToTable("project_members", (string)null);
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>
                 {
                     b.Property<long>("Id")
@@ -4264,18 +4195,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.Discipline", b =>
-                {
-                    b.HasOne("ID_Indetails.api.Models.Domain", "Domain")
-                        .WithMany()
-                        .HasForeignKey("DomainCode")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_disciplines_domains_domain_code");
-
-                    b.Navigation("Domain");
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.DomainSettings", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.Domain", "Domain")
@@ -4750,41 +4669,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Project");
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.ProjectMember", b =>
-                {
-                    b.HasOne("ID_Indetails.api.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("AddedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_project_members_users_added_by_id");
-
-                    b.HasOne("ID_Indetails.api.Models.Discipline", "Discipline")
-                        .WithMany()
-                        .HasForeignKey("DisciplineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_project_members_disciplines_discipline_id");
-
-                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
-                        .WithMany("Members")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_project_members_projects_project_id");
-
-                    b.HasOne("ID_Indetails.api.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_project_members_users_user_id");
-
-                    b.Navigation("Discipline");
-
-                    b.Navigation("Project");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -5160,8 +5044,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("LabourDefaults");
 
                     b.Navigation("Meetings");
-
-                    b.Navigation("Members");
 
                     b.Navigation("Requirements");
                 });

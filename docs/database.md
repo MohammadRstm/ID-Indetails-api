@@ -10,7 +10,7 @@ This database serves **one company**. There is no tenant or company key on any t
 
 The company has two business domains, **Design** and **Execution**. They are divisions, not tenants:
 
-- Root tables carry a `domain_code`: `users`, `teams`, `disciplines`, `clients`, `projects`, `conversations`, `activity_events`, `billing_settings`, `domain_settings`, `invoice_sequences`. Child tables inherit the domain through their parent.
+- Root tables carry a `domain_code`: `users`, `teams`, `clients`, `projects`, `conversations`, `activity_events`, `billing_settings`, `domain_settings`, `invoice_sequences`. Child tables inherit the domain through their parent.
 - Super admins have no domain (`CHECK`: `role_code = 'super_admin'` exactly when `domain_code IS NULL`). They see both domains and the company layer.
 - Company overhead, salaries and company settings belong to neither domain.
 - `projects (client_id, domain_code)` references `clients (id, domain_code)`, so a project can never point at the other domain's client.
@@ -33,9 +33,9 @@ The database is the second line of defence. The API must still filter every quer
 
 | Area | Tables |
 |---|---|
-| Identity and access | `domains`, `roles`, `permissions`, `role_permissions`, `user_permission_overrides`, `users`, `teams`, `disciplines`, `user_pay_history`, `refresh_tokens`, `user_invitations`, `password_reset_tokens` |
+| Identity and access | `domains`, `roles`, `permissions`, `role_permissions`, `user_permission_overrides`, `users`, `teams`, `user_pay_history`, `refresh_tokens`, `user_invitations`, `password_reset_tokens` |
 | Clients | `clients`, `client_contacts` |
-| Projects | `projects`, `project_members`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses` |
+| Projects | `projects`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses` |
 | Design work | `work_entries`, `work_entry_comments` |
 | Execution site costs and pricing | `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `client_statements`, `client_statement_lines`, `client_statement_deliveries`, `statement_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
@@ -137,6 +137,8 @@ The `ExchangeRatePermission` migration seeds the `exchange_rate:manage` permissi
 The `MeetingCreatePermission` migration seeds the Design `meeting:create` permission (set meetings, and move or remove your own), held by every role.
 
 The `MaterialMarkupEventPayload` migration only moves data: existing `material_markup_set` events get their markup in the payload (`markup`, `prevMarkup`) and empty amount columns. Each project's latest event takes the project's current markup, which is exact; older events and every `prevMarkup` keep the 2-decimal value they were saved with (12.5% stays 0.13), since the exact one was never stored.
+
+The `DropProjectMembers` migration drops `project_members` and `disciplines`. Nothing used them, and projects have no member list: anyone in the domain may work on any project (30 Sep 2026).
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
