@@ -1,4 +1,4 @@
-# Version 1 status (30 Sep 2026)
+# Version 1 status (30 Sep 2026, updated after the decisions)
 
 This page covers what the API does today, what is in progress, and what the prototype (`hourline`, the source of truth for business rules) still has that the API lacks. Decisions and open questions are in [business-rules-review.md](business-rules-review.md).
 
@@ -8,7 +8,7 @@ This page covers what the API does today, what is in progress, and what the prot
 |---|---|---|
 | Sign-in with rotating refresh tokens, invitation-only sign-up, super-admin setup, password reset | [authentication.md](authentication.md) | #4, #25 |
 | Permissions: role defaults, personal grants and revokes, delegation, domain separation | [authorization.md](authorization.md) | #6 |
-| People, teams, pay records, deactivation with leaving dates | [employees.md](employees.md) | #7, #23 |
+| People, teams, pay records, employment periods (leaving and coming back) | [employees.md](employees.md) | #7, #23 |
 | Clients, projects, requirements, expenses, status changes, project lists with filters, sorts and work | [clients.md](clients.md), [projects.md](projects.md) | #8, #16, #22 |
 | Invoices, payments, deliveries, billing settings, exchange rates | [billing.md](billing.md) | #8, #9, #21 |
 | Project cost, profit and margin; domain money summaries, list money, client rollups, money follow-ups | [finance.md](finance.md) | #10, #18, #21, #22 |
@@ -17,7 +17,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | Design work: entries, comments, meetings, settings, reports, activity, timeline, overtime, closed months, dashboards | [design.md](design.md) | #14, #22, #24 |
 | Self-service: my pay, hours, overtime, schedule, requirements, board layouts | [me.md](me.md) | #17, #22, #23, #24 |
 | Notifications, scheduled checks, money insights, auto-archive | [notifications.md](notifications.md) | #19, #22 |
-| Messaging and live updates | [messaging.md](messaging.md) | #20 |
+| Messaging, live updates, online status and last seen | [messaging.md](messaging.md) | #20 |
 | Search | [search.md](search.md) | #22 |
 
 The tests: 342 unit tests and 272 integration tests against real MySQL. The integration run takes about 7 minutes ([local-development.md](local-development.md#tests)).
@@ -65,8 +65,7 @@ These are compared with the prototype. None needs a schema change unless it says
 
 ### People and work
 
-- **Project members and disciplines**: the tables exist, but nothing reads or writes them. This waits on open question 12.
-- **Online status and last seen** (waits on open question 13). `last_seen_at` only moves at sign-in and refresh.
+- **An Execution site's "Team"** on its cards: with no project members (O12), it would be the people who recorded materials or labour there.
 - **The Timeline tab's lanes and one-day view**: these need individual entries with each person's team, not day totals (`59-timeline-*.js`).
 - **People page**:
   - the rate column for money viewers;
@@ -80,7 +79,7 @@ These are compared with the prototype. None needs a schema change unless it says
 
 ### Documents and delivery
 
-- **PDFs** of invoices, statements and project reports, made in the browser or on the server. This is open question 3.
+- **PDFs** of invoices, statements and project reports, made on the server (O3). The library is open question 3.
 - **Emailing invoices and statements.** Deliveries are recorded, but nothing is sent.
 
 ### Outside the API
@@ -101,4 +100,3 @@ These are known and harmless at today's size. Revisit them as the data grows.
   - the money follow-ups miss overdue invoices that have no exchange rate.
 - **Rounding in the company monthly view:** it rounds the parts before subtracting them; the domain charts subtract the rounded total.
 - **Viewing a super admin:** `/employees/{id}/work-summary` shows a super admin to anyone, but `/employees/{id}/overtime` only to callers who see every domain.
-- **Tests at the start of a month:** tests that log work a few hours back fail during the first hours of a month (Beirut time), because of the closed-month lock. This waits on open question 6.

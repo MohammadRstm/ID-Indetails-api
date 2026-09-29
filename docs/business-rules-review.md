@@ -127,25 +127,32 @@ See [messaging.md](messaging.md).
   Overtime first makes up any shortfall in the month, and the remainder is paid at the multiplier.
 - **Shortfall** (unexcused missing hours in a closed month) is deducted from salaried pay at the plain hourly rate. Hourly staff are simply paid for what they log. Nothing carries over between months.
 
+## Decided on 30 Sep 2026
+
+Answers to the questions raised after the helper sessions' work was merged.
+
+| # | Rule |
+|---|---|
+| O3 | **PDFs are made on the server**, so invoices and statements can be emailed with them. The library is still to be chosen (open question 3). |
+| O4, O5 | **Employment is dated periods** (decision 24): leaving takes a last working day, and time away between two periods isn't paid unless it began that month and the admin says so. |
+| O6 | **The month just ended stays open through the 1st** (D11). |
+| O7 | **The cost warning is Design only** (A1). A material's cost is always what was paid for it; the client price is typed or worked out from the markup, never used as the cost. |
+| O8 | **Auto-archive doesn't wait for payment**, but an archived project still owed money stays in the "finished but still owed" follow-up. |
+| O9 | **Overtime of work past midnight counts on the day it started**, as pay does. |
+| O10 | **Revenue always lands in a month**: with no priced cost it follows the hours logged, then the completion month. |
+| O11 | **Every completion and archive finalises the project** (the backend's rule). The close-out's "Notify the contributors" switch is gone: `notifyProject` decides. |
+| O12 | **Projects have no members.** Anyone in the domain may work on any project; the unused member tables are dropped. |
+| O13 | **Online means an open live connection**; last seen moves with use (at most every 5 minutes). |
+| O14 | **No single sign-on in version 1**; the sign-in page no longer mentions it. |
+| O15 | **A quiet stretch is 4 days without work**, everywhere. |
+| O16 | **An expense's currency changes from a month**: the line ends and a new one takes over, so past months keep theirs. |
+| O17 | **The company's address and website are settings**, for the letterhead. |
+| O18 | **Money stays exact to the cent**: no tolerance for small balances. |
+
 ## Open questions
 
-These have no decision yet. Unless one says otherwise, the schema doesn't depend on it. Where there is a suggestion, it is only that. What each question holds up is listed in [status.md](status.md).
+These have no decision yet. The schema doesn't depend on them.
 
 1. **Public holidays:** a company holiday calendar, or keep excusing per person?
 2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
-3. **PDFs** of invoices, statements and project reports: made in the browser, or on the server with a new library (a new dependency)? Emailing invoices and statements depends on it, since a server email needs the PDF.
-4. **Reactivating someone rewrites their closed months.** Reactivation clears `deactivated_at`, so the months they were away count as worked: salaried Execution staff are paid for them, and Design employees show those months as short. Keeping each leaving and return as dated periods would fix it, with a schema change.
-5. **The leaving day is paid.** The day of the deactivation counts as a working day. Deactivating someone the morning after their last day pays them one more day; for a Design employee, that day then counts as missed and its full 8 hours are deducted. Suggested: ask for the last working day when deactivating, defaulting to today.
-6. **Months close at midnight.** From 00:00 on the 1st (Beirut), last month's work can't be logged, so an evening's work logged after midnight is refused (D11). Suggested: keep last month open until the end of the 1st. The client's date picker should also stop at open months, and hide Edit and Undo on closed entries.
-7. **The Execution cost warning fires on almost every site.** A site's payment includes its materials at client price, while its cost includes them at cost price. With no fee and a markup under about 18%, cost is over 85% of the payment from the first material. The prototype shows the warning on the Design dashboard only. Suggested: Design only.
-8. **Auto-archive takes projects still owed money** once they are 90 days quiet, and they leave the "finished but still owed" follow-up. Suggested: never auto-archive a project with money outstanding.
-9. **Overtime of work past midnight** counts on the day it started, as pay does. The prototype's views split it across the calendar days it touches.
-10. **Revenue of a client project with no priced cost** is recognised in no month (as in the prototype), for example when all its hours were logged by someone with no pay record. Suggested: spread it by its logged hours instead, or by its completion month when there are none.
-11. **Every completion and archive goes through the close-out.** The prototype's menus can set any status directly, skipping the close-out and never locking revenue; the backend always finalises. The close-out's "Notify the contributors" switch does nothing in the prototype. Suggested: drop it; `notifyProject` already decides.
-12. **Who sets project members and their disciplines?** Logging doesn't add members (D9), and Execution staff don't log. The prototype has no screen for it. Suggested: admins manage a project's members, each with a discipline.
-13. **What does "online" mean?** Suggested: someone with the live connection (`/hubs/live`) open. Last seen then updates on activity, at most every few minutes, not only at sign-in and refresh.
-14. **Single sign-on:** the sign-in page says it is available. Is it planned, or should the line go?
-15. **Quiet stretches:** the heatmap marks 5 days without work, while the history view and the API use 4. Suggested: 4 everywhere.
-16. **Changing an overhead line's currency** isn't possible: amount changes are dated (decision 16). Confirm that a new currency means a new line.
-17. **The invoice letterhead** hard-codes the company's address and website. Making them company settings needs a schema change.
-18. **Small balances:** the prototype treats less than $0.50 as paid and not owing; the API is exact to the cent. Suggested: stay exact, since the API computes in decimals and has no rounding leftovers.
+3. **The PDF library:** QuestPDF (free for companies under $1M a year in revenue, a paid licence above that) or PdfSharp with MigraDoc (free for everyone, harder to lay out). Either is a new dependency.
