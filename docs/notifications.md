@@ -26,7 +26,11 @@ Every notification goes through one sender (`INotificationSender`), which applie
 - only active people who can see the notification's domain;
 - no money in payloads, so a notification can't reveal amounts to someone who later loses `financial:view`. The page it links to checks permissions as usual.
 
-"Holders of a permission" means the active people who hold it and can see the domain, super admins and people granted it from the other domain included.
+"Holders of a permission" means the active people who hold it and can see the domain, super admins and people granted it from the other domain included. "The domain's people" means the active admins and employees whose home domain it is; super admins are left out of these broadcasts.
+
+Some notifications are **rolling digests**: one per person per digest key. Each repeat adds 1 to `count`, takes the newest payload and actor, and shows as new and unread again.
+
+Project news (new projects, status changes, added requirements) follows the domain's `notifyProject` setting. Everything else always sends.
 
 ## Kinds
 
@@ -39,3 +43,21 @@ Every notification goes through one sender (`INotificationSender`), which applie
 | `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
 | `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` |
 | `labour_week_submitted` | Holders of `labour_report:manage` | the project | `weekStart`, `updated`, `projectTitle` |
+| `project_created` | The domain's people | the project | `projectTitle` |
+| `project_status_changed` | The domain's people, on hold, resume, complete and reopen (not archive) | the project | `projectTitle`, `change` (`hold`, `resume`, `complete`, `reopen`) |
+| `project_owner_set` | The new owner | the project | `projectTitle` |
+| `project_nearly_done` | The owner and holders of `project:change_status`, each time an active project's progress crosses 90% | the project | `projectTitle`, `progressPct` |
+| `requirements_added` | The domain's people other than the requirement's assignees. Rolling: one per project per day (`requirements-added-{projectId}-YYYY-MM-DD`) | the latest requirement | `projectTitle`, `latestText` |
+| `requirement_done` | Its assignees and holders of `requirement:manage` | the requirement | `projectTitle`, `text` |
+| `invitation_accepted` | Whoever sent the invitation, and holders of `employee:invite` in the new person's domain | the new person | `role`, `domain` |
+| `role_changed` | The person, after a manual change or an automatic one from a permission change | the person | `from`, `to`, `domain`, `automatic` |
+| `domain_changed` | The person moved | the person | `from`, `to` |
+| `team_changed` | The person, when an admin changes their team | the person | `teamId` (null when taken out of a team) |
+| `pay_changed` | The person | the person | `effectiveFrom` (never the amount) |
+| `permissions_changed` | The person | the person | `granted`, `revoked`, `reset` (permission codes) |
+| `hours_excused` | The person | the excuse | `month`, `kind`, `minutes`, `days`, `isPaid` |
+| `schedule_changed` | The person | the person | `effectiveFrom`, `followsDefault` |
+| `client_added` | Holders of `client:manage` in the client's domain | the client | `name`, `organisation` |
+| `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
+| `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
+| `statement_sent` | Holders of `financial:view` | the statement | `number` |

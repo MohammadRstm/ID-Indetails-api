@@ -12,6 +12,7 @@ using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Permissions.Abstraction;
 
 namespace ID_Indetails.api.Services.Permissions.Implementation;
@@ -22,6 +23,7 @@ public sealed class PermissionManagementService(
     IPermissionRepository permissionRepository,
     IPermissionService permissions,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IPermissionManagementService
 {
@@ -105,6 +107,7 @@ public sealed class PermissionManagementService(
 
         SyncOverrides(user.Id, existing, plan.Overrides, reasons, actor.UserId, now);
         RecordEvents(user, plan, reasons, actor.UserId, now);
+        await NotifyAsync(user, plan, actor.UserId, cancellationToken);
 
         if (plan.PreviousRole is not null)
         {
@@ -182,6 +185,35 @@ public sealed class PermissionManagementService(
         {
             var kind = plan.Role == RoleCodes.Admin ? ActivityEventKinds.RoleAutoPromoted : ActivityEventKinds.RoleAutoDemoted;
             activity.Add(UserEvent(user, kind, actorId, now, new { from = plan.PreviousRole, to = plan.Role }));
+        }
+    }
+
+    /// <summary>Tells the person what changed: one notification for the permissions, one for an automatic role change.</summary>
+    private async Task NotifyAsync(User user, PermissionChangePlanner.Plan plan, long actorId, CancellationToken cancellationToken)
+    {
+        List<string> Codes(PermissionChangeAction action) => plan.Applied.Where(c => c.Action == action).Select(c => c.Code).ToList();
+
+        if (plan.Applied.Count > 0)
+        {
+            await notifications.SendAsync(
+                new NotificationDraft(NotificationKinds.PermissionsChanged, actorId, null, null, "user", user.Id,
+                    new
+                    {
+                        granted = Codes(PermissionChangeAction.Grant),
+                        revoked = Codes(PermissionChangeAction.Revoke),
+                        reset = Codes(PermissionChangeAction.Reset),
+                    }),
+                [user.Id],
+                cancellationToken);
+        }
+
+        if (plan.PreviousRole is not null)
+        {
+            await notifications.SendAsync(
+                new NotificationDraft(NotificationKinds.RoleChanged, actorId, null, null, "user", user.Id,
+                    new { from = plan.PreviousRole, to = plan.Role, domain = user.DomainCode, automatic = true }),
+                [user.Id],
+                cancellationToken);
         }
     }
 

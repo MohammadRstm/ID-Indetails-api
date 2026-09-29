@@ -15,6 +15,7 @@ using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 
 namespace ID_Indetails.api.Services.Payroll.Implementation;
@@ -26,6 +27,7 @@ public sealed class HourExcuseService(
     IUserRepository users,
     IHourExcuseRepository excuses,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IHourExcuseService
 {
@@ -61,6 +63,11 @@ public sealed class HourExcuseService(
         excuses.Add(excuse);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         Record(user.DomainCode, excuse, ActivityEventKinds.HoursExcused, actor.UserId);
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.HoursExcused, actor.UserId, null, null, "hour_excuse", excuse.Id,
+                new { month = request.Month, kind = excuse.Kind, minutes = excuse.Minutes, days, isPaid = excuse.IsPaid }),
+            [user.Id],
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

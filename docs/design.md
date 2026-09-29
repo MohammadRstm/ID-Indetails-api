@@ -22,7 +22,8 @@ Features of the Design domain: domain settings, work entries, comments, meetings
 | `logReminder` | `true` | | Shown by the client (the afternoon reminder) |
 | `notifyEntry` | `all` | `all`, `long` (3 hours or more), `digest`, `off` | Notifications to admins when work is logged |
 | `notifyIdle` | `true` | | Whether the dashboard flags projects with no work for 7 days |
-| `notifyProject`, `weeklySummary`, `autoArchive` | `true`, `true`, `false` | | Stored only for now; the jobs that use them come later |
+| `notifyProject` | `true` | | Whether the domain's people hear about new projects, status changes and added requirements (see [notifications.md](notifications.md)) |
+| `weeklySummary`, `autoArchive` | `true`, `false` | | Stored only for now; the jobs that use them come later |
 | `holdLogging` | `false` | | Whether work may still be logged on a project on hold |
 
 ## Work entries

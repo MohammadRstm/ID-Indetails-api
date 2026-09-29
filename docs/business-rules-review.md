@@ -43,10 +43,21 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D4 | **Entry attachments wait** for a file-upload feature. |
 | D5 | **Comments can't be edited or deleted.** Posting a comment to the team group chat is refused until messaging exists. |
 | D6 | **Logged-work notifications** go to active people holding `work_entry:view_all` in Design, never the author. |
-| D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, only `notifyEntry` and `notifyIdle` (the dashboard's idle projects) are used for now; the others need scheduled jobs. |
+| D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, only `notifyEntry` and `notifyIdle` (the dashboard's idle projects) are used for now; `notifyProject` is used by project notifications (N4); the others need scheduled jobs. |
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
 | D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
+
+## Decided for notifications (29 Sep 2026)
+
+| # | Decision |
+|---|---|
+| N1 | **Assignees tick their own requirements.** `requirement:complete_own` (every role by default, `RequirementCompleteOwnPermission` migration) ticks a requirement assigned to you and unticks one you ticked yourself. The managers (`requirement:manage`) and the assignees hear about every tick. |
+| N2 | **"The team's admin" is the domain's admins** for now: teams have no lead. |
+| N3 | **Super admins get admin-level notifications** (work logged, materials, labour, clients, billing, ticked requirements) but not the broadcasts to a domain's people (new projects, status changes, added requirements). |
+| N4 | **Added requirements roll into one notification** per person per project per day, and follow `notifyProject` like the other project news. |
+| N5 | **No money in notifications.** Billing notifications name the invoice or project, never the amount. |
+| N6 | **Scheduled notifications come next** (weekly summary, idle projects, deadlines, overdue invoices, the month-end short-hours alert), and live push arrives with messaging. Until then the client polls the unread count. |
 
 ## Carried over from the prototype as-is
 

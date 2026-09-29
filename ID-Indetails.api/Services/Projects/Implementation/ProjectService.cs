@@ -42,6 +42,7 @@ public sealed class ProjectService(
     IPaymentService paymentService,
     IProjectFinanceService finance,
     IActivityEventRepository activity,
+    IProjectNotifier notifier,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectService
 {
@@ -139,6 +140,7 @@ public sealed class ProjectService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectCreated, actor.UserId));
+        await notifier.CreatedAsync(project, actor.UserId, cancellationToken);
         if (project.Revenue > 0)
         {
             activity.Add(ProjectEvent(project, ActivityEventKinds.RevenueSet, actor.UserId, amount: project.Revenue));
@@ -188,6 +190,7 @@ public sealed class ProjectService(
             activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectOwnerSet, actor.UserId,
                 new { ownerId = request.OwnerId, prevOwnerId = project.OwnerId }));
             project.OwnerId = request.OwnerId;
+            await notifier.OwnerSetAsync(project, actor.UserId, cancellationToken);
         }
 
         project.Title = request.Title.Trim();

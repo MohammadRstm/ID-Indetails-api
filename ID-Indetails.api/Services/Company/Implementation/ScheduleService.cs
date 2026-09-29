@@ -17,6 +17,7 @@ using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Company.Implementation;
 
@@ -31,6 +32,7 @@ public sealed class ScheduleService(
     IScheduleRepository schedules,
     IWorkingTimeService workingTime,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IScheduleService
 {
@@ -103,6 +105,11 @@ public sealed class ScheduleService(
             SubjectId = user.Id,
             Payload = JsonSerializer.Serialize(new { effectiveFrom, followsDefault = request.FollowsDefault }),
         });
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.ScheduleChanged, actor.UserId, null, null, "user", user.Id,
+                new { effectiveFrom, followsDefault = request.FollowsDefault }),
+            [user.Id],
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

@@ -79,7 +79,7 @@ Anything else is `422 invalid_status_change`, and asking for the current status 
 - **Assignees** are employees (not admins) of the project's domain who are active or invited (`422 assignee_not_allowed`). They don't have to be project members. With `requirement:complete_own` (every employee by default) an assignee ticks their own requirement and unticks it only if they ticked it themselves; anything else is `403`. Editing, assigning and deleting stay with `requirement:manage`.
 - A requirement is **overdue** when it is open and its deadline is before today (company time zone).
 - Every change writes `requirement_added`, `requirement_updated`, `requirement_done`, `requirement_reopened` or `requirement_deleted` (the requirement is the subject, the text is in the payload).
-- People newly assigned (on creation or an edit) get a `requirement_assigned` notification with the requirement text, deadline and project title. Removing someone, ticking and deleting send none.
+- People newly assigned (on creation or an edit) get a `requirement_assigned` notification with the requirement text, deadline and project title. Adding a requirement also bumps the domain's rolling `requirements_added` notification for the project, and ticking one sends `requirement_done` (see [notifications.md](notifications.md)). Removing someone, unticking and deleting send none.
 
 ## Expenses
 

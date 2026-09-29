@@ -26,6 +26,7 @@ public sealed class ProjectStatusService(
     IProjectService projectService,
     IProjectFinanceService finance,
     IActivityEventRepository activity,
+    IProjectNotifier notifier,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectStatusService
 {
@@ -74,6 +75,7 @@ public sealed class ProjectStatusService(
         }
 
         await progress.RefreshAsync(project, actor.UserId, cancellationToken);
+        await notifier.StatusChangedAsync(project, action, actor.UserId, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

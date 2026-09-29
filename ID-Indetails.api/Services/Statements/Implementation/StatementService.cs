@@ -20,6 +20,7 @@ using ID_Indetails.api.Repositories.Statements.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Statements.Abstraction;
 
 namespace ID_Indetails.api.Services.Statements.Implementation;
@@ -32,6 +33,7 @@ public sealed class StatementService(
     IStatementRepository statements,
     IProjectFinanceService finance,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IStatementService
 {
@@ -166,6 +168,12 @@ public sealed class StatementService(
         });
         activity.Add(StatementEvent(statement, statement.Project.DomainCode, ActivityEventKinds.StatementSent, actor.UserId,
             statement.Lines.Sum(l => l.Price), new { number = statement.Number, channel = request.Channel.ToString().ToLowerInvariant() }));
+        // Whoever sees the domain's money; the payload never holds amounts.
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.StatementSent, actor.UserId, statement.Project.DomainCode, statement.ProjectId, "statement",
+                statement.Id, new { number = statement.Number }),
+            await notifications.HoldersAsync(statement.Project.DomainCode, PermissionCodes.FinancialView, cancellationToken),
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

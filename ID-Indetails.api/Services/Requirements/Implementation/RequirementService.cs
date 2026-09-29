@@ -30,6 +30,7 @@ public sealed class RequirementService(
     IProjectRepository projects,
     IRequirementRepository requirements,
     IProjectProgress progress,
+    IProjectNotifier notifier,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -75,6 +76,7 @@ public sealed class RequirementService(
 
         activity.Add(RequirementEvent(project, requirement, ActivityEventKinds.RequirementAdded, actor.UserId));
         await NotifyAssignedAsync(project, requirement, assignees, actor.UserId, cancellationToken);
+        await notifier.RequirementAddedAsync(project, requirement, actor.UserId, cancellationToken);
         await progress.RefreshAsync(project, actor.UserId, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -143,6 +145,11 @@ public sealed class RequirementService(
                 project, requirement, done ? ActivityEventKinds.RequirementDone : ActivityEventKinds.RequirementReopened, actor.UserId));
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await progress.RefreshAsync(project, actor.UserId, cancellationToken);
+            if (done)
+            {
+                await notifier.RequirementDoneAsync(project, requirement, actor.UserId, cancellationToken);
+            }
+
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 

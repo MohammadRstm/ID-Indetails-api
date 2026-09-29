@@ -11,6 +11,7 @@ namespace ID_Indetails.api.Services.Projects.Implementation;
 public sealed class ProjectProgress(
     IRequirementRepository requirements,
     IActivityEventRepository activity,
+    IProjectNotifier notifier,
     IClock clock) : IProjectProgress
 {
     public async Task RefreshAsync(Project project, long actorId, CancellationToken cancellationToken = default)
@@ -34,6 +35,8 @@ public sealed class ProjectProgress(
             Amount = next,
             PrevAmount = project.ProgressPct,
         });
+        var previous = project.ProgressPct;
         project.ProgressPct = next;
+        await notifier.ProgressChangedAsync(project, previous, actorId, cancellationToken);
     }
 }

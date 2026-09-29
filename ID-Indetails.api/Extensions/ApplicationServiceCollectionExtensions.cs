@@ -193,6 +193,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IActivityFeedService, ActivityFeedService>();
         services.AddScoped<INotificationSender, NotificationSender>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IProjectNotifier, ProjectNotifier>();
         services.AddScoped<IMaterialService, MaterialService>();
         services.AddScoped<ILabourService, LabourService>();
         services.AddScoped<IStatementService, StatementService>();
