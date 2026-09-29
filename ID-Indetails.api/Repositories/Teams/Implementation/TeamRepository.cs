@@ -39,9 +39,11 @@ public sealed class TeamRepository(IdIndetailsDbContext db) : ITeamRepository
             t => t.DomainCode == domainCode && t.Name == name && (exceptTeamId == null || t.Id != exceptTeamId),
             cancellationToken);
 
-    public async Task<bool> IsInUseAsync(long teamId, CancellationToken cancellationToken = default)
-        => await db.Users.AnyAsync(u => u.TeamId == teamId, cancellationToken)
-            || await db.Conversations.AnyAsync(c => c.TeamId == teamId, cancellationToken);
+    public Task<bool> HasPeopleAsync(long teamId, CancellationToken cancellationToken = default)
+        => db.Users.AnyAsync(u => u.TeamId == teamId, cancellationToken);
+
+    public Task<bool> HasChatAsync(long teamId, CancellationToken cancellationToken = default)
+        => db.Conversations.AnyAsync(c => c.TeamId == teamId, cancellationToken);
 
     public void Add(Team team) => db.Teams.Add(team);
 

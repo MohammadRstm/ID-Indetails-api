@@ -7,6 +7,9 @@ public sealed record ActivityListQuery
     /// <summary>One filter chip: work, money, billing, projects, people or company. Everything when not given.</summary>
     public ActivityGroup? Group { get; init; }
 
+    /// <summary>Only this domain's events (design or execution), without company-level ones. Every visible domain when not given.</summary>
+    public string? Domain { get; init; }
+
     public long? ProjectId { get; init; }
 
     /// <summary>The event's client, or its project's client.</summary>

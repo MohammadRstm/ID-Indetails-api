@@ -5,6 +5,7 @@ using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 
 namespace ID_Indetails.api.Services.Notifications.Implementation;
 
@@ -12,15 +13,19 @@ public sealed class NotificationSender(
     INotificationRepository notifications,
     IUserRepository users,
     IPermissionService permissions,
+    ILiveUpdates live,
     IClock clock) : INotificationSender
 {
     public async Task SendAsync(NotificationDraft draft, IEnumerable<long> recipientIds, CancellationToken cancellationToken = default)
     {
         var payload = Serialise(draft);
-        foreach (var recipientId in await AllowedAsync(draft, recipientIds, cancellationToken))
+        var allowed = await AllowedAsync(draft, recipientIds, cancellationToken);
+        foreach (var recipientId in allowed)
         {
             notifications.Add(New(draft, recipientId, payload));
         }
+
+        live.NotificationsChanged(allowed);
     }
 
     public async Task SendDigestAsync(
@@ -30,7 +35,9 @@ public sealed class NotificationSender(
         CancellationToken cancellationToken = default)
     {
         var payload = Serialise(draft);
-        foreach (var recipientId in await AllowedAsync(draft, recipientIds, cancellationToken))
+        var allowed = await AllowedAsync(draft, recipientIds, cancellationToken);
+        live.NotificationsChanged(allowed);
+        foreach (var recipientId in allowed)
         {
             var digest = await notifications.GetDigestForUpdateAsync(recipientId, digestKey, cancellationToken);
             if (digest is null)
@@ -61,12 +68,15 @@ public sealed class NotificationSender(
 
         var payload = Serialise(draft);
         var alreadySent = await notifications.RecipientsWithKeyAsync(key, allowed, cancellationToken);
-        foreach (var recipientId in allowed.Where(id => !alreadySent.Contains(id)))
+        var fresh = allowed.Where(id => !alreadySent.Contains(id)).ToList();
+        foreach (var recipientId in fresh)
         {
             var created = New(draft, recipientId, payload);
             created.DigestKey = key;
             notifications.Add(created);
         }
+
+        live.NotificationsChanged(fresh);
     }
 
     public Task<IReadOnlyList<long>> DomainMembersAsync(string domain, CancellationToken cancellationToken = default)

@@ -6,6 +6,7 @@ using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Services.WorkEntries.Implementation;
@@ -20,6 +21,7 @@ public sealed class WorkLogNotifier(
     INotificationSender sender,
     IWorkEntryRepository entries,
     INotificationRepository notifications,
+    ILiveUpdates live,
     IClock clock) : IWorkLogNotifier
 {
     public const int LongEntryMinutes = 180;
@@ -62,6 +64,7 @@ public sealed class WorkLogNotifier(
         }
 
         await entries.LockDomainAsync(DomainCodes.Design, cancellationToken);
+        live.NotificationsChanged(recipients);
         var digestKey = $"work-digest-{clock.CompanyToday:yyyy-MM-dd}";
         foreach (var recipientId in recipients)
         {

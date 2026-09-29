@@ -46,7 +46,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, `notifyEntry`, `notifyProject` (N4), `notifyIdle` and `weeklySummary` (N7) are used; `autoArchive` waits for its job. |
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
-| D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
+| D10 | **Employees set meetings.** `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). Meetings were Design-only at first; since 29 Sep 2026 Execution sites have them too, as in the prototype, and both permissions apply in both domains (`MeetingsInBothDomains` migration). |
 
 ## Decided for the money summaries (29 Sep 2026)
 
@@ -75,9 +75,21 @@ See [finance.md](finance.md).
 | N3 | **Super admins get admin-level notifications** (work logged, materials, labour, clients, billing, ticked requirements) but not the broadcasts to a domain's people (new projects, status changes, added requirements). |
 | N4 | **Added requirements roll into one notification** per person per project per day, and follow `notifyProject` like the other project news. |
 | N5 | **No money in notifications.** Billing notifications name the invoice or project, never the amount. |
-| N6 | **Live push arrives with messaging.** Until then the client polls the unread count. |
+| N6 | **Live push** came with messaging: a `notifications` signal over the live connection tells the client to reload the bell (see C5). |
 | N7 | **Scheduled notifications** run on an hourly timer and are keyed so each goes once: last week's summary, idle Design projects, requirements due tomorrow or overdue (deadlines up to a week old), overdue invoices, and the month-end short-hours alert. `notifyIdle` now also sends `project_idle`, and `weeklySummary` sends the summary. |
 | N8 | **The month-end short-hours alert** goes to whoever holds `salary:view` (super admins by default), from the first of the month, naming the five people most short. This settles the old open question. |
+
+## Decided for messaging (29 Sep 2026)
+
+See [messaging.md](messaging.md).
+
+| # | Decision |
+|---|---|
+| C1 | **Chats follow the organisation, not permissions.** A team chat is the team, its domain's admins and the super admins, worked out live; direct messages reach your own domain and the super admins. Someone granted a permission from the other domain doesn't join its chats. |
+| C2 | **Moving someone moves their chats.** They lose the old team's chat, history included, and see the new team's whole history. |
+| C3 | **No bell notifications for messages.** The messages badge (unread count and the "@" flag) covers them, as in the prototype. |
+| C4 | **A team with chat history can't be deleted**, so history is never lost. |
+| C5 | **Live updates** push small "something changed" signals over SignalR for messages and the bell, only once a request has succeeded; the client reloads what changed. One API instance for now: several would need a SignalR backplane. |
 
 ## Carried over from the prototype as-is
 

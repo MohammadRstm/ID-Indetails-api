@@ -11,12 +11,12 @@ public class MeetingRulesTests
     private static readonly DateOnly Day = new(2026, 9, 28);
 
     [Fact]
-    public void Meetings_are_set_on_open_design_projects()
+    public void Meetings_are_set_on_open_projects()
     {
-        MeetingRules.CheckProject(DomainCodes.Design, ProjectStatus.Active).ShouldBeNull();
-        MeetingRules.CheckProject(DomainCodes.Design, ProjectStatus.Hold).ShouldBeNull();
-        MeetingRules.CheckProject(DomainCodes.Design, ProjectStatus.Completed)!.Code.ShouldBe(ErrorCodes.ProjectClosed);
-        MeetingRules.CheckProject(DomainCodes.Execution, ProjectStatus.Active)!.Code.ShouldBe(ErrorCodes.NotForThisDomain);
+        MeetingRules.CheckProject(ProjectStatus.Active).ShouldBeNull();
+        MeetingRules.CheckProject(ProjectStatus.Hold).ShouldBeNull();
+        MeetingRules.CheckProject(ProjectStatus.Completed)!.Code.ShouldBe(ErrorCodes.ProjectClosed);
+        MeetingRules.CheckProject(ProjectStatus.Archived)!.Code.ShouldBe(ErrorCodes.ProjectClosed);
     }
 
     [Fact]

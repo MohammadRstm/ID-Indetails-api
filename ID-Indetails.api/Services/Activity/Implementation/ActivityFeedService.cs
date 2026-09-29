@@ -21,6 +21,7 @@ namespace ID_Indetails.api.Services.Activity.Implementation;
 /// The activity feed of the domains the caller can see. Work events need <c>work_entry:view_all</c>, amounts (and the
 /// markup in <c>material_markup_set</c>'s payload) need <c>financial:view</c>, and company-level events (no domain:
 /// overhead, working time) need <c>company:view</c>.
+/// A <c>domain</c> filter keeps that domain's events only, so someone who sees both domains can look at one.
 /// </summary>
 public sealed class ActivityFeedService(
     ICurrentUser currentUser,
@@ -33,7 +34,8 @@ public sealed class ActivityFeedService(
     public async Task<PagedResponse<ActivityItemResponse>> ListAsync(ActivityListQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
-        var withCompany = actor.Has(PermissionCodes.CompanyView);
+        var withCompany = actor.Has(PermissionCodes.CompanyView) && query.Domain is null;
+        var domains = query.Domain is { } domain ? actor.VisibleDomains.Where(d => d == domain).ToList() : actor.VisibleDomains;
         var seesWork = actor.Has(PermissionCodes.WorkEntryViewAll);
         var seesMoney = actor.Has(PermissionCodes.FinancialView);
         if (query.Group == ActivityGroup.Company && !withCompany)
@@ -43,7 +45,7 @@ public sealed class ActivityFeedService(
 
         var (items, total) = await feed.SearchAsync(
             new ActivityFeedSearch(
-                actor.VisibleDomains,
+                domains,
                 withCompany,
                 query.Group is { } group and not ActivityGroup.Company ? ActivityGroups.KindsOf(group) : null,
                 seesWork ? [] : ActivityGroups.KindsOf(ActivityGroup.Work),

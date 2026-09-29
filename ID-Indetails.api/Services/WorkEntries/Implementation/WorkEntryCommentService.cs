@@ -10,6 +10,7 @@ using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Messaging.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -17,7 +18,8 @@ namespace ID_Indetails.api.Services.WorkEntries.Implementation;
 
 /// <summary>
 /// Comments on work entries, readable by whoever can read the entry. Comments can't be edited or deleted.
-/// The entry's author is notified of each comment someone else writes.
+/// The entry's author is notified of each comment someone else writes. With <c>sendToGroup</c>, the comment is also
+/// posted to the author's team chat as a card mentioning everyone in it.
 /// </summary>
 public sealed class WorkEntryCommentService(
     ICurrentUser currentUser,
@@ -25,6 +27,7 @@ public sealed class WorkEntryCommentService(
     IWorkEntryRepository entries,
     IWorkEntryCommentRepository comments,
     INotificationSender notifications,
+    IMessagingService messaging,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IWorkEntryCommentService
@@ -53,11 +56,6 @@ public sealed class WorkEntryCommentService(
             throw new NotFoundException("Work entry not found.");
         }
 
-        if (request.SendToGroup)
-        {
-            throw new BusinessRuleException(ErrorCodes.GroupChatUnavailable, "Group chats aren't available yet, so the comment can't be posted there.");
-        }
-
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var comment = new WorkEntryComment
         {
@@ -68,6 +66,13 @@ public sealed class WorkEntryCommentService(
         };
         comments.Add(comment);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (request.SendToGroup)
+        {
+            comment.SentToGroup = true;
+            comment.MessageId = await messaging.PostTaskCommentAsync(
+                actor.UserId, entry.UserId, entry.ProjectDomain, entry.Id, comment.Id, comment.Body, cancellationToken);
+        }
 
         activity.Add(new ActivityEvent
         {

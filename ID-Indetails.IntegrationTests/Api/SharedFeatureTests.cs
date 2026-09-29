@@ -145,4 +145,29 @@ public class SharedFeatureTests(ApiFactory api) : IClassFixture<ApiFactory>
         byPerson.Items.ShouldAllBe(e => e.Actor != null && e.Actor.Id == admin.User.Id);
         byPerson.Items.ShouldNotContain(e => e.Project != null && e.Project.Id == theirs.Id);
     }
+
+    [Fact]
+    public async Task The_activity_feed_shows_one_domain_when_asked()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+
+        Task<PagedResponse<ActivityItemResponse>> FeedAsync(string domain, string token)
+            => OkAsync<PagedResponse<ActivityItemResponse>>(Client.GetAsync($"/api/activity?domain={domain}&pageSize=100", token));
+
+        // Company-level events are left out too: they belong to the company view.
+        var design = await FeedAsync(DomainCodes.Design, superAdmin.AccessToken);
+        design.Items.ShouldNotBeEmpty();
+        design.Items.ShouldAllBe(e => e.Domain == DomainCodes.Design);
+        var execution = await FeedAsync(DomainCodes.Execution, superAdmin.AccessToken);
+        execution.Items.ShouldNotBeEmpty();
+        execution.Items.ShouldAllBe(e => e.Domain == DomainCodes.Execution);
+
+        // A domain the caller can't see gives nothing, and only real domains are accepted.
+        (await FeedAsync(DomainCodes.Execution, designAdmin.AccessToken)).Items.ShouldBeEmpty();
+        await (await Client.GetAsync("/api/activity?domain=company", superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
 }

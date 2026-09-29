@@ -5,6 +5,7 @@ using ID_Indetails.api.Authorization.Handlers;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Hubs;
 using ID_Indetails.api.Middlewares;
 using ID_Indetails.api.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -47,6 +48,22 @@ public static class AuthServiceCollectionExtensions
                     ClockSkew = TimeSpan.FromMinutes(1),
                     NameClaimType = AuthClaimTypes.UserId,
                     RoleClaimType = AuthClaimTypes.Role,
+                };
+
+                // WebSockets can't send headers, so the live connection alone may pass the token in the query string.
+                // Request logging stays at Warning, so query strings aren't logged.
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        if (context.Request.Path.StartsWithSegments(LiveHub.Path)
+                            && context.Request.Query["access_token"] is { Count: > 0 } token)
+                        {
+                            context.Token = token;
+                        }
+
+                        return Task.CompletedTask;
+                    },
                 };
             });
 
