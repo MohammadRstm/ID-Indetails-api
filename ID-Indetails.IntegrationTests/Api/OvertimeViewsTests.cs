@@ -2,6 +2,7 @@ using System.Text;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Payroll;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Reports;
 using ID_Indetails.api.DTO.Response.WorkEntries;
@@ -194,6 +195,40 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         (after.Minutes - before.Minutes).ShouldBe(120);
         (after.OvertimeMinutes - before.OvertimeMinutes).ShouldBe(120);
         await (await Client.GetAsync("/api/reports/overview", designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+    }
+
+    [Fact]
+    public async Task The_schedule_shows_any_day_s_hours_for_the_logging_preview()
+    {
+        var (superAdmin, designer, _, _) = await JuneAsync();
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        await _steps.ScalarAsync<int>("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id; SELECT 1", ("@id", designer.User.Id));
+
+        var monday = (await OkAsync<MyScheduleResponse>("/api/me/schedule?date=2026-06-15", designer)).Day;
+        monday.ShouldSatisfyAllConditions(
+            d => d.Date.ShouldBe(new DateOnly(2026, 6, 15)),
+            d => d.IsWorkingDay.ShouldBeTrue(),
+            d => d.StartMinute.ShouldBe(540),
+            d => d.EndMinute.ShouldBe(1020),
+            d => d.RequiredMinutes.ShouldBe(420),
+            d => d.PaidBreakMinutes.ShouldBe(60),
+            d => d.LoggedMinutes.ShouldBe(540),
+            d => d.InsideMinutes.ShouldBe(420),
+            d => d.OvertimeMinutes.ShouldBe(120),
+            d => d.LeftMinutes.ShouldBe(0),
+            // June's 22 working days of 7h, less the 7h worked within hours and the 4h of overtime that made hours up.
+            d => d.MonthShortMinutes.ShouldBe(22 * 420 - 420 - 240));
+
+        var saturday = (await OkAsync<MyScheduleResponse>("/api/me/schedule?date=2026-06-20", designer)).Day;
+        saturday.IsWorkingDay.ShouldBeFalse();
+        saturday.OvertimeMinutes.ShouldBe(120);
+
+        // Admins log hours without an hours ledger.
+        (await OkAsync<MyScheduleResponse>("/api/me/schedule?date=2026-06-15", designAdmin)).Day.MonthShortMinutes.ShouldBeNull();
+
+        await (await Client.GetAsync("/api/me/schedule?date=1999-12-31", designer.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.GetAsync("/api/me/schedule?date=2026-06-15", siteWorker.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
     /// <summary>A Design employee with the June work described above, on two new projects.</summary>

@@ -21,21 +21,22 @@ public sealed class MyTimeService(
     IWorkEntryRepository entries,
     IClock clock) : IMyTimeService
 {
-    public async Task<MyScheduleResponse> ScheduleAsync(CancellationToken cancellationToken = default)
+    public async Task<MyScheduleResponse> ScheduleAsync(MyScheduleQuery query, CancellationToken cancellationToken = default)
     {
         var me = await MeAsync(cancellationToken);
-        var today = clock.CompanyToday;
-        var input = (await inputs.ForAsync([me], [new DateOnly(today.Year, today.Month, 1)], cancellationToken))[0].Input;
-        var hours = input.Calendar.HoursOn(today);
-        var work = Overtime.Of(input.Work.Where(w => w.Day == today), input.Calendar);
+        var day = query.Date ?? clock.CompanyToday;
+        var input = (await inputs.ForAsync([me], [new DateOnly(day.Year, day.Month, 1)], cancellationToken))[0].Input;
+        var hours = input.Calendar.HoursOn(day);
+        var monthWork = Overtime.Of(input.Work, input.Calendar);
+        var work = monthWork.Where(w => w.Day == day).ToList();
         var logged = work.Sum(w => w.Minutes);
         var overtime = work.Sum(w => w.Overtime);
 
         return new MyScheduleResponse(
             await schedules.DescribeAsync(me, cancellationToken),
             (await workingTime.GetAsync(cancellationToken)).Current,
-            new MyTodayResponse(
-                today,
+            new MyScheduleDayResponse(
+                day,
                 hours is not null,
                 hours?.Start,
                 hours?.End,
@@ -44,7 +45,8 @@ public sealed class MyTimeService(
                 logged,
                 logged - overtime,
                 overtime,
-                hours is null ? 0 : Math.Max(0, hours.Required - (logged - overtime))));
+                hours is null ? 0 : Math.Max(0, hours.Required - (logged - overtime)),
+                input.LedgerApplies ? SalaryCalculator.LedgerOf(input, monthWork).Short : null));
     }
 
     public async Task<MyHoursResponse> HoursAsync(MyHoursQuery query, CancellationToken cancellationToken = default)

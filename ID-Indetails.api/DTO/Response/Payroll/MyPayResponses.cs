@@ -60,9 +60,14 @@ public sealed record MyOvertimeResponse(
     int Entries,
     IReadOnlyList<MyOvertimeDayResponse> Days);
 
+/// <summary>One day of the caller's schedule and what they logged on it.</summary>
 /// <param name="IsWorkingDay">False on a day off: anything logged is overtime.</param>
 /// <param name="LeftMinutes">Required minutes not yet covered by work within hours.</param>
-public sealed record MyTodayResponse(
+/// <param name="MonthShortMinutes">
+/// What the day's month is short of its required hours so far (null where the hours ledger doesn't apply). Overtime
+/// logged in the month first makes this up, as normal hours.
+/// </param>
+public sealed record MyScheduleDayResponse(
     DateOnly Date,
     bool IsWorkingDay,
     int? StartMinute,
@@ -72,11 +77,13 @@ public sealed record MyTodayResponse(
     int LoggedMinutes,
     int InsideMinutes,
     int OvertimeMinutes,
-    int LeftMinutes);
+    int LeftMinutes,
+    int? MonthShortMinutes);
 
 /// <param name="Schedule">The caller's week: their own schedule where they have one, otherwise the company week.</param>
 /// <param name="CompanyWeek">The company policy in force: its break and overtime multiplier apply to everyone.</param>
-public sealed record MyScheduleResponse(PersonScheduleResponse Schedule, WorkingTimePolicyResponse CompanyWeek, MyTodayResponse Today);
+/// <param name="Day">The day asked for (today by default).</param>
+public sealed record MyScheduleResponse(PersonScheduleResponse Schedule, WorkingTimePolicyResponse CompanyWeek, MyScheduleDayResponse Day);
 
 /// <param name="DifferenceMinutes">Inside hours − required; null where the day isn't judged (today, excused, a day off).</param>
 public sealed record MyPayDayResponse(

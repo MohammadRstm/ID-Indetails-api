@@ -41,7 +41,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             s => s.IsOwn.ShouldBeTrue(),
             s => s.Days.Count.ShouldBe(7),
             s => s.RequiredMinutesPerWeek.ShouldBe(7 * 420));
-        mine.Today.ShouldSatisfyAllConditions(
+        mine.Day.ShouldSatisfyAllConditions(
             t => t.IsWorkingDay.ShouldBeTrue(),
             t => t.StartMinute.ShouldBe(480),
             t => t.RequiredMinutes.ShouldBe(420),
@@ -53,7 +53,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var theirs = await OkAsync<MyScheduleResponse>(Client.GetAsync("/api/me/schedule", colleague.AccessToken));
         theirs.Schedule.ShouldSatisfyAllConditions(s => s.UserId.ShouldBe(colleague.User.Id), s => s.IsOwn.ShouldBeFalse());
-        theirs.Today.LoggedMinutes.ShouldBe(0);
+        theirs.Day.LoggedMinutes.ShouldBe(0);
     }
 
     [Fact]

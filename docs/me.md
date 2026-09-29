@@ -38,11 +38,13 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/me/schedule` | `work_entry:view_own` | The caller's week, the company policy in force, and today's hours |
+| `GET /api/me/schedule?date=` | `work_entry:view_own` | The caller's week, the company policy in force, and one day's hours (today by default) |
 
 - `schedule`: the caller's week as it stands today, with the same shape as the Schedules screen. It is their own schedule where they have one (`isOwn`, `ownSince`), otherwise the company week. Each working day has its start, end and required minutes, and `nextChangeOn` is a change dated in the future.
 - `companyWeek`: the company policy in force today. Its break and overtime multiplier apply to everyone.
-- `today`: whether today is a working day, its hours, required minutes and paid break, and what the caller has logged today. `insideMinutes` is logged time that isn't overtime, and `leftMinutes` is what the day still requires. On a day off everything logged is overtime.
+- `day`: the day asked for (`date`, today by default, from 2000 to 2100): whether it is a working day, its hours, required minutes and paid break, and what the caller has logged on it. `insideMinutes` is logged time that isn't overtime, and `leftMinutes` is what the day still requires. On a day off everything logged is overtime.
+- `day.monthShortMinutes`: what that day's month is short of its required hours so far, from the hours ledger (null where it doesn't apply). Overtime logged in the month first makes this up, as normal hours.
+- This is what the log-work form previews against (the prototype's overtime warning): the day's hours and what is already logged, with the entries themselves from `GET /api/me/day?date=`.
 
 ## My hours
 

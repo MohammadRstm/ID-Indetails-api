@@ -32,6 +32,15 @@ public sealed class MyHoursQueryValidator : AbstractValidator<MyHoursQuery>
     }
 }
 
+public sealed class MyScheduleQueryValidator : AbstractValidator<MyScheduleQuery>
+{
+    public MyScheduleQueryValidator()
+    {
+        RuleFor(x => x.Date).InclusiveBetween(new DateOnly(2000, 1, 1), new DateOnly(2100, 12, 31)).When(x => x.Date is not null)
+            .WithMessage("Date must be between 2000 and 2100.");
+    }
+}
+
 public sealed class SalaryMonthQueryValidator : AbstractValidator<SalaryMonthQuery>
 {
     public SalaryMonthQueryValidator()
