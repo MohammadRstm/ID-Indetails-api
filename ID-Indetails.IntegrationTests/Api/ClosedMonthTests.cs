@@ -74,13 +74,16 @@ public class ClosedMonthTests(ApiFactory api) : IClassFixture<ApiFactory>
         return (await response.ReadAsync<WorkEntryDetailResponse>()).Entry;
     }
 
-    /// <summary>An entry written straight to the database, as if it had been logged before the month closed.</summary>
+    /// <summary>
+    /// An entry written straight to the database, as if it had been logged when it ended: long past the edit window,
+    /// which a closed month's refusal still names.
+    /// </summary>
     private async Task<long> InsertAsync(AuthResponse person, long projectId, DateTime startUtc, int minutes, bool deleted)
     {
         await using var connection = await api.Database.OpenConnectionAsync();
         await using var command = new MySqlCommand(
             "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at, deleted_at) " +
-            "VALUES (@u, @p, 'Drawings', @s, @e, UTC_TIMESTAMP(3), @d); SELECT LAST_INSERT_ID();",
+            "VALUES (@u, @p, 'Drawings', @s, @e, @e, @d); SELECT LAST_INSERT_ID();",
             connection);
         command.Parameters.AddWithValue("@u", person.User.Id);
         command.Parameters.AddWithValue("@p", projectId);
