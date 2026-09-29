@@ -53,6 +53,9 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM notifications WHERE project_id = @p AND kind = 'materials_added' AND recipient_id = @r",
             ("@p", project.Id), ("@r", admin.User.Id))).ShouldBe(1);
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM notifications WHERE project_id = @p AND kind = 'materials_added' AND recipient_id = @r",
+            ("@p", project.Id), ("@r", superAdmin.User.Id))).ShouldBe(1);
     }
 
     [Fact]

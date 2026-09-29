@@ -43,6 +43,9 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM notifications WHERE project_id = @p AND kind = 'labour_week_submitted' AND recipient_id = @r",
             ("@p", project.Id), ("@r", admin.User.Id))).ShouldBe(1);
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM notifications WHERE project_id = @p AND kind = 'labour_week_submitted' AND recipient_id = @r",
+            ("@p", project.Id), ("@r", superAdmin.User.Id))).ShouldBe(1);
     }
 
     [Fact]
