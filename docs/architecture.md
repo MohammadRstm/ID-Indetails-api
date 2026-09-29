@@ -23,7 +23,8 @@ Request → Middleware → Controller → FluentValidation → Service → Busin
 | Folder | What goes in it |
 |---|---|
 | `Controllers/` | Thin HTTP endpoints. They receive requests, call a service and return a response. No business logic and no database access. |
-| `Middlewares/` | Cross-cutting HTTP concerns: centralized exception handling, correlation IDs. |
+| `Middlewares/` | Cross-cutting HTTP concerns: centralized exception handling, correlation IDs, sending a request's live signals once it has succeeded. |
+| `Hubs/` | SignalR hubs. `LiveHub` (`/hubs/live`) pushes "something changed" signals to signed-in clients; see [messaging.md](messaging.md#live-updates). |
 | `Validators/` | FluentValidation validators for request DTOs (shape, format, ranges). Not for rules that depend on stored state. |
 | `DTO/Request/`, `DTO/Response/` | What the API accepts and returns. Entities are never exposed directly. |
 | `Services/<Feature>/Abstraction/`, `Services/<Feature>/Implementation/` | Use-case orchestration, with the interface and the implementation kept apart. |

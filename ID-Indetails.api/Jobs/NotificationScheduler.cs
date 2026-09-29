@@ -2,7 +2,7 @@ using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using Microsoft.Extensions.Options;
 
-namespace ID_Indetails.api.Services.Notifications.Implementation;
+namespace ID_Indetails.api.Jobs;
 
 /// <summary>
 /// Runs every scheduled check at start-up and then on a timer. Each check gets its own scope, so one that fails

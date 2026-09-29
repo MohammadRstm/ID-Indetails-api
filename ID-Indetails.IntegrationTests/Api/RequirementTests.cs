@@ -134,7 +134,7 @@ public class RequirementTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Employees_only_read_and_other_domains_read_as_not_found()
+    public async Task Employees_read_and_tick_only_their_own_and_other_domains_read_as_not_found()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
@@ -143,8 +143,9 @@ public class RequirementTests(ApiFactory api) : IClassFixture<ApiFactory>
         var requirement = await AddAsync(project.Id, superAdmin.AccessToken, new { text = "Plans", assigneeIds = new[] { employee.User.Id } });
 
         (await Client.GetAsync($"/api/projects/{project.Id}/requirements", employee.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await (await Client.PostEmptyAsync($"/api/projects/{project.Id}/requirements/{requirement.Id}/done", employee.AccessToken))
-            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        // requirement:complete_own: the assignee ticks their own; adding and editing stay with managers.
+        (await Client.PostEmptyAsync($"/api/projects/{project.Id}/requirements/{requirement.Id}/done", employee.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PostJsonAsync($"/api/projects/{project.Id}/requirements", new { text = "X" }, employee.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 

@@ -69,7 +69,7 @@ public sealed record AddWorkEntryCommentRequest
 {
     public string Body { get; init; } = string.Empty;
 
-    /// <summary>Also post to the author's team group chat. Refused until group chats exist.</summary>
+    /// <summary>Also post to the entry author's team chat, as a card mentioning everyone in it.</summary>
     public bool SendToGroup { get; init; }
 }
 

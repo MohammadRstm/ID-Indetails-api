@@ -107,7 +107,7 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 | `POST /api/work-entries/{id}/comments` | `work_entry:comment` | `{ body, sendToGroup }`. Returns `201` |
 
 - A comment is 1 to 2000 characters. Comments can't be edited or deleted.
-- `sendToGroup` (also post to the author's team group chat) is refused with `422 group_chat_unavailable` until group chats exist.
+- `sendToGroup` also posts the comment to the entry author's team chat, as a card mentioning everyone in it (see [messaging.md](messaging.md)). An author in no team gives `422 no_team_chat`.
 - The entry's author gets an `entry_comment` notification (commenter's name, the text and the entry's description), unless they wrote it themselves.
 - Event: `work_entry_commented`, with the entry as the subject and the comment id in the payload.
 
@@ -123,13 +123,13 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 
 Rules (`Business/Meetings/MeetingRules.cs`):
 
-- Meetings belong to Design projects (`422 not_for_this_domain`) that are active or on hold (`422 project_closed`).
+- Meetings belong to projects of either domain that are active or on hold (`422 project_closed`). Execution sites have them too (decision D10, reversed on 29 Sep 2026).
 - Times are UTC instants in whole minutes. A meeting lasts at least 5 minutes and starts and ends on the same company-time-zone day (`400`). Past days are allowed.
 - Topic up to 200 characters, description up to 2000; both optional.
 - A meeting has no attendees: it is a project-wide block. It is not work time and never counts in hours.
 - Events: `meeting_created`, `meeting_updated`, `meeting_deleted`, with the meeting as the subject and its topic and times in the payload.
 
-**Who sets meetings:** everyone of Design holds `meeting:create` by default, so employees set meetings and move or remove the ones they set (someone else's is `403`). `meeting:manage` (admins and super admins) covers every meeting. When someone without `meeting:manage` sets a meeting, the active people of the domain who hold it (not the setter) get a `meeting_scheduled` notification with the setter's name, the project, topic and times, as in the prototype.
+**Who sets meetings:** everyone holds `meeting:create` by default, in both domains, so employees set meetings and move or remove the ones they set (someone else's is `403`). `meeting:manage` (admins and super admins) covers every meeting. When someone without `meeting:manage` sets a meeting, the active people of the domain who hold it (not the setter) get a `meeting_scheduled` notification with the setter's name, the project, topic and times, as in the prototype.
 
 ## Reports and dashboard
 
@@ -150,7 +150,7 @@ Callers who can't see Design (an Execution admin holds `report:view` too) get `4
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/activity?group=&projectId=&clientId=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first |
+| `GET /api/activity?group=&domain=&projectId=&clientId=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first. `domain` (`design` or `execution`) keeps that domain's events only, without company-level ones; a domain the caller can't see gives an empty page |
 | `GET /api/activity/today` | `activity:view` and `work_entry:view_all` | Design work that started today: minutes, entries, people, and minutes by the hour they were logged |
 
 - **Groups** (the filter chips, `Business/Activity/ActivityGroups.cs`): `work` (work entries and their comments), `money` (revenue, expenses, fee, markup, finalising), `billing` (billing settings, exchange rates, invoices, payments), `projects` (projects, progress, requirements, meetings, clients), `people` (people, pay changes, permissions, teams) and `company` (company-level events with no domain).

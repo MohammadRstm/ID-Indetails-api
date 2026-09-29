@@ -1838,14 +1838,12 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             Code = "meeting:manage",
-                            Description = "Record and remove project meetings",
-                            DomainCode = "design"
+                            Description = "Record and remove project meetings"
                         },
                         new
                         {
                             Code = "meeting:create",
-                            Description = "Set project meetings, and move or remove the ones you set",
-                            DomainCode = "design"
+                            Description = "Set project meetings, and move or remove the ones you set"
                         },
                         new
                         {

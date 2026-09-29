@@ -1,0 +1,33 @@
+namespace ID_Indetails.api.Services.Realtime.Abstraction;
+
+/// <summary>Which chat changed: a team's, or the direct chat with <paramref name="UserId"/>.</summary>
+public sealed record LiveChat(long? TeamId, long? UserId);
+
+/// <summary>
+/// "Something changed" signals for signed-in clients (see <c>Hubs/LiveHub</c>). Staged while a request runs and sent
+/// only once it has succeeded (<c>Middlewares/LiveUpdatesMiddleware</c>); background jobs call <see cref="FlushAsync"/>.
+/// </summary>
+public interface ILiveUpdates
+{
+    /// <summary>The bell changed: a new notification, or some were read.</summary>
+    void NotificationsChanged(IEnumerable<long> userIds);
+
+    /// <summary>A chat changed for this person: a new message, or they read it on another device.</summary>
+    void ChatChanged(long userId, LiveChat chat);
+
+    Task FlushAsync(CancellationToken cancellationToken = default);
+
+    void Discard();
+}
+
+/// <summary>Sends a signal to every live connection of these people: SignalR in the API, captured in tests.</summary>
+public interface ILivePublisher
+{
+    Task PublishAsync(IReadOnlyCollection<long> userIds, string signal, object? payload, CancellationToken cancellationToken = default);
+}
+
+public static class LiveSignals
+{
+    public const string Notifications = "notifications";
+    public const string Messages = "messages";
+}

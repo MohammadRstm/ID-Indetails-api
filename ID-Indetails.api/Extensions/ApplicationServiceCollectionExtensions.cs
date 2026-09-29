@@ -1,4 +1,6 @@
 using ID_Indetails.api.Configuration.Options;
+using ID_Indetails.api.Hubs;
+using ID_Indetails.api.Jobs;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Activity.Implementation;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
@@ -43,6 +45,8 @@ using ID_Indetails.api.Repositories.Settings.Abstraction;
 using ID_Indetails.api.Repositories.Settings.Implementation;
 using ID_Indetails.api.Repositories.Statements.Abstraction;
 using ID_Indetails.api.Repositories.Statements.Implementation;
+using ID_Indetails.api.Repositories.Messaging.Abstraction;
+using ID_Indetails.api.Repositories.Messaging.Implementation;
 using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Repositories.Teams.Implementation;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
@@ -99,10 +103,15 @@ using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
 using ID_Indetails.api.Services.Statements.Abstraction;
 using ID_Indetails.api.Services.Statements.Implementation;
+using ID_Indetails.api.Services.Messaging.Abstraction;
+using ID_Indetails.api.Services.Messaging.Implementation;
+using ID_Indetails.api.Services.Realtime.Abstraction;
+using ID_Indetails.api.Services.Realtime.Implementation;
 using ID_Indetails.api.Services.Teams.Abstraction;
 using ID_Indetails.api.Services.Teams.Implementation;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
+using Microsoft.AspNetCore.SignalR;
 
 namespace ID_Indetails.api.Extensions;
 
@@ -123,6 +132,10 @@ public static class ApplicationServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddMemoryCache();
+        services.AddSignalR();
+        services.AddSingleton<IUserIdProvider, LiveUserIdProvider>();
+        services.AddSingleton<ILivePublisher, SignalRLivePublisher>();
+        services.AddScoped<ILiveUpdates, LiveUpdates>();
         services.AddSingleton<IClock, SystemClock>();
 
         // Repositories
@@ -132,6 +145,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPermissionRepository, PermissionRepository>();
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
+        services.AddScoped<IMessagingRepository, MessagingRepository>();
         services.AddScoped<IActivityEventRepository, ActivityEventRepository>();
         services.AddScoped<IActivityFeedRepository, ActivityFeedRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
@@ -183,6 +197,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IHourExcuseService, HourExcuseService>();
         services.AddScoped<IProjectPayService, ProjectPayService>();
         services.AddScoped<ITeamService, TeamService>();
+        services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IClientService, ClientService>();
         services.AddScoped<IProjectService, ProjectService>();

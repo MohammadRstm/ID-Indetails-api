@@ -6,7 +6,7 @@ namespace ID_Indetails.api.Business.Meetings;
 
 /// <summary>
 /// <list type="bullet">
-/// <item>Meetings belong to Design projects that are active or on hold.</item>
+/// <item>Meetings belong to projects of either domain that are active or on hold.</item>
 /// <item>People with <c>meeting:create</c> set meetings and move or remove their own; <c>meeting:manage</c> covers every meeting.</item>
 /// <item>A meeting starts and ends on the same company-time-zone day, and lasts at least 5 minutes. Past days are fine.</item>
 /// <item>Meetings are not work time: they never count in hours, and don't block logging.</item>
@@ -26,17 +26,10 @@ public static class MeetingRules
             ? null
             : RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only whoever set this meeting, or someone who manages meetings, can change it.");
 
-    public static RuleDenial? CheckProject(string domainCode, ProjectStatus status)
-    {
-        if (domainCode != DomainCodes.Design)
-        {
-            return RuleDenial.BusinessRule(ErrorCodes.NotForThisDomain, "Meetings are only set on Design projects.");
-        }
-
-        return status is ProjectStatus.Active or ProjectStatus.Hold
+    public static RuleDenial? CheckProject(ProjectStatus status)
+        => status is ProjectStatus.Active or ProjectStatus.Hold
             ? null
             : RuleDenial.BusinessRule(ErrorCodes.ProjectClosed, "This project is finished. Reopen it to set meetings.");
-    }
 
     /// <param name="startDay">The company-time-zone day the meeting starts on.</param>
     /// <param name="endDay">The company-time-zone day of the last minute of the meeting.</param>

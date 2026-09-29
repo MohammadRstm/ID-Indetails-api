@@ -9,6 +9,7 @@ using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 
 namespace ID_Indetails.api.Services.Notifications.Implementation;
 
@@ -21,6 +22,7 @@ public sealed class NotificationService(
     IPermissionService permissions,
     INotificationRepository notifications,
     IUnitOfWork unitOfWork,
+    ILiveUpdates live,
     IClock clock) : INotificationService
 {
     private const string NotFound = "Notification not found.";
@@ -47,6 +49,7 @@ public sealed class NotificationService(
         {
             notification.ReadAt = clock.UtcNow;
             await unitOfWork.SaveChangesAsync(cancellationToken);
+            live.NotificationsChanged([currentUser.Id]);
         }
 
         return new UnreadCountResponse(await notifications.CountUnreadAsync(currentUser.Id, domains, cancellationToken));
@@ -55,6 +58,7 @@ public sealed class NotificationService(
     public async Task<UnreadCountResponse> MarkAllReadAsync(CancellationToken cancellationToken = default)
     {
         await notifications.MarkAllReadAsync(currentUser.Id, clock.UtcNow, cancellationToken);
+        live.NotificationsChanged([currentUser.Id]);
         return new UnreadCountResponse(0);
     }
 

@@ -18,8 +18,11 @@ public interface ITeamRepository
     /// <summary>Whether another team of the domain already has this name (ignoring case).</summary>
     Task<bool> NameExistsAsync(string domainCode, string name, long? exceptTeamId, CancellationToken cancellationToken = default);
 
-    /// <summary>Whether anyone (in any status) is in the team, or a group chat belongs to it.</summary>
-    Task<bool> IsInUseAsync(long teamId, CancellationToken cancellationToken = default);
+    /// <summary>Whether anyone, in any status, is in the team.</summary>
+    Task<bool> HasPeopleAsync(long teamId, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the team's group chat exists, which it does from its first message.</summary>
+    Task<bool> HasChatAsync(long teamId, CancellationToken cancellationToken = default);
 
     /// <summary>Stages a new team; saved by the unit of work.</summary>
     void Add(Team team);
