@@ -291,7 +291,7 @@ public sealed class ReportService(
         DateOnly to,
         CancellationToken cancellationToken)
     {
-        var pricer = await LabourPricer.LoadAsync(financeSources, views.Select(e => e.UserId).Distinct().ToList(), clock, cancellationToken);
+        var pricer = await LabourPricer.LoadAsync(financeSources, projectFinance, views.Select(ToRow).ToList(), clock, cancellationToken);
         var labour = pricer.Price(views.Select(ToRow));
 
         var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
