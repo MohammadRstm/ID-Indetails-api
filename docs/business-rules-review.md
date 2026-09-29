@@ -63,6 +63,7 @@ See [finance.md](finance.md).
 | M7 | **Money on the project list isn't sortable or filterable** on the server (the list is paged in the database); the Financials projects table has every project. |
 | M8 | **One billing rule** (`Business/Billing/ProjectBilling`) for the project page, the project and client lists, the client pages and Financials. Invoices are converted at the rate of their issue day everywhere, so the project page and the lists always agree. |
 | M9 | **Unconverted money is never dropped.** Costs with no rate are listed for the period they fall in (summary, each month, costs tab); list rows flag them (`hasUnconverted`); the company overview lists invoices and costs with no rate instead of counting them as 0. |
+| M10 | **Statement readers see the statement's money.** Holders of `statement:create` or `statement:send` see its received, agreed, remaining and paid-ahead figures without `financial:view`, because the statement is printed on the client's document. |
 
 ## Decided for notifications (29 Sep 2026)
 

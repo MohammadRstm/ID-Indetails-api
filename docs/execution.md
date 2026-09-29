@@ -66,7 +66,7 @@ Rules (`Business/Statements/StatementRules.cs`):
 - A statement needs at least one material (`422 statement_empty`).
 - The client reads **one row per material type** (grouped like the materials list), with what it came to on earlier statements, what is new and the total, plus the quantity added up when every delivery has the same unit. A total-only statement has no rows, just the total. `since` is the day of the previous statement.
 - **Prices are frozen.** Each line keeps the client price shown, and every material a statement shows becomes *stated*: its price is written to the material and no markup change or manual price moves it again (see Materials).
-- The **payment summary** is snapshotted: what was received and the agreed amount (material client prices plus the fee, from the shared finance calculator), with what remains or was paid ahead.
+- The **payment summary** is snapshotted: what was received and the agreed amount (material client prices plus the fee, from the shared finance calculator), with what remains or was paid ahead. Everyone who may read the statement sees it, `financial:view` or not: it is printed on the client's document (decision M10 in [business-rules-review.md](business-rules-review.md)).
 - **Numbers** are `ST-YYYY-NNN`, one sequence per year across the company, taken from `statement_sequences` under a row lock so a number is never handed out twice. A preview doesn't use one up. Statements can be made while a site is on hold or finalised.
 - The server records sends but doesn't email the statement; the client produces the PDF.
 - Events: `statement_created` and `statement_sent` (the statement's total in the `amount` column; the number, and the mode or channel, in the payload).
