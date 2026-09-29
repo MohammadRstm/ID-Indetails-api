@@ -84,12 +84,22 @@ public static class WorkEntryRules
         _ => true,
     };
 
-    /// <param name="monthStartUtc">When the current company month began, in UTC.</param>
-    public static bool IsInOpenMonth(DateTime startUtc, DateTime monthStartUtc) => startUtc >= monthStartUtc;
+    /// <summary>
+    /// The first day whose work can still change. Past months never change (D11), but the one just ended stays open
+    /// through the 1st, so work from its last evening can still be logged after midnight.
+    /// </summary>
+    public static DateOnly OpenFrom(DateOnly today)
+    {
+        var month = new DateOnly(today.Year, today.Month, 1);
+        return today.Day == 1 ? month.AddMonths(-1) : month;
+    }
+
+    /// <param name="openFromUtc">When the first day of <see cref="OpenFrom"/> began, in UTC.</param>
+    public static bool IsInOpenMonth(DateTime startUtc, DateTime openFromUtc) => startUtc >= openFromUtc;
 
     /// <summary>Checks each start time given: an entry's current start and, when it moves, its new one.</summary>
-    public static RuleDenial? CheckOpenMonth(DateTime monthStartUtc, params DateTime[] startsUtc)
-        => startsUtc.All(start => IsInOpenMonth(start, monthStartUtc))
+    public static RuleDenial? CheckOpenMonth(DateTime openFromUtc, params DateTime[] startsUtc)
+        => startsUtc.All(start => IsInOpenMonth(start, openFromUtc))
             ? null
             : RuleDenial.BusinessRule(
                 ErrorCodes.MonthClosed,

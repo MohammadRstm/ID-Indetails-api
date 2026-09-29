@@ -55,7 +55,7 @@ public sealed class WorkEntryService(
             CreatedAt = clock.UtcNow,
         };
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt));
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
 
         var moved = await ApplyMovesAsync(actor, request.Moves, settings, cancellationToken);
         await CheckOverlapAsync(actor.UserId, [new WorkEntryRules.Span(0, entry.StartedAt, entry.EndedAt, project.Title), .. moved.Select(SpanOf)], settings, cancellationToken);
@@ -80,7 +80,7 @@ public sealed class WorkEntryService(
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
 
         var entry = Own(actor, await entries.GetForUpdateAsync(id, cancellationToken));
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(request.StartedAt)));
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(request.StartedAt)));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
         var project = entry.ProjectId == request.ProjectId
             ? entry.Project
@@ -111,7 +111,7 @@ public sealed class WorkEntryService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
         var entry = Own(actor, await entries.GetForUpdateAsync(id, cancellationToken));
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt));
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
 
         entry.DeletedAt = clock.UtcNow;
@@ -128,7 +128,7 @@ public sealed class WorkEntryService(
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
 
         var entry = Own(actor, await entries.GetDeletedForUpdateAsync(id, cancellationToken));
-        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt));
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
         await CheckOverlapAsync(actor.UserId, [SpanOf(entry)], settings, cancellationToken);
 
@@ -176,7 +176,7 @@ public sealed class WorkEntryService(
         foreach (var move in moves)
         {
             var entry = tracked.SingleOrDefault(e => e.Id == move.Id) ?? throw new NotFoundException("Work entry not found.");
-            Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(move.StartedAt)));
+            Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(move.StartedAt)));
             Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
 
             entry.StartedAt = WorkEntryRules.AsUtc(move.StartedAt);
