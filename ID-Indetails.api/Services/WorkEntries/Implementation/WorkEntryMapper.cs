@@ -20,6 +20,12 @@ internal static class WorkEntryMapper
         CancellationToken cancellationToken)
         => overtime.ByEntryAsync(entries.Select(e => new LoggedWork(e.Id, e.UserId, e.StartedAt)).ToList(), cancellationToken);
 
+    public static Task<IReadOnlyDictionary<long, int>> OvertimeOfAsync(
+        this IOvertimeService overtime,
+        IEnumerable<WorkRow> rows,
+        CancellationToken cancellationToken)
+        => overtime.ByEntryAsync(rows.Select(r => new LoggedWork(r.Id, r.UserId, r.StartedAt)).ToList(), cancellationToken);
+
     /// <param name="overtime">Overtime minutes by entry id, from <see cref="OvertimeOfAsync"/>.</param>
     public static WorkEntryResponse ToResponse(
         WorkEntryView e,

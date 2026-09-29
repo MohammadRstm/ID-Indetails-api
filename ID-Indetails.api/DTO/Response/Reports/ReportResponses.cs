@@ -16,12 +16,14 @@ public sealed record ReportProjectResponse(
 /// <param name="Name">Null for internal work (no client).</param>
 public sealed record ReportClientResponse(long? ClientId, string? Name, int Minutes);
 
-public sealed record ReportPersonResponse(long UserId, string Name, int Minutes, int Entries);
+/// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>
+public sealed record ReportPersonResponse(long UserId, string Name, int Minutes, int OvertimeMinutes, int Entries);
 
 public sealed record ReportMatrixProjectResponse(long ProjectId, string Title);
 
+/// <param name="OvertimeMinutes">The part of <paramref name="TotalMinutes"/> that is overtime, on every project.</param>
 /// <param name="Cells">Minutes on each of the matrix's projects, in the same order.</param>
-public sealed record ReportMatrixRowResponse(long UserId, string Name, int TotalMinutes, IReadOnlyList<int> Cells);
+public sealed record ReportMatrixRowResponse(long UserId, string Name, int TotalMinutes, int OvertimeMinutes, IReadOnlyList<int> Cells);
 
 /// <summary>People against the range's six busiest projects.</summary>
 public sealed record ReportMatrixResponse(IReadOnlyList<ReportMatrixProjectResponse> Projects, IReadOnlyList<ReportMatrixRowResponse> Rows);
@@ -49,6 +51,7 @@ public sealed record ReportMoneyResponse(
     IReadOnlyList<PersonLabourCostResponse> LabourByPerson);
 
 /// <summary>Design work over a range of company days, both inclusive.</summary>
+/// <param name="OvertimeMinutes">The part of <paramref name="TotalMinutes"/> that is overtime; the rest is normal time.</param>
 /// <param name="Weekly">3 to 20 weeks ending with the range, oldest first.</param>
 /// <param name="CompletedProjects">Design projects completed in the range, whatever the filters.</param>
 /// <param name="Quarterly">The last 6 quarters of all Design work, whatever the range and filters, oldest first.</param>
@@ -56,6 +59,7 @@ public sealed record WorkReportResponse(
     DateOnly From,
     DateOnly To,
     int TotalMinutes,
+    int OvertimeMinutes,
     int EntryCount,
     int ProjectCount,
     int PeopleCount,
@@ -81,6 +85,7 @@ public sealed record ProjectMinutesResponse(long ProjectId, string Title, int Mi
 /// <summary>The Design dashboard for a period and the one before it.</summary>
 /// <param name="Weekly">The period's weeks, oldest first.</param>
 /// <param name="PreviousWeekly">As many weeks ending with the previous period, oldest first, for comparison.</param>
+/// <param name="OvertimeMinutes">The part of the period's <paramref name="Minutes"/> that is overtime.</param>
 /// <param name="Attention">At most 5 items.</param>
 public sealed record OverviewResponse(
     OverviewPeriod Period,
@@ -89,6 +94,7 @@ public sealed record OverviewResponse(
     DateOnly PreviousFrom,
     DateOnly PreviousTo,
     int Minutes,
+    int OvertimeMinutes,
     int PreviousMinutes,
     int Entries,
     int PreviousEntries,

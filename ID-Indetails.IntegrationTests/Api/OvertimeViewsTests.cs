@@ -3,6 +3,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.DTO.Response.Reports;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using Shouldly;
 
@@ -19,6 +20,8 @@ namespace ID_Indetails.IntegrationTests.Api;
 /// </summary>
 public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
+    private static readonly TimeZoneInfo Beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
+
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
     private ProjectTestSteps Projects => new(_steps);
@@ -148,6 +151,51 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await OkAsync<ProjectWorkResponse>($"/api/projects/{first.Id}/work", designAdmin)).Contributors.ShouldHaveSingleItem().OvertimeMinutes.ShouldBe(120);
     }
 
+    [Fact]
+    public async Task The_work_report_splits_each_person_s_hours()
+    {
+        var (superAdmin, designer, _, second) = await JuneAsync();
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var range = "from=2026-06-01&to=2026-06-30";
+
+        var report = await OkAsync<WorkReportResponse>($"/api/reports/work?{range}&userId={designer.User.Id}", designAdmin);
+        report.ShouldSatisfyAllConditions(
+            r => r.TotalMinutes.ShouldBe(660),
+            r => r.OvertimeMinutes.ShouldBe(240),
+            r => r.ByPerson.ShouldHaveSingleItem().OvertimeMinutes.ShouldBe(240),
+            r => r.Matrix.Rows.ShouldHaveSingleItem().OvertimeMinutes.ShouldBe(240));
+
+        // Narrowed to one project, its entries are still judged against the person's whole day.
+        (await OkAsync<WorkReportResponse>($"/api/reports/work?{range}&projectId={second.Id}", designAdmin)).OvertimeMinutes.ShouldBe(120);
+
+        (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await OkAsync<WorkReportResponse>($"/api/reports/work?{range}&userId={designer.User.Id}", designAdmin)).OvertimeMinutes.ShouldBe(240);
+    }
+
+    [Fact]
+    public async Task The_overview_counts_the_period_s_overtime()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var before = await OkAsync<OverviewResponse>("/api/reports/overview?period=last30", superAdmin);
+
+        // Two hours on the latest Saturday, a day off, so all of it is overtime.
+        var saturday = TodayInBeirut().AddDays(-1);
+        while (saturday.DayOfWeek != DayOfWeek.Saturday)
+        {
+            saturday = saturday.AddDays(-1);
+        }
+
+        var start = TimeZoneInfo.ConvertTimeToUtc(saturday.ToDateTime(new TimeOnly(9, 0)), Beirut);
+        await Work.InsertAsync(designer.User.Id, project.Id, $"{start:yyyy-MM-dd HH:mm:ss}", $"{start.AddHours(2):yyyy-MM-dd HH:mm:ss}");
+
+        var after = await OkAsync<OverviewResponse>("/api/reports/overview?period=last30", superAdmin);
+        (after.Minutes - before.Minutes).ShouldBe(120);
+        (after.OvertimeMinutes - before.OvertimeMinutes).ShouldBe(120);
+        await (await Client.GetAsync("/api/reports/overview", designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+    }
+
     /// <summary>A Design employee with the June work described above, on two new projects.</summary>
     private async Task<(AuthResponse SuperAdmin, AuthResponse Designer, ProjectResponse First, ProjectResponse Second)> JuneAsync()
     {
@@ -161,6 +209,8 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         await Work.InsertAsync(designer.User.Id, first.Id, "2026-06-20 06:00:00", "2026-06-20 08:00:00", "Weekend renders");
         return (superAdmin, designer, first, second);
     }
+
+    private static DateOnly TodayInBeirut() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut));
 
     private static Dictionary<string, int> OvertimeOf(IEnumerable<WorkEntryResponse> entries)
         => entries.ToDictionary(e => e.Description, e => e.OvertimeMinutes);
