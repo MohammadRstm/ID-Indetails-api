@@ -1,3 +1,5 @@
+using ID_Indetails.api.Business.Billing;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
@@ -10,8 +12,10 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.Reports.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
@@ -31,6 +35,10 @@ namespace ID_Indetails.api.Services.Notifications.Implementation;
 /// <item>Overdue invoices: once per invoice, to whoever sees the domain's money.</item>
 /// <item>Short hours: from the first of a month, who finished the month before short of their hours, to whoever
 /// sees salaries.</item>
+/// <item>Cost warnings: once per project, when an active client project's cost passes 85% of its payment, to whoever
+/// sees the domain's money.</item>
+/// <item>Draft invoices: once per draft still unissued 3 days after it was created, to whoever sees the domain's money.</item>
+/// <item>Auto-archive: see <see cref="IProjectAutoArchive"/>.</item>
 /// </list>
 /// </summary>
 public sealed class ScheduledNotifications(
@@ -43,12 +51,15 @@ public sealed class ScheduledNotifications(
     IRequirementRepository requirements,
     IInvoiceRepository invoices,
     ISalaryService salaries,
+    IProjectFinanceService finance,
+    IProjectAutoArchive autoArchive,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IClock clock) : IScheduledNotifications
 {
     public const int OverdueLookbackDays = 7;
     public const int ShortPeopleShown = 5;
+    public const int DraftReminderDays = 3;
     private const int PageSize = 200;
 
     public async Task RunAsync(ScheduledCheck check, CancellationToken cancellationToken = default)
@@ -61,6 +72,9 @@ public sealed class ScheduledNotifications(
             ScheduledCheck.RequirementDeadlines => RequirementDeadlinesAsync(today, cancellationToken),
             ScheduledCheck.OverdueInvoices => OverdueInvoicesAsync(today, cancellationToken),
             ScheduledCheck.ShortHours => ShortHoursAsync(today, cancellationToken),
+            ScheduledCheck.CostWarnings => CostWarningsAsync(cancellationToken),
+            ScheduledCheck.DraftInvoices => DraftInvoicesAsync(today, cancellationToken),
+            ScheduledCheck.AutoArchive => autoArchive.RunAsync(cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(check)),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -227,6 +241,68 @@ public sealed class ScheduledNotifications(
             key,
             recipients,
             cancellationToken);
+    }
+
+    private async Task CostWarningsAsync(CancellationToken cancellationToken)
+    {
+        foreach (var domain in DomainCodes.All)
+        {
+            var clientWork = (await ActiveProjectsAsync(domain, cancellationToken)).Where(p => p.BillingType == BillingType.Client).ToList();
+            if (clientWork.Count == 0)
+            {
+                continue;
+            }
+
+            var money = await finance.GetAsync(clientWork, cancellationToken);
+            var moneyPeople = await sender.HoldersAsync(domain, PermissionCodes.FinancialView, cancellationToken);
+            foreach (var project in clientWork)
+            {
+                var summary = money[project.Id].Summary;
+                if (!MoneyAttention.CostIsHigh(summary.Revenue, summary.Cost))
+                {
+                    continue;
+                }
+
+                await sender.SendOnceAsync(
+                    new NotificationDraft(NotificationKinds.ProjectCostHigh, null, domain, project.Id, "project", project.Id,
+                        new { projectTitle = project.Title, usedPct = MoneyAttention.UsedPct(summary.Revenue, summary.Cost) }),
+                    $"project-cost-{project.Id}",
+                    moneyPeople,
+                    cancellationToken);
+            }
+        }
+    }
+
+    private async Task DraftInvoicesAsync(DateOnly today, CancellationToken cancellationToken)
+    {
+        var createdBy = clock.UtcNow.AddDays(-DraftReminderDays);
+        var holders = new Dictionary<string, IReadOnlyList<long>>();
+        for (var page = 1; ; page++)
+        {
+            var (items, total) = await invoices.SearchAsync(
+                new InvoiceSearch(DomainCodes.All, null, null, InvoiceStatus.Draft, null, null, today, page, PageSize), cancellationToken);
+            foreach (var invoice in items.Select(r => r.Invoice).Where(i => i.CreatedAt <= createdBy))
+            {
+                var domain = invoice.Project.DomainCode;
+                if (!holders.TryGetValue(domain, out var moneyPeople))
+                {
+                    moneyPeople = await sender.HoldersAsync(domain, PermissionCodes.FinancialView, cancellationToken);
+                    holders[domain] = moneyPeople;
+                }
+
+                await sender.SendOnceAsync(
+                    new NotificationDraft(NotificationKinds.InvoiceDraftWaiting, null, domain, invoice.ProjectId, "invoice", invoice.Id,
+                        new { projectTitle = invoice.Project.Title, createdOn = clock.ToCompanyDate(invoice.CreatedAt) }),
+                    $"invoice-draft-{invoice.Id}",
+                    moneyPeople,
+                    cancellationToken);
+            }
+
+            if (page * PageSize >= total)
+            {
+                return;
+            }
+        }
     }
 
     private async Task<IReadOnlyList<Project>> ActiveProjectsAsync(string domain, CancellationToken cancellationToken)

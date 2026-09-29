@@ -10,8 +10,14 @@ namespace ID_Indetails.api.Controllers;
 /// <summary>Someone's Design work, for people who see everyone's. A person of a domain the caller can't see reads as 404.</summary>
 [ApiController]
 [Route("api/employees/{userId:long}")]
-public sealed class EmployeeWorkController(IMyWorkService myWorkService) : ControllerBase
+public sealed class EmployeeWorkController(IMyWorkService myWorkService, IWorkInsightsService insights) : ControllerBase
 {
+    /// <summary>What their logged work cost the company: this quarter, all time and by project.</summary>
+    [HttpGet("labour-cost")]
+    [HasPermission(PermissionCodes.FinancialView)]
+    public Task<PersonLabourCostResponse> LabourCost(long userId, CancellationToken cancellationToken)
+        => insights.PersonCostAsync(userId, cancellationToken);
+
     [HttpGet("work-summary")]
     [HasPermission(PermissionCodes.WorkEntryViewAll)]
     public Task<WorkSummaryResponse> Summary(long userId, [FromQuery] WorkSummaryQuery query, CancellationToken cancellationToken)

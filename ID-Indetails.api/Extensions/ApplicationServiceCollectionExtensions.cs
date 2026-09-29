@@ -7,6 +7,8 @@ using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Implementation;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Repositories.Billing.Implementation;
+using ID_Indetails.api.Repositories.BoardLayouts.Abstraction;
+using ID_Indetails.api.Repositories.BoardLayouts.Implementation;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Implementation;
 using ID_Indetails.api.Repositories.Common.Abstraction;
@@ -57,6 +59,8 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Auth.Implementation;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Billing.Implementation;
+using ID_Indetails.api.Services.BoardLayouts.Abstraction;
+using ID_Indetails.api.Services.BoardLayouts.Implementation;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Clients.Implementation;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -95,6 +99,8 @@ using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Reports.Abstraction;
 using ID_Indetails.api.Services.Reports.Implementation;
+using ID_Indetails.api.Services.Search.Abstraction;
+using ID_Indetails.api.Services.Search.Implementation;
 using ID_Indetails.api.Services.Requirements.Abstraction;
 using ID_Indetails.api.Services.Requirements.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
@@ -175,6 +181,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ILabourRepository, LabourRepository>();
         services.AddScoped<IStatementRepository, StatementRepository>();
         services.AddScoped<ISiteRecordsRepository, SiteRecordsRepository>();
+        services.AddScoped<IBoardLayoutRepository, BoardLayoutRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -201,6 +208,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IClientService, ClientService>();
         services.AddScoped<IProjectService, ProjectService>();
+        services.AddScoped<IProjectAutoArchive, ProjectAutoArchive>();
         services.AddScoped<IProjectProgress, ProjectProgress>();
         services.AddScoped<IProjectStatusService, ProjectStatusService>();
         services.AddScoped<IRequirementService, RequirementService>();
@@ -231,6 +239,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IStatementService, StatementService>();
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
+        services.AddScoped<IBoardLayoutService, BoardLayoutService>();
+        services.AddScoped<ISearchService, SearchService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

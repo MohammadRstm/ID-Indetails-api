@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ID_Indetails.api.Controllers;
 
-/// <summary>A domain dashboard's key figures and projects by status. Its money cards come from /api/finance.</summary>
+/// <summary>A domain dashboard's key figures, projects by status and deadlines. Its money cards come from /api/finance.</summary>
 [ApiController]
 [Route("api/dashboard")]
 public sealed class DashboardController(IDashboardService dashboardService) : ControllerBase
@@ -15,4 +15,10 @@ public sealed class DashboardController(IDashboardService dashboardService) : Co
     [HasPermission(PermissionCodes.ReportView)]
     public Task<DashboardResponse> Get(string domain, CancellationToken cancellationToken)
         => dashboardService.GetAsync(domain, cancellationToken);
+
+    /// <summary>Open requirements due in the next 14 days, overdue ones included, with the overdue count.</summary>
+    [HttpGet("{domain}/deadlines")]
+    [HasPermission(PermissionCodes.ReportView)]
+    public Task<UpcomingDeadlinesResponse> Deadlines(string domain, CancellationToken cancellationToken)
+        => dashboardService.DeadlinesAsync(domain, cancellationToken);
 }

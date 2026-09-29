@@ -42,4 +42,9 @@ public sealed class FinanceController(IDomainFinanceService financeService) : Co
     [HttpGet("costs")]
     public Task<FinanceCostsResponse> Costs(string domain, [FromQuery] FinancePeriodQuery query, CancellationToken cancellationToken)
         => financeService.CostsAsync(domain, query, cancellationToken);
+
+    /// <summary>The dashboard's money follow-ups, 6 at most: overdue invoices, finished but owed, no payment, cost past 85% of the payment.</summary>
+    [HttpGet("attention")]
+    public Task<IReadOnlyList<MoneyAttentionResponse>> Attention(string domain, CancellationToken cancellationToken)
+        => financeService.AttentionAsync(domain, cancellationToken);
 }

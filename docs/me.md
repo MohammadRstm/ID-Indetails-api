@@ -65,3 +65,15 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - The month can't be in the future or before the caller joined (`400`).
 - Totals: overtime, how much of it made up missing hours and how much is paid as overtime (both null where the ledger doesn't apply), and the number of entries.
 - `days`: days with overtime, newest first, each with whether it was a day off and every entry: project, description, start and end, length, overtime and the part that made up missing hours. No money is shown.
+
+## My board layouts
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/me/board-layouts/{key}` | Signed in | The caller's saved card order for a board; `order` and `savedAt` are null while nothing is saved (the board shows its default) |
+| `PUT /api/me/board-layouts/{key}` | Signed in | `{ order: [cardKey…] }` creates or replaces it |
+| `DELETE /api/me/board-layouts/{key}` | Signed in | Goes back to the default order (`204`, also when nothing was saved) |
+
+- The boards are the domain overviews and the company overview: `overview-design`, `overview-execution` and `company-overview` (`Constants/BoardKeys.cs`). Any other key is `404`.
+- Only the order is kept (`user_board_layouts.layout` holds `{ "order": [...] }`), as in the prototype: a card takes the width of the slot it lands in. The client drops keys it no longer knows and places new cards at their default spot, so the server only checks the shape: 1 to 30 card keys, each lowercase letters, digits and dashes (40 at most), none twice (`400`).
+- The client saves on every move and deletes the layout when the order matches the default again. Nobody reads or changes anyone else's layout.
