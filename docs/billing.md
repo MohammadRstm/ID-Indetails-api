@@ -49,6 +49,8 @@ Rules (`Business/Billing/InvoiceRules.cs`):
 - Voiding keeps the number and the reason. It is refused while live payments are attached (`422 invoice_has_payments`).
 - Events: `invoice_created`, `invoice_updated`, `invoice_discarded`, `invoice_issued`, `invoice_sent` (the channel in the payload), `invoice_voided` (the reason in the payload). The total is in the `amount` column.
 
+**Who sees what was paid:** the invoice write endpoints (create, edit, issue, deliveries, void) answer with the invoice. For callers without `financial:view`, it leaves out `paid`, `balance` and `isOverdue`, and a partly or fully paid invoice reads as `sent`. They still see the amounts they invoice. The `payment_exceeds_balance` error doesn't state the balance.
+
 ## Payments
 
 | Method and path | Needs | Purpose |
