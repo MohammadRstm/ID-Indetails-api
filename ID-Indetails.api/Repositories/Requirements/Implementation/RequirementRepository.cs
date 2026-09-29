@@ -20,6 +20,23 @@ public sealed class RequirementRepository(IdIndetailsDbContext db) : IRequiremen
             .ThenBy(r => r.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<ProjectRequirement>> AssignedToAsync(
+        long userId,
+        IReadOnlyCollection<string> domains,
+        CancellationToken cancellationToken = default)
+    {
+        var codes = domains.ToList();
+        return await db.ProjectRequirements
+            .AsNoTracking()
+            .Include(r => r.Project)
+            .Include(r => r.Assignees).ThenInclude(a => a.User)
+            .Where(r => r.DeletedAt == null
+                && r.Assignees.Any(a => a.UserId == userId)
+                && (r.Project.Status == ProjectStatus.Active || r.Project.Status == ProjectStatus.Hold)
+                && codes.Contains(r.Project.DomainCode))
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<ProjectRequirement?> GetForUpdateAsync(long projectId, long requirementId, CancellationToken cancellationToken = default)
         => db.ProjectRequirements
             .Include(r => r.Assignees)

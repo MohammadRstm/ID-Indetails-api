@@ -35,6 +35,36 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Hourly_staff_paid_break_is_labour_cost_shared_across_the_days_projects()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+            new { basis = "hourly", amount = 20m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var morning = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
+        var afternoon = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
+
+        // Tuesday 10 February 2026 in Beirut (UTC+2): 09:00-13:00 on one project, 13:00-17:00 on the other.
+        // The 9-to-5 day needs 7 hours, so the last hour is overtime and the in-hours split is 240 / 180 minutes;
+        // the paid 60-minute break is shared the same way: 34.29 and 25.71 minutes.
+        const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
+            "VALUES (@u, @p, 'Drawings', @start, @end, UTC_TIMESTAMP(3))";
+        await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", morning.Id), ("@start", "2026-02-10 07:00:00"), ("@end", "2026-02-10 11:00:00"));
+        await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", afternoon.Id), ("@start", "2026-02-10 11:00:00"), ("@end", "2026-02-10 15:00:00"));
+
+        // 4 h x 20 = 80, plus 34.29 minutes of break at 20 an hour = 11.43.
+        (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
+        (await MoneyAsync(afternoon.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(88.57m);
+
+        // Monthly pay already covers the break: no extra cost.
+        (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+            new { basis = "monthly", amount = 3466.60m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(80m);
+    }
+
+    [Fact]
     public async Task Design_cost_is_labour_at_the_day_rate_plus_expenses_converted_to_usd()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

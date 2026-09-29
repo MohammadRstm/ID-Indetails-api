@@ -65,13 +65,7 @@ public static class SalaryCalculator
         }
 
         var work = Overtime.Of(input.Work, input.Calendar);
-        var excuses = new HoursLedger.Excuses(
-            input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth),
-            input.Excuses.Sum(e => e.Minutes ?? 0),
-            input.Excuses.SelectMany(e => e.Days).ToHashSet());
-        var ledger = input.LedgerApplies
-            ? HoursLedger.Build(input.Month, input.Today, input.JoinedOn, input.Calendar, work, excuses)
-            : null;
+        var ledger = input.LedgerApplies ? LedgerOf(input, work) : null;
         int MadeUp(Overtime.Split w) => ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
 
         var monthDays = HoursLedger.Days(input.Month, next).Where(d => input.Calendar.HoursOn(d) is not null).ToList();
@@ -128,6 +122,13 @@ public static class SalaryCalculator
             Round(basePay),
             Round(overtimePay));
     }
+
+    /// <summary>The month's hours ledger, from its work split into normal and overtime minutes.</summary>
+    public static HoursLedger.Result LedgerOf(Input input, IReadOnlyList<Overtime.Split> work)
+        => HoursLedger.Build(input.Month, input.Today, input.JoinedOn, input.Calendar, work, new HoursLedger.Excuses(
+            input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth),
+            input.Excuses.Sum(e => e.Minutes ?? 0),
+            input.Excuses.SelectMany(e => e.Days).ToHashSet()));
 
     public static PayTerms? TermsOn(IEnumerable<PayTerms> history, DateOnly day)
         => history.Where(t => t.EffectiveFrom <= day).OrderBy(t => t.EffectiveFrom).LastOrDefault();

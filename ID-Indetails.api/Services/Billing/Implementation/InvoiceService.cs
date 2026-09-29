@@ -50,7 +50,7 @@ public sealed class InvoiceService(
             cancellationToken);
 
         return new PagedResponse<InvoiceSummaryResponse>(
-            rows.Select(Summary).ToList(), query.Page, query.PageSize, total);
+            rows.Select(r => Summary(r, actor.Has(PermissionCodes.FinancialView))).ToList(), query.Page, query.PageSize, total);
     }
 
     public async Task<InvoiceResponse> GetAsync(long invoiceId, CancellationToken cancellationToken = default)
@@ -258,7 +258,7 @@ public sealed class InvoiceService(
         }
 
         var i = row.Invoice;
-        return new InvoiceResponse(Summary(row))
+        return new InvoiceResponse(Summary(row, actor.Has(PermissionCodes.FinancialView)))
         {
             TermsDays = i.TermsDays,
             Notes = i.Notes,
@@ -271,10 +271,15 @@ public sealed class InvoiceService(
         };
     }
 
-    private InvoiceSummaryResponse Summary(InvoiceRow row)
+    /// <summary>
+    /// Without financial:view, what has been paid stays hidden: no paid, balance or overdue figures, and a partly or
+    /// fully paid invoice reads as sent. The caller still sees the amounts they invoice.
+    /// </summary>
+    private InvoiceSummaryResponse Summary(InvoiceRow row, bool seesMoney)
     {
         var i = row.Invoice;
         var status = InvoiceRules.Status(i.VoidedAt is not null, i.IssuedAt is not null, i.Total, row.Paid);
+        var shownStatus = seesMoney || status is not (InvoiceStatus.Partial or InvoiceStatus.Paid) ? status : InvoiceStatus.Sent;
         var dueOn = i.DueAt is { } due ? DateOnly.FromDateTime(due) : (DateOnly?)null;
         return new InvoiceSummaryResponse
         {
@@ -283,12 +288,12 @@ public sealed class InvoiceService(
             Project = new InvoiceProjectResponse(i.Project.Id, i.Project.Title),
             Client = new InvoiceClientResponse(i.Client.Id, ClientRules.DisplayName(i.Client.Name, i.Client.Organisation)),
             Number = i.Number,
-            Status = status,
-            IsOverdue = InvoiceRules.IsOverdue(status, dueOn, clock.CompanyToday),
+            Status = shownStatus,
+            IsOverdue = seesMoney ? InvoiceRules.IsOverdue(status, dueOn, clock.CompanyToday) : null,
             Currency = i.Currency,
             Total = i.Total,
-            Paid = row.Paid,
-            Balance = InvoiceRules.Balance(i.Total, row.Paid),
+            Paid = seesMoney ? row.Paid : null,
+            Balance = seesMoney ? InvoiceRules.Balance(i.Total, row.Paid) : null,
             IssuedAt = i.IssuedAt,
             DueOn = dueOn,
             CreatedAt = i.CreatedAt,

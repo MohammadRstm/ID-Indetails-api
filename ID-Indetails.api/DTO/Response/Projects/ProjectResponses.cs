@@ -1,4 +1,6 @@
+using System.Text.Json.Serialization;
 using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Projects;
@@ -119,6 +121,10 @@ public sealed record ProjectSummaryResponse
     public DateOnly? TargetDate { get; init; }
 
     public int ProgressPct { get; init; }
+
+    /// <summary>Only for callers with financial:view; left out entirely otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ProjectListMoneyResponse? Money { get; init; }
 }
 
 public sealed record ProjectResponse

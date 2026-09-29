@@ -21,6 +21,14 @@ public sealed class SalaryListQueryValidator : AbstractValidator<SalaryListQuery
     }
 }
 
+public sealed class MyHoursQueryValidator : AbstractValidator<MyHoursQuery>
+{
+    public MyHoursQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+    }
+}
+
 public sealed class SalaryMonthQueryValidator : AbstractValidator<SalaryMonthQuery>
 {
     public SalaryMonthQueryValidator()

@@ -2,7 +2,9 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Requirements;
 using ID_Indetails.api.DTO.Response.WorkEntries;
+using ID_Indetails.api.Services.Requirements.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,7 +13,10 @@ namespace ID_Indetails.api.Controllers;
 /// <summary>The caller's own Design work.</summary>
 [ApiController]
 [Route("api/me")]
-public sealed class MyWorkController(IWorkEntryQueryService workEntryQueryService, IMyWorkService myWorkService) : ControllerBase
+public sealed class MyWorkController(
+    IWorkEntryQueryService workEntryQueryService,
+    IMyWorkService myWorkService,
+    IRequirementService requirementService) : ControllerBase
 {
     /// <summary>The caller's entries, newest first.</summary>
     [HttpGet("work-entries")]
@@ -36,6 +41,12 @@ public sealed class MyWorkController(IWorkEntryQueryService workEntryQueryServic
     [HasPermission(PermissionCodes.WorkEntryViewOwn)]
     public Task<MyProjectWorkResponse> ProjectWork(long projectId, CancellationToken cancellationToken)
         => myWorkService.MyProjectWorkAsync(projectId, cancellationToken);
+
+    /// <summary>The caller's open requirements on active and on-hold projects, soonest deadline first.</summary>
+    [HttpGet("requirements")]
+    [HasPermission(PermissionCodes.WorkEntryViewOwn)]
+    public Task<MyRequirementsResponse> Requirements(CancellationToken cancellationToken)
+        => requirementService.ListMineAsync(cancellationToken);
 
     /// <summary>The caller's entries and the domain's meetings on one day (the day timeline). Defaults to today.</summary>
     [HttpGet("day")]

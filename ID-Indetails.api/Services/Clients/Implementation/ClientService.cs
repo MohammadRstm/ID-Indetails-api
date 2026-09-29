@@ -12,9 +12,11 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Clients.Implementation;
@@ -24,6 +26,8 @@ public sealed class ClientService(
     ICurrentUser currentUser,
     IPermissionService permissions,
     IClientRepository clients,
+    IMoneySummaryRepository moneySummaries,
+    IMoneyRollupService moneyRollups,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -38,13 +42,38 @@ public sealed class ClientService(
             new ClientSearch(actor.VisibleDomains, query.Search?.Trim(), query.Archived, query.Domain, query.Page, query.PageSize),
             cancellationToken);
 
-        return new PagedResponse<ClientSummaryResponse>(rows.Select(ToSummary).ToList(), query.Page, query.PageSize, total);
+        if (!actor.Has(PermissionCodes.FinancialView))
+        {
+            return new PagedResponse<ClientSummaryResponse>(rows.Select(ToSummary).ToList(), query.Page, query.PageSize, total);
+        }
+
+        // One batched load for the whole page, never a query per client.
+        var projects = (await moneySummaries.ClientProjectsAsync(rows.Select(r => r.Client.Id).ToList(), cancellationToken))
+            .ToLookup(p => p.ClientId!.Value);
+        var rollup = await moneyRollups.LoadAsync(projects.SelectMany(g => g).ToList(), cancellationToken);
+        return new PagedResponse<ClientSummaryResponse>(
+            rows.Select(r => ToSummary(r) with { Money = rollup.ClientMoney(projects[r.Client.Id].ToList()) }).ToList(),
+            query.Page,
+            query.PageSize,
+            total);
     }
 
     public async Task<ClientResponse> GetAsync(long clientId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        return await DescribeAsync(actor, clientId, cancellationToken);
+        var client = await DescribeAsync(actor, clientId, cancellationToken);
+        if (!actor.Has(PermissionCodes.FinancialView))
+        {
+            return client;
+        }
+
+        var projects = await moneySummaries.ClientProjectsAsync([clientId], cancellationToken);
+        var rollup = await moneyRollups.LoadAsync(projects, cancellationToken);
+        return client with
+        {
+            Money = rollup.ClientMoney(projects),
+            ProjectMoney = projects.OrderByDescending(p => p.StartDate).ThenByDescending(p => p.Id).Select(rollup.ClientProject).ToList(),
+        };
     }
 
     public async Task<ClientResponse> CreateAsync(CreateClientRequest request, CancellationToken cancellationToken = default)

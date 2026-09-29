@@ -117,6 +117,9 @@ public sealed class ScheduleService(
         return Describe(user, saved, await CompanyWeekAsync(cancellationToken));
     }
 
+    public async Task<PersonScheduleResponse> DescribeAsync(User user, CancellationToken cancellationToken = default)
+        => Describe(user, await schedules.SchedulesAsync([user.Id], cancellationToken), await CompanyWeekAsync(cancellationToken));
+
     private async Task<WorkingTimePolicy> CompanyWeekAsync(CancellationToken cancellationToken)
     {
         var policies = await workingTime.GetPoliciesAsync(cancellationToken);

@@ -41,7 +41,7 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 ## Editing people
 
 - Admins edit name, phone, position and team. Names are required once someone has signed up; an invited person's may stay empty. The team must belong to the person's domain.
-- People edit their own name and phone (`PUT /api/me/profile`). Email, position, team and pay are managed by the company.
+- People edit their own name and phone (`PUT /api/me/profile`). Email, position, team and pay are managed by the company. Their own pay, hours, overtime, schedule and requirements are in [me.md](me.md).
 - **Nobody** can change an email address. There is no endpoint for it.
 
 ## Rules that protect accounts

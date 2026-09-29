@@ -3,7 +3,6 @@ using System.Text;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Payroll;
-using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Auth;
@@ -12,12 +11,10 @@ using ID_Indetails.api.DTO.Response.Payroll;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
-using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Common.Implementation;
-using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 
 namespace ID_Indetails.api.Services.Payroll.Implementation;
@@ -30,8 +27,7 @@ public sealed class SalaryService(
     ICurrentUser currentUser,
     IPermissionService permissions,
     IPayrollRepository payroll,
-    IScheduleRepository schedules,
-    IWorkingTimeService workingTime,
+    IPayrollInputs inputs,
     IClock clock) : ISalaryService
 {
     private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses);
@@ -40,7 +36,7 @@ public sealed class SalaryService(
     {
         var (month, computed) = await CalculateAsync(query.Month, query.Domain, query.Search, null, cancellationToken);
         var rows = computed.Select(c => ToRow(c)).ToList();
-        var policy = (await PoliciesAsync(cancellationToken)).LastOrDefault(p => p.EffectiveFrom <= clock.CompanyToday);
+        var policy = (await inputs.PoliciesAsync(cancellationToken)).LastOrDefault(p => p.EffectiveFrom <= clock.CompanyToday);
 
         return new SalariesResponse(
             month,
@@ -77,6 +73,37 @@ public sealed class SalaryService(
                 .Select(w => new OvertimeWorkResponse(w.Id, w.Day, w.Minutes, w.Overtime, MadeUp(w)))
                 .ToList(),
             person.Excuses.Select(HourExcuseService.ToResponse).ToList());
+    }
+
+    public async Task<MyPayResponse> GetMineAsync(SalaryMonthQuery query, CancellationToken cancellationToken = default)
+    {
+        var me = (await payroll.UsersAsync([currentUser.Id], cancellationToken)).Single();
+        var today = clock.CompanyToday;
+        var joinedOn = inputs.JoinedOn(me);
+        var month = SelfService.MonthOf(query.Month, today, joinedOn);
+        var personMonth = (await inputs.ForAsync([me], [month], cancellationToken))[0];
+        var input = personMonth.Input;
+        var work = Overtime.Of(input.Work, input.Calendar);
+        var ledger = input.LedgerApplies ? SalaryCalculator.LedgerOf(input, work) : null;
+        var pay = SalaryCalculator.Calculate(input);
+        var excuses = personMonth.Excuses;
+        var days = MyTime.Days(
+            month,
+            today,
+            joinedOn,
+            input.Calendar,
+            work,
+            excuses.SelectMany(x => x.Days).Select(d => d.Day).ToHashSet(),
+            excuses.Any(x => x.Kind == ExcuseKind.WholeMonth));
+
+        return new MyPayResponse(
+            month,
+            InProgress(month),
+            new DateOnly(joinedOn.Year, joinedOn.Month, 1),
+            pay is null ? null : MySalary(pay, input, InProgress(month)),
+            ledger is null ? null : SelfService.LedgerMonth(personMonth, ledger),
+            days.Select(d => new MyPayDayResponse(d.Date, d.Required, d.Logged, d.Inside, d.Overtime, d.Excused, d.DayOff, d.IsToday, d.Difference)).ToList(),
+            excuses.Select(x => new MyExcuseResponse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).OrderBy(d => d).ToList(), x.IsPaid, x.Note)).ToList());
     }
 
     public async Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
@@ -146,52 +173,17 @@ public sealed class SalaryService(
 
     private async Task<IReadOnlyList<Computed>> ComputeAsync(DateOnly month, IReadOnlyList<User> people, CancellationToken cancellationToken)
     {
-        var today = clock.CompanyToday;
-        var ids = people.Select(p => p.Id).ToList();
-        var next = month.AddMonths(1);
-
-        var pay = (await payroll.PayHistoryAsync(ids, cancellationToken)).ToLookup(p => p.UserId);
-        var personal = (await schedules.SchedulesAsync(ids, cancellationToken)).ToLookup(s => s.UserId);
-        var excuses = (await payroll.ExcusesAsync(ids, month, cancellationToken)).ToLookup(x => x.UserId);
-        var policies = (await PoliciesAsync(cancellationToken)).ToList();
-
-        // A day either side covers the time-zone offset; entries are then kept by their company date.
-        var work = (await payroll.WorkAsync(
-                ids,
-                month.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
-                next.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
-                cancellationToken))
-            .Select(e => (e.UserId, Local: clock.ToCompanyTime(e.StartedAt), e.Id, e.Minutes))
-            .Where(e => DateOnly.FromDateTime(e.Local) >= month && DateOnly.FromDateTime(e.Local) < next)
-            .ToLookup(e => e.UserId, e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes));
-
         var computed = new List<Computed>();
-        foreach (var person in people)
+        foreach (var personMonth in await inputs.ForAsync(people, [month], cancellationToken))
         {
-            var result = SalaryCalculator.Calculate(new SalaryCalculator.Input(
-                month,
-                today,
-                person.JoinedOn!.Value,
-                person.DomainCode == DomainCodes.Design && person.RoleCode == RoleCodes.Employee,
-                pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.HourlyCostRate)).ToList(),
-                new PersonCalendar(policies, personal[person.Id].Select(s => new PersonCalendar.Schedule(
-                    s.EffectiveFrom, s.FollowsDefault, s.Days.ToDictionary(d => (int)d.Weekday, d => ((int)d.StartMinute, (int)d.EndMinute))))),
-                work[person.Id].ToList(),
-                excuses[person.Id].Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList()));
-
-            if (result is not null)
+            if (SalaryCalculator.Calculate(personMonth.Input) is { } result)
             {
-                computed.Add(new Computed(person, result, excuses[person.Id].ToList()));
+                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses));
             }
         }
 
         return computed;
     }
-
-    private async Task<IReadOnlyList<PersonCalendar.Policy>> PoliciesAsync(CancellationToken cancellationToken)
-        => (await workingTime.GetPoliciesAsync(cancellationToken))
-            .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
-            .ToList();
 
     private bool InProgress(DateOnly month) => clock.CompanyToday >= month && clock.CompanyToday < month.AddMonths(1);
 
@@ -227,6 +219,38 @@ public sealed class SalaryService(
             BasePay = r.BasePay,
             OvertimePay = r.OvertimePay,
             Total = r.Total,
+        };
+    }
+
+    private MySalaryResponse MySalary(SalaryCalculator.Result pay, SalaryCalculator.Input input, bool inProgress)
+    {
+        var lastDay = inProgress ? clock.CompanyToday : input.Month.AddMonths(1).AddDays(-1);
+        var estimate = MyTime.EstimateOf(pay, inProgress, MyTime.ExpectedFullMonth(input.Month, input.JoinedOn, input.Calendar));
+
+        return new MySalaryResponse
+        {
+            Basis = pay.Terms.Basis,
+            Amount = pay.Terms.Amount,
+            Currency = pay.Terms.Currency,
+            HourlyRate = pay.Terms.HourlyRate,
+            OvertimeMultiplier = input.Calendar.PolicyOn(lastDay).OvertimeMultiplier,
+            NormalMinutes = pay.NormalMinutes,
+            MadeUpMinutes = pay.MadeUpMinutes,
+            OvertimeMinutes = pay.OvertimePaidMinutes,
+            ExcusedMinutes = pay.ExcusedMinutes,
+            ProRated = pay.ProRated,
+            WorkingDays = pay.WorkingDays,
+            WorkingDaysPaid = pay.WorkingDaysPaid,
+            PaidBreakDays = pay.PaidBreakDays,
+            PaidBreakPay = pay.PaidBreakPay,
+            DeductionMinutes = pay.DeductionMinutes,
+            Deduction = pay.Deduction,
+            BasePay = pay.BasePay,
+            OvertimePay = pay.OvertimePay,
+            Total = pay.Total,
+            EarnedSoFar = estimate.EarnedSoFar,
+            FullMonthEstimate = estimate.FullMonth,
+            WouldLose = estimate.WouldLose,
         };
     }
 

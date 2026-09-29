@@ -48,6 +48,20 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D9 | **Logging doesn't add project members.** |
 | D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
 
+## Decided for the money summaries (29 Sep 2026)
+
+See [finance.md](finance.md).
+
+| # | Rule |
+|---|---|
+| M1 | **Hourly staff's paid break is labour cost**, exactly as Salaries pays it, shared across the day's projects by in-hours minutes. *(May change later.)* |
+| M2 | **A client's margin follows the project rule** as a whole: shown once all their projects are done, at least 5% of their revenue is recognised, or 10 hours are logged. *(The prototype showed it whenever there was revenue.)* |
+| M3 | **Revenue in a period follows `Recognition`**: each month counts for the share of it the period covers. *(The prototype counted whole calendar months.)* |
+| M4 | **Every cost source is returned** on the dashboards and Financials, so the parts add up to the total. *(The prototype's Execution breakdowns left out materials and ground labour.)* |
+| M5 | **The Execution dashboard has no hours cards**: key figures, money cards and projects by status only, as in the prototype. |
+| M6 | **Without `financial:view`, invoice write responses hide what was paid**: no paid, balance or overdue figures, and paid or partly paid reads as sent. |
+| M7 | **Money on the project list isn't sortable or filterable** on the server (the list is paged in the database); the Financials projects table has every project. |
+
 ## Decided for notifications (29 Sep 2026)
 
 | # | Decision |

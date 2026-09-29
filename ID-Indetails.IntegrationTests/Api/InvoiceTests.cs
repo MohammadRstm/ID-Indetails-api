@@ -106,7 +106,7 @@ public class InvoiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         backdated.Number.ShouldBe("EX-2025-001");
         // Drafted before the settings existed, so it kept the 30-day fallback terms.
         backdated.DueOn.ShouldBe(new DateOnly(2026, 1, 19));
-        backdated.IsOverdue.ShouldBeTrue();
+        backdated.IsOverdue.ShouldBe(true);
         (await (await Client.GetAsync("/api/invoices?overdue=true&domain=execution", superAdmin.AccessToken))
             .ReadAsync<PagedResponse<InvoiceSummaryResponse>>()).Items.ShouldContain(i => i.Id == draft.Id);
 
@@ -152,5 +152,34 @@ public class InvoiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
         (await (await Client.GetAsync("/api/invoices?pageSize=100", executionAdmin.AccessToken))
             .ReadAsync<PagedResponse<InvoiceSummaryResponse>>()).Items.ShouldAllBe(i => i.Domain == DomainCodes.Execution);
+    }
+
+    [Fact]
+    public async Task Senders_without_financial_view_never_see_what_was_paid()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, sender) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        (await Client.PutJsonAsync($"/api/users/{sender.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.FinancialView, action = "revoke", reason = "Sends invoices only" } } },
+            superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await Projects.SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var invoice = await IssueAsync((await DraftAsync(project.Id, superAdmin.AccessToken, 1000m)).Id, superAdmin.AccessToken);
+        (await Client.PostJsonAsync($"/api/projects/{project.Id}/payments",
+            new { amount = 400m, currency = "USD", invoiceId = invoice.Id }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        var response = await Client.PostJsonAsync($"/api/invoices/{invoice.Id}/deliveries", new { channel = "download" }, sender.AccessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        var json = await response.Content.ReadAsStringAsync();
+        json.ShouldNotContain("\"paid\"");
+        json.ShouldNotContain("\"balance\"");
+        json.ShouldNotContain("\"isOverdue\"");
+        var seen = await response.ReadAsync<InvoiceResponse>();
+        seen.Status.ShouldBe(InvoiceStatus.Sent);
+        seen.Total.ShouldBe(1000m);
+
+        var full = await (await Client.GetAsync($"/api/invoices/{invoice.Id}", superAdmin.AccessToken)).ReadAsync<InvoiceResponse>();
+        full.Status.ShouldBe(InvoiceStatus.Partial);
+        full.Balance.ShouldBe(600m);
     }
 }
