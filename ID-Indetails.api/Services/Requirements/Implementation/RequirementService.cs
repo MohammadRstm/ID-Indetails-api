@@ -125,6 +125,13 @@ public sealed class RequirementService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await EditableProjectAsync(actor, projectId, cancellationToken);
         var requirement = await RequirementForUpdateAsync(projectId, requirementId, cancellationToken);
+        Throw(RequirementRules.CheckTick(
+            actor.Has(PermissionCodes.RequirementManage),
+            requirement.Assignees.Any(a => a.UserId == actor.UserId),
+            requirement.IsDone,
+            done,
+            requirement.DoneById,
+            actor.UserId));
 
         if (requirement.IsDone != done)
         {

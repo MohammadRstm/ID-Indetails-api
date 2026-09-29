@@ -26,6 +26,7 @@ public static class PermissionCatalog
         new(P.StatementSend, "Send client statements", DomainCodes.Execution),
         new(P.RequirementView, "View project requirements"),
         new(P.RequirementManage, "Add, edit, assign, tick and remove requirements"),
+        new(P.RequirementCompleteOwn, "Tick requirements assigned to you, and untick the ones you ticked"),
         new(P.MeetingManage, "Record and remove project meetings", DomainCodes.Design),
         new(P.MeetingCreate, "Set project meetings, and move or remove the ones you set", DomainCodes.Design),
         new(P.ExpenseManage, "Add and remove project expenses"),
@@ -85,6 +86,7 @@ public static class PermissionCatalog
     [
         P.ProjectView,
         P.RequirementView,
+        P.RequirementCompleteOwn,
         P.MeetingCreate,
         P.WorkEntryCreate,
         P.WorkEntryViewOwn,

@@ -72,11 +72,11 @@ Anything else is `422 invalid_status_change`, and asking for the current status 
 | `GET /api/projects/{id}/requirements` | `requirement:view` | Open requirements first (oldest first), then done ones (most recently done first), with totals, the overdue count and progress |
 | `POST /api/projects/{id}/requirements` | `requirement:manage` | `{ text, deadline, assigneeIds }` |
 | `PUT /api/projects/{id}/requirements/{reqId}` | `requirement:manage` | Replaces text, deadline and assignees |
-| `POST /api/projects/{id}/requirements/{reqId}/done`, `/undone` | `requirement:manage` | Ticks or unticks. Asking for the current state changes nothing. A manual tick clears `autoDone` |
+| `POST /api/projects/{id}/requirements/{reqId}/done`, `/undone` | `requirement:manage` or `requirement:complete_own` | Ticks or unticks. Asking for the current state changes nothing. A manual tick clears `autoDone` |
 | `DELETE /api/projects/{id}/requirements/{reqId}` | `requirement:manage` | Soft delete (`deleted_at`) |
 
 - Requirements of a completed or archived project can't change until it is reopened (`422 project_closed`). Projects on hold stay editable.
-- **Assignees** are employees (not admins) of the project's domain who are active or invited (`422 assignee_not_allowed`). They don't have to be project members. Employees can't tick requirements, not even their own.
+- **Assignees** are employees (not admins) of the project's domain who are active or invited (`422 assignee_not_allowed`). They don't have to be project members. With `requirement:complete_own` (every employee by default) an assignee ticks their own requirement and unticks it only if they ticked it themselves; anything else is `403`. Editing, assigning and deleting stay with `requirement:manage`.
 - A requirement is **overdue** when it is open and its deadline is before today (company time zone).
 - Every change writes `requirement_added`, `requirement_updated`, `requirement_done`, `requirement_reopened` or `requirement_deleted` (the requirement is the subject, the text is in the payload).
 - People newly assigned (on creation or an edit) get a `requirement_assigned` notification with the requirement text, deadline and project title. Removing someone, ticking and deleting send none.
