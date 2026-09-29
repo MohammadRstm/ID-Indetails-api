@@ -99,6 +99,8 @@ using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Reports.Abstraction;
 using ID_Indetails.api.Services.Reports.Implementation;
+using ID_Indetails.api.Services.Search.Abstraction;
+using ID_Indetails.api.Services.Search.Implementation;
 using ID_Indetails.api.Services.Requirements.Abstraction;
 using ID_Indetails.api.Services.Requirements.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
@@ -238,6 +240,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();
+        services.AddScoped<ISearchService, SearchService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

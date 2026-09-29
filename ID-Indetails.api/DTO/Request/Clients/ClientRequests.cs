@@ -5,7 +5,7 @@ namespace ID_Indetails.api.DTO.Request.Clients;
 /// <summary>Filters for the client list. Everything is optional.</summary>
 public sealed record ClientListQuery
 {
-    /// <summary>Matches name and organisation; every word must match.</summary>
+    /// <summary>Matches name, organisation and label; every word must match.</summary>
     public string? Search { get; init; }
 
     /// <summary>When empty, archived clients are left out.</summary>

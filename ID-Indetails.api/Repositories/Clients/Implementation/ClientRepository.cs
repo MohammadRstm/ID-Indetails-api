@@ -24,10 +24,12 @@ public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepositor
             query = query.Where(c => c.DomainCode == domain);
         }
 
-        // Every word must appear in the name or organisation (the collation ignores case).
+        // Every word must appear in the name, organisation or label (the collation ignores case).
         foreach (var word in (search.Text ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
-            query = query.Where(c => c.Name.Contains(word) || (c.Organisation != null && c.Organisation.Contains(word)));
+            query = query.Where(c => c.Name.Contains(word)
+                || (c.Organisation != null && c.Organisation.Contains(word))
+                || (c.Label != null && c.Label.Contains(word)));
         }
 
         if (search.Filter == ClientFilter.Active)
