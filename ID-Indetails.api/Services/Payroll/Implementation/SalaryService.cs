@@ -99,11 +99,12 @@ public sealed class SalaryService(
         return new MyPayResponse(
             month,
             InProgress(month),
+            joinedOn,
             new DateOnly(joinedOn.Year, joinedOn.Month, 1),
             pay is null ? null : MySalary(pay, input, InProgress(month)),
             ledger is null ? null : SelfService.LedgerMonth(personMonth, ledger),
             days.Select(d => new MyPayDayResponse(d.Date, d.Required, d.Logged, d.Inside, d.Overtime, d.Excused, d.DayOff, d.IsToday, d.Difference)).ToList(),
-            excuses.Select(x => new MyExcuseResponse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).OrderBy(d => d).ToList(), x.IsPaid, x.Note)).ToList());
+            excuses.Select(SelfService.Excuse).ToList());
     }
 
     public async Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default)

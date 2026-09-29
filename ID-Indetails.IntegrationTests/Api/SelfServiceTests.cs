@@ -89,6 +89,10 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.MadeUpMinutes.ShouldBe(60),
             m => m.ShortMinutes.ShouldBe(22 * 420 - 420 - 420 - 60),
             m => m.MissedDays.Count.ShouldBe(20));
+        june.Excuses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            x => x.IsPaid.ShouldBeFalse(),
+            x => x.Note.ShouldBe("Unpaid day off"),
+            x => x.Days.ShouldBe([new DateOnly(2026, 6, 2)]));
 
         (await OkAsync<MyHoursResponse>(Client.GetAsync($"/api/me/hours?page={pages + 1}", me.AccessToken))).Months.ShouldBeEmpty();
         await (await Client.GetAsync($"/api/me/hours?page={MyHoursQueryValidator.MaxPage + 1}", me.AccessToken))
@@ -103,6 +107,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1733.30m);
         var colleague = await JuneMonthAsync(superAdmin, project.Id, "hourly", 12m);
         await AddWorkAsync(colleague, project.Id, new DateTime(2026, 6, 6, 6, 0, 0, DateTimeKind.Utc), minutes: 240);
+        await ExecuteAsync("UPDATE projects SET icon = 'pen', tint = '#2F6FEB' WHERE id = @p", ("@p", project.Id));
 
         var overtime = await OkAsync<MyOvertimeResponse>(Client.GetAsync("/api/me/overtime?month=2026-06", me.AccessToken));
 
@@ -119,7 +124,9 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             e => e.Minutes.ShouldBe(480),
             e => e.OvertimeMinutes.ShouldBe(60),
             e => e.MadeUpMinutes.ShouldBe(60),
-            e => e.ProjectId.ShouldBe(project.Id));
+            e => e.ProjectId.ShouldBe(project.Id),
+            e => e.ProjectIcon.ShouldBe("pen"),
+            e => e.ProjectTint.ShouldBe("#2F6FEB"));
 
         // The colleague's Saturday is a day off: all of it is overtime.
         var theirs = await OkAsync<MyOvertimeResponse>(Client.GetAsync("/api/me/overtime?month=2026-06", colleague.AccessToken));
@@ -158,6 +165,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             p => p.EarnedSoFar.ShouldBe(73.30m),
             p => p.FullMonthEstimate.ShouldBeNull());
         mine.InProgress.ShouldBeFalse();
+        mine.JoinedOn.ShouldBe(new DateOnly(2026, 1, 1));
         mine.FirstMonth.ShouldBe(new DateOnly(2026, 1, 1));
         mine.Ledger!.MissedDays.Count.ShouldBe(20);
         mine.Excuses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(

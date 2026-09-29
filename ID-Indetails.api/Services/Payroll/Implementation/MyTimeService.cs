@@ -75,6 +75,7 @@ public sealed class MyTimeService(
 
         // An entry deleted between the two reads is left out rather than failing the request.
         overtime = overtime.Where(w => views.ContainsKey(w.Id)).ToList();
+        var looks = await payroll.ProjectLooksAsync(views.Values.Select(v => v.ProjectId).Distinct().ToList(), cancellationToken);
 
         return new MyOvertimeResponse(
             month,
@@ -95,6 +96,8 @@ public sealed class MyTimeService(
                             v.Id,
                             v.ProjectId,
                             v.ProjectTitle,
+                            looks.GetValueOrDefault(v.ProjectId)?.Icon,
+                            looks.GetValueOrDefault(v.ProjectId)?.Tint,
                             v.Description,
                             v.StartedAt,
                             v.EndedAt,

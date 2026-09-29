@@ -36,8 +36,13 @@ public interface IPayrollRepository
 
     /// <summary>A domain's projects, newest first, with their client's name.</summary>
     Task<IReadOnlyList<ProjectLabel>> ProjectsAsync(string domain, CancellationToken cancellationToken = default);
+
+    /// <summary>The icon and tint of these projects, by id.</summary>
+    Task<IReadOnlyDictionary<long, ProjectLook>> ProjectLooksAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 }
 
 public sealed record WorkEntryTime(long Id, long UserId, long ProjectId, DateTime StartedAt, int Minutes);
 
 public sealed record ProjectLabel(long Id, string Title, string? ClientName, string? ClientOrganisation);
+
+public sealed record ProjectLook(string? Icon, string? Tint);

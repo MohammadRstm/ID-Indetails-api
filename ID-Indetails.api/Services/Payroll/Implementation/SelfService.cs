@@ -4,6 +4,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Payroll;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Models;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 
 namespace ID_Indetails.api.Services.Payroll.Implementation;
@@ -45,6 +46,11 @@ internal static class SelfService
             ledger.MadeUp,
             ledger.OvertimePaid,
             ledger.Short,
-            ledger.MissedDays);
+            ledger.MissedDays,
+            personMonth.Excuses.Select(Excuse).ToList());
     }
+
+    /// <summary>An excuse as the caller sees it: who made it isn't shown.</summary>
+    public static MyExcuseResponse Excuse(HourExcuse x)
+        => new(x.Kind, x.Minutes, x.Days.Select(d => d.Day).OrderBy(d => d).ToList(), x.IsPaid, x.Note);
 }

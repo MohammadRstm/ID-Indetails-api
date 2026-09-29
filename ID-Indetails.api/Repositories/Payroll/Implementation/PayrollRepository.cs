@@ -75,6 +75,14 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
             .Select(p => new ProjectLabel(p.Id, p.Title, p.Client != null ? p.Client.Name : null, p.Client != null ? p.Client.Organisation : null))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyDictionary<long, ProjectLook>> ProjectLooksAsync(
+        IReadOnlyCollection<long> projectIds,
+        CancellationToken cancellationToken = default)
+        => await db.Projects
+            .AsNoTracking()
+            .Where(p => projectIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => new ProjectLook(p.Icon, p.Tint), cancellationToken);
+
     public async Task<IReadOnlyList<HourExcuse>> ExcusesAsync(IReadOnlyCollection<long> userIds, DateOnly month, CancellationToken cancellationToken = default)
         => await db.HourExcuses
             .AsNoTracking()
