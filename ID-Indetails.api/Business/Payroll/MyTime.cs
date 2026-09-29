@@ -12,7 +12,8 @@ namespace ID_Indetails.api.Business.Payroll;
 /// working days passed. The full-month estimate takes off what would be deducted if the month closed as short as it
 /// is now: the shortfall plus the paid break of each whole missed day, at the hourly rate (as Salaries deducts it).
 /// Both are estimates: the month's pay is only final once it closes.</item>
-/// <item>The ledger history runs from the month they joined to this month, newest first, 12 months a page.</item>
+/// <item>The ledger history runs from the month they joined to this month (or the month they left), newest first, 12
+/// months a page.</item>
 /// </list>
 /// </summary>
 public static class MyTime
@@ -118,10 +119,11 @@ public static class MyTime
         return working.Count > 0 ? (decimal)working.Count(d => d < today) / working.Count : 1m;
     }
 
-    /// <summary>One page of months, newest first, from this month back to the month the person joined.</summary>
-    public static (IReadOnlyList<DateOnly> Months, int TotalMonths) MonthsPage(DateOnly joinedOn, DateOnly today, int page)
+    /// <summary>One page of months, newest first, from this month (or the month they left) back to the month they joined.</summary>
+    public static (IReadOnlyList<DateOnly> Months, int TotalMonths) MonthsPage(DateOnly joinedOn, DateOnly today, int page, DateOnly? leftOn = null)
     {
-        var current = new DateOnly(today.Year, today.Month, 1);
+        var last = leftOn is { } left && left < today ? left : today;
+        var current = new DateOnly(last.Year, last.Month, 1);
         var total = Math.Max(0, (current.Year * 12 + current.Month) - (joinedOn.Year * 12 + joinedOn.Month) + 1);
         var months = Enumerable.Range((page - 1) * MonthsPerPage, MonthsPerPage)
             .Where(i => i < total)

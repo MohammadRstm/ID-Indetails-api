@@ -62,6 +62,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
   - `shortMinutes` and `missedDays`: what is still missing, and the working days with no work within hours and no excuse.
   - `excuses`: the month's excuses, paid or not, with their notes. Who made them isn't shown.
 - `status` is `excused` (the whole month), `short` (a closed month still short), `behind` (the month in progress is short so far), `on_track` or `complete` (`Business/Payroll/MyTime.cs`).
+- Someone else's ledger, for their profile, is `GET /api/employees/{id}/hours` (`salary:view`; see [design.md](design.md)).
 
 ## My overtime
 
@@ -73,6 +74,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - The month can't be in the future or before the caller joined (`400`).
 - Totals: overtime, how much of it made up missing hours and how much is paid as overtime (both null where the ledger doesn't apply), and the number of entries.
 - `days`: days with overtime, newest first, each with whether it was a day off and every entry: project (with its icon and tint), description, start and end, length, overtime and the part that made up missing hours. No money is shown.
+- Someone else's overtime, for their profile, is `GET /api/employees/{id}/overtime` (`work_entry:view_all`; see [design.md](design.md)).
 
 ## My board layouts
 

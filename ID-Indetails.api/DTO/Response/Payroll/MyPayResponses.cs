@@ -29,10 +29,13 @@ public sealed record MyLedgerMonthResponse(
     IReadOnlyList<MyExcuseResponse> Excuses);
 
 /// <param name="Applies">The hours ledger applies to Design employees only; for anyone else there are no months.</param>
-/// <param name="TotalMonths">Months from the one the caller joined to this one.</param>
+/// <param name="TotalMonths">Months from the one the person joined to this one (or the one they left).</param>
 public sealed record MyHoursResponse(bool Applies, int Page, int PageSize, int TotalMonths, IReadOnlyList<MyLedgerMonthResponse> Months);
 
-/// <param name="MadeUpMinutes">Part of its overtime that made up missing hours; null where the ledger doesn't apply.</param>
+/// <param name="MadeUpMinutes">
+/// Part of its overtime that made up missing hours; null where the ledger doesn't apply, or on someone else's overtime
+/// for a caller without salary:view.
+/// </param>
 public sealed record MyOvertimeEntryResponse(
     long WorkEntryId,
     long ProjectId,
@@ -48,8 +51,8 @@ public sealed record MyOvertimeEntryResponse(
 
 public sealed record MyOvertimeDayResponse(DateOnly Date, bool DayOff, int OvertimeMinutes, IReadOnlyList<MyOvertimeEntryResponse> Entries);
 
-/// <param name="MadeUpMinutes">Overtime that made up missing hours; null where the ledger doesn't apply.</param>
-/// <param name="PaidMinutes">Overtime paid as overtime; null where the ledger doesn't apply.</param>
+/// <param name="MadeUpMinutes">Overtime that made up missing hours; null as on each entry.</param>
+/// <param name="PaidMinutes">Overtime paid as overtime; null as on each entry.</param>
 /// <param name="Days">Days with overtime, newest first.</param>
 public sealed record MyOvertimeResponse(
     DateOnly Month,

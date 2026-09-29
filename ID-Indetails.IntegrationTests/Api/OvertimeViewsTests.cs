@@ -203,7 +203,7 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (superAdmin, designer, _, _) = await JuneAsync();
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        await _steps.ScalarAsync<int>("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id; SELECT 1", ("@id", designer.User.Id));
+        await JoinedInJanuaryAsync(designer);
 
         var monday = (await OkAsync<MyScheduleResponse>("/api/me/schedule?date=2026-06-15", designer)).Day;
         monday.ShouldSatisfyAllConditions(
@@ -231,6 +231,83 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync("/api/me/schedule?date=2026-06-15", siteWorker.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
+    [Fact]
+    public async Task Someone_s_overtime_shows_what_made_up_hours_only_to_salary_viewers()
+    {
+        var (superAdmin, designer, _, _) = await JuneAsync();
+        await JoinedInJanuaryAsync(designer);
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var url = $"/api/employees/{designer.User.Id}/overtime?month=2026-06";
+
+        var seen = await OkAsync<MyOvertimeResponse>(url, designAdmin);
+        seen.ShouldSatisfyAllConditions(
+            o => o.OvertimeMinutes.ShouldBe(240),
+            o => o.Entries.ShouldBe(2),
+            o => o.MadeUpMinutes.ShouldBeNull(),
+            o => o.PaidMinutes.ShouldBeNull());
+        seen.Days.Select(d => (d.Date, d.DayOff, d.OvertimeMinutes))
+            .ShouldBe([(new DateOnly(2026, 6, 20), true, 120), (new DateOnly(2026, 6, 15), false, 120)]);
+        seen.Days.SelectMany(d => d.Entries).ShouldAllBe(e => e.MadeUpMinutes == null);
+
+        // June was short, so all of it made up missing hours; salary viewers see that.
+        var full = await OkAsync<MyOvertimeResponse>(url, superAdmin);
+        full.MadeUpMinutes.ShouldBe(240);
+        full.PaidMinutes.ShouldBe(0);
+        full.Days.SelectMany(d => d.Entries).Select(e => e.MadeUpMinutes).ShouldBe([120, 120]);
+
+        await (await Client.GetAsync($"/api/employees/{designer.User.Id}/overtime?month=2025-12", designAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.GetAsync($"/api/employees/{siteWorker.User.Id}/overtime", designAdmin.AccessToken))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.GetAsync(url, designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await OkAsync<MyOvertimeResponse>(url, designAdmin)).OvertimeMinutes.ShouldBe(240);
+    }
+
+    [Fact]
+    public async Task Someone_s_hours_are_for_salary_viewers_and_end_with_the_month_they_left()
+    {
+        var (superAdmin, designer, _, _) = await JuneAsync();
+        await JoinedInJanuaryAsync(designer);
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var url = $"/api/employees/{designer.User.Id}/hours";
+
+        // Every page, however many months have passed since January 2026.
+        var first = await OkAsync<MyHoursResponse>(url, superAdmin);
+        var months = new List<MyLedgerMonthResponse>();
+        for (var page = 1; page <= (first.TotalMonths + first.PageSize - 1) / first.PageSize; page++)
+        {
+            months.AddRange((await OkAsync<MyHoursResponse>($"{url}?page={page}", superAdmin)).Months);
+        }
+
+        months.Single(m => m.Month == new DateOnly(2026, 6, 1)).ShouldSatisfyAllConditions(
+            m => m.ExpectedMinutes.ShouldBe(22 * 420),
+            m => m.InsideMinutes.ShouldBe(420),
+            m => m.MadeUpMinutes.ShouldBe(240),
+            m => m.ShortMinutes.ShouldBe(22 * 420 - 420 - 240));
+
+        // Leaving on Thursday 25 June (15:00 in Beirut): the ledger ends that day, and the history that month.
+        (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await _steps.ScalarAsync<int>("UPDATE users SET deactivated_at = '2026-06-25 12:00:00' WHERE id = @id; SELECT 1", ("@id", designer.User.Id));
+        var left = await OkAsync<MyHoursResponse>(url, superAdmin);
+        left.TotalMonths.ShouldBe(6);
+        left.Months[0].ShouldSatisfyAllConditions(
+            m => m.Month.ShouldBe(new DateOnly(2026, 6, 1)),
+            m => m.ExpectedMinutes.ShouldBe(19 * 420));
+
+        (await OkAsync<MyHoursResponse>($"/api/employees/{siteWorker.User.Id}/hours", superAdmin)).Applies.ShouldBeFalse();
+        await (await Client.GetAsync(url, designAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        (await Client.PutJsonAsync($"/api/users/{designAdmin.User.Id}/permissions",
+                new { changes = new[] { new { code = PermissionCodes.SalaryView, action = "grant" } } }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        (await OkAsync<MyHoursResponse>(url, designAdmin)).TotalMonths.ShouldBe(6);
+        await (await Client.GetAsync($"/api/employees/{siteWorker.User.Id}/hours", designAdmin.AccessToken))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
     /// <summary>A Design employee with the June work described above, on two new projects.</summary>
     private async Task<(AuthResponse SuperAdmin, AuthResponse Designer, ProjectResponse First, ProjectResponse Second)> JuneAsync()
     {
@@ -244,6 +321,10 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         await Work.InsertAsync(designer.User.Id, first.Id, "2026-06-20 06:00:00", "2026-06-20 08:00:00", "Weekend renders");
         return (superAdmin, designer, first, second);
     }
+
+    /// <summary>Moves the joining day to 1 January 2026, so June 2026 is judged in full.</summary>
+    private Task JoinedInJanuaryAsync(AuthResponse person)
+        => _steps.ScalarAsync<int>("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id; SELECT 1", ("@id", person.User.Id));
 
     private static DateOnly TodayInBeirut() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut));
 

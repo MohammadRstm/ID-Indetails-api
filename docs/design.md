@@ -76,6 +76,8 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 |---|---|---|
 | `GET /api/me/work-summary?from=&to=&projectId=&search=` | `work_entry:view_own` | The caller's totals and series (below) |
 | `GET /api/employees/{userId}/work-summary?from=&to=&projectId=&search=` | `work_entry:view_all` | The same for someone else (their profile). A person of a domain the caller can't see reads as `404` |
+| `GET /api/employees/{userId}/overtime?month=YYYY-MM` | `work_entry:view_all` | Their overtime in a month (this month by default), day by day: the profile's overtime panel (below) |
+| `GET /api/employees/{userId}/hours?page=1` | `salary:view` | Their hours ledger, 12 months a page: the profile's hours balance (below) |
 | `GET /api/employees/{userId}/labour-cost` | `financial:view` | Their profile's "cost to the company": the labour cost of their work this quarter so far and all time, and the 8 projects it cost most on (all time), priced like project cost (paid breaks included) |
 | `GET /api/me/projects` | `work_entry:view_own` | Every active and on-hold Design project, with the caller's own time on it |
 | `GET /api/me/projects/{id}/work` | `work_entry:view_own` | The caller's work on one project and the team's latest entries there |
@@ -87,6 +89,7 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 - **My projects:** every open project, as the prototype shows them to employees (not only those they are members of): whether it accepts work, the caller's minutes and latest start, the people who logged on it (most time first, names only), and the latest activity. Other people's hours stay private. Projects the caller worked on come first, most recent first, then the newest.
 - **My project work:** the caller's minutes (with `myOvertimeMinutes`), entries and minutes this week on the project; how many people logged there and the project's total minutes; the caller's 12 latest entries; the caller's last 8 weeks there; and the 6 latest entries by other people (name, start and description, as the prototype's "Team activity").
 - **My day:** the day's logged minutes with `overtimeMinutes`, and each entry with its own.
+- **A person's overtime and hours** have the same shape as the caller's own (`GET /api/me/overtime` and `GET /api/me/hours`, see [me.md](me.md)), built the same way. A person of a domain the caller can't see reads as `404`, and people who have left stay readable. On their overtime, what made up missing hours (`madeUpMinutes`, `paidMinutes`, and each entry's `madeUpMinutes`) is pay information: it is null unless the caller holds `salary:view`, as in the prototype where only super admins see it. The hours ledger needs `salary:view` altogether. For someone who has left, it runs up to the month they left.
 - **Overtime** figures are the overtime part of the minutes next to them (see "Overtime" above); the rest is normal time. The prototype shows them as normal and overtime columns.
 
 ## Everyone's work by project and person
