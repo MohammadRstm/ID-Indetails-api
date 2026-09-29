@@ -11,13 +11,15 @@ There is **no self-signup**. A developer creates the first super admin. After th
 | `POST /api/auth/refresh` | Refresh cookie | Rotates the refresh cookie and returns a new access token |
 | `POST /api/auth/logout` | Refresh cookie | Revokes the refresh token and clears the cookie |
 | `POST /api/auth/change-password` | Signed in (allowed while a temporary password is pending) | Sets a new password and signs out every other session |
+| `POST /api/auth/forgot-password` | Anyone | `{ email }`. Emails a reset link to an active account with that email. Always `204` |
+| `POST /api/auth/reset-password` | Anyone with a link | `{ token, password }`. Sets the new password and signs out everywhere. `204` |
 | `GET /api/auth/me` | Signed in (allowed while a temporary password is pending) | Current user, effective permissions, `isJoker` and `visibleDomains` |
 | `POST /api/invitations` | `employee:invite` or `employee:invite_super_admin` | Invites someone by email |
 | `POST /api/invitations/{userId}/resend` | `employee:invite` or `employee:invite_super_admin` | Emails a fresh link; the previous one stops working |
 | `POST /api/invitations/validate` | Anyone with a link | What the signup page shows (email, role, domain, team, position) |
 | `POST /api/invitations/accept` | Anyone with a link | Sets name, phone and password, activates the account, signs in |
 
-Every request counts against a global limit: 300 a minute per signed-in user, or 60 a minute per IP without a valid access token. Login, refresh and the two public invitation endpoints are also limited per IP to 10 a minute, and the setup endpoint to 5 an hour. File exports are limited to 10 a minute per user. All limits are in the `RateLimiting` configuration section; going over answers `429 too_many_requests`.
+Every request counts against a global limit: 300 a minute per signed-in user, or 60 a minute per IP without a valid access token. Login, refresh, forgot and reset password and the two public invitation endpoints are also limited per IP to 10 a minute (together), and the setup endpoint to 5 an hour. File exports are limited to 10 a minute per user. All limits are in the `RateLimiting` configuration section; going over answers `429 too_many_requests`.
 
 ## Creating the first super admin
 
@@ -52,6 +54,14 @@ By default only super admins hold `employee:invite_super_admin`, and super admin
 
 An unknown, used, revoked or expired link always answers `404 invitation_invalid` with the same message.
 
+## Forgotten passwords
+
+1. **Ask.** The sign-in page's "Forgot password?" link leads to a form that calls `POST /api/auth/forgot-password` with the email. The answer is always an empty `204`: for an unknown email, an invited account that hasn't signed up, a deactivated account, and an email that couldn't be sent alike. Only active accounts get an email, and the email is sent without the answer waiting for it, so neither the answer nor its timing says whether the email belongs to anyone.
+2. **Email.** The link goes to `{Frontend:BaseUrl}{Frontend:ResetPasswordPath}?token=…`. It works once and expires after 30 minutes (`PasswordReset:ExpirationMinutes`). Asking again makes earlier links stop working. Only the token's SHA-256 hash is stored, in `password_reset_tokens`.
+3. **Reset.** The page reads `token` from the URL and submits `POST /api/auth/reset-password` with the token and a new password (the same length rules as everywhere). The password is replaced, a pending temporary password no longer needs changing, every other link of the account stops working, and every refresh token is revoked, so the account is signed out everywhere. The person then signs in with the new password.
+
+An unknown, used, expired or replaced link, or one whose account has since been deactivated, always answers `404 password_reset_invalid` with the same message. The rules are in `Business/Auth/PasswordResetRules.cs`.
+
 ## Tokens
 
 ### Access token
@@ -77,7 +87,7 @@ Permissions are **not** in the token, and the `role` claim is informational only
 - **Cookie:** `idi_refresh`, with `HttpOnly`, `Secure`, `SameSite=Strict` and `Path=/api/auth`. JavaScript can't read it, and it's only sent to the auth endpoints.
 - **Storage:** a random token is generated and discarded. The cookie carries its SHA-256 hash, and the database stores the SHA-256 of the cookie value. Nothing in the database can be replayed as a cookie.
 - **Reuse detection:** presenting a refresh cookie that was already rotated revokes **all** of that user's sessions, because the old cookie may have been stolen.
-- **Other revocations:** changing the password and logging out revoke refresh tokens too.
+- **Other revocations:** changing or resetting the password and logging out revoke refresh tokens too.
 
 ## Using it from the React client
 
@@ -106,6 +116,8 @@ Every error has the same shape:
 | `Jwt:Issuer` / `Jwt:Audience` | `id-indetails-api` / `id-indetails-client` | |
 | `RefreshToken:SameSite` | `Strict` | `None` only if the client is ever on another site |
 | `Frontend:BaseUrl` | `http://localhost:5173` | Used for links in emails |
+| `Frontend:ResetPasswordPath` | `/reset-password` | The client's page for choosing a new password |
+| `PasswordReset:ExpirationMinutes` | `30` | How long a reset link works (5 to 1440) |
 | `Cors:AllowedOrigins` | `http://localhost:5173` | Origins allowed to call the API with credentials |
 | `Email:*` | Mailpit on `127.0.0.1:1025` | Put SMTP credentials in user secrets |
 | `Company:TimeZone` | `Asia/Beirut` | Decides "today" for join dates and pay dates |

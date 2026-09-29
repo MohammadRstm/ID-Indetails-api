@@ -74,5 +74,38 @@ public static class AccountEmails
         return new EmailMessage(toAddress, firstName, subject, html, text);
     }
 
+    public static EmailMessage PasswordReset(
+        string productName,
+        string toAddress,
+        string? firstName,
+        string resetUrl,
+        DateTime expiresAtUtc)
+    {
+        var expires = expiresAtUtc.ToString("dddd d MMMM yyyy, HH:mm 'UTC'", CultureInfo.InvariantCulture);
+        var greeting = string.IsNullOrWhiteSpace(firstName) ? "Hello," : $"Hello {firstName},";
+        var subject = $"Reset your {productName} password";
+
+        var html = $"""
+            <p>{Encode(greeting)}</p>
+            <p>Someone asked to reset the password of your <strong>{Encode(productName)}</strong> account. If it was you, choose a new one:</p>
+            <p><a href="{Encode(resetUrl)}">Choose a new password</a></p>
+            <p>This link works once and expires on {Encode(expires)}. Choosing a new password signs you out everywhere.<br>
+            If you didn't ask for this, you can ignore this email: your password stays as it is.</p>
+            """;
+
+        var text = $"""
+            {greeting}
+
+            Someone asked to reset the password of your {productName} account. If it was you, choose a new one:
+
+            {resetUrl}
+
+            This link works once and expires on {expires}. Choosing a new password signs you out everywhere.
+            If you didn't ask for this, you can ignore this email: your password stays as it is.
+            """;
+
+        return new EmailMessage(toAddress, firstName, subject, html, text);
+    }
+
     private static string Encode(string value) => WebUtility.HtmlEncode(value);
 }

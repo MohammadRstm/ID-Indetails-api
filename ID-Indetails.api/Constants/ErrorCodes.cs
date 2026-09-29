@@ -17,6 +17,7 @@ public static class ErrorCodes
     public const string RefreshTokenReused = "refresh_token_reused";
     public const string PasswordChangeRequired = "password_change_required";
     public const string CurrentPasswordIncorrect = "current_password_incorrect";
+    public const string PasswordResetInvalid = "password_reset_invalid";
 
     // Accounts and invitations
     public const string EmailAlreadyRegistered = "email_already_registered";

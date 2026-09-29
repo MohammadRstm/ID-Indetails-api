@@ -31,6 +31,26 @@ public class AuthValidatorTests
     }
 
     [Fact]
+    public void Forgot_password_needs_a_valid_email()
+    {
+        var validator = new ForgotPasswordRequestValidator();
+
+        validator.Validate(new ForgotPasswordRequest { Email = "not-an-email" }).IsValid.ShouldBeFalse();
+        validator.Validate(new ForgotPasswordRequest { Email = "a@b.co" }).IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Reset_password_needs_the_token_and_a_long_enough_password()
+    {
+        var validator = new ResetPasswordRequestValidator();
+
+        validator.Validate(new ResetPasswordRequest { Token = "", Password = "a-much-longer-passphrase" }).IsValid.ShouldBeFalse();
+        validator.Validate(new ResetPasswordRequest { Token = new string('t', 201), Password = "a-much-longer-passphrase" }).IsValid.ShouldBeFalse();
+        validator.Validate(new ResetPasswordRequest { Token = "token", Password = "short" }).IsValid.ShouldBeFalse();
+        validator.Validate(new ResetPasswordRequest { Token = "token", Password = "a-much-longer-passphrase" }).IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
     public void Invitation_rejects_unknown_roles_and_a_domain_for_super_admins()
     {
         var validator = new CreateInvitationRequestValidator();
