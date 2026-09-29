@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Requirements;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
 using Microsoft.EntityFrameworkCore;
@@ -78,6 +79,20 @@ public sealed class RequirementRepository(IdIndetailsDbContext db) : IRequiremen
                 .SetProperty(r => r.AutoDone, false)
                 .SetProperty(r => r.DoneAt, (DateTime?)null)
                 .SetProperty(r => r.DoneById, (long?)null), cancellationToken);
+
+    public async Task<IReadOnlyList<RequirementDeadline>> DueBetweenAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+        => await db.ProjectRequirements
+            .AsNoTracking()
+            .Where(r => r.DeletedAt == null && !r.IsDone && r.Deadline >= from && r.Deadline <= to && r.Project.Status == ProjectStatus.Active)
+            .Select(r => new RequirementDeadline(
+                r.Id,
+                r.ProjectId,
+                r.Project.Title,
+                r.Project.DomainCode,
+                r.Text,
+                r.Deadline!.Value,
+                r.Assignees.Select(a => a.UserId).ToList()))
+            .ToListAsync(cancellationToken);
 
     public void Add(ProjectRequirement requirement) => db.ProjectRequirements.Add(requirement);
 }

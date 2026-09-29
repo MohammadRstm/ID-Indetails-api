@@ -43,7 +43,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D4 | **Entry attachments wait** for a file-upload feature. |
 | D5 | **Comments can't be edited or deleted.** Posting a comment to the team group chat is refused until messaging exists. |
 | D6 | **Logged-work notifications** go to active people holding `work_entry:view_all` in Design, never the author. |
-| D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, only `notifyEntry` and `notifyIdle` (the dashboard's idle projects) are used for now; `notifyProject` is used by project notifications (N4); the others need scheduled jobs. |
+| D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, `notifyEntry`, `notifyProject` (N4), `notifyIdle` and `weeklySummary` (N7) are used; `autoArchive` waits for its job. |
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
 | D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
@@ -57,7 +57,9 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | N3 | **Super admins get admin-level notifications** (work logged, materials, labour, clients, billing, ticked requirements) but not the broadcasts to a domain's people (new projects, status changes, added requirements). |
 | N4 | **Added requirements roll into one notification** per person per project per day, and follow `notifyProject` like the other project news. |
 | N5 | **No money in notifications.** Billing notifications name the invoice or project, never the amount. |
-| N6 | **Scheduled notifications come next** (weekly summary, idle projects, deadlines, overdue invoices, the month-end short-hours alert), and live push arrives with messaging. Until then the client polls the unread count. |
+| N6 | **Live push arrives with messaging.** Until then the client polls the unread count. |
+| N7 | **Scheduled notifications** run on an hourly timer and are keyed so each goes once: last week's summary, idle Design projects, requirements due tomorrow or overdue (deadlines up to a week old), overdue invoices, and the month-end short-hours alert. `notifyIdle` now also sends `project_idle`, and `weeklySummary` sends the summary. |
+| N8 | **The month-end short-hours alert** goes to whoever holds `salary:view` (super admins by default), from the first of the month, naming the five people most short. This settles the old open question. |
 
 ## Carried over from the prototype as-is
 
@@ -87,4 +89,3 @@ These have no decision yet. The schema doesn't depend on them.
 
 1. **Public holidays:** a company holiday calendar, or keep excusing per person?
 2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
-3. **Month-end "short hours" alert:** should it be a scheduled job that notifies super admins?

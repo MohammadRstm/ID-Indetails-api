@@ -81,4 +81,24 @@ public static class NotificationKinds
 
     /// <summary>A client statement was sent (subject: the statement). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string StatementSent = "statement_sent";
+
+    // Scheduled: sent by the notification scheduler, not by anyone's action, so they have no actor.
+
+    /// <summary>What you logged last week (digest key <c>weekly-summary-YYYY-MM-DD</c>, the week's first day). Design, while <c>weekly_summary</c> is on.</summary>
+    public const string WeeklySummary = "weekly_summary";
+
+    /// <summary>An active Design project has had no work for 7 days (subject: the project). Once per quiet stretch, while <c>notify_idle</c> is on.</summary>
+    public const string ProjectIdle = "project_idle";
+
+    /// <summary>Your open requirement is due tomorrow (subject: the requirement).</summary>
+    public const string RequirementDueSoon = "requirement_due_soon";
+
+    /// <summary>An open requirement passed its deadline (subject: the requirement). Sent to its assignees and whoever manages requirements.</summary>
+    public const string RequirementOverdue = "requirement_overdue";
+
+    /// <summary>An issued invoice passed its due date unpaid (subject: the invoice). Sent to whoever sees the domain's money.</summary>
+    public const string InvoiceOverdue = "invoice_overdue";
+
+    /// <summary>Design employees finished a closed month short of their hours (digest key <c>hours-short-YYYY-MM</c>). Sent to whoever sees salaries.</summary>
+    public const string HoursShort = "hours_short";
 }

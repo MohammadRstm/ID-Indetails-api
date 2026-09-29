@@ -112,6 +112,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddOptions<InvitationOptions>().BindConfiguration(InvitationOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<FrontendOptions>().BindConfiguration(FrontendOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         services.AddMemoryCache();
         services.AddSingleton<IClock, SystemClock>();
@@ -194,6 +197,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<INotificationSender, NotificationSender>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IProjectNotifier, ProjectNotifier>();
+        services.AddScoped<IScheduledNotifications, ScheduledNotifications>();
+        services.AddHostedService<NotificationScheduler>();
         services.AddScoped<IMaterialService, MaterialService>();
         services.AddScoped<ILabourService, LabourService>();
         services.AddScoped<IStatementService, StatementService>();

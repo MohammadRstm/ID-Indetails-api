@@ -3,6 +3,16 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Requirements.Abstraction;
 
+/// <summary>An open requirement with a deadline, its project and who it is assigned to.</summary>
+public sealed record RequirementDeadline(
+    long Id,
+    long ProjectId,
+    string ProjectTitle,
+    string DomainCode,
+    string Text,
+    DateOnly Deadline,
+    IReadOnlyList<long> AssigneeIds);
+
 public interface IRequirementRepository
 {
     /// <summary>
@@ -28,6 +38,9 @@ public interface IRequirementRepository
 
     /// <summary>Reopens exactly the requirements that were ticked automatically. Runs immediately.</summary>
     Task UntickAutoDoneAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Open requirements of active projects due from <paramref name="from"/> to <paramref name="to"/>, both inclusive. Not tracked.</summary>
+    Task<IReadOnlyList<RequirementDeadline>> DueBetweenAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
 
     void Add(ProjectRequirement requirement);
 }
