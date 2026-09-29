@@ -12,6 +12,7 @@ using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Activity.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
 
@@ -29,6 +30,7 @@ public sealed class ActivityFeedService(
     IActivityFeedRepository feed,
     IWorkEntryRepository entries,
     IDomainSettingsService domainSettings,
+    IOvertimeService overtime,
     IClock clock) : IActivityFeedService
 {
     public async Task<PagedResponse<ActivityItemResponse>> ListAsync(ActivityListQuery query, CancellationToken cancellationToken = default)
@@ -59,6 +61,7 @@ public sealed class ActivityFeedService(
 
         var workIds = items.Where(e => e.SubjectType == "work_entry" && e.SubjectId is not null).Select(e => e.SubjectId!.Value).Distinct().ToList();
         var work = workIds.Count > 0 ? (await entries.ViewsByIdAsync(workIds, cancellationToken)).ToDictionary(e => e.Id) : [];
+        var overtimeById = await overtime.OvertimeOfAsync(work.Values, cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
 
         return new PagedResponse<ActivityItemResponse>(
@@ -79,7 +82,7 @@ public sealed class ActivityFeedService(
                     ? null
                     : JsonDocument.Parse(e.Payload).RootElement.Clone(),
                 e.SubjectType == "work_entry" && e.SubjectId is { } id && work.TryGetValue(id, out var entry)
-                    ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock)
+                    ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock, overtimeById)
                     : null,
                 e.IsDemo)).ToList(),
             query.Page,

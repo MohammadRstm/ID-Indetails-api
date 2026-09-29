@@ -19,6 +19,9 @@ public interface IPayrollInputs
     /// <summary>The day someone left: when their account was deactivated. Null while it is active.</summary>
     DateOnly? LeftOn(User person);
 
+    /// <summary>Each person's working days over time: the company policies with their own schedules, by user id.</summary>
+    Task<IReadOnlyDictionary<long, PersonCalendar>> CalendarsAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
     /// <summary>One entry per person and month, in that order; each source is loaded once for everyone and every month.</summary>
     Task<IReadOnlyList<PersonMonth>> ForAsync(IReadOnlyList<User> people, IReadOnlyList<DateOnly> months, CancellationToken cancellationToken = default);
 }

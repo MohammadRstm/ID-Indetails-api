@@ -199,6 +199,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IOverheadService, OverheadService>();
         services.AddScoped<ICompanyOverviewService, CompanyOverviewService>();
         services.AddScoped<IPayrollInputs, PayrollInputs>();
+        services.AddScoped<IOvertimeService, OvertimeService>();
         services.AddScoped<ISalaryService, SalaryService>();
         services.AddScoped<IMyTimeService, MyTimeService>();
         services.AddScoped<IHourExcuseService, HourExcuseService>();

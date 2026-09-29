@@ -30,6 +30,17 @@ public sealed class PayrollInputs(
             .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
             .ToList();
 
+    public async Task<IReadOnlyDictionary<long, PersonCalendar>> CalendarsAsync(
+        IReadOnlyCollection<long> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var personal = (await schedules.SchedulesAsync(userIds, cancellationToken)).ToLookup(s => s.UserId);
+        var policies = await PoliciesAsync(cancellationToken);
+
+        return userIds.Distinct().ToDictionary(id => id, id => new PersonCalendar(policies, personal[id].Select(s => new PersonCalendar.Schedule(
+            s.EffectiveFrom, s.FollowsDefault, s.Days.ToDictionary(d => (int)d.Weekday, d => ((int)d.StartMinute, (int)d.EndMinute))))));
+    }
+
     public async Task<IReadOnlyList<PersonMonth>> ForAsync(
         IReadOnlyList<User> people,
         IReadOnlyList<DateOnly> months,
@@ -43,8 +54,7 @@ public sealed class PayrollInputs(
         var ids = people.Select(p => p.Id).ToList();
         var today = clock.CompanyToday;
         var pay = (await payroll.PayHistoryAsync(ids, cancellationToken)).ToLookup(p => p.UserId);
-        var personal = (await schedules.SchedulesAsync(ids, cancellationToken)).ToLookup(s => s.UserId);
-        var policies = await PoliciesAsync(cancellationToken);
+        var calendars = await CalendarsAsync(ids, cancellationToken);
 
         var excuses = new Dictionary<DateOnly, ILookup<long, HourExcuse>>();
         foreach (var month in months.Distinct())
@@ -65,8 +75,7 @@ public sealed class PayrollInputs(
         foreach (var person in people)
         {
             var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.HourlyCostRate)).ToList();
-            var calendar = new PersonCalendar(policies, personal[person.Id].Select(s => new PersonCalendar.Schedule(
-                s.EffectiveFrom, s.FollowsDefault, s.Days.ToDictionary(d => (int)d.Weekday, d => ((int)d.StartMinute, (int)d.EndMinute)))));
+            var calendar = calendars[person.Id];
 
             foreach (var month in months)
             {

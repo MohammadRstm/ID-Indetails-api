@@ -12,6 +12,7 @@ using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Meetings.Implementation;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -29,6 +30,7 @@ public sealed class MyWorkService(
     ICompanyRepository company,
     IDomainSettingsService domainSettings,
     IMeetingRepository meetings,
+    IOvertimeService overtime,
     IClock clock) : IMyWorkService
 {
     public const int SummaryWeeks = 16;
@@ -114,6 +116,7 @@ public sealed class MyWorkService(
         var all = await entries.ListAsync(new WorkEntrySearch(ProjectId: projectId), cancellationToken);
         var mine = all.Where(e => e.UserId == actor.UserId).ToList();
         var myWorked = mine.Select(ToWorked).ToList();
+        var overtimeById = await overtime.OvertimeOfAsync(mine, cancellationToken);
 
         return new MyProjectWorkResponse(
             projectId,
@@ -124,7 +127,7 @@ public sealed class MyWorkService(
             all.Select(e => e.UserId).Distinct().Count(),
             all.Sum(e => e.Minutes),
             mine.OrderByDescending(e => e.StartedAt).Take(RecentOnProject)
-                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock)).ToList(),
+                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
             ToWeeks(WorkStats.Weekly(myWorked, today, WeeksOnProject, calendar.FirstDayOfWeek)),
             all.Where(e => e.UserId != actor.UserId).OrderByDescending(e => e.StartedAt).Take(TeamActivityOnProject)
                 .Select(e => new TeamActivityResponse(e.UserName, e.StartedAt, e.Description)).ToList());
@@ -138,6 +141,7 @@ public sealed class MyWorkService(
         var to = clock.CompanyDayStartUtc(day.AddDays(1));
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         var mine = await entries.ListAsync(new WorkEntrySearch(actor.UserId, From: from, To: to), cancellationToken);
+        var overtimeById = await overtime.OvertimeOfAsync(mine, cancellationToken);
         var domainMeetings = actor.CanSee(DomainCodes.Design)
             ? await meetings.ListAsync(new MeetingSearch([DomainCodes.Design], From: from, To: to), cancellationToken)
             : [];
@@ -145,7 +149,7 @@ public sealed class MyWorkService(
         return new MyDayResponse(
             day,
             mine.Sum(e => e.Minutes),
-            mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock)).ToList(),
+            mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
             domainMeetings.Select(MeetingMapper.ToResponse).ToList());
     }
 

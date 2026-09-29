@@ -16,6 +16,7 @@ using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -36,6 +37,7 @@ public sealed class WorkInsightsService(
     IDomainSettingsService domainSettings,
     IMeetingRepository meetings,
     IActivityFeedRepository activityFeed,
+    IOvertimeService overtime,
     IClock clock) : IWorkInsightsService
 {
     public const int MinProjectWeeks = 4;
@@ -123,6 +125,7 @@ public sealed class WorkInsightsService(
         }
 
         var minutes = theirs.Sum(e => e.Minutes);
+        var overtimeById = await overtime.OvertimeOfAsync(theirs, cancellationToken);
         return new ProjectContributorDetailResponse(
             projectId,
             new WorkEntryPersonResponse(userId, theirs[0].UserName),
@@ -131,7 +134,7 @@ public sealed class WorkInsightsService(
             SharePct(minutes, all.Sum(e => e.Minutes)),
             ToWeeks(WorkStats.Weekly(theirs.Select(ToWorked), clock.CompanyToday, ContributorWeeks, calendar.FirstDayOfWeek)),
             theirs.OrderByDescending(e => e.StartedAt).Take(ContributorEntries)
-                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock)).ToList());
+                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList());
     }
 
     public async Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default)
