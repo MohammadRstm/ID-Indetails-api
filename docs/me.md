@@ -38,11 +38,13 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/me/schedule` | `work_entry:view_own` | The caller's week, the company policy in force, and today's hours |
+| `GET /api/me/schedule?date=` | `work_entry:view_own` | The caller's week, the company policy in force, and one day's hours (today by default) |
 
 - `schedule`: the caller's week as it stands today, with the same shape as the Schedules screen. It is their own schedule where they have one (`isOwn`, `ownSince`), otherwise the company week. Each working day has its start, end and required minutes, and `nextChangeOn` is a change dated in the future.
 - `companyWeek`: the company policy in force today. Its break and overtime multiplier apply to everyone.
-- `today`: whether today is a working day, its hours, required minutes and paid break, and what the caller has logged today. `insideMinutes` is logged time that isn't overtime, and `leftMinutes` is what the day still requires. On a day off everything logged is overtime.
+- `day`: the day asked for (`date`, today by default, from 2000 to 2100): whether it is a working day, its hours, required minutes and paid break, and what the caller has logged on it. `insideMinutes` is logged time that isn't overtime, and `leftMinutes` is what the day still requires. On a day off everything logged is overtime.
+- `day.monthShortMinutes`: what that day's month is short of its required hours so far, from the hours ledger (null where it doesn't apply). Overtime logged in the month first makes this up, as normal hours.
+- This is what the log-work form previews against (the prototype's overtime warning): the day's hours and what is already logged, with the entries themselves from `GET /api/me/day?date=`.
 
 ## My hours
 
@@ -60,6 +62,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
   - `shortMinutes` and `missedDays`: what is still missing, and the working days with no work within hours and no excuse.
   - `excuses`: the month's excuses, paid or not, with their notes. Who made them isn't shown.
 - `status` is `excused` (the whole month), `short` (a closed month still short), `behind` (the month in progress is short so far), `on_track` or `complete` (`Business/Payroll/MyTime.cs`).
+- Someone else's ledger, for their profile, is `GET /api/employees/{id}/hours` (`salary:view`; see [design.md](design.md)).
 
 ## My overtime
 
@@ -71,6 +74,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - The month can't be in the future or before the caller joined (`400`).
 - Totals: overtime, how much of it made up missing hours and how much is paid as overtime (both null where the ledger doesn't apply), and the number of entries.
 - `days`: days with overtime, newest first, each with whether it was a day off and every entry: project (with its icon and tint), description, start and end, length, overtime and the part that made up missing hours. No money is shown.
+- Someone else's overtime, for their profile, is `GET /api/employees/{id}/overtime` (`work_entry:view_all`; see [design.md](design.md)).
 
 ## My board layouts
 

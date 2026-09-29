@@ -123,4 +123,14 @@ public class MyTimeTests
         MyTime.MonthsPage(new DateOnly(2025, 3, 17), today, page: 3).Months.ShouldBeEmpty();
         MyTime.MonthsPage(new DateOnly(2026, 9, 28), today, page: 1).Months.ShouldBe([September]);
     }
+
+    [Fact]
+    public void A_leaver_s_ledger_months_end_with_the_month_they_left()
+    {
+        var (months, total) = MyTime.MonthsPage(new DateOnly(2026, 1, 5), new DateOnly(2026, 9, 29), page: 1, leftOn: new DateOnly(2026, 6, 25));
+
+        total.ShouldBe(6);
+        months[0].ShouldBe(new DateOnly(2026, 6, 1));
+        months[^1].ShouldBe(new DateOnly(2026, 1, 1));
+    }
 }

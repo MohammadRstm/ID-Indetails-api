@@ -14,6 +14,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -33,6 +34,7 @@ public sealed class WorkEntryService(
     IWorkLogNotifier notifier,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
+    IOvertimeService overtime,
     IClock clock) : IWorkEntryService
 {
     public async Task<WorkEntryResponse> CreateAsync(SaveWorkEntryRequest request, CancellationToken cancellationToken = default)
@@ -214,7 +216,7 @@ public sealed class WorkEntryService(
     private async Task<WorkEntryResponse> DescribeAsync(long id, UserAccess actor, DomainSettings settings, CancellationToken cancellationToken)
     {
         var view = await entries.GetViewAsync(id, cancellationToken) ?? throw new NotFoundException("Work entry not found.");
-        return WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock);
+        return WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock, await overtime.OvertimeOfAsync([view], cancellationToken));
     }
 
     private ActivityEvent EntryEvent(WorkEntry entry, string kind, long actorId) => new()

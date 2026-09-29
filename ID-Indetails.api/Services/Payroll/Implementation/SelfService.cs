@@ -9,10 +9,10 @@ using ID_Indetails.api.Services.Payroll.Abstraction;
 
 namespace ID_Indetails.api.Services.Payroll.Implementation;
 
-/// <summary>What the caller's own pay, hours and overtime views share.</summary>
+/// <summary>What the pay, hours and overtime views share: the caller's own, and someone's for people who may see them.</summary>
 internal static class SelfService
 {
-    /// <summary>The month asked for (this month by default): never in the future or before the caller joined.</summary>
+    /// <summary>The month asked for (this month by default): never in the future or before the person joined.</summary>
     public static DateOnly MonthOf(string? text, DateOnly today, DateOnly joinedOn)
     {
         var month = text is null
@@ -25,7 +25,7 @@ internal static class SelfService
         }
 
         return month < new DateOnly(joinedOn.Year, joinedOn.Month, 1)
-            ? throw new RequestValidationException(ErrorCodes.ValidationFailed, "month", "That month is before you joined.")
+            ? throw new RequestValidationException(ErrorCodes.ValidationFailed, "month", "That month is before they joined.")
             : month;
     }
 

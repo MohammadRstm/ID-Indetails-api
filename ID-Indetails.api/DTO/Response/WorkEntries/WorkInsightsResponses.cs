@@ -14,6 +14,7 @@ public sealed record LabourCostResponse(decimal Usd, IReadOnlyList<CurrencyAmoun
 
 public sealed record HourCellResponse(DayOfWeek Weekday, int Hour, int Minutes);
 
+/// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>
 /// <param name="Weekly">The last 8 weeks, oldest first.</param>
 /// <param name="LabourCost">Only for callers with financial:view.</param>
 public sealed record ProjectContributorResponse(
@@ -21,18 +22,21 @@ public sealed record ProjectContributorResponse(
     string Name,
     int Entries,
     int Minutes,
+    int OvertimeMinutes,
     int SharePct,
     DateTime LastStartedAt,
     IReadOnlyList<int> Weekly,
     LabourCostResponse? LabourCost);
 
 /// <summary>A Design project's logged work, for the admin project page.</summary>
+/// <param name="TotalOvertimeMinutes">The part of <paramref name="TotalMinutes"/> that is overtime; the rest is normal time.</param>
 /// <param name="ActivityLevel">From the last 14 days: busy from 45 h a week, steady from 15 h, quiet with any work.</param>
 /// <param name="Weekly">Weekly hours from the project's start (4 to 30 weeks), oldest first.</param>
-/// <param name="Contributors">Within the requested range, most time first.</param>
+/// <param name="Contributors">Within the requested range and work text, most time first.</param>
 public sealed record ProjectWorkResponse(
     long ProjectId,
     int TotalMinutes,
+    int TotalOvertimeMinutes,
     int EntryCount,
     int ContributorCount,
     DateTime? LastStartedAt,
@@ -43,12 +47,16 @@ public sealed record ProjectWorkResponse(
     IReadOnlyList<HourCellResponse> HourHeat,
     IReadOnlyList<ProjectContributorResponse> Contributors);
 
+/// <summary>One person's work on a project, within the requested range and work text.</summary>
+/// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>
+/// <param name="SharePct">Of the project's minutes, all of them.</param>
 /// <param name="Weekly">The last 10 weeks, oldest first.</param>
-/// <param name="Entries">The 40 latest entries, newest first.</param>
+/// <param name="RecentEntries">The 40 latest entries, newest first.</param>
 public sealed record ProjectContributorDetailResponse(
     long ProjectId,
     WorkEntryPersonResponse Person,
     int Minutes,
+    int OvertimeMinutes,
     int Entries,
     int SharePct,
     IReadOnlyList<WeekTotalResponse> Weekly,

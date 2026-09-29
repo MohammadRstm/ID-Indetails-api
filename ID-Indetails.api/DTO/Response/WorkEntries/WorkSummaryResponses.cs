@@ -7,7 +7,8 @@ public sealed record WeekTotalResponse(DateOnly WeekStart, int Minutes, int Entr
 
 public sealed record DayTotalResponse(DateOnly Day, int Minutes);
 
-public sealed record ProjectTimeResponse(long ProjectId, string Title, int Minutes, int Entries, DateTime LastStartedAt);
+/// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>
+public sealed record ProjectTimeResponse(long ProjectId, string Title, int Minutes, int OvertimeMinutes, int Entries, DateTime LastStartedAt);
 
 /// <summary>
 /// One person's work, as their "My work" page and their profile show it. Days are company-time-zone days;
@@ -16,6 +17,7 @@ public sealed record ProjectTimeResponse(long ProjectId, string Title, int Minut
 /// <param name="Week">Each day of the current week, first day first.</param>
 /// <param name="LastWeekMinutes">The whole of last week.</param>
 /// <param name="LastQuarterSameSpanMinutes">Last quarter, up to the same number of days as this quarter so far.</param>
+/// <param name="TotalOvertimeMinutes">The part of <paramref name="TotalMinutes"/> that is overtime; the rest is normal time.</param>
 /// <param name="Weekly">The last 16 weeks, oldest first.</param>
 /// <param name="Daily">Days with work in the last 365 days, oldest first.</param>
 /// <param name="ByProject">Time per project within the requested range and filters, most first.</param>
@@ -31,6 +33,7 @@ public sealed record WorkSummaryResponse(
     int ThisQuarterMinutes,
     int LastQuarterSameSpanMinutes,
     int TotalMinutes,
+    int TotalOvertimeMinutes,
     int EntryCount,
     DateOnly? FirstEntryDay,
     int ProjectCount,
@@ -62,6 +65,7 @@ public sealed record MyProjectResponse(
 
 public sealed record TeamActivityResponse(string PersonName, DateTime StartedAt, string Description);
 
+/// <param name="MyOvertimeMinutes">The part of <paramref name="MyMinutes"/> that is overtime; the rest is normal time.</param>
 /// <param name="Recent">The caller's 12 latest entries on the project, newest first.</param>
 /// <param name="Weekly">The caller's last 8 weeks on the project, oldest first.</param>
 /// <param name="Team">The 6 latest entries by other people, newest first.</param>
@@ -69,6 +73,7 @@ public sealed record MyProjectWorkResponse(
     long ProjectId,
     bool AcceptsWork,
     int MyMinutes,
+    int MyOvertimeMinutes,
     int MyEntries,
     int MyThisWeekMinutes,
     int ContributorCount,
@@ -78,4 +83,10 @@ public sealed record MyProjectWorkResponse(
     IReadOnlyList<TeamActivityResponse> Team);
 
 /// <summary>One company-time-zone day: the caller's entries and the domain's meetings, earliest first. Meetings are not work time.</summary>
-public sealed record MyDayResponse(DateOnly Date, int LoggedMinutes, IReadOnlyList<WorkEntryResponse> Entries, IReadOnlyList<MeetingResponse> Meetings);
+/// <param name="OvertimeMinutes">The part of <paramref name="LoggedMinutes"/> that is overtime; the rest is normal time.</param>
+public sealed record MyDayResponse(
+    DateOnly Date,
+    int LoggedMinutes,
+    int OvertimeMinutes,
+    IReadOnlyList<WorkEntryResponse> Entries,
+    IReadOnlyList<MeetingResponse> Meetings);
