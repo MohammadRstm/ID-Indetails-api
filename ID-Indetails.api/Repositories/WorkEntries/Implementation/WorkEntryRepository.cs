@@ -133,19 +133,6 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .ToList();
     }
 
-    public async Task<IReadOnlyList<long>> PeopleWhoMayHoldAsync(
-        string domainCode,
-        string permissionCode,
-        CancellationToken cancellationToken = default)
-        => await db.Users
-            .AsNoTracking()
-            .Where(u => u.Status == UserStatus.Active
-                && (u.DomainCode == domainCode
-                    || u.RoleCode == RoleCodes.SuperAdmin
-                    || db.UserPermissionOverrides.Any(o => o.UserId == u.Id && o.PermissionCode == permissionCode && o.Effect == PermissionEffect.Grant)))
-            .Select(u => u.Id)
-            .ToListAsync(cancellationToken);
-
     public Task LockDomainAsync(string domainCode, CancellationToken cancellationToken = default)
         => db.Database.ExecuteSqlAsync($"SELECT `code` FROM `domains` WHERE `code` = {domainCode} FOR UPDATE", cancellationToken);
 

@@ -14,7 +14,6 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Labour.Abstraction;
-using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -29,8 +28,7 @@ public sealed class LabourService(
     IProjectRepository projects,
     ILabourRepository labour,
     IActivityEventRepository activity,
-    INotificationRepository notifications,
-    INotificationRecipients recipients,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : ILabourService
 {
@@ -261,23 +259,17 @@ public sealed class LabourService(
     }
 
     private async Task NotifyAsync(Project project, DateOnly weekStart, bool isNew, long actorId, CancellationToken cancellationToken)
-    {
-        var payload = JsonSerializer.Serialize(new { weekStart, updated = !isNew, projectTitle = project.Title });
-        foreach (var recipientId in await recipients.HoldersAsync(project.DomainCode, PermissionCodes.LabourReportManage, actorId, cancellationToken))
-        {
-            notifications.Add(new Notification
-            {
-                RecipientId = recipientId,
-                Kind = NotificationKinds.LabourWeekSubmitted,
-                ActorId = actorId,
-                ProjectId = project.Id,
-                SubjectType = "project",
-                SubjectId = project.Id,
-                Payload = payload,
-                CreatedAt = clock.UtcNow,
-            });
-        }
-    }
+        => await notifications.SendAsync(
+            new NotificationDraft(
+                NotificationKinds.LabourWeekSubmitted,
+                actorId,
+                project.DomainCode,
+                project.Id,
+                "project",
+                project.Id,
+                new { weekStart, updated = !isNew, projectTitle = project.Title }),
+            await notifications.HoldersAsync(project.DomainCode, PermissionCodes.LabourReportManage, cancellationToken),
+            cancellationToken);
 
     /// <summary>Updates the days kept, removes the ones left out and adds the new ones, so no day is ever duplicated.</summary>
     private void ReplaceDays(LabourWeek week, IReadOnlyList<LabourRules.Day> days)

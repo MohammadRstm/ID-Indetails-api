@@ -7,10 +7,10 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
-using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Services.WorkEntries.Implementation;
@@ -24,7 +24,7 @@ public sealed class WorkEntryCommentService(
     IPermissionService permissions,
     IWorkEntryRepository entries,
     IWorkEntryCommentRepository comments,
-    INotificationRepository notifications,
+    INotificationSender notifications,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IWorkEntryCommentService
@@ -81,20 +81,17 @@ public sealed class WorkEntryCommentService(
             Payload = JsonSerializer.Serialize(new { commentId = comment.Id }),
         });
 
-        if (entry.UserId != actor.UserId)
-        {
-            notifications.Add(new Notification
-            {
-                RecipientId = entry.UserId,
-                Kind = NotificationKinds.EntryComment,
-                ActorId = actor.UserId,
-                ProjectId = entry.ProjectId,
-                SubjectType = "work_entry",
-                SubjectId = entry.Id,
-                Payload = JsonSerializer.Serialize(new { authorName = currentUser.FullName, text = comment.Body, entryDescription = entry.Description }),
-                CreatedAt = clock.UtcNow,
-            });
-        }
+        await notifications.SendAsync(
+            new NotificationDraft(
+                NotificationKinds.EntryComment,
+                actor.UserId,
+                entry.ProjectDomain,
+                entry.ProjectId,
+                "work_entry",
+                entry.Id,
+                new { authorName = currentUser.FullName, text = comment.Body, entryDescription = entry.Description }),
+            [entry.UserId],
+            cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

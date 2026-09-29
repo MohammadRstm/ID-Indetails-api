@@ -14,7 +14,6 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Materials.Abstraction;
-using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -29,8 +28,7 @@ public sealed class MaterialService(
     IProjectRepository projects,
     IMaterialRepository materials,
     IActivityEventRepository activity,
-    INotificationRepository notifications,
-    INotificationRecipients recipients,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IMaterialService
 {
@@ -225,23 +223,17 @@ public sealed class MaterialService(
     }
 
     private async Task NotifyAddedAsync(Project project, int count, long actorId, CancellationToken cancellationToken)
-    {
-        var payload = JsonSerializer.Serialize(new { count, projectTitle = project.Title });
-        foreach (var recipientId in await recipients.HoldersAsync(project.DomainCode, PermissionCodes.MaterialManage, actorId, cancellationToken))
-        {
-            notifications.Add(new Notification
-            {
-                RecipientId = recipientId,
-                Kind = NotificationKinds.MaterialsAdded,
-                ActorId = actorId,
-                ProjectId = project.Id,
-                SubjectType = "project",
-                SubjectId = project.Id,
-                Payload = payload,
-                CreatedAt = clock.UtcNow,
-            });
-        }
-    }
+        => await notifications.SendAsync(
+            new NotificationDraft(
+                NotificationKinds.MaterialsAdded,
+                actorId,
+                project.DomainCode,
+                project.Id,
+                "project",
+                project.Id,
+                new { count, projectTitle = project.Title }),
+            await notifications.HoldersAsync(project.DomainCode, PermissionCodes.MaterialManage, cancellationToken),
+            cancellationToken);
 
     private async Task<MaterialResponse> DescribeAsync(long materialId, Project project, UserAccess actor, CancellationToken cancellationToken)
         => ToResponse((await materials.GetRowsAsync([materialId], cancellationToken))[0], project, actor, open: true);

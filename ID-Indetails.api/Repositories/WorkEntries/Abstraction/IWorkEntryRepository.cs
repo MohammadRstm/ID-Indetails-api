@@ -109,12 +109,6 @@ public interface IWorkEntryRepository
     /// <summary>Names, emails, teams and domains of the given people. Not tracked.</summary>
     Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Active people who might hold <paramref name="permissionCode"/> in the domain: its members, super admins,
-    /// and anyone granted it personally. The caller still checks each one's effective permissions.
-    /// </summary>
-    Task<IReadOnlyList<long>> PeopleWhoMayHoldAsync(string domainCode, string permissionCode, CancellationToken cancellationToken = default);
-
     /// <summary>Locks the domain row until the transaction ends, to serialise updates of shared digest notifications.</summary>
     Task LockDomainAsync(string domainCode, CancellationToken cancellationToken = default);
 

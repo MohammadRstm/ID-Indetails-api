@@ -191,7 +191,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMeetingService, MeetingService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IActivityFeedService, ActivityFeedService>();
-        services.AddScoped<INotificationRecipients, NotificationRecipients>();
+        services.AddScoped<INotificationSender, NotificationSender>();
         services.AddScoped<IMaterialService, MaterialService>();
         services.AddScoped<ILabourService, LabourService>();
         services.AddScoped<IStatementService, StatementService>();
