@@ -21,6 +21,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 
 namespace ID_Indetails.api.Services.Employees.Implementation;
 
@@ -37,6 +38,7 @@ public sealed class EmployeeService(
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
     ISessionService sessions,
+    IPresence presence,
     IClock clock) : IEmployeeService
 {
     private const string NotFoundMessage = "Employee not found.";
@@ -336,6 +338,7 @@ public sealed class EmployeeService(
             IsJoker = IsJoker(row),
             JoinedOn = row.JoinedOn,
             LastSeenAt = row.LastSeenAt,
+            Online = presence.IsOnline(row.Id),
             Phone = row.Phone,
             CreatedAt = row.CreatedAt,
             CurrentPay = pay is null ? null : ToPay(pay),
@@ -396,7 +399,7 @@ public sealed class EmployeeService(
     private static TeamSummaryResponse? TeamOf(EmployeeRow row)
         => row.TeamId is { } id ? new TeamSummaryResponse(id, row.TeamName ?? string.Empty) : null;
 
-    private static EmployeeSummaryResponse ToSummary(EmployeeRow row) => new()
+    private EmployeeSummaryResponse ToSummary(EmployeeRow row) => new()
     {
         Id = row.Id,
         Email = row.Email,
@@ -410,6 +413,7 @@ public sealed class EmployeeService(
         IsJoker = IsJoker(row),
         JoinedOn = row.JoinedOn,
         LastSeenAt = row.LastSeenAt,
+        Online = presence.IsOnline(row.Id),
     };
 
     private static PayResponse ToPay(UserPayHistory p)

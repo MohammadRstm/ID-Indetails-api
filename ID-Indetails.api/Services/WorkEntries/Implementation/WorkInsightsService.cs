@@ -17,6 +17,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -38,6 +39,7 @@ public sealed class WorkInsightsService(
     IMeetingRepository meetings,
     IActivityFeedRepository activityFeed,
     IOvertimeService overtime,
+    IPresence presence,
     IClock clock) : IWorkInsightsService
 {
     public const int MinProjectWeeks = 4;
@@ -237,6 +239,8 @@ public sealed class WorkInsightsService(
                     p.TeamName,
                     p.Role,
                     p.Status,
+                    presence.IsOnline(p.Id),
+                    p.LastSeenAt,
                     WorkStats.Minutes(mine, weekStart, today),
                     WorkStats.Minutes(mine, quarterStart, today),
                     mine.Sum(x => x.Minutes),

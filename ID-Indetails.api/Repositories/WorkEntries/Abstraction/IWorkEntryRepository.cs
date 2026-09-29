@@ -57,7 +57,16 @@ public sealed record WorkProject(
 public sealed record Contribution(long ProjectId, long UserId, string UserName, int Minutes, int Entries, DateTime LastStartedAt);
 
 /// <summary>Someone of the Design domain, as the Employees page lists them.</summary>
-public sealed record DesignPerson(long Id, string Name, string Email, string? Position, long? TeamId, string? TeamName, string Role, UserStatus Status);
+public sealed record DesignPerson(
+    long Id,
+    string Name,
+    string Email,
+    string? Position,
+    long? TeamId,
+    string? TeamName,
+    string Role,
+    UserStatus Status,
+    DateTime? LastSeenAt);
 
 public interface IWorkEntryRepository
 {

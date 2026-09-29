@@ -143,6 +143,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IUserIdProvider, LiveUserIdProvider>();
         services.AddSingleton<ILivePublisher, SignalRLivePublisher>();
         services.AddScoped<ILiveUpdates, LiveUpdates>();
+        services.AddSingleton<IPresence, Presence>();
+        services.AddScoped<IPresenceService, PresenceService>();
         services.AddSingleton<IClock, SystemClock>();
 
         // Repositories

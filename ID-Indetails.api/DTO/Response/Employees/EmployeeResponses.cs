@@ -32,6 +32,9 @@ public record EmployeeSummaryResponse
     public DateOnly? JoinedOn { get; init; }
 
     public DateTime? LastSeenAt { get; init; }
+
+    /// <summary>Whether they have the live connection open now.</summary>
+    public bool Online { get; init; }
 }
 
 /// <summary>A person's profile.</summary>

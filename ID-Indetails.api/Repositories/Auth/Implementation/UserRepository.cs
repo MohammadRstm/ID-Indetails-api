@@ -36,6 +36,18 @@ public sealed class UserRepository(IdIndetailsDbContext db) : IUserRepository
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<UserDomain>> ActiveDomainsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
+    {
+        var list = ids.ToList();
+        return await db.Users.AsNoTracking()
+            .Where(u => list.Contains(u.Id) && u.Status == UserStatus.Active)
+            .Select(u => new UserDomain(u.Id, u.DomainCode))
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task SetLastSeenAsync(long id, DateTime at, CancellationToken cancellationToken = default)
+        => db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastSeenAt, at), cancellationToken);
+
     public void Add(User user) => db.Users.Add(user);
 
     public void AddPayHistory(UserPayHistory payHistory) => db.UserPayHistory.Add(payHistory);
