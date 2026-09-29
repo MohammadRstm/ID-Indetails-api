@@ -18,8 +18,9 @@ using ID_Indetails.api.Services.WorkEntries.Implementation;
 namespace ID_Indetails.api.Services.Activity.Implementation;
 
 /// <summary>
-/// The activity feed of the domains the caller can see. Work events need <c>work_entry:view_all</c>, amounts need
-/// <c>financial:view</c>, and company-level events (no domain: overhead, working time) need <c>company:view</c>.
+/// The activity feed of the domains the caller can see. Work events need <c>work_entry:view_all</c>, amounts (and the
+/// markup in <c>material_markup_set</c>'s payload) need <c>financial:view</c>, and company-level events (no domain:
+/// overhead, working time) need <c>company:view</c>.
 /// </summary>
 public sealed class ActivityFeedService(
     ICurrentUser currentUser,
@@ -72,7 +73,9 @@ public sealed class ActivityFeedService(
                 e.SubjectId,
                 seesMoney ? e.Amount : null,
                 seesMoney ? e.PrevAmount : null,
-                e.Payload is null ? null : JsonDocument.Parse(e.Payload).RootElement.Clone(),
+                e.Payload is null || (!seesMoney && e.Kind == ActivityEventKinds.MaterialMarkupSet)
+                    ? null
+                    : JsonDocument.Parse(e.Payload).RootElement.Clone(),
                 e.SubjectType == "work_entry" && e.SubjectId is { } id && work.TryGetValue(id, out var entry)
                     ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock.UtcNow)
                     : null,

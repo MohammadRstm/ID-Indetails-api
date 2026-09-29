@@ -101,4 +101,4 @@ Anything else is `422 invalid_status_change`, and asking for the current status 
 
 ## Activity
 
-`project_created`, `project_updated`, `project_owner_set`, `project_client_set`, `revenue_set`, `revenue_changed`, `project_fee_set`, `material_markup_set`, `project_hold`, `project_resumed`, `project_completed`, `project_archived`, `project_reopened`, `project_finalized` (the frozen revenue in `amount`), `progress_set`. Amounts go in the event's `amount` and `prev_amount` columns, never in the payload.
+`project_created`, `project_updated`, `project_owner_set`, `project_client_set`, `revenue_set`, `revenue_changed`, `project_fee_set`, `material_markup_set`, `project_hold`, `project_resumed`, `project_completed`, `project_archived`, `project_reopened`, `project_finalized` (the frozen revenue in `amount`), `progress_set`. Amounts go in the event's `amount` and `prev_amount` columns, never in the payload. The markup is a fraction (0.125 is 12.5%), so `material_markup_set` keeps it in the payload as `markup` and `prevMarkup` (as the prototype does), with no amount; the feed shows that payload only with `financial:view`.

@@ -283,8 +283,9 @@ public sealed class ProjectService(
 
         if (request.MaterialMarkup != project.MaterialMarkup)
         {
+            // A fraction (0.125 is 12.5%), so it goes in the payload: the amount columns keep 2 decimals.
             activity.Add(ProjectEvent(project, ActivityEventKinds.MaterialMarkupSet, actor.UserId,
-                amount: request.MaterialMarkup, prevAmount: project.MaterialMarkup));
+                new { markup = request.MaterialMarkup, prevMarkup = project.MaterialMarkup }));
         }
 
         project.ProjectFee = request.ProjectFee;
