@@ -6,7 +6,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first. |
+| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first. Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding) only for callers with `financial:view`; see [finance.md](finance.md) |
 | `GET /api/projects/{id}` | `project:view` | A project. `money` is included only for callers with `financial:view` |
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner |
