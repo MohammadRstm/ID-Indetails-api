@@ -260,13 +260,17 @@ public sealed class WorkInsightsService(
             throw new NotFoundException("Employee not found.");
         }
 
-        var rows = await entries.RowsAsync(new WorkEntrySearch(UserId: userId), cancellationToken);
+        // Work is only logged on Design projects, and someone moved to Execution keeps theirs: only callers who see
+        // Design may see what it cost and on which projects.
+        var rows = actor.CanSee(DomainCodes.Design)
+            ? await entries.RowsAsync(new WorkEntrySearch(UserId: userId), cancellationToken)
+            : [];
         var pricer = await LabourPricer.LoadAsync(financeSources, projectFinance, rows, clock, cancellationToken);
         var quarterStart = WorkStats.QuarterStartOf(clock.CompanyToday);
         var byProject = rows
             .GroupBy(r => r.ProjectId)
             .Select(g => (ProjectId: g.Key, Cost: pricer.Price(g)))
-            .Where(x => x.Cost.Usd > 0)
+            .Where(x => x.Cost.Usd > 0 || x.Cost.Unconverted.Count > 0)
             .OrderByDescending(x => x.Cost.Usd)
             .Take(CostProjects)
             .ToList();

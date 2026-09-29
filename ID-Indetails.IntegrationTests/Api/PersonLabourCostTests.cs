@@ -50,5 +50,17 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", anna.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.GetAsync("/api/employees/999999/labour-cost", admin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+
+        // Moved to Execution, she keeps her Design work, whose projects and cost an Execution admin can't see.
+        (await Client.PutJsonAsync($"/api/employees/{anna.User.Id}/domain", new { domainCode = DomainCodes.Execution }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var moved = await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", executionAdmin.AccessToken);
+        ((int)moved.StatusCode).ShouldBe(200, await moved.Content.ReadAsStringAsync());
+        var hidden = await moved.ReadAsync<EmployeeLabourCostResponse>();
+        hidden.EntryCount.ShouldBe(0);
+        hidden.AllTime.Usd.ShouldBe(0m);
+        hidden.ByProject.ShouldBeEmpty();
+        (await (await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", superAdmin.AccessToken))
+            .ReadAsync<EmployeeLabourCostResponse>()).AllTime.Usd.ShouldBe(150m);
     }
 }

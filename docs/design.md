@@ -78,7 +78,7 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 | `GET /api/employees/{userId}/work-summary?from=&to=&projectId=&search=` | `work_entry:view_all` | The same for someone else (their profile). A person of a domain the caller can't see reads as `404` |
 | `GET /api/employees/{userId}/overtime?month=YYYY-MM` | `work_entry:view_all` | Their overtime in a month (this month by default), day by day: the profile's overtime panel (below) |
 | `GET /api/employees/{userId}/hours?page=1` | `salary:view` | Their hours ledger, 12 months a page: the profile's hours balance (below) |
-| `GET /api/employees/{userId}/labour-cost` | `financial:view` | Their profile's "cost to the company": the labour cost of their work this quarter so far and all time, and the 8 projects it cost most on (all time), priced like project cost (paid breaks included) |
+| `GET /api/employees/{userId}/labour-cost` | `financial:view` | Their profile's "cost to the company": the labour cost of their work this quarter so far and all time, and the 8 projects it cost most on (all time, those with only unconverted cost included), priced like project cost (paid breaks included). Work is logged on Design projects only, so a caller who can't see Design (someone moved to Execution, seen by an Execution admin) gets no work and no projects |
 | `GET /api/me/projects` | `work_entry:view_own` | Every active and on-hold Design project, with the caller's own time on it |
 | `GET /api/me/projects/{id}/work` | `work_entry:view_own` | The caller's work on one project and the team's latest entries there |
 | `GET /api/me/day?date=` | `work_entry:view_own` | One day (today by default): the caller's entries and the domain's meetings, earliest first, for the day timeline |
