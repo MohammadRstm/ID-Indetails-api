@@ -42,9 +42,9 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 - **Money follow-ups** (`Business/Finance/MoneyAttention.cs`, as in the prototype), 6 at most, in this order:
   - `overdue_invoice`: each overdue invoice, oldest due first, with its number, days overdue and balance;
-  - `finished_owed`: completed projects still owed on their invoices, when none of it is overdue;
+  - `finished_owed`: completed or archived projects still owed on their invoices, when none of it is overdue (auto-archive doesn't wait for payment, so this keeps them in sight);
   - `no_payment`: active client projects with no payment (revenue) agreed;
-  - `cost_high`: active client projects whose cost has passed 85% of the payment, with the cost, the payment and the whole percentage used.
+  - `cost_high` (Design only): active client projects whose cost has passed 85% of the payment, with the cost, the payment and the whole percentage used. An Execution site's payment includes its materials at client price and its cost at what was paid, so the warning would fire on nearly every site.
   The payment is the agreed revenue (Execution: the agreed amount), not what was received. Projects come oldest first.
 - **Upcoming deadlines** are the open requirements of the domain's active and on-hold projects with a deadline up to 14 days from today, overdue ones included, soonest first (then oldest added). `total` and `overdue` count them all; `items` holds the first 8, each with its project, assignees and days left (negative once overdue). Both domains have it.
 

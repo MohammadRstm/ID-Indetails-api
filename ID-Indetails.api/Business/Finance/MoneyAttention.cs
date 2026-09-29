@@ -1,12 +1,13 @@
 using ID_Indetails.api.Business.Billing;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Business.Finance;
 
 /// <summary>
 /// A domain dashboard's money follow-ups, as in the prototype, 6 at most: overdue invoices (oldest due first), then
-/// completed projects still owed on their invoices with nothing overdue, then active client projects with no payment
-/// agreed or whose cost has passed 85% of it. The payment is the project's revenue (Execution: the agreed amount).
+/// finished projects (completed or archived) still owed on their invoices with nothing overdue, then active client
+/// projects with no payment agreed or, in Design, whose cost has passed 85% of it.
 /// </summary>
 public static class MoneyAttention
 {
@@ -22,13 +23,24 @@ public static class MoneyAttention
     /// <param name="UsedPct">Cost warning: the cost as a whole percentage of the payment.</param>
     public sealed record Item(MoneyAttentionKind Kind, long ProjectId, long? InvoiceId, int? DaysOverdue, decimal? Amount, decimal? Revenue, int? UsedPct);
 
+    /// <summary>
+    /// The cost warning is for Design only. An Execution site's payment includes its materials at client price while
+    /// its cost includes them at what was paid, so its cost is past 85% of the payment from the first material.
+    /// </summary>
+    public static bool WarnsOnCost(string domain) => domain == DomainCodes.Design;
+
     /// <summary>Whether the cost has passed 85% of the payment.</summary>
     public static bool CostIsHigh(decimal revenue, decimal cost) => revenue > 0 && cost / revenue > CostWarning;
 
     public static int UsedPct(decimal revenue, decimal cost) => (int)Math.Round(cost / revenue * 100, MidpointRounding.AwayFromZero);
 
     /// <param name="projects">In the order their items should appear.</param>
-    public static IReadOnlyList<Item> Of(IReadOnlyCollection<Project> projects, IEnumerable<ProjectBilling.Invoice> invoices, DateOnly today)
+    /// <param name="warnOnCost">Whether the projects' domain gets the cost warning (<see cref="WarnsOnCost"/>).</param>
+    public static IReadOnlyList<Item> Of(
+        IReadOnlyCollection<Project> projects,
+        IEnumerable<ProjectBilling.Invoice> invoices,
+        DateOnly today,
+        bool warnOnCost)
     {
         var items = invoices
             .Where(i => i.IsOverdue(today))
@@ -38,7 +50,7 @@ public static class MoneyAttention
             .ToList();
 
         items.AddRange(projects
-            .Where(p => p.Status == ProjectStatus.Completed && p.Outstanding > 0 && p.Overdue == 0)
+            .Where(p => p.Status is ProjectStatus.Completed or ProjectStatus.Archived && p.Outstanding > 0 && p.Overdue == 0)
             .Select(p => new Item(MoneyAttentionKind.FinishedOwed, p.Id, null, null, p.Outstanding, null, null)));
 
         foreach (var p in projects.Where(p => p.Status == ProjectStatus.Active && p.IsClientWork))
@@ -47,7 +59,7 @@ public static class MoneyAttention
             {
                 items.Add(new Item(MoneyAttentionKind.NoPayment, p.Id, null, null, null, null, null));
             }
-            else if (CostIsHigh(p.Revenue, p.Cost))
+            else if (warnOnCost && CostIsHigh(p.Revenue, p.Cost))
             {
                 items.Add(new Item(MoneyAttentionKind.CostHigh, p.Id, null, null, p.Cost, p.Revenue, UsedPct(p.Revenue, p.Cost)));
             }

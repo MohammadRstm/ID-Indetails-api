@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using Shouldly;
 
@@ -118,6 +119,7 @@ public class MoneySummaryTests
             Project(5, ProjectStatus.Completed, outstanding: 300m),
             Project(6, ProjectStatus.Completed, outstanding: 500m, overdue: 500m),
             Project(7, ProjectStatus.Hold, revenue: 0m),
+            Project(8, ProjectStatus.Archived, outstanding: 200m),
         };
         var invoices = new[]
         {
@@ -126,24 +128,31 @@ public class MoneySummaryTests
             new ProjectBilling.Invoice(12, 1, 1, IsIssued: true, IsVoided: false, Today.AddDays(3), 400m, 0m),
         };
 
-        var items = MoneyAttention.Of(projects, invoices, Today);
+        var items = MoneyAttention.Of(projects, invoices, Today, warnOnCost: true);
 
-        // 85% exactly isn't past it, internal and on-hold projects are never flagged, and an overdue project isn't also "owed".
+        // 85% exactly isn't past it, internal and on-hold projects are never flagged, an overdue project isn't also
+        // "owed", and an archived project still owed is flagged like a completed one.
         items.Select(i => (i.Kind, i.ProjectId)).ShouldBe([
             (MoneyAttentionKind.OverdueInvoice, 1L),
             (MoneyAttentionKind.OverdueInvoice, 6L),
             (MoneyAttentionKind.FinishedOwed, 5L),
+            (MoneyAttentionKind.FinishedOwed, 8L),
             (MoneyAttentionKind.CostHigh, 1L),
             (MoneyAttentionKind.NoPayment, 3L),
         ]);
         items[0].DaysOverdue.ShouldBe(20);
         items[0].Amount.ShouldBe(300m);
         items[2].Amount.ShouldBe(300m);
-        items[3].UsedPct.ShouldBe(86);
-        items[3].Amount.ShouldBe(860m);
-        items[3].Revenue.ShouldBe(1000m);
+        items[4].UsedPct.ShouldBe(86);
+        items[4].Amount.ShouldBe(860m);
+        items[4].Revenue.ShouldBe(1000m);
+
+        // Execution gets no cost warning.
+        MoneyAttention.Of(projects, invoices, Today, warnOnCost: false).ShouldNotContain(i => i.Kind == MoneyAttentionKind.CostHigh);
+        MoneyAttention.WarnsOnCost(DomainCodes.Design).ShouldBeTrue();
+        MoneyAttention.WarnsOnCost(DomainCodes.Execution).ShouldBeFalse();
 
         var many = Enumerable.Range(1, 8).Select(id => Project(id, ProjectStatus.Active, revenue: 0m)).ToList();
-        MoneyAttention.Of(many, [], Today).Count.ShouldBe(MoneyAttention.MaxItems);
+        MoneyAttention.Of(many, [], Today, warnOnCost: true).Count.ShouldBe(MoneyAttention.MaxItems);
     }
 }

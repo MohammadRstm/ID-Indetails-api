@@ -245,7 +245,7 @@ public sealed class ScheduledNotifications(
 
     private async Task CostWarningsAsync(CancellationToken cancellationToken)
     {
-        foreach (var domain in DomainCodes.All)
+        foreach (var domain in DomainCodes.All.Where(MoneyAttention.WarnsOnCost))
         {
             var clientWork = (await ActiveProjectsAsync(domain, cancellationToken)).Where(p => p.BillingType == BillingType.Client).ToList();
             if (clientWork.Count == 0)

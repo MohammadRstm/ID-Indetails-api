@@ -274,7 +274,7 @@ public sealed class DomainFinanceService(
             })
             .ToList();
 
-        return MoneyAttention.Of(facts, rollup.Invoices, rollup.Today)
+        return MoneyAttention.Of(facts, rollup.Invoices, rollup.Today, MoneyAttention.WarnsOnCost(domain))
             .Select(i => new MoneyAttentionResponse(
                 i.Kind,
                 i.ProjectId,
