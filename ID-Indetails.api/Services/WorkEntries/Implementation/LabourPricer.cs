@@ -9,7 +9,7 @@ namespace ID_Indetails.api.Services.WorkEntries.Implementation;
 
 /// <summary>
 /// Prices work entries with the shared finance calculator, so a person's labour cost here always matches
-/// the project cost: each hour at the hourly cost in force that day, plus hourly staff's paid breaks, converted
+/// the project cost: each hour at the hourly cost in force that day, plus the paid daily breaks, converted
 /// at that day's exchange rate.
 /// </summary>
 internal sealed class LabourPricer

@@ -15,6 +15,16 @@ public sealed class WorkEntryTestSteps(AuthTestSteps steps)
         return new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc).AddHours(-hours);
     }
 
+    /// <summary>
+    /// Work at fixed UTC times, written straight to the database, so money figures (the paid break depends on the
+    /// weekday and the hours) don't depend on when the test runs.
+    /// </summary>
+    public Task InsertAsync(long userId, long projectId, string startUtc, string endUtc, string description = "Drawings")
+        => steps.ScalarAsync<int>(
+            "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
+            "VALUES (@u, @p, @d, @s, @e, UTC_TIMESTAMP(3)); SELECT 1",
+            ("@u", userId), ("@p", projectId), ("@d", description), ("@s", startUtc), ("@e", endUtc));
+
     public Task<HttpResponseMessage> TryLogAsync(string accessToken, long projectId, DateTime start, int minutes, string description = "Layout work")
         => Client.PostJsonAsync("/api/work-entries", new { projectId, description, startedAt = start, endedAt = start.AddMinutes(minutes) }, accessToken);
 

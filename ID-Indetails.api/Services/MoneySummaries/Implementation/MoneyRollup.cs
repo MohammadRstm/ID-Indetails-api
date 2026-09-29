@@ -10,49 +10,84 @@ using ID_Indetails.api.Services.Finance.Abstraction;
 namespace ID_Indetails.api.Services.MoneySummaries.Implementation;
 
 /// <summary>
-/// The money of a set of projects, loaded once: the shared calculator's figures and dated costs, and billing in USD.
-/// Invoices with no exchange rate on their day are left out of the billing figures and listed in <see cref="UnconvertedInvoices"/>.
+/// The money of a set of projects, loaded once: the shared calculator's figures and dated costs, and billing in USD
+/// (<see cref="ProjectBilling"/>). Invoices with no exchange rate on their day are left out of the billing figures and
+/// listed by <see cref="UnconvertedInvoices"/>.
 /// </summary>
 public sealed class MoneyRollup(
     IReadOnlyDictionary<long, ProjectCostHistory> history,
-    IReadOnlyList<BillingPosition.Invoice> invoices,
+    IReadOnlyList<ProjectBilling.Invoice> invoices,
     IReadOnlyDictionary<long, InvoiceMoneyRow> invoiceRows,
-    IReadOnlyList<BillingPosition.Payment> payments,
-    IReadOnlyList<UnconvertedInvoicesResponse> unconvertedInvoices,
+    IReadOnlyList<InvoiceMoneyRow> unconvertedInvoices,
+    IReadOnlyList<ProjectBilling.Payment> payments,
     DateOnly today)
 {
     public DateOnly Today { get; } = today;
 
-    public IReadOnlyList<BillingPosition.Invoice> Invoices { get; } = invoices;
+    public IReadOnlyList<ProjectBilling.Invoice> Invoices { get; } = invoices;
 
-    public IReadOnlyList<BillingPosition.Payment> Payments { get; } = payments;
-
-    public IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices { get; } = unconvertedInvoices;
+    public IReadOnlyList<ProjectBilling.Payment> Payments { get; } = payments;
 
     public ProjectFinancials Money(long projectId) => history[projectId].Money;
 
     public IReadOnlyList<Recognition.DatedCost> Costs(long projectId) => history[projectId].Costs;
 
+    /// <summary>The project's costs with no exchange rate on their day.</summary>
+    public IReadOnlyList<ProjectFinance.DatedUnconverted> Unconverted(long projectId) => history[projectId].Unconverted;
+
     public InvoiceMoneyRow InvoiceRow(long invoiceId) => invoiceRows[invoiceId];
 
-    public BillingPosition.Position Billing(IEnumerable<Project> projects)
+    public ProjectBilling.Summary Billing(IEnumerable<Project> projects)
     {
         var list = projects.ToList();
         var ids = list.Select(p => p.Id).ToHashSet();
-        return BillingPosition.Of(
+        return ProjectBilling.Summarise(
             list.Where(p => p.BillingType == BillingType.Client).Sum(p => Money(p.Id).Summary.Revenue),
             Invoices.Where(i => ids.Contains(i.ProjectId)).ToList(),
             Payments.Where(p => ids.Contains(p.ProjectId)).ToList(),
             Today);
     }
 
+    /// <summary>Live invoices of these projects (all of them when not given) that have no exchange rate on their day.</summary>
+    public IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices(IEnumerable<Project>? projects = null)
+    {
+        var ids = projects?.Select(p => p.Id).ToHashSet();
+        return unconvertedInvoices
+            .Where(r => !r.IsVoided && (ids is null || ids.Contains(r.ProjectId)))
+            .GroupBy(r => r.Currency.ToUpperInvariant())
+            .Select(g => new UnconvertedInvoicesResponse(g.Key, g.Sum(r => r.Total), g.Count()))
+            .ToList();
+    }
+
+    /// <summary>The billing block of a project's page.</summary>
+    public ProjectBillingResponse ProjectBillingOf(Project project)
+    {
+        var b = Billing([project]);
+        return new ProjectBillingResponse(
+            b.Invoiced,
+            b.Outstanding,
+            b.Received,
+            b.OnAccount,
+            b.NotYetInvoiced,
+            b.Owed,
+            b.PaidAhead,
+            b.IssuedCount,
+            b.PaymentCount,
+            b.Overdue,
+            b.OverdueCount,
+            DaysSince(b.OldestOverdueDue),
+            b.Drafts,
+            UnconvertedInvoices([project]));
+    }
+
     public ProjectListMoneyResponse ListMoney(Project project)
     {
-        var summary = Money(project.Id).Summary;
+        var money = Money(project.Id);
+        var s = money.Summary;
         var billing = Billing([project]);
         return new ProjectListMoneyResponse(
-            summary.Revenue, summary.RecognisedToDate, summary.Cost, summary.Profit, summary.Margin, summary.MarginKnown,
-            billing.Invoiced, billing.Outstanding);
+            s.Revenue, s.RecognisedToDate, s.Cost, s.Profit, s.Margin, s.MarginKnown,
+            billing.Invoiced, billing.Outstanding, HasUnconverted([project]), money.UnpricedLabourMinutes);
     }
 
     /// <summary>
@@ -79,7 +114,8 @@ public sealed class MoneyRollup(
             projects.Where(p => !IsDone(p)).Sum(p => Money(p.Id).Summary.Revenue),
             completed.Sum(p => Money(p.Id).Summary.Revenue),
             completedSummary?.Margin,
-            BillingTotals(Billing(projects)));
+            BillingTotals(Billing(projects)),
+            UnconvertedInvoices(projects));
     }
 
     public ClientProjectMoneyResponse ClientProject(Project project)
@@ -96,7 +132,9 @@ public sealed class MoneyRollup(
             money.Summary.Margin,
             money.Summary.MarginKnown,
             BillingTotals(Billing([project])),
-            project.StartDate);
+            project.StartDate,
+            HasUnconverted([project]),
+            money.UnpricedLabourMinutes);
     }
 
     public static ProjectCostResponse CostOf(ProjectFinance.Costs costs, int unpricedMinutes) => new(
@@ -108,15 +146,20 @@ public sealed class MoneyRollup(
         costs.Unconverted.Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount)).ToList(),
         unpricedMinutes);
 
-    public static BillingTotalsResponse BillingTotals(BillingPosition.Position b)
+    public static BillingTotalsResponse BillingTotals(ProjectBilling.Summary b)
         => new(b.Invoiced, b.Received, b.Outstanding, b.Overdue, b.NotYetInvoiced, b.Drafts);
 
-    public BillingPositionResponse Position(BillingPosition.Position b) => new(
-        b.Value, b.Invoiced, b.IssuedCount, b.Received, b.OnAccount, b.Outstanding, b.Overdue, b.OverdueCount,
-        b.OldestOverdueDue is { } due ? Today.DayNumber - due.DayNumber : null,
-        b.NotYetInvoiced, b.Drafts);
+    public BillingPositionResponse Position(ProjectBilling.Summary b) => new(
+        b.Revenue, b.Invoiced, b.IssuedCount, b.Received, b.OnAccount, b.Outstanding, b.Overdue, b.OverdueCount,
+        DaysSince(b.OldestOverdueDue), b.NotYetInvoiced, b.Drafts, b.PaymentCount);
 
     public static decimal Hours(int minutes) => Math.Round(minutes / 60m, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>Whether any of the projects' costs or invoices is left out of the USD figures for want of a rate.</summary>
+    private bool HasUnconverted(IReadOnlyCollection<Project> projects)
+        => projects.Any(p => Unconverted(p.Id).Count > 0) || UnconvertedInvoices(projects).Count > 0;
+
+    private int? DaysSince(DateOnly? day) => day is { } d ? Today.DayNumber - d.DayNumber : null;
 
     private static bool IsDone(Project p) => p.Status is ProjectStatus.Completed or ProjectStatus.Archived;
 

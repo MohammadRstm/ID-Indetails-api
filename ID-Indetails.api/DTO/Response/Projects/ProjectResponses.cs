@@ -87,6 +87,12 @@ public sealed record ProjectProjectionResponse(decimal Cost, decimal Profit, dec
 /// <param name="NotYetInvoiced">Revenue minus invoiced, never below zero.</param>
 /// <param name="Owed">Revenue minus received, never below zero.</param>
 /// <param name="PaidAhead">Received beyond the revenue.</param>
+/// <param name="IssuedCount">Issued, live invoices.</param>
+/// <param name="PaymentCount">Live payments, on account or not.</param>
+/// <param name="Overdue">Left to pay on invoices past their due date.</param>
+/// <param name="OldestOverdueDays">Days past due of the oldest overdue invoice.</param>
+/// <param name="Drafts">Invoices drafted but not issued yet.</param>
+/// <param name="UnconvertedInvoices">Invoices left out of these figures for want of an exchange rate on their day.</param>
 public sealed record ProjectBillingResponse(
     decimal Invoiced,
     decimal Outstanding,
@@ -94,7 +100,14 @@ public sealed record ProjectBillingResponse(
     decimal OnAccount,
     decimal NotYetInvoiced,
     decimal Owed,
-    decimal PaidAhead);
+    decimal PaidAhead,
+    int IssuedCount,
+    int PaymentCount,
+    decimal Overdue,
+    int OverdueCount,
+    int? OldestOverdueDays,
+    decimal Drafts,
+    IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
 public sealed record ProjectSummaryResponse
 {
