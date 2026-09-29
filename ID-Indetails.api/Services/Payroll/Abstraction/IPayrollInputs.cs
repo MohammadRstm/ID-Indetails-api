@@ -16,6 +16,9 @@ public interface IPayrollInputs
     /// <summary>The day someone joined; people set up without one (the first super admin) count from their account's creation.</summary>
     DateOnly JoinedOn(User person);
 
+    /// <summary>The day someone left: when their account was deactivated. Null while it is active.</summary>
+    DateOnly? LeftOn(User person);
+
     /// <summary>One entry per person and month, in that order; each source is loaded once for everyone and every month.</summary>
     Task<IReadOnlyList<PersonMonth>> ForAsync(IReadOnlyList<User> people, IReadOnlyList<DateOnly> months, CancellationToken cancellationToken = default);
 }

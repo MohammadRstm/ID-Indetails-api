@@ -7,8 +7,8 @@ namespace ID_Indetails.api.Business.Payroll;
 /// What someone is owed for a month. Terms are the pay in force at the end of the month (or today,
 /// while it is in progress); an hour of monthly pay is salary ÷ 173.33.
 /// <list type="bullet">
-/// <item><b>Monthly:</b> the salary, pro-rated on the person's own working days if they joined mid-month,
-/// plus overtime at the multiplier. In a closed month the hours ledger's shortfall is deducted at the
+/// <item><b>Monthly:</b> the salary, pro-rated on the person's own working days if they joined or left (their
+/// account was deactivated) mid-month, plus overtime at the multiplier. In a closed month the hours ledger's shortfall is deducted at the
 /// hourly rate, and each missed working day also loses its paid break, so it costs the full paid day.
 /// Unpaid excuses are deducted the same way (an unpaid day off costs the full paid day).</item>
 /// <item><b>Hourly:</b> logged hours at the rate in force that day, overtime that made up a shortfall at the
@@ -29,7 +29,8 @@ public static class SalaryCalculator
         IReadOnlyList<PayTerms> PayHistory,
         PersonCalendar Calendar,
         IReadOnlyList<Overtime.Work> Work,
-        IReadOnlyList<Excuse> Excuses);
+        IReadOnlyList<Excuse> Excuses,
+        DateOnly? LeftOn = null);
 
     public sealed record Result(
         PayTerms Terms,
@@ -57,9 +58,10 @@ public static class SalaryCalculator
     public static Result? Calculate(Input input)
     {
         var next = input.Month.AddMonths(1);
-        var termsDay = input.Today < next ? input.Today : next.AddDays(-1);
+        var lastDay = input.LeftOn is { } left && left < next ? left : next.AddDays(-1);
+        var termsDay = input.Today < lastDay ? input.Today : lastDay;
         var terms = TermsOn(input.PayHistory, termsDay);
-        if (terms is null || input.JoinedOn >= next)
+        if (terms is null || input.JoinedOn >= next || lastDay < input.Month)
         {
             return null;
         }
@@ -69,8 +71,8 @@ public static class SalaryCalculator
         int MadeUp(Overtime.Split w) => ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
 
         var monthDays = HoursLedger.Days(input.Month, next).Where(d => input.Calendar.HoursOn(d) is not null).ToList();
-        var paidDays = monthDays.Count(d => d >= input.JoinedOn);
-        var proRated = input.JoinedOn > input.Month;
+        var paidDays = monthDays.Count(d => d >= input.JoinedOn && d <= lastDay);
+        var proRated = input.JoinedOn > input.Month || lastDay < next.AddDays(-1);
 
         decimal basePay, overtimePay, paidBreakPay = 0, deduction = 0;
         int paidBreakDays = 0, deductionMinutes = 0;
@@ -128,7 +130,8 @@ public static class SalaryCalculator
         => HoursLedger.Build(input.Month, input.Today, input.JoinedOn, input.Calendar, work, new HoursLedger.Excuses(
             input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth),
             input.Excuses.Sum(e => e.Minutes ?? 0),
-            input.Excuses.SelectMany(e => e.Days).ToHashSet()));
+            input.Excuses.SelectMany(e => e.Days).ToHashSet()),
+            input.LeftOn);
 
     public static PayTerms? TermsOn(IEnumerable<PayTerms> history, DateOnly day)
         => history.Where(t => t.EffectiveFrom <= day).OrderBy(t => t.EffectiveFrom).LastOrDefault();
@@ -160,7 +163,7 @@ public static class SalaryCalculator
     private static int UnpaidMinutes(Input input, DateOnly next)
         => input.Excuses.Where(e => !e.IsPaid && e.Kind != ExcuseKind.WholeMonth).Sum(e =>
             (e.Minutes ?? 0)
-            + e.Days.Where(d => d >= input.Month && d < next && d >= input.JoinedOn)
+            + e.Days.Where(d => d >= input.Month && d < next && d >= input.JoinedOn && !(d > input.LeftOn))
                 .Sum(d => input.Calendar.HoursOn(d)?.Span ?? 0));
 
     private static decimal Round(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);

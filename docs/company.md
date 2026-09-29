@@ -63,7 +63,9 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 Always calculated from the records, never stored (`Business/Payroll/`). The month defaults to this one and can't be in the future.
 
-**Who is listed:** every active person who has joined and has a pay record, in the caller's domains. Super admins appear only if they have pay and the caller sees both domains. People who joined after the month are left out.
+**Who is listed:** every person who has joined, has a pay record and was active at some point in the month, in the caller's domains: people still active, and people deactivated during or after the month (`users.deactivated_at`). Super admins appear only if they have pay and the caller sees both domains. People who joined after the month, or left before it, are left out. Someone deactivated before the leaving day was recorded (no `deactivated_at`) is left out, as before. The list, the detail, the CSV, the totals and the month-end short-hours alert all follow this.
+
+**Leavers:** a person's final month ends on the day they left (the company-time-zone day of `deactivated_at`, included). Monthly pay is pro-rated to it the way a joining month is (`leftOn` on the row, and `workingDaysPaid` of `workingDays`), and their hours ledger ends there too, so the month counts as closed for them once they have left. Reactivating clears the date; the months in between then read as if they had stayed.
 
 **Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay is salary ÷ 173.33.
 
@@ -79,7 +81,7 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 - A closed month still short is *flagged*; the month in progress is *behind*.
 
 **Pay** (`SalaryCalculator.cs`):
-- **Monthly:** the salary, pro-rated on the person's own working days if they joined mid-month, plus overtime at the multiplier in force that day.
+- **Monthly:** the salary, pro-rated on the person's own working days if they joined or left mid-month, plus overtime at the multiplier in force that day.
   - In a closed, flagged month the shortfall is deducted at the hourly rate. Whole missed days still owed also lose their paid break, so each costs the full paid day (8h on a 9–5 day); a partly made-up remainder costs only its hours. Example: 21 missed days with one hour made up is 20 whole days (8h each) plus 6h.
   - Unpaid excuses are deducted too: unpaid minutes at the hourly rate, each unpaid day off as the full paid day, an unpaid whole month as the whole salary. The deduction never exceeds the salary.
 - **Hourly:** hours within schedule and made-up hours at the rate in force each day, plus the paid break of each working day they worked, plus overtime at the rate × multiplier. Excuses don't change their pay (they are paid for what they log).
@@ -108,6 +110,6 @@ What each Design project paid its people in a week, month or quarter (`Business/
 - **Period:** the week (following the company's week start), month or quarter containing `date` (today by default). Never a future period (`400 project_pay_period_in_future`).
 - **Each work entry** is paid at the person's hourly rate in force that day (salary ÷ 173.33 for monthly pay): its hours within schedule, plus any overtime that made up a shortfall in the month, at the plain rate, and the rest of its overtime at the multiplier.
 - **Left out:** paid breaks and salary deductions. They aren't worked on any project, so project pay differs from Salaries for hourly staff by exactly their paid breaks.
-- Overtime and made-up hours are worked out from the person's whole day and month, whichever projects they worked on.
+- Overtime and made-up hours are worked out from the person's whole day and month, whichever projects they worked on. A leaver's hours ledger ends on the day they left, as in Salaries.
 - Grouped by project, then person and currency; projects are ordered by USD pay. Someone with no pay record is listed with `priced: false` and paid 0.
 

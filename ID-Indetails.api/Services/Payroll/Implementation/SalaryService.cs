@@ -30,7 +30,7 @@ public sealed class SalaryService(
     IPayrollInputs inputs,
     IClock clock) : ISalaryService
 {
-    private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses);
+    private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses, DateOnly? LeftOn);
 
     public async Task<SalariesResponse> ListAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
@@ -155,7 +155,8 @@ public sealed class SalaryService(
             throw new RequestValidationException(ErrorCodes.SalaryMonthInFuture, "month", "Salaries can't be shown for a future month.");
         }
 
-        var people = (await payroll.PeopleAsync(actor.VisibleDomains, EmployeeRules.CanSee(actor, null), domain, search?.Trim(), cancellationToken))
+        var people = (await payroll.PeopleAsync(
+                actor.VisibleDomains, EmployeeRules.CanSee(actor, null), domain, search?.Trim(), clock.CompanyDayStartUtc(month), cancellationToken))
             .Where(p => onlyUserId is null || p.Id == onlyUserId)
             .ToList();
 
@@ -164,7 +165,7 @@ public sealed class SalaryService(
 
     public async Task<IReadOnlyList<ShortPerson>> FlaggedAsync(DateOnly month, CancellationToken cancellationToken = default)
     {
-        var people = await payroll.PeopleAsync([DomainCodes.Design], false, DomainCodes.Design, null, cancellationToken);
+        var people = await payroll.PeopleAsync([DomainCodes.Design], false, DomainCodes.Design, null, clock.CompanyDayStartUtc(month), cancellationToken);
         return (await ComputeAsync(month, people, cancellationToken))
             .Where(c => c.Result.Ledger is { Flagged: true })
             .Select(c => new ShortPerson(c.User.Id, ToRow(c).Name, c.Result.Ledger!.Short))
@@ -179,7 +180,7 @@ public sealed class SalaryService(
         {
             if (SalaryCalculator.Calculate(personMonth.Input) is { } result)
             {
-                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses));
+                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses, personMonth.Input.LeftOn));
             }
         }
 
@@ -214,6 +215,7 @@ public sealed class SalaryService(
             Flagged = r.Ledger?.Flagged ?? false,
             Behind = r.Ledger?.Behind ?? false,
             ProRated = r.ProRated,
+            LeftOn = c.LeftOn,
             WorkingDays = r.WorkingDays,
             WorkingDaysPaid = r.WorkingDaysPaid,
             Deduction = r.Deduction,

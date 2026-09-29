@@ -67,6 +67,7 @@ There is no self-signup.
 1. **The first super admin** is created by a developer-only command-line tool with a generated password that is emailed to them. `users.must_change_password` forces a new password at first sign-in.
 2. **Everyone else is invited.** The inviter creates a `users` row with `status = 'invited'` and sets email, role, domain, team, position and pay (`user_pay_history`). A `user_invitations` row holds the hash of a one-time, expiring signup token.
 3. **Accepting** the invitation sets first name, last name, phone and password, and makes the user `active`. `CHECK`: an active user always has a password hash and a name.
+4. **Deactivating** sets `status = 'deactivated'` and `users.deactivated_at`; reactivating clears it. Salaries keep a person in the months they were active and end their final month on that day. The `UserDeactivatedAt` migration backfilled it for people already deactivated, from their latest `employee_deactivated` activity event.
 
 Who may invite whom is decided by permissions (`employee:invite`, `employee:invite_super_admin`) and enforced by the API, not the schema. See [authorization.md](authorization.md). Tokens (refresh, invitation, password reset) are stored only as unique hashes.
 

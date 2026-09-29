@@ -13,13 +13,14 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
         bool includeSuperAdmins,
         string? domain,
         string? search,
+        DateTime activeSinceUtc,
         CancellationToken cancellationToken = default)
     {
         var codes = domains.ToList();
         var query = db.Users
             .AsNoTracking()
             .Include(u => u.Team)
-            .Where(u => u.Status == UserStatus.Active
+            .Where(u => (u.Status == UserStatus.Active || (u.Status == UserStatus.Deactivated && u.DeactivatedAt >= activeSinceUtc))
                 && u.JoinedOn != null
                 && (u.DomainCode != null ? codes.Contains(u.DomainCode) : includeSuperAdmins));
 

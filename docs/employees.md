@@ -52,8 +52,8 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 
 ## Deactivating and reactivating
 
-- Deactivating sets the status to `deactivated`, revokes every refresh token and any pending invitation link, and drops the cached permissions. The person's access token stops working at once: permission checks find no permissions, and `/auth/me` answers `401`. Their history is kept.
-- Reactivating makes them `active` again if they had signed up, or `invited` if they never did (send them a fresh link with `POST /api/invitations/{id}/resend`).
+- Deactivating sets the status to `deactivated`, records when (`users.deactivated_at`, the day their pay and hours ledger end), revokes every refresh token and any pending invitation link, and drops the cached permissions. The person's access token stops working at once: permission checks find no permissions, and `/auth/me` answers `401`. Their history is kept.
+- Reactivating clears `deactivated_at` and makes them `active` again if they had signed up, or `invited` if they never did (send them a fresh link with `POST /api/invitations/{id}/resend`).
 
 ## Changing a role
 

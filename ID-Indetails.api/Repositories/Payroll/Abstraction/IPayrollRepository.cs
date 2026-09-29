@@ -5,12 +5,16 @@ namespace ID_Indetails.api.Repositories.Payroll.Abstraction;
 /// <summary>What salaries are calculated from, loaded for everyone at once (one query per source).</summary>
 public interface IPayrollRepository
 {
-    /// <summary>Active people who have joined, in the given domains (super admins only when asked), with their team.</summary>
+    /// <summary>
+    /// People who have joined and were active at some point since <paramref name="activeSinceUtc"/> (active now, or
+    /// deactivated since then), in the given domains (super admins only when asked), with their team.
+    /// </summary>
     Task<IReadOnlyList<User>> PeopleAsync(
         IReadOnlyList<string> domains,
         bool includeSuperAdmins,
         string? domain,
         string? search,
+        DateTime activeSinceUtc,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<UserPayHistory>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
