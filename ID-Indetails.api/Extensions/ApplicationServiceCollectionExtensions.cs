@@ -1,4 +1,5 @@
 using ID_Indetails.api.Configuration.Options;
+using ID_Indetails.api.Jobs;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Activity.Implementation;
 using ID_Indetails.api.Repositories.Auth.Abstraction;

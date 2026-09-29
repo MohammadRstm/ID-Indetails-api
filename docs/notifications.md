@@ -64,7 +64,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 
 ## Scheduled notifications
 
-Nobody's action sends these, so they have no actor. A background timer (`NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default); `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
+Nobody's action sends these, so they have no actor. A background timer (`Jobs/NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default); `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
 
 Every scheduled notification carries a key (`digest_key`) and goes to a person only once per key, however often the checks run. The unique recipient and key index stops a second API instance from sending it twice.
 
