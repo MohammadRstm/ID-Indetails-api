@@ -11,8 +11,16 @@ namespace ID_Indetails.api.Controllers;
 [ApiController]
 [Route("api/me")]
 [HasPermission(PermissionCodes.WorkEntryViewOwn)]
-public sealed class MyPayController(IMyTimeService myTime) : ControllerBase
+public sealed class MyPayController(IMyTimeService myTime, ISalaryService salaries) : ControllerBase
 {
+    /// <summary>
+    /// The caller's pay for a month (this month by default), as the Salaries screen calculates it, with the day by
+    /// day view and, while the month runs, what has been earned so far. <c>salary</c> is null without a pay record.
+    /// </summary>
+    [HttpGet("pay")]
+    public Task<MyPayResponse> Pay([FromQuery] SalaryMonthQuery query, CancellationToken cancellationToken)
+        => salaries.GetMineAsync(query, cancellationToken);
+
     /// <summary>The caller's week, the company policy in force, and today's hours.</summary>
     [HttpGet("schedule")]
     public Task<MyScheduleResponse> Schedule(CancellationToken cancellationToken)

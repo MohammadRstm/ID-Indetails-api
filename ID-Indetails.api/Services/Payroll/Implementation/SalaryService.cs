@@ -75,6 +75,37 @@ public sealed class SalaryService(
             person.Excuses.Select(HourExcuseService.ToResponse).ToList());
     }
 
+    public async Task<MyPayResponse> GetMineAsync(SalaryMonthQuery query, CancellationToken cancellationToken = default)
+    {
+        var me = (await payroll.UsersAsync([currentUser.Id], cancellationToken)).Single();
+        var today = clock.CompanyToday;
+        var joinedOn = inputs.JoinedOn(me);
+        var month = SelfService.MonthOf(query.Month, today, joinedOn);
+        var personMonth = (await inputs.ForAsync([me], [month], cancellationToken))[0];
+        var input = personMonth.Input;
+        var work = Overtime.Of(input.Work, input.Calendar);
+        var ledger = input.LedgerApplies ? SalaryCalculator.LedgerOf(input, work) : null;
+        var pay = SalaryCalculator.Calculate(input);
+        var excuses = personMonth.Excuses;
+        var days = MyTime.Days(
+            month,
+            today,
+            joinedOn,
+            input.Calendar,
+            work,
+            excuses.SelectMany(x => x.Days).Select(d => d.Day).ToHashSet(),
+            excuses.Any(x => x.Kind == ExcuseKind.WholeMonth));
+
+        return new MyPayResponse(
+            month,
+            InProgress(month),
+            new DateOnly(joinedOn.Year, joinedOn.Month, 1),
+            pay is null ? null : MySalary(pay, input, InProgress(month)),
+            ledger is null ? null : SelfService.LedgerMonth(personMonth, ledger),
+            days.Select(d => new MyPayDayResponse(d.Date, d.Required, d.Logged, d.Inside, d.Overtime, d.Excused, d.DayOff, d.IsToday, d.Difference)).ToList(),
+            excuses.Select(x => new MyExcuseResponse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).OrderBy(d => d).ToList(), x.IsPaid, x.Note)).ToList());
+    }
+
     public async Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
         var (month, computed) = await CalculateAsync(query.Month, query.Domain, query.Search, null, cancellationToken);
@@ -172,6 +203,38 @@ public sealed class SalaryService(
             BasePay = r.BasePay,
             OvertimePay = r.OvertimePay,
             Total = r.Total,
+        };
+    }
+
+    private MySalaryResponse MySalary(SalaryCalculator.Result pay, SalaryCalculator.Input input, bool inProgress)
+    {
+        var lastDay = inProgress ? clock.CompanyToday : input.Month.AddMonths(1).AddDays(-1);
+        var estimate = MyTime.EstimateOf(pay, inProgress, MyTime.ExpectedFullMonth(input.Month, input.JoinedOn, input.Calendar));
+
+        return new MySalaryResponse
+        {
+            Basis = pay.Terms.Basis,
+            Amount = pay.Terms.Amount,
+            Currency = pay.Terms.Currency,
+            HourlyRate = pay.Terms.HourlyRate,
+            OvertimeMultiplier = input.Calendar.PolicyOn(lastDay).OvertimeMultiplier,
+            NormalMinutes = pay.NormalMinutes,
+            MadeUpMinutes = pay.MadeUpMinutes,
+            OvertimeMinutes = pay.OvertimePaidMinutes,
+            ExcusedMinutes = pay.ExcusedMinutes,
+            ProRated = pay.ProRated,
+            WorkingDays = pay.WorkingDays,
+            WorkingDaysPaid = pay.WorkingDaysPaid,
+            PaidBreakDays = pay.PaidBreakDays,
+            PaidBreakPay = pay.PaidBreakPay,
+            DeductionMinutes = pay.DeductionMinutes,
+            Deduction = pay.Deduction,
+            BasePay = pay.BasePay,
+            OvertimePay = pay.OvertimePay,
+            Total = pay.Total,
+            EarnedSoFar = estimate.EarnedSoFar,
+            FullMonthEstimate = estimate.FullMonth,
+            WouldLose = estimate.WouldLose,
         };
     }
 
