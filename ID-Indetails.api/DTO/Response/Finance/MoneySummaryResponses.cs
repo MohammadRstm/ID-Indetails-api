@@ -200,4 +200,21 @@ public sealed record ClientProjectMoneyResponse(
     bool HasUnconverted,
     int UnpricedLabourMinutes);
 
+/// <summary>A money follow-up of the dashboard (see <c>Business/Finance/MoneyAttention</c>).</summary>
+/// <param name="InvoiceNumber">Overdue invoice only, like <paramref name="InvoiceId"/> and <paramref name="DaysOverdue"/>.</param>
+/// <param name="Amount">Overdue invoice: its balance. Finished but owed: what is outstanding. Cost warning: the cost.</param>
+/// <param name="Revenue">Cost warning: the payment.</param>
+/// <param name="UsedPct">Cost warning: the cost as a whole percentage of the payment.</param>
+public sealed record MoneyAttentionResponse(
+    MoneyAttentionKind Kind,
+    long ProjectId,
+    string ProjectTitle,
+    string? ClientName,
+    long? InvoiceId,
+    string? InvoiceNumber,
+    int? DaysOverdue,
+    decimal? Amount,
+    decimal? Revenue,
+    int? UsedPct);
+
 public sealed record FinanceClientResponse(long ClientId, string Name, string? Label, bool IsArchived, ClientMoneyResponse Money);

@@ -16,6 +16,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 | `GET /api/finance/{domain}/billing?months=12` | `financial:view` | Billing and collections (Financials billing tab, dashboard "money owed" and "invoiced against collected") |
 | `GET /api/finance/{domain}/clients` | `financial:view` | Every client with projects and their money, most revenue first (Financials clients tab, dashboard "top clients") |
 | `GET /api/finance/{domain}/costs?from=&to=` | `financial:view` | Costs over a period: by source, labour by person, expenses by category, the biggest expenses (Financials costs tab) |
+| `GET /api/finance/{domain}/attention` | `financial:view` | The dashboard's money follow-ups, 6 at most |
 | `GET /api/dashboard/{domain}` | `report:view` | The dashboard's cards without money or hours: active projects, clients, projects by status, longest running |
 | `GET /api/dashboard/{domain}/deadlines` | `report:view` | Upcoming deadlines: open requirements due in the next 14 days, overdue ones included |
 | `GET /api/projects` | `project:view` | Each row has `money` for callers with `financial:view` |
@@ -39,6 +40,12 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 - **Aging** puts every open invoice's balance in one of: not yet due, 1–30, 31–60, 61–90 and 90+ days past due.
 - **Unconverted costs** are dated like every other cost: the summary and the costs tab list those dated inside the period (every source, materials included), and each month of `monthly` lists its own. The projects totals are all-time, like the rest of that tab.
 
+- **Money follow-ups** (`Business/Finance/MoneyAttention.cs`, as in the prototype), 6 at most, in this order:
+  - `overdue_invoice`: each overdue invoice, oldest due first, with its number, days overdue and balance;
+  - `finished_owed`: completed projects still owed on their invoices, when none of it is overdue;
+  - `no_payment`: active client projects with no payment (revenue) agreed;
+  - `cost_high`: active client projects whose cost has passed 85% of the payment, with the cost, the payment and the whole percentage used.
+  The payment is the agreed revenue (Execution: the agreed amount), not what was received. Projects come oldest first.
 - **Upcoming deadlines** are the open requirements of the domain's active and on-hold projects with a deadline up to 14 days from today, overdue ones included, soonest first (then oldest added). `total` and `overdue` count them all; `items` holds the first 8, each with its project, assignees and days left (negative once overdue). Both domains have it.
 
 ## Response notes

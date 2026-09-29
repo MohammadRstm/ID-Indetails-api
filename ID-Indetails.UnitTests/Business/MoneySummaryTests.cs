@@ -101,4 +101,49 @@ public class MoneySummaryTests
         aging.Select(a => a.Amount).ShouldBe([100m, 150m, 0m, 0m, 300m]);
         aging.Select(a => a.Count).ShouldBe([1, 1, 0, 0, 1]);
     }
+
+    [Fact]
+    public void Money_follow_ups_list_overdue_invoices_then_finished_owed_then_payment_warnings_six_at_most()
+    {
+        static MoneyAttention.Project Project(
+            long id, ProjectStatus status, decimal revenue = 1000m, decimal cost = 0m, decimal outstanding = 0m, decimal overdue = 0m, bool client = true)
+            => new(id, status, client, revenue, cost, outstanding, overdue);
+
+        var projects = new[]
+        {
+            Project(1, ProjectStatus.Active, cost: 860m),
+            Project(2, ProjectStatus.Active, cost: 850m),
+            Project(3, ProjectStatus.Active, revenue: 0m),
+            Project(4, ProjectStatus.Active, revenue: 0m, client: false),
+            Project(5, ProjectStatus.Completed, outstanding: 300m),
+            Project(6, ProjectStatus.Completed, outstanding: 500m, overdue: 500m),
+            Project(7, ProjectStatus.Hold, revenue: 0m),
+        };
+        var invoices = new[]
+        {
+            new ProjectBilling.Invoice(10, 6, 1, IsIssued: true, IsVoided: false, Today.AddDays(-5), 500m, 0m),
+            new ProjectBilling.Invoice(11, 1, 1, IsIssued: true, IsVoided: false, Today.AddDays(-20), 400m, 100m),
+            new ProjectBilling.Invoice(12, 1, 1, IsIssued: true, IsVoided: false, Today.AddDays(3), 400m, 0m),
+        };
+
+        var items = MoneyAttention.Of(projects, invoices, Today);
+
+        // 85% exactly isn't past it, internal and on-hold projects are never flagged, and an overdue project isn't also "owed".
+        items.Select(i => (i.Kind, i.ProjectId)).ShouldBe([
+            (MoneyAttentionKind.OverdueInvoice, 1L),
+            (MoneyAttentionKind.OverdueInvoice, 6L),
+            (MoneyAttentionKind.FinishedOwed, 5L),
+            (MoneyAttentionKind.CostHigh, 1L),
+            (MoneyAttentionKind.NoPayment, 3L),
+        ]);
+        items[0].DaysOverdue.ShouldBe(20);
+        items[0].Amount.ShouldBe(300m);
+        items[2].Amount.ShouldBe(300m);
+        items[3].UsedPct.ShouldBe(86);
+        items[3].Amount.ShouldBe(860m);
+        items[3].Revenue.ShouldBe(1000m);
+
+        var many = Enumerable.Range(1, 8).Select(id => Project(id, ProjectStatus.Active, revenue: 0m)).ToList();
+        MoneyAttention.Of(many, [], Today).Count.ShouldBe(MoneyAttention.MaxItems);
+    }
 }
