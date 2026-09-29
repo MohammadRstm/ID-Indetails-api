@@ -12,6 +12,12 @@ public interface IRequirementRepository
     Task<IReadOnlyList<ProjectRequirement>> ListAsync(long projectId, CancellationToken cancellationToken = default);
 
     /// <summary>A live requirement of the project, tracked, with its assignees.</summary>
+    /// <summary>
+    /// Live requirements assigned to the user on active or on-hold projects of <paramref name="domains"/>,
+    /// done or not, with their project and assignees; not tracked.
+    /// </summary>
+    Task<IReadOnlyList<ProjectRequirement>> AssignedToAsync(long userId, IReadOnlyCollection<string> domains, CancellationToken cancellationToken = default);
+
     Task<ProjectRequirement?> GetForUpdateAsync(long projectId, long requirementId, CancellationToken cancellationToken = default);
 
     /// <summary>Who these people are, for checking assignees. Unknown ids are left out.</summary>

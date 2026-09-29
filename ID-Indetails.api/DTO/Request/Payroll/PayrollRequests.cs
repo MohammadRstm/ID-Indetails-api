@@ -17,6 +17,12 @@ public sealed record SalaryListQuery
     public int PageSize { get; init; } = 25;
 }
 
+/// <summary>A page of the caller's hours ledger: 12 months, newest first.</summary>
+public sealed record MyHoursQuery
+{
+    public int Page { get; init; } = 1;
+}
+
 public sealed record SalaryMonthQuery
 {
     /// <summary>YYYY-MM; this month when empty.</summary>
