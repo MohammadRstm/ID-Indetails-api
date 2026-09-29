@@ -20,19 +20,20 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, ben) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        // 40 an hour on a monthly salary (6,933.20 ÷ 173.33).
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",
-            // 40 an hour on a monthly salary (6,933.20 ÷ 173.33), so no paid break is added whatever time the test runs.
             new { basis = "monthly", amount = 6933.20m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var brand = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var web = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        await Work.LogAsync(anna.AccessToken, brand.Id, WorkEntryTestSteps.HoursAgo(6), 120);
-        await Work.LogAsync(anna.AccessToken, web.Id, WorkEntryTestSteps.HoursAgo(3), 60);
-        await Work.LogAsync(ben.AccessToken, brand.Id, WorkEntryTestSteps.HoursAgo(6), 60);
+        // Tuesday 10 February 2026 (Beirut is UTC+2): Anna 09:00-11:00 on brand and 13:00-14:00 on web, Ben 09:00-10:00.
+        await Work.InsertAsync(anna.User.Id, brand.Id, "2026-02-10 07:00:00", "2026-02-10 09:00:00");
+        await Work.InsertAsync(anna.User.Id, web.Id, "2026-02-10 11:00:00", "2026-02-10 12:00:00");
+        await Work.InsertAsync(ben.User.Id, brand.Id, "2026-02-10 07:00:00", "2026-02-10 08:00:00");
 
-        var from = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-3);
-        var to = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var from = new DateOnly(2026, 2, 9);
+        var to = new DateOnly(2026, 2, 11);
         var report = await (await Client.GetAsync($"/api/reports/work?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}", admin.AccessToken))
             .ReadAsync<WorkReportResponse>();
 
@@ -45,7 +46,8 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         report.Quarterly.Count.ShouldBe(6);
         report.Matrix.Rows.Single(r => r.UserId == ben.User.Id).TotalMinutes.ShouldBe(60);
         report.Money.ShouldNotBeNull();
-        report.Money!.LabourByPerson.Single(p => p.UserId == anna.User.Id).LabourCost.Usd.ShouldBe(120m);
+        // 3 hours at 40, plus her paid hour of break at 40 (it was a working day with in-hours work).
+        report.Money!.LabourByPerson.Single(p => p.UserId == anna.User.Id).LabourCost.Usd.ShouldBe(160m);
         report.Money.ProfitByProject.ShouldContain(p => p.ProjectId == brand.Id);
 
         var filtered = await (await Client.GetAsync($"/api/reports/work?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&userId={anna.User.Id}", admin.AccessToken))

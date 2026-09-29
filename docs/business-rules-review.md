@@ -54,7 +54,7 @@ See [finance.md](finance.md).
 
 | # | Rule |
 |---|---|
-| M1 | **Hourly staff's paid break is labour cost**, exactly as Salaries pays it, shared across the day's projects by in-hours minutes. *(May change later.)* |
+| M1 | **Everyone's paid break is labour cost**, hourly and salaried alike (7 required hours are 8 paid hours), on the days Salaries pays it, shared across the day's projects by in-hours minutes. Project pay (decision 22) still leaves breaks out. *(Changed on 29 Sep 2026: it was hourly staff only.)* |
 | M2 | **A client's margin follows the project rule** as a whole: shown once all their projects are done, at least 5% of their revenue is recognised, or 10 hours are logged. *(The prototype showed it whenever there was revenue.)* |
 | M3 | **Revenue in a period follows `Recognition`**: each month counts for the share of it the period covers. *(The prototype counted whole calendar months.)* |
 | M4 | **Every cost source is returned** on the dashboards and Financials, so the parts add up to the total. *(The prototype's Execution breakdowns left out materials and ground labour.)* |

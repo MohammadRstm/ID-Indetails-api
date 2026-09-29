@@ -27,7 +27,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 ## Rules
 
 - **Revenue in a period** is what the projects recognised then: each project's recognised revenue (revenue × progress, or all of it once done) is spread over the months of its costs (`Recognition.ByMonth`: labour months, or other cost months when there is no labour), and each month counts for the share of it the period covers, up to today. The company overview works the same way. The prototype counted whole calendar months instead.
-- **Cost in a period** is every cost dated inside it, by source: labour (including hourly staff's paid breaks), expenses, materials and ground labour. All four are always returned, so the parts add up to the total (the prototype's Execution sub-lines left materials and ground labour out).
+- **Cost in a period** is every cost dated inside it, by source: labour (including everyone's paid breaks, hourly and salaried alike), expenses, materials and ground labour. All four are always returned, so the parts add up to the total (the prototype's Execution sub-lines left materials and ground labour out).
 - **Margin** is profit ÷ revenue when there is revenue. For a project it only shows once the project is done, at least 5% along or has 10 hours logged (`marginKnown`). A **client** follows the same rule as a whole: done once every project is, progress = the share of their revenue recognised so far, hours across all their projects.
 - **Billing** (`Business/Billing/BillingPosition.cs`):
   - invoiced counts issued, live invoices; outstanding is what is left to pay on them; drafts are counted apart;

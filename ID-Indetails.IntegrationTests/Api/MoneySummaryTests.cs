@@ -36,7 +36,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         await Projects.SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
         (await Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_500m, effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        // 1,733.30 a month is 10 an hour (÷ 173.33); monthly pay covers the break.
+        // 1,733.30 a month is 10 an hour (÷ 173.33).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
@@ -46,9 +46,11 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var internalWork = await (await Client.PostJsonAsync("/api/projects",
             new { title = "Studio tooling", billingType = "internal" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
 
-        // One hour of work (10), an LBP expense converted at today's rate (10), and one dated before any LBP rate.
-        await Work.LogAsync(designer.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 60);
-        await Work.LogAsync(designer.AccessToken, internalWork.Id, WorkEntryTestSteps.HoursAgo(5), 60);
+        // Tuesday 10 February 2026 (Beirut is UTC+2): an hour on the project (09:00-10:00) and an hour on internal work
+        // (11:00-12:00), 10 each, and the paid hour of break shared between them, 5 each. Then an LBP expense converted
+        // at today's rate (10), and one dated before any LBP rate.
+        await Work.InsertAsync(designer.User.Id, project.Id, "2026-02-10 07:00:00", "2026-02-10 08:00:00");
+        await Work.InsertAsync(designer.User.Id, internalWork.Id, "2026-02-10 09:00:00", "2026-02-10 10:00:00");
         (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses", new { label = "Taxi", amount = 895_000m, currency = "LBP" }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
@@ -66,19 +68,20 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.PostJsonAsync($"/api/projects/{project.Id}/payments", new { amount = 500m, currency = "USD", method = "cash" }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
-        // Completed, so all 10,000 is recognised, spread over the month the work was done.
+        // Completed, so all 10,000 is recognised, spread over the months of its costs.
         (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
-        var summary = await OkAsync<FinanceSummaryResponse>("/api/finance/design/summary", admin.AccessToken);
+        // From December 2025, so the period holds the work, both expenses and today.
+        var summary = await OkAsync<FinanceSummaryResponse>("/api/finance/design/summary?from=2025-12-01", admin.AccessToken);
         summary.Revenue.ShouldBe(10_000m);
-        summary.Cost.Labour.ShouldBe(20m);
+        summary.Cost.Labour.ShouldBe(30m);
         summary.Cost.Expenses.ShouldBe(10m);
-        summary.Cost.Total.ShouldBe(30m);
-        summary.Profit.ShouldBe(9970m);
+        summary.Cost.Total.ShouldBe(40m);
+        summary.Profit.ShouldBe(9960m);
         summary.Unconverted.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
         summary.ClientProjects.ShouldBe(1);
         summary.InternalProjects.ShouldBe(1);
-        summary.AllTimeInternalCost.ShouldBe(10m);
+        summary.AllTimeInternalCost.ShouldBe(15m);
         summary.StillToEarn.ShouldBe(0m);
         summary.Billing.Invoiced.ShouldBe(3000m);
         summary.Billing.Received.ShouldBe(1500m);
@@ -92,15 +95,16 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var projects = await OkAsync<FinanceProjectsResponse>("/api/finance/design/projects", admin.AccessToken);
         var row = projects.Projects.Single(p => p.ProjectId == project.Id);
         row.Revenue.ShouldBe(10_000m);
-        row.Cost.Total.ShouldBe(20m);
-        row.Profit.ShouldBe(9980m);
+        row.Cost.Total.ShouldBe(25m);
+        row.Profit.ShouldBe(9975m);
         row.MarginKnown.ShouldBeTrue();
-        projects.Projects.Single(p => p.ProjectId == internalWork.Id).Profit.ShouldBe(-10m);
-        projects.Totals.InternalCost.ShouldBe(10m);
+        projects.Projects.Single(p => p.ProjectId == internalWork.Id).Profit.ShouldBe(-15m);
+        projects.Totals.InternalCost.ShouldBe(15m);
 
-        var months = await OkAsync<List<FinanceMonthResponse>>("/api/finance/design/monthly?months=3", admin.AccessToken);
-        months.Count.ShouldBe(3);
+        var months = await OkAsync<List<FinanceMonthResponse>>("/api/finance/design/monthly?months=36", admin.AccessToken);
+        months.Count.ShouldBe(36);
         months.Sum(m => m.Revenue).ShouldBe(10_000m);
+        months.Single(m => m.Month == new DateOnly(2026, 2, 1)).Labour.ShouldBe(30m);
 
         var billing = await OkAsync<FinanceBillingResponse>("/api/finance/design/billing", admin.AccessToken);
         billing.Aging.Single(a => a.FromDays == 1).Amount.ShouldBe(2000m);
@@ -116,15 +120,15 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         client.Money.MarginKnown.ShouldBeTrue();
         client.Money.Billing.Outstanding.ShouldBe(2000m);
 
-        var costs = await OkAsync<FinanceCostsResponse>("/api/finance/design/costs", admin.AccessToken);
-        costs.LabourByPerson.Single().Usd.ShouldBe(20m);
+        var costs = await OkAsync<FinanceCostsResponse>("/api/finance/design/costs?from=2025-12-01", admin.AccessToken);
+        costs.LabourByPerson.Single().Usd.ShouldBe(30m);
         costs.ExpensesByCategory.Sum(c => c.Usd).ShouldBe(10m);
 
         // The project list and the client pages carry the same money.
         var list = await OkAsync<PagedResponse<ProjectSummaryResponse>>($"/api/projects?clientId={clientId}", admin.AccessToken);
         list.Items.Single().Money!.Outstanding.ShouldBe(2000m);
         var detail = await OkAsync<ClientResponse>($"/api/clients/{clientId}", admin.AccessToken);
-        detail.Money!.Profit.ShouldBe(9980m);
+        detail.Money!.Profit.ShouldBe(9975m);
         detail.ProjectMoney!.Single().Billing.Invoiced.ShouldBe(3000m);
         (await OkAsync<PagedResponse<ClientSummaryResponse>>("/api/clients", admin.AccessToken)).Items.Single(c => c.Id == clientId).Money!.Revenue
             .ShouldBe(10_000m);

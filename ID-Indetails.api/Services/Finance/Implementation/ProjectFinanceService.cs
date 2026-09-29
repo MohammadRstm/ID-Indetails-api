@@ -111,8 +111,8 @@ public sealed class ProjectFinanceService(
         IReadOnlyList<ProjectFinance.PayRate> payRates,
         CancellationToken cancellationToken = default)
     {
-        var hourly = payRates.Where(r => r.IsHourly).Select(r => r.UserId).ToHashSet();
-        var theirs = work.Where(e => hourly.Contains(e.UserId)).ToList();
+        var priced = payRates.Select(r => r.UserId).ToHashSet();
+        var theirs = work.Where(e => priced.Contains(e.UserId)).ToList();
         if (theirs.Count == 0)
         {
             return [];
@@ -145,8 +145,8 @@ public sealed class ProjectFinanceService(
     }
 
     /// <summary>
-    /// Every cost of a project on its day, in its own currency; worked time is priced at each person's rate, and hourly
-    /// staff's paid breaks are added as labour.
+    /// Every cost of a project on its day, in its own currency; worked time is priced at each person's rate, and their
+    /// paid breaks are added as labour.
     /// </summary>
     private (IReadOnlyList<Cost> Items, int UnpricedMinutes) CostItems(
         IEnumerable<WorkEntryRow> entries,

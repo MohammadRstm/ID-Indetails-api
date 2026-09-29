@@ -37,7 +37,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
-        // 1,733.30 a month is 10 an hour; 6 hours in June cost 60.
+        // 1,733.30 a month is 10 an hour; 6 hours in June (09:00-15:00 in Beirut) cost 60, plus 10 for the paid hour of break.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
@@ -53,13 +53,13 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var june = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-06-01&to=2026-06-30", superAdmin.AccessToken));
         var design = june.Domains.Single(d => d.Domain == DomainCodes.Design);
         design.Revenue.ShouldBe(10_000m);
-        design.Cost.ShouldBe(60m);
-        design.Profit.ShouldBe(9940m);
-        design.Margin.ShouldBe(0.994m);
+        design.Cost.ShouldBe(70m);
+        design.Profit.ShouldBe(9930m);
+        design.Margin.ShouldBe(0.993m);
         design.ProjectsWithActivity.ShouldBe(1);
         design.Loggers.ShouldBe(1);
         june.Domains.Single(d => d.Domain == DomainCodes.Execution).Revenue.ShouldBe(0m);
-        june.NetProfit.ShouldBe(9940m - june.Overhead);
+        june.NetProfit.ShouldBe(9930m - june.Overhead);
 
         // July had no work: nothing is recognised there.
         var july = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-07-01&to=2026-07-31", superAdmin.AccessToken));
@@ -68,8 +68,8 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var months = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?months=36", superAdmin.AccessToken));
         var juneMonth = months.Single(m => m.Month == new DateOnly(2026, 6, 1));
         juneMonth.Revenue.ShouldBe(10_000m);
-        juneMonth.Labour.ShouldBe(60m);
-        juneMonth.ProfitBeforeOverhead.ShouldBe(9940m);
+        juneMonth.Labour.ShouldBe(70m);
+        juneMonth.ProfitBeforeOverhead.ShouldBe(9930m);
 
         await (await Client.GetAsync("/api/company/overview", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }

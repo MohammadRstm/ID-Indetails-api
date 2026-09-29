@@ -21,8 +21,8 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, ben) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        // 30 an hour on a monthly salary (5,199.90 ÷ 173.33).
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",
-            // 30 an hour on a monthly salary (5,199.90 ÷ 173.33), so no paid break is added whatever time the test runs.
             new { basis = "monthly", amount = 5199.90m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
@@ -30,8 +30,10 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
             superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        await Work.LogAsync(anna.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(6), 120);
-        await Work.LogAsync(anna.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 60);
+        // Anna's paid work at fixed times (Tuesday 10 February 2026, 09:00-11:00 and 13:00-14:00 in Beirut), so her cost
+        // doesn't depend on when the test runs; Ben, who has no pay record, logs recent work for the activity figures.
+        await Work.InsertAsync(anna.User.Id, project.Id, "2026-02-10 07:00:00", "2026-02-10 09:00:00");
+        await Work.InsertAsync(anna.User.Id, project.Id, "2026-02-10 11:00:00", "2026-02-10 12:00:00");
         await Work.LogAsync(ben.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(6), 60);
 
         var work = await (await Client.GetAsync($"/api/projects/{project.Id}/work", admin.AccessToken)).ReadAsync<ProjectWorkResponse>();
@@ -39,14 +41,15 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         work.EntryCount.ShouldBe(3);
         work.ContributorCount.ShouldBe(2);
         work.ActivityLevel.ShouldBe(ActivityLevel.Quiet);
-        work.MinutesLast14Days.ShouldBe(240);
+        work.MinutesLast14Days.ShouldBe(60);
         work.Weekly.Count.ShouldBeGreaterThanOrEqualTo(4);
         work.HourHeat.Sum(c => c.Minutes).ShouldBe(240);
         var first = work.Contributors[0];
         first.UserId.ShouldBe(anna.User.Id);
         first.SharePct.ShouldBe(75);
-        first.Weekly.Sum().ShouldBe(180);
-        first.LabourCost!.Usd.ShouldBe(90m);
+        // 3 hours at 30, plus her paid hour of break at 30.
+        first.LabourCost!.Usd.ShouldBe(120m);
+        work.Contributors[1].Weekly.Sum().ShouldBe(60);
         work.Contributors[1].LabourCost!.UnpricedMinutes.ShouldBe(60);
 
         var forLead = await (await Client.GetAsync($"/api/projects/{project.Id}/work", lead.AccessToken)).ReadAsync<ProjectWorkResponse>();

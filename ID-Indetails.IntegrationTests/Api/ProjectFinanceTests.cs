@@ -35,7 +35,7 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Hourly_staff_paid_break_is_labour_cost_shared_across_the_days_projects()
+    public async Task The_paid_break_is_labour_cost_shared_across_the_days_projects()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
@@ -57,11 +57,11 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
         (await MoneyAsync(afternoon.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(88.57m);
 
-        // Monthly pay already covers the break: no extra cost.
+        // A salaried person's break is paid too: 3,466.60 a month is the same 20 an hour, so the cost doesn't change.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { basis = "monthly", amount = 3466.60m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(80m);
+        (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
     }
 
     [Fact]
@@ -79,7 +79,8 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
 
-        // 6 hours by the designer, and 30 minutes by the admin, who has no pay record.
+        // 6 hours by the designer (08:00-14:00 in Beirut, so a working day with in-hours work: the paid hour of break
+        // is cost too), and 30 minutes by the admin, who has no pay record.
         const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
             "VALUES (@u, @p, 'Drawings', '2026-02-10 06:00:00', @end, UTC_TIMESTAMP(3))";
         await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", project.Id), ("@end", "2026-02-10 12:00:00"));
@@ -90,11 +91,11 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var money = await MoneyAsync(project.Id, admin.AccessToken);
 
-        money.Cost.Labour.ShouldBe(60m);
+        money.Cost.Labour.ShouldBe(70m);
         money.Cost.Expenses.ShouldBe(110m);
-        money.Cost.Total.ShouldBe(170m);
+        money.Cost.Total.ShouldBe(180m);
         money.Cost.UnpricedLabourMinutes.ShouldBe(30);
-        money.Profit.ShouldBe(9830m);
+        money.Profit.ShouldBe(9820m);
         money.LabourHours.ShouldBe(6.5m);
 
         // No requirements done and under 10 hours: too early for a margin.

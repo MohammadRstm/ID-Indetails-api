@@ -38,18 +38,22 @@ public class PaidBreaksTests
     }
 
     [Fact]
-    public void Only_days_paid_by_the_hour_cost_a_break()
+    public void Every_priced_day_costs_its_break_at_that_days_rate()
     {
         var shares = new[] { new PaidBreaks.Share(10, new(2026, 1, 20), 60m), new PaidBreaks.Share(10, new(2026, 3, 10), 30m) };
         var history = new[]
         {
-            new ProjectFinance.PayRate(1, new(2026, 1, 1), 20m, "USD", IsHourly: true),
-            new ProjectFinance.PayRate(1, new(2026, 3, 1), 12m, "USD", IsHourly: false),
+            // Hourly, then salaried from March: the break is paid either way.
+            new ProjectFinance.PayRate(1, new(2026, 1, 1), 20m, "USD"),
+            new ProjectFinance.PayRate(1, new(2026, 3, 1), 12m, "USD"),
         };
 
         var costs = PaidBreaks.Price(shares, history);
 
-        costs.ShouldBe([(10L, new ProjectFinance.CostItem(CostSource.Labour, "USD", 20m, new(2026, 1, 20)))]);
+        costs.ShouldBe([
+            (10L, new ProjectFinance.CostItem(CostSource.Labour, "USD", 20m, new(2026, 1, 20))),
+            (10L, new ProjectFinance.CostItem(CostSource.Labour, "USD", 6m, new(2026, 3, 10))),
+        ]);
         PaidBreaks.Price(shares, []).ShouldBeEmpty();
     }
 }
