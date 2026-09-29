@@ -26,6 +26,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Services.Projects.Implementation;
@@ -41,6 +42,7 @@ public sealed class ProjectService(
     IPaymentRepository payments,
     IPaymentService paymentService,
     IProjectFinanceService finance,
+    IMoneyRollupService moneyRollups,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectService
@@ -55,7 +57,15 @@ public sealed class ProjectService(
                 actor.VisibleDomains, query.Search?.Trim(), query.Status, query.ClientId, query.BillingType, query.Domain, query.Page, query.PageSize),
             cancellationToken);
 
-        return new PagedResponse<ProjectSummaryResponse>(items.Select(ToSummary).ToList(), query.Page, query.PageSize, total);
+        if (!actor.Has(PermissionCodes.FinancialView))
+        {
+            return new PagedResponse<ProjectSummaryResponse>(items.Select(ToSummary).ToList(), query.Page, query.PageSize, total);
+        }
+
+        // One batched load for the whole page, never a query per project.
+        var rollup = await moneyRollups.LoadAsync(items, cancellationToken);
+        return new PagedResponse<ProjectSummaryResponse>(
+            items.Select(p => ToSummary(p) with { Money = rollup.ListMoney(p) }).ToList(), query.Page, query.PageSize, total);
     }
 
     public async Task<ProjectResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)

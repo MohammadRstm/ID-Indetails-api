@@ -6,7 +6,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first |
+| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first. Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding) only for callers with `financial:view`; see [finance.md](finance.md) |
 | `GET /api/projects/{id}` | `project:view` | A project. `money` is included only for callers with `financial:view` |
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner |
@@ -38,7 +38,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 Every project money figure comes from one place: `Business/Finance/ProjectFinance.cs`, loaded by `IProjectFinanceService` with one query per cost source however many projects are asked for. Domain features add their costs to its sources; they never calculate their own.
 
 - **Cost** (`money.cost`) = employee labour + expenses + materials + ground labour, in USD.
-  - **Labour:** each work entry's hours × the person's hourly cost in force on the day it was worked (company time zone). Monthly pay costs salary ÷ 173.33 an hour; the overtime premium is not part of project cost. Time before someone's first pay record uses their earliest rate; time of someone with no pay record can't be priced and is counted in `unpricedLabourMinutes`.
+  - **Labour:** each work entry's hours × the person's hourly cost in force on the day it was worked (company time zone). Monthly pay costs salary ÷ 173.33 an hour; the overtime premium is not part of project cost. **Hourly staff's paid break** is labour cost too, exactly as Salaries pays it: on each working day with some in-hours work, the day's paid break (none on days of 6 hours or less), at that day's rate, shared across the day's projects by the in-hours minutes worked on each (`Business/Finance/PaidBreaks.cs`). Monthly pay already covers the break. Time before someone's first pay record uses their earliest rate; time of someone with no pay record can't be priced and is counted in `unpricedLabourMinutes`.
   - **Expenses and materials:** converted to USD at the company exchange rate in force on their day (`spentOn`, the day a material was added). An amount with no rate that day is left out and listed in `cost.unconverted`, in its own currency.
   - **Ground labour:** workers × daily pay, in USD.
 - **Profit** = revenue − cost. Internal projects have no revenue.

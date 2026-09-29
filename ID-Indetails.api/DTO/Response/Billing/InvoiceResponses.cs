@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Enums;
 
@@ -25,18 +26,24 @@ public record InvoiceSummaryResponse
     /// <summary>Empty until issued.</summary>
     public string? Number { get; init; }
 
+    /// <summary>Partial and paid show as sent to callers without financial:view.</summary>
     public InvoiceStatus Status { get; init; }
 
-    public bool IsOverdue { get; init; }
+    /// <summary>Left out for callers without financial:view.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsOverdue { get; init; }
 
     public string Currency { get; init; } = "USD";
 
     public decimal Total { get; init; }
 
-    /// <summary>Live payments recorded against it, in the invoice currency.</summary>
-    public decimal Paid { get; init; }
+    /// <summary>Live payments recorded against it, in USD. Left out for callers without financial:view.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? Paid { get; init; }
 
-    public decimal Balance { get; init; }
+    /// <summary>Left out for callers without financial:view.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? Balance { get; init; }
 
     public DateTime? IssuedAt { get; init; }
 

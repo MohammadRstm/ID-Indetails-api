@@ -8,6 +8,8 @@ A client belongs to one domain. The rules live in `Business/Clients/ClientRules.
 |---|---|---|
 | `GET /api/clients?search=&archived=&domain=&page=1&pageSize=25` | `client:view` | Client list. Archived clients only with `archived=true`. `search` matches name and organisation |
 | `GET /api/clients/{id}` | `client:view` | A client with its contacts and project count |
+
+With `financial:view`, list rows and the client carry `money`, the client's money across their projects, and the client also carries `projectMoney`, each project's money. Without it these fields are left out. See [finance.md](finance.md).
 | `POST /api/clients` | `client:create` | Adds a client. `domainCode` is needed only by callers who see both domains |
 | `PUT /api/clients/{id}` | `client:manage` | Replaces every field and the whole contact list |
 | `POST /api/clients/{id}/archive`, `/restore` | `client:manage` | Hides or shows the client. Its projects and history are unchanged |

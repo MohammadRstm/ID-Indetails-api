@@ -46,7 +46,7 @@ public static class PaymentRules
 
         return amountUsd > balance
             ? RuleDenial.BusinessRule(
-                ErrorCodes.PaymentExceedsBalance, $"The invoice only has {balance:0.00} left to pay. Record the rest on account.")
+                ErrorCodes.PaymentExceedsBalance, "The payment is more than the invoice has left to pay. Record the rest on account.")
             : null;
     }
 

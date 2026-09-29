@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,7 +25,7 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
         => await db.UserPayHistory
             .AsNoTracking()
             .Where(p => userIds.Contains(p.UserId))
-            .Select(p => new ProjectFinance.PayRate(p.UserId, p.EffectiveFrom, p.HourlyCostRate, p.Currency))
+            .Select(p => new ProjectFinance.PayRate(p.UserId, p.EffectiveFrom, p.HourlyCostRate, p.Currency, p.Basis == PayBasis.Hourly))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)

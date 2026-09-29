@@ -14,6 +14,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -30,6 +31,7 @@ public sealed class WorkInsightsService(
     IWorkEntryRepository entries,
     ICompanyRepository company,
     IProjectFinanceRepository financeSources,
+    IProjectFinanceService projectFinance,
     IDomainSettingsService domainSettings,
     IMeetingRepository meetings,
     IActivityFeedRepository activityFeed,
@@ -69,7 +71,7 @@ public sealed class WorkInsightsService(
         var inRange = all.Where(e => InRange(e, query.From, query.To)).ToList();
         var rangeMinutes = inRange.Sum(e => e.Minutes);
         var pricer = actor.Has(PermissionCodes.FinancialView)
-            ? await LabourPricer.LoadAsync(financeSources, inRange.Select(e => e.UserId).Distinct().ToList(), clock, cancellationToken)
+            ? await LabourPricer.LoadAsync(financeSources, projectFinance, inRange.Select(ToRow).ToList(), clock, cancellationToken)
             : null;
 
         var contributors = inRange
@@ -197,7 +199,7 @@ public sealed class WorkInsightsService(
         var quarterStart = WorkStats.QuarterStartOf(today);
         var focusFrom = today.AddDays(-(FocusDays - 1));
         var pricer = actor.Has(PermissionCodes.FinancialView)
-            ? await LabourPricer.LoadAsync(financeSources, people.Select(p => p.Id).ToList(), clock, cancellationToken)
+            ? await LabourPricer.LoadAsync(financeSources, projectFinance, people.SelectMany(p => rows[p.Id]).ToList(), clock, cancellationToken)
             : null;
 
         var worked = people.ToDictionary(p => p.Id, p => rows[p.Id].Select(ToWorked).ToList());

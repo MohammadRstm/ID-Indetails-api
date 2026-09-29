@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Clients;
@@ -24,6 +26,10 @@ public sealed record ClientSummaryResponse
     public ClientContactResponse? PrimaryContact { get; init; }
 
     public int ProjectCount { get; init; }
+
+    /// <summary>Only for callers with financial:view; left out entirely otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ClientMoneyResponse? Money { get; init; }
 }
 
 public sealed record ClientResponse
@@ -52,4 +58,12 @@ public sealed record ClientResponse
 
     /// <summary>A warning only: another client of the domain has the same name. Saving is still allowed.</summary>
     public bool NameSharedWithAnotherClient { get; init; }
+
+    /// <summary>Only for callers with financial:view; left out entirely otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ClientMoneyResponse? Money { get; init; }
+
+    /// <summary>Each of the client's projects with its money, newest first. Only for callers with financial:view.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ClientProjectMoneyResponse>? ProjectMoney { get; init; }
 }

@@ -22,7 +22,8 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, ben) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",
-            new { basis = "hourly", amount = 30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            // 30 an hour on a monthly salary (5,199.90 ÷ 173.33), so no paid break is added whatever time the test runs.
+            new { basis = "monthly", amount = 5199.90m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
             new { changes = new[] { new { code = PermissionCodes.WorkEntryViewAll, action = "grant", reason = "Team lead" } } },

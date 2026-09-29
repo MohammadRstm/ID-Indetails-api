@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Finance.Abstraction;
 
 namespace ID_Indetails.api.Services.Finance.Abstraction;
 
@@ -18,6 +19,16 @@ public interface IProjectFinanceService
     /// Each project's money plus every cost on its day in USD and who worked on which day, for period
     /// and month-by-month figures. Same loading as <see cref="GetAsync(IReadOnlyCollection{Project}, CancellationToken)"/>.
     /// </summary>
+    /// <summary>
+    /// Hourly staff's paid breaks on the days of the given work, as labour cost per project and day (see
+    /// <c>Business/Finance/PaidBreaks</c>). Loads their other work of those days, since a break is shared across all
+    /// the day's projects; the result can therefore include projects outside <paramref name="work"/>.
+    /// </summary>
+    Task<IReadOnlyList<BreakCost>> PaidBreaksAsync(
+        IReadOnlyCollection<WorkEntryRow> work,
+        IReadOnlyList<ProjectFinance.PayRate> payRates,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyDictionary<long, ProjectCostHistory>> CostHistoryAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken = default);
 
     /// <summary>The project's cash position week by week, from its first week to the week of <paramref name="to"/>.</summary>
@@ -43,3 +54,5 @@ public sealed record ProjectFinancials(
 public sealed record WorkDay(long UserId, DateOnly Day);
 
 public sealed record ProjectCostHistory(ProjectFinancials Money, IReadOnlyList<Recognition.DatedCost> Costs, IReadOnlyList<WorkDay> Work);
+
+public sealed record BreakCost(long UserId, long ProjectId, ProjectFinance.CostItem Cost);
