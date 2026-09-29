@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -41,7 +42,7 @@ public class NotificationSenderTests
         var clock = new Mock<IClock>();
         clock.SetupGet(c => c.UtcNow).Returns(Now);
 
-        return new NotificationSender(_repository.Object, permissions.Object, clock.Object);
+        return new NotificationSender(_repository.Object, new Mock<IUserRepository>().Object, permissions.Object, clock.Object);
     }
 
     [Fact]
@@ -57,6 +58,46 @@ public class NotificationSenderTests
         _staged.ShouldAllBe(n => n.Kind == NotificationKinds.RequirementAssigned
             && n.ActorId == Actor && n.ProjectId == 10 && n.SubjectType == "requirement" && n.SubjectId == 20
             && n.Payload == """{"text":"Stairs"}""" && n.CreatedAt == Now);
+    }
+
+    [Fact]
+    public async Task A_digest_repeat_bumps_the_existing_notification_and_marks_it_unread()
+    {
+        var sender = CreateSender();
+        var existing = new Notification
+        {
+            RecipientId = DesignEmployee, Kind = NotificationKinds.RequirementsAdded, DigestKey = "key", Count = 2,
+            ReadAt = Now.AddHours(-1), CreatedAt = Now.AddHours(-2),
+        };
+        _repository.Setup(r => r.GetDigestForUpdateAsync(DesignEmployee, "key", It.IsAny<CancellationToken>())).ReturnsAsync(existing);
+
+        await sender.SendDigestAsync(
+            new NotificationDraft(NotificationKinds.RequirementsAdded, Actor, DomainCodes.Design, 10, "requirement", 21, new { latestText = "Roof" }),
+            "key",
+            [DesignEmployee, SuperAdmin]);
+
+        existing.ShouldSatisfyAllConditions(
+            n => n.Count.ShouldBe(3),
+            n => n.SubjectId.ShouldBe(21),
+            n => n.Payload.ShouldBe("""{"latestText":"Roof"}"""),
+            n => n.CreatedAt.ShouldBe(Now),
+            n => n.ReadAt.ShouldBeNull());
+        _staged.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            n => n.RecipientId.ShouldBe(SuperAdmin),
+            n => n.DigestKey.ShouldBe("key"),
+            n => n.Count.ShouldBe(1));
+    }
+
+    [Fact]
+    public async Task Company_level_notifications_reach_any_active_person()
+    {
+        var sender = CreateSender();
+
+        await sender.SendAsync(
+            new NotificationDraft(NotificationKinds.PayChanged, Actor, null, null, "user", ExecutionEmployee, new { }),
+            [ExecutionEmployee, Deactivated]);
+
+        _staged.ShouldHaveSingleItem().RecipientId.ShouldBe(ExecutionEmployee);
     }
 
     [Fact]
