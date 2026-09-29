@@ -80,7 +80,9 @@ public class ClientMoneyListTests(ApiFactory api) : IClassFixture<ApiFactory>
 
     private async Task<IReadOnlyList<ClientSummaryResponse>> ListAsync(string query, string token)
     {
-        var response = await Client.GetAsync($"/api/clients?pageSize=100&{query}", token);
+        // A query that pages itself keeps its own page size: a repeated pageSize binds only its first value.
+        var paging = query.Contains("pageSize=") ? "" : "pageSize=100&";
+        var response = await Client.GetAsync($"/api/clients?{paging}{query}", token);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
         return (await response.ReadAsync<PagedResponse<ClientSummaryResponse>>()).Items;
     }

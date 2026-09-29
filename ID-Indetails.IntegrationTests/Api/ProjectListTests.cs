@@ -95,11 +95,15 @@ public class ProjectListTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await ListAsync("year=2025", admin.AccessToken)).Select(r => r.Id).ShouldBe([old.Id, closed.Id], ignoreOrder: true);
         (await ListAsync("year=2100", admin.AccessToken)).ShouldBeEmpty();
 
+        // The other test's projects share the domain, so the orders are checked over this test's projects.
         const string design = "domain=design";
-        (await ListAsync($"{design}&sort=progress", admin.AccessToken)).Select(r => r.Id).ShouldBe([closed.Id, old.Id, fresh.Id, tooling.Id]);
-        (await ListAsync($"{design}&sort=hours", admin.AccessToken)).Select(r => r.Id).Take(3).ShouldBe([closed.Id, old.Id, fresh.Id]);
+        long[] ours = [old.Id, closed.Id, fresh.Id, tooling.Id];
+        async Task<IEnumerable<long>> SortedAsync(string sort)
+            => (await ListAsync($"{design}&sort={sort}", admin.AccessToken)).Select(r => r.Id).Where(ours.Contains);
+        (await SortedAsync("progress")).ShouldBe([closed.Id, old.Id, fresh.Id, tooling.Id]);
+        (await SortedAsync("hours")).Take(3).ShouldBe([closed.Id, old.Id, fresh.Id]);
         // Tooling has no work, so it counts from when it was added (today), ahead of the older work.
-        (await ListAsync($"{design}&sort=activity", admin.AccessToken)).Select(r => r.Id).ShouldBe([tooling.Id, fresh.Id, old.Id, closed.Id]);
+        (await SortedAsync("activity")).ShouldBe([tooling.Id, fresh.Id, old.Id, closed.Id]);
         var byName = await ListAsync($"{design}&sort=name", admin.AccessToken);
         byName.Select(r => r.Title).ShouldBe(byName.Select(r => r.Title).OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
         (await ListAsync($"{design}&sort=client", admin.AccessToken)).Last().Id.ShouldBe(tooling.Id);
