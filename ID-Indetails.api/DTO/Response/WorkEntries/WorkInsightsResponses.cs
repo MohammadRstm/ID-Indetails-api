@@ -116,7 +116,7 @@ public sealed record ProjectLabourCostResponse(long ProjectId, string Title, Lab
 /// <summary>What someone's logged work cost the company (their profile's "cost to the company").</summary>
 /// <param name="ThisQuarter">From the first of this quarter to today.</param>
 /// <param name="ByProject">All time: the 8 projects their work cost most on, in USD, most first.</param>
-public sealed record PersonLabourCostResponse(
+public sealed record EmployeeLabourCostResponse(
     long UserId,
     int EntryCount,
     LabourCostResponse ThisQuarter,

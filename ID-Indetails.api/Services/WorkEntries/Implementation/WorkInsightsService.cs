@@ -251,7 +251,7 @@ public sealed class WorkInsightsService(
             .ToList();
     }
 
-    public async Task<PersonLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default)
+    public async Task<EmployeeLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
         var person = (await entries.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
@@ -272,7 +272,7 @@ public sealed class WorkInsightsService(
             .ToList();
         var titles = await entries.ProjectTitlesAsync(byProject.Select(x => x.ProjectId).ToList(), cancellationToken);
 
-        return new PersonLabourCostResponse(
+        return new EmployeeLabourCostResponse(
             userId,
             rows.Count,
             pricer.Price(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= quarterStart)),

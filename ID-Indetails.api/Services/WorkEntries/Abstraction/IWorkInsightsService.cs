@@ -14,5 +14,5 @@ public interface IWorkInsightsService
 
     Task<IReadOnlyList<PersonWorkResponse>> PeopleAsync(PeopleWorkQuery query, CancellationToken cancellationToken = default);
 
-    Task<PersonLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default);
+    Task<EmployeeLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default);
 }

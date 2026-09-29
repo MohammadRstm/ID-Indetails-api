@@ -39,7 +39,7 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var response = await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", admin.AccessToken);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
-        var cost = await response.ReadAsync<PersonLabourCostResponse>();
+        var cost = await response.ReadAsync<EmployeeLabourCostResponse>();
         cost.EntryCount.ShouldBe(3);
         cost.ThisQuarter.Usd.ShouldBe(30m);
         cost.AllTime.Usd.ShouldBe(150m);
