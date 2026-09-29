@@ -157,6 +157,22 @@ public sealed class SalaryService(
         var people = (await payroll.PeopleAsync(actor.VisibleDomains, EmployeeRules.CanSee(actor, null), domain, search?.Trim(), cancellationToken))
             .Where(p => onlyUserId is null || p.Id == onlyUserId)
             .ToList();
+
+        return (month, await ComputeAsync(month, people, cancellationToken));
+    }
+
+    public async Task<IReadOnlyList<ShortPerson>> FlaggedAsync(DateOnly month, CancellationToken cancellationToken = default)
+    {
+        var people = await payroll.PeopleAsync([DomainCodes.Design], false, DomainCodes.Design, null, cancellationToken);
+        return (await ComputeAsync(month, people, cancellationToken))
+            .Where(c => c.Result.Ledger is { Flagged: true })
+            .Select(c => new ShortPerson(c.User.Id, ToRow(c).Name, c.Result.Ledger!.Short))
+            .OrderByDescending(p => p.ShortMinutes)
+            .ToList();
+    }
+
+    private async Task<IReadOnlyList<Computed>> ComputeAsync(DateOnly month, IReadOnlyList<User> people, CancellationToken cancellationToken)
+    {
         var computed = new List<Computed>();
         foreach (var personMonth in await inputs.ForAsync(people, [month], cancellationToken))
         {
@@ -166,7 +182,7 @@ public sealed class SalaryService(
             }
         }
 
-        return (month, computed);
+        return computed;
     }
 
     private bool InProgress(DateOnly month) => clock.CompanyToday >= month && clock.CompanyToday < month.AddMonths(1);

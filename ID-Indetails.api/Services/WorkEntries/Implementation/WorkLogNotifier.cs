@@ -4,8 +4,8 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
-using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Services.WorkEntries.Implementation;
@@ -17,7 +17,7 @@ namespace ID_Indetails.api.Services.WorkEntries.Implementation;
 /// <c>off</c> sends nothing.
 /// </summary>
 public sealed class WorkLogNotifier(
-    IPermissionService permissions,
+    INotificationSender sender,
     IWorkEntryRepository entries,
     INotificationRepository notifications,
     IClock clock) : IWorkLogNotifier
@@ -47,22 +47,17 @@ public sealed class WorkLogNotifier(
 
         if (mode != EntryNotificationMode.Digest)
         {
-            var payload = JsonSerializer.Serialize(new { authorName, projectTitle, minutes, description = entry.Description });
-            foreach (var recipientId in recipients)
-            {
-                notifications.Add(new Notification
-                {
-                    RecipientId = recipientId,
-                    Kind = NotificationKinds.WorkLogged,
-                    ActorId = entry.UserId,
-                    ProjectId = entry.ProjectId,
-                    SubjectType = "work_entry",
-                    SubjectId = entry.Id,
-                    Payload = payload,
-                    CreatedAt = clock.UtcNow,
-                });
-            }
-
+            await sender.SendAsync(
+                new NotificationDraft(
+                    NotificationKinds.WorkLogged,
+                    entry.UserId,
+                    DomainCodes.Design,
+                    entry.ProjectId,
+                    "work_entry",
+                    entry.Id,
+                    new { authorName, projectTitle, minutes, description = entry.Description }),
+                recipients,
+                cancellationToken);
             return;
         }
 
@@ -98,17 +93,7 @@ public sealed class WorkLogNotifier(
     }
 
     private async Task<IReadOnlyList<long>> RecipientsAsync(long authorId, CancellationToken cancellationToken)
-    {
-        var recipients = new List<long>();
-        foreach (var id in await entries.PeopleWhoMayHoldAsync(DomainCodes.Design, PermissionCodes.WorkEntryViewAll, cancellationToken))
-        {
-            var access = await permissions.GetAccessAsync(id, cancellationToken);
-            if (id != authorId && access.Has(PermissionCodes.WorkEntryViewAll) && access.CanSee(DomainCodes.Design))
-            {
-                recipients.Add(id);
-            }
-        }
-
-        return recipients;
-    }
+        => (await sender.HoldersAsync(DomainCodes.Design, PermissionCodes.WorkEntryViewAll, cancellationToken))
+            .Where(id => id != authorId)
+            .ToList();
 }

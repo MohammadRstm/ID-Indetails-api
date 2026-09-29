@@ -17,6 +17,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Billing.Implementation;
 
@@ -29,6 +30,7 @@ public sealed class PaymentService(
     IPaymentRepository payments,
     IExchangeRateRepository exchangeRates,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IPaymentService
 {
@@ -114,6 +116,12 @@ public sealed class PaymentService(
 
         activity.Add(PaymentEvent(project.DomainCode, payment, ActivityEventKinds.PaymentRecorded, actorId,
             new { invoiceNumber = invoice?.Number, currency, method = request.Method, isInitial = request.IsInitial }));
+        // Whoever sees the domain's money; the payload never holds amounts.
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.PaymentRecorded, actorId, project.DomainCode, project.Id, "payment", payment.Id,
+                new { invoiceNumber = invoice?.Number, isInitial = request.IsInitial }),
+            await notifications.HoldersAsync(project.DomainCode, PermissionCodes.FinancialView, cancellationToken),
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return payment;
     }

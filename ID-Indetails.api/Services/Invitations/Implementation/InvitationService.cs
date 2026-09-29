@@ -18,6 +18,7 @@ using ID_Indetails.api.Services.Common.Implementation;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Services.Invitations.Implementation;
@@ -31,6 +32,7 @@ public sealed class InvitationService(
     IPasswordService passwords,
     ISessionService sessions,
     IPermissionService permissions,
+    INotificationSender notifications,
     IEmailSender emailSender,
     IClock clock,
     IOptions<InvitationOptions> invitationOptions,
@@ -184,11 +186,26 @@ public sealed class InvitationService(
         user.LastSeenAt = now;
         user.UpdatedAt = now;
 
+        await NotifyAcceptedAsync(invitation, cancellationToken);
         var session = await sessions.StartAsync(user, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return session;
+    }
+
+    /// <summary>Tells whoever sent the invitation, and whoever invites people into that domain.</summary>
+    private async Task NotifyAcceptedAsync(UserInvitation invitation, CancellationToken cancellationToken)
+    {
+        var user = invitation.User;
+        var inviters = user.DomainCode is { } domain
+            ? await notifications.HoldersAsync(domain, PermissionCodes.EmployeeInvite, cancellationToken)
+            : [];
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.InvitationAccepted, user.Id, user.DomainCode, null, "user", user.Id,
+                new { role = user.RoleCode, domain = user.DomainCode }),
+            invitation.InvitedById is { } inviter ? inviters.Append(inviter) : inviters,
+            cancellationToken);
     }
 
     private async Task<UserInvitation> GetUsableInvitationAsync(string token, CancellationToken cancellationToken)

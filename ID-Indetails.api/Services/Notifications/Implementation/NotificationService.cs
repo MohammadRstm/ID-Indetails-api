@@ -1,0 +1,75 @@
+using System.Text.Json;
+using ID_Indetails.api.Authorization;
+using ID_Indetails.api.DTO.Request.Notifications;
+using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Notifications;
+using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Notifications.Abstraction;
+using ID_Indetails.api.Services.Auth.Abstraction;
+using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
+
+namespace ID_Indetails.api.Services.Notifications.Implementation;
+
+/// <summary>
+/// Everyone reads only their own notifications. One about a project of a domain they can no longer see is
+/// hidden, and someone else's reads as not found.
+/// </summary>
+public sealed class NotificationService(
+    ICurrentUser currentUser,
+    IPermissionService permissions,
+    INotificationRepository notifications,
+    IUnitOfWork unitOfWork,
+    IClock clock) : INotificationService
+{
+    private const string NotFound = "Notification not found.";
+
+    public async Task<PagedResponse<NotificationResponse>> ListAsync(NotificationListQuery query, CancellationToken cancellationToken = default)
+    {
+        var domains = await VisibleDomainsAsync(cancellationToken);
+        var (items, total) = await notifications.SearchAsync(
+            currentUser.Id, domains, query.UnreadOnly, query.Page, query.PageSize, cancellationToken);
+
+        return new PagedResponse<NotificationResponse>(items.Select(ToResponse).ToList(), query.Page, query.PageSize, total);
+    }
+
+    public async Task<UnreadCountResponse> UnreadCountAsync(CancellationToken cancellationToken = default)
+        => new(await notifications.CountUnreadAsync(currentUser.Id, await VisibleDomainsAsync(cancellationToken), cancellationToken));
+
+    public async Task<UnreadCountResponse> MarkReadAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var domains = await VisibleDomainsAsync(cancellationToken);
+        var notification = await notifications.GetForUpdateAsync(id, currentUser.Id, domains, cancellationToken)
+            ?? throw new NotFoundException(NotFound);
+
+        if (notification.ReadAt is null)
+        {
+            notification.ReadAt = clock.UtcNow;
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        return new UnreadCountResponse(await notifications.CountUnreadAsync(currentUser.Id, domains, cancellationToken));
+    }
+
+    public async Task<UnreadCountResponse> MarkAllReadAsync(CancellationToken cancellationToken = default)
+    {
+        await notifications.MarkAllReadAsync(currentUser.Id, clock.UtcNow, cancellationToken);
+        return new UnreadCountResponse(0);
+    }
+
+    private async Task<IReadOnlyList<string>> VisibleDomainsAsync(CancellationToken cancellationToken)
+        => (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).VisibleDomains;
+
+    private static NotificationResponse ToResponse(NotificationView n) => new(
+        n.Id,
+        n.Kind,
+        n.ActorId is { } a ? new NotificationRefResponse(a, n.ActorName ?? string.Empty) : null,
+        n.ProjectId is { } p ? new NotificationProjectResponse(p, n.ProjectTitle ?? string.Empty, n.ProjectDomain ?? string.Empty) : null,
+        n.SubjectType,
+        n.SubjectId,
+        n.Payload is null ? null : JsonDocument.Parse(n.Payload).RootElement.Clone(),
+        n.Count,
+        n.CreatedAt,
+        n.ReadAt);
+}

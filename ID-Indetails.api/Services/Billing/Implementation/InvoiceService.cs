@@ -17,6 +17,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Billing.Implementation;
 
@@ -32,6 +33,7 @@ public sealed class InvoiceService(
     IInvoiceRepository invoices,
     IBillingSettingsRepository billingSettings,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IInvoiceService
 {
@@ -146,6 +148,12 @@ public sealed class InvoiceService(
         invoice.UpdatedAt = clock.UtcNow;
 
         activity.Add(InvoiceEvent(domain, invoice, ActivityEventKinds.InvoiceIssued, actor.UserId, invoice.Total, new { number = invoice.Number }));
+        // Whoever sees the domain's money; the payload never holds amounts.
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.InvoiceIssued, actor.UserId, domain, invoice.ProjectId, "invoice", invoice.Id,
+                new { number = invoice.Number }),
+            await notifications.HoldersAsync(domain, PermissionCodes.FinancialView, cancellationToken),
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 

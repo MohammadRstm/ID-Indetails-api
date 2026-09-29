@@ -10,6 +10,8 @@ namespace ID_Indetails.api.Business.Requirements;
 /// <item>Assignees are employees (not admins) of the project's domain who are active or invited.
 /// They don't have to be project members.</item>
 /// <item>A requirement is overdue when it is open and its deadline is before today.</item>
+/// <item>Whoever manages requirements ticks and unticks any of them. Otherwise only an assignee ticks one,
+/// and unticks only what they ticked themselves.</item>
 /// </list>
 /// </summary>
 public static class RequirementRules
@@ -33,6 +35,23 @@ public static class RequirementRules
             ? null
             : RuleDenial.BusinessRule(
                 ErrorCodes.AssigneeNotAllowed, "Requirements can only be assigned to active or invited employees of the project's domain.");
+    }
+
+    public static RuleDenial? CheckTick(bool canManage, bool isAssignee, bool isDone, bool done, long? doneById, long actorId)
+    {
+        if (canManage)
+        {
+            return null;
+        }
+
+        if (!isAssignee)
+        {
+            return RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only the people assigned can tick this requirement.");
+        }
+
+        return !done && isDone && doneById != actorId
+            ? RuleDenial.Forbidden(ErrorCodes.Forbidden, "You can only untick a requirement you ticked yourself.")
+            : null;
     }
 
     public static bool IsOverdue(DateOnly? deadline, bool isDone, DateOnly today)

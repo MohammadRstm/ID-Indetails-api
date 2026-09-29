@@ -22,7 +22,10 @@ public class Notification
 
     public string? Payload { get; set; }
 
-    /// <summary>Set for rolling digests (e.g. one "work logged today" notification per day).</summary>
+    /// <summary>
+    /// Set for rolling digests (e.g. one "work logged today" notification per day) and for scheduled
+    /// notifications, so each goes to a person only once.
+    /// </summary>
     public string? DigestKey { get; set; }
 
     public int Count { get; set; } = 1;

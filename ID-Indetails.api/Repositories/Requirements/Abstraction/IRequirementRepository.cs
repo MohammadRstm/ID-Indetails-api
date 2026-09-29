@@ -3,6 +3,16 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Requirements.Abstraction;
 
+/// <summary>An open requirement with a deadline, its project and who it is assigned to.</summary>
+public sealed record RequirementDeadline(
+    long Id,
+    long ProjectId,
+    string ProjectTitle,
+    string DomainCode,
+    string Text,
+    DateOnly Deadline,
+    IReadOnlyList<long> AssigneeIds);
+
 public interface IRequirementRepository
 {
     /// <summary>
@@ -11,13 +21,13 @@ public interface IRequirementRepository
     /// </summary>
     Task<IReadOnlyList<ProjectRequirement>> ListAsync(long projectId, CancellationToken cancellationToken = default);
 
-    /// <summary>A live requirement of the project, tracked, with its assignees.</summary>
     /// <summary>
     /// Live requirements assigned to the user on active or on-hold projects of <paramref name="domains"/>,
     /// done or not, with their project and assignees; not tracked.
     /// </summary>
     Task<IReadOnlyList<ProjectRequirement>> AssignedToAsync(long userId, IReadOnlyCollection<string> domains, CancellationToken cancellationToken = default);
 
+    /// <summary>A live requirement of the project, tracked, with its assignees.</summary>
     Task<ProjectRequirement?> GetForUpdateAsync(long projectId, long requirementId, CancellationToken cancellationToken = default);
 
     /// <summary>Who these people are, for checking assignees. Unknown ids are left out.</summary>
@@ -34,6 +44,9 @@ public interface IRequirementRepository
 
     /// <summary>Reopens exactly the requirements that were ticked automatically. Runs immediately.</summary>
     Task UntickAutoDoneAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Open requirements of active projects due from <paramref name="from"/> to <paramref name="to"/>, both inclusive. Not tracked.</summary>
+    Task<IReadOnlyList<RequirementDeadline>> DueBetweenAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
 
     void Add(ProjectRequirement requirement);
 }

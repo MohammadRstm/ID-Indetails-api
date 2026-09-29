@@ -28,13 +28,15 @@ public sealed class RequirementsController(IRequirementService requirementServic
     public Task<RequirementResponse> Update(long projectId, long requirementId, SaveRequirementRequest request, CancellationToken cancellationToken)
         => requirementService.UpdateAsync(projectId, requirementId, request, cancellationToken);
 
+    /// <summary>Assignees with requirement:complete_own tick their own; managers tick any.</summary>
     [HttpPost("{requirementId:long}/done")]
-    [HasPermission(PermissionCodes.RequirementManage)]
+    [HasAnyPermission(PermissionCodes.RequirementManage, PermissionCodes.RequirementCompleteOwn)]
     public Task<RequirementResponse> Done(long projectId, long requirementId, CancellationToken cancellationToken)
         => requirementService.SetDoneAsync(projectId, requirementId, true, cancellationToken);
 
+    /// <summary>Assignees untick only what they ticked; managers untick any.</summary>
     [HttpPost("{requirementId:long}/undone")]
-    [HasPermission(PermissionCodes.RequirementManage)]
+    [HasAnyPermission(PermissionCodes.RequirementManage, PermissionCodes.RequirementCompleteOwn)]
     public Task<RequirementResponse> Undone(long projectId, long requirementId, CancellationToken cancellationToken)
         => requirementService.SetDoneAsync(projectId, requirementId, false, cancellationToken);
 

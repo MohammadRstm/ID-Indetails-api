@@ -12,12 +12,11 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Meetings.Abstraction;
-using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
-using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Meetings.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Meetings.Implementation;
 
@@ -31,8 +30,7 @@ public sealed class MeetingService(
     IPermissionService permissions,
     IProjectRepository projects,
     IMeetingRepository meetings,
-    IWorkEntryRepository people,
-    INotificationRepository notifications,
+    INotificationSender notifications,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IMeetingService
@@ -135,37 +133,24 @@ public sealed class MeetingService(
             actor.Has(PermissionCodes.MeetingManage), actor.Has(PermissionCodes.MeetingCreate), meeting.CreatedById, actor.UserId);
 
     private async Task NotifyManagersAsync(ProjectMeeting meeting, Project project, long actorId, CancellationToken cancellationToken)
-    {
-        var payload = JsonSerializer.Serialize(new
-        {
-            authorName = currentUser.FullName,
-            projectTitle = project.Title,
-            topic = meeting.Topic,
-            startsAt = meeting.StartsAt,
-            endsAt = meeting.EndsAt,
-        });
-
-        foreach (var id in await people.PeopleWhoMayHoldAsync(project.DomainCode, PermissionCodes.MeetingManage, cancellationToken))
-        {
-            var access = await permissions.GetAccessAsync(id, cancellationToken);
-            if (id == actorId || !access.Has(PermissionCodes.MeetingManage) || !access.CanSee(project.DomainCode))
-            {
-                continue;
-            }
-
-            notifications.Add(new Notification
-            {
-                RecipientId = id,
-                Kind = NotificationKinds.MeetingScheduled,
-                ActorId = actorId,
-                ProjectId = project.Id,
-                SubjectType = "meeting",
-                SubjectId = meeting.Id,
-                Payload = payload,
-                CreatedAt = clock.UtcNow,
-            });
-        }
-    }
+        => await notifications.SendAsync(
+            new NotificationDraft(
+                NotificationKinds.MeetingScheduled,
+                actorId,
+                project.DomainCode,
+                project.Id,
+                "meeting",
+                meeting.Id,
+                new
+                {
+                    authorName = currentUser.FullName,
+                    projectTitle = project.Title,
+                    topic = meeting.Topic,
+                    startsAt = meeting.StartsAt,
+                    endsAt = meeting.EndsAt,
+                }),
+            await notifications.HoldersAsync(project.DomainCode, PermissionCodes.MeetingManage, cancellationToken),
+            cancellationToken);
 
     private void Apply(ProjectMeeting meeting, SaveMeetingRequest request)
     {

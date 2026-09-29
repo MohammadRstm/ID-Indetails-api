@@ -17,6 +17,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Clients.Implementation;
 
@@ -28,6 +29,7 @@ public sealed class ClientService(
     IMoneySummaryRepository moneySummaries,
     IMoneyRollupService moneyRollups,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IClientService
 {
@@ -101,6 +103,11 @@ public sealed class ClientService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         activity.Add(ClientEvent(client, ActivityEventKinds.ClientAdded, actor.UserId));
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.ClientAdded, actor.UserId, client.DomainCode, null, "client", client.Id,
+                new { name = client.Name, organisation = client.Organisation }),
+            await notifications.HoldersAsync(client.DomainCode, PermissionCodes.ClientManage, cancellationToken),
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return await DescribeAsync(actor, client.Id, cancellationToken);

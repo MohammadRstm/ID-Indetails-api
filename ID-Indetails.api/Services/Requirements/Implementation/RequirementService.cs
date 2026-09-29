@@ -10,11 +10,11 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
-using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Requirements.Abstraction;
 
@@ -30,8 +30,9 @@ public sealed class RequirementService(
     IProjectRepository projects,
     IRequirementRepository requirements,
     IProjectProgress progress,
+    IProjectNotifier notifier,
     IActivityEventRepository activity,
-    INotificationRepository notifications,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IRequirementService
 {
@@ -103,7 +104,8 @@ public sealed class RequirementService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         activity.Add(RequirementEvent(project, requirement, ActivityEventKinds.RequirementAdded, actor.UserId));
-        NotifyAssigned(project, requirement, assignees, actor.UserId);
+        await NotifyAssignedAsync(project, requirement, assignees, actor.UserId, cancellationToken);
+        await notifier.RequirementAddedAsync(project, requirement, actor.UserId, cancellationToken);
         await progress.RefreshAsync(project, actor.UserId, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -137,7 +139,7 @@ public sealed class RequirementService(
         }
 
         activity.Add(RequirementEvent(project, requirement, ActivityEventKinds.RequirementUpdated, actor.UserId));
-        NotifyAssigned(project, requirement, added, actor.UserId);
+        await NotifyAssignedAsync(project, requirement, added, actor.UserId, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -154,6 +156,13 @@ public sealed class RequirementService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await EditableProjectAsync(actor, projectId, cancellationToken);
         var requirement = await RequirementForUpdateAsync(projectId, requirementId, cancellationToken);
+        Throw(RequirementRules.CheckTick(
+            actor.Has(PermissionCodes.RequirementManage),
+            requirement.Assignees.Any(a => a.UserId == actor.UserId),
+            requirement.IsDone,
+            done,
+            requirement.DoneById,
+            actor.UserId));
 
         if (requirement.IsDone != done)
         {
@@ -165,6 +174,11 @@ public sealed class RequirementService(
                 project, requirement, done ? ActivityEventKinds.RequirementDone : ActivityEventKinds.RequirementReopened, actor.UserId));
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await progress.RefreshAsync(project, actor.UserId, cancellationToken);
+            if (done)
+            {
+                await notifier.RequirementDoneAsync(project, requirement, actor.UserId, cancellationToken);
+            }
+
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
@@ -251,24 +265,23 @@ public sealed class RequirementService(
     }
 
     /// <summary>Tells each newly assigned person (other than the caller) about the requirement.</summary>
-    private void NotifyAssigned(Project project, ProjectRequirement requirement, IEnumerable<long> userIds, long actorId)
-    {
-        var payload = JsonSerializer.Serialize(new { text = requirement.Text, deadline = requirement.Deadline, projectTitle = project.Title });
-        foreach (var userId in userIds.Where(id => id != actorId))
-        {
-            notifications.Add(new Notification
-            {
-                RecipientId = userId,
-                Kind = NotificationKinds.RequirementAssigned,
-                ActorId = actorId,
-                ProjectId = project.Id,
-                SubjectType = "requirement",
-                SubjectId = requirement.Id,
-                Payload = payload,
-                CreatedAt = clock.UtcNow,
-            });
-        }
-    }
+    private Task NotifyAssignedAsync(
+        Project project,
+        ProjectRequirement requirement,
+        IEnumerable<long> userIds,
+        long actorId,
+        CancellationToken cancellationToken)
+        => notifications.SendAsync(
+            new NotificationDraft(
+                NotificationKinds.RequirementAssigned,
+                actorId,
+                project.DomainCode,
+                project.Id,
+                "requirement",
+                requirement.Id,
+                new { text = requirement.Text, deadline = requirement.Deadline, projectTitle = project.Title }),
+            userIds,
+            cancellationToken);
 
     private ActivityEvent RequirementEvent(Project project, ProjectRequirement requirement, string kind, long actorId) => new()
     {

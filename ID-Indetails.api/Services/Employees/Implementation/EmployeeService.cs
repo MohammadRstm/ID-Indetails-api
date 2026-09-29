@@ -20,6 +20,7 @@ using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Employees.Implementation;
 
@@ -33,6 +34,7 @@ public sealed class EmployeeService(
     IRefreshTokenRepository refreshTokens,
     IInvitationRepository invitations,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     ISessionService sessions,
     IClock clock) : IEmployeeService
@@ -90,9 +92,14 @@ public sealed class EmployeeService(
         user.LastName = Clean(request.LastName);
         user.Phone = Clean(request.Phone);
         user.Position = Clean(request.Position);
+        var previousTeam = user.TeamId;
         user.TeamId = request.TeamId;
         user.UpdatedAt = clock.UtcNow;
         activity.Add(UserEvent(user, ActivityEventKinds.EmployeeUpdated, actor.UserId, null));
+        if (previousTeam != user.TeamId)
+        {
+            await NotifySelfAsync(NotificationKinds.TeamChanged, user, actor.UserId, new { teamId = user.TeamId }, cancellationToken);
+        }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -175,6 +182,8 @@ public sealed class EmployeeService(
         await ClearPermissionOverridesAsync(user.Id, cancellationToken);
         activity.Add(UserEvent(user, ActivityEventKinds.RoleChanged, actor.UserId,
             new { from = previousRole, to = user.RoleCode, domain = user.DomainCode }));
+        await NotifySelfAsync(NotificationKinds.RoleChanged, user, actor.UserId,
+            new { from = previousRole, to = user.RoleCode, domain = user.DomainCode, automatic = false }, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -204,6 +213,7 @@ public sealed class EmployeeService(
         await ClearPermissionOverridesAsync(user.Id, cancellationToken);
         activity.Add(UserEvent(user, ActivityEventKinds.EmployeeMoved, actor.UserId,
             new { from = previousDomain, to = user.DomainCode }));
+        await NotifySelfAsync(NotificationKinds.DomainChanged, user, actor.UserId, new { from = previousDomain, to = user.DomainCode }, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -255,6 +265,7 @@ public sealed class EmployeeService(
 
         // Amounts stay out of the activity feed, which people without financial access can read.
         activity.Add(UserEvent(user, ActivityEventKinds.PayChanged, actor.UserId, new { effectiveFrom }));
+        await NotifySelfAsync(NotificationKinds.PayChanged, user, actor.UserId, new { effectiveFrom }, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -281,6 +292,10 @@ public sealed class EmployeeService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await sessions.DescribeAsync(user, cancellationToken);
     }
+
+    /// <summary>A company-level notification to the person it is about.</summary>
+    private Task NotifySelfAsync(string kind, User user, long actorId, object payload, CancellationToken cancellationToken)
+        => notifications.SendAsync(new NotificationDraft(kind, actorId, null, null, "user", user.Id, payload), [user.Id], cancellationToken);
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);

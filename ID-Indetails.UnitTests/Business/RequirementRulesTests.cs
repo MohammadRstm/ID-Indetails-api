@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Requirements;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Requirements;
@@ -46,6 +47,23 @@ public class RequirementRulesTests
         RequirementRules.IsOverdue(Today, isDone: false, Today).ShouldBeFalse();
         RequirementRules.IsOverdue(Today.AddDays(-1), isDone: true, Today).ShouldBeFalse();
         RequirementRules.IsOverdue(null, isDone: false, Today).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Managers_tick_anything_and_assignees_only_their_own_ticks()
+    {
+        const long me = 7, admin = 1;
+
+        RequirementRules.CheckTick(canManage: true, isAssignee: false, isDone: true, done: false, doneById: me, actorId: admin).ShouldBeNull();
+        RequirementRules.CheckTick(false, isAssignee: true, isDone: false, done: true, doneById: null, actorId: me).ShouldBeNull();
+        RequirementRules.CheckTick(false, isAssignee: true, isDone: true, done: false, doneById: me, actorId: me).ShouldBeNull();
+        RequirementRules.CheckTick(false, isAssignee: false, isDone: false, done: true, doneById: null, actorId: me)!
+            .Kind.ShouldBe(DenialKind.Forbidden);
+        RequirementRules.CheckTick(false, isAssignee: true, isDone: true, done: false, doneById: admin, actorId: me)!
+            .Kind.ShouldBe(DenialKind.Forbidden);
+
+        // Unticking an open one changes nothing, so it isn't refused.
+        RequirementRules.CheckTick(false, isAssignee: true, isDone: false, done: false, doneById: null, actorId: me).ShouldBeNull();
     }
 
     [Fact]

@@ -48,6 +48,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("RateLimiting:UserPermitsPerMinute", UserPermitsPerMinute.ToString());
         builder.UseSetting("RateLimiting:AnonymousPermitsPerMinute", "100000");
 
+        // Tests run the scheduled checks themselves, once their data is ready.
+        builder.UseSetting("NotificationScheduler:Enabled", "false");
+
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IEmailSender>();
