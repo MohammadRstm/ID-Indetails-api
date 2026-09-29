@@ -201,6 +201,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IClientService, ClientService>();
         services.AddScoped<IProjectService, ProjectService>();
+        services.AddScoped<IProjectAutoArchive, ProjectAutoArchive>();
         services.AddScoped<IProjectProgress, ProjectProgress>();
         services.AddScoped<IProjectStatusService, ProjectStatusService>();
         services.AddScoped<IRequirementService, RequirementService>();

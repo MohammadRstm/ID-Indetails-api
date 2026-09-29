@@ -58,6 +58,7 @@ public sealed class ProjectStatusService(
         if (transition.Finalises)
         {
             await FinaliseAsync(project, actor.UserId, now, cancellationToken);
+            await notifier.ClosedAsync(project, (await finance.GetAsync(project, cancellationToken)).Summary.Margin, actor.UserId, cancellationToken);
         }
 
         if (transition.Reopens)

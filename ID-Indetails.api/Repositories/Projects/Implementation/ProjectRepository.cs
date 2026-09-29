@@ -74,6 +74,17 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
         return (items, total);
     }
 
+    public async Task<IReadOnlyList<long>> QuietCompletedAsync(string domain, DateTime beforeUtc, CancellationToken cancellationToken = default)
+        => await db.Projects
+            .AsNoTracking()
+            .Where(p => p.DomainCode == domain
+                && p.Status == ProjectStatus.Completed
+                && p.CompletedAt != null
+                && p.CompletedAt <= beforeUtc
+                && !db.ActivityEvents.Any(e => e.ProjectId == p.Id && e.OccurredAt > beforeUtc))
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<WorkRow>> RecentWorkAsync(
         IReadOnlyCollection<long> projectIds,
         DateTime fromUtc,

@@ -24,7 +24,7 @@ Features of the Design domain: domain settings, work entries, comments, meetings
 | `notifyIdle` | `true` | | Whether the dashboard flags projects with no work for 7 days, and their owners and managers get a `project_idle` notification (see [notifications.md](notifications.md)) |
 | `notifyProject` | `true` | | Whether the domain's people hear about new projects, status changes and added requirements (see [notifications.md](notifications.md)) |
 | `weeklySummary` | `true` | | Whether everyone who logs work gets last week's `weekly_summary` on the first day of the week |
-| `autoArchive` | `false` | | Stored only for now; the job that uses it comes later |
+| `autoArchive` | `false` | | Archives completed projects nothing has happened on for 90 days (see [projects.md](projects.md), "Status") |
 | `holdLogging` | `false` | | Whether work may still be logged on a project on hold |
 
 ## Work entries

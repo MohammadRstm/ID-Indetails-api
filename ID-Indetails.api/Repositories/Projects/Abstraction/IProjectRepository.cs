@@ -25,6 +25,11 @@ public interface IProjectRepository
     /// <summary>Not tracked, with client and owner.</summary>
     Task<(IReadOnlyList<Project> Items, int TotalCount)> SearchAsync(ProjectSearch search, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Ids of the domain's completed projects completed by <paramref name="beforeUtc"/> with no activity event after it.
+    /// </summary>
+    Task<IReadOnlyList<long>> QuietCompletedAsync(string domain, DateTime beforeUtc, CancellationToken cancellationToken = default);
+
     /// <summary>Live work on these projects starting from <paramref name="fromUtc"/>, for the project list's recent figures.</summary>
     Task<IReadOnlyList<WorkRow>> RecentWorkAsync(IReadOnlyCollection<long> projectIds, DateTime fromUtc, CancellationToken cancellationToken = default);
 
