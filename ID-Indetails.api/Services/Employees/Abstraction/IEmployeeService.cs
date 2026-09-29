@@ -14,9 +14,9 @@ public interface IEmployeeService
 
     Task<EmployeeResponse> UpdateAsync(long userId, UpdateEmployeeRequest request, CancellationToken cancellationToken = default);
 
-    Task<EmployeeResponse> DeactivateAsync(long userId, CancellationToken cancellationToken = default);
+    Task<EmployeeResponse> DeactivateAsync(long userId, DeactivateEmployeeRequest? request, CancellationToken cancellationToken = default);
 
-    Task<EmployeeResponse> ReactivateAsync(long userId, CancellationToken cancellationToken = default);
+    Task<EmployeeResponse> ReactivateAsync(long userId, ReactivateEmployeeRequest? request, CancellationToken cancellationToken = default);
 
     Task<EmployeeResponse> ChangeRoleAsync(long userId, ChangeRoleRequest request, CancellationToken cancellationToken = default);
 

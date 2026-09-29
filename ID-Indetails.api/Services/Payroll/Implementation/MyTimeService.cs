@@ -82,7 +82,8 @@ public sealed class MyTimeService(
             return new MyHoursResponse(false, query.Page, MyTime.MonthsPerPage, 0, []);
         }
 
-        var (months, total) = MyTime.MonthsPage(inputs.JoinedOn(person), clock.CompanyToday, query.Page, inputs.LeftOn(person));
+        var employment = inputs.EmploymentOf(person);
+        var (months, total) = MyTime.MonthsPage(employment.JoinedOn, clock.CompanyToday, query.Page, employment.LeftOn);
         var ledgers = (await inputs.ForAsync([person], months, cancellationToken))
             .Select(m => SelfService.LedgerMonth(m, SalaryCalculator.LedgerOf(m.Input, Overtime.Of(m.Input.Work, m.Input.Calendar))))
             .ToList();
@@ -93,7 +94,7 @@ public sealed class MyTimeService(
     /// <param name="withLedger">Whether to say which overtime made up missing hours and which is paid as overtime.</param>
     private async Task<MyOvertimeResponse> OvertimeOfAsync(User person, SalaryMonthQuery query, bool withLedger, CancellationToken cancellationToken)
     {
-        var month = SelfService.MonthOf(query.Month, clock.CompanyToday, inputs.JoinedOn(person));
+        var month = SelfService.MonthOf(query.Month, clock.CompanyToday, inputs.EmploymentOf(person).JoinedOn);
         var input = (await inputs.ForAsync([person], [month], cancellationToken))[0].Input;
         var work = Overtime.Of(input.Work, input.Calendar);
         var ledger = withLedger && input.LedgerApplies ? SalaryCalculator.LedgerOf(input, work) : null;

@@ -162,12 +162,14 @@ public sealed class ProjectPayService(
                     monthWork.Where(e => e.UserId == userId && e.Work.Day.Month == month.Month && e.Work.Day.Year == month.Year).Select(e => e.Work),
                     calendar);
 
+                var employment = inputs.EmploymentOf(user);
                 var ledger = user.DomainCode == DomainCodes.Design && user.RoleCode == RoleCodes.Employee
-                    ? HoursLedger.Build(month, today, user.JoinedOn ?? month, calendar, work, new HoursLedger.Excuses(
+                    ? HoursLedger.Build(month, today, employment.JoinedOn, calendar, work, new HoursLedger.Excuses(
                         excuses[userId].Any(x => x.Kind == ExcuseKind.WholeMonth),
                         excuses[userId].Sum(x => x.Minutes ?? 0),
                         excuses[userId].SelectMany(x => x.Days.Select(d => d.Day)).ToHashSet()),
-                        inputs.LeftOn(user))
+                        employment.LeftOn,
+                        employment.Gaps)
                     : null;
 
                 foreach (var split in work)

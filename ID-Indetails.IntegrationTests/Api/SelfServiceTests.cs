@@ -247,7 +247,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<AuthResponse> JuneMonthAsync(AuthResponse superAdmin, long projectId, string basis, decimal amount)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        await ExecuteAsync("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id", ("@id", person.User.Id));
+        await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         await OkAsync<object>(Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
             new { basis, amount, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken), status: null);
         await AddWorkAsync(person, projectId, new DateTime(2026, 6, 1, 6, 0, 0, DateTimeKind.Utc), minutes: 480);

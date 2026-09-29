@@ -88,6 +88,11 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
             .ToListAsync(cancellationToken))
             .Count;
 
+    public Task<EmploymentPeriod?> LatestPeriodAsync(long userId, CancellationToken cancellationToken = default)
+        => db.EmploymentPeriods.Where(p => p.UserId == userId).OrderByDescending(p => p.StartedOn).FirstOrDefaultAsync(cancellationToken);
+
+    public void AddPeriod(EmploymentPeriod period) => db.EmploymentPeriods.Add(period);
+
     private IQueryable<EmployeeRow> Project(IQueryable<User> users)
         => users.Select(u => new EmployeeRow(
             u.Id,
@@ -103,6 +108,9 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
             u.Status,
             db.UserPermissionOverrides.Any(o => o.UserId == u.Id),
             u.JoinedOn,
+            u.Status == UserStatus.Deactivated
+                ? u.EmploymentPeriods.OrderByDescending(p => p.StartedOn).Select(p => p.EndedOn).FirstOrDefault()
+                : null,
             u.LastSeenAt,
             u.CreatedAt));
 }

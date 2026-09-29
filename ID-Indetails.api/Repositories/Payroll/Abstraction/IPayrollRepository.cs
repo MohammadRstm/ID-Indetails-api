@@ -6,15 +6,15 @@ namespace ID_Indetails.api.Repositories.Payroll.Abstraction;
 public interface IPayrollRepository
 {
     /// <summary>
-    /// People who have joined and were active at some point since <paramref name="activeSinceUtc"/> (active now, or
-    /// deactivated since then), in the given domains (super admins only when asked), with their team.
+    /// People employed at some point since <paramref name="employedSince"/> (a period of employment still going or
+    /// ended since then), in the given domains (super admins only when asked), with their team and periods.
     /// </summary>
     Task<IReadOnlyList<User>> PeopleAsync(
         IReadOnlyList<string> domains,
         bool includeSuperAdmins,
         string? domain,
         string? search,
-        DateTime activeSinceUtc,
+        DateOnly employedSince,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<UserPayHistory>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);

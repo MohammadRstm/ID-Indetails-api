@@ -787,6 +787,52 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.EmploymentPeriod", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<DateOnly?>("EndedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("ended_on");
+
+                    b.Property<DateOnly>("StartedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("started_on");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_employment_periods");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_employment_periods_created_by_id");
+
+                    b.HasIndex("UserId", "StartedOn")
+                        .IsUnique()
+                        .HasDatabaseName("ix_employment_periods_user_id_started_on");
+
+                    b.ToTable("employment_periods", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_employment_periods_ends_after_start", "`ended_on` IS NULL OR `ended_on` >= `started_on`");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ExchangeRate", b =>
                 {
                     b.Property<long>("Id")
@@ -4223,6 +4269,24 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Domain");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.EmploymentPeriod", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_employment_periods_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany("EmploymentPeriods")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_employment_periods_users_user_id");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ExchangeRate", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -5070,6 +5134,8 @@ namespace ID_Indetails.api.Data.Migrations
 
             modelBuilder.Entity("ID_Indetails.api.Models.User", b =>
                 {
+                    b.Navigation("EmploymentPeriods");
+
                     b.Navigation("Invitations");
 
                     b.Navigation("PayHistory");

@@ -65,9 +65,9 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 Always calculated from the records, never stored (`Business/Payroll/`). The month defaults to this one and can't be in the future.
 
-**Who is listed:** every person who has joined, has a pay record and was active at some point in the month, in the caller's domains: people still active, and people deactivated during or after the month (`users.deactivated_at`). Super admins appear only if they have pay and the caller sees both domains. People who joined after the month, or left before it, are left out. Someone deactivated before the leaving day was recorded (no `deactivated_at`) is left out, as before. The list, the detail, the CSV, the totals and the month-end short-hours alert all follow this.
+**Who is listed:** every person with a pay record who was employed on some day of the month (a period of employment overlapping it, see [employees.md](employees.md#deactivating-and-reactivating)), in the caller's domains. Super admins appear only if they have pay and the caller sees both domains. People who joined after the month, left before it, or were away all of it are left out. The list, the detail, the CSV, the totals and the month-end short-hours alert all follow this.
 
-**Leavers:** a person's final month ends on the day they left (the company-time-zone day of `deactivated_at`, included). Monthly pay is pro-rated to it the way a joining month is (`leftOn` on the row, and `workingDaysPaid` of `workingDays`), and their hours ledger ends there too, so the month counts as closed for them once they have left. Reactivating clears the date; the months in between then read as if they had stayed.
+**Leavers:** a person's final month ends on their last working day (included). Monthly pay is pro-rated to it the way a joining month is (`leftOn` on the row, and `workingDaysPaid` of `workingDays`), and their hours ledger ends there too, so the month counts as closed for them once they have left. Someone taken back later isn't paid, or counted short, for the days they were away between two periods: a month partly away is pro-rated, a month wholly away isn't listed.
 
 **Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay is salary ÷ 173.33.
 
@@ -88,7 +88,7 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
   - Unpaid excuses are deducted too: unpaid minutes at the hourly rate, each unpaid day off as the full paid day, an unpaid whole month as the whole salary. The deduction never exceeds the salary.
 - **Hourly:** hours within schedule and made-up hours at the rate in force each day, plus the paid break of each working day they worked, plus overtime at the rate × multiplier. Excuses don't change their pay (they are paid for what they log).
 - Admins who log hours are paid overtime the same way, without an hours ledger. Execution staff don't log hours: they are paid their salary.
-- Totals are per currency and never converted. Deactivated people aren't listed (there is no record of when they were deactivated yet).
+- Totals are per currency and never converted.
 
 **Excuses:** `kind` is `minutes` (with `minutes`), `days` (with days of that month) or `whole_month`; `isPaid` defaults to true; the note defaults by kind. Never for a future month (`400 excuse_month_in_future`). Removing one is a soft delete.
 

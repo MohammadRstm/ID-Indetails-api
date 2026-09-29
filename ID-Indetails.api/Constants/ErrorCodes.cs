@@ -37,6 +37,9 @@ public static class ErrorCodes
     public const string LastSuperAdmin = "last_super_admin";
     public const string UserAlreadyDeactivated = "user_already_deactivated";
     public const string UserNotDeactivated = "user_not_deactivated";
+    public const string LastWorkingDayInvalid = "last_working_day_invalid";
+    public const string PayGapRequired = "pay_gap_required";
+    public const string PayGapNotAsked = "pay_gap_not_asked";
     public const string RoleUnchanged = "role_unchanged";
     public const string DomainUnchanged = "domain_unchanged";
     public const string SuperAdminHasNoDomain = "super_admin_has_no_domain";

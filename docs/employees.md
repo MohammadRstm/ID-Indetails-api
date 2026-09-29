@@ -15,8 +15,8 @@ People management covers everyone with an account: super admins, admins and empl
 | `GET /api/employees` | `employee:view` | The people list (below) |
 | `GET /api/employees/{id}` | `employee:view` | A profile. `currentPay` is included only for callers with `financial:view` or `employee:pay_manage` |
 | `PUT /api/employees/{id}` | `employee:manage` | Replaces first and last name, phone, position and team |
-| `POST /api/employees/{id}/deactivate` | `employee:manage` | Blocks sign-in and ends every session |
-| `POST /api/employees/{id}/reactivate` | `employee:manage` | Undoes a deactivation |
+| `POST /api/employees/{id}/deactivate` | `employee:manage` | `{ lastWorkingDay }` (optional, today when empty): blocks sign-in, ends every session and ends their employment on that day |
+| `POST /api/employees/{id}/reactivate` | `employee:manage` | `{ payGap }` (only when they left earlier this month): undoes a deactivation |
 | `PUT /api/employees/{id}/role` | `employee:manage` | Changes the role |
 | `PUT /api/employees/{id}/domain` | `employee:manage` | Moves someone to the other domain |
 | `GET /api/employees/{id}/pay` | `employee:pay_manage` | Pay history, newest first |
@@ -52,8 +52,13 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 
 ## Deactivating and reactivating
 
-- Deactivating sets the status to `deactivated`, records when (`users.deactivated_at`, the day their pay and hours ledger end), revokes every refresh token and any pending invitation link, and drops the cached permissions. The person's access token stops working at once: permission checks find no permissions, and `/auth/me` answers `401`. Their history is kept.
-- Reactivating clears `deactivated_at` and makes them `active` again if they had signed up, or `invited` if they never did (send them a fresh link with `POST /api/invitations/{id}/resend`).
+Employment is kept as dated periods (`employment_periods`): accepting the invitation starts the first one, leaving ends it, and being taken back starts a new one. Pay, the hours ledger and project pay count only the days inside a period (`Business/Payroll/Employment.cs`, `Business/Employees/EmploymentRules.cs`).
+
+- **Deactivating** sets the status to `deactivated`, records when (`users.deactivated_at`), and ends the person's period on their **last working day**: today unless given, never in the future (`400 last_working_day_invalid`) or before the period started, and never so far back that a closed month would change (`422 month_closed`; on the 1st, last month is still open). That day is paid. It also revokes every refresh token and any pending invitation link, and drops the cached permissions. The person's access token stops working at once: permission checks find no permissions, and `/auth/me` answers `401`. Their history is kept, and `leftOn` shows the last working day.
+- **Reactivating** clears `deactivated_at` and makes them `active` again if they had signed up, or `invited` if they never did (send them a fresh link with `POST /api/invitations/{id}/resend`). For someone who worked here:
+  - back the day after their last working day (or the same day): their period simply goes on;
+  - away since earlier **this month**: `payGap` is required (`422 pay_gap_required`). `true` keeps their period going and excuses the days away as paid, so the hours ledger doesn't count them short; `false` starts a new period today, and the days away aren't paid;
+  - away since an earlier month: a new period starts today and the time away is never paid (`payGap` is refused, `422 pay_gap_not_asked`).
 
 ## Changing a role
 

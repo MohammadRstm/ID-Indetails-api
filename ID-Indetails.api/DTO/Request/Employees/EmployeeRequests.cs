@@ -81,3 +81,18 @@ public sealed record UpdateMyProfileRequest
 
     public string? Phone { get; init; }
 }
+
+public sealed record DeactivateEmployeeRequest
+{
+    /// <summary>Their last day of work, paid; today when empty.</summary>
+    public DateOnly? LastWorkingDay { get; init; }
+}
+
+public sealed record ReactivateEmployeeRequest
+{
+    /// <summary>
+    /// Whether their time away is paid. Asked, and required, only when they left earlier this month; otherwise time
+    /// away is never paid and this must be left out.
+    /// </summary>
+    public bool? PayGap { get; init; }
+}

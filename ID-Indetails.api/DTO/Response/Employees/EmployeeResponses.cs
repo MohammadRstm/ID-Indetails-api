@@ -31,6 +31,9 @@ public record EmployeeSummaryResponse
 
     public DateOnly? JoinedOn { get; init; }
 
+    /// <summary>The last working day of someone who left; null while they work here.</summary>
+    public DateOnly? LeftOn { get; init; }
+
     public DateTime? LastSeenAt { get; init; }
 
     /// <summary>Whether they have the live connection open now.</summary>

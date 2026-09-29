@@ -65,6 +65,8 @@ public class User
 
     public ICollection<UserPayHistory> PayHistory { get; set; } = new List<UserPayHistory>();
 
+    public ICollection<EmploymentPeriod> EmploymentPeriods { get; set; } = new List<EmploymentPeriod>();
+
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 
     public ICollection<UserInvitation> Invitations { get; set; } = new List<UserInvitation>();

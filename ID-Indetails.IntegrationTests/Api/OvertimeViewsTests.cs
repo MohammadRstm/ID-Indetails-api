@@ -297,7 +297,7 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // Leaving on Thursday 25 June (15:00 in Beirut): the ledger ends that day, and the history that month.
         (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await _steps.ScalarAsync<int>("UPDATE users SET deactivated_at = '2026-06-25 12:00:00' WHERE id = @id; SELECT 1", ("@id", designer.User.Id));
+        await _steps.SetLeftAtAsync(designer.User.Id, "2026-06-25 12:00:00");
         var left = await OkAsync<MyHoursResponse>(url, superAdmin);
         left.TotalMonths.ShouldBe(6);
         left.Months[0].ShouldSatisfyAllConditions(
@@ -330,7 +330,7 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
 
     /// <summary>Moves the joining day to 1 January 2026, so June 2026 is judged in full.</summary>
     private Task JoinedInJanuaryAsync(AuthResponse person)
-        => _steps.ScalarAsync<int>("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id; SELECT 1", ("@id", person.User.Id));
+        => _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
 
     private static DateOnly TodayInBeirut() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut));
 

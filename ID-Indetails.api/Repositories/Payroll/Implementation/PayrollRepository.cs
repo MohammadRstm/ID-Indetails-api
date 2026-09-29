@@ -13,15 +13,15 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
         bool includeSuperAdmins,
         string? domain,
         string? search,
-        DateTime activeSinceUtc,
+        DateOnly employedSince,
         CancellationToken cancellationToken = default)
     {
         var codes = domains.ToList();
         var query = db.Users
             .AsNoTracking()
             .Include(u => u.Team)
-            .Where(u => (u.Status == UserStatus.Active || (u.Status == UserStatus.Deactivated && u.DeactivatedAt >= activeSinceUtc))
-                && u.JoinedOn != null
+            .Include(u => u.EmploymentPeriods)
+            .Where(u => u.EmploymentPeriods.Any(p => p.EndedOn == null || p.EndedOn >= employedSince)
                 && (u.DomainCode != null ? codes.Contains(u.DomainCode) : includeSuperAdmins));
 
         if (domain is not null)
@@ -66,7 +66,11 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<User>> UsersAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
-        => await db.Users.AsNoTracking().Include(u => u.Team).Where(u => userIds.Contains(u.Id)).ToListAsync(cancellationToken);
+        => await db.Users.AsNoTracking()
+            .Include(u => u.Team)
+            .Include(u => u.EmploymentPeriods)
+            .Where(u => userIds.Contains(u.Id))
+            .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ProjectLabel>> ProjectsAsync(string domain, CancellationToken cancellationToken = default)
         => await db.Projects

@@ -16,6 +16,7 @@ using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Employees.Abstraction;
 using ID_Indetails.api.Repositories.Invitations.Abstraction;
+using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -34,6 +35,7 @@ public sealed class EmployeeService(
     IPermissionRepository permissionRepository,
     IRefreshTokenRepository refreshTokens,
     IInvitationRepository invitations,
+    IHourExcuseRepository excuses,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -109,7 +111,7 @@ public sealed class EmployeeService(
         return await DescribeAsync(actor, userId, cancellationToken);
     }
 
-    public async Task<EmployeeResponse> DeactivateAsync(long userId, CancellationToken cancellationToken = default)
+    public async Task<EmployeeResponse> DeactivateAsync(long userId, DeactivateEmployeeRequest? request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -120,6 +122,16 @@ public sealed class EmployeeService(
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckDeactivate(actor, TargetOf(user), superAdmins));
 
+        // Their employment ends on their last working day (today unless given); someone who never started has none.
+        var today = clock.CompanyToday;
+        var lastDay = request?.LastWorkingDay ?? today;
+        var period = await employees.LatestPeriodAsync(user.Id, cancellationToken);
+        if (period is { EndedOn: null })
+        {
+            Throw(EmploymentRules.CheckLastWorkingDay(lastDay, period.StartedOn, today));
+            period.EndedOn = lastDay;
+        }
+
         var now = clock.UtcNow;
         user.Status = UserStatus.Deactivated;
         user.DeactivatedAt = now;
@@ -128,7 +140,7 @@ public sealed class EmployeeService(
         // Signed out everywhere, and any pending signup link stops working.
         await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
         await invitations.RevokePendingForUserAsync(user.Id, now, cancellationToken);
-        activity.Add(UserEvent(user, ActivityEventKinds.EmployeeDeactivated, actor.UserId, null));
+        activity.Add(UserEvent(user, ActivityEventKinds.EmployeeDeactivated, actor.UserId, period is null ? null : new { lastWorkingDay = lastDay }));
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -137,13 +149,17 @@ public sealed class EmployeeService(
         return await DescribeAsync(actor, userId, cancellationToken);
     }
 
-    public async Task<EmployeeResponse> ReactivateAsync(long userId, CancellationToken cancellationToken = default)
+    public async Task<EmployeeResponse> ReactivateAsync(long userId, ReactivateEmployeeRequest? request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckReactivate(actor, TargetOf(user)));
+        if (await employees.LatestPeriodAsync(user.Id, cancellationToken) is { EndedOn: { } leftOn } period)
+        {
+            ComeBack(user.Id, period, leftOn, request?.PayGap, actor.UserId);
+        }
 
         user.Status = EmployeeRules.ReactivatedStatus(hasPassword: user.PasswordHash is not null);
         user.DeactivatedAt = null;
@@ -155,6 +171,57 @@ public sealed class EmployeeService(
         permissions.Forget(user.Id);
 
         return await DescribeAsync(actor, userId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Taking someone back. Time away that began earlier this month is paid only if the admin says so: their period
+    /// then simply continues, with the days away excused (paid) so the hours ledger doesn't count them short.
+    /// Otherwise a new period starts today and the days away aren't paid.
+    /// </summary>
+    private void ComeBack(long userId, EmploymentPeriod period, DateOnly leftOn, bool? payGap, long actorId)
+    {
+        var today = clock.CompanyToday;
+        var asked = EmploymentRules.AsksAboutGap(leftOn, today);
+        if (asked && payGap is null)
+        {
+            throw new BusinessRuleException(
+                ErrorCodes.PayGapRequired, "They left earlier this month: say whether their time away is paid (payGap).");
+        }
+
+        if (!asked && payGap is not null)
+        {
+            throw new BusinessRuleException(
+                ErrorCodes.PayGapNotAsked, "Only time away that began earlier this month can be paid.");
+        }
+
+        var gap = EmploymentRules.GapDays(leftOn, today).ToList();
+        if (gap.Count == 0 || payGap == true)
+        {
+            period.EndedOn = null;
+            if (gap.Count > 0)
+            {
+                var excuse = new HourExcuse
+                {
+                    UserId = userId,
+                    MonthStart = new DateOnly(today.Year, today.Month, 1),
+                    Kind = ExcuseKind.Days,
+                    IsPaid = true,
+                    Note = "Paid time away between leaving and coming back",
+                    CreatedAt = clock.UtcNow,
+                    CreatedById = actorId,
+                };
+                foreach (var day in gap)
+                {
+                    excuse.Days.Add(new HourExcuseDay { Day = day });
+                }
+
+                excuses.Add(excuse);
+            }
+
+            return;
+        }
+
+        employees.AddPeriod(new EmploymentPeriod { UserId = userId, StartedOn = today, CreatedAt = clock.UtcNow, CreatedById = actorId });
     }
 
     public async Task<EmployeeResponse> ChangeRoleAsync(
@@ -337,6 +404,7 @@ public sealed class EmployeeService(
             Status = row.Status,
             IsJoker = IsJoker(row),
             JoinedOn = row.JoinedOn,
+            LeftOn = row.LeftOn,
             LastSeenAt = row.LastSeenAt,
             Online = presence.IsOnline(row.Id),
             Phone = row.Phone,
@@ -412,6 +480,7 @@ public sealed class EmployeeService(
         Status = row.Status,
         IsJoker = IsJoker(row),
         JoinedOn = row.JoinedOn,
+        LeftOn = row.LeftOn,
         LastSeenAt = row.LastSeenAt,
         Online = presence.IsOnline(row.Id),
     };

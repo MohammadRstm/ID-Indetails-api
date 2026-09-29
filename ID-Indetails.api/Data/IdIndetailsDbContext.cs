@@ -14,6 +14,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<UserPermissionOverride> UserPermissionOverrides => Set<UserPermissionOverride>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Team> Teams => Set<Team>();
+    public DbSet<EmploymentPeriod> EmploymentPeriods => Set<EmploymentPeriod>();
+
     public DbSet<UserPayHistory> UserPayHistory => Set<UserPayHistory>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();

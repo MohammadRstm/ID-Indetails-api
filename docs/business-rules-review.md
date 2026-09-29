@@ -31,6 +31,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 21 | **Admins who log hours** are paid overtime like employees, without an hours ledger. | Payroll calculation |
 | 22 | **Project pay leaves paid breaks out.** A break isn't worked on any project, so project pay covers logged hours and overtime only, and differs from Salaries for hourly staff by exactly their paid breaks. It needs `salary:view`. | Project pay report |
 | 23 | **Leavers stay in past months** (29 Sep 2026). `users.deactivated_at` records when an account was deactivated (cleared on reactivation; backfilled from the latest `employee_deactivated` event). Salaries (list, detail, CSV, totals), the month-end alert and project pay include everyone active at any point in the month, with the final month pro-rated to the leaving day like a joining month, and the hours ledger ending there. | Schema (`UserDeactivatedAt` migration); payroll calculation |
+| 24 | **Employment is dated periods** (30 Sep 2026, open questions 4 and 5). Leaving ends a period on the last working day the admin gives (today by default, never reaching back into a closed month), which is paid. Being taken back starts a new period, and the days away between two periods are neither paid nor expected. When the time away began earlier in the same month, the admin says whether it is paid: if so, the period simply continues and the days away are excused as paid. | Schema (`EmploymentPeriods` migration); API; payroll calculation |
 
 ## Decided for Design work (28 Sep 2026)
 
