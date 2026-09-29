@@ -4,6 +4,8 @@ using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.DTO.Response.Finance;
+using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Company.Abstraction;
@@ -54,27 +56,27 @@ public sealed class CompanyOverviewService(
             var projects = data.Projects.Where(p => p.DomainCode == domain).ToList();
             var history = projects.Select(p => (Project: p, History: data.History[p.Id])).ToList();
 
-            var revenue = history.Sum(h =>
-            {
-                var byMonth = Recognition.ByMonth(h.History.Money.Summary.RecognisedToDate, h.History.Costs.ToList());
-                return shares.Sum(s => byMonth.GetValueOrDefault(s.Month) * s.Accrued);
-            });
-            var cost = history.Sum(h => h.History.Costs.Where(c => InPeriod(c.Day)).Sum(c => c.Usd));
+            var revenue = PeriodMoney.Round(history.Sum(h => PeriodMoney.Revenue(
+                Recognition.ByMonth(h.History.Money.Summary.RecognisedToDate, h.History.Costs.ToList()), shares)));
+            var cost = PeriodMoney.Round(PeriodMoney.Costs(history.SelectMany(h => h.History.Costs), start, end).Total);
             var active = history
                 .Where(h => h.History.Costs.Any(c => InPeriod(c.Day)) || h.History.Work.Any(w => InPeriod(w.Day)))
                 .Select(h => h.Project)
                 .ToList();
             var work = history.SelectMany(h => h.History.Work).ToList();
-            var domainInvoices = invoices.Where(i => i.Domain == domain).ToList();
+            // An invoice is converted at the rate of its issue day; one with no rate there is listed, not counted as 0.
+            var domainInvoices = invoices
+                .Where(i => i.Domain == domain)
+                .Select(i => (Invoice: i, Usd: data.Rates.ToUsd(i.Total, i.Currency, clock.ToCompanyDate(i.IssuedAt))))
+                .ToList();
+            var converted = domainInvoices.Where(x => x.Usd is not null).ToList();
 
-            revenue = Round(revenue);
-            cost = Round(cost);
             return new DomainOverviewResponse(
                 domain,
                 revenue,
                 cost,
                 revenue - cost,
-                revenue > 0 ? Math.Round((revenue - cost) / revenue, 4) : null,
+                PeriodMoney.Margin(revenue - cost, revenue),
                 active.Count,
                 projects.Count(p => p.Status == ProjectStatus.Active),
                 employees.GetValueOrDefault(domain),
@@ -82,9 +84,13 @@ public sealed class CompanyOverviewService(
                 work.Count > 0,
                 active.Where(p => p.ClientId is not null).Select(p => p.ClientId).Distinct().Count(),
                 clients.GetValueOrDefault(domain),
-                Round(domainInvoices.Where(i => InPeriod(clock.ToCompanyDate(i.IssuedAt))).Sum(i => InvoiceUsd(i, data.Rates))),
-                Round(payments.Where(p => p.Domain == domain && InPeriod(p.ReceivedOn)).Sum(p => p.AmountUsd)),
-                Round(domainInvoices.Sum(i => InvoiceRules.Balance(InvoiceUsd(i, data.Rates), i.PaidUsd))));
+                PeriodMoney.Round(converted.Where(x => InPeriod(clock.ToCompanyDate(x.Invoice.IssuedAt))).Sum(x => x.Usd!.Value)),
+                PeriodMoney.Round(payments.Where(p => p.Domain == domain && InPeriod(p.ReceivedOn)).Sum(p => p.AmountUsd)),
+                PeriodMoney.Round(converted.Sum(x => InvoiceRules.Balance(x.Usd!.Value, x.Invoice.PaidUsd))),
+                PeriodMoney.Unconverted(history.SelectMany(h => h.History.Unconverted), start, end)
+                    .Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount))
+                    .ToList(),
+                UnconvertedInvoices(domainInvoices.Where(x => x.Usd is null).Select(x => x.Invoice)));
         }).ToList();
 
         var (overhead, unconverted) = await OverheadAsync(shares.Select(s => (s.Month, s.Calendar)), data.Rates, cancellationToken);
@@ -104,7 +110,8 @@ public sealed class CompanyOverviewService(
             domains.Sum(d => d.Collected),
             domains.Sum(d => d.Outstanding),
             domains.Sum(d => d.ProjectsWithActivity),
-            domains.Sum(d => d.ClientsServed));
+            domains.Sum(d => d.ClientsServed),
+            UnconvertedInvoices(invoices.Where(i => data.Rates.ToUsd(i.Total, i.Currency, clock.ToCompanyDate(i.IssuedAt)) is null)));
     }
 
     public async Task<IReadOnlyList<CompanyMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default)
@@ -122,21 +129,21 @@ public sealed class CompanyOverviewService(
             }
         }
 
-        var costs = data.History.Values.SelectMany(h => h.Costs).ToLookup(c => (Recognition.MonthOf(c.Day), c.Source));
-        decimal CostOf(DateOnly month, CostSource source) => Round(costs[(month, source)].Sum(c => c.Usd));
+        var costs = data.History.Values.SelectMany(h => h.Costs).ToList();
 
         var result = new List<CompanyMonthResponse>();
         foreach (var month in keys)
         {
             var (overhead, _) = await OverheadAsync([(month, 1m)], data.Rates, cancellationToken);
-            var labour = CostOf(month, CostSource.Labour);
-            var expenses = CostOf(month, CostSource.Expenses);
-            var materials = CostOf(month, CostSource.Materials);
-            var ground = CostOf(month, CostSource.GroundLabour);
-            var before = Round(revenue.GetValueOrDefault(month)) - labour - expenses - materials - ground;
+            var cost = PeriodMoney.Costs(costs, month, month.AddMonths(1).AddDays(-1));
+            var labour = PeriodMoney.Round(cost.Labour);
+            var expenses = PeriodMoney.Round(cost.Expenses);
+            var materials = PeriodMoney.Round(cost.Materials);
+            var ground = PeriodMoney.Round(cost.GroundLabour);
+            var monthRevenue = PeriodMoney.Round(revenue.GetValueOrDefault(month));
+            var before = monthRevenue - labour - expenses - materials - ground;
 
-            result.Add(new CompanyMonthResponse(
-                month, Round(revenue.GetValueOrDefault(month)), labour, expenses, materials, ground, overhead, before, before - overhead));
+            result.Add(new CompanyMonthResponse(month, monthRevenue, labour, expenses, materials, ground, overhead, before, before - overhead));
         }
 
         return result;
@@ -183,11 +190,12 @@ public sealed class CompanyOverviewService(
             }
         }
 
-        return (Round(usd), unconverted.Select(u => new CurrencyTotalResponse(u.Key, Round(u.Value))).ToList());
+        return (PeriodMoney.Round(usd), unconverted.Select(u => new CurrencyTotalResponse(u.Key, PeriodMoney.Round(u.Value))).ToList());
     }
 
-    private decimal InvoiceUsd(IssuedInvoiceRow invoice, ExchangeRateTable rates)
-        => rates.ToUsd(invoice.Total, invoice.Currency, clock.ToCompanyDate(invoice.IssuedAt)) ?? 0;
-
-    private static decimal Round(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
+    private static IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices(IEnumerable<IssuedInvoiceRow> invoices)
+        => invoices
+            .GroupBy(i => i.Currency.ToUpperInvariant())
+            .Select(g => new UnconvertedInvoicesResponse(g.Key, g.Sum(i => i.Total), g.Count()))
+            .ToList();
 }

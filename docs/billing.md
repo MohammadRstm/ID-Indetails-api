@@ -74,7 +74,7 @@ Rules (`Business/Billing/PaymentRules.cs`):
 
 ## A project's cash position
 
-`money.billing` on a project (`Business/Billing/ProjectBilling.cs`), in USD:
+`money.billing` on a project (`Business/Billing/ProjectBilling.cs`), in USD. The same rule gives the billing figures of the project and client lists, the client pages and the Financials page ([finance.md](finance.md)); invoices are converted at the rate of their issue day everywhere.
 
 | Field | Meaning |
 |---|---|
@@ -85,3 +85,8 @@ Rules (`Business/Billing/PaymentRules.cs`):
 | `notYetInvoiced` | Revenue (Execution: the agreed amount) minus invoiced, never below zero |
 | `owed` | Revenue minus received, never below zero |
 | `paidAhead` | Received beyond the revenue |
+| `issuedCount`, `paymentCount` | How many issued, live invoices and live payments |
+| `overdue`, `overdueCount` | Left to pay on sent or partly paid invoices past their due date, and how many |
+| `oldestOverdueDays` | Days past due of the oldest overdue invoice; null when none is overdue |
+| `drafts` | The total of draft invoices, kept apart from invoiced |
+| `unconvertedInvoices[]` | Invoices with no exchange rate on their issue day, per currency: left out of the USD figures above, never counted as 0 |

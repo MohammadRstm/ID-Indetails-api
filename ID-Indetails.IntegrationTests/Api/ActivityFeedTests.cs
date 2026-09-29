@@ -53,6 +53,34 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_markup_change_keeps_the_exact_markup_in_its_payload_for_money_viewers_only()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
+        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.125m }, admin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        var money = await (await Client.GetAsync($"/api/activity?group=money&projectId={site.Id}", admin.AccessToken))
+            .ReadAsync<PagedResponse<ActivityItemResponse>>();
+        var markupSet = money.Items.Single(i => i.Kind == ActivityEventKinds.MaterialMarkupSet);
+        // 12.5% exactly: the amount columns keep 2 decimals and would have stored 0.13.
+        markupSet.Payload!.Value.GetProperty("markup").GetDecimal().ShouldBe(0.125m);
+        markupSet.Payload.Value.GetProperty("prevMarkup").GetDecimal().ShouldBe(0.10m);
+        markupSet.Amount.ShouldBeNull();
+        markupSet.PrevAmount.ShouldBeNull();
+
+        // Someone who reads the feed without financial:view sees the change, not the markup.
+        var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.ActivityView, action = "grant", reason = "Test" } } },
+            superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var limited = await (await Client.GetAsync($"/api/activity?projectId={site.Id}", lead.AccessToken))
+            .ReadAsync<PagedResponse<ActivityItemResponse>>();
+        limited.Items.Single(i => i.Kind == ActivityEventKinds.MaterialMarkupSet).Payload.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Other_domains_and_company_events_stay_out_of_a_domain_feed()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

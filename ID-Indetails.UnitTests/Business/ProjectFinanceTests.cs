@@ -47,6 +47,19 @@ public class ProjectFinanceTests
     }
 
     [Fact]
+    public void Dated_costs_are_either_converted_or_listed_unconverted_on_their_day()
+    {
+        CostItem[] items =
+        [
+            new(CostSource.Expenses, "LBP", 179_000m, new DateOnly(2026, 2, 15)),
+            new(CostSource.Materials, "lbp", 179_000m, new DateOnly(2025, 6, 1)),
+        ];
+
+        DatedUsd(items, Rates).ShouldBe([new Recognition.DatedCost(CostSource.Expenses, new DateOnly(2026, 2, 15), 2m)]);
+        Unconvertible(items, Rates).ShouldBe([new DatedUnconverted(CostSource.Materials, "LBP", 179_000m, new DateOnly(2025, 6, 1))]);
+    }
+
+    [Fact]
     public void Labour_uses_the_hourly_cost_in_force_on_the_day_worked()
     {
         var (items, unpriced) = PriceLabour(

@@ -1,4 +1,3 @@
-using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
@@ -70,29 +69,6 @@ public sealed class PaymentRepository(IdIndetailsDbContext db) : IPaymentReposit
 
     public Task<bool> HasLiveInitialAsync(long projectId, CancellationToken cancellationToken = default)
         => db.Payments.AnyAsync(p => p.ProjectId == projectId && p.IsInitial && p.VoidedAt == null, cancellationToken);
-
-    public async Task<(decimal Received, decimal OnAccount)> ProjectTotalsAsync(long projectId, CancellationToken cancellationToken = default)
-    {
-        var totals = await db.Payments
-            .Where(p => p.ProjectId == projectId && p.VoidedAt == null)
-            .GroupBy(_ => 1)
-            .Select(g => new
-            {
-                Received = g.Sum(p => p.AmountUsd),
-                OnAccount = g.Sum(p => p.InvoiceId == null ? p.AmountUsd : 0),
-            })
-            .SingleOrDefaultAsync(cancellationToken);
-
-        return totals is null ? (0, 0) : (totals.Received, totals.OnAccount);
-    }
-
-    public async Task<IReadOnlyList<ProjectBilling.IssuedInvoice>> IssuedInvoicesAsync(long projectId, CancellationToken cancellationToken = default)
-        => await db.Invoices
-            .Where(i => i.ProjectId == projectId && i.IssuedAt != null && i.VoidedAt == null)
-            .Select(i => new ProjectBilling.IssuedInvoice(
-                i.Total,
-                i.Payments.Where(p => p.VoidedAt == null).Sum(p => (decimal?)p.AmountUsd) ?? 0))
-            .ToListAsync(cancellationToken);
 
     public void Add(Payment payment) => db.Payments.Add(payment);
 }

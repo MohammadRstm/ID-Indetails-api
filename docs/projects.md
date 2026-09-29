@@ -6,7 +6,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first. Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding) only for callers with `financial:view`; see [finance.md](finance.md) |
+| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first. Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding, `hasUnconverted`, `unpricedLabourMinutes`) only for callers with `financial:view`; see [finance.md](finance.md) |
 | `GET /api/projects/{id}` | `project:view` | A project. `money` is included only for callers with `financial:view` |
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner |
@@ -30,7 +30,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 - The Execution agreed amount is calculated live while the project is open, and frozen into `projects.revenue` when it is finalised. A material with no exchange rate for its day is left out of the live amount (`money.unconvertedMaterials`), and finalising is refused until the rate is added (`422 exchange_rate_missing`).
 - While a project is finalised (`money.isLocked`), billing, revenue, fee and markup can't change (`422 project_locked`).
 - A project with any invoice or payment can't move to another client or become internal (`422 project_has_billing`), because invoices and payments keep the client they were made for.
-- `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed` and `paidAhead` (see [billing.md](billing.md)).
+- `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed`, `paidAhead`, `issuedCount`, `paymentCount`, `overdue`, `overdueCount`, `oldestOverdueDays`, `drafts` and `unconvertedInvoices[]` (invoices with no rate on their issue day, left out of the USD figures). It comes from the same billing rule and batch load as the lists and the Financials page (`Business/Billing/ProjectBilling.cs`; see [billing.md](billing.md) and [finance.md](finance.md)).
 - Cost, profit, margin and the projections come from the shared finance calculator (below).
 
 ## Cost, profit and margin
@@ -38,7 +38,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 Every project money figure comes from one place: `Business/Finance/ProjectFinance.cs`, loaded by `IProjectFinanceService` with one query per cost source however many projects are asked for. Domain features add their costs to its sources; they never calculate their own.
 
 - **Cost** (`money.cost`) = employee labour + expenses + materials + ground labour, in USD.
-  - **Labour:** each work entry's hours × the person's hourly cost in force on the day it was worked (company time zone). Monthly pay costs salary ÷ 173.33 an hour; the overtime premium is not part of project cost. **Hourly staff's paid break** is labour cost too, exactly as Salaries pays it: on each working day with some in-hours work, the day's paid break (none on days of 6 hours or less), at that day's rate, shared across the day's projects by the in-hours minutes worked on each (`Business/Finance/PaidBreaks.cs`). Monthly pay already covers the break. Time before someone's first pay record uses their earliest rate; time of someone with no pay record can't be priced and is counted in `unpricedLabourMinutes`.
+  - **Labour:** each work entry's hours × the person's hourly cost in force on the day it was worked (company time zone). Monthly pay costs salary ÷ 173.33 an hour; the overtime premium is not part of project cost. **The paid break** is labour cost too, for everyone with a pay record, hourly and salaried alike (7 required hours are 8 paid hours): on each working day with some in-hours work, the day's paid break (none on days of 6 hours or less), at that day's rate, shared across the day's projects by the in-hours minutes worked on each (`Business/Finance/PaidBreaks.cs`). Project pay (see [company.md](company.md)) still leaves breaks out; it is a separate report of what each project paid for the hours worked on it. Time before someone's first pay record uses their earliest rate; time of someone with no pay record can't be priced and is counted in `unpricedLabourMinutes`.
   - **Expenses and materials:** converted to USD at the company exchange rate in force on their day (`spentOn`, the day a material was added). An amount with no rate that day is left out and listed in `cost.unconverted`, in its own currency.
   - **Ground labour:** workers × daily pay, in USD.
 - **Profit** = revenue − cost. Internal projects have no revenue.
@@ -101,4 +101,4 @@ Anything else is `422 invalid_status_change`, and asking for the current status 
 
 ## Activity
 
-`project_created`, `project_updated`, `project_owner_set`, `project_client_set`, `revenue_set`, `revenue_changed`, `project_fee_set`, `material_markup_set`, `project_hold`, `project_resumed`, `project_completed`, `project_archived`, `project_reopened`, `project_finalized` (the frozen revenue in `amount`), `progress_set`. Amounts go in the event's `amount` and `prev_amount` columns, never in the payload.
+`project_created`, `project_updated`, `project_owner_set`, `project_client_set`, `revenue_set`, `revenue_changed`, `project_fee_set`, `material_markup_set`, `project_hold`, `project_resumed`, `project_completed`, `project_archived`, `project_reopened`, `project_finalized` (the frozen revenue in `amount`), `progress_set`. Amounts go in the event's `amount` and `prev_amount` columns, never in the payload. The markup is a fraction (0.125 is 12.5%), so `material_markup_set` keeps it in the payload as `markup` and `prevMarkup` (as the prototype does), with no amount; the feed shows that payload only with `financial:view`.

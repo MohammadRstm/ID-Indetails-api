@@ -7,7 +7,7 @@ namespace ID_Indetails.api.Business.Finance;
 /// A project's cost, profit and margin, in USD. Every cost is converted at the company exchange rate
 /// in force on the day it happened; a cost with no rate that day is left out and reported as unconverted.
 /// <list type="bullet">
-/// <item>Cost = employee labour (hours × the hourly cost in force that day, plus hourly staff's paid breaks) + expenses + materials + ground labour.</item>
+/// <item>Cost = employee labour (hours × the hourly cost in force that day, plus everyone's paid breaks) + expenses + materials + ground labour.</item>
 /// <item>Profit = revenue − cost. Internal projects have no revenue.</item>
 /// <item>Margin = profit ÷ revenue, only once it means something: the project is done, at least 5% along,
 /// or has at least 10 hours logged.</item>
@@ -37,8 +37,7 @@ public static class ProjectFinance
 
     public sealed record WorkedTime(long UserId, DateOnly Day, int Minutes);
 
-    /// <param name="IsHourly">Paid by the hour, so their paid daily break is a cost too (see <see cref="PaidBreaks"/>).</param>
-    public sealed record PayRate(long UserId, DateOnly EffectiveFrom, decimal HourlyCost, string Currency, bool IsHourly = false);
+    public sealed record PayRate(long UserId, DateOnly EffectiveFrom, decimal HourlyCost, string Currency);
 
     public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes);
 
@@ -96,12 +95,22 @@ public static class ProjectFinance
         return (items, unpriced);
     }
 
-    /// <summary>Each cost on its day in USD; costs with no exchange rate that day are left out (as in <see cref="ToUsd"/>).</summary>
+    /// <summary>A cost with no exchange rate on its day, in its own currency.</summary>
+    public sealed record DatedUnconverted(CostSource Source, string Currency, decimal Amount, DateOnly Day);
+
+    /// <summary>Each cost on its day in USD; costs with no exchange rate that day are left out here and listed by <see cref="Unconvertible"/>.</summary>
     public static IReadOnlyList<Recognition.DatedCost> DatedUsd(IEnumerable<CostItem> items, ExchangeRateTable rates)
         => items
             .Select(i => (i.Source, i.Day, Usd: rates.ToUsd(i.Amount, i.Currency, i.Day)))
             .Where(i => i.Usd is not null)
             .Select(i => new Recognition.DatedCost(i.Source, i.Day, i.Usd!.Value))
+            .ToList();
+
+    /// <summary>The costs <see cref="DatedUsd"/> leaves out: those with no exchange rate on their day.</summary>
+    public static IReadOnlyList<DatedUnconverted> Unconvertible(IEnumerable<CostItem> items, ExchangeRateTable rates)
+        => items
+            .Where(i => rates.ToUsd(i.Amount, i.Currency, i.Day) is null)
+            .Select(i => new DatedUnconverted(i.Source, i.Currency.ToUpperInvariant(), i.Amount, i.Day))
             .ToList();
 
     /// <summary>The rate in force on the day, from a person's history ordered by date; their earliest rate for days before it.</summary>

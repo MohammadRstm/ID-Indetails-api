@@ -86,10 +86,17 @@ public sealed class TeamService(
         var actor = await ActorAsync(cancellationToken);
         var team = await VisibleTeamAsync(actor, teamId, cancellationToken);
 
-        if (await teams.IsInUseAsync(team.Id, cancellationToken))
+        if (await teams.HasPeopleAsync(team.Id, cancellationToken))
         {
             throw new BusinessRuleException(
                 ErrorCodes.TeamNotEmpty, "Only an empty team can be deleted. Move its people to another team first.");
+        }
+
+        // Its chat history is kept, and the chat can't outlive the team.
+        if (await teams.HasChatAsync(team.Id, cancellationToken))
+        {
+            throw new BusinessRuleException(
+                ErrorCodes.TeamHasChat, "This team's chat has messages, so the team can't be deleted. Rename it instead.");
         }
 
         activity.Add(TeamEvent(team, ActivityEventKinds.TeamDeleted, actor.UserId, new { name = team.Name }));

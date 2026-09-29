@@ -1,4 +1,5 @@
 using ID_Indetails.api.Services.Email.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.IntegrationTests.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -20,6 +21,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly MigratedDatabaseFixture _database = new();
 
     public CapturingEmailSender Emails { get; } = new();
+
+    public CapturingLivePublisher Live { get; } = new();
 
     public MigratedDatabaseFixture Database => _database;
 
@@ -55,6 +58,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         {
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(Emails);
+            services.RemoveAll<ILivePublisher>();
+            services.AddSingleton<ILivePublisher>(Live);
         });
     }
 

@@ -27,8 +27,8 @@ public static class PermissionCatalog
         new(P.RequirementView, "View project requirements"),
         new(P.RequirementManage, "Add, edit, assign, tick and remove requirements"),
         new(P.RequirementCompleteOwn, "Tick requirements assigned to you, and untick the ones you ticked"),
-        new(P.MeetingManage, "Record and remove project meetings", DomainCodes.Design),
-        new(P.MeetingCreate, "Set project meetings, and move or remove the ones you set", DomainCodes.Design),
+        new(P.MeetingManage, "Record and remove project meetings"),
+        new(P.MeetingCreate, "Set project meetings, and move or remove the ones you set"),
         new(P.ExpenseManage, "Add and remove project expenses"),
 
         new(P.WorkEntryCreate, "Log, edit and delete own work entries", DomainCodes.Design),

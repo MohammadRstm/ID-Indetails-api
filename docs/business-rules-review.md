@@ -47,7 +47,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, `notifyEntry`, `notifyProject` (N4), `notifyIdle` and `weeklySummary` (N7) are used; `autoArchive` waits for its job. |
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
-| D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
+| D10 | **Employees set meetings.** `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). Meetings were Design-only at first; since 29 Sep 2026 Execution sites have them too, as in the prototype, and both permissions apply in both domains (`MeetingsInBothDomains` migration). |
 | D11 | **Past months never change** (29 Sep 2026). Work entries that start before the current company month can no longer be logged, edited, moved (the day timeline's swaps and moves included), deleted or restored, by anyone (`422 month_closed`). Excusing hours stays the way to correct a closed month. Known exception: a backdated pay change still changes a closed month's salary; it is out of scope for now. |
 
 ## Decided for the money summaries (29 Sep 2026)
@@ -56,13 +56,17 @@ See [finance.md](finance.md).
 
 | # | Rule |
 |---|---|
-| M1 | **Hourly staff's paid break is labour cost**, exactly as Salaries pays it, shared across the day's projects by in-hours minutes. *(May change later.)* |
+| M1 | **Everyone's paid break is labour cost**, hourly and salaried alike (7 required hours are 8 paid hours), on the days Salaries pays it, shared across the day's projects by in-hours minutes. Project pay (decision 22) still leaves breaks out. *(Changed on 29 Sep 2026: it was hourly staff only.)* |
 | M2 | **A client's margin follows the project rule** as a whole: shown once all their projects are done, at least 5% of their revenue is recognised, or 10 hours are logged. *(The prototype showed it whenever there was revenue.)* |
 | M3 | **Revenue in a period follows `Recognition`**: each month counts for the share of it the period covers. *(The prototype counted whole calendar months.)* |
 | M4 | **Every cost source is returned** on the dashboards and Financials, so the parts add up to the total. *(The prototype's Execution breakdowns left out materials and ground labour.)* |
 | M5 | **The Execution dashboard has no hours cards**: key figures, money cards and projects by status only, as in the prototype. |
 | M6 | **Without `financial:view`, invoice write responses hide what was paid**: no paid, balance or overdue figures, and paid or partly paid reads as sent. |
 | M7 | **Money on the project list isn't sortable or filterable** on the server (the list is paged in the database); the Financials projects table has every project. |
+| M8 | **One billing rule** (`Business/Billing/ProjectBilling`) for the project page, the project and client lists, the client pages and Financials. Invoices are converted at the rate of their issue day everywhere, so the project page and the lists always agree. |
+| M9 | **Unconverted money is never dropped.** Costs with no rate are listed for the period they fall in (summary, each month, costs tab); list rows flag them (`hasUnconverted`); the company overview lists invoices and costs with no rate instead of counting them as 0. |
+| M10 | **Statement readers see the statement's money.** Holders of `statement:create` or `statement:send` see its received, agreed, remaining and paid-ahead figures without `financial:view`, because the statement is printed on the client's document. |
+| M11 | **The markup event keeps the exact markup** in its payload (`markup`, `prevMarkup`, as in the prototype), with no amount: the amount columns keep 2 decimals, so 12.5% was saved as 0.13. The feed shows that payload only with `financial:view`. Existing events were moved by the `MaterialMarkupEventPayload` migration: each project's latest one is exact, older ones keep their rounded value. |
 
 ## Decided for notifications (29 Sep 2026)
 
@@ -73,9 +77,21 @@ See [finance.md](finance.md).
 | N3 | **Super admins get admin-level notifications** (work logged, materials, labour, clients, billing, ticked requirements) but not the broadcasts to a domain's people (new projects, status changes, added requirements). |
 | N4 | **Added requirements roll into one notification** per person per project per day, and follow `notifyProject` like the other project news. |
 | N5 | **No money in notifications.** Billing notifications name the invoice or project, never the amount. |
-| N6 | **Live push arrives with messaging.** Until then the client polls the unread count. |
+| N6 | **Live push** came with messaging: a `notifications` signal over the live connection tells the client to reload the bell (see C5). |
 | N7 | **Scheduled notifications** run on an hourly timer and are keyed so each goes once: last week's summary, idle Design projects, requirements due tomorrow or overdue (deadlines up to a week old), overdue invoices, and the month-end short-hours alert. `notifyIdle` now also sends `project_idle`, and `weeklySummary` sends the summary. |
 | N8 | **The month-end short-hours alert** goes to whoever holds `salary:view` (super admins by default), from the first of the month, naming the five people most short. This settles the old open question. |
+
+## Decided for messaging (29 Sep 2026)
+
+See [messaging.md](messaging.md).
+
+| # | Decision |
+|---|---|
+| C1 | **Chats follow the organisation, not permissions.** A team chat is the team, its domain's admins and the super admins, worked out live; direct messages reach your own domain and the super admins. Someone granted a permission from the other domain doesn't join its chats. |
+| C2 | **Moving someone moves their chats.** They lose the old team's chat, history included, and see the new team's whole history. |
+| C3 | **No bell notifications for messages.** The messages badge (unread count and the "@" flag) covers them, as in the prototype. |
+| C4 | **A team with chat history can't be deleted**, so history is never lost. |
+| C5 | **Live updates** push small "something changed" signals over SignalR for messages and the bell, only once a request has succeeded; the client reloads what changed. One API instance for now: several would need a SignalR backplane. |
 
 ## Carried over from the prototype as-is
 

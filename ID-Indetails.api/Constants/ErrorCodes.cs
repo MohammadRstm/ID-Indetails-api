@@ -72,7 +72,10 @@ public static class ErrorCodes
     public const string DescriptionRequired = "description_required";
     public const string EditWindowClosed = "edit_window_closed";
     public const string MonthClosed = "month_closed";
-    public const string GroupChatUnavailable = "group_chat_unavailable";
+
+    // Messaging
+    public const string NoTeamChat = "no_team_chat";
+    public const string TeamHasChat = "team_has_chat";
 
     // Billing
     public const string BillingSettingsMissing = "billing_settings_missing";

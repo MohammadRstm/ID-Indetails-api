@@ -1,5 +1,7 @@
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Extensions;
+using ID_Indetails.api.Hubs;
+using ID_Indetails.api.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,7 +35,11 @@ app.UseRateLimiter();
 
 app.UseAuthorization();
 
+// Sends a successful request's live signals once its changes are committed.
+app.UseMiddleware<LiveUpdatesMiddleware>();
+
 app.MapControllers();
+app.MapHub<LiveHub>(LiveHub.Path);
 
 app.Run();
 

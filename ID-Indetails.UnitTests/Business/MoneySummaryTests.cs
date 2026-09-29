@@ -9,7 +9,7 @@ public class MoneySummaryTests
 {
     private static readonly DateOnly Today = new(2026, 9, 29);
 
-    private static BillingPosition.Invoice Issued(long id, decimal total, decimal paid, DateOnly? dueOn)
+    private static ProjectBilling.Invoice Issued(long id, decimal total, decimal paid, DateOnly? dueOn)
         => new(id, 1, 1, IsIssued: true, IsVoided: false, dueOn, total, paid);
 
     [Fact]
@@ -37,6 +37,25 @@ public class MoneySummaryTests
     }
 
     [Fact]
+    public void Unconverted_costs_count_in_the_period_of_their_day()
+    {
+        var unconverted = PeriodMoney.Unconverted(
+            [
+                new ProjectFinance.DatedUnconverted(CostSource.Expenses, "LBP", 100_000m, new(2026, 8, 16)),
+                new ProjectFinance.DatedUnconverted(CostSource.Expenses, "LBP", 200_000m, new(2026, 8, 17)),
+                new ProjectFinance.DatedUnconverted(CostSource.Expenses, "LBP", 300_000m, new(2026, 9, 29)),
+                new ProjectFinance.DatedUnconverted(CostSource.Materials, "EUR", 40m, new(2026, 9, 1)),
+            ],
+            new DateOnly(2026, 8, 17),
+            Today);
+
+        unconverted.ShouldBe([
+            new ProjectFinance.UnconvertedCost(CostSource.Expenses, "LBP", 500_000m),
+            new ProjectFinance.UnconvertedCost(CostSource.Materials, "EUR", 40m),
+        ]);
+    }
+
+    [Fact]
     public void The_billing_position_keeps_drafts_apart_and_on_account_payments_off_outstanding()
     {
         var invoices = new[]
@@ -44,17 +63,17 @@ public class MoneySummaryTests
             Issued(1, 1000m, 400m, Today.AddDays(-10)),
             Issued(2, 500m, 500m, Today.AddDays(-40)),
             Issued(3, 300m, 0m, Today.AddDays(5)),
-            new BillingPosition.Invoice(4, 1, 1, IsIssued: false, IsVoided: false, null, 250m, 0m),
-            new BillingPosition.Invoice(5, 1, 1, IsIssued: true, IsVoided: true, Today.AddDays(-90), 800m, 0m),
+            new ProjectBilling.Invoice(4, 1, 1, IsIssued: false, IsVoided: false, null, 250m, 0m),
+            new ProjectBilling.Invoice(5, 1, 1, IsIssued: true, IsVoided: true, Today.AddDays(-90), 800m, 0m),
         };
         var payments = new[]
         {
-            new BillingPosition.Payment(1, 1, 1, Today, 400m, PaymentMethod.Bank),
-            new BillingPosition.Payment(1, 1, 2, Today, 500m, PaymentMethod.Cash),
-            new BillingPosition.Payment(1, 1, null, Today, 200m, PaymentMethod.Cash),
+            new ProjectBilling.Payment(1, 1, 1, Today, 400m, PaymentMethod.Bank),
+            new ProjectBilling.Payment(1, 1, 2, Today, 500m, PaymentMethod.Cash),
+            new ProjectBilling.Payment(1, 1, null, Today, 200m, PaymentMethod.Cash),
         };
 
-        var position = BillingPosition.Of(3000m, invoices, payments, Today);
+        var position = ProjectBilling.Summarise(3000m, invoices, payments, Today);
 
         position.Invoiced.ShouldBe(1800m);
         position.IssuedCount.ShouldBe(3);
@@ -66,12 +85,15 @@ public class MoneySummaryTests
         position.OldestOverdueDue.ShouldBe(Today.AddDays(-10));
         position.NotYetInvoiced.ShouldBe(1200m);
         position.Drafts.ShouldBe(250m);
+        position.PaymentCount.ShouldBe(3);
+        position.Owed.ShouldBe(1900m);
+        position.PaidAhead.ShouldBe(0m);
     }
 
     [Fact]
     public void Aging_lists_every_bucket_of_open_invoices()
     {
-        var aging = BillingPosition.Aging(
+        var aging = ProjectBilling.Aging(
             [Issued(1, 100m, 0m, Today.AddDays(3)), Issued(2, 200m, 50m, Today.AddDays(-1)), Issued(3, 300m, 0m, Today.AddDays(-95)), Issued(4, 50m, 50m, Today.AddDays(-5))],
             Today);
 

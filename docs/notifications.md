@@ -9,7 +9,7 @@ All of them need only a signed-in user and act on the caller's own notifications
 | Method and path | Purpose |
 |---|---|
 | `GET /api/notifications?unreadOnly=&page=&pageSize=` | Newest first, 20 a page by default (1–100) |
-| `GET /api/notifications/unread-count` | `{ unread }`, for the badge. The client polls it until live updates arrive with messaging |
+| `GET /api/notifications/unread-count` | `{ unread }`, for the badge. Reload it on the live `notifications` signal (see [messaging.md](messaging.md#live-updates)) |
 | `POST /api/notifications/{id}/read` | Marks one read and returns the unread count left |
 | `POST /api/notifications/read-all` | Marks all read and returns `{ unread: 0 }` |
 
@@ -64,7 +64,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 
 ## Scheduled notifications
 
-Nobody's action sends these, so they have no actor. A background timer (`NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default); `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
+Nobody's action sends these, so they have no actor. A background timer (`Jobs/NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default); `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
 
 Every scheduled notification carries a key (`digest_key`) and goes to a person only once per key, however often the checks run. The unique recipient and key index stops a second API instance from sending it twice.
 

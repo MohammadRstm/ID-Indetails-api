@@ -89,7 +89,7 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 - The prototype's teams are seeded (`Constants/TeamSeed.cs`):
   - Design: Engineering, Design, Data, Marketing, Operations, Platform.
   - Execution: Site Operations, Procurement, Quantity Surveying, Safety, Project Management.
-- A team can only be deleted while nobody is in it (including deactivated people) and no group chat belongs to it.
+- A team can only be deleted while nobody is in it, including deactivated people (`422 team_not_empty`), and while its group chat has no messages (`422 team_has_chat`), so chat history is never lost. Rename it instead.
 - `POST /api/teams` may leave out `domainCode` when the caller works in only one domain.
 
 ## Not built yet
