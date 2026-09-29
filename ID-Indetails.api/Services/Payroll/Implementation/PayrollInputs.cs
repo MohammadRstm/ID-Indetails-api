@@ -19,6 +19,8 @@ public sealed class PayrollInputs(
     /// <summary>The hours ledger applies to Design employees only.</summary>
     public static bool LedgerApplies(User person) => person.DomainCode == DomainCodes.Design && person.RoleCode == RoleCodes.Employee;
 
+    public DateOnly JoinedOn(User person) => person.JoinedOn ?? clock.ToCompanyDate(person.CreatedAt);
+
     public async Task<IReadOnlyList<PersonCalendar.Policy>> PoliciesAsync(CancellationToken cancellationToken = default)
         => (await workingTime.GetPoliciesAsync(cancellationToken))
             .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
@@ -69,7 +71,7 @@ public sealed class PayrollInputs(
                 result.Add(new PersonMonth(person, new SalaryCalculator.Input(
                     month,
                     today,
-                    person.JoinedOn!.Value,
+                    JoinedOn(person),
                     LedgerApplies(person),
                     terms,
                     calendar,

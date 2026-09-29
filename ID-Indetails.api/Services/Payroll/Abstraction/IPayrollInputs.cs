@@ -13,6 +13,9 @@ public interface IPayrollInputs
     /// <summary>The company working-time policies, oldest first.</summary>
     Task<IReadOnlyList<PersonCalendar.Policy>> PoliciesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The day someone joined; people set up without one (the first super admin) count from their account's creation.</summary>
+    DateOnly JoinedOn(User person);
+
     /// <summary>One entry per person and month, in that order; each source is loaded once for everyone and every month.</summary>
     Task<IReadOnlyList<PersonMonth>> ForAsync(IReadOnlyList<User> people, IReadOnlyList<DateOnly> months, CancellationToken cancellationToken = default);
 }
