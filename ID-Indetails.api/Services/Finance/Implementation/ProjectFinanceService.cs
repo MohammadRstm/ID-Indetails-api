@@ -55,7 +55,8 @@ public sealed class ProjectFinanceService(
                 Calculate(p, loaded),
                 ProjectFinance.DatedUsd(items, loaded.Rates),
                 ProjectFinance.Unconvertible(items, loaded.Rates),
-                entries.Select(e => new WorkDay(e.UserId, clock.ToCompanyDate(e.StartedAt))).ToList());
+                entries.Select(e => new WorkDay(e.UserId, clock.ToCompanyDate(e.StartedAt), e.Minutes)).ToList(),
+                (p.CompletedAt ?? p.FinalizedAt) is { } done ? clock.ToCompanyDate(done) : null);
         });
     }
 

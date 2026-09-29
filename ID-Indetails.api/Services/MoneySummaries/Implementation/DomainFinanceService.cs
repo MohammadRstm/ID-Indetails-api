@@ -48,7 +48,7 @@ public sealed class DomainFinanceService(
 
         var shares = Recognition.Months(from, to, clock.CompanyToday);
         var revenue = PeriodMoney.Round(projects.Sum(p =>
-            PeriodMoney.Revenue(Recognition.ByMonth(rollup.Money(p.Id).Summary.RecognisedToDate, rollup.Costs(p.Id)), shares)));
+            PeriodMoney.Revenue(rollup.RevenueByMonth(p.Id), shares)));
         var cost = PeriodMoney.Costs(projects.SelectMany(p => rollup.Costs(p.Id)), from, to);
         var clientWork = projects.Where(p => p.BillingType == BillingType.Client).Select(p => rollup.Money(p.Id).Summary).ToList();
         var profit = revenue - PeriodMoney.Round(cost.Total);
@@ -78,7 +78,7 @@ public sealed class DomainFinanceService(
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var rollup = await rollups.LoadAsync(projects, cancellationToken);
         var byMonth = projects
-            .Select(p => Recognition.ByMonth(rollup.Money(p.Id).Summary.RecognisedToDate, rollup.Costs(p.Id)))
+            .Select(p => rollup.RevenueByMonth(p.Id))
             .ToList();
         var costs = projects.SelectMany(p => rollup.Costs(p.Id)).ToList();
         var unconverted = projects.SelectMany(p => rollup.Unconverted(p.Id)).ToList();
