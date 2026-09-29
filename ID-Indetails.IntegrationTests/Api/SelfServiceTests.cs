@@ -1,6 +1,8 @@
+using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Payroll;
+using ID_Indetails.api.Validators.Payroll;
 using MySqlConnector;
 using Shouldly;
 
@@ -61,17 +63,25 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1733.30m);
 
-        var hours = await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours", me.AccessToken));
+        // Every page, however many months have passed since January 2026.
+        var first = await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours", me.AccessToken));
+        first.Applies.ShouldBeTrue();
+        first.Months.Count.ShouldBe(Math.Min(MyTime.MonthsPerPage, first.TotalMonths));
+        var pages = (first.TotalMonths + MyTime.MonthsPerPage - 1) / MyTime.MonthsPerPage;
+        var months = new List<MyLedgerMonthResponse>();
+        for (var page = 1; page <= pages; page++)
+        {
+            months.AddRange((await OkAsync<MyHoursResponse>(Client.GetAsync($"/api/me/hours?page={page}", me.AccessToken))).Months);
+        }
 
-        hours.Applies.ShouldBeTrue();
-        hours.Months.Count.ShouldBe(hours.TotalMonths);
-        hours.Months[^1].Month.ShouldBe(new DateOnly(2026, 1, 1));
-        hours.Months.ShouldBeInOrder(SortDirection.Descending, Comparer<MyLedgerMonthResponse>.Create((a, b) => a.Month.CompareTo(b.Month)));
+        months.Count.ShouldBe(first.TotalMonths);
+        months[^1].Month.ShouldBe(new DateOnly(2026, 1, 1));
+        months.ShouldBeInOrder(SortDirection.Descending, Comparer<MyLedgerMonthResponse>.Create((a, b) => a.Month.CompareTo(b.Month)));
 
         // 22 working days: one worked (7h inside plus 1h beyond, which makes up an hour), one unpaid day off, 20 missed.
-        var june = hours.Months.Single(m => m.Month == new DateOnly(2026, 6, 1));
+        var june = months.Single(m => m.Month == new DateOnly(2026, 6, 1));
         june.ShouldSatisfyAllConditions(
-            m => m.Status.ShouldBe(ID_Indetails.api.Business.Payroll.MyTime.LedgerStatus.Short),
+            m => m.Status.ShouldBe(MyTime.LedgerStatus.Short),
             m => m.ExpectedMinutes.ShouldBe(22 * 420),
             m => m.ExpectedFullMonthMinutes.ShouldBe(22 * 420),
             m => m.ExcusedMinutes.ShouldBe(420),
@@ -80,7 +90,9 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.ShortMinutes.ShouldBe(22 * 420 - 420 - 420 - 60),
             m => m.MissedDays.Count.ShouldBe(20));
 
-        (await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours?page=2", me.AccessToken))).Months.ShouldBeEmpty();
+        (await OkAsync<MyHoursResponse>(Client.GetAsync($"/api/me/hours?page={pages + 1}", me.AccessToken))).Months.ShouldBeEmpty();
+        await (await Client.GetAsync($"/api/me/hours?page={MyHoursQueryValidator.MaxPage + 1}", me.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
     [Fact]
