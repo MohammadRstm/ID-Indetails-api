@@ -123,13 +123,13 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 
 Rules (`Business/Meetings/MeetingRules.cs`):
 
-- Meetings belong to Design projects (`422 not_for_this_domain`) that are active or on hold (`422 project_closed`).
+- Meetings belong to projects of either domain that are active or on hold (`422 project_closed`). Execution sites have them too (decision D10, reversed on 29 Sep 2026).
 - Times are UTC instants in whole minutes. A meeting lasts at least 5 minutes and starts and ends on the same company-time-zone day (`400`). Past days are allowed.
 - Topic up to 200 characters, description up to 2000; both optional.
 - A meeting has no attendees: it is a project-wide block. It is not work time and never counts in hours.
 - Events: `meeting_created`, `meeting_updated`, `meeting_deleted`, with the meeting as the subject and its topic and times in the payload.
 
-**Who sets meetings:** everyone of Design holds `meeting:create` by default, so employees set meetings and move or remove the ones they set (someone else's is `403`). `meeting:manage` (admins and super admins) covers every meeting. When someone without `meeting:manage` sets a meeting, the active people of the domain who hold it (not the setter) get a `meeting_scheduled` notification with the setter's name, the project, topic and times, as in the prototype.
+**Who sets meetings:** everyone holds `meeting:create` by default, in both domains, so employees set meetings and move or remove the ones they set (someone else's is `403`). `meeting:manage` (admins and super admins) covers every meeting. When someone without `meeting:manage` sets a meeting, the active people of the domain who hold it (not the setter) get a `meeting_scheduled` notification with the setter's name, the project, topic and times, as in the prototype.
 
 ## Reports and dashboard
 

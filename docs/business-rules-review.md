@@ -46,7 +46,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, `notifyEntry`, `notifyProject` (N4), `notifyIdle` and `weeklySummary` (N7) are used; `autoArchive` waits for its job. |
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
-| D10 | **Employees set meetings.** Design's `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Meetings stay Design-only, and nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). |
+| D10 | **Employees set meetings.** `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). Meetings were Design-only at first; since 29 Sep 2026 Execution sites have them too, as in the prototype, and both permissions apply in both domains (`MeetingsInBothDomains` migration). |
 
 ## Decided for the money summaries (29 Sep 2026)
 

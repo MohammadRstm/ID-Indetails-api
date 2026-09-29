@@ -92,7 +92,7 @@ public class MeetingTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { startsAt = start, endsAt = start.AddHours(1) }, colleague.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.DeleteAsync($"/api/meetings/{mine.Id}", colleague.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
-            new { startsAt = start, endsAt = start.AddHours(1) }, executionEmployee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+            new { startsAt = start, endsAt = start.AddHours(1) }, executionEmployee.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
         (await Client.DeleteAsync($"/api/meetings/{mine.Id}", employee.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
 
@@ -104,7 +104,7 @@ public class MeetingTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Closed_projects_and_other_domains_are_refused()
+    public async Task Closed_projects_are_refused_and_other_domains_read_as_not_found()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
@@ -120,12 +120,39 @@ public class MeetingTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldNotContain(m => m.Id == meeting.Id);
         await (await Client.PostJsonAsync($"/api/projects/{site.Id}/meetings",
             new { startsAt = start, endsAt = start.AddHours(1) }, admin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
-        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/meetings",
-            new { startsAt = start, endsAt = start.AddHours(1) }, superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
 
         (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
             new { startsAt = start, endsAt = start.AddHours(2) }, admin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.ProjectClosed);
+    }
+
+    [Fact]
+    public async Task Execution_sites_have_meetings_like_design_projects()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, colleague) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
+        var start = Start();
+
+        var response = await Client.PostJsonAsync($"/api/projects/{site.Id}/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1), topic = "Slab inspection" }, siteWorker.AccessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        var meeting = await response.ReadAsync<MeetingResponse>();
+
+        // The site's admin hears about it; a colleague can't move it; Design can't see it.
+        (await _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM notifications WHERE recipient_id = @r AND kind = 'meeting_scheduled' AND subject_id = @m",
+            ("@r", admin.User.Id), ("@m", meeting.Id))).ShouldBe(1);
+        await (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start, endsAt = start.AddMinutes(30) }, colleague.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        (await (await Client.GetAsync($"/api/projects/{site.Id}/meetings", colleague.AccessToken)).ReadAsync<List<MeetingResponse>>())
+            .ShouldHaveSingleItem().Id.ShouldBe(meeting.Id);
+        await (await Client.GetAsync($"/api/projects/{site.Id}/meetings", designAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        (await (await Client.GetAsync("/api/meetings", designAdmin.AccessToken)).ReadAsync<List<MeetingResponse>>())
+            .ShouldNotContain(m => m.Id == meeting.Id);
     }
 
     [Fact]

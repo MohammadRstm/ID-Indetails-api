@@ -1,6 +1,6 @@
 # Execution sites
 
-What site staff and admins record on an Execution project, and how it is priced for the client. Execution projects themselves, their fee and markup, and their cost, profit and margin are in [projects.md](projects.md). A project of a domain the caller can't see reads as `404`, and Design projects have none of this (`422 not_for_this_domain`).
+What site staff and admins record on an Execution project, and how it is priced for the client. Execution projects themselves, their fee and markup, and their cost, profit and margin are in [projects.md](projects.md). A project of a domain the caller can't see reads as `404`, and Design projects have none of this (`422 not_for_this_domain`). Meetings work on sites exactly as on Design projects (see [design.md](design.md#meetings)).
 
 **A finalised project is locked.** Once a site is completed or archived, nobody (admins included) adds, changes or removes its materials until it is reopened (`422 project_locked`). Projects on hold stay open. This lock, and the rule that people change only what they recorded unless they hold the manage permission, are in `Business/Execution/SiteRules.cs`.
 

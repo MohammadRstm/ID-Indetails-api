@@ -63,7 +63,7 @@ public sealed class MeetingService(
     {
         var actor = await ActorAsync(cancellationToken);
         var project = await VisibleProjectAsync(actor, projectId, cancellationToken);
-        Throw(MeetingRules.CheckProject(project.DomainCode, project.Status));
+        Throw(MeetingRules.CheckProject(project.Status));
 
         var meeting = new ProjectMeeting { ProjectId = project.Id, CreatedAt = clock.UtcNow, CreatedById = actor.UserId };
         Apply(meeting, request);
@@ -89,7 +89,7 @@ public sealed class MeetingService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var meeting = await VisibleMeetingAsync(actor, id, cancellationToken);
         Throw(CheckChange(actor, meeting));
-        Throw(MeetingRules.CheckProject(meeting.Project.DomainCode, meeting.Project.Status));
+        Throw(MeetingRules.CheckProject(meeting.Project.Status));
 
         Apply(meeting, request);
         meeting.UpdatedAt = clock.UtcNow;
