@@ -9,6 +9,8 @@ namespace ID_Indetails.api.DTO.Response.Company;
 public sealed record CompanySettingsResponse(
     bool IsSetUp,
     string Name,
+    string? Address,
+    string? Website,
     string TimeZone,
     byte WeekStart,
     bool Use24HourTime,

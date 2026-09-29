@@ -56,6 +56,9 @@ public sealed record SalaryRowResponse
 
     public required bool ProRated { get; init; }
 
+    /// <summary>The day they left (their account was deactivated); their pay and hours end there. Null while active.</summary>
+    public DateOnly? LeftOn { get; init; }
+
     public required int WorkingDays { get; init; }
 
     public required int WorkingDaysPaid { get; init; }

@@ -61,6 +61,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
 | `statement_sent` | Holders of `financial:view` | the statement | `number` |
+| `project_closed` | Holders of `financial:view`, when a client project with revenue is finalised (completed, or archived without being completed). Each finalisation sends it: a project reopened and completed again reports its new margin | the project | `projectTitle`, `marginPct` (the final margin as a percentage, one decimal; never an amount) |
 
 ## Scheduled notifications
 
@@ -76,5 +77,9 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `requirement_overdue` | Once its deadline has passed, for deadlines up to 7 days ago (older ones are left alone, so turning this on doesn't flood anyone). Key `requirement-overdue-{id}-{deadline}` | Its assignees and holders of `requirement:manage` | the requirement | `projectTitle`, `text`, `deadline` |
 | `invoice_overdue` | An issued invoice still unpaid after its due date. Key `invoice-overdue-{id}` | Holders of `financial:view` in its domain | the invoice | `number`, `dueOn` |
 | `hours_short` | From the first of a month, when Design employees finished the month before flagged in the hours ledger. Key `hours-short-YYYY-MM` | Holders of `salary:view` | — | `month`, `count`, `people` (the 5 most short: `id`, `name`, `shortMinutes`) |
+| `project_cost_high` | An active Design client project's cost has passed 85% of its payment (its revenue). Not for Execution, whose payment includes its materials at client price. Once per project: key `project-cost-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` (the cost as a whole percentage of the payment) |
+| `invoice_draft_waiting` | A draft invoice still unissued 3 days after it was created. Key `invoice-draft-{id}` | Holders of `financial:view` in its domain | the invoice | `projectTitle`, `createdOn` |
+
+The same timer also runs the domains' auto-archive (see [projects.md](projects.md), "Status"). Percentages (`usedPct`, `marginPct`) are money information, so they only go to holders of `financial:view`, and no notification carries an amount (N5).
 
 A new deadline gets a new key, so moving a requirement's deadline warns again. Paying an invoice stops it being overdue; one that becomes overdue again later isn't flagged twice.

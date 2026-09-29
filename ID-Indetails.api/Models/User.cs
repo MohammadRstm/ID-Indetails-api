@@ -35,6 +35,12 @@ public class User
 
     public UserStatus Status { get; set; } = UserStatus.Invited;
 
+    /// <summary>
+    /// When the account was deactivated; cleared on reactivation. Pay and the hours ledger end on that day, and past
+    /// months keep the person.
+    /// </summary>
+    public DateTime? DeactivatedAt { get; set; }
+
     /// <summary>Set for accounts created with a generated password (the first super admin).</summary>
     public bool MustChangePassword { get; set; }
 
@@ -58,6 +64,8 @@ public class User
     public StoredFile? PhotoFile { get; set; }
 
     public ICollection<UserPayHistory> PayHistory { get; set; } = new List<UserPayHistory>();
+
+    public ICollection<EmploymentPeriod> EmploymentPeriods { get; set; } = new List<EmploymentPeriod>();
 
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 

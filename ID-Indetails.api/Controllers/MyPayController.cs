@@ -21,10 +21,13 @@ public sealed class MyPayController(IMyTimeService myTime, ISalaryService salari
     public Task<MyPayResponse> Pay([FromQuery] SalaryMonthQuery query, CancellationToken cancellationToken)
         => salaries.GetMineAsync(query, cancellationToken);
 
-    /// <summary>The caller's week, the company policy in force, and today's hours.</summary>
+    /// <summary>
+    /// The caller's week, the company policy in force, and one day's hours (today by default): what logging on that
+    /// day would count against.
+    /// </summary>
     [HttpGet("schedule")]
-    public Task<MyScheduleResponse> Schedule(CancellationToken cancellationToken)
-        => myTime.ScheduleAsync(cancellationToken);
+    public Task<MyScheduleResponse> Schedule([FromQuery] MyScheduleQuery query, CancellationToken cancellationToken)
+        => myTime.ScheduleAsync(query, cancellationToken);
 
     /// <summary>The caller's hours ledger, 12 months a page from this month back to the one they joined.</summary>
     [HttpGet("hours")]

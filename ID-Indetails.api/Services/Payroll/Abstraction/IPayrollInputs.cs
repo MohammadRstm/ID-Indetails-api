@@ -13,8 +13,14 @@ public interface IPayrollInputs
     /// <summary>The company working-time policies, oldest first.</summary>
     Task<IReadOnlyList<PersonCalendar.Policy>> PoliciesAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>The day someone joined; people set up without one (the first super admin) count from their account's creation.</summary>
-    DateOnly JoinedOn(User person);
+    /// <summary>
+    /// When someone was employed, from their periods of employment (the user must be loaded with them, as the payroll
+    /// repository does). Someone with none counts from when they joined, or their account's creation.
+    /// </summary>
+    Employment EmploymentOf(User person);
+
+    /// <summary>Each person's working days over time: the company policies with their own schedules, by user id.</summary>
+    Task<IReadOnlyDictionary<long, PersonCalendar>> CalendarsAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
 
     /// <summary>One entry per person and month, in that order; each source is loaded once for everyone and every month.</summary>
     Task<IReadOnlyList<PersonMonth>> ForAsync(IReadOnlyList<User> people, IReadOnlyList<DateOnly> months, CancellationToken cancellationToken = default);

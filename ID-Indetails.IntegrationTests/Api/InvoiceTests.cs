@@ -55,11 +55,13 @@ public class InvoiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         edited.Total.ShouldBe(2000m);
 
         var issued = await IssueAsync(draft.Id, admin.AccessToken);
-        var year = DateTime.UtcNow.Year;
+        // Issued today in the company's time zone, which is a day ahead of UTC late in the evening.
+        var issuedOn = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(issued.IssuedAt!.Value, "Asia/Beirut"));
+        var year = issuedOn.Year;
         issued.Number.ShouldBe($"HL-{year}-001");
         issued.Status.ShouldBe(InvoiceStatus.Sent);
         issued.Balance.ShouldBe(2000m);
-        issued.DueOn.ShouldBe(DateOnly.FromDateTime(issued.IssuedAt!.Value).AddDays(15));
+        issued.DueOn.ShouldBe(issuedOn.AddDays(15));
 
         var second = await IssueAsync((await DraftAsync(project.Id, admin.AccessToken, 10m)).Id, admin.AccessToken);
         second.Number.ShouldBe($"HL-{year}-002");

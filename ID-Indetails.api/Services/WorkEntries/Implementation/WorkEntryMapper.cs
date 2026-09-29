@@ -1,14 +1,38 @@
-using ID_Indetails.api.Services.Files.Implementation;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
+using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Files.Implementation;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 
 namespace ID_Indetails.api.Services.WorkEntries.Implementation;
 
 internal static class WorkEntryMapper
 {
-    public static WorkEntryResponse ToResponse(WorkEntryView e, long viewerId, DomainSettings settings, DateTime now) => new(
+    /// <summary>When the earliest work that can still change may start, in UTC (see <see cref="WorkEntryRules.OpenFrom"/>).</summary>
+    public static DateTime OpenFromUtc(IClock clock) => clock.CompanyDayStartUtc(WorkEntryRules.OpenFrom(clock.CompanyToday));
+
+    /// <summary>The overtime of these entries by id (see <see cref="IOvertimeService"/>).</summary>
+    public static Task<IReadOnlyDictionary<long, int>> OvertimeOfAsync(
+        this IOvertimeService overtime,
+        IEnumerable<WorkEntryView> entries,
+        CancellationToken cancellationToken)
+        => overtime.ByEntryAsync(entries.Select(e => new LoggedWork(e.Id, e.UserId, e.StartedAt)).ToList(), cancellationToken);
+
+    public static Task<IReadOnlyDictionary<long, int>> OvertimeOfAsync(
+        this IOvertimeService overtime,
+        IEnumerable<WorkRow> rows,
+        CancellationToken cancellationToken)
+        => overtime.ByEntryAsync(rows.Select(r => new LoggedWork(r.Id, r.UserId, r.StartedAt)).ToList(), cancellationToken);
+
+    /// <param name="overtime">Overtime minutes by entry id, from <see cref="OvertimeOfAsync"/>.</param>
+    public static WorkEntryResponse ToResponse(
+        WorkEntryView e,
+        long viewerId,
+        DomainSettings settings,
+        IClock clock,
+        IReadOnlyDictionary<long, int> overtime) => new(
         e.Id,
         new WorkEntryPersonResponse(e.UserId, e.UserName),
         new WorkEntryProjectResponse(e.ProjectId, e.ProjectTitle),
@@ -16,11 +40,13 @@ internal static class WorkEntryMapper
         e.StartedAt,
         e.EndedAt,
         e.Minutes,
+        overtime.GetValueOrDefault(e.Id),
         e.CreatedAt,
         e.UpdatedAt,
         e.UserId == viewerId
-            && WorkEntryRules.IsWithinEditWindow(e.CreatedAt, now, settings.EditWindow)
-            && WorkEntryRules.AcceptsWork(e.ProjectStatus, settings.HoldLogging),
+            && WorkEntryRules.IsWithinEditWindow(e.CreatedAt, clock.UtcNow, settings.EditWindow)
+            && WorkEntryRules.AcceptsWork(e.ProjectStatus, settings.HoldLogging)
+            && WorkEntryRules.IsInOpenMonth(e.StartedAt, OpenFromUtc(clock)),
         e.CommentCount,
         e.Attachment is { } file ? FileMapper.ToResponse(file) : null);
 }

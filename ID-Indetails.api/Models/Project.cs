@@ -77,8 +77,6 @@ public class Project
 
     public User Owner { get; set; } = null!;
 
-    public ICollection<ProjectMember> Members { get; set; } = new List<ProjectMember>();
-
     public ICollection<ProjectRequirement> Requirements { get; set; } = new List<ProjectRequirement>();
 
     public ICollection<ProjectMeeting> Meetings { get; set; } = new List<ProjectMeeting>();

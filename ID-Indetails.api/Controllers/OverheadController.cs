@@ -41,6 +41,15 @@ public sealed class OverheadController(IOverheadService overhead) : ControllerBa
     public Task<OverheadLineResponse> ChangeAmount(long id, ChangeOverheadAmountRequest request, CancellationToken cancellationToken)
         => overhead.ChangeAmountAsync(id, request, cancellationToken);
 
+    /// <summary>
+    /// Charges the line in another currency from a month. A line charged before then ends and a new one takes over
+    /// (returned), so past months keep their currency.
+    /// </summary>
+    [HttpPost("{id:long}/currency")]
+    [HasPermission(PermissionCodes.OverheadManage)]
+    public Task<OverheadLineResponse> ChangeCurrency(long id, ChangeOverheadCurrencyRequest request, CancellationToken cancellationToken)
+        => overhead.ChangeCurrencyAsync(id, request, cancellationToken);
+
     /// <summary>Stops charging after this month. A line that hasn't started yet is removed (204).</summary>
     [HttpPost("{id:long}/cancel")]
     [HasPermission(PermissionCodes.OverheadManage)]

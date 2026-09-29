@@ -38,13 +38,13 @@ public class WorkEntryExportTests(ApiFactory api) : IClassFixture<ApiFactory>
         var entry = await Work.LogAsync(designer.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(5), 90, "Logo, second round");
 
         var lines = await LinesAsync(await Client.GetAsync($"/api/work-entries/export?projectId={project.Id}", admin.AccessToken));
-        lines[0].ShouldBe("Date,Weekday,Start,End,Hours,Employee,Email,Team,Project,Client,Task,Hourly rate,Currency,Labour cost,Entry id");
+        lines[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Team,Project,Client,Task,Hourly rate,Currency,Labour cost,Entry id");
         lines.Length.ShouldBe(2);
         lines[1].ShouldContain(",1.50,");
         lines[1].ShouldContain("\"Logo, second round\",20.00,USD,30.00," + entry.Id);
 
         var withoutMoney = await LinesAsync(await Client.GetAsync($"/api/work-entries/export?projectId={project.Id}", lead.AccessToken));
-        withoutMoney[0].ShouldBe("Date,Weekday,Start,End,Hours,Employee,Email,Team,Project,Client,Task,Entry id");
+        withoutMoney[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Team,Project,Client,Task,Entry id");
         withoutMoney[1].ShouldEndWith("\"Logo, second round\"," + entry.Id);
 
         await (await Client.GetAsync("/api/work-entries/export", designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);

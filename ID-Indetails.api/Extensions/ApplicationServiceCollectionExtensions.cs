@@ -7,6 +7,8 @@ using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Implementation;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Repositories.Billing.Implementation;
+using ID_Indetails.api.Repositories.BoardLayouts.Abstraction;
+using ID_Indetails.api.Repositories.BoardLayouts.Implementation;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Implementation;
 using ID_Indetails.api.Repositories.Common.Abstraction;
@@ -59,6 +61,8 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Auth.Implementation;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Billing.Implementation;
+using ID_Indetails.api.Services.BoardLayouts.Abstraction;
+using ID_Indetails.api.Services.BoardLayouts.Implementation;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Clients.Implementation;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -97,6 +101,8 @@ using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Reports.Abstraction;
 using ID_Indetails.api.Services.Reports.Implementation;
+using ID_Indetails.api.Services.Search.Abstraction;
+using ID_Indetails.api.Services.Search.Implementation;
 using ID_Indetails.api.Services.Requirements.Abstraction;
 using ID_Indetails.api.Services.Requirements.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
@@ -129,6 +135,7 @@ public static class ApplicationServiceCollectionExtensions
             .Validate(o => TimeZoneInfo.TryFindSystemTimeZoneById(o.TimeZone, out _), "Company:TimeZone is not a known time zone.")
             .ValidateOnStart();
         services.AddOptions<InvitationOptions>().BindConfiguration(InvitationOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<PasswordResetOptions>().BindConfiguration(PasswordResetOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<FrontendOptions>().BindConfiguration(FrontendOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<FileStorageOptions>().BindConfiguration(FileStorageOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
@@ -141,12 +148,15 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IUserIdProvider, LiveUserIdProvider>();
         services.AddSingleton<ILivePublisher, SignalRLivePublisher>();
         services.AddScoped<ILiveUpdates, LiveUpdates>();
+        services.AddSingleton<IPresence, Presence>();
+        services.AddScoped<IPresenceService, PresenceService>();
         services.AddSingleton<IClock, SystemClock>();
 
         // Repositories
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IPasswordResetRepository, PasswordResetRepository>();
         services.AddScoped<IPermissionRepository, PermissionRepository>();
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
@@ -181,6 +191,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ILabourRepository, LabourRepository>();
         services.AddScoped<IStatementRepository, StatementRepository>();
         services.AddScoped<ISiteRecordsRepository, SiteRecordsRepository>();
+        services.AddScoped<IBoardLayoutRepository, BoardLayoutRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -188,6 +199,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IPasswordResetService, PasswordResetService>();
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IPermissionManagementService, PermissionManagementService>();
         services.AddScoped<IEmployeeService, EmployeeService>();
@@ -198,6 +210,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IOverheadService, OverheadService>();
         services.AddScoped<ICompanyOverviewService, CompanyOverviewService>();
         services.AddScoped<IPayrollInputs, PayrollInputs>();
+        services.AddScoped<IOvertimeService, OvertimeService>();
         services.AddScoped<ISalaryService, SalaryService>();
         services.AddScoped<IMyTimeService, MyTimeService>();
         services.AddScoped<IHourExcuseService, HourExcuseService>();
@@ -211,6 +224,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IClientService, ClientService>();
         services.AddScoped<IProjectService, ProjectService>();
+        services.AddScoped<IProjectAutoArchive, ProjectAutoArchive>();
         services.AddScoped<IProjectProgress, ProjectProgress>();
         services.AddScoped<IProjectStatusService, ProjectStatusService>();
         services.AddScoped<IRequirementService, RequirementService>();
@@ -241,6 +255,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IStatementService, StatementService>();
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
+        services.AddScoped<IBoardLayoutService, BoardLayoutService>();
+        services.AddScoped<ISearchService, SearchService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

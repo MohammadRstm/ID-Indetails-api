@@ -1,5 +1,10 @@
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Company;
+using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.DTO.Response.Finance;
+using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.Enums;
 using MySqlConnector;
 using Shouldly;
 
@@ -37,7 +42,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
-        // 1,733.30 a month is 10 an hour; 6 hours in June cost 60.
+        // 1,733.30 a month is 10 an hour; 6 hours in June (09:00-15:00 in Beirut) cost 60, plus 10 for the paid hour of break.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
@@ -47,29 +52,46 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
             "VALUES (@u, @p, 'Drawings', '2026-06-10 06:00:00', '2026-06-10 12:00:00', UTC_TIMESTAMP(3))",
             ("@u", designer.User.Id), ("@p", project.Id));
 
+        // A June expense and a June invoice in euros, which have no exchange rate: listed, never counted as 0. The API
+        // only takes USD and LBP, so both are switched to euros in the database.
+        var expense = await OkAsync<ExpenseResponse>(Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+            new { label = "Print run", amount = 50m, currency = "USD", spentOn = "2026-06-15" }, superAdmin.AccessToken));
+        await ExecuteAsync("UPDATE project_expenses SET currency = 'EUR' WHERE id = @id", ("@id", expense.Id));
+        await new ProjectTestSteps(_steps).SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var draft = await OkAsync<InvoiceResponse>(Client.PostJsonAsync($"/api/projects/{project.Id}/invoices",
+            new { lines = new[] { new { description = "Stage 1", amount = 3000m } } }, superAdmin.AccessToken));
+        (await Client.PostJsonAsync($"/api/invoices/{draft.Id}/issue", new { issuedOn = "2026-06-20" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        await ExecuteAsync("UPDATE invoices SET currency = 'EUR' WHERE id = @id", ("@id", draft.Id));
+
         // Completing the project recognises all of its revenue, and all its labour happened in June.
         (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         var june = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-06-01&to=2026-06-30", superAdmin.AccessToken));
         var design = june.Domains.Single(d => d.Domain == DomainCodes.Design);
         design.Revenue.ShouldBe(10_000m);
-        design.Cost.ShouldBe(60m);
-        design.Profit.ShouldBe(9940m);
-        design.Margin.ShouldBe(0.994m);
+        design.Cost.ShouldBe(70m);
+        design.Profit.ShouldBe(9930m);
+        design.Margin.ShouldBe(0.993m);
         design.ProjectsWithActivity.ShouldBe(1);
         design.Loggers.ShouldBe(1);
         june.Domains.Single(d => d.Domain == DomainCodes.Execution).Revenue.ShouldBe(0m);
-        june.NetProfit.ShouldBe(9940m - june.Overhead);
+        june.NetProfit.ShouldBe(9930m - june.Overhead);
+        design.UnconvertedCosts.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "EUR", 50m)]);
+        design.Invoiced.ShouldBe(0m);
+        design.UnconvertedInvoices.ShouldBe([new UnconvertedInvoicesResponse("EUR", 3000m, 1)]);
+        june.UnconvertedInvoices.ShouldBe([new UnconvertedInvoicesResponse("EUR", 3000m, 1)]);
 
         // July had no work: nothing is recognised there.
         var july = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-07-01&to=2026-07-31", superAdmin.AccessToken));
         july.Domains.Single(d => d.Domain == DomainCodes.Design).Revenue.ShouldBe(0m);
+        july.Domains.Single(d => d.Domain == DomainCodes.Design).UnconvertedCosts.ShouldBeEmpty();
 
         var months = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?months=36", superAdmin.AccessToken));
         var juneMonth = months.Single(m => m.Month == new DateOnly(2026, 6, 1));
         juneMonth.Revenue.ShouldBe(10_000m);
-        juneMonth.Labour.ShouldBe(60m);
-        juneMonth.ProfitBeforeOverhead.ShouldBe(9940m);
+        juneMonth.Labour.ShouldBe(70m);
+        juneMonth.ProfitBeforeOverhead.ShouldBe(9930m);
 
         await (await Client.GetAsync("/api/company/overview", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }

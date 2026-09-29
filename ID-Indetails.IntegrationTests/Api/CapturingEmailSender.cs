@@ -34,6 +34,10 @@ public sealed partial class CapturingEmailSender : IEmailSender
     public string InvitationTokenFor(string address)
         => Uri.UnescapeDataString(TokenInLink().Match(LastTo(address).TextBody).Groups[1].Value);
 
+    /// <summary>The token from the link in the latest password reset email to <paramref name="address"/>.</summary>
+    public string ResetTokenFor(string address)
+        => Uri.UnescapeDataString(TokenInLink().Match(LastTo(address).TextBody).Groups[1].Value);
+
     /// <summary>The temporary password from the latest super-admin email to <paramref name="address"/>.</summary>
     public string TemporaryPasswordFor(string address)
         => TemporaryPassword().Match(LastTo(address).TextBody).Groups[1].Value;

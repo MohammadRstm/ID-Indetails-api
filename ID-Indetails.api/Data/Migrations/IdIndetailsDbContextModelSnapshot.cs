@@ -514,6 +514,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("id");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)")
+                        .HasColumnName("address");
+
                     b.Property<string>("DefaultCurrency")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -549,6 +554,11 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Property<bool>("Use24HourTime")
                         .HasColumnType("tinyint(1)")
                         .HasColumnName("use_24_hour_time");
+
+                    b.Property<string>("Website")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("website");
 
                     b.Property<byte>("WeekStart")
                         .HasColumnType("tinyint unsigned")
@@ -664,37 +674,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("conversation_reads", (string)null);
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.Discipline", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("DomainCode")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("varchar(16)")
-                        .HasColumnName("domain_code");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)")
-                        .HasColumnName("name");
-
-                    b.HasKey("Id")
-                        .HasName("pk_disciplines");
-
-                    b.HasIndex("DomainCode", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("ix_disciplines_domain_code_name");
-
-                    b.ToTable("disciplines", (string)null);
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.Domain", b =>
                 {
                     b.Property<string>("Code")
@@ -805,6 +784,52 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_domain_settings_edit_window", "`edit_window` IN ('none', 'one_day', 'seven_days', 'unlimited')");
 
                             t.HasCheckConstraint("ck_domain_settings_notify_entry", "`notify_entry` IN ('all', 'long', 'digest', 'off')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.EmploymentPeriod", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<DateOnly?>("EndedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("ended_on");
+
+                    b.Property<DateOnly>("StartedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("started_on");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_employment_periods");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_employment_periods_created_by_id");
+
+                    b.HasIndex("UserId", "StartedOn")
+                        .IsUnique()
+                        .HasDatabaseName("ix_employment_periods_user_id_started_on");
+
+                    b.ToTable("employment_periods", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_employment_periods_ends_after_start", "`ended_on` IS NULL OR `ended_on` >= `started_on`");
                         });
                 });
 
@@ -2515,44 +2540,6 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.ProjectMember", b =>
-                {
-                    b.Property<long>("ProjectId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("project_id");
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("user_id");
-
-                    b.Property<DateTime>("AddedAt")
-                        .HasPrecision(3)
-                        .HasColumnType("datetime(3)")
-                        .HasColumnName("added_at");
-
-                    b.Property<long?>("AddedById")
-                        .HasColumnType("bigint")
-                        .HasColumnName("added_by_id");
-
-                    b.Property<long?>("DisciplineId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("discipline_id");
-
-                    b.HasKey("ProjectId", "UserId")
-                        .HasName("pk_project_members");
-
-                    b.HasIndex("AddedById")
-                        .HasDatabaseName("ix_project_members_added_by_id");
-
-                    b.HasIndex("DisciplineId")
-                        .HasDatabaseName("ix_project_members_discipline_id");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_project_members_user_id");
-
-                    b.ToTable("project_members", (string)null);
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>
                 {
                     b.Property<long>("Id")
@@ -3452,6 +3439,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("created_by_id");
 
+                    b.Property<DateTime?>("DeactivatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("deactivated_at");
+
                     b.Property<string>("DomainCode")
                         .HasMaxLength(16)
                         .HasColumnType("varchar(16)")
@@ -4259,18 +4251,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.Discipline", b =>
-                {
-                    b.HasOne("ID_Indetails.api.Models.Domain", "Domain")
-                        .WithMany()
-                        .HasForeignKey("DomainCode")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_disciplines_domains_domain_code");
-
-                    b.Navigation("Domain");
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.DomainSettings", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.Domain", "Domain")
@@ -4287,6 +4267,24 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_domain_settings_users_updated_by_id");
 
                     b.Navigation("Domain");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.EmploymentPeriod", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_employment_periods_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany("EmploymentPeriods")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_employment_periods_users_user_id");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ExchangeRate", b =>
@@ -4745,41 +4743,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Project");
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.ProjectMember", b =>
-                {
-                    b.HasOne("ID_Indetails.api.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("AddedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_project_members_users_added_by_id");
-
-                    b.HasOne("ID_Indetails.api.Models.Discipline", "Discipline")
-                        .WithMany()
-                        .HasForeignKey("DisciplineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_project_members_disciplines_discipline_id");
-
-                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
-                        .WithMany("Members")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_project_members_projects_project_id");
-
-                    b.HasOne("ID_Indetails.api.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_project_members_users_user_id");
-
-                    b.Navigation("Discipline");
-
-                    b.Navigation("Project");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -5156,8 +5119,6 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.Navigation("Meetings");
 
-                    b.Navigation("Members");
-
                     b.Navigation("Requirements");
                 });
 
@@ -5173,6 +5134,8 @@ namespace ID_Indetails.api.Data.Migrations
 
             modelBuilder.Entity("ID_Indetails.api.Models.User", b =>
                 {
+                    b.Navigation("EmploymentPeriods");
+
                     b.Navigation("Invitations");
 
                     b.Navigation("PayHistory");

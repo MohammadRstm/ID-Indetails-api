@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.Enums;
@@ -87,6 +88,12 @@ public sealed record ProjectProjectionResponse(decimal Cost, decimal Profit, dec
 /// <param name="NotYetInvoiced">Revenue minus invoiced, never below zero.</param>
 /// <param name="Owed">Revenue minus received, never below zero.</param>
 /// <param name="PaidAhead">Received beyond the revenue.</param>
+/// <param name="IssuedCount">Issued, live invoices.</param>
+/// <param name="PaymentCount">Live payments, on account or not.</param>
+/// <param name="Overdue">Left to pay on invoices past their due date.</param>
+/// <param name="OldestOverdueDays">Days past due of the oldest overdue invoice.</param>
+/// <param name="Drafts">Invoices drafted but not issued yet.</param>
+/// <param name="UnconvertedInvoices">Invoices left out of these figures for want of an exchange rate on their day.</param>
 public sealed record ProjectBillingResponse(
     decimal Invoiced,
     decimal Outstanding,
@@ -94,7 +101,14 @@ public sealed record ProjectBillingResponse(
     decimal OnAccount,
     decimal NotYetInvoiced,
     decimal Owed,
-    decimal PaidAhead);
+    decimal PaidAhead,
+    int IssuedCount,
+    int PaymentCount,
+    decimal Overdue,
+    int OverdueCount,
+    int? OldestOverdueDays,
+    decimal Drafts,
+    IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
 public sealed record ProjectSummaryResponse
 {
@@ -125,7 +139,25 @@ public sealed record ProjectSummaryResponse
     /// <summary>Only for callers with financial:view; left out entirely otherwise.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ProjectListMoneyResponse? Money { get; init; }
+
+    /// <summary>Design projects only, for callers with work_entry:view_all; left out entirely otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ProjectListWorkResponse? Work { get; init; }
 }
+
+/// <summary>A Design project's logged work, as the project list shows it.</summary>
+/// <param name="ActivityLevel">From the last 14 days: busy from 45 h a week, steady from 15 h, quiet with any work.</param>
+/// <param name="Weekly">Minutes of the last 8 weeks, ending with this one, oldest first.</param>
+/// <param name="Contributors">The 4 people who logged the most time on it.</param>
+/// <param name="ContributorCount">Everyone who logged work on it.</param>
+public sealed record ProjectListWorkResponse(
+    int TotalMinutes,
+    ActivityLevel ActivityLevel,
+    int MinutesLast14Days,
+    IReadOnlyList<int> Weekly,
+    DateTime? LastStartedAt,
+    IReadOnlyList<PersonRefResponse> Contributors,
+    int ContributorCount);
 
 public sealed record ProjectResponse
 {

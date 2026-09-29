@@ -44,3 +44,9 @@ A SignalR connection at `/hubs/live` tells signed-in clients that something chan
 - **Connecting.** It needs a signed-in user. Browsers pass the access token as the `access_token` query parameter, because WebSockets can't send headers; that parameter is only read on `/hubs/live`, and request logging stays at Warning so query strings aren't logged. The React client uses `@microsoft/signalr` with `accessTokenFactory`.
 - **When.** Signals are staged while a request runs and sent only once it has succeeded (`Middlewares/LiveUpdatesMiddleware`), so a refused or failed request signals nobody. The scheduled notification checks send theirs after each check. A signal that can't be sent is logged and dropped; the request still succeeds.
 - **Scale.** One API instance for now. Several would need a SignalR backplane such as Redis.
+
+### Online and last seen
+
+- **Online** means having the live connection open (`Services/Realtime/Presence`); two tabs keep someone online until both close. `GET /api/presence` (any signed-in user) returns `{ online: [userIds] }` for the people of the domains the caller can see, super admins included; the client reloads it for the dots on avatars and the "Online now" count. Employee responses carry `online`, and the Employees page rows (`/api/work/people`) carry `online` and `lastSeenAt`.
+- **Last seen** (`users.last_seen_at`) moves with use: any signed-in request records it, at most every 5 minutes per person (`Middlewares/LastSeenMiddleware`), and closing the last live connection records it too. Sign-in and token refresh still set it.
+- Presence lives in the API's memory, so it is per instance, like the live connections.

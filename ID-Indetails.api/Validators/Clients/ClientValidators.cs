@@ -11,6 +11,9 @@ public sealed class ClientListQueryValidator : AbstractValidator<ClientListQuery
     {
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
         RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
+        RuleFor(x => x.Filter).IsInEnum().WithMessage("Filter must be active, owing or empty.");
+        RuleFor(x => x.Sort).IsInEnum()
+            .WithMessage("Sort must be name, projects, hours, activity, revenue, profit, margin or outstanding.");
         RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");

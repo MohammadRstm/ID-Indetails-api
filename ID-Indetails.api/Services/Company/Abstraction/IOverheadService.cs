@@ -16,6 +16,9 @@ public interface IOverheadService
 
     Task<OverheadLineResponse> ChangeAmountAsync(long id, ChangeOverheadAmountRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Switches a line to another currency from a month (see <see cref="Business.Company.OverheadRules"/>), and returns the line charged from then.</summary>
+    Task<OverheadLineResponse> ChangeCurrencyAsync(long id, ChangeOverheadCurrencyRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Ends the line at the end of this month. A line that hasn't started yet is removed instead (returns null).</summary>
     Task<OverheadLineResponse?> CancelAsync(long id, CancellationToken cancellationToken = default);
 

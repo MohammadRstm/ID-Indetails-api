@@ -118,7 +118,7 @@ public class WorkEntryTests(ApiFactory api) : IClassFixture<ApiFactory>
         await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var start = WorkEntryTestSteps.HoursAgo(30);
+        var start = WorkEntryTestSteps.HoursAgo(3);
         var entry = await Work.LogAsync(employee.AccessToken, project.Id, start, 60);
         await _steps.ScalarAsync<int>(
             "UPDATE work_entries SET created_at = DATE_SUB(created_at, INTERVAL 2 DAY) WHERE id = @id; SELECT 1", ("@id", entry.Id));

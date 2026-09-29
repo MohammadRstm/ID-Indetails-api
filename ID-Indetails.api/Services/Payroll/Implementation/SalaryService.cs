@@ -30,7 +30,7 @@ public sealed class SalaryService(
     IPayrollInputs inputs,
     IClock clock) : ISalaryService
 {
-    private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses);
+    private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses, DateOnly? LeftOn);
 
     public async Task<SalariesResponse> ListAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
@@ -79,7 +79,7 @@ public sealed class SalaryService(
     {
         var me = (await payroll.UsersAsync([currentUser.Id], cancellationToken)).Single();
         var today = clock.CompanyToday;
-        var joinedOn = inputs.JoinedOn(me);
+        var joinedOn = inputs.EmploymentOf(me).JoinedOn;
         var month = SelfService.MonthOf(query.Month, today, joinedOn);
         var personMonth = (await inputs.ForAsync([me], [month], cancellationToken))[0];
         var input = personMonth.Input;
@@ -99,11 +99,12 @@ public sealed class SalaryService(
         return new MyPayResponse(
             month,
             InProgress(month),
+            joinedOn,
             new DateOnly(joinedOn.Year, joinedOn.Month, 1),
             pay is null ? null : MySalary(pay, input, InProgress(month)),
             ledger is null ? null : SelfService.LedgerMonth(personMonth, ledger),
             days.Select(d => new MyPayDayResponse(d.Date, d.Required, d.Logged, d.Inside, d.Overtime, d.Excused, d.DayOff, d.IsToday, d.Difference)).ToList(),
-            excuses.Select(x => new MyExcuseResponse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).OrderBy(d => d).ToList(), x.IsPaid, x.Note)).ToList());
+            excuses.Select(SelfService.Excuse).ToList());
     }
 
     public async Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
@@ -154,7 +155,8 @@ public sealed class SalaryService(
             throw new RequestValidationException(ErrorCodes.SalaryMonthInFuture, "month", "Salaries can't be shown for a future month.");
         }
 
-        var people = (await payroll.PeopleAsync(actor.VisibleDomains, EmployeeRules.CanSee(actor, null), domain, search?.Trim(), cancellationToken))
+        var people = (await payroll.PeopleAsync(
+                actor.VisibleDomains, EmployeeRules.CanSee(actor, null), domain, search?.Trim(), month, cancellationToken))
             .Where(p => onlyUserId is null || p.Id == onlyUserId)
             .ToList();
 
@@ -163,7 +165,7 @@ public sealed class SalaryService(
 
     public async Task<IReadOnlyList<ShortPerson>> FlaggedAsync(DateOnly month, CancellationToken cancellationToken = default)
     {
-        var people = await payroll.PeopleAsync([DomainCodes.Design], false, DomainCodes.Design, null, cancellationToken);
+        var people = await payroll.PeopleAsync([DomainCodes.Design], false, DomainCodes.Design, null, month, cancellationToken);
         return (await ComputeAsync(month, people, cancellationToken))
             .Where(c => c.Result.Ledger is { Flagged: true })
             .Select(c => new ShortPerson(c.User.Id, ToRow(c).Name, c.Result.Ledger!.Short))
@@ -178,7 +180,7 @@ public sealed class SalaryService(
         {
             if (SalaryCalculator.Calculate(personMonth.Input) is { } result)
             {
-                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses));
+                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses, personMonth.Input.LeftOn));
             }
         }
 
@@ -213,6 +215,7 @@ public sealed class SalaryService(
             Flagged = r.Ledger?.Flagged ?? false,
             Behind = r.Ledger?.Behind ?? false,
             ProRated = r.ProRated,
+            LeftOn = c.LeftOn,
             WorkingDays = r.WorkingDays,
             WorkingDaysPaid = r.WorkingDaysPaid,
             Deduction = r.Deduction,
@@ -225,7 +228,7 @@ public sealed class SalaryService(
     private MySalaryResponse MySalary(SalaryCalculator.Result pay, SalaryCalculator.Input input, bool inProgress)
     {
         var lastDay = inProgress ? clock.CompanyToday : input.Month.AddMonths(1).AddDays(-1);
-        var estimate = MyTime.EstimateOf(pay, inProgress, MyTime.ExpectedFullMonth(input.Month, input.JoinedOn, input.Calendar));
+        var estimate = MyTime.EstimateOf(pay, input, inProgress);
 
         return new MySalaryResponse
         {

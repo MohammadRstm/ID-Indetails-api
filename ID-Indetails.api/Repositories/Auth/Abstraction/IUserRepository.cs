@@ -3,6 +3,9 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Auth.Abstraction;
 
+/// <param name="DomainCode">Null for super admins.</param>
+public sealed record UserDomain(long Id, string? DomainCode);
+
 public interface IUserRepository
 {
     /// <summary>Tracked, with Team loaded.</summary>
@@ -24,6 +27,12 @@ public interface IUserRepository
 
     /// <summary>Ids of the active people whose home domain is <paramref name="domain"/> (super admins have none).</summary>
     Task<IReadOnlyList<long>> ActiveIdsInDomainAsync(string domain, CancellationToken cancellationToken = default);
+
+    /// <summary>The active people among these, with their domain. Not tracked.</summary>
+    Task<IReadOnlyList<UserDomain>> ActiveDomainsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>Records when the person was last seen, straight in the database.</summary>
+    Task SetLastSeenAsync(long id, DateTime at, CancellationToken cancellationToken = default);
 
     /// <summary>Stages a new user; saved by the unit of work.</summary>
     void Add(User user);

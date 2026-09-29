@@ -12,14 +12,16 @@ using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Activity.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
 
 namespace ID_Indetails.api.Services.Activity.Implementation;
 
 /// <summary>
-/// The activity feed of the domains the caller can see. Work events need <c>work_entry:view_all</c>, amounts need
-/// <c>financial:view</c>, and company-level events (no domain: overhead, working time) need <c>company:view</c>.
+/// The activity feed of the domains the caller can see. Work events need <c>work_entry:view_all</c>, amounts (and the
+/// markup in <c>material_markup_set</c>'s payload) need <c>financial:view</c>, and company-level events (no domain:
+/// overhead, working time) need <c>company:view</c>.
 /// A <c>domain</c> filter keeps that domain's events only, so someone who sees both domains can look at one.
 /// </summary>
 public sealed class ActivityFeedService(
@@ -28,6 +30,7 @@ public sealed class ActivityFeedService(
     IActivityFeedRepository feed,
     IWorkEntryRepository entries,
     IDomainSettingsService domainSettings,
+    IOvertimeService overtime,
     IClock clock) : IActivityFeedService
 {
     public async Task<PagedResponse<ActivityItemResponse>> ListAsync(ActivityListQuery query, CancellationToken cancellationToken = default)
@@ -58,6 +61,7 @@ public sealed class ActivityFeedService(
 
         var workIds = items.Where(e => e.SubjectType == "work_entry" && e.SubjectId is not null).Select(e => e.SubjectId!.Value).Distinct().ToList();
         var work = workIds.Count > 0 ? (await entries.ViewsByIdAsync(workIds, cancellationToken)).ToDictionary(e => e.Id) : [];
+        var overtimeById = await overtime.OvertimeOfAsync(work.Values, cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
 
         return new PagedResponse<ActivityItemResponse>(
@@ -74,9 +78,11 @@ public sealed class ActivityFeedService(
                 e.SubjectId,
                 seesMoney ? e.Amount : null,
                 seesMoney ? e.PrevAmount : null,
-                e.Payload is null ? null : JsonDocument.Parse(e.Payload).RootElement.Clone(),
+                e.Payload is null || (!seesMoney && e.Kind == ActivityEventKinds.MaterialMarkupSet)
+                    ? null
+                    : JsonDocument.Parse(e.Payload).RootElement.Clone(),
                 e.SubjectType == "work_entry" && e.SubjectId is { } id && work.TryGetValue(id, out var entry)
-                    ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock.UtcNow)
+                    ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock, overtimeById)
                     : null,
                 e.IsDemo)).ToList(),
             query.Page,

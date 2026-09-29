@@ -5,9 +5,10 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Business.Finance;
 
 /// <summary>
-/// Hourly staff are paid the daily break on top of the hours they log, exactly as Salaries pays it: on each working day
-/// they did some work within their hours, the day's paid break (none on days of 6 hours or less). Project cost counts
-/// that break as labour, shared across the day's projects by the in-hours minutes worked on each.
+/// The daily break is paid: 7 required hours are 8 paid hours. Project cost counts everyone's paid break as labour, hourly
+/// and salaried alike, on the days Salaries pays it: each working day they did some work within their hours, the day's
+/// paid break (none on days of 6 hours or less), at that day's rate, shared across the day's projects by the in-hours
+/// minutes worked on each. (Project pay leaves breaks out; that is a separate report.)
 /// </summary>
 public static class PaidBreaks
 {
@@ -41,7 +42,7 @@ public static class PaidBreaks
         return shares;
     }
 
-    /// <summary>The shares as labour cost at the person's rate that day. Days they weren't paid by the hour cost nothing.</summary>
+    /// <summary>The shares as labour cost at the person's rate that day.</summary>
     public static IReadOnlyList<(long ProjectId, ProjectFinance.CostItem Cost)> Price(
         IEnumerable<Share> shares,
         IReadOnlyList<ProjectFinance.PayRate> history)
@@ -54,7 +55,6 @@ public static class PaidBreaks
 
         return shares
             .Select(s => (Share: s, Rate: ProjectFinance.RateOn(ordered, s.Day)))
-            .Where(x => x.Rate.IsHourly)
             .Select(x => (x.Share.ProjectId, new ProjectFinance.CostItem(
                 CostSource.Labour, x.Rate.Currency, x.Share.Minutes / 60m * x.Rate.HourlyCost, x.Share.Day)))
             .ToList();

@@ -35,6 +35,8 @@ app.UseRateLimiter();
 
 app.UseAuthorization();
 
+app.UseMiddleware<LastSeenMiddleware>();
+
 // Sends a successful request's live signals once its changes are committed.
 app.UseMiddleware<LiveUpdatesMiddleware>();
 

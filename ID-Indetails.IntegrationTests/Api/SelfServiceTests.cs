@@ -1,6 +1,8 @@
+using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Payroll;
+using ID_Indetails.api.Validators.Payroll;
 using MySqlConnector;
 using Shouldly;
 
@@ -39,7 +41,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             s => s.IsOwn.ShouldBeTrue(),
             s => s.Days.Count.ShouldBe(7),
             s => s.RequiredMinutesPerWeek.ShouldBe(7 * 420));
-        mine.Today.ShouldSatisfyAllConditions(
+        mine.Day.ShouldSatisfyAllConditions(
             t => t.IsWorkingDay.ShouldBeTrue(),
             t => t.StartMinute.ShouldBe(480),
             t => t.RequiredMinutes.ShouldBe(420),
@@ -51,7 +53,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var theirs = await OkAsync<MyScheduleResponse>(Client.GetAsync("/api/me/schedule", colleague.AccessToken));
         theirs.Schedule.ShouldSatisfyAllConditions(s => s.UserId.ShouldBe(colleague.User.Id), s => s.IsOwn.ShouldBeFalse());
-        theirs.Today.LoggedMinutes.ShouldBe(0);
+        theirs.Day.LoggedMinutes.ShouldBe(0);
     }
 
     [Fact]
@@ -61,17 +63,25 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1733.30m);
 
-        var hours = await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours", me.AccessToken));
+        // Every page, however many months have passed since January 2026.
+        var first = await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours", me.AccessToken));
+        first.Applies.ShouldBeTrue();
+        first.Months.Count.ShouldBe(Math.Min(MyTime.MonthsPerPage, first.TotalMonths));
+        var pages = (first.TotalMonths + MyTime.MonthsPerPage - 1) / MyTime.MonthsPerPage;
+        var months = new List<MyLedgerMonthResponse>();
+        for (var page = 1; page <= pages; page++)
+        {
+            months.AddRange((await OkAsync<MyHoursResponse>(Client.GetAsync($"/api/me/hours?page={page}", me.AccessToken))).Months);
+        }
 
-        hours.Applies.ShouldBeTrue();
-        hours.Months.Count.ShouldBe(hours.TotalMonths);
-        hours.Months[^1].Month.ShouldBe(new DateOnly(2026, 1, 1));
-        hours.Months.ShouldBeInOrder(SortDirection.Descending, Comparer<MyLedgerMonthResponse>.Create((a, b) => a.Month.CompareTo(b.Month)));
+        months.Count.ShouldBe(first.TotalMonths);
+        months[^1].Month.ShouldBe(new DateOnly(2026, 1, 1));
+        months.ShouldBeInOrder(SortDirection.Descending, Comparer<MyLedgerMonthResponse>.Create((a, b) => a.Month.CompareTo(b.Month)));
 
         // 22 working days: one worked (7h inside plus 1h beyond, which makes up an hour), one unpaid day off, 20 missed.
-        var june = hours.Months.Single(m => m.Month == new DateOnly(2026, 6, 1));
+        var june = months.Single(m => m.Month == new DateOnly(2026, 6, 1));
         june.ShouldSatisfyAllConditions(
-            m => m.Status.ShouldBe(ID_Indetails.api.Business.Payroll.MyTime.LedgerStatus.Short),
+            m => m.Status.ShouldBe(MyTime.LedgerStatus.Short),
             m => m.ExpectedMinutes.ShouldBe(22 * 420),
             m => m.ExpectedFullMonthMinutes.ShouldBe(22 * 420),
             m => m.ExcusedMinutes.ShouldBe(420),
@@ -79,8 +89,14 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.MadeUpMinutes.ShouldBe(60),
             m => m.ShortMinutes.ShouldBe(22 * 420 - 420 - 420 - 60),
             m => m.MissedDays.Count.ShouldBe(20));
+        june.Excuses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            x => x.IsPaid.ShouldBeFalse(),
+            x => x.Note.ShouldBe("Unpaid day off"),
+            x => x.Days.ShouldBe([new DateOnly(2026, 6, 2)]));
 
-        (await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours?page=2", me.AccessToken))).Months.ShouldBeEmpty();
+        (await OkAsync<MyHoursResponse>(Client.GetAsync($"/api/me/hours?page={pages + 1}", me.AccessToken))).Months.ShouldBeEmpty();
+        await (await Client.GetAsync($"/api/me/hours?page={MyHoursQueryValidator.MaxPage + 1}", me.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
     [Fact]
@@ -91,6 +107,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1733.30m);
         var colleague = await JuneMonthAsync(superAdmin, project.Id, "hourly", 12m);
         await AddWorkAsync(colleague, project.Id, new DateTime(2026, 6, 6, 6, 0, 0, DateTimeKind.Utc), minutes: 240);
+        await ExecuteAsync("UPDATE projects SET icon = 'pen', tint = '#2F6FEB' WHERE id = @p", ("@p", project.Id));
 
         var overtime = await OkAsync<MyOvertimeResponse>(Client.GetAsync("/api/me/overtime?month=2026-06", me.AccessToken));
 
@@ -107,7 +124,9 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             e => e.Minutes.ShouldBe(480),
             e => e.OvertimeMinutes.ShouldBe(60),
             e => e.MadeUpMinutes.ShouldBe(60),
-            e => e.ProjectId.ShouldBe(project.Id));
+            e => e.ProjectId.ShouldBe(project.Id),
+            e => e.ProjectIcon.ShouldBe("pen"),
+            e => e.ProjectTint.ShouldBe("#2F6FEB"));
 
         // The colleague's Saturday is a day off: all of it is overtime.
         var theirs = await OkAsync<MyOvertimeResponse>(Client.GetAsync("/api/me/overtime?month=2026-06", colleague.AccessToken));
@@ -146,6 +165,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             p => p.EarnedSoFar.ShouldBe(73.30m),
             p => p.FullMonthEstimate.ShouldBeNull());
         mine.InProgress.ShouldBeFalse();
+        mine.JoinedOn.ShouldBe(new DateOnly(2026, 1, 1));
         mine.FirstMonth.ShouldBe(new DateOnly(2026, 1, 1));
         mine.Ledger!.MissedDays.Count.ShouldBe(20);
         mine.Excuses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
@@ -227,7 +247,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<AuthResponse> JuneMonthAsync(AuthResponse superAdmin, long projectId, string basis, decimal amount)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        await ExecuteAsync("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id", ("@id", person.User.Id));
+        await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         await OkAsync<object>(Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
             new { basis, amount, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken), status: null);
         await AddWorkAsync(person, projectId, new DateTime(2026, 6, 1, 6, 0, 0, DateTimeKind.Utc), minutes: 480);

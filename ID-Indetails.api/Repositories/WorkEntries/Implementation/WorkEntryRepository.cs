@@ -109,11 +109,24 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
         var rows = await db.Users
             .AsNoTracking()
             .Where(u => u.DomainCode == DomainCodes.Design && u.Status != UserStatus.Deactivated)
-            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, u.Position, u.TeamId, TeamName = u.Team != null ? u.Team.Name : null, u.RoleCode, u.Status })
+            .Select(u => new
+            {
+                u.Id,
+                u.FirstName,
+                u.LastName,
+                u.Email,
+                u.Position,
+                u.TeamId,
+                TeamName = u.Team != null ? u.Team.Name : null,
+                u.RoleCode,
+                u.Status,
+                u.LastSeenAt,
+            })
             .ToListAsync(cancellationToken);
 
         return rows
-            .Select(u => new DesignPerson(u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.Email, u.Position, u.TeamId, u.TeamName, u.RoleCode, u.Status))
+            .Select(u => new DesignPerson(
+                u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.Email, u.Position, u.TeamId, u.TeamName, u.RoleCode, u.Status, u.LastSeenAt))
             .OrderBy(p => p.Name)
             .ToList();
     }

@@ -13,14 +13,15 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
         bool includeSuperAdmins,
         string? domain,
         string? search,
+        DateOnly employedSince,
         CancellationToken cancellationToken = default)
     {
         var codes = domains.ToList();
         var query = db.Users
             .AsNoTracking()
             .Include(u => u.Team)
-            .Where(u => u.Status == UserStatus.Active
-                && u.JoinedOn != null
+            .Include(u => u.EmploymentPeriods)
+            .Where(u => u.EmploymentPeriods.Any(p => p.EndedOn == null || p.EndedOn >= employedSince)
                 && (u.DomainCode != null ? codes.Contains(u.DomainCode) : includeSuperAdmins));
 
         if (domain is not null)
@@ -65,7 +66,11 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<User>> UsersAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
-        => await db.Users.AsNoTracking().Include(u => u.Team).Where(u => userIds.Contains(u.Id)).ToListAsync(cancellationToken);
+        => await db.Users.AsNoTracking()
+            .Include(u => u.Team)
+            .Include(u => u.EmploymentPeriods)
+            .Where(u => userIds.Contains(u.Id))
+            .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ProjectLabel>> ProjectsAsync(string domain, CancellationToken cancellationToken = default)
         => await db.Projects
@@ -74,6 +79,14 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
             .OrderByDescending(p => p.CreatedAt)
             .Select(p => new ProjectLabel(p.Id, p.Title, p.Client != null ? p.Client.Name : null, p.Client != null ? p.Client.Organisation : null))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<long, ProjectLook>> ProjectLooksAsync(
+        IReadOnlyCollection<long> projectIds,
+        CancellationToken cancellationToken = default)
+        => await db.Projects
+            .AsNoTracking()
+            .Where(p => projectIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => new ProjectLook(p.Icon, p.Tint), cancellationToken);
 
     public async Task<IReadOnlyList<HourExcuse>> ExcusesAsync(IReadOnlyCollection<long> userIds, DateOnly month, CancellationToken cancellationToken = default)
         => await db.HourExcuses

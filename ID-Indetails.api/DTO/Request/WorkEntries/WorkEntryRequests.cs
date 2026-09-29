@@ -89,12 +89,15 @@ public sealed record WorkSummaryQuery
     public string? Search { get; init; }
 }
 
-/// <summary>Narrows only the contributors table. Days are company-time-zone days, both inclusive.</summary>
+/// <summary>Narrows only the contributors table and a contributor's work. Days are company-time-zone days, both inclusive.</summary>
 public sealed record ProjectWorkQuery
 {
     public DateOnly? From { get; init; }
 
     public DateOnly? To { get; init; }
+
+    /// <summary>Matches the work description; every word must match.</summary>
+    public string? Search { get; init; }
 }
 
 public sealed record PeopleWorkQuery

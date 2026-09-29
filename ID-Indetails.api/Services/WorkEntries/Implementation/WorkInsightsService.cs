@@ -1,5 +1,6 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -15,6 +16,8 @@ using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -35,6 +38,8 @@ public sealed class WorkInsightsService(
     IDomainSettingsService domainSettings,
     IMeetingRepository meetings,
     IActivityFeedRepository activityFeed,
+    IOvertimeService overtime,
+    IPresence presence,
     IClock clock) : IWorkInsightsService
 {
     public const int MinProjectWeeks = 4;
@@ -43,6 +48,7 @@ public sealed class WorkInsightsService(
     public const int ContributorWeeks = 10;
     public const int ContributorEntries = 40;
     public const int FocusDays = 14;
+    public const int CostProjects = 8;
     public const int MaxTimelineEvents = 1000;
 
     private static readonly IReadOnlyList<string> TimelineKinds =
@@ -64,11 +70,13 @@ public sealed class WorkInsightsService(
         var today = clock.CompanyToday;
         var all = await entries.ListAsync(new WorkEntrySearch(ProjectId: projectId), cancellationToken);
         var worked = all.Select(ToWorked).ToList();
+        var overtimeById = await overtime.OvertimeOfAsync(all, cancellationToken);
 
         var end = project.CompletedAt is { } completedAt ? clock.ToCompanyDate(completedAt) : today;
         var weeks = Math.Clamp((int)Math.Ceiling((end.DayNumber - project.StartDate.DayNumber + 1) / 7.0), MinProjectWeeks, MaxProjectWeeks);
 
-        var inRange = all.Where(e => InRange(e, query.From, query.To)).ToList();
+        var words = WordsOf(query.Search);
+        var inRange = all.Where(e => Matches(e, query, words)).ToList();
         var rangeMinutes = inRange.Sum(e => e.Minutes);
         var pricer = actor.Has(PermissionCodes.FinancialView)
             ? await LabourPricer.LoadAsync(financeSources, projectFinance, inRange.Select(ToRow).ToList(), clock, cancellationToken)
@@ -84,6 +92,7 @@ public sealed class WorkInsightsService(
                     g.First().UserName,
                     g.Count(),
                     minutes,
+                    g.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
                     SharePct(minutes, rangeMinutes),
                     g.Max(e => e.StartedAt),
                     WorkStats.Weekly(worked.Where(w => w.UserId == g.Key), today, SparkWeeks, calendar.FirstDayOfWeek).Select(w => w.Minutes).ToList(),
@@ -96,6 +105,7 @@ public sealed class WorkInsightsService(
         return new ProjectWorkResponse(
             projectId,
             all.Sum(e => e.Minutes),
+            all.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
             all.Count,
             all.Select(e => e.UserId).Distinct().Count(),
             all.Count > 0 ? all.Max(e => e.StartedAt) : null,
@@ -107,7 +117,11 @@ public sealed class WorkInsightsService(
             contributors);
     }
 
-    public async Task<ProjectContributorDetailResponse> ContributorAsync(long projectId, long userId, CancellationToken cancellationToken = default)
+    public async Task<ProjectContributorDetailResponse> ContributorAsync(
+        long projectId,
+        long userId,
+        ProjectWorkQuery query,
+        CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
         await DesignProjectAsync(actor, projectId, cancellationToken);
@@ -120,16 +134,20 @@ public sealed class WorkInsightsService(
             throw new NotFoundException("This person has no work on the project.");
         }
 
-        var minutes = theirs.Sum(e => e.Minutes);
+        var words = WordsOf(query.Search);
+        var matching = theirs.Where(e => Matches(e, query, words)).ToList();
+        var minutes = matching.Sum(e => e.Minutes);
+        var overtimeById = await overtime.OvertimeOfAsync(matching, cancellationToken);
         return new ProjectContributorDetailResponse(
             projectId,
             new WorkEntryPersonResponse(userId, theirs[0].UserName),
             minutes,
-            theirs.Count,
+            matching.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
+            matching.Count,
             SharePct(minutes, all.Sum(e => e.Minutes)),
-            ToWeeks(WorkStats.Weekly(theirs.Select(ToWorked), clock.CompanyToday, ContributorWeeks, calendar.FirstDayOfWeek)),
-            theirs.OrderByDescending(e => e.StartedAt).Take(ContributorEntries)
-                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList());
+            ToWeeks(WorkStats.Weekly(matching.Select(ToWorked), clock.CompanyToday, ContributorWeeks, calendar.FirstDayOfWeek)),
+            matching.OrderByDescending(e => e.StartedAt).Take(ContributorEntries)
+                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList());
     }
 
     public async Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default)
@@ -221,6 +239,8 @@ public sealed class WorkInsightsService(
                     p.TeamName,
                     p.Role,
                     p.Status,
+                    presence.IsOnline(p.Id),
+                    p.LastSeenAt,
                     WorkStats.Minutes(mine, weekStart, today),
                     WorkStats.Minutes(mine, quarterStart, today),
                     mine.Sum(x => x.Minutes),
@@ -233,6 +253,39 @@ public sealed class WorkInsightsService(
             .OrderByDescending(p => p.WeekMinutes)
             .ThenBy(p => p.Name)
             .ToList();
+    }
+
+    public async Task<EmployeeLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var person = (await entries.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
+        if (person is null || !EmployeeRules.CanSee(actor, person.DomainCode))
+        {
+            throw new NotFoundException("Employee not found.");
+        }
+
+        // Work is only logged on Design projects, and someone moved to Execution keeps theirs: only callers who see
+        // Design may see what it cost and on which projects.
+        var rows = actor.CanSee(DomainCodes.Design)
+            ? await entries.RowsAsync(new WorkEntrySearch(UserId: userId), cancellationToken)
+            : [];
+        var pricer = await LabourPricer.LoadAsync(financeSources, projectFinance, rows, clock, cancellationToken);
+        var quarterStart = WorkStats.QuarterStartOf(clock.CompanyToday);
+        var byProject = rows
+            .GroupBy(r => r.ProjectId)
+            .Select(g => (ProjectId: g.Key, Cost: pricer.Price(g)))
+            .Where(x => x.Cost.Usd > 0 || x.Cost.Unconverted.Count > 0)
+            .OrderByDescending(x => x.Cost.Usd)
+            .Take(CostProjects)
+            .ToList();
+        var titles = await entries.ProjectTitlesAsync(byProject.Select(x => x.ProjectId).ToList(), cancellationToken);
+
+        return new EmployeeLabourCostResponse(
+            userId,
+            rows.Count,
+            pricer.Price(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= quarterStart)),
+            pricer.Price(rows),
+            byProject.Select(x => new ProjectLabourCostResponse(x.ProjectId, titles.GetValueOrDefault(x.ProjectId, string.Empty), x.Cost)).ToList());
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken) => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
@@ -253,10 +306,15 @@ public sealed class WorkInsightsService(
             : throw new BusinessRuleException(ErrorCodes.NotForThisDomain, "Work is only logged on Design projects.");
     }
 
-    private bool InRange(WorkEntryView e, DateOnly? from, DateOnly? to)
+    private static string[] WordsOf(string? search) => search?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+
+    /// <summary>Started within the query's days, with every word of its search in the description.</summary>
+    private bool Matches(WorkEntryView e, ProjectWorkQuery query, string[] words)
     {
         var day = clock.ToCompanyDate(e.StartedAt);
-        return (from is null || day >= from) && (to is null || day <= to);
+        return (query.From is null || day >= query.From)
+            && (query.To is null || day <= query.To)
+            && words.All(w => e.Description.Contains(w, StringComparison.OrdinalIgnoreCase));
     }
 
     private WorkStats.Worked ToWorked(WorkEntryView e) => new(e.Id, e.UserId, e.ProjectId, clock.ToCompanyTime(e.StartedAt), e.Minutes);

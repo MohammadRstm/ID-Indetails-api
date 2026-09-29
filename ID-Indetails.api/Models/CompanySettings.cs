@@ -12,6 +12,12 @@ public class CompanySettings
 
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Printed on the letterhead of invoices and statements.</summary>
+    public string? Address { get; set; }
+
+    /// <summary>Printed on the letterhead of invoices and statements, e.g. indetails.com.</summary>
+    public string? Website { get; set; }
+
     public long? LogoFileId { get; set; }
 
     /// <summary>IANA zone used for overtime, day boundaries and "today" (e.g. Asia/Beirut).</summary>

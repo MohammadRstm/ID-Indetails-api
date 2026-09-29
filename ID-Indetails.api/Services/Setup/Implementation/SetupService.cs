@@ -54,6 +54,7 @@ public sealed class SetupService(
             CreatedAt = now,
         };
         user.PasswordHash = passwords.Hash(user, temporaryPassword);
+        user.EmploymentPeriods.Add(new EmploymentPeriod { StartedOn = clock.CompanyToday, CreatedAt = now });
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         users.Add(user);

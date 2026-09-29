@@ -37,17 +37,34 @@ public class RecognitionTests
             new Cost(CostSource.Labour, new(2026, 5, 3), 300m),
             new Cost(CostSource.Labour, new(2026, 6, 3), 100m),
             new Cost(CostSource.Materials, new(2026, 7, 3), 5000m),
-        ]);
+        ], [], null);
         byLabour.ShouldBe(new Dictionary<DateOnly, decimal> { [new(2026, 5, 1)] = 750m, [new(2026, 6, 1)] = 250m });
 
         var byOthers = Recognition.ByMonth(1000m,
         [
             new Cost(CostSource.Materials, new(2026, 5, 3), 100m),
             new Cost(CostSource.GroundLabour, new(2026, 6, 3), 300m),
-        ]);
+        ], [], null);
         byOthers[new DateOnly(2026, 6, 1)].ShouldBe(750m);
 
-        Recognition.ByMonth(1000m, []).ShouldBeEmpty();
-        Recognition.ByMonth(0m, [new Cost(CostSource.Labour, new(2026, 5, 3), 300m)]).ShouldBeEmpty();
+        Recognition.ByMonth(1000m, [], [], null).ShouldBeEmpty();
+        Recognition.ByMonth(0m, [new Cost(CostSource.Labour, new(2026, 5, 3), 300m)], [], null).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Without_a_priced_cost_revenue_follows_the_hours_logged_then_the_completion_month()
+    {
+        // A priced cost wins over the hours logged.
+        Recognition.ByMonth(1000m, [new Cost(CostSource.Labour, new(2026, 5, 3), 300m)], [(new DateOnly(2026, 6, 3), 600)], null)
+            .ShouldBe(new Dictionary<DateOnly, decimal> { [new(2026, 5, 1)] = 1000m });
+
+        // Work only by someone with no pay: 3 hours in May, 1 in June.
+        Recognition.ByMonth(1000m, [], [(new DateOnly(2026, 5, 3), 120), (new DateOnly(2026, 5, 20), 60), (new DateOnly(2026, 6, 3), 60)], null)
+            .ShouldBe(new Dictionary<DateOnly, decimal> { [new(2026, 5, 1)] = 750m, [new(2026, 6, 1)] = 250m });
+
+        // Nothing at all: the month it was completed, or nowhere while it is still running.
+        Recognition.ByMonth(1000m, [], [], new DateOnly(2026, 7, 14))
+            .ShouldBe(new Dictionary<DateOnly, decimal> { [new(2026, 7, 1)] = 1000m });
+        Recognition.ByMonth(1000m, [], [], null).ShouldBeEmpty();
     }
 }

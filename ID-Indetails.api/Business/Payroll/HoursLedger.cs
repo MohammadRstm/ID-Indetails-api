@@ -4,7 +4,8 @@ namespace ID_Indetails.api.Business.Payroll;
 
 /// <summary>
 /// A person's hours owed for a month (Design employees only). The month runs up to today while it is in
-/// progress, and from the day they joined.
+/// progress, from the day they joined, and up to the day they left (their account was deactivated), after which
+/// their month is closed.
 /// <list type="bullet">
 /// <item>Expected: the required hours of every working day.</item>
 /// <item>Excused hours and days (paid or not) reduce what is owed; a whole-month excuse clears it.</item>
@@ -41,14 +42,26 @@ public static class HoursLedger
         DateOnly joinedOn,
         PersonCalendar calendar,
         IReadOnlyList<Overtime.Split> work,
-        Excuses excuses)
+        Excuses excuses,
+        DateOnly? leftOn = null,
+        IReadOnlyList<Employment.Gap>? gaps = null)
     {
         var next = month.AddMonths(1);
-        var inProgress = today >= month && today < next;
+        var inProgress = today >= month && today < next && !(today > leftOn);
         var until = inProgress ? today : next;
+        if (leftOn is { } left && left.AddDays(1) < until)
+        {
+            until = left.AddDays(1);
+        }
+
         var from = joinedOn > month ? joinedOn : month;
 
-        var workingDays = Days(from, until).Select(d => (Day: d, Hours: calendar.HoursOn(d))).Where(d => d.Hours is not null).ToList();
+        // Days away between two periods of employment aren't expected.
+        var workingDays = Days(from, until)
+            .Where(d => !Employment.InGap(gaps, d))
+            .Select(d => (Day: d, Hours: calendar.HoursOn(d)))
+            .Where(d => d.Hours is not null)
+            .ToList();
         var expected = workingDays.Sum(d => d.Hours!.Required);
         var excusedDays = workingDays.Where(d => excuses.Days.Contains(d.Day)).Sum(d => d.Hours!.Required);
         var excused = excuses.WholeMonth ? expected : Math.Min(expected, excuses.Minutes + excusedDays);

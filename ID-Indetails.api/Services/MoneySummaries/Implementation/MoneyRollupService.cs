@@ -1,6 +1,5 @@
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Finance;
-using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.MoneySummaries.Abstraction;
@@ -29,7 +28,7 @@ public sealed class MoneyRollupService(
         var payments = ids.Count > 0 ? await summaries.PaymentsAsync(ids, cancellationToken) : [];
         var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
 
-        var invoices = new List<BillingPosition.Invoice>();
+        var invoices = new List<ProjectBilling.Invoice>();
         var unconverted = new List<InvoiceMoneyRow>();
         foreach (var row in rows)
         {
@@ -41,7 +40,7 @@ public sealed class MoneyRollupService(
                 continue;
             }
 
-            invoices.Add(new BillingPosition.Invoice(
+            invoices.Add(new ProjectBilling.Invoice(
                 row.Id,
                 row.ProjectId,
                 row.ClientId,
@@ -56,12 +55,8 @@ public sealed class MoneyRollupService(
             history,
             invoices,
             rows.ToDictionary(r => r.Id),
-            payments.Select(p => new BillingPosition.Payment(p.ProjectId, p.ClientId, p.InvoiceId, p.ReceivedOn, p.AmountUsd, p.Method)).ToList(),
-            unconverted
-                .Where(r => !r.IsVoided)
-                .GroupBy(r => r.Currency.ToUpperInvariant())
-                .Select(g => new UnconvertedInvoicesResponse(g.Key, g.Sum(r => r.Total), g.Count()))
-                .ToList(),
+            unconverted,
+            payments.Select(p => new ProjectBilling.Payment(p.ProjectId, p.ClientId, p.InvoiceId, p.ReceivedOn, p.AmountUsd, p.Method)).ToList(),
             today);
     }
 }

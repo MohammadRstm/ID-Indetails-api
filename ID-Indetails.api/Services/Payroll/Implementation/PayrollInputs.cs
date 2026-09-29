@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
@@ -19,12 +20,29 @@ public sealed class PayrollInputs(
     /// <summary>The hours ledger applies to Design employees only.</summary>
     public static bool LedgerApplies(User person) => person.DomainCode == DomainCodes.Design && person.RoleCode == RoleCodes.Employee;
 
-    public DateOnly JoinedOn(User person) => person.JoinedOn ?? clock.ToCompanyDate(person.CreatedAt);
+    public Employment EmploymentOf(User person)
+        => person.EmploymentPeriods.Count > 0
+            ? new Employment(person.EmploymentPeriods
+                .OrderBy(p => p.StartedOn)
+                .Select(p => new Employment.Period(p.StartedOn, p.EndedOn))
+                .ToList())
+            : new Employment([new Employment.Period(person.JoinedOn ?? clock.ToCompanyDate(person.CreatedAt), null)]);
 
     public async Task<IReadOnlyList<PersonCalendar.Policy>> PoliciesAsync(CancellationToken cancellationToken = default)
         => (await workingTime.GetPoliciesAsync(cancellationToken))
             .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
             .ToList();
+
+    public async Task<IReadOnlyDictionary<long, PersonCalendar>> CalendarsAsync(
+        IReadOnlyCollection<long> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var personal = (await schedules.SchedulesAsync(userIds, cancellationToken)).ToLookup(s => s.UserId);
+        var policies = await PoliciesAsync(cancellationToken);
+
+        return userIds.Distinct().ToDictionary(id => id, id => new PersonCalendar(policies, personal[id].Select(s => new PersonCalendar.Schedule(
+            s.EffectiveFrom, s.FollowsDefault, s.Days.ToDictionary(d => (int)d.Weekday, d => ((int)d.StartMinute, (int)d.EndMinute))))));
+    }
 
     public async Task<IReadOnlyList<PersonMonth>> ForAsync(
         IReadOnlyList<User> people,
@@ -39,8 +57,7 @@ public sealed class PayrollInputs(
         var ids = people.Select(p => p.Id).ToList();
         var today = clock.CompanyToday;
         var pay = (await payroll.PayHistoryAsync(ids, cancellationToken)).ToLookup(p => p.UserId);
-        var personal = (await schedules.SchedulesAsync(ids, cancellationToken)).ToLookup(s => s.UserId);
-        var policies = await PoliciesAsync(cancellationToken);
+        var calendars = await CalendarsAsync(ids, cancellationToken);
 
         var excuses = new Dictionary<DateOnly, ILookup<long, HourExcuse>>();
         foreach (var month in months.Distinct())
@@ -61,8 +78,8 @@ public sealed class PayrollInputs(
         foreach (var person in people)
         {
             var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.HourlyCostRate)).ToList();
-            var calendar = new PersonCalendar(policies, personal[person.Id].Select(s => new PersonCalendar.Schedule(
-                s.EffectiveFrom, s.FollowsDefault, s.Days.ToDictionary(d => (int)d.Weekday, d => ((int)d.StartMinute, (int)d.EndMinute)))));
+            var calendar = calendars[person.Id];
+            var employment = EmploymentOf(person);
 
             foreach (var month in months)
             {
@@ -71,7 +88,7 @@ public sealed class PayrollInputs(
                 result.Add(new PersonMonth(person, new SalaryCalculator.Input(
                     month,
                     today,
-                    JoinedOn(person),
+                    employment.JoinedOn,
                     LedgerApplies(person),
                     terms,
                     calendar,
@@ -79,7 +96,9 @@ public sealed class PayrollInputs(
                         .Where(e => DateOnly.FromDateTime(e.Local) >= month && DateOnly.FromDateTime(e.Local) < next)
                         .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes))
                         .ToList(),
-                    monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList()),
+                    monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
+                    employment.LeftOn,
+                    employment.Gaps),
                     monthExcuses));
             }
         }

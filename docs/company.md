@@ -6,8 +6,8 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/company/settings` | Signed in | Name, time zone, week start, time format, default currency |
-| `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row |
+| `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices and statements), time zone, week start, time format, default currency |
+| `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row. Address (up to 300 characters) and website (a web address such as `indetails.com`) are optional; leaving one out clears it |
 | `GET /api/company/working-time` | Signed in | The policy in force today and every dated policy, newest first |
 | `POST /api/company/working-time` | `working_time:manage` | A new working week, break and overtime multiplier from a date |
 | `GET /api/company/schedules?domain=&search=` | `schedule:manage` | Everyone's week (their own or the company's) and the hours it requires |
@@ -17,6 +17,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `POST /api/company/overhead` | `overhead:manage` | Adds a line |
 | `PUT /api/company/overhead/{id}` | `overhead:manage` | Renames it or changes its group |
 | `POST /api/company/overhead/{id}/amounts` | `overhead:manage` | A new monthly amount from a month |
+| `POST /api/company/overhead/{id}/currency` | `overhead:manage` | `{ currency, amount, fromMonth }`: charges it in another currency from a month (this month when empty). Returns the line charged from then |
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
 | `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
 | `GET /api/company/overview/monthly?months=13` | `company:view` | Revenue, costs and overhead per month: the profit before and after company expenses (1–36 months) |
@@ -55,6 +56,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 - A line has a name, a group (`software` or `operating`), a currency (USD or LBP) and a monthly amount.
 - It is charged **in full** for every month from its start month to its end month.
 - **Amount changes are dated** from the first of a month, this month or later, and never before a later change that already exists. Past months keep their cost. A change for a month that already has one replaces it.
+- **Changing the currency** applies from the first of a month, this month or later (`400 overhead_same_currency` when it doesn't change, `422 overhead_already_cancelled` on a cancelled line). A line already charged before that month ends the month before, and a new line with the same name and group takes over in the new currency, so past months keep theirs. A line not charged before it just changes, with the new amount throughout.
 - **Cancelling** ends the line at the end of this month. It can be resumed until that date passes; after that, add a new line. A line that hasn't started yet is removed instead (`204`).
 - **Totals are per currency** and never converted.
 - Every change writes an `overhead_*` activity event (company level, no domain), with the amount in the `amount` column.
@@ -63,7 +65,9 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 Always calculated from the records, never stored (`Business/Payroll/`). The month defaults to this one and can't be in the future.
 
-**Who is listed:** every active person who has joined and has a pay record, in the caller's domains. Super admins appear only if they have pay and the caller sees both domains. People who joined after the month are left out.
+**Who is listed:** every person with a pay record who was employed on some day of the month (a period of employment overlapping it, see [employees.md](employees.md#deactivating-and-reactivating)), in the caller's domains. Super admins appear only if they have pay and the caller sees both domains. People who joined after the month, left before it, or were away all of it are left out. The list, the detail, the CSV, the totals and the month-end short-hours alert all follow this.
+
+**Leavers:** a person's final month ends on their last working day (included). Monthly pay is pro-rated to it the way a joining month is (`leftOn` on the row, and `workingDaysPaid` of `workingDays`), and their hours ledger ends there too, so the month counts as closed for them once they have left. Someone taken back later isn't paid, or counted short, for the days they were away between two periods: a month partly away is pro-rated, a month wholly away isn't listed.
 
 **Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay is salary ÷ 173.33.
 
@@ -79,12 +83,12 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 - A closed month still short is *flagged*; the month in progress is *behind*.
 
 **Pay** (`SalaryCalculator.cs`):
-- **Monthly:** the salary, pro-rated on the person's own working days if they joined mid-month, plus overtime at the multiplier in force that day.
+- **Monthly:** the salary, pro-rated on the person's own working days if they joined or left mid-month, plus overtime at the multiplier in force that day.
   - In a closed, flagged month the shortfall is deducted at the hourly rate. Whole missed days still owed also lose their paid break, so each costs the full paid day (8h on a 9–5 day); a partly made-up remainder costs only its hours. Example: 21 missed days with one hour made up is 20 whole days (8h each) plus 6h.
   - Unpaid excuses are deducted too: unpaid minutes at the hourly rate, each unpaid day off as the full paid day, an unpaid whole month as the whole salary. The deduction never exceeds the salary.
 - **Hourly:** hours within schedule and made-up hours at the rate in force each day, plus the paid break of each working day they worked, plus overtime at the rate × multiplier. Excuses don't change their pay (they are paid for what they log).
 - Admins who log hours are paid overtime the same way, without an hours ledger. Execution staff don't log hours: they are paid their salary.
-- Totals are per currency and never converted. Deactivated people aren't listed (there is no record of when they were deactivated yet).
+- Totals are per currency and never converted.
 
 **Excuses:** `kind` is `minutes` (with `minutes`), `days` (with days of that month) or `whole_month`; `isPaid` defaults to true; the note defaults by kind. Never for a future month (`400 excuse_month_in_future`). Removing one is a soft delete.
 
@@ -95,8 +99,9 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 Always calculated, from the shared finance calculator (`Business/Finance/`), in USD.
 
 - **Period:** `from` and `to` are company dates, both included. `to` defaults to today and is never later; `from` defaults to the first of `to`'s month.
-- **Revenue recognised** (`Recognition.cs`): each client project's revenue recognised to date (revenue × progress, all of it once completed or archived) is spread over the months of its work: by employee labour cost when it has any, otherwise by its other costs (expenses, materials, ground labour). A period takes each month's share by the part of the month's elapsed days it covers.
-- **Cost:** every project cost dated inside the period, converted at the rate of its day.
+- **Revenue recognised** (`Recognition.cs`): each client project's revenue recognised to date (revenue × progress, all of it once completed or archived) is spread over the months of its work: by employee labour cost when it has any, otherwise by its other costs (expenses, materials, ground labour). With no priced cost at all (work only by people with no pay, say), it follows the hours logged, and without those the month it was completed, so it always lands in some month (30 Sep 2026; the prototype dropped it). A period takes each month's share by the part of the month's elapsed days it covers.
+- **Cost:** every project cost dated inside the period, converted at the rate of its day. Costs with no rate that day are listed per domain in `unconvertedCosts[]`, never counted as 0.
+- **Invoices** are converted at the rate of their issue day. Those with no rate are left out of invoiced and outstanding and listed per currency in `unconvertedInvoices[]`, per domain and for the company.
 - **Per domain:** revenue, cost, profit and margin; projects with work or costs in the period and active projects; active employees and who logged work; clients served and all clients; invoiced (issued in the period), collected (received in the period) and outstanding today.
 - **Company:** both domains' profit less **company overhead**, charged by the calendar days of each month the period covers and converted at the rate on the first of the month. Overhead with no rate for its month is listed as unconverted instead of being added in.
 - **Monthly:** each month's recognised revenue, labour, expenses, materials, ground labour and overhead, with the profit before and after company expenses. This feeds the chart on the company expenses page.
@@ -107,7 +112,7 @@ What each Design project paid its people in a week, month or quarter (`Business/
 
 - **Period:** the week (following the company's week start), month or quarter containing `date` (today by default). Never a future period (`400 project_pay_period_in_future`).
 - **Each work entry** is paid at the person's hourly rate in force that day (salary ÷ 173.33 for monthly pay): its hours within schedule, plus any overtime that made up a shortfall in the month, at the plain rate, and the rest of its overtime at the multiplier.
-- **Left out:** paid breaks and salary deductions. They aren't worked on any project, so project pay differs from Salaries for hourly staff by exactly their paid breaks.
-- Overtime and made-up hours are worked out from the person's whole day and month, whichever projects they worked on.
+- **Left out:** paid breaks and salary deductions. They aren't worked on any project, so project pay differs from Salaries for hourly staff by exactly their paid breaks. Project cost is different: it counts everyone's paid break as labour ([projects.md](projects.md)).
+- Overtime and made-up hours are worked out from the person's whole day and month, whichever projects they worked on. A leaver's hours ledger ends on the day they left, as in Salaries.
 - Grouped by project, then person and currency; projects are ordered by USD pay. Someone with no pay record is listed with `priced: false` and paid 0.
 

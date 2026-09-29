@@ -16,6 +16,11 @@ public sealed class ProjectListQueryValidator : AbstractValidator<ProjectListQue
         RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
         RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
         RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
+        RuleFor(x => x.OwnerId).GreaterThan(0).When(x => x.OwnerId is not null).WithMessage("Owner is invalid.");
+        RuleFor(x => x.Year).InclusiveBetween(2000, 2100).When(x => x.Year is not null).WithMessage("Year must be between 2000 and 2100.");
+        RuleFor(x => x.Quarter).InclusiveBetween(1, 4).When(x => x.Quarter is not null).WithMessage("Quarter must be between 1 and 4.");
+        RuleFor(x => x.Year).NotNull().When(x => x.Quarter is not null).WithMessage("A quarter needs a year.");
+        RuleFor(x => x.Sort).IsInEnum().WithMessage("Sort must be start, activity, hours, progress, name or client.");
         RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");

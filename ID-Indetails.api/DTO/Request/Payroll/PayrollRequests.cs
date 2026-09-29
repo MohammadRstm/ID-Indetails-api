@@ -23,6 +23,13 @@ public sealed record MyHoursQuery
     public int Page { get; init; } = 1;
 }
 
+/// <summary>The day whose hours the caller's schedule shows.</summary>
+public sealed record MyScheduleQuery
+{
+    /// <summary>Today when empty.</summary>
+    public DateOnly? Date { get; init; }
+}
+
 public sealed record SalaryMonthQuery
 {
     /// <summary>YYYY-MM; this month when empty.</summary>

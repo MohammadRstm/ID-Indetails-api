@@ -13,6 +13,7 @@ using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -30,6 +31,7 @@ public sealed class WorkEntryQueryService(
     IWorkEntryCommentRepository comments,
     IDomainSettingsService domainSettings,
     IProjectFinanceRepository financeSources,
+    IOvertimeService overtime,
     IClock clock) : IWorkEntryQueryService
 {
     public async Task<PagedResponse<WorkEntryResponse>> ListAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
@@ -64,14 +66,15 @@ public sealed class WorkEntryQueryService(
         var sameDay = await entries.ListAsync(
             new WorkEntrySearch(view.UserId, view.ProjectId, From: clock.CompanyDayStartUtc(day), To: clock.CompanyDayStartUtc(day.AddDays(1))),
             cancellationToken);
+        var overtimeById = await overtime.OvertimeOfAsync([view, .. sameDay], cancellationToken);
 
         return new WorkEntryDetailResponse(
-            WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock.UtcNow),
+            WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock, overtimeById),
             (await comments.ListAsync(id, cancellationToken))
                 .Select(c => new WorkEntryCommentResponse(
                     c.Id, new WorkEntryCommentAuthorResponse(c.AuthorId, c.AuthorName, c.AuthorRole), c.Body, c.SentToGroup, c.CreatedAt))
                 .ToList(),
-            sameDay.Where(e => e.Id != id).Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList());
+            sameDay.Where(e => e.Id != id).Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList());
     }
 
     public async Task<WorkEntryExport> ExportAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
@@ -86,6 +89,7 @@ public sealed class WorkEntryQueryService(
         var userIds = rows.Select(e => e.UserId).Distinct().ToList();
         var people = (await entries.PeopleAsync(userIds, cancellationToken)).ToDictionary(p => p.Id);
         var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
+        var overtimeById = await overtime.OvertimeOfAsync(rows, cancellationToken);
         var withMoney = actor.Has(PermissionCodes.FinancialView);
         var rates = withMoney
             ? (await financeSources.PayRatesAsync(userIds, cancellationToken))
@@ -93,7 +97,7 @@ public sealed class WorkEntryQueryService(
                 .ToDictionary(g => g.Key, g => (IReadOnlyList<ProjectFinance.PayRate>)g.OrderBy(r => r.EffectiveFrom).ToList())
             : [];
 
-        var header = new List<string> { "Date", "Weekday", "Start", "End", "Hours", "Employee", "Email", "Team", "Project", "Client", "Task" };
+        var header = new List<string> { "Date", "Weekday", "Start", "End", "Hours", "Overtime hours", "Employee", "Email", "Team", "Project", "Client", "Task" };
         if (withMoney)
         {
             header.AddRange(["Hourly rate", "Currency", "Labour cost"]);
@@ -112,6 +116,7 @@ public sealed class WorkEntryQueryService(
                 start.ToString(timeFormat, CultureInfo.InvariantCulture),
                 clock.ToCompanyTime(e.EndedAt).ToString(timeFormat, CultureInfo.InvariantCulture),
                 (e.Minutes / 60m).ToString("0.00", CultureInfo.InvariantCulture),
+                (overtimeById.GetValueOrDefault(e.Id) / 60m).ToString("0.00", CultureInfo.InvariantCulture),
                 e.UserName,
                 person?.Email ?? string.Empty,
                 person?.TeamName ?? string.Empty,
@@ -156,8 +161,9 @@ public sealed class WorkEntryQueryService(
 
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         var (items, total) = await entries.SearchAsync(search, cancellationToken);
+        var overtimeById = await overtime.OvertimeOfAsync(items, cancellationToken);
         return new PagedResponse<WorkEntryResponse>(
-            items.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList(),
+            items.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
             search.Page,
             search.PageSize,
             total);

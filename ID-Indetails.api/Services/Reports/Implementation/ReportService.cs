@@ -16,6 +16,7 @@ using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Reports.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
@@ -35,6 +36,7 @@ public sealed class ReportService(
     IProjectFinanceRepository financeSources,
     IProjectFinanceService projectFinance,
     IDomainSettingsService domainSettings,
+    IOvertimeService overtime,
     IClock clock) : IReportService
 {
     public const int MinReportWeeks = 3;
@@ -59,6 +61,7 @@ public sealed class ReportService(
             cancellationToken);
         var worked = views.Select(ToWorked).ToList();
         var total = views.Sum(e => e.Minutes);
+        var overtimeById = await overtime.OvertimeOfAsync(views, cancellationToken);
         var weeks = Math.Clamp((int)Math.Ceiling((to.DayNumber - from.DayNumber + 1) / 7.0), MinReportWeeks, MaxReportWeeks);
         var weekly = WorkStats.Weekly(worked, to, weeks, calendar.FirstDayOfWeek);
         var projects = (await reports.DesignProjectsAsync(cancellationToken)).ToDictionary(p => p.Id);
@@ -83,7 +86,12 @@ public sealed class ReportService(
 
         var byPerson = views
             .GroupBy(e => e.UserId)
-            .Select(g => new ReportPersonResponse(g.Key, g.First().UserName, g.Sum(e => e.Minutes), g.Count()))
+            .Select(g => new ReportPersonResponse(
+                g.Key,
+                g.First().UserName,
+                g.Sum(e => e.Minutes),
+                g.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
+                g.Count()))
             .OrderByDescending(p => p.Minutes)
             .ToList();
 
@@ -96,6 +104,7 @@ public sealed class ReportService(
                     p.UserId,
                     p.Name,
                     p.Minutes,
+                    p.OvertimeMinutes,
                     matrixProjects.Select(mp => cells.GetValueOrDefault((p.UserId, mp.ProjectId))).ToList()))
                 .ToList());
 
@@ -103,6 +112,7 @@ public sealed class ReportService(
             from,
             to,
             total,
+            views.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
             views.Count,
             byProject.Count,
             byPerson.Count,
@@ -137,6 +147,7 @@ public sealed class ReportService(
         var current = worked.Where(w => w.Day >= from && w.Day <= today).ToList();
         var previous = worked.Where(w => w.Day >= previousFrom && w.Day <= previousTo).ToList();
         var thisWeek = worked.Where(w => w.Day >= weekStart && w.Day <= today).ToList();
+        var overtimeById = await overtime.OvertimeOfAsync(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= from), cancellationToken);
         var weeks = (int)Math.Ceiling((today.DayNumber - from.DayNumber + 1) / 7.0);
 
         var projects = await reports.DesignProjectsAsync(cancellationToken);
@@ -151,6 +162,7 @@ public sealed class ReportService(
             previousFrom,
             previousTo,
             current.Sum(w => w.Minutes),
+            current.Sum(w => overtimeById.GetValueOrDefault(w.Id)),
             previous.Sum(w => w.Minutes),
             current.Count,
             previous.Count,

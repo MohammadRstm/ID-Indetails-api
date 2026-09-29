@@ -183,6 +183,7 @@ public sealed class InvitationService(
         user.PasswordHash = passwords.Hash(user, request.Password);
         user.Status = UserStatus.Active;
         user.JoinedOn = clock.CompanyToday;
+        user.EmploymentPeriods.Add(new EmploymentPeriod { StartedOn = clock.CompanyToday, CreatedAt = now });
         user.LastSeenAt = now;
         user.UpdatedAt = now;
 

@@ -48,7 +48,7 @@ public sealed class DomainFinanceService(
 
         var shares = Recognition.Months(from, to, clock.CompanyToday);
         var revenue = PeriodMoney.Round(projects.Sum(p =>
-            PeriodMoney.Revenue(Recognition.ByMonth(rollup.Money(p.Id).Summary.RecognisedToDate, rollup.Costs(p.Id)), shares)));
+            PeriodMoney.Revenue(rollup.RevenueByMonth(p.Id), shares)));
         var cost = PeriodMoney.Costs(projects.SelectMany(p => rollup.Costs(p.Id)), from, to);
         var clientWork = projects.Where(p => p.BillingType == BillingType.Client).Select(p => rollup.Money(p.Id).Summary).ToList();
         var profit = revenue - PeriodMoney.Round(cost.Total);
@@ -61,7 +61,7 @@ public sealed class DomainFinanceService(
             PeriodCost(cost),
             profit,
             PeriodMoney.Margin(profit, revenue),
-            Unconverted(projects.SelectMany(p => rollup.Money(p.Id).Costs.Unconverted)),
+            UnconvertedOf(PeriodMoney.Unconverted(projects.SelectMany(p => rollup.Unconverted(p.Id)), from, to)),
             projects.Sum(p => rollup.Money(p.Id).UnpricedLabourMinutes),
             clientWork.Count,
             projects.Count - clientWork.Count,
@@ -78,18 +78,20 @@ public sealed class DomainFinanceService(
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var rollup = await rollups.LoadAsync(projects, cancellationToken);
         var byMonth = projects
-            .Select(p => Recognition.ByMonth(rollup.Money(p.Id).Summary.RecognisedToDate, rollup.Costs(p.Id)))
+            .Select(p => rollup.RevenueByMonth(p.Id))
             .ToList();
         var costs = projects.SelectMany(p => rollup.Costs(p.Id)).ToList();
+        var unconverted = projects.SelectMany(p => rollup.Unconverted(p.Id)).ToList();
 
         return Months(query.Months)
             .Select(month =>
             {
+                var end = month.AddMonths(1).AddDays(-1);
                 var revenue = PeriodMoney.Round(byMonth.Sum(m => m.GetValueOrDefault(month)));
-                var cost = PeriodMoney.Costs(costs, month, month.AddMonths(1).AddDays(-1));
+                var cost = PeriodMoney.Costs(costs, month, end);
                 return new FinanceMonthResponse(
                     month, revenue, Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.Materials), Rounded(cost.GroundLabour),
-                    Rounded(cost.Total), revenue - Rounded(cost.Total));
+                    Rounded(cost.Total), revenue - Rounded(cost.Total), UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
             })
             .ToList();
     }
@@ -160,7 +162,7 @@ public sealed class DomainFinanceService(
             .Select(g => (Client: g.First(), Billing: rollup.Billing(g)))
             .Where(x => x.Billing.Invoiced > 0 || x.Billing.Drafts > 0)
             .Select(x => new ClientBillingResponse(
-                x.Client.ClientId!.Value, ClientName(x.Client)!, x.Billing.Value, x.Billing.Invoiced, x.Billing.Received,
+                x.Client.ClientId!.Value, ClientName(x.Client)!, x.Billing.Revenue, x.Billing.Invoiced, x.Billing.Received,
                 x.Billing.Outstanding, x.Billing.Overdue))
             .OrderByDescending(c => c.Outstanding)
             .ToList();
@@ -182,13 +184,13 @@ public sealed class DomainFinanceService(
 
         return new FinanceBillingResponse(
             rollup.Position(rollup.Billing(projects)),
-            BillingPosition.Aging(rollup.Invoices, today).Select(a => new AgingResponse(a.FromDays, a.ToDays, a.Amount, a.Count)).ToList(),
+            ProjectBilling.Aging(rollup.Invoices, today).Select(a => new AgingResponse(a.FromDays, a.ToDays, a.Amount, a.Count)).ToList(),
             monthly,
             byClient,
             rollup.Payments.GroupBy(p => p.Method).Select(g => new MethodTotalResponse(g.Key, g.Sum(p => p.AmountUsd)))
                 .OrderByDescending(m => m.Amount).ToList(),
             open,
-            rollup.UnconvertedInvoices);
+            rollup.UnconvertedInvoices());
     }
 
     public async Task<IReadOnlyList<FinanceClientResponse>> ClientsAsync(string domain, CancellationToken cancellationToken = default)
@@ -253,13 +255,38 @@ public sealed class DomainFinanceService(
                 .OrderByDescending(c => c.Usd)
                 .ToList(),
             expenses.OrderByDescending(x => x.Usd ?? -1).Take(BiggestExpenses).ToList(),
-            expenses
-                .Where(x => x.Usd is null)
-                .Select(x => (x.Currency, x.Amount))
-                .Concat(labour.SelectMany(l => l.Cost.Unconverted.Select(u => (u.Currency, u.Amount))))
-                .GroupBy(x => x.Currency.ToUpperInvariant())
-                .Select(g => new CurrencyTotalResponse(g.Key, g.Sum(x => x.Amount)))
-                .ToList());
+            UnconvertedOf(PeriodMoney.Unconverted(projects.SelectMany(p => rollup.Unconverted(p.Id)), from, to)));
+    }
+
+    public async Task<IReadOnlyList<MoneyAttentionResponse>> AttentionAsync(string domain, CancellationToken cancellationToken = default)
+    {
+        await CheckDomainAsync(domain, cancellationToken);
+        var projects = (await summaries.DomainProjectsAsync(domain, cancellationToken)).OrderBy(p => p.StartDate).ThenBy(p => p.Id).ToList();
+        var byId = projects.ToDictionary(p => p.Id);
+        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        var facts = projects
+            .Select(p =>
+            {
+                var summary = rollup.Money(p.Id).Summary;
+                var billing = rollup.Billing([p]);
+                return new MoneyAttention.Project(
+                    p.Id, p.Status, p.BillingType == BillingType.Client, summary.Revenue, summary.Cost, billing.Outstanding, billing.Overdue);
+            })
+            .ToList();
+
+        return MoneyAttention.Of(facts, rollup.Invoices, rollup.Today, MoneyAttention.WarnsOnCost(domain))
+            .Select(i => new MoneyAttentionResponse(
+                i.Kind,
+                i.ProjectId,
+                byId[i.ProjectId].Title,
+                ClientName(byId[i.ProjectId]),
+                i.InvoiceId,
+                i.InvoiceId is { } id ? rollup.InvoiceRow(id).Number : null,
+                i.DaysOverdue,
+                i.Amount,
+                i.Revenue,
+                i.UsedPct))
+            .ToList();
     }
 
     /// <summary>Money is shown per domain; a domain the caller can't see is not found.</summary>
@@ -295,8 +322,10 @@ public sealed class DomainFinanceService(
     private static decimal Rounded(decimal amount) => PeriodMoney.Round(amount);
 
     private static IReadOnlyList<UnconvertedCostResponse> Unconverted(IEnumerable<ProjectFinance.UnconvertedCost> costs)
-        => costs
+        => UnconvertedOf(costs
             .GroupBy(u => (u.Source, Currency: u.Currency.ToUpperInvariant()))
-            .Select(g => new UnconvertedCostResponse(g.Key.Source, g.Key.Currency, g.Sum(u => u.Amount)))
-            .ToList();
+            .Select(g => new ProjectFinance.UnconvertedCost(g.Key.Source, g.Key.Currency, g.Sum(u => u.Amount))));
+
+    private static IReadOnlyList<UnconvertedCostResponse> UnconvertedOf(IEnumerable<ProjectFinance.UnconvertedCost> costs)
+        => costs.Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount)).ToList();
 }

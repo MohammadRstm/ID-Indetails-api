@@ -97,6 +97,19 @@ public sealed class RequirementRepository(IdIndetailsDbContext db) : IRequiremen
                 .SetProperty(r => r.DoneAt, (DateTime?)null)
                 .SetProperty(r => r.DoneById, (long?)null), cancellationToken);
 
+    public async Task<IReadOnlyList<ProjectRequirement>> OpenDueByAsync(string domain, DateOnly to, CancellationToken cancellationToken = default)
+        => await db.ProjectRequirements
+            .AsNoTracking()
+            .Include(r => r.Project)
+            .Include(r => r.Assignees).ThenInclude(a => a.User)
+            .Where(r => r.DeletedAt == null && !r.IsDone && r.Deadline != null && r.Deadline <= to
+                && r.Project.DomainCode == domain
+                && (r.Project.Status == ProjectStatus.Active || r.Project.Status == ProjectStatus.Hold))
+            .OrderBy(r => r.Deadline)
+            .ThenBy(r => r.CreatedAt)
+            .ThenBy(r => r.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<RequirementDeadline>> DueBetweenAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
         => await db.ProjectRequirements
             .AsNoTracking()

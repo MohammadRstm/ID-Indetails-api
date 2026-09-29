@@ -8,9 +8,11 @@ public interface IWorkInsightsService
 {
     Task<ProjectWorkResponse> ProjectWorkAsync(long projectId, ProjectWorkQuery query, CancellationToken cancellationToken = default);
 
-    Task<ProjectContributorDetailResponse> ContributorAsync(long projectId, long userId, CancellationToken cancellationToken = default);
+    Task<ProjectContributorDetailResponse> ContributorAsync(long projectId, long userId, ProjectWorkQuery query, CancellationToken cancellationToken = default);
 
     Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<PersonWorkResponse>> PeopleAsync(PeopleWorkQuery query, CancellationToken cancellationToken = default);
+
+    Task<EmployeeLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default);
 }

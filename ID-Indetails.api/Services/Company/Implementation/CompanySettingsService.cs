@@ -43,6 +43,8 @@ public sealed class CompanySettingsService(
         }
 
         settings.Name = request.Name.Trim();
+        settings.Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim();
+        settings.Website = string.IsNullOrWhiteSpace(request.Website) ? null : request.Website.Trim();
         settings.TimeZone = options.Value.TimeZone;
         settings.WeekStart = request.WeekStart;
         settings.Use24HourTime = request.Use24HourTime;
@@ -67,6 +69,6 @@ public sealed class CompanySettingsService(
     {
         var s = settings ?? new CompanySettings();
         return new CompanySettingsResponse(
-            settings is not null, s.Name, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt);
+            settings is not null, s.Name, s.Address, s.Website, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt);
     }
 }
