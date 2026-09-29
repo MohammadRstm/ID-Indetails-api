@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.Enums;
 using Shouldly;
 
 namespace ID_Indetails.UnitTests.Business;
@@ -51,11 +52,17 @@ public class PaymentRulesTests
     [Fact]
     public void Project_billing_counts_on_account_payments_as_received_but_not_against_invoices()
     {
+        ProjectBilling.Invoice Issued(long id, decimal total, decimal paid) => new(id, 1, 1, IsIssued: true, IsVoided: false, Today, total, paid);
+
         var summary = ProjectBilling.Summarise(
-            revenue: 10_000m,
-            invoices: [new(4000m, 1000m), new(2000m, 2000m)],
-            received: 5000m,
-            onAccount: 2000m);
+            10_000m,
+            [Issued(1, 4000m, 1000m), Issued(2, 2000m, 2000m)],
+            [
+                new ProjectBilling.Payment(1, 1, 1, Today, 1000m, PaymentMethod.Bank),
+                new ProjectBilling.Payment(1, 1, 2, Today, 2000m, PaymentMethod.Bank),
+                new ProjectBilling.Payment(1, 1, null, Today, 2000m, PaymentMethod.Cash),
+            ],
+            Today);
 
         summary.Invoiced.ShouldBe(6000m);
         summary.Outstanding.ShouldBe(3000m);
@@ -65,6 +72,7 @@ public class PaymentRulesTests
         summary.Owed.ShouldBe(5000m);
         summary.PaidAhead.ShouldBe(0m);
 
-        ProjectBilling.Summarise(1000m, [], received: 1500m, onAccount: 1500m).PaidAhead.ShouldBe(500m);
+        ProjectBilling.Summarise(1000m, [], [new ProjectBilling.Payment(1, 1, null, Today, 1500m, PaymentMethod.Cash)], Today)
+            .PaidAhead.ShouldBe(500m);
     }
 }

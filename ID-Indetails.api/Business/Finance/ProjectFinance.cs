@@ -95,12 +95,22 @@ public static class ProjectFinance
         return (items, unpriced);
     }
 
-    /// <summary>Each cost on its day in USD; costs with no exchange rate that day are left out (as in <see cref="ToUsd"/>).</summary>
+    /// <summary>A cost with no exchange rate on its day, in its own currency.</summary>
+    public sealed record DatedUnconverted(CostSource Source, string Currency, decimal Amount, DateOnly Day);
+
+    /// <summary>Each cost on its day in USD; costs with no exchange rate that day are left out here and listed by <see cref="Unconvertible"/>.</summary>
     public static IReadOnlyList<Recognition.DatedCost> DatedUsd(IEnumerable<CostItem> items, ExchangeRateTable rates)
         => items
             .Select(i => (i.Source, i.Day, Usd: rates.ToUsd(i.Amount, i.Currency, i.Day)))
             .Where(i => i.Usd is not null)
             .Select(i => new Recognition.DatedCost(i.Source, i.Day, i.Usd!.Value))
+            .ToList();
+
+    /// <summary>The costs <see cref="DatedUsd"/> leaves out: those with no exchange rate on their day.</summary>
+    public static IReadOnlyList<DatedUnconverted> Unconvertible(IEnumerable<CostItem> items, ExchangeRateTable rates)
+        => items
+            .Where(i => rates.ToUsd(i.Amount, i.Currency, i.Day) is null)
+            .Select(i => new DatedUnconverted(i.Source, i.Currency.ToUpperInvariant(), i.Amount, i.Day))
             .ToList();
 
     /// <summary>The rate in force on the day, from a person's history ordered by date; their earliest rate for days before it.</summary>

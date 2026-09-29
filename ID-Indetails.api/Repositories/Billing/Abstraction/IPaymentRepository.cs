@@ -1,4 +1,3 @@
-using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Billing.Abstraction;
@@ -25,12 +24,6 @@ public interface IPaymentRepository
     Task<Payment?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default);
 
     Task<bool> HasLiveInitialAsync(long projectId, CancellationToken cancellationToken = default);
-
-    /// <summary>Totals of the project's live payments in USD: all of them, and those on account.</summary>
-    Task<(decimal Received, decimal OnAccount)> ProjectTotalsAsync(long projectId, CancellationToken cancellationToken = default);
-
-    /// <summary>The project's issued, live invoices with what has been paid on each.</summary>
-    Task<IReadOnlyList<ProjectBilling.IssuedInvoice>> IssuedInvoicesAsync(long projectId, CancellationToken cancellationToken = default);
 
     void Add(Payment payment);
 }

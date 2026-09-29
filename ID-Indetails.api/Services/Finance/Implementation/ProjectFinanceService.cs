@@ -54,6 +54,7 @@ public sealed class ProjectFinanceService(
             return new ProjectCostHistory(
                 Calculate(p, loaded),
                 ProjectFinance.DatedUsd(items, loaded.Rates),
+                ProjectFinance.Unconvertible(items, loaded.Rates),
                 entries.Select(e => new WorkDay(e.UserId, clock.ToCompanyDate(e.StartedAt))).ToList());
         });
     }

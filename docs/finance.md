@@ -29,23 +29,20 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 - **Revenue in a period** is what the projects recognised then: each project's recognised revenue (revenue × progress, or all of it once done) is spread over the months of its costs (`Recognition.ByMonth`: labour months, or other cost months when there is no labour), and each month counts for the share of it the period covers, up to today. The company overview works the same way. The prototype counted whole calendar months instead.
 - **Cost in a period** is every cost dated inside it, by source: labour (including everyone's paid breaks, hourly and salaried alike), expenses, materials and ground labour. All four are always returned, so the parts add up to the total (the prototype's Execution sub-lines left materials and ground labour out).
 - **Margin** is profit ÷ revenue when there is revenue. For a project it only shows once the project is done, at least 5% along or has 10 hours logged (`marginKnown`). A **client** follows the same rule as a whole: done once every project is, progress = the share of their revenue recognised so far, hours across all their projects.
-- **Billing** (`Business/Billing/BillingPosition.cs`):
+- **Billing** (`Business/Billing/ProjectBilling.cs`) is the one billing rule. The project page's `money.billing`, the project and client lists, the client pages and the Financials page all use it, through the same batch load (`MoneyRollup`):
   - invoiced counts issued, live invoices; outstanding is what is left to pay on them; drafts are counted apart;
   - received counts every live payment; payments on account count as received but never reduce outstanding;
   - an invoice is **overdue** while it is sent or partly paid and its due date is before today (company time zone);
   - not yet invoiced = the client projects' revenue − invoiced, never below zero;
   - invoices are converted at the rate of the day they were issued (drafts at today's); one with no rate is left out and listed in `unconvertedInvoices`.
 - **Aging** puts every open invoice's balance in one of: not yet due, 1–30, 31–60, 61–90 and 90+ days past due.
-- **Unconverted costs** in the summary and projects totals are all-time (see "Known limits").
+- **Unconverted costs** are dated like every other cost: the summary and the costs tab list those dated inside the period (every source, materials included), and each month of `monthly` lists its own. The projects totals are all-time, like the rest of that tab.
 
 ## Response notes
 
 - **Summary:** `revenue`, `cost { labour, expenses, materials, groundLabour, total }`, `profit`, `margin`, `unconverted[]`, `unpricedLabourMinutes`, counts of client and internal projects, all-time client revenue and profit and internal cost, `stillToEarn` (client revenue not recognised yet), and `billing` (the position as of today, whatever the period).
-- **Billing:** `position` (value, invoiced, issued count, received, on account, outstanding, overdue, overdue count, days overdue of the oldest, not yet invoiced, drafts), `aging[]`, `monthly[]` (invoiced by issue month, collected by the month received), `byClient[]` (clients with invoices or drafts, most outstanding first), `byMethod[]`, `openInvoices[]` (soonest due first) and `unconvertedInvoices[]`.
-- **Costs:** labour by person is the 10 people who cost most; the biggest expenses are the 12 largest in USD (unconverted ones last).
-- **Project list `money`:** revenue, recognised to date, cost, profit, margin, `marginKnown`, invoiced and outstanding. Sorting and filtering by money isn't offered on this paged list; the Financials projects table has every project.
-- **Client `money`:** projects (active, completed), hours, revenue, recognised, cost, profit, margin, active and completed revenue, the margin of completed work, and billing. The detail's `projectMoney` lists each project the same way.
-
-## Known limits
-
-- **Unconverted costs by period:** the shared calculator gives dated costs only in USD and leaves out those it can't convert, so the summary lists unconverted costs all-time rather than for the period.
+- **Monthly:** each month's revenue, cost by source, profit and `unconverted[]` (costs of that month with no rate).
+- **Billing:** `position` (value, invoiced, issued count, received, payment count, on account, outstanding, overdue, overdue count, days overdue of the oldest, not yet invoiced, drafts), `aging[]`, `monthly[]` (invoiced by issue month, collected by the month received), `byClient[]` (clients with invoices or drafts, most outstanding first), `byMethod[]`, `openInvoices[]` (soonest due first) and `unconvertedInvoices[]`.
+- **Costs:** labour by person is the 10 people who cost most; the biggest expenses are the 12 largest in USD (unconverted ones last); `unconverted[]` lists the period's costs with no rate, by source and currency.
+- **Project list `money`:** revenue, recognised to date, cost, profit, margin, `marginKnown`, invoiced and outstanding, plus `hasUnconverted` (a cost or invoice of the project has no rate, so the USD figures leave it out) and `unpricedLabourMinutes` (time of people with no pay record). Sorting and filtering by money isn't offered on this paged list; the Financials projects table has every project.
+- **Client `money`:** projects (active, completed), hours, revenue, recognised, cost, profit, margin, active and completed revenue, the margin of completed work, billing and `unconvertedInvoices[]`. The detail's `projectMoney` lists each project the same way, with the same `hasUnconverted` and `unpricedLabourMinutes` as the project list.

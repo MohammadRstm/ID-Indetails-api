@@ -91,6 +91,12 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         summary.Billing.OverdueCount.ShouldBe(1);
         summary.Billing.OldestOverdueDays.ShouldBe(15);
         summary.Billing.NotYetInvoiced.ShouldBe(7000m);
+        summary.Billing.PaymentCount.ShouldBe(2);
+
+        // The unconverted expense belongs to December: a period without it doesn't list it.
+        var thisYear = await OkAsync<FinanceSummaryResponse>("/api/finance/design/summary?from=2026-01-01", admin.AccessToken);
+        thisYear.Unconverted.ShouldBeEmpty();
+        thisYear.Cost.Total.ShouldBe(40m);
 
         var projects = await OkAsync<FinanceProjectsResponse>("/api/finance/design/projects", admin.AccessToken);
         var row = projects.Projects.Single(p => p.ProjectId == project.Id);
@@ -105,6 +111,9 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         months.Count.ShouldBe(36);
         months.Sum(m => m.Revenue).ShouldBe(10_000m);
         months.Single(m => m.Month == new DateOnly(2026, 2, 1)).Labour.ShouldBe(30m);
+        months.Single(m => m.Month == new DateOnly(2025, 12, 1)).Unconverted
+            .ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
+        months.Where(m => m.Month != new DateOnly(2025, 12, 1)).SelectMany(m => m.Unconverted).ShouldBeEmpty();
 
         var billing = await OkAsync<FinanceBillingResponse>("/api/finance/design/billing", admin.AccessToken);
         billing.Aging.Single(a => a.FromDays == 1).Amount.ShouldBe(2000m);
@@ -123,13 +132,32 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var costs = await OkAsync<FinanceCostsResponse>("/api/finance/design/costs?from=2025-12-01", admin.AccessToken);
         costs.LabourByPerson.Single().Usd.ShouldBe(30m);
         costs.ExpensesByCategory.Sum(c => c.Usd).ShouldBe(10m);
+        costs.Unconverted.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
 
-        // The project list and the client pages carry the same money.
+        // The project page's billing uses the same rule as the Financials page.
+        var detailMoney = (await OkAsync<ProjectResponse>($"/api/projects/{project.Id}", admin.AccessToken)).Money!;
+        detailMoney.Cost.Labour.ShouldBe(15m);
+        detailMoney.Billing.Invoiced.ShouldBe(3000m);
+        detailMoney.Billing.IssuedCount.ShouldBe(1);
+        detailMoney.Billing.Received.ShouldBe(1500m);
+        detailMoney.Billing.PaymentCount.ShouldBe(2);
+        detailMoney.Billing.Outstanding.ShouldBe(2000m);
+        detailMoney.Billing.Overdue.ShouldBe(2000m);
+        detailMoney.Billing.OverdueCount.ShouldBe(1);
+        detailMoney.Billing.OldestOverdueDays.ShouldBe(15);
+        detailMoney.Billing.Drafts.ShouldBe(0m);
+        detailMoney.Billing.UnconvertedInvoices.ShouldBeEmpty();
+
+        // The project list and the client pages carry the same money, and flag the unconverted December expense.
         var list = await OkAsync<PagedResponse<ProjectSummaryResponse>>($"/api/projects?clientId={clientId}", admin.AccessToken);
         list.Items.Single().Money!.Outstanding.ShouldBe(2000m);
+        list.Items.Single().Money!.HasUnconverted.ShouldBeTrue();
+        list.Items.Single().Money!.UnpricedLabourMinutes.ShouldBe(0);
         var detail = await OkAsync<ClientResponse>($"/api/clients/{clientId}", admin.AccessToken);
         detail.Money!.Profit.ShouldBe(9975m);
+        detail.Money.UnconvertedInvoices.ShouldBeEmpty();
         detail.ProjectMoney!.Single().Billing.Invoiced.ShouldBe(3000m);
+        detail.ProjectMoney!.Single().HasUnconverted.ShouldBeTrue();
         (await OkAsync<PagedResponse<ClientSummaryResponse>>("/api/clients", admin.AccessToken)).Items.Single(c => c.Id == clientId).Money!.Revenue
             .ShouldBe(10_000m);
     }

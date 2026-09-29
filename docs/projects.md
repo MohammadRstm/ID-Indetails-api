@@ -6,7 +6,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first. Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding) only for callers with `financial:view`; see [finance.md](finance.md) |
+| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first. Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding, `hasUnconverted`, `unpricedLabourMinutes`) only for callers with `financial:view`; see [finance.md](finance.md) |
 | `GET /api/projects/{id}` | `project:view` | A project. `money` is included only for callers with `financial:view` |
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner |
@@ -30,7 +30,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 - The Execution agreed amount is calculated live while the project is open, and frozen into `projects.revenue` when it is finalised. A material with no exchange rate for its day is left out of the live amount (`money.unconvertedMaterials`), and finalising is refused until the rate is added (`422 exchange_rate_missing`).
 - While a project is finalised (`money.isLocked`), billing, revenue, fee and markup can't change (`422 project_locked`).
 - A project with any invoice or payment can't move to another client or become internal (`422 project_has_billing`), because invoices and payments keep the client they were made for.
-- `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed` and `paidAhead` (see [billing.md](billing.md)).
+- `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed`, `paidAhead`, `issuedCount`, `paymentCount`, `overdue`, `overdueCount`, `oldestOverdueDays`, `drafts` and `unconvertedInvoices[]` (invoices with no rate on their issue day, left out of the USD figures). It comes from the same billing rule and batch load as the lists and the Financials page (`Business/Billing/ProjectBilling.cs`; see [billing.md](billing.md) and [finance.md](finance.md)).
 - Cost, profit, margin and the projections come from the shared finance calculator (below).
 
 ## Cost, profit and margin

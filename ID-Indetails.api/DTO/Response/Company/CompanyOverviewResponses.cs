@@ -1,4 +1,6 @@
 using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.DTO.Response.Finance;
+using ID_Indetails.api.DTO.Response.Projects;
 
 namespace ID_Indetails.api.DTO.Response.Company;
 
@@ -11,6 +13,8 @@ namespace ID_Indetails.api.DTO.Response.Company;
 /// <param name="TracksHours">Whether anyone in the domain has ever logged hours.</param>
 /// <param name="ClientsServed">Clients of projects with activity in the period.</param>
 /// <param name="Outstanding">Unpaid on issued invoices today, whatever the period.</param>
+/// <param name="UnconvertedCosts">Costs of the period with no exchange rate on their day, left out of <see cref="Cost"/>.</param>
+/// <param name="UnconvertedInvoices">Issued invoices with no exchange rate on their issue day, left out of invoiced and outstanding.</param>
 public sealed record DomainOverviewResponse(
     string Domain,
     decimal Revenue,
@@ -26,11 +30,14 @@ public sealed record DomainOverviewResponse(
     int AllClients,
     decimal Invoiced,
     decimal Collected,
-    decimal Outstanding);
+    decimal Outstanding,
+    IReadOnlyList<UnconvertedCostResponse> UnconvertedCosts,
+    IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
 /// <param name="Overhead">Company expenses charged to the period (by calendar days), in USD.</param>
 /// <param name="UnconvertedOverhead">Overhead with no exchange rate for its month, left out of <see cref="Overhead"/>.</param>
 /// <param name="NetProfit">Both domains' profit less company overhead.</param>
+/// <param name="UnconvertedInvoices">Both domains' invoices with no exchange rate on their issue day.</param>
 public sealed record CompanyOverviewResponse(
     DateOnly From,
     DateOnly To,
@@ -45,7 +52,8 @@ public sealed record CompanyOverviewResponse(
     decimal Collected,
     decimal Outstanding,
     int ProjectsWithActivity,
-    int ClientsServed);
+    int ClientsServed,
+    IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
 /// <summary>One month for both domains together, in USD.</summary>
 /// <param name="ProfitBeforeOverhead">Revenue − project costs.</param>

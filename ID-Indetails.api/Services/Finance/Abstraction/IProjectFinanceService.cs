@@ -26,8 +26,9 @@ public interface IProjectFinanceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Each project's money plus every cost on its day in USD and who worked on which day, for period
-    /// and month-by-month figures. Same loading as <see cref="GetAsync(IReadOnlyCollection{Project}, CancellationToken)"/>.
+    /// Each project's money plus every cost on its day (in USD, and apart those with no exchange rate that day) and
+    /// who worked on which day, for period and month-by-month figures. Same loading as
+    /// <see cref="GetAsync(IReadOnlyCollection{Project}, CancellationToken)"/>.
     /// </summary>
     Task<IReadOnlyDictionary<long, ProjectCostHistory>> CostHistoryAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken = default);
 
@@ -53,6 +54,11 @@ public sealed record ProjectFinancials(
 
 public sealed record WorkDay(long UserId, DateOnly Day);
 
-public sealed record ProjectCostHistory(ProjectFinancials Money, IReadOnlyList<Recognition.DatedCost> Costs, IReadOnlyList<WorkDay> Work);
+/// <param name="Unconverted">Costs with no exchange rate on their day, in their own currency.</param>
+public sealed record ProjectCostHistory(
+    ProjectFinancials Money,
+    IReadOnlyList<Recognition.DatedCost> Costs,
+    IReadOnlyList<ProjectFinance.DatedUnconverted> Unconverted,
+    IReadOnlyList<WorkDay> Work);
 
 public sealed record BreakCost(long UserId, long ProjectId, ProjectFinance.CostItem Cost);

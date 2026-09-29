@@ -17,7 +17,6 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
-using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
@@ -25,7 +24,6 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
-using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 
@@ -39,9 +37,7 @@ public sealed class ProjectService(
     IClientRepository clients,
     IUserRepository users,
     IExpenseRepository expenses,
-    IPaymentRepository payments,
     IPaymentService paymentService,
-    IProjectFinanceService finance,
     IMoneyRollupService moneyRollups,
     IActivityEventRepository activity,
     IProjectNotifier notifier,
@@ -363,18 +359,16 @@ public sealed class ProjectService(
         };
     }
 
+    /// <summary>The same batched load as the lists and the Financials page, so every page shows the same billing.</summary>
     private async Task<ProjectMoneyResponse> MoneyOfAsync(Project p, CancellationToken cancellationToken)
     {
-        var money = await finance.GetAsync(p, cancellationToken);
+        var rollup = await moneyRollups.LoadAsync([p], cancellationToken);
+        var money = rollup.Money(p.Id);
         var summary = money.Summary;
         var costs = money.Costs;
         var expenseTotals = ExpenseRules.Totals(await expenses.AmountsAsync(p.Id, cancellationToken))
             .Select(t => new CurrencyTotalResponse(t.Currency, t.Total))
             .ToList();
-
-        var (received, onAccount) = await payments.ProjectTotalsAsync(p.Id, cancellationToken);
-        var billing = ProjectBilling.Summarise(
-            summary.Revenue, await payments.IssuedInvoicesAsync(p.Id, cancellationToken), received, onAccount);
 
         return new ProjectMoneyResponse
         {
@@ -385,9 +379,7 @@ public sealed class ProjectService(
             MaterialMarkup = p.MaterialMarkup,
             MaterialCharge = money.MaterialCharge,
             ExpenseTotals = expenseTotals,
-            Billing = new ProjectBillingResponse(
-                billing.Invoiced, billing.Outstanding, billing.Received, billing.OnAccount,
-                billing.NotYetInvoiced, billing.Owed, billing.PaidAhead),
+            Billing = rollup.ProjectBillingOf(p),
             Cost = new ProjectCostResponse(
                 costs.Labour, costs.Expenses, costs.Materials, costs.GroundLabour, costs.Total,
                 costs.Unconverted.Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount)).ToList(),
