@@ -3452,6 +3452,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("created_by_id");
 
+                    b.Property<DateTime?>("DeactivatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("deactivated_at");
+
                     b.Property<string>("DomainCode")
                         .HasMaxLength(16)
                         .HasColumnType("varchar(16)")
