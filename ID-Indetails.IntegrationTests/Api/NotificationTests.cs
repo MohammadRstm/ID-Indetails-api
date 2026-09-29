@@ -92,8 +92,9 @@ public class NotificationTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { domainCode = DomainCodes.Execution, teamId = ExecutionSiteOperations }, superAdmin.AccessToken);
         moved.IsSuccessStatusCode.ShouldBeTrue(await moved.Content.ReadAsStringAsync());
 
-        (await ListAsync(employee.AccessToken)).Items.ShouldBeEmpty();
-        (await UnreadAsync(employee.AccessToken)).ShouldBe(0);
+        // What's left is the move itself, which belongs to no project.
+        (await ListAsync(employee.AccessToken)).Items.ShouldHaveSingleItem().Kind.ShouldBe(NotificationKinds.DomainChanged);
+        (await UnreadAsync(employee.AccessToken)).ShouldBe(1);
         await (await Client.PostEmptyAsync($"/api/notifications/{id}/read", employee.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }

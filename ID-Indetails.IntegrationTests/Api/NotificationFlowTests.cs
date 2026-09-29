@@ -146,9 +146,10 @@ public class NotificationFlowTests(ApiFactory api) : IClassFixture<ApiFactory>
         var payChanged = (await OfKindAsync(employee.AccessToken, NotificationKinds.PayChanged)).ShouldHaveSingleItem();
         payChanged.Payload!.Value.TryGetProperty("amount", out _).ShouldBeFalse();
 
+        // Only super admins hold permission:manage.
         await OkAsync<object>(Client.PutJsonAsync($"/api/users/{employee.User.Id}/permissions",
             new { changes = new[] { new { code = PermissionCodes.ClientView, action = PermissionChangeAction.Grant, reason = "Helps with clients" } } },
-            admin.AccessToken));
+            superAdmin.AccessToken));
         var granted = (await OfKindAsync(employee.AccessToken, NotificationKinds.PermissionsChanged)).ShouldHaveSingleItem();
         granted.Payload!.Value.GetProperty("granted")[0].GetString().ShouldBe(PermissionCodes.ClientView);
 
