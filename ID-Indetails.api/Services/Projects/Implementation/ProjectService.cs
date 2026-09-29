@@ -6,6 +6,7 @@ using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Expenses;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Projects;
@@ -18,14 +19,17 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
+using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
+using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.WorkEntries.Implementation;
 
 namespace ID_Indetails.api.Services.Projects.Implementation;
 
@@ -37,6 +41,8 @@ public sealed class ProjectService(
     IClientRepository clients,
     IUserRepository users,
     IExpenseRepository expenses,
+    IWorkEntryRepository entries,
+    ICompanyRepository company,
     IPaymentService paymentService,
     IMoneyRollupService moneyRollups,
     IActivityEventRepository activity,
@@ -45,24 +51,42 @@ public sealed class ProjectService(
     IClock clock) : IProjectService
 {
     private const string NotFoundMessage = "Project not found.";
+    public const int ListSparkWeeks = 8;
+    public const int ListContributors = 4;
 
     public async Task<PagedResponse<ProjectSummaryResponse>> ListAsync(ProjectListQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        var (items, total) = await projects.SearchAsync(
-            new ProjectSearch(
-                actor.VisibleDomains, query.Search?.Trim(), query.Status, query.ClientId, query.BillingType, query.Domain, query.Page, query.PageSize),
-            cancellationToken);
-
-        if (!actor.Has(PermissionCodes.FinancialView))
+        var period = OpenPeriodOf(query.Year, query.Quarter);
+        if (period is { } future && future.From > clock.CompanyToday)
         {
-            return new PagedResponse<ProjectSummaryResponse>(items.Select(ToSummary).ToList(), query.Page, query.PageSize, total);
+            // Nothing can have been open during a period that hasn't started.
+            return new PagedResponse<ProjectSummaryResponse>([], query.Page, query.PageSize, 0);
         }
 
-        // One batched load for the whole page, never a query per project.
-        var rollup = await moneyRollups.LoadAsync(items, cancellationToken);
+        var (items, total) = await projects.SearchAsync(
+            new ProjectSearch(
+                actor.VisibleDomains,
+                query.Search?.Trim(),
+                query.Status,
+                query.ClientId,
+                query.BillingType,
+                query.Domain,
+                query.Page,
+                query.PageSize,
+                query.OwnerId,
+                period is { } open ? new OpenPeriod(clock.CompanyDayStartUtc(open.From), open.To) : null,
+                query.Sort),
+            cancellationToken);
+
+        // One batched load of each kind for the whole page, never a query per project.
+        var work = actor.Has(PermissionCodes.WorkEntryViewAll) ? await ListWorkAsync(items, cancellationToken) : null;
+        var rollup = actor.Has(PermissionCodes.FinancialView) ? await moneyRollups.LoadAsync(items, cancellationToken) : null;
         return new PagedResponse<ProjectSummaryResponse>(
-            items.Select(p => ToSummary(p) with { Money = rollup.ListMoney(p) }).ToList(), query.Page, query.PageSize, total);
+            items.Select(p => ToSummary(p) with { Money = rollup?.ListMoney(p), Work = work?.GetValueOrDefault(p.Id) }).ToList(),
+            query.Page,
+            query.PageSize,
+            total);
     }
 
     public async Task<ProjectResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)
@@ -428,6 +452,53 @@ public sealed class ProjectService(
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>The whole year, or one quarter of it.</summary>
+    private static (DateOnly From, DateOnly To)? OpenPeriodOf(int? year, int? quarter)
+    {
+        if (year is not { } y)
+        {
+            return null;
+        }
+
+        var from = new DateOnly(y, quarter is { } q ? (q - 1) * 3 + 1 : 1, 1);
+        return (from, from.AddMonths(quarter is null ? 12 : 3).AddDays(-1));
+    }
+
+    /// <summary>The page's Design projects' work: one query for totals and contributors, one for the last 8 weeks.</summary>
+    private async Task<IReadOnlyDictionary<long, ProjectListWorkResponse>> ListWorkAsync(
+        IReadOnlyList<Project> items,
+        CancellationToken cancellationToken)
+    {
+        var ids = items.Where(p => p.DomainCode == DomainCodes.Design).Select(p => p.Id).ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<long, ProjectListWorkResponse>();
+        }
+
+        var today = clock.CompanyToday;
+        var firstDay = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken)).FirstDayOfWeek;
+        var since = WorkStats.WeekStartOf(today, firstDay).AddDays(-7 * (ListSparkWeeks - 1));
+        var people = (await entries.ContributionsAsync(ids, cancellationToken)).ToLookup(c => c.ProjectId);
+        var recent = (await projects.RecentWorkAsync(ids, clock.CompanyDayStartUtc(since), cancellationToken))
+            .Select(r => new WorkStats.Worked(r.Id, r.UserId, r.ProjectId, clock.ToCompanyTime(r.StartedAt), r.Minutes))
+            .ToLookup(w => w.ProjectId);
+
+        return ids.ToDictionary(id => id, id =>
+        {
+            var contributors = people[id].OrderByDescending(c => c.Minutes).ThenBy(c => c.UserId).ToList();
+            var worked = recent[id].ToList();
+            var last14 = WorkStats.Minutes(worked, today.AddDays(-13), today);
+            return new ProjectListWorkResponse(
+                contributors.Sum(c => c.Minutes),
+                WorkStats.LevelOf(last14),
+                last14,
+                WorkStats.Weekly(worked, today, ListSparkWeeks, firstDay).Select(w => w.Minutes).ToList(),
+                contributors.Count > 0 ? contributors.Max(c => c.LastStartedAt) : null,
+                contributors.Take(ListContributors).Select(c => new PersonRefResponse(c.UserId, c.UserName)).ToList(),
+                contributors.Count);
+        });
+    }
 
     private static ProjectClientResponse? ClientOf(Project p)
         => p.Client is null ? null : new ProjectClientResponse(p.Client.Id, ClientRules.DisplayName(p.Client.Name, p.Client.Organisation));

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.Enums;
@@ -138,7 +139,25 @@ public sealed record ProjectSummaryResponse
     /// <summary>Only for callers with financial:view; left out entirely otherwise.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ProjectListMoneyResponse? Money { get; init; }
+
+    /// <summary>Design projects only, for callers with work_entry:view_all; left out entirely otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ProjectListWorkResponse? Work { get; init; }
 }
+
+/// <summary>A Design project's logged work, as the project list shows it.</summary>
+/// <param name="ActivityLevel">From the last 14 days: busy from 45 h a week, steady from 15 h, quiet with any work.</param>
+/// <param name="Weekly">Minutes of the last 8 weeks, ending with this one, oldest first.</param>
+/// <param name="Contributors">The 4 people who logged the most time on it.</param>
+/// <param name="ContributorCount">Everyone who logged work on it.</param>
+public sealed record ProjectListWorkResponse(
+    int TotalMinutes,
+    ActivityLevel ActivityLevel,
+    int MinutesLast14Days,
+    IReadOnlyList<int> Weekly,
+    DateTime? LastStartedAt,
+    IReadOnlyList<PersonRefResponse> Contributors,
+    int ContributorCount);
 
 public sealed record ProjectResponse
 {

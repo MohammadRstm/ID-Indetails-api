@@ -6,7 +6,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&page=1&pageSize=25` | `project:view` | Project list, newest first. Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding, `hasUnconverted`, `unpricedLabourMinutes`) only for callers with `financial:view`; see [finance.md](finance.md) |
+| `GET /api/projects?search=&status=&clientId=&billingType=&domain=&ownerId=&year=&quarter=&sort=start&page=1&pageSize=25` | `project:view` | Project list, newest start first unless sorted (see "The project list"). Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding, `hasUnconverted`, `unpricedLabourMinutes`) only for callers with `financial:view` (see [finance.md](finance.md)), and Design rows have `work` only for callers with `work_entry:view_all` |
 | `GET /api/projects/{id}` | `project:view` | A project. `money` is included only for callers with `financial:view` |
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner |
@@ -15,6 +15,12 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 | `POST /api/projects/{id}/hold`, `/resume`, `/complete`, `/archive`, `/reopen` | `project:change_status` | Status changes (below) |
 
 Employees hold `project:view`, so they see every project of their domain in any status, with the client by name and no money.
+
+## The project list
+
+- **Filters:** `search` (every word in the title), `status`, `clientId`, `billingType`, `domain`, `ownerId`, and `year` with an optional `quarter` (1–4). A project was **open during** a period when it started by the period's end and wasn't completed before its start (as in the prototype); a period that hasn't started yet matches nothing. A quarter needs a year (`400`).
+- **Sort** (`sort`): `start` (newest start first, the default), `activity` (most recent work first; a project without work counts from when it was added), `hours` (most logged time first), `progress` (furthest along first), `name` (A to Z) or `client` (A to Z, projects without a client last). Money isn't sortable here (decision M7).
+- **`work`** (Design rows, `work_entry:view_all` only; left out otherwise): all-time minutes, the activity level and minutes of the last 14 days (busy from 45 h a week, steady from 15 h, quiet with any work), minutes of the last 8 weeks ending with this one (the company's week start), when the latest work started, the 4 people who logged the most time and how many logged any. Loaded in two batched queries per page.
 
 ## Creating a project
 

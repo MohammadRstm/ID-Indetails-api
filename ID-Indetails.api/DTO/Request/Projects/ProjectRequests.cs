@@ -18,6 +18,16 @@ public sealed record ProjectListQuery
     /// <summary>Must be a domain the caller can see, or nothing is returned.</summary>
     public string? Domain { get; init; }
 
+    public long? OwnerId { get; init; }
+
+    /// <summary>Projects open at some point during this year, or during <see cref="Quarter"/> of it.</summary>
+    public int? Year { get; init; }
+
+    /// <summary>1 to 4; needs <see cref="Year"/>.</summary>
+    public int? Quarter { get; init; }
+
+    public ProjectSort Sort { get; init; } = ProjectSort.Start;
+
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 25;
