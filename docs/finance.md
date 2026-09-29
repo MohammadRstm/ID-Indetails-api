@@ -17,6 +17,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 | `GET /api/finance/{domain}/clients` | `financial:view` | Every client with projects and their money, most revenue first (Financials clients tab, dashboard "top clients") |
 | `GET /api/finance/{domain}/costs?from=&to=` | `financial:view` | Costs over a period: by source, labour by person, expenses by category, the biggest expenses (Financials costs tab) |
 | `GET /api/dashboard/{domain}` | `report:view` | The dashboard's cards without money or hours: active projects, clients, projects by status, longest running |
+| `GET /api/dashboard/{domain}/deadlines` | `report:view` | Upcoming deadlines: open requirements due in the next 14 days, overdue ones included |
 | `GET /api/projects` | `project:view` | Each row has `money` for callers with `financial:view` |
 | `GET /api/clients`, `GET /api/clients/{id}` | `client:view` | `money` (and on the detail, `projectMoney`) for callers with `financial:view` |
 
@@ -37,6 +38,8 @@ A domain's money as the dashboards, the Financials page, the projects list and t
   - invoices are converted at the rate of the day they were issued (drafts at today's); one with no rate is left out and listed in `unconvertedInvoices`.
 - **Aging** puts every open invoice's balance in one of: not yet due, 1–30, 31–60, 61–90 and 90+ days past due.
 - **Unconverted costs** are dated like every other cost: the summary and the costs tab list those dated inside the period (every source, materials included), and each month of `monthly` lists its own. The projects totals are all-time, like the rest of that tab.
+
+- **Upcoming deadlines** are the open requirements of the domain's active and on-hold projects with a deadline up to 14 days from today, overdue ones included, soonest first (then oldest added). `total` and `overdue` count them all; `items` holds the first 8, each with its project, assignees and days left (negative once overdue). Both domains have it.
 
 ## Response notes
 

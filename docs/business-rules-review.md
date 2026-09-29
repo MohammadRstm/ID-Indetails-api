@@ -66,6 +66,12 @@ See [finance.md](finance.md).
 | M10 | **Statement readers see the statement's money.** Holders of `statement:create` or `statement:send` see its received, agreed, remaining and paid-ahead figures without `financial:view`, because the statement is printed on the client's document. |
 | M11 | **The markup event keeps the exact markup** in its payload (`markup`, `prevMarkup`, as in the prototype), with no amount: the amount columns keep 2 decimals, so 12.5% was saved as 0.13. The feed shows that payload only with `financial:view`. Existing events were moved by the `MaterialMarkupEventPayload` migration: each project's latest one is exact, older ones keep their rounded value. |
 
+## Decided for the admin views (29 Sep 2026)
+
+| # | Rule |
+|---|---|
+| A1 | **Deadlines, money follow-ups and the cost warning cover both domains.** The prototype only shows the follow-ups and deadlines card on the Design dashboard, but its rules don't depend on the domain; the endpoints serve Design and Execution alike, and the client decides what to show. |
+
 ## Decided for notifications (29 Sep 2026)
 
 | # | Decision |
