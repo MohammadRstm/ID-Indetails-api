@@ -55,6 +55,20 @@ public sealed class ProjectNotifier(
             [project.OwnerId],
             cancellationToken);
 
+    public async Task ClosedAsync(Project project, decimal? margin, long actorId, CancellationToken cancellationToken = default)
+    {
+        if (margin is not { } closedAt)
+        {
+            return;
+        }
+
+        await sender.SendAsync(
+            Draft(NotificationKinds.ProjectClosed, project, actorId, "project", project.Id,
+                new { projectTitle = project.Title, marginPct = Math.Round(closedAt * 100, 1, MidpointRounding.AwayFromZero) }),
+            await sender.HoldersAsync(project.DomainCode, PermissionCodes.FinancialView, cancellationToken),
+            cancellationToken);
+    }
+
     public async Task ProgressChangedAsync(Project project, int previousPct, long actorId, CancellationToken cancellationToken = default)
     {
         if (project.Status != ProjectStatus.Active || previousPct >= NearlyDonePct || project.ProgressPct < NearlyDonePct)

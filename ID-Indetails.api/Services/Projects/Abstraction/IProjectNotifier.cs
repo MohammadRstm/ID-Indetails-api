@@ -13,6 +13,12 @@ public interface IProjectNotifier
 
     Task OwnerSetAsync(Project project, long actorId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Once a finalised project's margin is known (client projects with revenue), its margin as a percentage to
+    /// whoever sees the domain's money.
+    /// </summary>
+    Task ClosedAsync(Project project, decimal? margin, long actorId, CancellationToken cancellationToken = default);
+
     /// <summary>Notifies once, when an active project's progress crosses 90%.</summary>
     Task ProgressChangedAsync(Project project, int previousPct, long actorId, CancellationToken cancellationToken = default);
 

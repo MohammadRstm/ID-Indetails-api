@@ -7,11 +7,14 @@ public enum ScheduledCheck
     RequirementDeadlines,
     OverdueInvoices,
     ShortHours,
+    CostWarnings,
+    DraftInvoices,
+    AutoArchive,
 }
 
 /// <summary>
-/// The notifications nobody's action sends. Each is keyed, so a check can run as often as it likes and still
-/// sends each notification once.
+/// The notifications nobody's action sends, and the domains' auto-archiving. Each notification is keyed, so a check
+/// can run as often as it likes and still sends each notification once.
 /// </summary>
 public interface IScheduledNotifications
 {

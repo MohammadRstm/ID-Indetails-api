@@ -258,6 +258,37 @@ public sealed class DomainFinanceService(
             UnconvertedOf(PeriodMoney.Unconverted(projects.SelectMany(p => rollup.Unconverted(p.Id)), from, to)));
     }
 
+    public async Task<IReadOnlyList<MoneyAttentionResponse>> AttentionAsync(string domain, CancellationToken cancellationToken = default)
+    {
+        await CheckDomainAsync(domain, cancellationToken);
+        var projects = (await summaries.DomainProjectsAsync(domain, cancellationToken)).OrderBy(p => p.StartDate).ThenBy(p => p.Id).ToList();
+        var byId = projects.ToDictionary(p => p.Id);
+        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        var facts = projects
+            .Select(p =>
+            {
+                var summary = rollup.Money(p.Id).Summary;
+                var billing = rollup.Billing([p]);
+                return new MoneyAttention.Project(
+                    p.Id, p.Status, p.BillingType == BillingType.Client, summary.Revenue, summary.Cost, billing.Outstanding, billing.Overdue);
+            })
+            .ToList();
+
+        return MoneyAttention.Of(facts, rollup.Invoices, rollup.Today)
+            .Select(i => new MoneyAttentionResponse(
+                i.Kind,
+                i.ProjectId,
+                byId[i.ProjectId].Title,
+                ClientName(byId[i.ProjectId]),
+                i.InvoiceId,
+                i.InvoiceId is { } id ? rollup.InvoiceRow(id).Number : null,
+                i.DaysOverdue,
+                i.Amount,
+                i.Revenue,
+                i.UsedPct))
+            .ToList();
+    }
+
     /// <summary>Money is shown per domain; a domain the caller can't see is not found.</summary>
     private async Task CheckDomainAsync(string domain, CancellationToken cancellationToken)
     {

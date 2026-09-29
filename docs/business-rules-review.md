@@ -44,7 +44,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D4 | **Entry attachments wait** for a file-upload feature. |
 | D5 | **Comments can't be edited or deleted.** Posting a comment to the team group chat is refused until messaging exists. |
 | D6 | **Logged-work notifications** go to active people holding `work_entry:view_all` in Design, never the author. |
-| D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, `notifyEntry`, `notifyProject` (N4), `notifyIdle` and `weeklySummary` (N7) are used; `autoArchive` waits for its job. |
+| D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, `notifyEntry`, `notifyProject` (N4), `notifyIdle` and `weeklySummary` (N7) are used; `autoArchive` is used by the auto-archive job (A4). |
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
 | D10 | **Employees set meetings.** `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). Meetings were Design-only at first; since 29 Sep 2026 Execution sites have them too, as in the prototype, and both permissions apply in both domains (`MeetingsInBothDomains` migration). |
@@ -67,6 +67,16 @@ See [finance.md](finance.md).
 | M9 | **Unconverted money is never dropped.** Costs with no rate are listed for the period they fall in (summary, each month, costs tab); list rows flag them (`hasUnconverted`); the company overview lists invoices and costs with no rate instead of counting them as 0. |
 | M10 | **Statement readers see the statement's money.** Holders of `statement:create` or `statement:send` see its received, agreed, remaining and paid-ahead figures without `financial:view`, because the statement is printed on the client's document. |
 | M11 | **The markup event keeps the exact markup** in its payload (`markup`, `prevMarkup`, as in the prototype), with no amount: the amount columns keep 2 decimals, so 12.5% was saved as 0.13. The feed shows that payload only with `financial:view`. Existing events were moved by the `MaterialMarkupEventPayload` migration: each project's latest one is exact, older ones keep their rounded value. |
+
+## Decided for the admin views (29 Sep 2026)
+
+| # | Rule |
+|---|---|
+| A1 | **Deadlines, money follow-ups and the cost warning cover both domains.** The prototype only shows the follow-ups and deadlines card on the Design dashboard, but its rules don't depend on the domain; the endpoints serve Design and Execution alike, and the client decides what to show. |
+| A2 | **The project list keeps its newest-start default.** The prototype's default "recent activity" order is `sort=activity`; a project without work counts from when it was added (the prototype used its start date). A `year` alone filters projects open during that year (the prototype only filtered by quarter). |
+| A3 | **The client list keeps its A-to-Z default** and sorts each column one way (numbers highest first, activity newest first); the prototype also let a second click reverse it. "Last activity" is the latest work on the client's projects, or when the client was added (the prototype's column sorted by the date added). |
+| A4 | **Auto-archive needs 90 quiet days**: a completed project is archived only when its completion and its latest activity event are both 90 days old, so one still being billed stays out. *(The prototype only checked the completion date, and only when the setting was switched on.)* It runs hourly for each domain whose setting is on. |
+| A5 | **Money insights are notifications to `financial:view` holders only**, with percentages and never amounts: the cost warning (cost past 85% of the payment, once per project ever), the closing margin (when a client project is finalised) and the draft reminder (a draft still unissued 3 days after it was created; the prototype had no threshold). The prototype's monthly company-expenses notification is left out. |
 
 ## Decided for notifications (29 Sep 2026)
 

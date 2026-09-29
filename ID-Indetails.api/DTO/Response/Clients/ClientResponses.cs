@@ -30,7 +30,14 @@ public sealed record ClientSummaryResponse
     /// <summary>Only for callers with financial:view; left out entirely otherwise.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ClientMoneyResponse? Money { get; init; }
+
+    /// <summary>Only for callers with work_entry:view_all; left out entirely otherwise.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ClientListWorkResponse? Work { get; init; }
 }
+
+/// <summary>The work logged on a client's projects (Design logs work; Execution doesn't).</summary>
+public sealed record ClientListWorkResponse(int TotalMinutes, DateTime? LastStartedAt);
 
 public sealed record ClientResponse
 {
@@ -66,4 +73,23 @@ public sealed record ClientResponse
     /// <summary>Each of the client's projects with its money, newest first. Only for callers with financial:view.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ClientProjectMoneyResponse>? ProjectMoney { get; init; }
+
+    /// <summary>The work logged for the client. Only for callers with work_entry:view_all.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ClientWorkResponse? Work { get; init; }
 }
+
+public sealed record MonthMinutesResponse(DateOnly Month, int Minutes);
+
+public sealed record ClientPersonWorkResponse(long Id, string Name, int Minutes);
+
+/// <summary>The work logged on a client's projects, all time (Design logs work; Execution doesn't).</summary>
+/// <param name="Monthly">The last 12 months, ending with this one, oldest first.</param>
+/// <param name="People">The 8 people who logged the most time for the client.</param>
+/// <param name="ContributorCount">Everyone who logged work for the client.</param>
+public sealed record ClientWorkResponse(
+    int TotalMinutes,
+    int EntryCount,
+    int ContributorCount,
+    IReadOnlyList<MonthMinutesResponse> Monthly,
+    IReadOnlyList<ClientPersonWorkResponse> People);

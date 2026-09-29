@@ -1,7 +1,11 @@
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Repositories.Projects.Abstraction;
+
+/// <summary>Open at some point in a period: started by <paramref name="To"/> and not completed before <paramref name="FromUtc"/>.</summary>
+public sealed record OpenPeriod(DateTime FromUtc, DateOnly To);
 
 public sealed record ProjectSearch(
     IReadOnlyList<string> Domains,
@@ -11,12 +15,23 @@ public sealed record ProjectSearch(
     BillingType? BillingType,
     string? Domain,
     int Page,
-    int PageSize);
+    int PageSize,
+    long? OwnerId = null,
+    OpenPeriod? OpenDuring = null,
+    ProjectSort Sort = ProjectSort.Start);
 
 public interface IProjectRepository
 {
     /// <summary>Not tracked, with client and owner.</summary>
     Task<(IReadOnlyList<Project> Items, int TotalCount)> SearchAsync(ProjectSearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ids of the domain's completed projects completed by <paramref name="beforeUtc"/> with no activity event after it.
+    /// </summary>
+    Task<IReadOnlyList<long>> QuietCompletedAsync(string domain, DateTime beforeUtc, CancellationToken cancellationToken = default);
+
+    /// <summary>Live work on these projects starting from <paramref name="fromUtc"/>, for the project list's recent figures.</summary>
+    Task<IReadOnlyList<WorkRow>> RecentWorkAsync(IReadOnlyCollection<long> projectIds, DateTime fromUtc, CancellationToken cancellationToken = default);
 
     /// <summary>Not tracked, with client and owner.</summary>
     Task<Project?> GetAsync(long id, CancellationToken cancellationToken = default);

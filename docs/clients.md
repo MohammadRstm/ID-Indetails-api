@@ -6,8 +6,8 @@ A client belongs to one domain. The rules live in `Business/Clients/ClientRules.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/clients?search=&archived=&domain=&page=1&pageSize=25` | `client:view` | Client list. Archived clients only with `archived=true`. `search` matches name and organisation |
-| `GET /api/clients/{id}` | `client:view` | A client with its contacts and project count |
+| `GET /api/clients?search=&archived=&domain=&filter=&sort=name&page=1&pageSize=25` | `client:view` | Client list, A to Z unless sorted. Archived clients only with `archived=true`. `search` matches name, organisation and label |
+| `GET /api/clients/{id}` | `client:view` | A client with its contacts and project count, and its work for callers with `work_entry:view_all` |
 | `POST /api/clients` | `client:create` | Adds a client. `domainCode` is needed only by callers who see both domains |
 | `PUT /api/clients/{id}` | `client:manage` | Replaces every field and the whole contact list |
 | `POST /api/clients/{id}/archive`, `/restore` | `client:manage` | Hides or shows the client. Its projects and history are unchanged |
@@ -16,6 +16,14 @@ A client belongs to one domain. The rules live in `Business/Clients/ClientRules.
 With `financial:view`, list rows and the client carry `money`, the client's money across their projects, and the client also carries `projectMoney`, each project's money. Without it these fields are left out. See [finance.md](finance.md).
 
 A client of a domain the caller can't see reads as `404`. Adding one in such a domain is `403`.
+
+## The client list and page
+
+- **`filter`:** `active` (with an active or on-hold project), `owing` (still owed on their invoices) or `empty` (no projects).
+- **`sort`:** `name` (A to Z, the default), `projects`, `hours` and `activity` (most recent work first; a client without work counts from when it was added), or by money: `revenue`, `profit`, `margin` (unknown margins last) and `outstanding`, each highest first.
+- **Money:** the money sorts and the `owing` filter need `financial:view` (`403` otherwise). They need every matching client's money, so those clients are loaded, sorted and paged together in one batched load.
+- **`work`** on each row (`work_entry:view_all` only): the minutes logged on the client's projects and when the latest work started.
+- **`work`** on the client page (`work_entry:view_all` only): all-time minutes, entries and contributors, the minutes of the last 12 months ending with this one, and the 8 people who logged the most time for the client. Only Design logs work, so an Execution client's are zero.
 
 ## Rules
 

@@ -102,3 +102,15 @@ public sealed record ProjectTimelineResponse(
     IReadOnlyList<TimelineDayResponse> Days,
     IReadOnlyList<TimelineEventResponse> Events,
     IReadOnlyList<TimelineGapResponse> Gaps);
+
+public sealed record ProjectLabourCostResponse(long ProjectId, string Title, LabourCostResponse Cost);
+
+/// <summary>What someone's logged work cost the company (their profile's "cost to the company").</summary>
+/// <param name="ThisQuarter">From the first of this quarter to today.</param>
+/// <param name="ByProject">All time: the 8 projects their work cost most on, in USD, most first.</param>
+public sealed record PersonLabourCostResponse(
+    long UserId,
+    int EntryCount,
+    LabourCostResponse ThisQuarter,
+    LabourCostResponse AllTime,
+    IReadOnlyList<ProjectLabourCostResponse> ByProject);

@@ -3,16 +3,23 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Clients.Abstraction;
 
+/// <param name="Filter">Active and empty are applied here; owing needs the money, so the service applies it.</param>
+/// <param name="Sort">The money sorts need the money, so the service applies them; here they order by name.</param>
 public sealed record ClientSearch(
     IReadOnlyList<string> Domains,
     string? Text,
     bool? Archived,
     string? Domain,
     int Page,
-    int PageSize);
+    int PageSize,
+    ClientFilter? Filter = null,
+    ClientSort Sort = ClientSort.Name);
 
 /// <summary>A client with its contacts and how many projects use it.</summary>
 public sealed record ClientRow(Client Client, int ProjectCount);
+
+/// <summary>The live work logged on a client's projects.</summary>
+public sealed record ClientWork(long ClientId, int Minutes, DateTime LastStartedAt);
 
 public interface IClientRepository
 {
@@ -25,6 +32,9 @@ public interface IClientRepository
     Task<Client?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default);
 
     Task<int> CountProjectsAsync(long clientId, CancellationToken cancellationToken = default);
+
+    /// <summary>The work logged on each client's projects; clients without any are left out.</summary>
+    Task<IReadOnlyList<ClientWork>> WorkAsync(IReadOnlyCollection<long> clientIds, CancellationToken cancellationToken = default);
 
     /// <summary>The first client of the domain (other than <paramref name="exceptClientId"/>) holding one of these contacts.</summary>
     Task<(Client Client, ContactKind Kind)?> FindContactOwnerAsync(

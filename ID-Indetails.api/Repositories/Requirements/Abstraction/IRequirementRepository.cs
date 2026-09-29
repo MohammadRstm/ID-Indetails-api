@@ -45,6 +45,12 @@ public interface IRequirementRepository
     /// <summary>Reopens exactly the requirements that were ticked automatically. Runs immediately.</summary>
     Task UntickAutoDoneAsync(long projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Open requirements of the domain's active and on-hold projects with a deadline on or before <paramref name="to"/>,
+    /// overdue ones included, soonest first, with their project and assignees. Not tracked.
+    /// </summary>
+    Task<IReadOnlyList<ProjectRequirement>> OpenDueByAsync(string domain, DateOnly to, CancellationToken cancellationToken = default);
+
     /// <summary>Open requirements of active projects due from <paramref name="from"/> to <paramref name="to"/>, both inclusive. Not tracked.</summary>
     Task<IReadOnlyList<RequirementDeadline>> DueBetweenAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
 

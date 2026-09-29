@@ -43,7 +43,8 @@ public sealed class WorkEntryTestSteps(AuthTestSteps steps)
         bool allowFutureEntries = false,
         bool requireDescription = true,
         string notifyEntry = "off",
-        bool holdLogging = false)
+        bool holdLogging = false,
+        bool autoArchive = false)
     {
         var response = await Client.PutJsonAsync("/api/domain-settings/design", new
         {
@@ -58,7 +59,7 @@ public sealed class WorkEntryTestSteps(AuthTestSteps steps)
             notifyIdle = true,
             weeklySummary = true,
             holdLogging,
-            autoArchive = false,
+            autoArchive,
         }, accessToken);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
     }

@@ -82,6 +82,9 @@ public static class NotificationKinds
     /// <summary>A client statement was sent (subject: the statement). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string StatementSent = "statement_sent";
 
+    /// <summary>A client project was completed or archived and its margin is final (subject: the project). Sent to whoever sees the domain's money, with the margin as a percentage and never an amount.</summary>
+    public const string ProjectClosed = "project_closed";
+
     // Scheduled: sent by the notification scheduler, not by anyone's action, so they have no actor.
 
     /// <summary>What you logged last week (digest key <c>weekly-summary-YYYY-MM-DD</c>, the week's first day). Design, while <c>weekly_summary</c> is on.</summary>
@@ -101,4 +104,10 @@ public static class NotificationKinds
 
     /// <summary>Design employees finished a closed month short of their hours (digest key <c>hours-short-YYYY-MM</c>). Sent to whoever sees salaries.</summary>
     public const string HoursShort = "hours_short";
+
+    /// <summary>An active client project's cost passed 85% of its payment (subject: the project). Once per project, to whoever sees the domain's money.</summary>
+    public const string ProjectCostHigh = "project_cost_high";
+
+    /// <summary>A draft invoice is still unissued 3 days after it was created (subject: the invoice). Once per draft, to whoever sees the domain's money.</summary>
+    public const string InvoiceDraftWaiting = "invoice_draft_waiting";
 }

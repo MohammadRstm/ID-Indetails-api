@@ -122,6 +122,16 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         billing.ByMethod.ShouldContain(m => m.Method == PaymentMethod.Cash && m.Amount == 500m);
         billing.Monthly.Sum(m => m.Collected).ShouldBe(1500m);
 
+        // The completed project's invoice is overdue, so it isn't also flagged as finished but owed.
+        var attention = await OkAsync<List<MoneyAttentionResponse>>("/api/finance/design/attention", admin.AccessToken);
+        var overdue = attention.ShouldHaveSingleItem();
+        overdue.Kind.ShouldBe(MoneyAttentionKind.OverdueInvoice);
+        overdue.ProjectId.ShouldBe(project.Id);
+        overdue.InvoiceNumber.ShouldBe(invoice.Number);
+        overdue.DaysOverdue.ShouldBe(15);
+        overdue.Amount.ShouldBe(2000m);
+        overdue.ClientName.ShouldNotBeNull();
+
         var clients = await OkAsync<List<FinanceClientResponse>>("/api/finance/design/clients", admin.AccessToken);
         var client = clients.Single(c => c.ClientId == clientId);
         client.Money.Revenue.ShouldBe(10_000m);
@@ -186,7 +196,7 @@ public class MoneySummaryAccessTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 
-        foreach (var path in new[] { "summary", "monthly", "projects", "billing", "clients", "costs" })
+        foreach (var path in new[] { "summary", "monthly", "projects", "billing", "clients", "costs", "attention" })
         {
             await (await Client.GetAsync($"/api/finance/design/{path}", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.GetAsync($"/api/finance/design/{path}", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);

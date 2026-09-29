@@ -1,5 +1,6 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -43,6 +44,7 @@ public sealed class WorkInsightsService(
     public const int ContributorWeeks = 10;
     public const int ContributorEntries = 40;
     public const int FocusDays = 14;
+    public const int CostProjects = 8;
     public const int MaxTimelineEvents = 1000;
 
     private static readonly IReadOnlyList<string> TimelineKinds =
@@ -233,6 +235,35 @@ public sealed class WorkInsightsService(
             .OrderByDescending(p => p.WeekMinutes)
             .ThenBy(p => p.Name)
             .ToList();
+    }
+
+    public async Task<PersonLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var person = (await entries.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
+        if (person is null || !EmployeeRules.CanSee(actor, person.DomainCode))
+        {
+            throw new NotFoundException("Employee not found.");
+        }
+
+        var rows = await entries.RowsAsync(new WorkEntrySearch(UserId: userId), cancellationToken);
+        var pricer = await LabourPricer.LoadAsync(financeSources, projectFinance, rows, clock, cancellationToken);
+        var quarterStart = WorkStats.QuarterStartOf(clock.CompanyToday);
+        var byProject = rows
+            .GroupBy(r => r.ProjectId)
+            .Select(g => (ProjectId: g.Key, Cost: pricer.Price(g)))
+            .Where(x => x.Cost.Usd > 0)
+            .OrderByDescending(x => x.Cost.Usd)
+            .Take(CostProjects)
+            .ToList();
+        var titles = await entries.ProjectTitlesAsync(byProject.Select(x => x.ProjectId).ToList(), cancellationToken);
+
+        return new PersonLabourCostResponse(
+            userId,
+            rows.Count,
+            pricer.Price(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= quarterStart)),
+            pricer.Price(rows),
+            byProject.Select(x => new ProjectLabourCostResponse(x.ProjectId, titles.GetValueOrDefault(x.ProjectId, string.Empty), x.Cost)).ToList());
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken) => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
