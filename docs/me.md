@@ -1,6 +1,6 @@
 # Self-service (`/api/me`)
 
-What signed-in people see about themselves. These endpoints only ever return the caller's own data and never take a user id. For now they serve Design people: each needs `work_entry:view_own`, which only people of the Design domain hold. The caller's work entries, summary, projects and day are in [design.md](design.md); their profile is in [employees.md](employees.md).
+What signed-in people see about themselves. These endpoints only ever return the caller's own data and never take a user id. Pay, hours, overtime and schedule serve Design people for now: they need `work_entry:view_own`, which only people of the Design domain hold. My requirements serves both domains (`requirement:view`). The caller's work entries, summary, projects and day are in [design.md](design.md); their profile is in [employees.md](employees.md).
 
 ## My pay
 
@@ -21,7 +21,7 @@ What signed-in people see about themselves. These endpoints only ever return the
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/me/requirements` | `work_entry:view_own` | The caller's open requirements, soonest deadline first |
+| `GET /api/me/requirements` | `requirement:view` | The caller's open requirements, soonest deadline first. In both domains: it is the whole of an Execution employee's My work page |
 
 Rules (`Business/Requirements/MyRequirements.cs`):
 

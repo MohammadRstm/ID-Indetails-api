@@ -42,9 +42,12 @@ public sealed class MyWorkController(
     public Task<MyProjectWorkResponse> ProjectWork(long projectId, CancellationToken cancellationToken)
         => myWorkService.MyProjectWorkAsync(projectId, cancellationToken);
 
-    /// <summary>The caller's open requirements on active and on-hold projects, soonest deadline first.</summary>
+    /// <summary>
+    /// The caller's open requirements on active and on-hold projects, soonest deadline first. In both domains: it is
+    /// the whole of an Execution employee's My work page.
+    /// </summary>
     [HttpGet("requirements")]
-    [HasPermission(PermissionCodes.WorkEntryViewOwn)]
+    [HasPermission(PermissionCodes.RequirementView)]
     public Task<MyRequirementsResponse> Requirements(CancellationToken cancellationToken)
         => requirementService.ListMineAsync(cancellationToken);
 

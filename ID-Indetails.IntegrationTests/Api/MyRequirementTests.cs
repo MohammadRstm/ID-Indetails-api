@@ -49,12 +49,35 @@ public class MyRequirementTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Execution_staff_do_not_reach_the_design_self_service_views()
+    public async Task Execution_staff_see_their_own_requirements_and_never_the_other_domain_s()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, siteStaff) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var studio = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var pour = await AddAsync(site.Id, superAdmin.AccessToken, new { text = "Pour the slab", deadline = "2099-01-01", assigneeIds = new[] { siteStaff.User.Id } });
+        await AddAsync(studio.Id, superAdmin.AccessToken, new { text = "Concept plans", assigneeIds = new[] { designer.User.Id } });
 
-        await (await Client.GetAsync("/api/me/requirements", siteStaff.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        var mine = await (await Client.GetAsync("/api/me/requirements", siteStaff.AccessToken)).ReadAsync<MyRequirementsResponse>();
+
+        mine.Items.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            r => r.Id.ShouldBe(pour.Id),
+            r => r.Project.Id.ShouldBe(site.Id));
+        (await (await Client.GetAsync("/api/me/requirements", designer.AccessToken)).ReadAsync<MyRequirementsResponse>())
+            .Items.ShouldAllBe(r => r.Project.Id == studio.Id);
+    }
+
+    [Fact]
+    public async Task Requirements_need_the_requirement_view_permission()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        (await Client.PutJsonAsync($"/api/users/{employee.User.Id}/permissions",
+                new { changes = new[] { new { code = PermissionCodes.RequirementView, action = "revoke" } } }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        await (await Client.GetAsync("/api/me/requirements", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
     private async Task<RequirementResponse> AddAsync(long projectId, string accessToken, object body)
