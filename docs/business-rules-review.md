@@ -64,7 +64,7 @@ See [finance.md](finance.md).
 | M8 | **One billing rule** (`Business/Billing/ProjectBilling`) for the project page, the project and client lists, the client pages and Financials. Invoices are converted at the rate of their issue day everywhere, so the project page and the lists always agree. |
 | M9 | **Unconverted money is never dropped.** Costs with no rate are listed for the period they fall in (summary, each month, costs tab); list rows flag them (`hasUnconverted`); the company overview lists invoices and costs with no rate instead of counting them as 0. |
 | M10 | **Statement readers see the statement's money.** Holders of `statement:create` or `statement:send` see its received, agreed, remaining and paid-ahead figures without `financial:view`, because the statement is printed on the client's document. |
-| M11 | **The markup event keeps the exact markup** in its payload (`markup`, `prevMarkup`, as in the prototype), with no amount: the amount columns keep 2 decimals, so 12.5% was saved as 0.13. The feed shows that payload only with `financial:view`. |
+| M11 | **The markup event keeps the exact markup** in its payload (`markup`, `prevMarkup`, as in the prototype), with no amount: the amount columns keep 2 decimals, so 12.5% was saved as 0.13. The feed shows that payload only with `financial:view`. Existing events were moved by the `MaterialMarkupEventPayload` migration: each project's latest one is exact, older ones keep their rounded value. |
 
 ## Decided for notifications (29 Sep 2026)
 
