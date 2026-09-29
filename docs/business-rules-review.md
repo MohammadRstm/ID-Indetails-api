@@ -72,6 +72,7 @@ See [finance.md](finance.md).
 |---|---|
 | A1 | **Deadlines, money follow-ups and the cost warning cover both domains.** The prototype only shows the follow-ups and deadlines card on the Design dashboard, but its rules don't depend on the domain; the endpoints serve Design and Execution alike, and the client decides what to show. |
 | A2 | **The project list keeps its newest-start default.** The prototype's default "recent activity" order is `sort=activity`; a project without work counts from when it was added (the prototype used its start date). A `year` alone filters projects open during that year (the prototype only filtered by quarter). |
+| A3 | **The client list keeps its A-to-Z default** and sorts each column one way (numbers highest first, activity newest first); the prototype also let a second click reverse it. "Last activity" is the latest work on the client's projects, or when the client was added (the prototype's column sorted by the date added). |
 
 ## Decided for notifications (29 Sep 2026)
 

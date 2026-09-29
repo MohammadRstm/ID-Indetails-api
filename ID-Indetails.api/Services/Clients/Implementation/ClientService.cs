@@ -3,16 +3,20 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Clients;
 using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Finance;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.MoneySummaries.Abstraction;
+using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -28,31 +32,58 @@ public sealed class ClientService(
     IClientRepository clients,
     IMoneySummaryRepository moneySummaries,
     IMoneyRollupService moneyRollups,
+    IWorkEntryRepository entries,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IClientService
 {
     private const string NotFoundMessage = "Client not found.";
+    public const int WorkMonths = 12;
+    public const int WorkPeople = 8;
 
     public async Task<PagedResponse<ClientSummaryResponse>> ListAsync(ClientListQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        var (rows, total) = await clients.SearchAsync(
-            new ClientSearch(actor.VisibleDomains, query.Search?.Trim(), query.Archived, query.Domain, query.Page, query.PageSize),
-            cancellationToken);
-
-        if (!actor.Has(PermissionCodes.FinancialView))
+        var byMoney = query.Filter == ClientFilter.Owing
+            || query.Sort is ClientSort.Revenue or ClientSort.Profit or ClientSort.Margin or ClientSort.Outstanding;
+        if (byMoney && !actor.Has(PermissionCodes.FinancialView))
         {
-            return new PagedResponse<ClientSummaryResponse>(rows.Select(ToSummary).ToList(), query.Page, query.PageSize, total);
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Sorting or filtering clients by money needs financial:view.");
         }
 
-        // One batched load for the whole page, never a query per client.
-        var projects = (await moneySummaries.ClientProjectsAsync(rows.Select(r => r.Client.Id).ToList(), cancellationToken))
-            .ToLookup(p => p.ClientId!.Value);
-        var rollup = await moneyRollups.LoadAsync(projects.SelectMany(g => g).ToList(), cancellationToken);
+        var search = new ClientSearch(
+            actor.VisibleDomains, query.Search?.Trim(), query.Archived, query.Domain, query.Page, query.PageSize, query.Filter, query.Sort);
+        IReadOnlyList<ClientRow> rows;
+        int total;
+        IReadOnlyDictionary<long, ClientMoneyResponse>? money = null;
+        if (byMoney)
+        {
+            // The money of every matching client is needed to filter and sort, so they are paged here.
+            var (all, _) = await clients.SearchAsync(search with { Page = 1, PageSize = int.MaxValue }, cancellationToken);
+            money = await MoneyOfAsync(all, cancellationToken);
+            var matching = all.Where(r => query.Filter != ClientFilter.Owing || money[r.Client.Id].Billing.Outstanding > 0).ToList();
+            rows = SortedByMoney(matching, money, query.Sort).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToList();
+            total = matching.Count;
+        }
+        else
+        {
+            (rows, total) = await clients.SearchAsync(search, cancellationToken);
+            money = actor.Has(PermissionCodes.FinancialView) ? await MoneyOfAsync(rows, cancellationToken) : null;
+        }
+
+        var work = actor.Has(PermissionCodes.WorkEntryViewAll)
+            ? (await clients.WorkAsync(rows.Select(r => r.Client.Id).ToList(), cancellationToken)).ToDictionary(w => w.ClientId)
+            : null;
         return new PagedResponse<ClientSummaryResponse>(
-            rows.Select(r => ToSummary(r) with { Money = rollup.ClientMoney(projects[r.Client.Id].ToList()) }).ToList(),
+            rows.Select(r => ToSummary(r) with
+                {
+                    Money = money?[r.Client.Id],
+                    Work = work is null ? null
+                        : work.TryGetValue(r.Client.Id, out var w) ? new ClientListWorkResponse(w.Minutes, w.LastStartedAt)
+                        : new ClientListWorkResponse(0, null),
+                })
+                .ToList(),
             query.Page,
             query.PageSize,
             total);
@@ -62,6 +93,11 @@ public sealed class ClientService(
     {
         var actor = await ActorAsync(cancellationToken);
         var client = await DescribeAsync(actor, clientId, cancellationToken);
+        if (actor.Has(PermissionCodes.WorkEntryViewAll))
+        {
+            client = client with { Work = await WorkOfAsync(clientId, cancellationToken) };
+        }
+
         if (!actor.Has(PermissionCodes.FinancialView))
         {
             return client;
@@ -252,6 +288,62 @@ public sealed class ClientService(
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>The client's logged work: the last 12 months and who logged it, most time first.</summary>
+    private async Task<ClientWorkResponse> WorkOfAsync(long clientId, CancellationToken cancellationToken)
+    {
+        var rows = await entries.RowsAsync(new WorkEntrySearch(ClientId: clientId), cancellationToken);
+        var thisMonth = WorkStats.MonthStartOf(clock.CompanyToday);
+        var byMonth = rows
+            .GroupBy(r => WorkStats.MonthStartOf(clock.ToCompanyDate(r.StartedAt)))
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.Minutes));
+        var byPerson = rows
+            .GroupBy(r => r.UserId)
+            .Select(g => (UserId: g.Key, Minutes: g.Sum(r => r.Minutes)))
+            .OrderByDescending(p => p.Minutes)
+            .ThenBy(p => p.UserId)
+            .ToList();
+        var top = byPerson.Take(WorkPeople).ToList();
+        var names = (await entries.PeopleAsync(top.Select(p => p.UserId).ToList(), cancellationToken)).ToDictionary(p => p.Id, p => p.Name);
+
+        return new ClientWorkResponse(
+            rows.Sum(r => r.Minutes),
+            rows.Count,
+            byPerson.Count,
+            Enumerable.Range(0, WorkMonths)
+                .Select(i => thisMonth.AddMonths(i - WorkMonths + 1))
+                .Select(month => new MonthMinutesResponse(month, byMonth.GetValueOrDefault(month)))
+                .ToList(),
+            top.Select(p => new ClientPersonWorkResponse(p.UserId, names.GetValueOrDefault(p.UserId, string.Empty), p.Minutes)).ToList());
+    }
+
+    /// <summary>The money of each client across their projects, in one batched load.</summary>
+    private async Task<IReadOnlyDictionary<long, ClientMoneyResponse>> MoneyOfAsync(IReadOnlyList<ClientRow> rows, CancellationToken cancellationToken)
+    {
+        var projects = (await moneySummaries.ClientProjectsAsync(rows.Select(r => r.Client.Id).ToList(), cancellationToken))
+            .ToLookup(p => p.ClientId!.Value);
+        var rollup = await moneyRollups.LoadAsync(projects.SelectMany(g => g).ToList(), cancellationToken);
+        return rows.ToDictionary(r => r.Client.Id, r => rollup.ClientMoney(projects[r.Client.Id].ToList()));
+    }
+
+    private static IEnumerable<ClientRow> SortedByMoney(
+        IEnumerable<ClientRow> rows,
+        IReadOnlyDictionary<long, ClientMoneyResponse> money,
+        ClientSort sort)
+    {
+        var ordered = sort switch
+        {
+            ClientSort.Revenue => rows.OrderByDescending(r => money[r.Client.Id].Revenue),
+            ClientSort.Profit => rows.OrderByDescending(r => money[r.Client.Id].Profit),
+            ClientSort.Margin => rows.OrderByDescending(r => money[r.Client.Id].Margin ?? decimal.MinValue),
+            ClientSort.Outstanding => rows.OrderByDescending(r => money[r.Client.Id].Billing.Outstanding),
+            // Filtered by money but sorted by something else: the repository's order stands.
+            _ => null,
+        };
+
+        return ordered?.ThenBy(r => ClientRules.DisplayName(r.Client.Name, r.Client.Organisation), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.Client.Id) ?? rows;
+    }
 
     private static ClientContactResponse ToContact(ClientContact x)
         => new(x.Id, x.Kind, x.Value, x.Label, x.IsWhatsapp, x.IsPrimary);

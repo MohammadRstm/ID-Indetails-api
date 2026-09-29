@@ -30,9 +30,26 @@ public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepositor
             query = query.Where(c => c.Name.Contains(word) || (c.Organisation != null && c.Organisation.Contains(word)));
         }
 
+        if (search.Filter == ClientFilter.Active)
+        {
+            query = query.Where(c => db.Projects.Any(p => p.ClientId == c.Id && (p.Status == ProjectStatus.Active || p.Status == ProjectStatus.Hold)));
+        }
+        else if (search.Filter == ClientFilter.Empty)
+        {
+            query = query.Where(c => !db.Projects.Any(p => p.ClientId == c.Id));
+        }
+
         var total = await query.CountAsync(cancellationToken);
-        var rows = await query
-            .OrderBy(c => c.Organisation ?? c.Name)
+        var live = db.WorkEntries.Where(e => e.DeletedAt == null);
+        var ordered = search.Sort switch
+        {
+            ClientSort.Projects => query.OrderByDescending(c => db.Projects.Count(p => p.ClientId == c.Id)),
+            ClientSort.Hours => query.OrderByDescending(c => live.Where(e => e.Project.ClientId == c.Id).Sum(e => (int?)e.DurationMinutes) ?? 0),
+            ClientSort.Activity => query.OrderByDescending(c => live.Where(e => e.Project.ClientId == c.Id).Max(e => (DateTime?)e.StartedAt) ?? c.CreatedAt),
+            _ => query.OrderBy(c => c.Organisation ?? c.Name),
+        };
+
+        var rows = await ordered
             .ThenBy(c => c.Id)
             .Skip((search.Page - 1) * search.PageSize)
             .Take(search.PageSize)
@@ -58,6 +75,14 @@ public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepositor
 
     public Task<int> CountProjectsAsync(long clientId, CancellationToken cancellationToken = default)
         => db.Projects.CountAsync(p => p.ClientId == clientId, cancellationToken);
+
+    public async Task<IReadOnlyList<ClientWork>> WorkAsync(IReadOnlyCollection<long> clientIds, CancellationToken cancellationToken = default)
+        => await db.WorkEntries
+            .AsNoTracking()
+            .Where(e => e.DeletedAt == null && e.Project.ClientId != null && clientIds.Contains(e.Project.ClientId.Value))
+            .GroupBy(e => e.Project.ClientId!.Value)
+            .Select(g => new ClientWork(g.Key, g.Sum(e => e.DurationMinutes), g.Max(e => e.StartedAt)))
+            .ToListAsync(cancellationToken);
 
     public async Task<(Client Client, ContactKind Kind)?> FindContactOwnerAsync(
         string domainCode,

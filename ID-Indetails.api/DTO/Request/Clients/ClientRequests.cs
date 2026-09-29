@@ -14,6 +14,10 @@ public sealed record ClientListQuery
     /// <summary>Must be a domain the caller can see, or nothing is returned.</summary>
     public string? Domain { get; init; }
 
+    public ClientFilter? Filter { get; init; }
+
+    public ClientSort Sort { get; init; } = ClientSort.Name;
+
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 25;
