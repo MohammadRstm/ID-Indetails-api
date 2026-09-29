@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
@@ -20,6 +21,9 @@ public sealed class PayrollInputs(
     public static bool LedgerApplies(User person) => person.DomainCode == DomainCodes.Design && person.RoleCode == RoleCodes.Employee;
 
     public DateOnly JoinedOn(User person) => person.JoinedOn ?? clock.ToCompanyDate(person.CreatedAt);
+
+    public DateOnly? LeftOn(User person)
+        => person.Status == UserStatus.Deactivated && person.DeactivatedAt is { } at ? clock.ToCompanyDate(at) : null;
 
     public async Task<IReadOnlyList<PersonCalendar.Policy>> PoliciesAsync(CancellationToken cancellationToken = default)
         => (await workingTime.GetPoliciesAsync(cancellationToken))
@@ -79,7 +83,8 @@ public sealed class PayrollInputs(
                         .Where(e => DateOnly.FromDateTime(e.Local) >= month && DateOnly.FromDateTime(e.Local) < next)
                         .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes))
                         .ToList(),
-                    monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList()),
+                    monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
+                    LeftOn(person)),
                     monthExcuses));
             }
         }

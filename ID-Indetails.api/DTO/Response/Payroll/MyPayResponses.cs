@@ -12,6 +12,7 @@ namespace ID_Indetails.api.DTO.Response.Payroll;
 /// <param name="MadeUpMinutes">Overtime that made up missing hours.</param>
 /// <param name="OvertimePaidMinutes">Overtime left after that, paid as overtime.</param>
 /// <param name="MissedDays">Working days with no work within hours and no excuse.</param>
+/// <param name="Excuses">The month's excuses, with their notes.</param>
 public sealed record MyLedgerMonthResponse(
     DateOnly Month,
     bool InProgress,
@@ -24,7 +25,8 @@ public sealed record MyLedgerMonthResponse(
     int MadeUpMinutes,
     int OvertimePaidMinutes,
     int ShortMinutes,
-    IReadOnlyList<DateOnly> MissedDays);
+    IReadOnlyList<DateOnly> MissedDays,
+    IReadOnlyList<MyExcuseResponse> Excuses);
 
 /// <param name="Applies">The hours ledger applies to Design employees only; for anyone else there are no months.</param>
 /// <param name="TotalMonths">Months from the one the caller joined to this one.</param>
@@ -35,6 +37,8 @@ public sealed record MyOvertimeEntryResponse(
     long WorkEntryId,
     long ProjectId,
     string ProjectTitle,
+    string? ProjectIcon,
+    string? ProjectTint,
     string Description,
     DateTime StartedAt,
     DateTime EndedAt,
@@ -134,16 +138,24 @@ public sealed record MySalaryResponse
 
     public required decimal Total { get; init; }
 
-    /// <summary>What has been earned by today while the month runs; the total once it has closed.</summary>
+    /// <summary>
+    /// What has been earned by today while the month runs: for salaried staff, the salary accrued so far (by the hours
+    /// required so far, or by the working days passed where the hours ledger doesn't apply) plus overtime pay. The
+    /// total once the month has closed.
+    /// </summary>
     public required decimal EarnedSoFar { get; init; }
 
-    /// <summary>Salaried, month in progress: salary + overtime so far − what the caller is behind. An estimate.</summary>
+    /// <summary>Salaried, month in progress: salary + overtime so far − <see cref="WouldLose"/>. An estimate.</summary>
     public decimal? FullMonthEstimate { get; init; }
 
-    /// <summary>Salaried, month in progress: what would come off if the month closed as short as it is now.</summary>
+    /// <summary>
+    /// Salaried, month in progress: what would come off if the month closed as short as it is now - the shortfall
+    /// plus the paid break of each whole missed day, at the hourly rate, as Salaries deducts it.
+    /// </summary>
     public required decimal WouldLose { get; init; }
 }
 
+/// <param name="JoinedOn">The day the caller joined.</param>
 /// <param name="FirstMonth">The month the caller joined: the earliest one to ask for.</param>
 /// <param name="Salary">Null when the caller has no pay record for the month.</param>
 /// <param name="Ledger">Null where the hours ledger doesn't apply (anyone but Design employees).</param>
@@ -151,6 +163,7 @@ public sealed record MySalaryResponse
 public sealed record MyPayResponse(
     DateOnly Month,
     bool InProgress,
+    DateOnly JoinedOn,
     DateOnly FirstMonth,
     MySalaryResponse? Salary,
     MyLedgerMonthResponse? Ledger,

@@ -13,13 +13,14 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
         bool includeSuperAdmins,
         string? domain,
         string? search,
+        DateTime activeSinceUtc,
         CancellationToken cancellationToken = default)
     {
         var codes = domains.ToList();
         var query = db.Users
             .AsNoTracking()
             .Include(u => u.Team)
-            .Where(u => u.Status == UserStatus.Active
+            .Where(u => (u.Status == UserStatus.Active || (u.Status == UserStatus.Deactivated && u.DeactivatedAt >= activeSinceUtc))
                 && u.JoinedOn != null
                 && (u.DomainCode != null ? codes.Contains(u.DomainCode) : includeSuperAdmins));
 
@@ -74,6 +75,14 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
             .OrderByDescending(p => p.CreatedAt)
             .Select(p => new ProjectLabel(p.Id, p.Title, p.Client != null ? p.Client.Name : null, p.Client != null ? p.Client.Organisation : null))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<long, ProjectLook>> ProjectLooksAsync(
+        IReadOnlyCollection<long> projectIds,
+        CancellationToken cancellationToken = default)
+        => await db.Projects
+            .AsNoTracking()
+            .Where(p => projectIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => new ProjectLook(p.Icon, p.Tint), cancellationToken);
 
     public async Task<IReadOnlyList<HourExcuse>> ExcusesAsync(IReadOnlyCollection<long> userIds, DateOnly month, CancellationToken cancellationToken = default)
         => await db.HourExcuses

@@ -22,7 +22,7 @@ namespace ID_Indetails.api.Services.WorkEntries.Implementation;
 /// <summary>
 /// People log only their own work, and only on Design projects (see <see cref="WorkEntryRules"/>).
 /// Someone else's entry reads as not found. Each change locks the person's user row, so overlap
-/// checks of two simultaneous changes run one after the other.
+/// checks of two simultaneous changes run one after the other. Work in a closed month never changes.
 /// </summary>
 public sealed class WorkEntryService(
     ICurrentUser currentUser,
@@ -53,6 +53,7 @@ public sealed class WorkEntryService(
             CreatedAt = clock.UtcNow,
         };
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt));
 
         var moved = await ApplyMovesAsync(actor, request.Moves, settings, cancellationToken);
         await CheckOverlapAsync(actor.UserId, [new WorkEntryRules.Span(0, entry.StartedAt, entry.EndedAt, project.Title), .. moved.Select(SpanOf)], settings, cancellationToken);
@@ -78,6 +79,7 @@ public sealed class WorkEntryService(
 
         var entry = Own(actor, await entries.GetForUpdateAsync(id, cancellationToken));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(request.StartedAt)));
         var project = entry.ProjectId == request.ProjectId
             ? entry.Project
             : await LoggableProjectAsync(actor, request.ProjectId, settings, cancellationToken);
@@ -108,6 +110,7 @@ public sealed class WorkEntryService(
 
         var entry = Own(actor, await entries.GetForUpdateAsync(id, cancellationToken));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt));
 
         entry.DeletedAt = clock.UtcNow;
         activity.Add(EntryEvent(entry, ActivityEventKinds.WorkEntryDeleted, actor.UserId));
@@ -124,6 +127,7 @@ public sealed class WorkEntryService(
 
         var entry = Own(actor, await entries.GetDeletedForUpdateAsync(id, cancellationToken));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt));
         await CheckOverlapAsync(actor.UserId, [SpanOf(entry)], settings, cancellationToken);
 
         entry.DeletedAt = null;
@@ -171,6 +175,7 @@ public sealed class WorkEntryService(
         {
             var entry = tracked.SingleOrDefault(e => e.Id == move.Id) ?? throw new NotFoundException("Work entry not found.");
             Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
+            Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.MonthStartUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(move.StartedAt)));
 
             entry.StartedAt = WorkEntryRules.AsUtc(move.StartedAt);
             entry.EndedAt = WorkEntryRules.AsUtc(move.EndedAt);
@@ -209,7 +214,7 @@ public sealed class WorkEntryService(
     private async Task<WorkEntryResponse> DescribeAsync(long id, UserAccess actor, DomainSettings settings, CancellationToken cancellationToken)
     {
         var view = await entries.GetViewAsync(id, cancellationToken) ?? throw new NotFoundException("Work entry not found.");
-        return WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock.UtcNow);
+        return WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock);
     }
 
     private ActivityEvent EntryEvent(WorkEntry entry, string kind, long actorId) => new()

@@ -88,4 +88,20 @@ public class WorkEntryRulesTests
         WorkEntryRules.AsUtc(new DateTime(2026, 9, 28, 6, 0, 0, DateTimeKind.Unspecified)).ShouldBe(Nine);
         WorkEntryRules.AsUtc(Nine).Kind.ShouldBe(DateTimeKind.Utc);
     }
+
+    [Fact]
+    public void Past_months_never_change()
+    {
+        // 1 September 2026 begins at 21:00 UTC on 31 August in Beirut.
+        var monthStart = new DateTime(2026, 8, 31, 21, 0, 0, DateTimeKind.Utc);
+
+        WorkEntryRules.IsInOpenMonth(monthStart, monthStart).ShouldBeTrue();
+        WorkEntryRules.IsInOpenMonth(monthStart.AddMinutes(-1), monthStart).ShouldBeFalse();
+        WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddDays(2)).ShouldBeNull();
+        WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddMinutes(-1))!.Code.ShouldBe(ErrorCodes.MonthClosed);
+
+        // A move is refused when either its current or its new start is in a closed month.
+        WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddDays(2), monthStart.AddDays(-2))!.Code.ShouldBe(ErrorCodes.MonthClosed);
+        WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddDays(-2), monthStart.AddDays(2))!.Kind.ShouldBe(ID_Indetails.api.Business.Common.DenialKind.BusinessRule);
+    }
 }

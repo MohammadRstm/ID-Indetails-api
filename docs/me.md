@@ -1,6 +1,6 @@
 # Self-service (`/api/me`)
 
-What signed-in people see about themselves. These endpoints only ever return the caller's own data and never take a user id. For now they serve Design people: each needs `work_entry:view_own`, which only people of the Design domain hold. The caller's work entries, summary, projects and day are in [design.md](design.md); their profile is in [employees.md](employees.md).
+What signed-in people see about themselves. These endpoints only ever return the caller's own data and never take a user id. Pay, hours, overtime and schedule serve Design people for now: they need `work_entry:view_own`, which only people of the Design domain hold. My requirements serves both domains (`requirement:view`). The caller's work entries, summary, projects and day are in [design.md](design.md); their profile is in [employees.md](employees.md).
 
 ## My pay
 
@@ -8,11 +8,16 @@ What signed-in people see about themselves. These endpoints only ever return the
 |---|---|---|
 | `GET /api/me/pay?month=YYYY-MM` | `work_entry:view_own` | The caller's pay for a month (this month by default) |
 
-- The month can't be in the future or before the caller joined (`400`). `firstMonth` is the month they joined.
+- The month can't be in the future or before the caller joined (`400`). `joinedOn` is the day they joined and `firstMonth` its month.
 - `salary` is exactly what the Salaries screen shows for the caller (`SalaryCalculator`, loaded through the same `IPayrollInputs`), and `null` when they have no pay record for the month (admins and super admins often have none).
   - **The break is paid.** Salaried staff are paid the whole day (7h required is an 8h paid day), and their hourly rate is salary ÷ 173.33. Hourly staff are paid the break of each working day they worked on top of the hours they log (`paidBreakDays`, `paidBreakPay`).
   - **Deductions** (salaried, `deduction` and `deductionMinutes`): in a closed month, the hours still short, each whole missed working day costing the full paid day (required hours plus the break); unpaid excuses are deducted the same way, an unpaid day off costing its full paid day. Past months never change.
-  - While a salaried month runs, `earnedSoFar` is the salary accrued with the hours required so far (required so far ÷ the whole month's) plus overtime pay, `fullMonthEstimate` is salary plus overtime so far less what the caller is behind at their hourly rate, and `wouldLose` is that amount. They are estimates: the month's pay is only final once it closes. Otherwise `earnedSoFar` is the month's total.
+  - While a salaried month runs:
+    - `earnedSoFar` is the salary accrued so far plus overtime pay. It accrues with the hours required so far (required so far ÷ the whole month's) where the hours ledger applies, otherwise with the working days passed (none on the 1st).
+    - `wouldLose` is what would be deducted if the month closed as short as it is now: the shortfall plus the paid break of each whole missed day, at the hourly rate, exactly as Salaries deducts it (`SalaryCalculator.ShortfallMinutes`).
+    - `fullMonthEstimate` is salary plus overtime so far, less `wouldLose`.
+
+    They are estimates: the month's pay is only final once it closes. Otherwise `earnedSoFar` is the month's total.
 - `ledger`: the month's hours ledger (see My hours), null where it doesn't apply.
 - `days`: the month's days up to today, newest first: what each asked for, what was logged, inside hours, overtime, and the difference (null for today, an excused day or a day off). Days off with nothing logged are left out.
 - `excuses`: the month's excuses, paid or not, with their note. Who made them isn't shown.
@@ -21,7 +26,7 @@ What signed-in people see about themselves. These endpoints only ever return the
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/me/requirements` | `work_entry:view_own` | The caller's open requirements, soonest deadline first |
+| `GET /api/me/requirements` | `requirement:view` | The caller's open requirements, soonest deadline first. In both domains: it is the whole of an Execution employee's My work page |
 
 Rules (`Business/Requirements/MyRequirements.cs`):
 
@@ -53,6 +58,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
   - `madeUpMinutes`: overtime that made up missing hours, in date order.
   - `overtimePaidMinutes`: the rest of the overtime.
   - `shortMinutes` and `missedDays`: what is still missing, and the working days with no work within hours and no excuse.
+  - `excuses`: the month's excuses, paid or not, with their notes. Who made them isn't shown.
 - `status` is `excused` (the whole month), `short` (a closed month still short), `behind` (the month in progress is short so far), `on_track` or `complete` (`Business/Payroll/MyTime.cs`).
 
 ## My overtime
@@ -64,7 +70,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - Overtime is time outside the caller's hours, all time on a day off, and time within hours beyond what the day requires (taken from the day's latest work).
 - The month can't be in the future or before the caller joined (`400`).
 - Totals: overtime, how much of it made up missing hours and how much is paid as overtime (both null where the ledger doesn't apply), and the number of entries.
-- `days`: days with overtime, newest first, each with whether it was a day off and every entry: project, description, start and end, length, overtime and the part that made up missing hours. No money is shown.
+- `days`: days with overtime, newest first, each with whether it was a day off and every entry: project (with its icon and tint), description, start and end, length, overtime and the part that made up missing hours. No money is shown.
 
 ## My board layouts
 

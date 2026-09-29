@@ -120,6 +120,7 @@ public sealed class EmployeeService(
 
         var now = clock.UtcNow;
         user.Status = UserStatus.Deactivated;
+        user.DeactivatedAt = now;
         user.UpdatedAt = now;
 
         // Signed out everywhere, and any pending signup link stops working.
@@ -143,6 +144,7 @@ public sealed class EmployeeService(
         Throw(EmployeeRules.CheckReactivate(actor, TargetOf(user)));
 
         user.Status = EmployeeRules.ReactivatedStatus(hasPassword: user.PasswordHash is not null);
+        user.DeactivatedAt = null;
         user.UpdatedAt = clock.UtcNow;
         activity.Add(UserEvent(user, ActivityEventKinds.EmployeeReactivated, actor.UserId, new { status = user.Status }));
 

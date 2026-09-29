@@ -7,9 +7,11 @@ namespace ID_Indetails.api.Business.Payroll;
 /// What a person sees of their own hours and pay, on top of <see cref="SalaryCalculator"/> and <see cref="HoursLedger"/>:
 /// <list type="bullet">
 /// <item>Day by day: what each day asked for and what was logged, up to today.</item>
-/// <item>While a salaried month runs, "earned so far" is the salary accrued with the hours required so far
-/// (required so far ÷ the month's) plus overtime pay, and the full-month estimate takes off what the person is
-/// behind at their hourly rate. Both are estimates: the month's pay is only final once it closes.</item>
+/// <item>While a salaried month runs, "earned so far" is the salary accrued so far plus overtime pay. It accrues with
+/// the hours required so far (required so far ÷ the month's) where the hours ledger applies, otherwise with the
+/// working days passed. The full-month estimate takes off what would be deducted if the month closed as short as it
+/// is now: the shortfall plus the paid break of each whole missed day, at the hourly rate (as Salaries deducts it).
+/// Both are estimates: the month's pay is only final once it closes.</item>
 /// <item>The ledger history runs from the month they joined to this month, newest first, 12 months a page.</item>
 /// </list>
 /// </summary>
@@ -86,16 +88,34 @@ public static class MyTime
             .ToList();
     }
 
-    public static Estimate EstimateOf(SalaryCalculator.Result pay, bool inProgress, int expectedFullMonth)
+    public static Estimate EstimateOf(SalaryCalculator.Result pay, SalaryCalculator.Input input, bool inProgress)
     {
-        if (!inProgress || pay.Terms.Basis != PayBasis.Monthly || pay.Ledger is null || expectedFullMonth <= 0)
+        if (!inProgress || pay.Terms.Basis != PayBasis.Monthly)
         {
             return new Estimate(pay.Total, null, 0);
         }
 
-        var accrued = Round(pay.BasePay * Math.Min(1m, (decimal)pay.Ledger.Expected / expectedFullMonth));
-        var wouldLose = Round(pay.Ledger.Short / 60m * pay.Terms.HourlyRate);
-        return new Estimate(accrued + pay.OvertimePay, pay.BasePay + pay.OvertimePay - wouldLose, wouldLose);
+        decimal share, wouldLose = 0;
+        if (pay.Ledger is { } ledger)
+        {
+            var fullMonth = ExpectedFullMonth(input.Month, input.JoinedOn, input.Calendar);
+            share = fullMonth > 0 ? Math.Min(1m, (decimal)ledger.Expected / fullMonth) : 1m;
+            wouldLose = Math.Min(pay.BasePay, Round(SalaryCalculator.ShortfallMinutes(ledger, input.Calendar) / 60m * pay.Terms.HourlyRate));
+        }
+        else
+        {
+            share = WorkingDaysPassedShare(input.Month, input.Today, input.JoinedOn, input.Calendar);
+        }
+
+        return new Estimate(Round(pay.BasePay * share) + pay.OvertimePay, pay.BasePay + pay.OvertimePay - wouldLose, wouldLose);
+    }
+
+    /// <summary>Working days before today ÷ the month's working days, both from the day the person joined.</summary>
+    private static decimal WorkingDaysPassedShare(DateOnly month, DateOnly today, DateOnly joinedOn, PersonCalendar calendar)
+    {
+        var from = joinedOn > month ? joinedOn : month;
+        var working = HoursLedger.Days(from, month.AddMonths(1)).Where(d => calendar.HoursOn(d) is not null).ToList();
+        return working.Count > 0 ? (decimal)working.Count(d => d < today) / working.Count : 1m;
     }
 
     /// <summary>One page of months, newest first, from this month back to the month the person joined.</summary>

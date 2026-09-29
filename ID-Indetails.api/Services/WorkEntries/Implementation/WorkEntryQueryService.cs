@@ -66,12 +66,12 @@ public sealed class WorkEntryQueryService(
             cancellationToken);
 
         return new WorkEntryDetailResponse(
-            WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock.UtcNow),
+            WorkEntryMapper.ToResponse(view, actor.UserId, settings, clock),
             (await comments.ListAsync(id, cancellationToken))
                 .Select(c => new WorkEntryCommentResponse(
                     c.Id, new WorkEntryCommentAuthorResponse(c.AuthorId, c.AuthorName, c.AuthorRole), c.Body, c.SentToGroup, c.CreatedAt))
                 .ToList(),
-            sameDay.Where(e => e.Id != id).Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList());
+            sameDay.Where(e => e.Id != id).Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock)).ToList());
     }
 
     public async Task<WorkEntryExport> ExportAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
@@ -157,7 +157,7 @@ public sealed class WorkEntryQueryService(
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         var (items, total) = await entries.SearchAsync(search, cancellationToken);
         return new PagedResponse<WorkEntryResponse>(
-            items.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList(),
+            items.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock)).ToList(),
             search.Page,
             search.PageSize,
             total);

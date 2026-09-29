@@ -23,9 +23,12 @@ public sealed class SalaryListQueryValidator : AbstractValidator<SalaryListQuery
 
 public sealed class MyHoursQueryValidator : AbstractValidator<MyHoursQuery>
 {
+    /// <summary>A thousand pages is 12,000 months; beyond it the month arithmetic would overflow.</summary>
+    public const int MaxPage = 1000;
+
     public MyHoursQueryValidator()
     {
-        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.Page).InclusiveBetween(1, MaxPage).WithMessage($"Page must be between 1 and {MaxPage}.");
     }
 }
 

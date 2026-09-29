@@ -29,6 +29,7 @@ public sealed class ProjectPayService(
     ICurrentUser currentUser,
     IPermissionService permissions,
     IPayrollRepository payroll,
+    IPayrollInputs inputs,
     IScheduleRepository schedules,
     IWorkingTimeService workingTime,
     ICompanySettingsService settings,
@@ -165,7 +166,8 @@ public sealed class ProjectPayService(
                     ? HoursLedger.Build(month, today, user.JoinedOn ?? month, calendar, work, new HoursLedger.Excuses(
                         excuses[userId].Any(x => x.Kind == ExcuseKind.WholeMonth),
                         excuses[userId].Sum(x => x.Minutes ?? 0),
-                        excuses[userId].SelectMany(x => x.Days.Select(d => d.Day)).ToHashSet()))
+                        excuses[userId].SelectMany(x => x.Days.Select(d => d.Day)).ToHashSet()),
+                        inputs.LeftOn(user))
                     : null;
 
                 foreach (var split in work)

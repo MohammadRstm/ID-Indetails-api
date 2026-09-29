@@ -79,7 +79,7 @@ public sealed class ActivityFeedService(
                     ? null
                     : JsonDocument.Parse(e.Payload).RootElement.Clone(),
                 e.SubjectType == "work_entry" && e.SubjectId is { } id && work.TryGetValue(id, out var entry)
-                    ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock.UtcNow)
+                    ? WorkEntryMapper.ToResponse(entry, actor.UserId, settings, clock)
                     : null,
                 e.IsDemo)).ToList(),
             query.Page,

@@ -30,6 +30,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 20 | **Hourly staff** are paid for what they log; excuses only clear their shortfall and never add pay. | Payroll calculation |
 | 21 | **Admins who log hours** are paid overtime like employees, without an hours ledger. | Payroll calculation |
 | 22 | **Project pay leaves paid breaks out.** A break isn't worked on any project, so project pay covers logged hours and overtime only, and differs from Salaries for hourly staff by exactly their paid breaks. It needs `salary:view`. | Project pay report |
+| 23 | **Leavers stay in past months** (29 Sep 2026). `users.deactivated_at` records when an account was deactivated (cleared on reactivation; backfilled from the latest `employee_deactivated` event). Salaries (list, detail, CSV, totals), the month-end alert and project pay include everyone active at any point in the month, with the final month pro-rated to the leaving day like a joining month, and the hours ledger ending there. | Schema (`UserDeactivatedAt` migration); payroll calculation |
 
 ## Decided for Design work (28 Sep 2026)
 
@@ -47,6 +48,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
 | D10 | **Employees set meetings.** `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). Meetings were Design-only at first; since 29 Sep 2026 Execution sites have them too, as in the prototype, and both permissions apply in both domains (`MeetingsInBothDomains` migration). |
+| D11 | **Past months never change** (29 Sep 2026). Work entries that start before the current company month can no longer be logged, edited, moved (the day timeline's swaps and moves included), deleted or restored, by anyone (`422 month_closed`). Excusing hours stays the way to correct a closed month. Known exception: a backdated pay change still changes a closed month's salary; it is out of scope for now. |
 
 ## Decided for the money summaries (29 Sep 2026)
 

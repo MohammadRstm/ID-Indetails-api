@@ -131,7 +131,7 @@ public sealed class WorkInsightsService(
             SharePct(minutes, all.Sum(e => e.Minutes)),
             ToWeeks(WorkStats.Weekly(theirs.Select(ToWorked), clock.CompanyToday, ContributorWeeks, calendar.FirstDayOfWeek)),
             theirs.OrderByDescending(e => e.StartedAt).Take(ContributorEntries)
-                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock.UtcNow)).ToList());
+                .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock)).ToList());
     }
 
     public async Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default)
