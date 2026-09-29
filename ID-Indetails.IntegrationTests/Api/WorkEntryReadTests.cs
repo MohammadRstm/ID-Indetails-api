@@ -80,8 +80,9 @@ public class WorkEntryReadTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.PostJsonAsync($"/api/work-entries/{entry.Id}/comments", new { body = "Thanks" }, employee.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        // The author isn't in a team, so there's no team chat to share it to (MessagingTests covers the card).
         await (await Client.PostJsonAsync($"/api/work-entries/{entry.Id}/comments", new { body = "Team", sendToGroup = true }, admin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.GroupChatUnavailable);
+            .ShouldFailWithAsync(422, ErrorCodes.NoTeamChat);
         await (await Client.PostJsonAsync($"/api/work-entries/{entry.Id}/comments", new { body = " " }, admin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
 

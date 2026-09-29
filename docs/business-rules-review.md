@@ -75,6 +75,18 @@ See [finance.md](finance.md).
 | N7 | **Scheduled notifications** run on an hourly timer and are keyed so each goes once: last week's summary, idle Design projects, requirements due tomorrow or overdue (deadlines up to a week old), overdue invoices, and the month-end short-hours alert. `notifyIdle` now also sends `project_idle`, and `weeklySummary` sends the summary. |
 | N8 | **The month-end short-hours alert** goes to whoever holds `salary:view` (super admins by default), from the first of the month, naming the five people most short. This settles the old open question. |
 
+## Decided for messaging (29 Sep 2026)
+
+See [messaging.md](messaging.md).
+
+| # | Decision |
+|---|---|
+| C1 | **Chats follow the organisation, not permissions.** A team chat is the team, its domain's admins and the super admins, worked out live; direct messages reach your own domain and the super admins. Someone granted a permission from the other domain doesn't join its chats. |
+| C2 | **Moving someone moves their chats.** They lose the old team's chat, history included, and see the new team's whole history. |
+| C3 | **No bell notifications for messages.** The messages badge (unread count and the "@" flag) covers them, as in the prototype. |
+| C4 | **A team with chat history can't be deleted**, so history is never lost. |
+| C5 | **Live updates** will push small "something changed" signals over SignalR for messages and the bell; the client then reloads what changed. |
+
 ## Carried over from the prototype as-is
 
 - **Execution money:**

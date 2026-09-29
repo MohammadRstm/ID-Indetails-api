@@ -107,7 +107,7 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 | `POST /api/work-entries/{id}/comments` | `work_entry:comment` | `{ body, sendToGroup }`. Returns `201` |
 
 - A comment is 1 to 2000 characters. Comments can't be edited or deleted.
-- `sendToGroup` (also post to the author's team group chat) is refused with `422 group_chat_unavailable` until group chats exist.
+- `sendToGroup` also posts the comment to the entry author's team chat, as a card mentioning everyone in it (see [messaging.md](messaging.md)). An author in no team gives `422 no_team_chat`.
 - The entry's author gets an `entry_comment` notification (commenter's name, the text and the entry's description), unless they wrote it themselves.
 - Event: `work_entry_commented`, with the entry as the subject and the comment id in the payload.
 
