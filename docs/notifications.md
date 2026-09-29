@@ -61,7 +61,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
 | `statement_sent` | Holders of `financial:view` | the statement | `number` |
-| `project_closed` | Holders of `financial:view`, when a client project with revenue is finalised (completed, or archived without being completed) | the project | `projectTitle`, `marginPct` (the final margin as a percentage, one decimal; never an amount) |
+| `project_closed` | Holders of `financial:view`, when a client project with revenue is finalised (completed, or archived without being completed). Each finalisation sends it: a project reopened and completed again reports its new margin | the project | `projectTitle`, `marginPct` (the final margin as a percentage, one decimal; never an amount) |
 
 ## Scheduled notifications
 

@@ -89,4 +89,4 @@ Rules (`Business/Billing/PaymentRules.cs`):
 | `overdue`, `overdueCount` | Left to pay on sent or partly paid invoices past their due date, and how many |
 | `oldestOverdueDays` | Days past due of the oldest overdue invoice; null when none is overdue |
 | `drafts` | The total of draft invoices, kept apart from invoiced |
-| `unconvertedInvoices[]` | Invoices with no exchange rate on their issue day, per currency: left out of the USD figures above, never counted as 0 |
+| `unconvertedInvoices[]` | Invoices with no exchange rate on their issue day (a draft: today), per currency: left out of the USD figures above, never counted as 0 |
