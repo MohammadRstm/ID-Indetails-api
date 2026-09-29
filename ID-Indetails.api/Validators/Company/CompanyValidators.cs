@@ -82,6 +82,15 @@ public sealed class ChangeOverheadAmountRequestValidator : AbstractValidator<Cha
     }
 }
 
+public sealed class ChangeOverheadCurrencyRequestValidator : AbstractValidator<ChangeOverheadCurrencyRequest>
+{
+    public ChangeOverheadCurrencyRequestValidator()
+    {
+        RuleFor(x => x.Currency).Currency();
+        RuleFor(x => x.Amount).Amount("Amount", allowZero: false);
+    }
+}
+
 internal static class CompanyRuleExtensions
 {
     public const int MinSpanMinutes = 30;

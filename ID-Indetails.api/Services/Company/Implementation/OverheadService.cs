@@ -131,6 +131,48 @@ public sealed class OverheadService(
         return Describe(item);
     }
 
+    public async Task<OverheadLineResponse> ChangeCurrencyAsync(long id, ChangeOverheadCurrencyRequest request, CancellationToken cancellationToken = default)
+    {
+        var item = await FindAsync(id, cancellationToken);
+        var month = OverheadRules.MonthStart(request.FromMonth ?? clock.CompanyToday);
+        var currency = request.Currency.ToUpperInvariant();
+        OverheadRules.CheckCurrencyChange(item.Currency, currency, item.EndedOn, month, clock.CompanyToday).ThrowIfDenied();
+
+        if (!OverheadRules.CurrencyChangeSplits(item.StartedOn, month))
+        {
+            // Never charged before the change: the line just changes, with the new amount throughout.
+            var previous = item.Currency;
+            item.Currency = currency;
+            item.Amounts.Clear();
+            item.Amounts.Add(new OverheadAmount { EffectiveFrom = item.StartedOn, Amount = request.Amount, CreatedAt = clock.UtcNow, CreatedById = currentUser.Id });
+            Record(item, ActivityEventKinds.OverheadCurrencyChanged, request.Amount, new { previousCurrency = previous, fromMonth = item.StartedOn });
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Describe(item);
+        }
+
+        var next = new OverheadItem
+        {
+            Name = item.Name,
+            CostGroup = item.CostGroup,
+            Currency = currency,
+            StartedOn = month,
+            CreatedAt = clock.UtcNow,
+            CreatedById = currentUser.Id,
+        };
+        next.Amounts.Add(new OverheadAmount { EffectiveFrom = month, Amount = request.Amount, CreatedAt = clock.UtcNow, CreatedById = currentUser.Id });
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        item.EndedOn = month.AddDays(-1);
+        overheads.Add(next);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        Record(item, ActivityEventKinds.OverheadCurrencyChanged, null, new { endedOn = item.EndedOn, replacedBy = next.Id });
+        Record(next, ActivityEventKinds.OverheadAdded, request.Amount, new { replaces = item.Id });
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return Describe(next);
+    }
+
     public async Task<OverheadLineResponse?> CancelAsync(long id, CancellationToken cancellationToken = default)
     {
         var item = await FindAsync(id, cancellationToken);

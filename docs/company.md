@@ -17,6 +17,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `POST /api/company/overhead` | `overhead:manage` | Adds a line |
 | `PUT /api/company/overhead/{id}` | `overhead:manage` | Renames it or changes its group |
 | `POST /api/company/overhead/{id}/amounts` | `overhead:manage` | A new monthly amount from a month |
+| `POST /api/company/overhead/{id}/currency` | `overhead:manage` | `{ currency, amount, fromMonth }`: charges it in another currency from a month (this month when empty). Returns the line charged from then |
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
 | `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
 | `GET /api/company/overview/monthly?months=13` | `company:view` | Revenue, costs and overhead per month: the profit before and after company expenses (1–36 months) |
@@ -55,6 +56,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 - A line has a name, a group (`software` or `operating`), a currency (USD or LBP) and a monthly amount.
 - It is charged **in full** for every month from its start month to its end month.
 - **Amount changes are dated** from the first of a month, this month or later, and never before a later change that already exists. Past months keep their cost. A change for a month that already has one replaces it.
+- **Changing the currency** applies from the first of a month, this month or later (`400 overhead_same_currency` when it doesn't change, `422 overhead_already_cancelled` on a cancelled line). A line already charged before that month ends the month before, and a new line with the same name and group takes over in the new currency, so past months keep theirs. A line not charged before it just changes, with the new amount throughout.
 - **Cancelling** ends the line at the end of this month. It can be resumed until that date passes; after that, add a new line. A line that hasn't started yet is removed instead (`204`).
 - **Totals are per currency** and never converted.
 - Every change writes an `overhead_*` activity event (company level, no domain), with the amount in the `amount` column.

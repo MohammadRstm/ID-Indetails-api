@@ -83,3 +83,14 @@ public sealed record ChangeOverheadAmountRequest
     /// <summary>First month at the new amount (any day in it); this month when empty.</summary>
     public DateOnly? FromMonth { get; init; }
 }
+
+public sealed record ChangeOverheadCurrencyRequest
+{
+    public string Currency { get; init; } = string.Empty;
+
+    /// <summary>The monthly amount in the new currency.</summary>
+    public decimal Amount { get; init; }
+
+    /// <summary>First month in the new currency (any day in it); this month when empty.</summary>
+    public DateOnly? FromMonth { get; init; }
+}
