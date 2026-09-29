@@ -95,4 +95,4 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 ## Not built yet
 
 - Profile photos (waiting for file storage).
-- Hours, overtime and cost figures on the profile (waiting for work entries).
+- Overtime and labour cost on the profile. Hours worked are available from `GET /api/employees/{id}/work-summary` (see [design.md](design.md)); overtime and pay figures are on the company Salaries page (see [company.md](company.md)).

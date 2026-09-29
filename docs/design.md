@@ -1,6 +1,6 @@
 # Design work
 
-Features of the Design domain: domain settings, work entries, comments, meetings, and the work views and reports built on them. A record of a domain the caller can't see reads as `404`, for every endpoint below.
+Features of the Design domain: domain settings, work entries, comments, meetings, and the work views and reports built on them. Most of these endpoints need a Design-only permission (such as `work_entry:view_all`), so a caller without it, for example an Execution admin, gets `403` before any record is looked up. A caller who holds the permission but asks for a record of a domain they can't see gets `404`.
 
 ## Domain settings
 

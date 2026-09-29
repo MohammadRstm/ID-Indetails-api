@@ -50,10 +50,23 @@ public static class PaymentRules
             : null;
     }
 
-    public static RuleDenial? CheckInitial(bool isInitial, bool projectHasLiveInitial)
-        => isInitial && projectHasLiveInitial
+    /// <summary>Only Execution sites take an initial payment, and at most one live one.</summary>
+    public static RuleDenial? CheckInitial(bool isInitial, string projectDomain, bool projectHasLiveInitial)
+    {
+        if (!isInitial)
+        {
+            return null;
+        }
+
+        if (projectDomain != DomainCodes.Execution)
+        {
+            return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "isInitial", "Only Execution projects take an initial payment.");
+        }
+
+        return projectHasLiveInitial
             ? RuleDenial.BusinessRule(ErrorCodes.InitialPaymentExists, "This project already has an initial payment.")
             : null;
+    }
 
     public static RuleDenial? CheckVoid(bool isVoided)
         => isVoided ? RuleDenial.BusinessRule(ErrorCodes.PaymentAlreadyVoided, "This payment is already void.") : null;

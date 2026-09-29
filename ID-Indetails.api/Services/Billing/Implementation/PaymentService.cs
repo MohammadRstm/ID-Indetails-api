@@ -84,7 +84,7 @@ public sealed class PaymentService(
         var rate = await RateAsync(currency, request.FxRate, receivedOn, cancellationToken);
         var amountUsd = PaymentRules.ToUsd(request.Amount, rate);
         Throw(PaymentRules.CheckUsd(amountUsd));
-        Throw(PaymentRules.CheckInitial(request.IsInitial, await payments.HasLiveInitialAsync(project.Id, cancellationToken)));
+        Throw(PaymentRules.CheckInitial(request.IsInitial, project.DomainCode, await payments.HasLiveInitialAsync(project.Id, cancellationToken)));
 
         Invoice? invoice = null;
         if (request.InvoiceId is { } invoiceId)

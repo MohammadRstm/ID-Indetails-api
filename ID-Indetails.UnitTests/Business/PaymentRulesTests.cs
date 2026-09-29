@@ -37,9 +37,11 @@ public class PaymentRulesTests
     [Fact]
     public void One_live_initial_payment_and_only_live_on_account_payments_are_applied()
     {
-        PaymentRules.CheckInitial(isInitial: true, projectHasLiveInitial: false).ShouldBeNull();
-        PaymentRules.CheckInitial(isInitial: false, projectHasLiveInitial: true).ShouldBeNull();
-        PaymentRules.CheckInitial(isInitial: true, projectHasLiveInitial: true)!.Code.ShouldBe(ErrorCodes.InitialPaymentExists);
+        PaymentRules.CheckInitial(isInitial: true, DomainCodes.Execution, projectHasLiveInitial: false).ShouldBeNull();
+        PaymentRules.CheckInitial(isInitial: false, DomainCodes.Execution, projectHasLiveInitial: true).ShouldBeNull();
+        PaymentRules.CheckInitial(isInitial: true, DomainCodes.Execution, projectHasLiveInitial: true)!.Code.ShouldBe(ErrorCodes.InitialPaymentExists);
+        PaymentRules.CheckInitial(isInitial: true, DomainCodes.Design, projectHasLiveInitial: false)!.Field.ShouldBe("isInitial");
+        PaymentRules.CheckInitial(isInitial: false, DomainCodes.Design, projectHasLiveInitial: false).ShouldBeNull();
 
         PaymentRules.CheckApply(isVoided: false, invoiceId: null).ShouldBeNull();
         PaymentRules.CheckApply(isVoided: false, invoiceId: 3)!.Code.ShouldBe(ErrorCodes.PaymentAlreadyApplied);

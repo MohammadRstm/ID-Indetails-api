@@ -53,6 +53,9 @@ public static class AuthServiceCollectionExtensions
         services.AddAuthorization(options =>
         {
             options.DefaultPolicy = AuthorizationPolicies.Default;
+            // An endpoint with no authorization attribute still requires a signed-in user, so a forgotten
+            // attribute fails closed. Public endpoints opt out with [AllowAnonymous].
+            options.FallbackPolicy = AuthorizationPolicies.Default;
             options.AddPolicy(AuthorizationPolicies.AllowPendingPasswordChange, p => p.RequireAuthenticatedUser());
         });
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
