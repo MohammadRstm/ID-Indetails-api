@@ -13,6 +13,7 @@ namespace ID_Indetails.api.Controllers;
 [Route("api/auth")]
 public sealed class AuthController(
     IAuthService authService,
+    IPasswordResetService passwordReset,
     ICurrentUser currentUser,
     RefreshTokenCookie refreshCookie) : ControllerBase
 {
@@ -62,6 +63,29 @@ public sealed class AuthController(
     [Authorize(Policy = AuthorizationPolicies.AllowPendingPasswordChange)]
     public async Task<ActionResult<AuthResponse>> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
         => SignedIn(await authService.ChangePasswordAsync(currentUser.Id, request, cancellationToken));
+
+    /// <summary>
+    /// Emails a link for choosing a new password to the active account with this email. Always answers 204, so it
+    /// never reveals whether the email belongs to anyone.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
+        await passwordReset.RequestAsync(request, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Sets a new password from an emailed link and signs the account out everywhere; the person then signs in.</summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken cancellationToken)
+    {
+        await passwordReset.ResetAsync(request, cancellationToken);
+        return NoContent();
+    }
 
     /// <summary>The signed-in user and their permissions, for restoring the session in the client.</summary>
     [HttpGet("me")]

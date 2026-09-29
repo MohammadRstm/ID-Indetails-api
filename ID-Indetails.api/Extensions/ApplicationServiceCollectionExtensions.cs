@@ -131,6 +131,7 @@ public static class ApplicationServiceCollectionExtensions
             .Validate(o => TimeZoneInfo.TryFindSystemTimeZoneById(o.TimeZone, out _), "Company:TimeZone is not a known time zone.")
             .ValidateOnStart();
         services.AddOptions<InvitationOptions>().BindConfiguration(InvitationOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<PasswordResetOptions>().BindConfiguration(PasswordResetOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<FrontendOptions>().BindConfiguration(FrontendOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)
@@ -148,6 +149,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IPasswordResetRepository, PasswordResetRepository>();
         services.AddScoped<IPermissionRepository, PermissionRepository>();
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
@@ -189,6 +191,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPermissionService, PermissionService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IPasswordResetService, PasswordResetService>();
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IPermissionManagementService, PermissionManagementService>();
         services.AddScoped<IEmployeeService, EmployeeService>();

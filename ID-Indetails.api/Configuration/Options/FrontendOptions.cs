@@ -17,8 +17,15 @@ public sealed class FrontendOptions
     [Required]
     public string LoginPath { get; init; } = "/login";
 
+    /// <summary>Page that sets a new password from an emailed link; the token is appended as <c>?token=</c>.</summary>
+    [Required]
+    public string ResetPasswordPath { get; init; } = "/reset-password";
+
     public string AcceptInvitationUrl(string token)
         => $"{BaseUrl.TrimEnd('/')}{AcceptInvitationPath}?token={Uri.EscapeDataString(token)}";
 
     public string LoginUrl => $"{BaseUrl.TrimEnd('/')}{LoginPath}";
+
+    public string ResetPasswordUrl(string token)
+        => $"{BaseUrl.TrimEnd('/')}{ResetPasswordPath}?token={Uri.EscapeDataString(token)}";
 }

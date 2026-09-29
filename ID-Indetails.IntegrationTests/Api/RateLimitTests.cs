@@ -21,6 +21,26 @@ public class RateLimitTests(RateLimitedApiFactory api) : IClassFixture<RateLimit
     }
 }
 
+/// <summary>Its own factory, so the auth limit starts fresh.</summary>
+public class PasswordResetRateLimitTests(RateLimitedApiFactory api) : IClassFixture<RateLimitedApiFactory>
+{
+    [Fact]
+    public async Task Reset_requests_share_the_auth_limit()
+    {
+        var client = api.CreateApiClient();
+
+        for (var i = 0; i < 3; i++)
+        {
+            ((int)(await client.PostJsonAsync("/api/auth/forgot-password", new { email = "guess@test.local" })).StatusCode).ShouldBe(204);
+        }
+
+        await (await client.PostJsonAsync("/api/auth/forgot-password", new { email = "guess@test.local" }))
+            .ShouldFailWithAsync(429, ErrorCodes.TooManyRequests);
+        await (await client.PostJsonAsync("/api/auth/reset-password", new { token = "guessed-token", password = "a-much-longer-passphrase" }))
+            .ShouldFailWithAsync(429, ErrorCodes.TooManyRequests);
+    }
+}
+
 public class UserRateLimitTests(UserRateLimitedApiFactory api) : IClassFixture<UserRateLimitedApiFactory>
 {
     private readonly AuthTestSteps _steps = new(api);
