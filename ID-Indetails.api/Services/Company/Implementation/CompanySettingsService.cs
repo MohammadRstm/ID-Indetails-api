@@ -83,7 +83,7 @@ public sealed class CompanySettingsService(
     public async Task<BrandingResponse> BrandingAsync(CancellationToken cancellationToken = default)
     {
         var settings = await GetAsync(cancellationToken);
-        return new BrandingResponse(settings.IsSetUp ? settings.Name : null, settings.LogoFileId is not null);
+        return new BrandingResponse(settings.IsSetUp ? settings.Name : null, settings.LogoFileId is not null, settings.LogoFileId);
     }
 
     public async Task<FileContent> OpenLogoAsync(CancellationToken cancellationToken = default)

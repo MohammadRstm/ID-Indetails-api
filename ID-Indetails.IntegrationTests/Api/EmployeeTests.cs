@@ -257,7 +257,11 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
         me.FirstName.ShouldBe("Omar");
         me.LastName.ShouldBe("Nassar");
         me.Phone.ShouldBe("+961 71 111 111");
-        (await OkAsync<CurrentUserResponse>(Client.GetAsync("/api/auth/me", employee.AccessToken))).Phone.ShouldBe("+961 71 111 111");
+        var session = await OkAsync<CurrentUserResponse>(Client.GetAsync("/api/auth/me", employee.AccessToken));
+        session.Phone.ShouldBe("+961 71 111 111");
+        // the day they accepted their invitation, as their employee record has it
+        session.JoinedOn.ShouldNotBeNull();
+        session.JoinedOn.ShouldBe(me.JoinedOn);
 
         await (await Client.PutJsonAsync("/api/me/profile", new { firstName = "", lastName = "Nassar" }, employee.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
