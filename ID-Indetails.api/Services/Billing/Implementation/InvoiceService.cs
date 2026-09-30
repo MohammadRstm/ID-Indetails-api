@@ -11,6 +11,7 @@ using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
+using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
@@ -32,6 +33,7 @@ public sealed class InvoiceService(
     IProjectRepository projects,
     IInvoiceRepository invoices,
     IBillingSettingsRepository billingSettings,
+    IUserRepository users,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -258,8 +260,10 @@ public sealed class InvoiceService(
         }
 
         var i = row.Invoice;
+        var creator = i.CreatedById is { } creatorId ? await users.GetByIdAsync(creatorId, cancellationToken) : null;
         return new InvoiceResponse(Summary(row, actor.Has(PermissionCodes.FinancialView)))
         {
+            CreatedBy = creator is null ? null : new PersonRefResponse(creator.Id, PersonName.Of(creator.FirstName, creator.LastName, creator.Email)),
             TermsDays = i.TermsDays,
             Notes = i.Notes,
             BillToName = i.BillToName,

@@ -25,6 +25,7 @@ using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
+using ID_Indetails.api.Repositories.Reports.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
@@ -47,6 +48,7 @@ public sealed class ProjectService(
     ICompanyRepository company,
     IPaymentService paymentService,
     IMoneyRollupService moneyRollups,
+    IReportRepository reports,
     IActivityEventRepository activity,
     IProjectNotifier notifier,
     IUnitOfWork unitOfWork,
@@ -407,6 +409,9 @@ public sealed class ProjectService(
             TargetDate = p.TargetDate,
             CompletedAt = p.CompletedAt,
             FinalizedAt = p.FinalizedAt,
+            HeldSince = p.Status == ProjectStatus.Hold && (await reports.HeldSinceAsync([p.Id], cancellationToken)).TryGetValue(p.Id, out var held)
+                ? held
+                : null,
             ProgressPct = p.ProgressPct,
             CreatedAt = p.CreatedAt,
             Money = actor.Has(PermissionCodes.FinancialView) ? await MoneyOfAsync(p, cancellationToken) : null,

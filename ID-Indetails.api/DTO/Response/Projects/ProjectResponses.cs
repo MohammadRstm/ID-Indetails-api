@@ -189,6 +189,9 @@ public sealed record ProjectResponse
 
     public DateTime? FinalizedAt { get; init; }
 
+    /// <summary>When it was put on hold, while it is on hold.</summary>
+    public DateTime? HeldSince { get; init; }
+
     public int ProgressPct { get; init; }
 
     public DateTime CreatedAt { get; init; }

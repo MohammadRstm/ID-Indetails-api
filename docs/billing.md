@@ -30,7 +30,7 @@ Rates are append-only, like pay history (`Business/Billing/ExchangeRateRules.cs`
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/invoices?projectId=&clientId=&status=&overdue=&domain=&page=1&pageSize=25` | `financial:view` | Newest first. `status` is `draft`, `sent`, `partial`, `paid` or `void` |
-| `GET /api/invoices/{id}` | `financial:view` | With lines and deliveries |
+| `GET /api/invoices/{id}` | `financial:view` | With lines, deliveries and who drafted it (`createdBy`) |
 | `POST /api/projects/{id}/invoices` | `invoice:create` | A new draft: `{ lines: [{ description, amount }], termsDays, notes, billToName, billToContact }` |
 | `PUT /api/invoices/{id}` | `invoice:create` | Replaces a draft's lines and details |
 | `DELETE /api/invoices/{id}` | `invoice:create` | Discards a draft (deleted, with an `invoice_discarded` event) |

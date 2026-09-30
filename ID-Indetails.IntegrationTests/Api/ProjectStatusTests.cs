@@ -44,6 +44,9 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
         await AddRequirementsAsync(project.Id, admin.User.Id, open: 3, done: 1);
 
         (await ChangeAsync(project.Id, "hold", admin.AccessToken)).Status.ShouldBe(ProjectStatus.Hold);
+        var held = await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>();
+        held.HeldSince.ShouldNotBeNull();
+        (DateTime.UtcNow - held.HeldSince.Value).ShouldBeLessThan(TimeSpan.FromMinutes(1));
         var completed = await ChangeAsync(project.Id, "complete", admin.AccessToken);
         completed.Status.ShouldBe(ProjectStatus.Completed);
         completed.ProgressPct.ShouldBe(100);

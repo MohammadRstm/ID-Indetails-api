@@ -46,6 +46,7 @@ public class InvoiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         draft.Number.ShouldBeNull();
         draft.Total.ShouldBe(1500.25m);
         draft.TermsDays.ShouldBe(45);
+        draft.CreatedBy!.Id.ShouldBe(admin.User.Id);
         draft.Client.Id.ShouldBe(project.Client!.Id);
 
         var edited = await (await Client.PutJsonAsync($"/api/invoices/{draft.Id}",
