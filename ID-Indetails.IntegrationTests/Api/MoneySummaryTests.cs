@@ -75,6 +75,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var summary = await OkAsync<FinanceSummaryResponse>("/api/finance/design/summary?from=2025-12-01", admin.AccessToken);
         summary.Revenue.ShouldBe(10_000m);
         summary.Cost.Labour.ShouldBe(30m);
+        summary.LabourMinutes.ShouldBe(120);
         summary.Cost.Expenses.ShouldBe(10m);
         summary.Cost.Total.ShouldBe(40m);
         summary.Profit.ShouldBe(9960m);
@@ -141,6 +142,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var costs = await OkAsync<FinanceCostsResponse>("/api/finance/design/costs?from=2025-12-01", admin.AccessToken);
         costs.LabourByPerson.Single().Usd.ShouldBe(30m);
+        costs.LabourByPerson.Single().Minutes.ShouldBe(120);
         costs.ExpensesByCategory.Sum(c => c.Usd).ShouldBe(10m);
         costs.Unconverted.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
 
