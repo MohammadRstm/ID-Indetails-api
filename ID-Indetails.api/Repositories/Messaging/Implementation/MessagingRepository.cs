@@ -176,6 +176,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
                     m.Sender.FirstName,
                     m.Sender.LastName,
                     m.Sender.Email,
+                    SenderPhotoFileId = m.Sender.PhotoFileId,
                     m.Body,
                     m.Kind,
                     m.RefEntryId,
@@ -191,7 +192,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
             .Select(m => new MessageView(
                 m.Id,
                 m.ConversationId,
-                new MessagePerson(m.SenderId, PersonName.Of(m.FirstName, m.LastName, m.Email)),
+                new MessagePerson(m.SenderId, PersonName.Of(m.FirstName, m.LastName, m.Email), m.SenderPhotoFileId),
                 m.Body,
                 m.Kind,
                 m.RefEntryId,
