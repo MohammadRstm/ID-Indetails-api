@@ -1,7 +1,7 @@
 using ID_Indetails.api.DTO.Response.Files;
 namespace ID_Indetails.api.DTO.Response.WorkEntries;
 
-public sealed record WorkEntryProjectResponse(long Id, string Title);
+public sealed record WorkEntryProjectResponse(long Id, string Title, string? Icon, string? Tint);
 
 public sealed record WorkEntryPersonResponse(long Id, string Name);
 

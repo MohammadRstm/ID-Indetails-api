@@ -35,7 +35,7 @@ internal static class WorkEntryMapper
         IReadOnlyDictionary<long, int> overtime) => new(
         e.Id,
         new WorkEntryPersonResponse(e.UserId, e.UserName),
-        new WorkEntryProjectResponse(e.ProjectId, e.ProjectTitle),
+        new WorkEntryProjectResponse(e.ProjectId, e.ProjectTitle, e.ProjectIcon, e.ProjectTint),
         e.Description,
         e.StartedAt,
         e.EndedAt,

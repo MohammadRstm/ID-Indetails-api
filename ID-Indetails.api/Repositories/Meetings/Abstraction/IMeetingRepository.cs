@@ -14,7 +14,9 @@ public sealed record MeetingView(
     long? CreatedById,
     string? CreatedByName,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    string? ProjectIcon,
+    string? ProjectTint);
 
 /// <summary>
 /// Live meetings of projects in <paramref name="Domains"/>. Times are UTC: a meeting matches when it overlaps

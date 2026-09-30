@@ -1,6 +1,6 @@
 namespace ID_Indetails.api.DTO.Response.Meetings;
 
-public sealed record MeetingProjectResponse(long Id, string Title);
+public sealed record MeetingProjectResponse(long Id, string Title, string? Icon, string? Tint);
 
 public sealed record MeetingPersonResponse(long Id, string Name);
 

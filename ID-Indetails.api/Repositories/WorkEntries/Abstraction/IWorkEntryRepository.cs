@@ -23,7 +23,9 @@ public sealed record WorkEntryView(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     int CommentCount,
-    FileView? Attachment);
+    FileView? Attachment,
+    string? ProjectIcon = null,
+    string? ProjectTint = null);
 
 /// <summary>
 /// Live entries on Design projects. Times are UTC; <paramref name="From"/> is inclusive and <paramref name="To"/>
@@ -55,10 +57,15 @@ public sealed record WorkProject(
     ProjectStatus Status,
     int ProgressPct,
     DateOnly StartDate,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? Icon,
+    string? Tint);
 
 /// <summary>One person's live work on one project.</summary>
 public sealed record Contribution(long ProjectId, long UserId, string UserName, int Minutes, int Entries, DateTime LastStartedAt);
+
+/// <summary>What a project looks like on cards and lists.</summary>
+public sealed record ProjectCard(long Id, string Title, string? Icon, string? Tint);
 
 /// <summary>Someone of the Design domain, as the Employees page lists them.</summary>
 public sealed record DesignPerson(
@@ -119,6 +126,9 @@ public interface IWorkEntryRepository
 
     /// <summary>Titles of the given projects. Not tracked.</summary>
     Task<IReadOnlyDictionary<long, string>> ProjectTitlesAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>These projects' titles, icons and tints, by id. Not tracked.</summary>
+    Task<IReadOnlyDictionary<long, ProjectCard>> ProjectCardsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
 
     /// <summary>Names, emails, teams and domains of the given people. Not tracked.</summary>
     Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);

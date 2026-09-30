@@ -77,7 +77,7 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .OrderByDescending(p => p.CreatedAt)
             .ThenByDescending(p => p.Id)
             .Select(p => new WorkProject(
-                p.Id, p.Title, p.Description, p.Client != null ? p.Client.Name : null, p.Status, p.ProgressPct, p.StartDate, p.CreatedAt))
+                p.Id, p.Title, p.Description, p.Client != null ? p.Client.Name : null, p.Status, p.ProgressPct, p.StartDate, p.CreatedAt, p.Icon, p.Tint))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<Contribution>> ContributionsAsync(
@@ -143,6 +143,12 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
 
     public async Task<IReadOnlyDictionary<long, string>> ProjectTitlesAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
         => await db.Projects.AsNoTracking().Where(p => ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Title, cancellationToken);
+
+    public async Task<IReadOnlyDictionary<long, ProjectCard>> ProjectCardsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
+        => await db.Projects.AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .Select(p => new ProjectCard(p.Id, p.Title, p.Icon, p.Tint))
+            .ToDictionaryAsync(p => p.Id, cancellationToken);
 
     public async Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
     {
@@ -210,7 +216,8 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
         long Id, long UserId, string? FirstName, string? LastName, string Email, long ProjectId, string ProjectTitle,
         ProjectStatus ProjectStatus, string ProjectDomain, long? ClientId, string? ClientName, string Description,
         DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt, DateTime? UpdatedAt, int CommentCount,
-        long? AttachmentId, string? AttachmentName, string? AttachmentMimeType, long? AttachmentSize, DateTime? AttachmentCreatedAt);
+        long? AttachmentId, string? AttachmentName, string? AttachmentMimeType, long? AttachmentSize, DateTime? AttachmentCreatedAt,
+        string? ProjectIcon, string? ProjectTint);
 
     /// <summary>Loads the entries of an already ordered and paged query, with the details shown for each.</summary>
     private static async Task<IReadOnlyList<WorkEntryView>> ViewsAsync(IQueryable<WorkEntry> entries, CancellationToken cancellationToken)
@@ -219,7 +226,8 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             e.Id, e.UserId, e.User.FirstName, e.User.LastName, e.User.Email, e.ProjectId, e.Project.Title,
             e.Project.Status, e.Project.DomainCode, e.Project.ClientId, e.Project.Client != null ? e.Project.Client.Name : null,
             e.Description, e.StartedAt, e.EndedAt, e.DurationMinutes, e.CreatedAt, e.UpdatedAt, e.Comments.Count(),
-            e.AttachmentFileId, e.AttachmentFile!.OriginalName, e.AttachmentFile.MimeType, e.AttachmentFile.SizeBytes, e.AttachmentFile.CreatedAt))
+            e.AttachmentFileId, e.AttachmentFile!.OriginalName, e.AttachmentFile.MimeType, e.AttachmentFile.SizeBytes, e.AttachmentFile.CreatedAt,
+            e.Project.Icon, e.Project.Tint))
             .ToListAsync(cancellationToken);
 
         return rows.Select(r => new WorkEntryView(
@@ -228,6 +236,8 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             r.UpdatedAt, r.CommentCount,
             r.AttachmentId is { } fileId
                 ? new FileView(fileId, r.AttachmentName!, r.AttachmentMimeType!, r.AttachmentSize ?? 0, r.AttachmentCreatedAt ?? r.CreatedAt)
-                : null)).ToList();
+                : null,
+            r.ProjectIcon,
+            r.ProjectTint)).ToList();
     }
 }

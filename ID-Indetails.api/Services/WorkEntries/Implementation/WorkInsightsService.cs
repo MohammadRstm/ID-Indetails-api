@@ -300,14 +300,17 @@ public sealed class WorkInsightsService(
             .OrderByDescending(x => x.Cost.Usd)
             .Take(CostProjects)
             .ToList();
-        var titles = await entries.ProjectTitlesAsync(byProject.Select(x => x.ProjectId).ToList(), cancellationToken);
+        var cards = await entries.ProjectCardsAsync(byProject.Select(x => x.ProjectId).ToList(), cancellationToken);
 
         return new EmployeeLabourCostResponse(
             userId,
             rows.Count,
             pricer.Price(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= quarterStart)),
             pricer.Price(rows),
-            byProject.Select(x => new ProjectLabourCostResponse(x.ProjectId, titles.GetValueOrDefault(x.ProjectId, string.Empty), x.Cost)).ToList());
+            byProject.Select(x => cards.TryGetValue(x.ProjectId, out var card)
+                    ? new ProjectLabourCostResponse(x.ProjectId, card.Title, card.Icon, card.Tint, x.Cost)
+                    : new ProjectLabourCostResponse(x.ProjectId, string.Empty, null, null, x.Cost))
+                .ToList());
     }
 
     public async Task<IReadOnlyList<TimelineEntryResponse>> TimelineEntriesAsync(

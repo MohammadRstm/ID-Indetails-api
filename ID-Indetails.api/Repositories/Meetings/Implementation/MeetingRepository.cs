@@ -60,6 +60,8 @@ public sealed class MeetingRepository(IdIndetailsDbContext db) : IMeetingReposit
                 m.CreatedById,
                 m.CreatedAt,
                 m.UpdatedAt,
+                m.Project.Icon,
+                m.Project.Tint,
             })
             .ToListAsync(cancellationToken);
 
@@ -73,7 +75,7 @@ public sealed class MeetingRepository(IdIndetailsDbContext db) : IMeetingReposit
         return rows
             .Select(r => new MeetingView(
                 r.Id, r.ProjectId, r.Title, r.DomainCode, r.StartsAt, r.EndsAt, r.Topic, r.Description, r.CreatedById,
-                r.CreatedById is { } c ? creators.GetValueOrDefault(c) : null, r.CreatedAt, r.UpdatedAt))
+                r.CreatedById is { } c ? creators.GetValueOrDefault(c) : null, r.CreatedAt, r.UpdatedAt, r.Icon, r.Tint))
             .ToList();
     }
 }

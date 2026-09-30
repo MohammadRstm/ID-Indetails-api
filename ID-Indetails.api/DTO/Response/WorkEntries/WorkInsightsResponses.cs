@@ -120,7 +120,7 @@ public sealed record ProjectTimelineResponse(
     IReadOnlyList<TimelineEventResponse> Events,
     IReadOnlyList<TimelineGapResponse> Gaps);
 
-public sealed record ProjectLabourCostResponse(long ProjectId, string Title, LabourCostResponse Cost);
+public sealed record ProjectLabourCostResponse(long ProjectId, string Title, string? Icon, string? Tint, LabourCostResponse Cost);
 
 /// <summary>What someone's logged work cost the company (their profile's "cost to the company").</summary>
 /// <param name="ThisQuarter">From the first of this quarter to today.</param>
