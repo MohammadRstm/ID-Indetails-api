@@ -151,7 +151,8 @@ public sealed class ScheduleService(
             days,
             days.Sum(d => d.RequiredMinutes),
             next?.EffectiveFrom,
-            user.PhotoFileId);
+            user.PhotoFileId,
+            current?.EffectiveFrom);
     }
 
     private static ScheduleDayResponse Day(int weekday, int start, int end, int breakMinutes)
