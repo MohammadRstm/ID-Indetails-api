@@ -97,6 +97,7 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
         var own = await OkAsync<PersonScheduleResponse>(Client.PutJsonAsync(url, ownWeek, superAdmin.AccessToken));
         own.IsOwn.ShouldBeTrue();
         own.OwnSince.ShouldBe(Today);
+        own.ChangedOn.ShouldBe(Today);
         own.RequiredMinutesPerWeek.ShouldBe(4 * 420);
 
         await (await Client.PutJsonAsync(url, new { followsDefault = true }, superAdmin.AccessToken))
@@ -106,6 +107,7 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { followsDefault = true, effectiveFrom = Iso(Today.AddDays(7)) }, superAdmin.AccessToken));
         planned.IsOwn.ShouldBeTrue();
         planned.NextChangeOn.ShouldBe(Today.AddDays(7));
+        planned.ChangedOn.ShouldBe(Today);
 
         var list = await OkAsync<SchedulesResponse>(Client.GetAsync($"/api/company/schedules?search={designer.User.LastName}", superAdmin.AccessToken));
         list.People.ShouldContain(p => p.UserId == designer.User.Id && p.IsOwn);

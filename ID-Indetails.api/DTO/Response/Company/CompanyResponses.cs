@@ -44,6 +44,8 @@ public sealed record ScheduleDayResponse(int Weekday, int StartMinute, int EndMi
 
 /// <param name="IsOwn">False when the person follows the company week.</param>
 /// <param name="NextChangeOn">A change that is set but hasn't started yet.</param>
+/// <param name="ChangedOn">The day the schedule in force started (their own, or back to the company week); null when it was
+/// never changed. A change starting that day can't be replaced, so after one made today the next starts tomorrow.</param>
 public sealed record PersonScheduleResponse(
     long UserId,
     string Name,
@@ -56,7 +58,8 @@ public sealed record PersonScheduleResponse(
     IReadOnlyList<ScheduleDayResponse> Days,
     int RequiredMinutesPerWeek,
     DateOnly? NextChangeOn,
-    long? PhotoFileId);
+    long? PhotoFileId,
+    DateOnly? ChangedOn);
 
 public sealed record SchedulesResponse(WorkingTimePolicyResponse CompanyWeek, IReadOnlyList<PersonScheduleResponse> People);
 
