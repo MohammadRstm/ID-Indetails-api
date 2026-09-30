@@ -52,7 +52,7 @@ public class NotificationTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var mine = (await AssignedAsync(employee.AccessToken)).ShouldHaveSingleItem();
         mine.Actor!.Id.ShouldBe(admin.User.Id);
-        mine.Project.ShouldBe(new NotificationProjectResponse(project.Id, project.Title, DomainCodes.Design));
+        mine.Project.ShouldBe(new NotificationProjectResponse(project.Id, project.Title, DomainCodes.Design, project.Icon, project.Tint));
         mine.Payload!.Value.GetProperty("text").GetString().ShouldBe("Issue the stair details");
         mine.ReadAt.ShouldBeNull();
         // The new project, and the assignment.
