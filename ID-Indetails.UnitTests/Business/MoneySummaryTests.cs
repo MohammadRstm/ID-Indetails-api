@@ -84,7 +84,8 @@ public class MoneySummaryTests
         position.Overdue.ShouldBe(600m);
         position.OverdueCount.ShouldBe(1);
         position.OldestOverdueDue.ShouldBe(Today.AddDays(-10));
-        position.NotYetInvoiced.ShouldBe(1200m);
+        position.NotYetInvoiced.ShouldBe(1000m);
+        position.LeftToInvoice.ShouldBe(1200m);
         position.Drafts.ShouldBe(250m);
         position.PaymentCount.ShouldBe(3);
         position.Owed.ShouldBe(1900m);

@@ -91,7 +91,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         summary.Billing.Overdue.ShouldBe(2000m);
         summary.Billing.OverdueCount.ShouldBe(1);
         summary.Billing.OldestOverdueDays.ShouldBe(15);
-        summary.Billing.NotYetInvoiced.ShouldBe(7000m);
+        summary.Billing.NotYetInvoiced.ShouldBe(6500m);
         summary.Billing.PaymentCount.ShouldBe(2);
 
         // The unconverted expense belongs to December: a period without it doesn't list it.

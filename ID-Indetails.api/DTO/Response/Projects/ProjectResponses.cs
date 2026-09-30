@@ -85,7 +85,8 @@ public sealed record ProjectProjectionResponse(decimal Cost, decimal Profit, dec
 /// <param name="Outstanding">Left to pay on those invoices.</param>
 /// <param name="Received">Every live payment, on account or not.</param>
 /// <param name="OnAccount">Live payments not tied to an invoice.</param>
-/// <param name="NotYetInvoiced">Revenue minus invoiced, never below zero.</param>
+/// <param name="NotYetInvoiced">Revenue neither invoiced nor received on account, never below zero.</param>
+/// <param name="LeftToInvoice">Revenue minus invoiced, never below zero: what a new invoice can still be for.</param>
 /// <param name="Owed">Revenue minus received, never below zero.</param>
 /// <param name="PaidAhead">Received beyond the revenue.</param>
 /// <param name="IssuedCount">Issued, live invoices.</param>
@@ -100,6 +101,7 @@ public sealed record ProjectBillingResponse(
     decimal Received,
     decimal OnAccount,
     decimal NotYetInvoiced,
+    decimal LeftToInvoice,
     decimal Owed,
     decimal PaidAhead,
     int IssuedCount,

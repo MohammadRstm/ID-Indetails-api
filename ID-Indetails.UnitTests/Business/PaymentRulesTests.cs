@@ -68,11 +68,24 @@ public class PaymentRulesTests
         summary.Outstanding.ShouldBe(3000m);
         summary.Received.ShouldBe(5000m);
         summary.OnAccount.ShouldBe(2000m);
-        summary.NotYetInvoiced.ShouldBe(4000m);
+        // 10,000 agreed, 6,000 invoiced and 2,000 paid on account: 2,000 left neither invoiced nor paid
+        summary.NotYetInvoiced.ShouldBe(2000m);
+        summary.LeftToInvoice.ShouldBe(4000m);
         summary.Owed.ShouldBe(5000m);
         summary.PaidAhead.ShouldBe(0m);
 
         ProjectBilling.Summarise(1000m, [], [new ProjectBilling.Payment(1, 1, null, Today, 1500m, PaymentMethod.Cash)], Today)
             .PaidAhead.ShouldBe(500m);
+    }
+
+    [Fact]
+    public void Money_paid_up_front_leaves_nothing_not_yet_invoiced_but_can_still_be_invoiced()
+    {
+        // 12,000 agreed and 12,000 received on account, before any invoice
+        var paid = ProjectBilling.Summarise(12_000m, [], [new ProjectBilling.Payment(1, 1, null, Today, 12_000m, PaymentMethod.Bank)], Today);
+
+        paid.NotYetInvoiced.ShouldBe(0m);
+        paid.LeftToInvoice.ShouldBe(12_000m);
+        paid.Owed.ShouldBe(0m);
     }
 }

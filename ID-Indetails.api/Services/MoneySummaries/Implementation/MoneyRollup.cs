@@ -71,6 +71,7 @@ public sealed class MoneyRollup(
             b.Received,
             b.OnAccount,
             b.NotYetInvoiced,
+            b.LeftToInvoice,
             b.Owed,
             b.PaidAhead,
             b.IssuedCount,
