@@ -1,5 +1,6 @@
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 
 namespace ID_Indetails.api.Services.Projects.Abstraction;
@@ -7,6 +8,9 @@ namespace ID_Indetails.api.Services.Projects.Abstraction;
 public interface IProjectService
 {
     Task<PagedResponse<ProjectSummaryResponse>> ListAsync(ProjectListQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>The money of every project <paramref name="query"/> matches, whatever the page.</summary>
+    Task<ProjectListTotalsResponse> TotalsAsync(ProjectListQuery query, CancellationToken cancellationToken = default);
 
     /// <summary>Money is included only for callers with <c>financial:view</c>.</summary>
     Task<ProjectResponse> GetAsync(long projectId, CancellationToken cancellationToken = default);

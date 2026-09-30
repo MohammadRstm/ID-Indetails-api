@@ -158,7 +158,7 @@ public sealed class MoneyRollup(
     public static decimal Hours(int minutes) => Math.Round(minutes / 60m, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>Whether any of the projects' costs or invoices is left out of the USD figures for want of a rate.</summary>
-    private bool HasUnconverted(IReadOnlyCollection<Project> projects)
+    public bool HasUnconverted(IReadOnlyCollection<Project> projects)
         => projects.Any(p => Unconverted(p.Id).Count > 0) || UnconvertedInvoices(projects).Count > 0;
 
     private int? DaysSince(DateOnly? day) => day is { } d ? Today.DayNumber - d.DayNumber : null;

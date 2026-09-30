@@ -3,6 +3,7 @@ using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +19,12 @@ public sealed class ProjectsController(IProjectService projectService, IProjectS
     [HasPermission(PermissionCodes.ProjectView)]
     public Task<PagedResponse<ProjectSummaryResponse>> List([FromQuery] ProjectListQuery query, CancellationToken cancellationToken)
         => projectService.ListAsync(query, cancellationToken);
+
+    /// <summary>The money of every project the list's filters match (paging aside), for the header above it.</summary>
+    [HttpGet("totals")]
+    [HasPermission(PermissionCodes.FinancialView)]
+    public Task<ProjectListTotalsResponse> Totals([FromQuery] ProjectListQuery query, CancellationToken cancellationToken)
+        => projectService.TotalsAsync(query, cancellationToken);
 
     /// <summary>Money is included only for callers with financial access.</summary>
     [HttpGet("{projectId:long}")]

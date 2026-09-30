@@ -5,6 +5,7 @@ using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Expenses;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
@@ -12,6 +13,7 @@ using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
@@ -19,8 +21,8 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
-using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
@@ -64,20 +66,7 @@ public sealed class ProjectService(
             return new PagedResponse<ProjectSummaryResponse>([], query.Page, query.PageSize, 0);
         }
 
-        var (items, total) = await projects.SearchAsync(
-            new ProjectSearch(
-                actor.VisibleDomains,
-                query.Search?.Trim(),
-                query.Status,
-                query.ClientId,
-                query.BillingType,
-                query.Domain,
-                query.Page,
-                query.PageSize,
-                query.OwnerId,
-                period is { } open ? new OpenPeriod(clock.CompanyDayStartUtc(open.From), open.To) : null,
-                query.Sort),
-            cancellationToken);
+        var (items, total) = await projects.SearchAsync(SearchOf(actor, query, period, query.Page, query.PageSize), cancellationToken);
 
         // One batched load of each kind for the whole page, never a query per project.
         var work = actor.Has(PermissionCodes.WorkEntryViewAll) ? await ListWorkAsync(items, cancellationToken) : null;
@@ -88,6 +77,46 @@ public sealed class ProjectService(
             query.PageSize,
             total);
     }
+
+    public async Task<ProjectListTotalsResponse> TotalsAsync(ProjectListQuery query, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var period = OpenPeriodOf(query.Year, query.Quarter);
+        IReadOnlyList<Project> matching = period is { } future && future.From > clock.CompanyToday
+            ? []
+            : (await projects.SearchAsync(SearchOf(actor, query, period, 1, int.MaxValue), cancellationToken)).Items;
+
+        var rollup = await moneyRollups.LoadAsync(matching, cancellationToken);
+        var client = matching.Where(p => p.BillingType == BillingType.Client).ToList();
+        var inHouse = matching.Where(p => p.BillingType != BillingType.Client).ToList();
+        decimal Sum(IEnumerable<Project> list, Func<ProjectFinance.Summary, decimal> of)
+            => PeriodMoney.Round(list.Sum(p => of(rollup.Money(p.Id).Summary)));
+
+        return new ProjectListTotalsResponse(
+            matching.Count,
+            client.Count,
+            inHouse.Count,
+            Sum(matching, s => s.Revenue),
+            Sum(matching, s => s.Cost),
+            Sum(client, s => s.Profit),
+            Sum(inHouse, s => s.Cost),
+            rollup.HasUnconverted(matching),
+            PaymentRules.BaseCurrency);
+    }
+
+    private ProjectSearch SearchOf(UserAccess actor, ProjectListQuery query, (DateOnly From, DateOnly To)? period, int page, int pageSize)
+        => new(
+            actor.VisibleDomains,
+            query.Search?.Trim(),
+            query.Status,
+            query.ClientId,
+            query.BillingType,
+            query.Domain,
+            page,
+            pageSize,
+            query.OwnerId,
+            period is { } open ? new OpenPeriod(clock.CompanyDayStartUtc(open.From), open.To) : null,
+            query.Sort);
 
     public async Task<ProjectResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)
     {
