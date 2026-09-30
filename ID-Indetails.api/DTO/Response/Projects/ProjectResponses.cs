@@ -118,6 +118,9 @@ public sealed record ProjectSummaryResponse
 
     public string Title { get; init; } = string.Empty;
 
+    /// <summary>Shown under the project's name in lists and on employees' project cards.</summary>
+    public string? Description { get; init; }
+
     public string? Icon { get; init; }
 
     public string? Tint { get; init; }

@@ -77,7 +77,7 @@ public class ProjectListTests(ApiFactory api) : IClassFixture<ApiFactory>
         var closed = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         var fresh = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var tooling = await (await Client.PostJsonAsync("/api/projects",
-            new { title = "Studio tooling", billingType = "internal" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
+            new { title = "Studio tooling", billingType = "internal", description = "Laptops, licences and plotters" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
 
         // Started in January 2025: one still open, one completed in February 2025.
         await SqlAsync("UPDATE projects SET start_date = '2025-01-10', progress_pct = 40 WHERE id = @id", ("@id", old.Id));
@@ -107,6 +107,7 @@ public class ProjectListTests(ApiFactory api) : IClassFixture<ApiFactory>
         var byName = await ListAsync($"{design}&sort=name", admin.AccessToken);
         byName.Select(r => r.Title).ShouldBe(byName.Select(r => r.Title).OrderBy(t => t, StringComparer.OrdinalIgnoreCase));
         (await ListAsync($"{design}&sort=client", admin.AccessToken)).Last().Id.ShouldBe(tooling.Id);
+        byName.Single(r => r.Id == tooling.Id).Description.ShouldBe("Laptops, licences and plotters");
 
         await (await Client.GetAsync("/api/projects?quarter=2", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.GetAsync("/api/projects?year=2025&quarter=5", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);

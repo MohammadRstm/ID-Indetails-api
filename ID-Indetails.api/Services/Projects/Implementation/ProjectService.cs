@@ -570,6 +570,7 @@ public sealed class ProjectService(
         Id = p.Id,
         Domain = p.DomainCode,
         Title = p.Title,
+        Description = p.Description,
         Icon = p.Icon,
         Tint = p.Tint,
         Status = p.Status,
