@@ -57,6 +57,7 @@ public sealed class ProjectService(
     private const string NotFoundMessage = "Project not found.";
     public const int ListSparkWeeks = 8;
     public const int ListContributors = 4;
+    public const int SiteTeamShown = 5;
 
     public async Task<PagedResponse<ProjectSummaryResponse>> ListAsync(ProjectListQuery query, CancellationToken cancellationToken = default)
     {
@@ -73,8 +74,14 @@ public sealed class ProjectService(
         // One batched load of each kind for the whole page, never a query per project.
         var work = actor.Has(PermissionCodes.WorkEntryViewAll) ? await ListWorkAsync(items, cancellationToken) : null;
         var rollup = actor.Has(PermissionCodes.FinancialView) ? await moneyRollups.LoadAsync(items, cancellationToken) : null;
+        var teams = await SiteTeamsAsync(items, cancellationToken);
         return new PagedResponse<ProjectSummaryResponse>(
-            items.Select(p => ToSummary(p) with { Money = rollup?.ListMoney(p), Work = work?.GetValueOrDefault(p.Id) }).ToList(),
+            items.Select(p => ToSummary(p) with
+            {
+                Money = rollup?.ListMoney(p),
+                Work = work?.GetValueOrDefault(p.Id),
+                Team = teams.GetValueOrDefault(p.Id),
+            }).ToList(),
             query.Page,
             query.PageSize,
             total);
@@ -104,6 +111,23 @@ public sealed class ProjectService(
             Sum(inHouse, s => s.Cost),
             rollup.HasUnconverted(matching),
             PaymentRules.BaseCurrency);
+    }
+
+    /// <summary>Each Execution site's team (Design projects have none), in one load for the whole page.</summary>
+    private async Task<IReadOnlyDictionary<long, SiteTeamResponse>> SiteTeamsAsync(IReadOnlyCollection<Project> items, CancellationToken cancellationToken)
+    {
+        var sites = items.Where(p => p.DomainCode == DomainCodes.Execution).Select(p => p.Id).ToList();
+        if (sites.Count == 0)
+        {
+            return new Dictionary<long, SiteTeamResponse>();
+        }
+
+        var recorders = (await projects.SiteRecordersAsync(sites, cancellationToken)).ToLookup(r => r.ProjectId);
+        return sites.ToDictionary(id => id, id =>
+        {
+            var people = recorders[id].OrderByDescending(r => r.LastAt).ToList();
+            return new SiteTeamResponse(people.Take(SiteTeamShown).Select(r => new PersonRefResponse(r.UserId, r.Name)).ToList(), people.Count);
+        });
     }
 
     private ProjectSearch SearchOf(UserAccess actor, ProjectListQuery query, (DateOnly From, DateOnly To)? period, int page, int pageSize)
@@ -412,6 +436,7 @@ public sealed class ProjectService(
             HeldSince = p.Status == ProjectStatus.Hold && (await reports.HeldSinceAsync([p.Id], cancellationToken)).TryGetValue(p.Id, out var held)
                 ? held
                 : null,
+            Team = (await SiteTeamsAsync([p], cancellationToken)).GetValueOrDefault(p.Id),
             ProgressPct = p.ProgressPct,
             CreatedAt = p.CreatedAt,
             Money = actor.Has(PermissionCodes.FinancialView) ? await MoneyOfAsync(p, cancellationToken) : null,

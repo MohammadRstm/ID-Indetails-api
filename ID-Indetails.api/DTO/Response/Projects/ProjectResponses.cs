@@ -143,7 +143,18 @@ public sealed record ProjectSummaryResponse
     /// <summary>Design projects only, for callers with work_entry:view_all; left out entirely otherwise.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ProjectListWorkResponse? Work { get; init; }
+
+    /// <summary>Execution sites only; left out entirely for Design projects.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SiteTeamResponse? Team { get; init; }
 }
+
+/// <summary>
+/// An Execution site's team: the people who recorded its materials or labour weeks (projects have no member list).
+/// </summary>
+/// <param name="People">The 5 who recorded most recently, latest first.</param>
+/// <param name="Count">Everyone who recorded anything there.</param>
+public sealed record SiteTeamResponse(IReadOnlyList<PersonRefResponse> People, int Count);
 
 /// <summary>A Design project's logged work, as the project list shows it.</summary>
 /// <param name="ActivityLevel">From the last 14 days: busy from 45 h a week, steady from 15 h, quiet with any work.</param>
@@ -191,6 +202,10 @@ public sealed record ProjectResponse
 
     /// <summary>When it was put on hold, while it is on hold.</summary>
     public DateTime? HeldSince { get; init; }
+
+    /// <summary>Execution sites only.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public SiteTeamResponse? Team { get; init; }
 
     public int ProgressPct { get; init; }
 

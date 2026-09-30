@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
@@ -111,6 +112,33 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
     public async Task<bool> HasBillingRecordsAsync(long projectId, CancellationToken cancellationToken = default)
         => await db.Invoices.AnyAsync(i => i.ProjectId == projectId, cancellationToken)
             || await db.Payments.AnyAsync(p => p.ProjectId == projectId, cancellationToken);
+
+    public async Task<IReadOnlyList<SiteRecorder>> SiteRecordersAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
+    {
+        var ids = projectIds.ToList();
+        var materials = await db.ProjectMaterials.AsNoTracking()
+            .Where(m => ids.Contains(m.ProjectId) && m.DeletedAt == null)
+            .GroupBy(m => new { m.ProjectId, m.AddedById })
+            .Select(g => new { g.Key.ProjectId, UserId = g.Key.AddedById, LastAt = g.Max(m => m.AddedAt) })
+            .ToListAsync(cancellationToken);
+        var labour = await db.LabourWeeks.AsNoTracking()
+            .Where(w => ids.Contains(w.ProjectId))
+            .GroupBy(w => new { w.ProjectId, w.SubmittedById })
+            .Select(g => new { g.Key.ProjectId, UserId = g.Key.SubmittedById, LastAt = g.Max(w => w.SubmittedAt) })
+            .ToListAsync(cancellationToken);
+
+        var recorded = materials.Concat(labour)
+            .GroupBy(r => (r.ProjectId, r.UserId))
+            .Select(g => (g.Key.ProjectId, g.Key.UserId, LastAt: g.Max(r => r.LastAt)))
+            .ToList();
+        var userIds = recorded.Select(r => r.UserId).Distinct().ToList();
+        var names = await db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+            .ToDictionaryAsync(u => u.Id, u => PersonName.Of(u.FirstName, u.LastName, u.Email), cancellationToken);
+
+        return recorded.Select(r => new SiteRecorder(r.ProjectId, r.UserId, names.GetValueOrDefault(r.UserId, string.Empty), r.LastAt)).ToList();
+    }
 
     public void Add(Project project) => db.Projects.Add(project);
 }
