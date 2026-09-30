@@ -15,6 +15,10 @@ public sealed class WorkEntryTestSteps(AuthTestSteps steps)
         return new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc).AddHours(-hours);
     }
 
+    /// <summary>The company day (Asia/Beirut) an instant falls on.</summary>
+    public static DateOnly CompanyDay(DateTime utc)
+        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(utc, "Asia/Beirut"));
+
     /// <summary>
     /// Work at fixed UTC times, written straight to the database, so money figures (the paid break depends on the
     /// weekday and the hours) don't depend on when the test runs.

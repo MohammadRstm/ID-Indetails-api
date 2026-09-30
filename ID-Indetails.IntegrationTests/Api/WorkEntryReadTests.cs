@@ -22,7 +22,12 @@ public class WorkEntryReadTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, ben) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var other = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        // The entries must share a company day whenever the test runs; near midnight, start earlier.
         var start = WorkEntryTestSteps.HoursAgo(8);
+        if (WorkEntryTestSteps.CompanyDay(start) != WorkEntryTestSteps.CompanyDay(start.AddHours(3)))
+        {
+            start = start.AddHours(-4);
+        }
 
         var first = await Work.LogAsync(anna.AccessToken, project.Id, start, 60, "Wireframes for checkout");
         var second = await Work.LogAsync(anna.AccessToken, project.Id, start.AddHours(2), 30, "Review");
