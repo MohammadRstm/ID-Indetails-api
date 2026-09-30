@@ -6,7 +6,7 @@ A client belongs to one domain. The rules live in `Business/Clients/ClientRules.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/clients?search=&archived=&domain=&filter=&sort=name&page=1&pageSize=25` | `client:view` | Client list, A to Z unless sorted. Archived clients only with `archived=true`. `search` matches name, organisation and label |
+| `GET /api/clients?search=&archived=&includeArchived=&domain=&filter=&sort=name&page=1&pageSize=25` | `client:view` | Client list, A to Z unless sorted. Archived clients only with `archived=true`, or alongside the others with `includeArchived=true`. `search` matches name, organisation, label, note and contact details |
 | `GET /api/clients/overview?domain=` | `client:view` | The client list's header figures: clients (not archived), archived, with active work, without projects, added this month, the newest client, and the last 13 months' growth (clients on the books at each month end, archived included, and who was added). The money figures come from `GET /api/finance/{domain}/clients` ([finance.md](finance.md)) |
 | `GET /api/clients/{id}` | `client:view` | A client with its contacts and project count, and its work for callers with `work_entry:view_all` |
 | `POST /api/clients` | `client:create` | Adds a client. `domainCode` is needed only by callers who see both domains |

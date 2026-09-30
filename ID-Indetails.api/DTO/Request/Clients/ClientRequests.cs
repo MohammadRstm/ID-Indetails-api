@@ -5,11 +5,14 @@ namespace ID_Indetails.api.DTO.Request.Clients;
 /// <summary>Filters for the client list. Everything is optional.</summary>
 public sealed record ClientListQuery
 {
-    /// <summary>Matches name, organisation and label; every word must match.</summary>
+    /// <summary>Matches name, organisation, label, note and contact details; every word must match.</summary>
     public string? Search { get; init; }
 
-    /// <summary>When empty, archived clients are left out.</summary>
+    /// <summary>True for archived clients only. When empty, archived clients are left out.</summary>
     public bool? Archived { get; init; }
+
+    /// <summary>Archived clients alongside the others (the prototype's "Show archived"). Not with <see cref="Archived"/>.</summary>
+    public bool IncludeArchived { get; init; }
 
     /// <summary>Must be a domain the caller can see, or nothing is returned.</summary>
     public string? Domain { get; init; }

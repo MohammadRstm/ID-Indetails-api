@@ -180,6 +180,11 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             query = query.Where(e => e.Project.ClientId == clientId);
         }
 
+        if (search.InternalOnly)
+        {
+            query = query.Where(e => e.Project.ClientId == null);
+        }
+
         if (search.From is { } from)
         {
             query = query.Where(e => e.StartedAt >= from);

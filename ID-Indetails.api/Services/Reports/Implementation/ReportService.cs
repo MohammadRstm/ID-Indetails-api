@@ -57,7 +57,13 @@ public sealed class ReportService(
         var to = query.To ?? today;
 
         var views = await entries.ListAsync(
-            new WorkEntrySearch(query.UserId, query.ProjectId, From: clock.CompanyDayStartUtc(from), To: clock.CompanyDayStartUtc(to.AddDays(1))),
+            new WorkEntrySearch(
+                query.UserId,
+                query.ProjectId,
+                query.ClientId,
+                clock.CompanyDayStartUtc(from),
+                clock.CompanyDayStartUtc(to.AddDays(1)),
+                InternalOnly: query.Internal),
             cancellationToken);
         var worked = views.Select(ToWorked).ToList();
         var total = views.Sum(e => e.Minutes);

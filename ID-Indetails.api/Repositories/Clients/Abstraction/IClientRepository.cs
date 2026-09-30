@@ -5,6 +5,8 @@ namespace ID_Indetails.api.Repositories.Clients.Abstraction;
 
 /// <param name="Filter">Active and empty are applied here; owing needs the money, so the service applies it.</param>
 /// <param name="Sort">The money sorts need the money, so the service applies them; here they order by name.</param>
+/// <param name="Archived">True for archived clients only; otherwise the ones not archived.</param>
+/// <param name="IncludeArchived">Both, whatever <paramref name="Archived"/> says.</param>
 public sealed record ClientSearch(
     IReadOnlyList<string> Domains,
     string? Text,
@@ -13,7 +15,8 @@ public sealed record ClientSearch(
     int Page,
     int PageSize,
     ClientFilter? Filter = null,
-    ClientSort Sort = ClientSort.Name);
+    ClientSort Sort = ClientSort.Name,
+    bool IncludeArchived = false);
 
 /// <summary>A client with its contacts and how many projects use it.</summary>
 public sealed record ClientRow(Client Client, int ProjectCount);

@@ -76,7 +76,15 @@ public sealed class ClientService(
         }
 
         var search = new ClientSearch(
-            actor.VisibleDomains, query.Search?.Trim(), query.Archived, query.Domain, query.Page, query.PageSize, query.Filter, query.Sort);
+            actor.VisibleDomains,
+            query.Search?.Trim(),
+            query.Archived,
+            query.Domain,
+            query.Page,
+            query.PageSize,
+            query.Filter,
+            query.Sort,
+            query.IncludeArchived);
         IReadOnlyList<ClientRow> rows;
         int total;
         IReadOnlyDictionary<long, ClientMoneyResponse>? money = null;

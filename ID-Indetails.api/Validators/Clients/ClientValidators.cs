@@ -9,6 +9,8 @@ public sealed class ClientListQueryValidator : AbstractValidator<ClientListQuery
 {
     public ClientListQueryValidator()
     {
+        RuleFor(x => x.IncludeArchived).Must((q, include) => !(include && q.Archived == true))
+            .WithMessage("Ask for archived clients only, or for them alongside the others, not both.");
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
         RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
         RuleFor(x => x.Filter).IsInEnum().WithMessage("Filter must be active, owing or empty.");

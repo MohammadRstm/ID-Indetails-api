@@ -12,6 +12,12 @@ public sealed record WorkReportQuery
     public long? ProjectId { get; init; }
 
     public long? UserId { get; init; }
+
+    /// <summary>Only work for this client's projects.</summary>
+    public long? ClientId { get; init; }
+
+    /// <summary>Only work on internal projects (no client). Not with <see cref="ClientId"/>.</summary>
+    public bool Internal { get; init; }
 }
 
 public sealed record OverviewQuery

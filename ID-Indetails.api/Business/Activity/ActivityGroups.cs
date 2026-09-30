@@ -21,6 +21,13 @@ public static class ActivityGroups
         [ActivityEventKinds.ProjectFeeSet] = ActivityGroup.Money,
         [ActivityEventKinds.MaterialMarkupSet] = ActivityGroup.Money,
         [ActivityEventKinds.ProjectFinalized] = ActivityGroup.Money,
+        [ActivityEventKinds.MaterialAdded] = ActivityGroup.Money,
+        [ActivityEventKinds.MaterialUpdated] = ActivityGroup.Money,
+        [ActivityEventKinds.MaterialRemoved] = ActivityGroup.Money,
+        [ActivityEventKinds.MaterialPriced] = ActivityGroup.Money,
+        [ActivityEventKinds.LabourWeekSubmitted] = ActivityGroup.Money,
+        [ActivityEventKinds.LabourWeekUpdated] = ActivityGroup.Money,
+        [ActivityEventKinds.LabourDefaultsSet] = ActivityGroup.Money,
 
         [ActivityEventKinds.BillingSettingsUpdated] = ActivityGroup.Billing,
         [ActivityEventKinds.ExchangeRateSet] = ActivityGroup.Billing,
@@ -33,6 +40,8 @@ public static class ActivityGroups
         [ActivityEventKinds.PaymentRecorded] = ActivityGroup.Billing,
         [ActivityEventKinds.PaymentApplied] = ActivityGroup.Billing,
         [ActivityEventKinds.PaymentVoided] = ActivityGroup.Billing,
+        [ActivityEventKinds.StatementCreated] = ActivityGroup.Billing,
+        [ActivityEventKinds.StatementSent] = ActivityGroup.Billing,
 
         [ActivityEventKinds.ProjectCreated] = ActivityGroup.Projects,
         [ActivityEventKinds.ProjectUpdated] = ActivityGroup.Projects,

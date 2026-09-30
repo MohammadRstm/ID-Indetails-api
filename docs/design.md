@@ -145,7 +145,7 @@ Rules (`Business/Meetings/MeetingRules.cs`):
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/reports/work?from=&to=&projectId=&userId=` | `report:view` | The Reports page for a range of company days (default: this quarter so far; at most three years) |
+| `GET /api/reports/work?from=&to=&projectId=&userId=&clientId=&internal=` | `report:view` | The Reports page for a range of company days (default: this quarter so far; at most three years). `clientId` keeps one client's projects, `internal=true` the projects with no client |
 | `GET /api/reports/overview?period=quarter\|month\|last30` | `report:view` | The Design dashboard for a period and the one before it |
 
 Callers who can't see Design (an Execution admin holds `report:view` too) get `404`. Money is only included for callers with `financial:view`, and comes from the shared finance calculator.
@@ -160,9 +160,9 @@ Callers who can't see Design (an Execution admin holds `report:view` too) get `4
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/activity?group=&domain=&projectId=&clientId=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first. `domain` (`design` or `execution`) keeps that domain's events only, without company-level ones; a domain the caller can't see gives an empty page |
+| `GET /api/activity?group=&domain=&projectId=&clientId=&internal=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first. `domain` (`design` or `execution`) keeps that domain's events only, without company-level ones; a domain the caller can't see gives an empty page. `internal=true` keeps the events of projects with no client (not with `clientId`) |
 | `GET /api/activity/today` | `activity:view` and `work_entry:view_all` | Design work that started today: minutes, entries, people, and minutes by the hour they were logged |
 
-- **Groups** (the filter chips, `Business/Activity/ActivityGroups.cs`): `work` (work entries and their comments), `money` (revenue, expenses, fee, markup, finalising), `billing` (billing settings, exchange rates, invoices, payments), `projects` (projects, progress, requirements, meetings, clients), `people` (people, pay changes, permissions, teams) and `company` (company-level events with no domain).
+- **Groups** (the filter chips, `Business/Activity/ActivityGroups.cs`): `work` (work entries and their comments), `money` (revenue, expenses, fee, markup, finalising, and Execution's materials, prices, labour weeks and labour defaults), `billing` (billing settings, exchange rates, invoices, payments, client statements), `projects` (projects, progress, requirements, meetings, clients), `people` (people, pay changes, permissions, teams) and `company` (company-level events with no domain).
 - **Who sees what:** work events only with `work_entry:view_all`; `amount` and `prevAmount` only with `financial:view` (payloads never hold money; the markup in `material_markup_set`'s payload also needs `financial:view`); company-level events (overhead, working time, schedules, company settings, exchange rates) only with `company:view`. The other domain's events never appear.
 - Each item has the actor, project and client by name, the subject, the payload as recorded, and for work events the entry as it is now (`null` once deleted). `clientId` matches the event's client or its project's client; `userId` matches who did it.

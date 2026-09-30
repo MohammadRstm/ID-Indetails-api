@@ -13,6 +13,8 @@ public sealed class WorkReportQueryValidator : AbstractValidator<WorkReportQuery
             .WithMessage("The range must end on or after its start.");
         RuleFor(x => x).Must(x => x.From is null || x.To is null || x.To.Value.DayNumber - x.From.Value.DayNumber <= MaxDays)
             .WithMessage("A report covers at most three years.").OverridePropertyName("to");
+        RuleFor(x => x.Internal).Must((q, isInternal) => !(isInternal && q.ClientId is not null))
+            .WithMessage("Choose a client or internal work, not both.");
     }
 }
 

@@ -28,6 +28,7 @@ public sealed record WorkEntryView(
 /// <summary>
 /// Live entries on Design projects. Times are UTC; <paramref name="From"/> is inclusive and <paramref name="To"/>
 /// exclusive, both on the start time. <paramref name="Text"/> matches the description or project title.
+/// <paramref name="InternalOnly"/> keeps work on projects with no client.
 /// </summary>
 public sealed record WorkEntrySearch(
     long? UserId = null,
@@ -37,7 +38,8 @@ public sealed record WorkEntrySearch(
     DateTime? To = null,
     string? Text = null,
     int Page = 1,
-    int PageSize = 25);
+    int PageSize = 25,
+    bool InternalOnly = false);
 
 /// <summary>The few fields totals and charts are calculated from.</summary>
 public sealed record WorkRow(long Id, long UserId, long ProjectId, DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt);

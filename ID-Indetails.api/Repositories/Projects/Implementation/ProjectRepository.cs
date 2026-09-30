@@ -48,7 +48,7 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
 
         foreach (var word in (search.Text ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
-            query = query.Where(p => p.Title.Contains(word));
+            query = query.Where(p => p.Title.Contains(word) || (p.Description != null && p.Description.Contains(word)));
         }
 
         var total = await query.CountAsync(cancellationToken);
