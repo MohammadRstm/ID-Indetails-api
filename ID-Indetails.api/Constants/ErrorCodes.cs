@@ -123,6 +123,7 @@ public static class ErrorCodes
     public const string OverheadAlreadyCancelled = "overhead_already_cancelled";
     public const string OverheadNotCancelled = "overhead_not_cancelled";
     public const string OverheadSameCurrency = "overhead_same_currency";
+    public const string CompanyNotSetUp = "company_not_set_up";
 
     // Payroll
     public const string SalaryMonthInFuture = "salary_month_in_future";

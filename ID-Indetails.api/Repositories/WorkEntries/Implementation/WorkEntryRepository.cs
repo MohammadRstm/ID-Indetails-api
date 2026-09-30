@@ -121,12 +121,22 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
                 u.RoleCode,
                 u.Status,
                 u.LastSeenAt,
+                u.PhotoFileId,
             })
             .ToListAsync(cancellationToken);
 
         return rows
             .Select(u => new DesignPerson(
-                u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.Email, u.Position, u.TeamId, u.TeamName, u.RoleCode, u.Status, u.LastSeenAt))
+                u.Id,
+                PersonName.Of(u.FirstName, u.LastName, u.Email),
+                u.Email,
+                u.Position,
+                u.TeamId,
+                u.TeamName,
+                u.RoleCode,
+                u.Status,
+                u.LastSeenAt,
+                u.PhotoFileId))
             .OrderBy(p => p.Name)
             .ToList();
     }

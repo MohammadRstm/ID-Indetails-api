@@ -239,6 +239,7 @@ public sealed class WorkInsightsService(
                     p.TeamName,
                     p.Role,
                     p.Status,
+                    p.PhotoFileId,
                     presence.IsOnline(p.Id),
                     p.LastSeenAt,
                     WorkStats.Minutes(mine, weekStart, today),

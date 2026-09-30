@@ -1,6 +1,7 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Employees;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Employees;
 using ID_Indetails.api.Services.Employees.Abstraction;
@@ -52,6 +53,17 @@ public sealed class EmployeesController(IEmployeeService employeeService) : Cont
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ReactivateEmployeeRequest? request,
         CancellationToken cancellationToken)
         => employeeService.ReactivateAsync(userId, request, cancellationToken);
+
+    /// <summary>Their profile photo, from the caller's upload.</summary>
+    [HttpPut("{userId:long}/photo")]
+    [HasPermission(PermissionCodes.EmployeeManage)]
+    public Task<EmployeeResponse> SetPhoto(long userId, AttachFileRequest request, CancellationToken cancellationToken)
+        => employeeService.SetPhotoAsync(userId, request, cancellationToken);
+
+    [HttpDelete("{userId:long}/photo")]
+    [HasPermission(PermissionCodes.EmployeeManage)]
+    public Task<EmployeeResponse> RemovePhoto(long userId, CancellationToken cancellationToken)
+        => employeeService.RemovePhotoAsync(userId, cancellationToken);
 
     /// <summary>Changes the role and clears personal permission changes.</summary>
     [HttpPut("{userId:long}/role")]

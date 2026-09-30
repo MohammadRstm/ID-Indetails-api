@@ -5,6 +5,7 @@ using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Employees;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Employees;
@@ -21,6 +22,7 @@ using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
+using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 
@@ -36,6 +38,7 @@ public sealed class EmployeeService(
     IRefreshTokenRepository refreshTokens,
     IInvitationRepository invitations,
     IHourExcuseRepository excuses,
+    IFileClaims fileClaims,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -348,12 +351,7 @@ public sealed class EmployeeService(
         UpdateMyProfileRequest request,
         CancellationToken cancellationToken = default)
     {
-        var user = await users.GetByIdAsync(currentUser.Id, cancellationToken);
-        if (user is not { Status: UserStatus.Active })
-        {
-            throw new UnauthenticatedException(ErrorCodes.Unauthenticated, "Your session has expired. Sign in again.");
-        }
-
+        var user = await ActiveSelfAsync(cancellationToken);
         user.FirstName = request.FirstName.Trim();
         user.LastName = request.LastName.Trim();
         user.Phone = Clean(request.Phone);
@@ -363,6 +361,57 @@ public sealed class EmployeeService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await sessions.DescribeAsync(user, cancellationToken);
     }
+
+    public async Task<CurrentUserResponse> SetMyPhotoAsync(AttachFileRequest request, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var user = await ActiveSelfAsync(cancellationToken);
+        user.PhotoFileId = (await fileClaims.ClaimAsync(request.FileId, FileKind.Image, cancellationToken)).Id;
+        user.UpdatedAt = clock.UtcNow;
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await sessions.DescribeAsync(user, cancellationToken);
+    }
+
+    /// <summary>The old photo is attached to nothing any more, so the cleanup deletes it.</summary>
+    public async Task<CurrentUserResponse> RemoveMyPhotoAsync(CancellationToken cancellationToken = default)
+    {
+        var user = await ActiveSelfAsync(cancellationToken);
+        user.PhotoFileId = null;
+        user.UpdatedAt = clock.UtcNow;
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await sessions.DescribeAsync(user, cancellationToken);
+    }
+
+    public Task<EmployeeResponse> SetPhotoAsync(long userId, AttachFileRequest request, CancellationToken cancellationToken = default)
+        => ChangePhotoAsync(userId, request.FileId, cancellationToken);
+
+    public Task<EmployeeResponse> RemovePhotoAsync(long userId, CancellationToken cancellationToken = default)
+        => ChangePhotoAsync(userId, null, cancellationToken);
+
+    private async Task<EmployeeResponse> ChangePhotoAsync(long userId, long? fileId, CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
+        Throw(EmployeeRules.CheckCanChange(actor, TargetOf(user)));
+        user.PhotoFileId = fileId is { } id ? (await fileClaims.ClaimAsync(id, FileKind.Image, cancellationToken)).Id : null;
+        user.UpdatedAt = clock.UtcNow;
+        activity.Add(UserEvent(user, ActivityEventKinds.EmployeeUpdated, actor.UserId, new { photo = fileId is not null }));
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(actor, userId, cancellationToken);
+    }
+
+    /// <summary>The caller, who must still be active: an access token outlives a deactivation.</summary>
+    private async Task<User> ActiveSelfAsync(CancellationToken cancellationToken)
+        => await users.GetByIdAsync(currentUser.Id, cancellationToken) is { Status: UserStatus.Active } user
+            ? user
+            : throw new UnauthenticatedException(ErrorCodes.Unauthenticated, "Your session has expired. Sign in again.");
 
     /// <summary>A company-level notification to the person it is about.</summary>
     private Task NotifySelfAsync(string kind, User user, long actorId, object payload, CancellationToken cancellationToken)
@@ -401,6 +450,7 @@ public sealed class EmployeeService(
             Domain = row.Domain,
             Team = TeamOf(row),
             Position = row.Position,
+            PhotoFileId = row.PhotoFileId,
             Status = row.Status,
             IsJoker = IsJoker(row),
             JoinedOn = row.JoinedOn,
@@ -477,6 +527,7 @@ public sealed class EmployeeService(
         Domain = row.Domain,
         Team = TeamOf(row),
         Position = row.Position,
+        PhotoFileId = row.PhotoFileId,
         Status = row.Status,
         IsJoker = IsJoker(row),
         JoinedOn = row.JoinedOn,

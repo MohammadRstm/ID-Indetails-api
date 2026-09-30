@@ -57,6 +57,7 @@ public sealed record EmployeeRow(
     long? TeamId,
     string? TeamName,
     string? Position,
+    long? PhotoFileId,
     UserStatus Status,
     bool HasPermissionOverrides,
     DateOnly? JoinedOn,

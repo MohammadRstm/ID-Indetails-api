@@ -105,6 +105,7 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
             u.TeamId,
             u.Team != null ? u.Team.Name : null,
             u.Position,
+            u.PhotoFileId,
             u.Status,
             db.UserPermissionOverrides.Any(o => o.UserId == u.Id),
             u.JoinedOn,

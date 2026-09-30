@@ -379,5 +379,5 @@ public sealed class MessagingService(
     private static MessagingRules.TeamChat Chat(ChatTeam t) => new(t.Id, t.Domain);
 
     private static ContactResponse ToContact(ChatPerson p) => new(
-        p.Id, p.Name, p.Role, p.Domain, p.TeamId is { } id ? new TeamSummaryResponse(id, p.TeamName ?? string.Empty) : null, p.Position);
+        p.Id, p.Name, p.Role, p.Domain, p.TeamId is { } id ? new TeamSummaryResponse(id, p.TeamName ?? string.Empty) : null, p.Position, p.PhotoFileId);
 }

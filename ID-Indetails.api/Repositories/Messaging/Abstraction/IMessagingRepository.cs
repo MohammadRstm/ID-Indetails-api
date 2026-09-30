@@ -13,7 +13,8 @@ public sealed record ChatPerson(
     long? TeamId,
     string? TeamName,
     string? Position,
-    UserStatus Status);
+    UserStatus Status,
+    long? PhotoFileId);
 
 public sealed record ChatTeam(long Id, string Name, string Domain);
 

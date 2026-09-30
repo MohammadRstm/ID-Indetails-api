@@ -68,7 +68,8 @@ public sealed record DesignPerson(
     string? TeamName,
     string Role,
     UserStatus Status,
-    DateTime? LastSeenAt);
+    DateTime? LastSeenAt,
+    long? PhotoFileId);
 
 public interface IWorkEntryRepository
 {

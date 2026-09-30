@@ -75,6 +75,7 @@ public sealed record PersonWorkResponse(
     string? TeamName,
     string Role,
     UserStatus Status,
+    long? PhotoFileId,
     bool Online,
     DateTime? LastSeenAt,
     int WeekMinutes,

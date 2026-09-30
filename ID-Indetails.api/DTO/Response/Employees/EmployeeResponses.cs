@@ -24,6 +24,9 @@ public record EmployeeSummaryResponse
 
     public string? Position { get; init; }
 
+    /// <summary>Their profile photo, read through <c>GET /api/files/{id}</c>.</summary>
+    public long? PhotoFileId { get; init; }
+
     public required UserStatus Status { get; init; }
 
     /// <summary>True when their permissions differ from their role defaults.</summary>

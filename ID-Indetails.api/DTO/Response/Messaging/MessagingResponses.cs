@@ -9,7 +9,15 @@ public sealed record ChatPersonResponse(long Id, string Name);
 public sealed record ChatTeamResponse(long Id, string Name, string Domain);
 
 /// <summary>Someone the caller can message directly, or a member of a team chat.</summary>
-public sealed record ContactResponse(long Id, string Name, string Role, string? Domain, TeamSummaryResponse? Team, string? Position);
+/// <param name="PhotoFileId">Their profile photo, read through <c>GET /api/files/{id}</c>.</param>
+public sealed record ContactResponse(
+    long Id,
+    string Name,
+    string Role,
+    string? Domain,
+    TeamSummaryResponse? Team,
+    string? Position,
+    long? PhotoFileId);
 
 /// <summary>The work entry a shared comment is about, as it is now.</summary>
 public sealed record TaskCommentResponse(

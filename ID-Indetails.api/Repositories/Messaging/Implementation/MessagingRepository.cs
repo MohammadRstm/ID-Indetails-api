@@ -158,10 +158,11 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
                     TeamName = u.Team != null ? u.Team.Name : null,
                     u.Position,
                     u.Status,
+                    u.PhotoFileId,
                 })
                 .ToListAsync(cancellationToken))
             .Select(u => new ChatPerson(
-                u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.RoleCode, u.DomainCode, u.TeamId, u.TeamName, u.Position, u.Status))
+                u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.RoleCode, u.DomainCode, u.TeamId, u.TeamName, u.Position, u.Status, u.PhotoFileId))
             .OrderBy(p => p.Name)
             .ToList();
 
