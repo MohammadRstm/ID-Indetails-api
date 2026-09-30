@@ -2,6 +2,7 @@ using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Company;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.Enums;
 using Shouldly;
 
 namespace ID_Indetails.UnitTests.Business;
@@ -46,6 +47,18 @@ public class CompanyRulesTests
         OverheadRules.AmountFor(new(2026, 6, 1), started, ended, amounts).ShouldBe(150m);
         OverheadRules.AmountFor(new(2026, 8, 1), started, ended, amounts).ShouldBe(150m);
         OverheadRules.AmountFor(new(2026, 9, 1), started, ended, amounts).ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_cancelled_overhead_line_can_t_be_resumed_once_another_carries_it_on()
+    {
+        var ended = new DateOnly(2026, 9, 30);
+        (string, OverheadCostGroup, DateOnly)[] carriedOn = [("Office rent", OverheadCostGroup.Operating, new(2026, 10, 1))];
+
+        OverheadRules.CheckResume("office rent", OverheadCostGroup.Operating, ended, carriedOn)!.Code.ShouldBe(ErrorCodes.OverheadCarriedOn);
+        OverheadRules.CheckResume("Office rent", OverheadCostGroup.Software, ended, carriedOn).ShouldBeNull();
+        OverheadRules.CheckResume("Office rent", OverheadCostGroup.Operating, ended, [("Office rent", OverheadCostGroup.Operating, new(2026, 11, 1))]).ShouldBeNull();
+        OverheadRules.CheckResume("Office rent", OverheadCostGroup.Operating, ended, []).ShouldBeNull();
     }
 
     [Fact]
