@@ -68,22 +68,23 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.PostJsonAsync($"/api/projects/{project.Id}/payments", new { amount = 500m, currency = "USD", method = "cash" }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
-        // Completed, so all 10,000 is recognised, spread over the months of its costs.
+        // Completed, which changes nothing about revenue: that is the money received, 1,500 today.
         (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         // From December 2025, so the period holds the work, both expenses and today.
         var summary = await OkAsync<FinanceSummaryResponse>("/api/finance/design/summary?from=2025-12-01", admin.AccessToken);
-        summary.Revenue.ShouldBe(10_000m);
+        summary.Revenue.ShouldBe(1500m);
         summary.Cost.Labour.ShouldBe(30m);
         summary.LabourMinutes.ShouldBe(120);
         summary.Cost.Expenses.ShouldBe(10m);
         summary.Cost.Total.ShouldBe(40m);
-        summary.Profit.ShouldBe(9960m);
+        summary.Profit.ShouldBe(1460m);
         summary.Unconverted.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
         summary.ClientProjects.ShouldBe(1);
         summary.InternalProjects.ShouldBe(1);
         summary.AllTimeInternalCost.ShouldBe(15m);
-        summary.StillToEarn.ShouldBe(0m);
+        // 10,000 agreed, 1,500 of it received
+        summary.StillToEarn.ShouldBe(8500m);
         summary.Billing.Invoiced.ShouldBe(3000m);
         summary.Billing.Received.ShouldBe(1500m);
         summary.Billing.OnAccount.ShouldBe(500m);
@@ -110,7 +111,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var months = await OkAsync<List<FinanceMonthResponse>>("/api/finance/design/monthly?months=36", admin.AccessToken);
         months.Count.ShouldBe(36);
-        months.Sum(m => m.Revenue).ShouldBe(10_000m);
+        months.Sum(m => m.Revenue).ShouldBe(1500m);
         months.Single(m => m.Month == new DateOnly(2026, 2, 1)).Labour.ShouldBe(30m);
         months.Single(m => m.Month == new DateOnly(2025, 12, 1)).Unconverted
             .ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);

@@ -3,9 +3,9 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Business.Finance;
 
 /// <summary>
-/// A domain's money over a period, from each project's dated costs and recognised revenue (see <see cref="Recognition"/>):
+/// A domain's money over a period, live: it moves as soon as a payment is recorded or a cost is added.
 /// <list type="bullet">
-/// <item>Revenue: each month's share of the recognised revenue, weighted by how much of the month the period covers.</item>
+/// <item>Revenue: the money received in the period, each payment counted on the day it arrived.</item>
 /// <item>Cost: every cost dated inside the period, by source. Costs with no exchange rate on their day are listed
 /// apart, in their own currency (<see cref="Unconverted"/>).</item>
 /// <item>Margin: profit ÷ revenue while there is revenue.</item>
@@ -18,8 +18,9 @@ public static class PeriodMoney
         public decimal Total => Labour + Expenses + Materials + GroundLabour;
     }
 
-    public static decimal Revenue(IReadOnlyDictionary<DateOnly, decimal> byMonth, IReadOnlyList<Recognition.MonthShare> shares)
-        => shares.Sum(s => byMonth.GetValueOrDefault(s.Month) * s.Accrued);
+    /// <summary>Revenue in a period: the payments received in it (in USD), each on the day it arrived.</summary>
+    public static decimal Received(IEnumerable<(DateOnly Day, decimal Usd)> payments, DateOnly from, DateOnly to)
+        => Round(payments.Where(p => p.Day >= from && p.Day <= to).Sum(p => p.Usd));
 
     public static CostTotals Costs(IEnumerable<Recognition.DatedCost> costs, DateOnly from, DateOnly to)
     {
