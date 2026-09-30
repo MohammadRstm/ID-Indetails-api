@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.Business.Meetings;
 using ID_Indetails.api.DTO.Request.Meetings;
+using ID_Indetails.api.Validators.Employees;
 
 namespace ID_Indetails.api.Validators.Meetings;
 
@@ -25,6 +26,7 @@ public sealed class MeetingListQueryValidator : AbstractValidator<MeetingListQue
 {
     public MeetingListQueryValidator()
     {
+        RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
         RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
             .WithMessage("The range must end on or after its start.");
     }

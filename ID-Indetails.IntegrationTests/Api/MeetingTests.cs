@@ -153,6 +153,13 @@ public class MeetingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync($"/api/projects/{site.Id}/meetings", designAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         (await (await Client.GetAsync("/api/meetings", designAdmin.AccessToken)).ReadAsync<List<MeetingResponse>>())
             .ShouldNotContain(m => m.Id == meeting.Id);
+
+        // Someone who sees both domains can ask for one of them.
+        (await (await Client.GetAsync("/api/meetings?domain=execution", superAdmin.AccessToken)).ReadAsync<List<MeetingResponse>>())
+            .ShouldContain(m => m.Id == meeting.Id);
+        (await (await Client.GetAsync("/api/meetings?domain=design", superAdmin.AccessToken)).ReadAsync<List<MeetingResponse>>())
+            .ShouldNotContain(m => m.Id == meeting.Id);
+        await (await Client.GetAsync("/api/meetings?domain=nowhere", superAdmin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
     [Fact]

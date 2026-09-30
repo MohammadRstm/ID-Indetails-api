@@ -15,6 +15,9 @@ public sealed record SaveMeetingRequest
 /// <summary>Days are company-time-zone days, both inclusive; a meeting matches when it overlaps them.</summary>
 public sealed record MeetingListQuery
 {
+    /// <summary>Only this domain's meetings (design or execution). Every visible domain when not given.</summary>
+    public string? Domain { get; init; }
+
     public long? ProjectId { get; init; }
 
     /// <summary>Only meetings the caller set.</summary>
