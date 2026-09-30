@@ -24,6 +24,9 @@ public sealed record StatementResponse
 
     public string ProjectTitle { get; init; } = string.Empty;
 
+    /// <summary>The site's location, when the project has one.</summary>
+    public string? ProjectLocation { get; init; }
+
     public ProjectClientResponse Client { get; init; } = null!;
 
     public StatementMode Mode { get; init; }

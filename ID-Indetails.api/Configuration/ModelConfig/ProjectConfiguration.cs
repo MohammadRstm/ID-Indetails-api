@@ -45,6 +45,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(x => x.DomainCode).IsRequired().HasMaxLength(16);
         builder.Property(x => x.Title).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Description).IsLongText();
+        builder.Property(x => x.Location).HasMaxLength(200);
         builder.Property(x => x.Icon).HasMaxLength(40);
         builder.Property(x => x.Tint).HasMaxLength(9);
         builder.Property(x => x.RevenueCurrency).IsCurrencyCode();

@@ -2119,6 +2119,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(40)")
                         .HasColumnName("icon");
 
+                    b.Property<string>("Location")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("location");
+
                     b.Property<decimal?>("MaterialMarkup")
                         .HasPrecision(7, 4)
                         .HasColumnType("decimal(7,4)")

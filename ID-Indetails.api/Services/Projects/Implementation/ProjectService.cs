@@ -192,6 +192,7 @@ public sealed class ProjectService(
             DomainCode = domain,
             Title = request.Title.Trim(),
             Description = Clean(request.Description),
+            Location = Clean(request.Location),
             Icon = Clean(request.Icon),
             Tint = Clean(request.Tint),
             Status = ProjectStatus.Active,
@@ -280,6 +281,7 @@ public sealed class ProjectService(
 
         project.Title = request.Title.Trim();
         project.Description = Clean(request.Description);
+        project.Location = Clean(request.Location);
         project.Icon = Clean(request.Icon);
         project.Tint = Clean(request.Tint);
         project.TargetDate = request.TargetDate;
@@ -423,6 +425,7 @@ public sealed class ProjectService(
             Domain = p.DomainCode,
             Title = p.Title,
             Description = p.Description,
+            Location = p.Location,
             Icon = p.Icon,
             Tint = p.Tint,
             Status = p.Status,
@@ -571,6 +574,7 @@ public sealed class ProjectService(
         Domain = p.DomainCode,
         Title = p.Title,
         Description = p.Description,
+        Location = p.Location,
         Icon = p.Icon,
         Tint = p.Tint,
         Status = p.Status,

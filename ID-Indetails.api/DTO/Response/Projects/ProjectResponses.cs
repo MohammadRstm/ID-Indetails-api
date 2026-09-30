@@ -121,6 +121,9 @@ public sealed record ProjectSummaryResponse
     /// <summary>Shown under the project's name in lists and on employees' project cards.</summary>
     public string? Description { get; init; }
 
+    /// <summary>Where the work is, when given.</summary>
+    public string? Location { get; init; }
+
     public string? Icon { get; init; }
 
     public string? Tint { get; init; }
@@ -182,6 +185,9 @@ public sealed record ProjectResponse
     public string Title { get; init; } = string.Empty;
 
     public string? Description { get; init; }
+
+    /// <summary>Where the work is, when given.</summary>
+    public string? Location { get; init; }
 
     public string? Icon { get; init; }
 

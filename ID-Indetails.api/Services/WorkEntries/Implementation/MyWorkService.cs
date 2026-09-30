@@ -82,6 +82,7 @@ public sealed class MyWorkService(
                     p.Icon,
                     p.Tint,
                     p.ClientName,
+                    p.Location,
                     p.Status,
                     p.ProgressPct,
                     p.StartDate,

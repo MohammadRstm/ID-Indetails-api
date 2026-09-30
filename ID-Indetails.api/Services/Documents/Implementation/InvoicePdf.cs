@@ -21,7 +21,7 @@ public static class InvoicePdf
         PdfLayout.AddFacts(
             section,
             [new Fact("Billed to", invoice.BillToName ?? invoice.Client.DisplayName, invoice.BillToContact)],
-            [new Fact("Project", invoice.Project.Title)],
+            [new Fact("Project", invoice.Project.Title, invoice.Project.Location)],
             [
                 new Fact("Issue date", issuedOn is { } issued ? PdfLayout.Date(issued) : "Not issued"),
                 new Fact("Due date", invoice.DueOn is { } due ? PdfLayout.Date(due) : Terms(invoice.TermsDays)),

@@ -17,7 +17,7 @@ public static class StatementPdf
         PdfLayout.AddFacts(
             section,
             [new Fact("Prepared for", statement.Client.DisplayName)],
-            [new Fact("Project", statement.ProjectTitle)],
+            [new Fact("Project", statement.ProjectTitle, statement.ProjectLocation)],
             [new Fact("Date", PdfLayout.Date(statement.Date))]);
 
         PdfLayout.AddHeading(section, "Materials");
