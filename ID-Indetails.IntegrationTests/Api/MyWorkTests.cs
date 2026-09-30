@@ -21,8 +21,10 @@ public class MyWorkTests(ApiFactory api) : IClassFixture<ApiFactory>
         var brand = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var web = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 
-        await Work.LogAsync(employee.AccessToken, brand.Id, WorkEntryTestSteps.HoursAgo(3), 60, "Logo sketches");
-        await Work.LogAsync(employee.AccessToken, web.Id, WorkEntryTestSteps.HoursAgo(2), 30, "Hero banner");
+        var sketchesAt = WorkEntryTestSteps.HoursAgo(3);
+        var bannerAt = WorkEntryTestSteps.HoursAgo(2);
+        await Work.LogAsync(employee.AccessToken, brand.Id, sketchesAt, 60, "Logo sketches");
+        await Work.LogAsync(employee.AccessToken, web.Id, bannerAt, 30, "Hero banner");
         await Work.LogAsync(colleague.AccessToken, web.Id, WorkEntryTestSteps.HoursAgo(3), 120, "Not mine");
 
         var summary = await (await Client.GetAsync("/api/me/work-summary", employee.AccessToken)).ReadAsync<WorkSummaryResponse>();
@@ -30,7 +32,8 @@ public class MyWorkTests(ApiFactory api) : IClassFixture<ApiFactory>
         summary.TotalMinutes.ShouldBe(90);
         summary.EntryCount.ShouldBe(2);
         summary.ProjectCount.ShouldBe(2);
-        summary.ThisQuarterMinutes.ShouldBe(90);
+        // in the first hours of a quarter, work from a few hours ago still belongs to the one before
+        summary.ThisQuarterMinutes.ShouldBe((InThisQuarter(sketchesAt) ? 60 : 0) + (InThisQuarter(bannerAt) ? 30 : 0));
         summary.Weekly.Count.ShouldBe(16);
         summary.Weekly.Sum(w => w.Minutes).ShouldBe(90);
         summary.Week.Count.ShouldBe(7);
@@ -96,5 +99,14 @@ public class MyWorkTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync("/api/me/projects", executionEmployee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync($"/api/me/projects/{site.Id}/work", employee.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    /// <summary>Whether a moment falls in the company's current quarter (the company runs on Beirut time).</summary>
+    private static bool InThisQuarter(DateTime utc)
+    {
+        var beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
+        var at = TimeZoneInfo.ConvertTimeFromUtc(utc, beirut);
+        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, beirut);
+        return at.Year == now.Year && (at.Month - 1) / 3 == (now.Month - 1) / 3;
     }
 }
