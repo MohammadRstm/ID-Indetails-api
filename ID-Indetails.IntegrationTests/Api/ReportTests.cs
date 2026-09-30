@@ -87,6 +87,9 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         quarter.Period.ShouldBe(OverviewPeriod.Quarter);
         quarter.Minutes.ShouldBeGreaterThanOrEqualTo(90);
         quarter.PeopleLoggingThisWeek.ShouldBeGreaterThanOrEqualTo(1);
+        quarter.PeopleCount.ShouldBeGreaterThanOrEqualTo(1);
+        quarter.ProjectCount.ShouldBeGreaterThanOrEqualTo(1);
+        quarter.ThisWeekMinutes.ShouldBeGreaterThanOrEqualTo(90);
         quarter.Attention.Count.ShouldBeLessThanOrEqualTo(5);
         quarter.Attention.Single(a => a.Kind == AttentionKind.NotLogging).People!.ShouldContain(p => p.Id == idle.User.Id);
 
