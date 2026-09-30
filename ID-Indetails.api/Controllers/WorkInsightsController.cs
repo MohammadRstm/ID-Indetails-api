@@ -35,6 +35,15 @@ public sealed class WorkInsightsController(IWorkInsightsService workInsightsServ
         => workInsightsService.TimelineAsync(projectId, cancellationToken);
 
     /// <summary>Everyone of the Design domain with their hours, most this week first.</summary>
+    /// <summary>The entries of a day, week, month or year (at most 366 days), for the Timeline tab's lanes and one-day view.</summary>
+    [HttpGet("projects/{projectId:long}/timeline/entries")]
+    [HasPermission(PermissionCodes.WorkEntryViewAll)]
+    public Task<IReadOnlyList<TimelineEntryResponse>> TimelineEntries(
+        long projectId,
+        [FromQuery] TimelineEntriesQuery query,
+        CancellationToken cancellationToken)
+        => workInsightsService.TimelineEntriesAsync(projectId, query, cancellationToken);
+
     /// <summary>Cost and payments week by week: the payment-vs-cost and weekly labour charts, and the project report.</summary>
     [HttpGet("projects/{projectId:long}/cost-timeline")]
     [HasPermission(PermissionCodes.FinancialView)]

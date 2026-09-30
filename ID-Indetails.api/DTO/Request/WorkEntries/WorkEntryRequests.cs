@@ -100,6 +100,14 @@ public sealed record ProjectWorkQuery
     public string? Search { get; init; }
 }
 
+/// <summary>A range of company days, both included: a day, week, month or year of the Timeline tab.</summary>
+public sealed record TimelineEntriesQuery
+{
+    public DateOnly From { get; init; }
+
+    public DateOnly To { get; init; }
+}
+
 public sealed record PeopleWorkQuery
 {
     /// <summary>Matches the name, email or position; every word must match.</summary>

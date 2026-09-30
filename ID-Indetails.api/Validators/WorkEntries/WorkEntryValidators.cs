@@ -101,6 +101,19 @@ public sealed class ProjectWorkQueryValidator : AbstractValidator<ProjectWorkQue
     }
 }
 
+public sealed class TimelineEntriesQueryValidator : AbstractValidator<TimelineEntriesQuery>
+{
+    public const int MaxDays = 366;
+
+    public TimelineEntriesQueryValidator()
+    {
+        RuleFor(x => x.From).NotEmpty().WithMessage("From is required.");
+        RuleFor(x => x.To)
+            .Must((q, to) => to >= q.From && to.DayNumber - q.From.DayNumber < MaxDays)
+            .WithMessage($"The range must end on or after its start, and cover at most {MaxDays} days.");
+    }
+}
+
 public sealed class PeopleWorkQueryValidator : AbstractValidator<PeopleWorkQuery>
 {
     public PeopleWorkQueryValidator()

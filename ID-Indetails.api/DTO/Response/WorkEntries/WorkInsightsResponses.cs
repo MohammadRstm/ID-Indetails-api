@@ -135,3 +135,15 @@ public sealed record CostWeekResponse(DateOnly WeekStart, int Minutes, decimal L
 
 /// <summary>A project's cost and payments week by week, from its start to today (or when it was finalised), in USD.</summary>
 public sealed record ProjectCostTimelineResponse(IReadOnlyList<CostWeekResponse> Weeks, string Currency);
+
+/// <summary>One entry on the Timeline tab's lanes and one-day view.</summary>
+/// <param name="TeamName">For grouping the day by team; null for someone in no team.</param>
+public sealed record TimelineEntryResponse(
+    long Id,
+    long UserId,
+    string UserName,
+    string? TeamName,
+    DateTime StartedAt,
+    DateTime EndedAt,
+    int Minutes,
+    string Description);

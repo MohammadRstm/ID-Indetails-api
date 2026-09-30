@@ -290,6 +290,27 @@ public sealed class WorkInsightsService(
             byProject.Select(x => new ProjectLabourCostResponse(x.ProjectId, titles.GetValueOrDefault(x.ProjectId, string.Empty), x.Cost)).ToList());
     }
 
+    public async Task<IReadOnlyList<TimelineEntryResponse>> TimelineEntriesAsync(
+        long projectId,
+        TimelineEntriesQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await DesignProjectAsync(actor, projectId, cancellationToken);
+
+        var views = await entries.ListAsync(
+            new WorkEntrySearch(ProjectId: projectId, From: clock.CompanyDayStartUtc(query.From), To: clock.CompanyDayStartUtc(query.To.AddDays(1))),
+            cancellationToken);
+        var teams = (await entries.PeopleAsync(views.Select(v => v.UserId).Distinct().ToList(), cancellationToken))
+            .ToDictionary(p => p.Id, p => p.TeamName);
+
+        return views
+            .OrderBy(v => v.StartedAt).ThenBy(v => v.EndedAt).ThenBy(v => v.UserId).ThenBy(v => v.Id)
+            .Select(v => new TimelineEntryResponse(
+                v.Id, v.UserId, v.UserName, teams.GetValueOrDefault(v.UserId), v.StartedAt, v.EndedAt, v.Minutes, v.Description))
+            .ToList();
+    }
+
     public async Task<ProjectCostTimelineResponse> CostTimelineAsync(long projectId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
