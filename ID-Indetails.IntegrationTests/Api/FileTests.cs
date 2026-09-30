@@ -128,6 +128,9 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         var profile = await OkAsync<EmployeeResponse>(
             Client.PutJsonAsync($"/api/employees/{employee.User.Id}/photo", new { fileId = portrait.Id }, designAdmin.AccessToken));
         profile.PhotoFileId.ShouldBe(portrait.Id);
+        // Lists of people carry it too.
+        var schedules = await OkAsync<SchedulesResponse>(Client.GetAsync("/api/company/schedules?domain=design", superAdmin.AccessToken));
+        schedules.People.Single(p => p.UserId == employee.User.Id).PhotoFileId.ShouldBe(portrait.Id);
         var contacts = await OkAsync<List<ContactResponse>>(Client.GetAsync("/api/messages/contacts", colleague.AccessToken));
         contacts.Single(c => c.Id == employee.User.Id).PhotoFileId.ShouldBe(portrait.Id);
 
