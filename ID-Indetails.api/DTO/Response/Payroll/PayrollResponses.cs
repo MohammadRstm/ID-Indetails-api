@@ -74,6 +74,7 @@ public sealed record SalaryRowResponse
 
 public sealed record SalaryTotalResponse(string Currency, int People, decimal BasePay, decimal OvertimePay, decimal Deduction, decimal Total);
 
+/// <param name="ExpectedMinutes">Hours the schedules ask for, of the people under the hours rule; null when nobody listed is.</param>
 public sealed record SalarySummaryResponse(
     int People,
     int OnMonthlySalary,
@@ -81,7 +82,8 @@ public sealed record SalarySummaryResponse(
     int OvertimeMinutes,
     int MadeUpMinutes,
     int ShortPeople,
-    int ShortMinutes);
+    int ShortMinutes,
+    int? ExpectedMinutes);
 
 /// <param name="Month">First day of the month.</param>
 /// <param name="Totals">One line per currency; currencies are never added together.</param>
@@ -106,8 +108,12 @@ public sealed record HourExcuseResponse(
     DateTime CreatedAt,
     long? CreatedById);
 
+/// <summary>A working day of someone's month, with the minutes it requires.</summary>
+public sealed record SalaryDayResponse(DateOnly Date, int RequiredMinutes);
+
 /// <param name="MissedDays">Working days with no work within hours and no excuse.</param>
 /// <param name="DeductionMinutes">Shortfall (with the paid break of each missed day) and unpaid excuses.</param>
+/// <param name="WorkingDays">The month's working days while the person was employed, to choose days to excuse from.</param>
 public sealed record SalaryDetailResponse(
     SalaryRowResponse Salary,
     bool InProgress,
@@ -116,4 +122,5 @@ public sealed record SalaryDetailResponse(
     int DeductionMinutes,
     IReadOnlyList<DateOnly> MissedDays,
     IReadOnlyList<OvertimeWorkResponse> OvertimeWork,
-    IReadOnlyList<HourExcuseResponse> Excuses);
+    IReadOnlyList<HourExcuseResponse> Excuses,
+    IReadOnlyList<SalaryDayResponse> WorkingDays);

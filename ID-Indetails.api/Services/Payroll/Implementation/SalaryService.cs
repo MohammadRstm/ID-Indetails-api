@@ -30,7 +30,7 @@ public sealed class SalaryService(
     IPayrollInputs inputs,
     IClock clock) : ISalaryService
 {
-    private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses, DateOnly? LeftOn);
+    private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses, SalaryCalculator.Input Input);
 
     public async Task<SalariesResponse> ListAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
@@ -52,15 +52,22 @@ public sealed class SalaryService(
                 computed.Sum(c => c.Result.OvertimeMinutes),
                 rows.Sum(r => r.MadeUpMinutes),
                 rows.Count(r => r.ShortMinutes > 0),
-                rows.Sum(r => r.ShortMinutes ?? 0)));
+                rows.Sum(r => r.ShortMinutes ?? 0),
+                rows.Any(r => r.ExpectedMinutes is not null) ? rows.Sum(r => r.ExpectedMinutes ?? 0) : null));
     }
 
     public async Task<SalaryDetailResponse> GetAsync(long userId, SalaryMonthQuery query, CancellationToken cancellationToken = default)
     {
         var (month, computed) = await CalculateAsync(query.Month, null, null, userId, cancellationToken);
         var person = computed.SingleOrDefault() ?? throw new NotFoundException("No salary for this person in that month.");
-        var result = person.Result;
+        var (result, input) = (person.Result, person.Input);
         int MadeUp(Overtime.Split w) => result.Ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
+        var workingDays = HoursLedger.Days(month, month.AddMonths(1))
+            .Where(d => d >= input.JoinedOn && !(d > input.LeftOn) && !Employment.InGap(input.Gaps, d))
+            .Select(d => (Day: d, Hours: input.Calendar.HoursOn(d)))
+            .Where(d => d.Hours is not null)
+            .Select(d => new SalaryDayResponse(d.Day, d.Hours!.Required))
+            .ToList();
 
         return new SalaryDetailResponse(
             ToRow(person),
@@ -72,7 +79,8 @@ public sealed class SalaryService(
             result.Work.Where(w => w.Overtime > 0)
                 .Select(w => new OvertimeWorkResponse(w.Id, w.Day, w.Minutes, w.Overtime, MadeUp(w)))
                 .ToList(),
-            person.Excuses.Select(HourExcuseService.ToResponse).ToList());
+            person.Excuses.Select(HourExcuseService.ToResponse).ToList(),
+            workingDays);
     }
 
     public async Task<MyPayResponse> GetMineAsync(SalaryMonthQuery query, CancellationToken cancellationToken = default)
@@ -180,7 +188,7 @@ public sealed class SalaryService(
         {
             if (SalaryCalculator.Calculate(personMonth.Input) is { } result)
             {
-                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses, personMonth.Input.LeftOn));
+                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses, personMonth.Input));
             }
         }
 
@@ -215,7 +223,7 @@ public sealed class SalaryService(
             Flagged = r.Ledger?.Flagged ?? false,
             Behind = r.Ledger?.Behind ?? false,
             ProRated = r.ProRated,
-            LeftOn = c.LeftOn,
+            LeftOn = c.Input.LeftOn,
             WorkingDays = r.WorkingDays,
             WorkingDaysPaid = r.WorkingDaysPaid,
             Deduction = r.Deduction,
