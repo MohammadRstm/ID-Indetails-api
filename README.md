@@ -26,4 +26,5 @@ The backend of Hourline, the company's internal management system: an ASP.NET Co
 | Self-service (`/api/me`) | [me.md](docs/me.md) |
 | Notifications | [notifications.md](docs/notifications.md) |
 | Messaging and live updates | [messaging.md](docs/messaging.md) |
+| Uploads, photos and the logo | [files.md](docs/files.md) |
 | Search | [search.md](docs/search.md) |

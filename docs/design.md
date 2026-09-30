@@ -31,8 +31,8 @@ Features of the Design domain: domain settings, work entries, comments, meetings
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `POST /api/work-entries` | `work_entry:create` | Logs the caller's work: `{ projectId, description, startedAt, endedAt, moves }`. Returns `201` |
-| `PUT /api/work-entries/{id}` | `work_entry:create` | Replaces project, description and times of one of the caller's entries |
+| `POST /api/work-entries` | `work_entry:create` | Logs the caller's work: `{ projectId, description, startedAt, endedAt, attachmentFileId, moves }`. Returns `201` |
+| `PUT /api/work-entries/{id}` | `work_entry:create` | Replaces project, description, times and attachment of one of the caller's entries |
 | `DELETE /api/work-entries/{id}` | `work_entry:create` | Soft delete (`deleted_at`). Returns `204` |
 | `POST /api/work-entries/{id}/restore` | `work_entry:create` | Undoes a delete |
 | `GET /api/work-entries?from=&to=&projectId=&userId=&clientId=&search=&page=1&pageSize=25` | `work_entry:view_all` | Everyone's Design entries, newest first |
@@ -51,6 +51,7 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 - **Past months never change.** Work that starts before the current company month (before the 1st, company time zone) can't be logged, edited, moved, deleted or restored, by anyone (`422 month_closed`). The month just ended stays open through the 1st, so work from its last evening can still be logged after midnight (`WorkEntryRules.OpenFrom`). An edit or a timeline move is refused when either the entry's current start or its new one is in a closed month. Excusing hours is how a closed month is corrected. `canEdit` is false for such entries. The known exception is pay: a pay change dated back into a closed month still changes that month's salary.
 - **`moves`** saves the timeline's swap: other entries of the caller moved to make room, `[{ id, startedAt, endedAt }]` (at most 20). They are checked with the new entry and saved in the same transaction, or not at all.
 - The timer runs in the client; stopping it logs an entry through `POST /api/work-entries`.
+- **An entry can carry one photo or video** (`attachmentFileId`, one of the author's own uploads, attached once), returned as `attachment`. Whoever may read the entry can download it ([files.md](files.md)).
 - Logging never adds the person to the project's members.
 
 **Events:** `work_entry_logged`, `work_entry_updated` (also once per moved entry), `work_entry_deleted`, `work_entry_restored`, with the entry as the subject and its minutes in the payload.

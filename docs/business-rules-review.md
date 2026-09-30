@@ -42,7 +42,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D1 | **The timer runs in the client.** Stopping it logs an ordinary entry; nothing is stored while it runs. |
 | D2 | **Nobody edits someone else's entries**, admins included. Whoever holds `work_entry:create` logs their own work (Design admins included, by the role defaults). |
 | D3 | **Entry rules are enforced on the server.** An entry is locked once past the edit window (counted from when it was logged) or while its project no longer accepts work. 5 minutes to 16 hours, in whole minutes. With future entries allowed, any end time is accepted. |
-| D4 | **Entry attachments wait** for a file-upload feature. |
+| D4 | **A work entry can carry one photo or video** (`attachmentFileId`), an upload of its author's, readable by whoever may read the entry (30 Sep 2026, with file uploads; see [files.md](files.md)). |
 | D5 | **Comments can't be edited or deleted.** Posting a comment to the team group chat is refused until messaging exists. |
 | D6 | **Logged-work notifications** go to active people holding `work_entry:view_all` in Design, never the author. |
 | D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, `notifyEntry`, `notifyProject` (N4), `notifyIdle` and `weeklySummary` (N7) are used; `autoArchive` is used by the auto-archive job (A4). |

@@ -19,24 +19,9 @@ This page covers what the API does today, what is in progress, and what the prot
 | Notifications, scheduled checks, money insights, auto-archive | [notifications.md](notifications.md) | #19, #22 |
 | Messaging, live updates, online status and last seen | [messaging.md](messaging.md) | #20 |
 | Search | [search.md](search.md) | #22 |
+| Uploads: message and work-entry attachments, profile photos, the company logo and sign-in branding | [files.md](files.md) | `MR-Files` |
 
 The tests: 342 unit tests and 272 integration tests against real MySQL. The integration run takes about 7 minutes ([local-development.md](local-development.md#tests)).
-
-## In progress
-
-**File uploads** (branch `MR-Files`, not merged or built yet).
-- Written:
-  - uploads stored on local disk;
-  - type checks from the file's content;
-  - photos up to 10 MB and videos up to 100 MB;
-  - downloads checked against what the file is attached to;
-  - message and work-entry attachments;
-  - a cleanup every 6 hours of uploads left unattached for a day.
-- Still to do:
-  - profile photos;
-  - the company logo and the public branding for the sign-in page;
-  - photo ids on people's responses;
-  - docs and the remaining tests.
 
 ## Not built yet
 

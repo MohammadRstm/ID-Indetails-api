@@ -15,6 +15,7 @@ People management covers everyone with an account: super admins, admins and empl
 | `GET /api/employees` | `employee:view` | The people list (below) |
 | `GET /api/employees/{id}` | `employee:view` | A profile. `currentPay` is included only for callers with `financial:view` or `employee:pay_manage` |
 | `PUT /api/employees/{id}` | `employee:manage` | Replaces first and last name, phone, position and team |
+| `PUT /api/employees/{id}/photo`, `DELETE …` | `employee:manage` | `{ fileId }`: their profile photo, from the caller's upload ([files.md](files.md)) |
 | `POST /api/employees/{id}/deactivate` | `employee:manage` | `{ lastWorkingDay }` (optional, today when empty): blocks sign-in, ends every session and ends their employment on that day |
 | `POST /api/employees/{id}/reactivate` | `employee:manage` | `{ payGap }` (only when they left earlier this month): undoes a deactivation |
 | `PUT /api/employees/{id}/role` | `employee:manage` | Changes the role |
