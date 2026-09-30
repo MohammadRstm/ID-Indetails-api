@@ -83,6 +83,10 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var excuse = await OkAsync<HourExcuseResponse>(Client.PostJsonAsync($"/api/employees/{designer.User.Id}/hour-excuses",
             new { month = "2026-06", kind = "days", days = otherDays }, superAdmin.AccessToken));
         excuse.Note.ShouldBe("Day off");
+        // the feed says how much was excused
+        (await _steps.ScalarAsync<int>(
+            "SELECT JSON_EXTRACT(payload, '$.days') FROM activity_events WHERE kind = 'hours_excused' AND subject_id = @u", ("@u", designer.User.Id)))
+            .ShouldBe(29);
 
         var excused = await OkAsync<SalaryDetailResponse>(Client.GetAsync(url, superAdmin.AccessToken));
         excused.Salary.ShortMinutes.ShouldBe(0);
