@@ -210,6 +210,9 @@ public sealed class OverheadService(
             throw new BusinessRuleException(ErrorCodes.OverheadEnded, "This expense has ended. Add it again as a new one.");
         }
 
+        var others = (await overheads.ListAsync(cancellationToken)).Where(o => o.Id != item.Id).Select(o => (o.Name, o.CostGroup, o.StartedOn));
+        OverheadRules.CheckResume(item.Name, item.CostGroup, item.EndedOn.Value, others).ThrowIfDenied();
+
         item.EndedOn = null;
         Record(item, ActivityEventKinds.OverheadResumed, null);
         await unitOfWork.SaveChangesAsync(cancellationToken);

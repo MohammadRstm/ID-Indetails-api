@@ -21,6 +21,9 @@ public sealed record ClientListQuery
 
     public ClientSort Sort { get; init; } = ClientSort.Name;
 
+    /// <summary>The other way round from the sort's own order: Z to A for names, lowest first for the rest.</summary>
+    public bool Reverse { get; init; }
+
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 25;

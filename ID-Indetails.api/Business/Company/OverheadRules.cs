@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Business.Company;
 
@@ -68,6 +69,15 @@ public static class OverheadRules
             ? RuleDenial.Invalid(ErrorCodes.OverheadMonthInPast, "fromMonth", "Past months keep their cost; choose this month or a later one.")
             : null;
     }
+
+    /// <summary>
+    /// A cancelled line can't be resumed while another with its name and group carries it on from the day after it
+    /// ends (a change of currency, or it was added again): both would then be charged.
+    /// </summary>
+    public static RuleDenial? CheckResume(string name, OverheadCostGroup group, DateOnly endedOn, IEnumerable<(string Name, OverheadCostGroup Group, DateOnly StartedOn)> others)
+        => others.Any(o => o.StartedOn == endedOn.AddDays(1) && o.Group == group && string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase))
+            ? RuleDenial.BusinessRule(ErrorCodes.OverheadCarriedOn, "Another line carries this expense on from the next day. Change that one instead.")
+            : null;
 
     /// <summary>Whether a currency change from <paramref name="month"/> ends the line and adds a new one: it was charged before that month.</summary>
     public static bool CurrencyChangeSplits(DateOnly startedOn, DateOnly month) => startedOn < month;

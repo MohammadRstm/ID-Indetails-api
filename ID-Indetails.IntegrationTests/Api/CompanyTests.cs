@@ -184,6 +184,8 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
         var lines = (await OkAsync<OverheadResponse>(Client.GetAsync("/api/company/overhead", token))).Lines;
         lines.Single(l => l.Id == rent.Id).EndedOn.ShouldBe(thisMonth.AddMonths(1).AddDays(-1));
         lines.Single(l => l.Id == rent.Id).CurrentAmount.ShouldBe(71_600_000m);
+        // the USD line carries it on, so resuming the LBP one would charge both
+        await (await Client.PostEmptyAsync($"/api/company/overhead/{rent.Id}/resume", token)).ShouldFailWithAsync(422, ErrorCodes.OverheadCarriedOn);
 
         // A line not charged before the change just changes.
         var planned = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",

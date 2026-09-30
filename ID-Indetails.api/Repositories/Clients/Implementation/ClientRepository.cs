@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
@@ -57,12 +58,15 @@ public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepositor
 
         var total = await query.CountAsync(cancellationToken);
         var live = db.WorkEntries.Where(e => e.DeletedAt == null);
+        // names run A to Z, the rest highest first; Reverse turns either round
+        IOrderedQueryable<Client> By<TKey>(Expression<Func<Client, TKey>> key, bool descending)
+            => descending ? query.OrderByDescending(key) : query.OrderBy(key);
         var ordered = search.Sort switch
         {
-            ClientSort.Projects => query.OrderByDescending(c => db.Projects.Count(p => p.ClientId == c.Id)),
-            ClientSort.Hours => query.OrderByDescending(c => live.Where(e => e.Project.ClientId == c.Id).Sum(e => (int?)e.DurationMinutes) ?? 0),
-            ClientSort.Activity => query.OrderByDescending(c => live.Where(e => e.Project.ClientId == c.Id).Max(e => (DateTime?)e.StartedAt) ?? c.CreatedAt),
-            _ => query.OrderBy(c => c.Organisation ?? c.Name),
+            ClientSort.Projects => By(c => db.Projects.Count(p => p.ClientId == c.Id), !search.Reverse),
+            ClientSort.Hours => By(c => live.Where(e => e.Project.ClientId == c.Id).Sum(e => (int?)e.DurationMinutes) ?? 0, !search.Reverse),
+            ClientSort.Activity => By(c => live.Where(e => e.Project.ClientId == c.Id).Max(e => (DateTime?)e.StartedAt) ?? c.CreatedAt, !search.Reverse),
+            _ => By(c => c.Organisation ?? c.Name, search.Reverse),
         };
 
         var rows = await ordered

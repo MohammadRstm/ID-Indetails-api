@@ -104,6 +104,10 @@ public class ClientMoneyListTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.PostJsonAsync($"/api/invoices/{draft.Id}/issue", new { }, admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         (await ListAsync("sort=revenue", admin.AccessToken)).Select(x => x.Id).ShouldBe([big.Client!.Id, small.Client!.Id, none]);
+        // either way round, by money (sorted in memory) and by projects (by the database)
+        (await ListAsync("sort=revenue&reverse=true", admin.AccessToken)).Select(x => x.Id).ShouldBe([none, small.Client!.Id, big.Client!.Id]);
+        (await ListAsync("sort=projects&reverse=true", admin.AccessToken)).Select(x => x.Id).First().ShouldBe(none);
+        (await ListAsync("sort=projects", admin.AccessToken)).Select(x => x.Id).Last().ShouldBe(none);
         (await ListAsync("sort=outstanding", admin.AccessToken)).Select(x => x.Id).First().ShouldBe(small.Client!.Id);
         var owing = await ListAsync("filter=owing", admin.AccessToken);
         owing.ShouldHaveSingleItem().Id.ShouldBe(small.Client!.Id);
