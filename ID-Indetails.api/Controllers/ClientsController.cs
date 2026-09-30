@@ -18,6 +18,12 @@ public sealed class ClientsController(IClientService clientService) : Controller
     public Task<PagedResponse<ClientSummaryResponse>> List([FromQuery] ClientListQuery query, CancellationToken cancellationToken)
         => clientService.ListAsync(query, cancellationToken);
 
+    /// <summary>The client list's header figures and growth chart.</summary>
+    [HttpGet("overview")]
+    [HasPermission(PermissionCodes.ClientView)]
+    public Task<ClientOverviewResponse> Overview([FromQuery] ClientOverviewQuery query, CancellationToken cancellationToken)
+        => clientService.OverviewAsync(query, cancellationToken);
+
     [HttpGet("{clientId:long}")]
     [HasPermission(PermissionCodes.ClientView)]
     public Task<ClientResponse> Get(long clientId, CancellationToken cancellationToken)

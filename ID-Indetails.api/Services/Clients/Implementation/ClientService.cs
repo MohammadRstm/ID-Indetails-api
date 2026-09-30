@@ -42,6 +42,29 @@ public sealed class ClientService(
     public const int WorkMonths = 12;
     public const int WorkPeople = 8;
 
+    public async Task<ClientOverviewResponse> OverviewAsync(ClientOverviewQuery query, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        async Task<int> CountAsync(bool? archived, ClientFilter? filter)
+            => (await clients.SearchAsync(new ClientSearch(actor.VisibleDomains, null, archived, query.Domain, 1, 1, filter), cancellationToken)).TotalCount;
+
+        var today = clock.CompanyToday;
+        var thisMonth = new DateOnly(today.Year, today.Month, 1);
+        var added = await clients.AddedAsync(actor.VisibleDomains, query.Domain, cancellationToken);
+        ClientAddedResponse Brief(ClientAdded c) => new(c.Id, c.Name, c.CreatedAt);
+        var byId = added.ToDictionary(c => c.Id);
+        var growth = ClientGrowth.Of(added.Select(c => new ClientGrowth.Added(c.Id, c.Name, clock.ToCompanyDate(c.CreatedAt))).ToList(), today);
+
+        return new ClientOverviewResponse(
+            await CountAsync(null, null),
+            await CountAsync(true, null),
+            await CountAsync(null, ClientFilter.Active),
+            await CountAsync(null, ClientFilter.Empty),
+            added.Count(c => !c.IsArchived && clock.ToCompanyDate(c.CreatedAt) >= thisMonth),
+            added.OrderByDescending(c => c.CreatedAt).ThenByDescending(c => c.Id).Select(Brief).FirstOrDefault(),
+            growth.Select(m => new ClientGrowthMonthResponse(m.Start, m.Total, m.AddedInMonth.Select(a => Brief(byId[a.Id])).ToList())).ToList());
+    }
+
     public async Task<PagedResponse<ClientSummaryResponse>> ListAsync(ClientListQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);

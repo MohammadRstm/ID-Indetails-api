@@ -122,3 +122,41 @@ public class ClientMoneyListTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync("/api/clients?sort=cost", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 }
+
+/// <summary>Its own database, so the counts are this class's clients only.</summary>
+public class ClientOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
+{
+    private readonly AuthTestSteps _steps = new(api);
+    private HttpClient Client => _steps.Client;
+    private ProjectTestSteps Projects => new(_steps);
+
+    [Fact]
+    public async Task The_overview_counts_clients_their_work_this_month_s_additions_and_growth()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var busy = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
+        var idle = (await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design)).Id;
+        var gone = (await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design)).Id;
+        (await Client.PostEmptyAsync($"/api/clients/{gone}/archive", admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await _steps.ExecuteAsync("UPDATE clients SET created_at = '2025-11-20 10:00:00' WHERE id = @id", ("@id", idle));
+
+        var response = await Client.GetAsync("/api/clients/overview", admin.AccessToken);
+        ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+        var overview = await response.ReadAsync<ClientOverviewResponse>();
+
+        overview.Clients.ShouldBe(2);
+        overview.Archived.ShouldBe(1);
+        overview.WithActiveWork.ShouldBe(1);
+        overview.WithoutProjects.ShouldBe(1);
+        overview.AddedThisMonth.ShouldBe(1);
+        overview.Newest!.Id.ShouldBeOneOf(busy.Client!.Id, gone);
+        overview.Growth.Count.ShouldBe(13);
+        overview.Growth[^1].Total.ShouldBe(3);
+        overview.Growth[^1].Added.Select(c => c.Id).ShouldBe([busy.Client!.Id, gone], ignoreOrder: true);
+
+        // Another domain's clients aren't counted.
+        (await (await Client.GetAsync("/api/clients/overview", siteAdmin.AccessToken)).ReadAsync<ClientOverviewResponse>()).Clients.ShouldBe(0);
+    }
+}

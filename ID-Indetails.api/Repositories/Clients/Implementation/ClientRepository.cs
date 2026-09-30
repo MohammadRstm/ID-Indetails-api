@@ -8,6 +8,15 @@ namespace ID_Indetails.api.Repositories.Clients.Implementation;
 
 public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepository
 {
+    public async Task<IReadOnlyList<ClientAdded>> AddedAsync(IReadOnlyList<string> domains, string? domain, CancellationToken cancellationToken = default)
+    {
+        var codes = domains.ToList();
+        return await db.Clients.AsNoTracking()
+            .Where(c => codes.Contains(c.DomainCode) && (domain == null || c.DomainCode == domain))
+            .Select(c => new ClientAdded(c.Id, c.Name, c.CreatedAt, c.ArchivedAt != null))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<(IReadOnlyList<ClientRow> Items, int TotalCount)> SearchAsync(
         ClientSearch search,
         CancellationToken cancellationToken = default)

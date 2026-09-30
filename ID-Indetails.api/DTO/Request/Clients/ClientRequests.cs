@@ -23,6 +23,12 @@ public sealed record ClientListQuery
     public int PageSize { get; init; } = 25;
 }
 
+public sealed record ClientOverviewQuery
+{
+    /// <summary>Must be a domain the caller can see; both of them when empty.</summary>
+    public string? Domain { get; init; }
+}
+
 public sealed record ClientContactRequest
 {
     public ContactKind Kind { get; init; }

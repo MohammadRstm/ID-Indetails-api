@@ -93,3 +93,26 @@ public sealed record ClientWorkResponse(
     int ContributorCount,
     IReadOnlyList<MonthMinutesResponse> Monthly,
     IReadOnlyList<ClientPersonWorkResponse> People);
+
+public sealed record ClientAddedResponse(long Id, string Name, DateTime AddedAt);
+
+/// <param name="Month">First day of the month.</param>
+/// <param name="Total">Clients on the books at the end of the month, archived ones included.</param>
+public sealed record ClientGrowthMonthResponse(DateOnly Month, int Total, IReadOnlyList<ClientAddedResponse> Added);
+
+/// <summary>
+/// The client list's header figures and growth chart. Its money figures (revenue, profit, margin, the largest
+/// client) come from <c>GET /api/finance/{domain}/clients</c>, for callers with financial:view.
+/// </summary>
+/// <param name="Clients">Clients not archived.</param>
+/// <param name="WithActiveWork">With an active or on-hold project.</param>
+/// <param name="AddedThisMonth">Clients not archived that were added this month.</param>
+/// <param name="Newest">The client added last, archived or not.</param>
+public sealed record ClientOverviewResponse(
+    int Clients,
+    int Archived,
+    int WithActiveWork,
+    int WithoutProjects,
+    int AddedThisMonth,
+    ClientAddedResponse? Newest,
+    IReadOnlyList<ClientGrowthMonthResponse> Growth);
