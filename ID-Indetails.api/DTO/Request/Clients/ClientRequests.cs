@@ -5,11 +5,14 @@ namespace ID_Indetails.api.DTO.Request.Clients;
 /// <summary>Filters for the client list. Everything is optional.</summary>
 public sealed record ClientListQuery
 {
-    /// <summary>Matches name, organisation and label; every word must match.</summary>
+    /// <summary>Matches name, organisation, label, note and contact details; every word must match.</summary>
     public string? Search { get; init; }
 
-    /// <summary>When empty, archived clients are left out.</summary>
+    /// <summary>True for archived clients only. When empty, archived clients are left out.</summary>
     public bool? Archived { get; init; }
+
+    /// <summary>Archived clients alongside the others (the prototype's "Show archived"). Not with <see cref="Archived"/>.</summary>
+    public bool IncludeArchived { get; init; }
 
     /// <summary>Must be a domain the caller can see, or nothing is returned.</summary>
     public string? Domain { get; init; }
@@ -21,6 +24,33 @@ public sealed record ClientListQuery
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 25;
+}
+
+/// <summary>What the client form has typed so far, to warn about duplicates before saving.</summary>
+public sealed record CheckClientRequest
+{
+    /// <summary>Needed only by callers who see both domains.</summary>
+    public string? DomainCode { get; init; }
+
+    public string? Name { get; init; }
+
+    public IReadOnlyList<CheckClientContactRequest> Contacts { get; init; } = [];
+
+    /// <summary>The client being edited, which may of course keep its own name and contacts.</summary>
+    public long? ExceptClientId { get; init; }
+}
+
+public sealed record CheckClientContactRequest
+{
+    public ContactKind Kind { get; init; }
+
+    public string Value { get; init; } = string.Empty;
+}
+
+public sealed record ClientOverviewQuery
+{
+    /// <summary>Must be a domain the caller can see; both of them when empty.</summary>
+    public string? Domain { get; init; }
 }
 
 public sealed record ClientContactRequest

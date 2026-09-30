@@ -15,6 +15,9 @@ public sealed record ActivityListQuery
     /// <summary>The event's client, or its project's client.</summary>
     public long? ClientId { get; init; }
 
+    /// <summary>Only events of internal projects (no client). Not with <see cref="ClientId"/>.</summary>
+    public bool Internal { get; init; }
+
     /// <summary>Who did it.</summary>
     public long? UserId { get; init; }
 

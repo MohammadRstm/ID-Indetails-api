@@ -107,6 +107,10 @@ public static class AuthServiceCollectionExtensions
                 "export:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                 _ => PerMinute(limits.ExportPermitsPerMinute)));
 
+            options.AddPolicy(RateLimitPolicies.Upload, context => RateLimitPartition.GetFixedWindowLimiter(
+                "upload:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => PerMinute(limits.UploadPermitsPerMinute)));
+
             options.AddPolicy(RateLimitPolicies.Setup, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.SetupPermitsPerHour, Window = TimeSpan.FromHours(1) }));

@@ -47,13 +47,19 @@ public static class ProjectFinance
     /// <param name="Received">Payments received up to the end of the week.</param>
     /// <param name="Spent">Every cost up to the end of the week.</param>
     /// <param name="GroundLabour">Ground labour up to the end of the week.</param>
+    /// <param name="Received">Received up to the end of the week; <paramref name="Spent"/> and <paramref name="GroundLabour"/> likewise.</param>
+    /// <param name="SpentInWeek">Every cost dated in the week; <paramref name="LabourInWeek"/> is the employee labour part of it.</param>
+    /// <param name="MinutesInWeek">Hours logged in the week, priced or not.</param>
     public sealed record CashWeek(
         DateOnly WeekStart,
         decimal Received,
         decimal Spent,
         decimal GroundLabour,
         decimal ReceivedInWeek,
-        decimal GroundLabourInWeek)
+        decimal GroundLabourInWeek,
+        decimal SpentInWeek,
+        decimal LabourInWeek,
+        int MinutesInWeek)
     {
         public decimal Profit => Received - Spent;
     }
@@ -145,33 +151,42 @@ public static class ProjectFinance
 
     /// <summary>
     /// The running cash position week by week, from the week of <paramref name="from"/> to the week of
-    /// <paramref name="to"/>. Anything dated before the first week counts in it. Costs are converted as in
+    /// <paramref name="to"/>, weeks starting on <paramref name="weekStart"/> (Monday for Execution's labour weeks).
+    /// Anything dated before the first week counts in its running totals. Costs are converted as in
     /// <see cref="ToUsd"/>, and one with no rate that day is left out.
     /// </summary>
+    /// <param name="work">Minutes logged, by day.</param>
     public static IReadOnlyList<CashWeek> CashByWeek(
         IEnumerable<CostItem> items,
         IEnumerable<(DateOnly Day, decimal Usd)> payments,
+        IEnumerable<(DateOnly Day, int Minutes)> work,
         ExchangeRateTable rates,
         DateOnly from,
-        DateOnly to)
+        DateOnly to,
+        DayOfWeek weekStart = DayOfWeek.Monday)
     {
         var costs = items
             .Select(i => (i.Day, i.Source, Usd: rates.ToUsd(i.Amount, i.Currency, i.Day)))
             .Where(c => c.Usd is not null)
             .ToList();
         var paid = payments.ToList();
+        var logged = work.ToList();
         var weeks = new List<CashWeek>();
 
-        for (var week = MondayOf(from); week <= MondayOf(to); week = week.AddDays(7))
+        for (var week = WeekOf(from, weekStart); week <= WeekOf(to, weekStart); week = week.AddDays(7))
         {
             var end = week.AddDays(7);
+            bool InWeek(DateOnly day) => day >= week && day < end;
             weeks.Add(new CashWeek(
                 week,
                 Round(paid.Where(p => p.Day < end).Sum(p => p.Usd)),
                 Round(costs.Where(c => c.Day < end).Sum(c => c.Usd!.Value)),
                 Round(costs.Where(c => c.Day < end && c.Source == CostSource.GroundLabour).Sum(c => c.Usd!.Value)),
-                Round(paid.Where(p => p.Day >= week && p.Day < end).Sum(p => p.Usd)),
-                Round(costs.Where(c => c.Day >= week && c.Day < end && c.Source == CostSource.GroundLabour).Sum(c => c.Usd!.Value))));
+                Round(paid.Where(p => InWeek(p.Day)).Sum(p => p.Usd)),
+                Round(costs.Where(c => InWeek(c.Day) && c.Source == CostSource.GroundLabour).Sum(c => c.Usd!.Value)),
+                Round(costs.Where(c => InWeek(c.Day)).Sum(c => c.Usd!.Value)),
+                Round(costs.Where(c => InWeek(c.Day) && c.Source == CostSource.Labour).Sum(c => c.Usd!.Value)),
+                logged.Where(w => InWeek(w.Day)).Sum(w => w.Minutes)));
         }
 
         return weeks;
@@ -235,7 +250,7 @@ public static class ProjectFinance
     private static decimal? MarginOf(decimal profit, decimal revenue)
         => revenue > 0 ? Math.Round(profit / revenue, 4, MidpointRounding.AwayFromZero) : null;
 
-    private static DateOnly MondayOf(DateOnly day) => day.AddDays(-(((int)day.DayOfWeek + 6) % 7));
+    private static DateOnly WeekOf(DateOnly day, DayOfWeek weekStart) => day.AddDays(-(((int)day.DayOfWeek - (int)weekStart + 7) % 7));
 
     private static decimal Round(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
 }

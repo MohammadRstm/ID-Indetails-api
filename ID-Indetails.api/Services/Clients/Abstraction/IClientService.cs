@@ -8,6 +8,12 @@ public interface IClientService
 {
     Task<PagedResponse<ClientSummaryResponse>> ListAsync(ClientListQuery query, CancellationToken cancellationToken = default);
 
+    /// <summary>The client list's header figures and 13-month growth.</summary>
+    Task<ClientOverviewResponse> OverviewAsync(ClientOverviewQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether the typed name or contacts are already used in the domain, before saving.</summary>
+    Task<ClientCheckResponse> CheckAsync(CheckClientRequest request, CancellationToken cancellationToken = default);
+
     Task<ClientResponse> GetAsync(long clientId, CancellationToken cancellationToken = default);
 
     Task<ClientResponse> CreateAsync(CreateClientRequest request, CancellationToken cancellationToken = default);

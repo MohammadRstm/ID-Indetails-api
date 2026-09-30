@@ -31,6 +31,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 21 | **Admins who log hours** are paid overtime like employees, without an hours ledger. | Payroll calculation |
 | 22 | **Project pay leaves paid breaks out.** A break isn't worked on any project, so project pay covers logged hours and overtime only, and differs from Salaries for hourly staff by exactly their paid breaks. It needs `salary:view`. | Project pay report |
 | 23 | **Leavers stay in past months** (29 Sep 2026). `users.deactivated_at` records when an account was deactivated (cleared on reactivation; backfilled from the latest `employee_deactivated` event). Salaries (list, detail, CSV, totals), the month-end alert and project pay include everyone active at any point in the month, with the final month pro-rated to the leaving day like a joining month, and the hours ledger ending there. | Schema (`UserDeactivatedAt` migration); payroll calculation |
+| 24 | **Employment is dated periods** (30 Sep 2026, open questions 4 and 5). Leaving ends a period on the last working day the admin gives (today by default, never reaching back into a closed month), which is paid. Being taken back starts a new period, and the days away between two periods are neither paid nor expected. When the time away began earlier in the same month, the admin says whether it is paid: if so, the period simply continues and the days away are excused as paid. | Schema (`EmploymentPeriods` migration); API; payroll calculation |
 
 ## Decided for Design work (28 Sep 2026)
 
@@ -41,14 +42,14 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | D1 | **The timer runs in the client.** Stopping it logs an ordinary entry; nothing is stored while it runs. |
 | D2 | **Nobody edits someone else's entries**, admins included. Whoever holds `work_entry:create` logs their own work (Design admins included, by the role defaults). |
 | D3 | **Entry rules are enforced on the server.** An entry is locked once past the edit window (counted from when it was logged) or while its project no longer accepts work. 5 minutes to 16 hours, in whole minutes. With future entries allowed, any end time is accepted. |
-| D4 | **Entry attachments wait** for a file-upload feature. |
+| D4 | **A work entry can carry one photo or video** (`attachmentFileId`), an upload of its author's, readable by whoever may read the entry (30 Sep 2026, with file uploads; see [files.md](files.md)). |
 | D5 | **Comments can't be edited or deleted.** Posting a comment to the team group chat is refused until messaging exists. |
 | D6 | **Logged-work notifications** go to active people holding `work_entry:view_all` in Design, never the author. |
 | D7 | **Domain settings aren't seeded.** A domain uses the defaults until its admins save. Each domain's admins (`domain_settings:manage`) edit their own row. Of the notification settings, `notifyEntry`, `notifyProject` (N4), `notifyIdle` and `weeklySummary` (N7) are used; `autoArchive` is used by the auto-archive job (A4). |
 | D8 | **Money in the activity feed** shows without its amount to people without `financial:view`. Company-level events need `company:view`. |
 | D9 | **Logging doesn't add project members.** |
 | D10 | **Employees set meetings.** `meeting:create` (every role, `MeetingCreatePermission` migration) sets meetings and moves or removes your own; `meeting:manage` covers anyone's. Nobody moves someone else's meeting without `meeting:manage` (the prototype let anyone drag any meeting). Meetings were Design-only at first; since 29 Sep 2026 Execution sites have them too, as in the prototype, and both permissions apply in both domains (`MeetingsInBothDomains` migration). |
-| D11 | **Past months never change** (29 Sep 2026). Work entries that start before the current company month can no longer be logged, edited, moved (the day timeline's swaps and moves included), deleted or restored, by anyone (`422 month_closed`). Excusing hours stays the way to correct a closed month. Known exception: a backdated pay change still changes a closed month's salary; it is out of scope for now. |
+| D11 | **Past months never change** (29 Sep 2026). Work entries that start before the current company month can no longer be logged, edited, moved (the day timeline's swaps and moves included), deleted or restored, by anyone (`422 month_closed`). Excusing hours stays the way to correct a closed month. Known exception: a backdated pay change still changes a closed month's salary; it is out of scope for now. The month just ended stays open through the 1st, so an evening's work can still be logged after midnight (30 Sep 2026). |
 | D12 | **Overtime on someone's profile** (29 Sep 2026). `GET /api/employees/{id}/overtime` (`work_entry:view_all`) shows their overtime like their own page does, but which of it made up missing hours is pay information: only callers with `salary:view` get it, as in the prototype where only super admins see it. Their hours ledger (`GET /api/employees/{id}/hours`) needs `salary:view` altogether. |
 
 ## Decided for the money summaries (29 Sep 2026)
@@ -73,7 +74,7 @@ See [finance.md](finance.md).
 
 | # | Rule |
 |---|---|
-| A1 | **Deadlines, money follow-ups and the cost warning cover both domains.** The prototype only shows the follow-ups and deadlines card on the Design dashboard, but its rules don't depend on the domain; the endpoints serve Design and Execution alike, and the client decides what to show. |
+| A1 | **Deadlines and money follow-ups cover both domains.** The prototype only shows the follow-ups and deadlines card on the Design dashboard, but its rules don't depend on the domain; the endpoints serve Design and Execution alike, and the client decides what to show. The cost warning (follow-up and notification) is Design only (30 Sep 2026): an Execution site's payment includes its materials at client price and its cost at what was paid, so its cost is past 85% from the first material. |
 | A2 | **The project list keeps its newest-start default.** The prototype's default "recent activity" order is `sort=activity`; a project without work counts from when it was added (the prototype used its start date). A `year` alone filters projects open during that year (the prototype only filtered by quarter). |
 | A3 | **The client list keeps its A-to-Z default** and sorts each column one way (numbers highest first, activity newest first); the prototype also let a second click reverse it. "Last activity" is the latest work on the client's projects, or when the client was added (the prototype's column sorted by the date added). |
 | A4 | **Auto-archive needs 90 quiet days**: a completed project is archived only when its completion and its latest activity event are both 90 days old, so one still being billed stays out. *(The prototype only checked the completion date, and only when the setting was switched on.)* It runs hourly for each domain whose setting is on. |
@@ -125,6 +126,28 @@ See [messaging.md](messaging.md).
 
   Overtime first makes up any shortfall in the month, and the remainder is paid at the multiplier.
 - **Shortfall** (unexcused missing hours in a closed month) is deducted from salaried pay at the plain hourly rate. Hourly staff are simply paid for what they log. Nothing carries over between months.
+
+## Decided on 30 Sep 2026
+
+Answers to the questions raised after the helper sessions' work was merged.
+
+| # | Rule |
+|---|---|
+| O3 | **PDFs are made on the server**, so invoices and statements can be emailed with them. The library is PDFsharp with MigraDoc (MIT licence, free for everyone). The layout starts plain and is refined later. The documents have no Arabic ([documents.md](documents.md)). |
+| O4, O5 | **Employment is dated periods** (decision 24): leaving takes a last working day, and time away between two periods isn't paid unless it began that month and the admin says so. |
+| O6 | **The month just ended stays open through the 1st** (D11). |
+| O7 | **The cost warning is Design only** (A1). A material's cost is always what was paid for it; the client price is typed or worked out from the markup, never used as the cost. |
+| O8 | **Auto-archive doesn't wait for payment**, but an archived project still owed money stays in the "finished but still owed" follow-up. |
+| O9 | **Overtime of work past midnight counts on the day it started**, as pay does. |
+| O10 | **Revenue always lands in a month**: with no priced cost it follows the hours logged, then the completion month. |
+| O11 | **Every completion and archive finalises the project** (the backend's rule). The close-out's "Notify the contributors" switch is gone: `notifyProject` decides. |
+| O12 | **Projects have no members.** Anyone in the domain may work on any project; the unused member tables are dropped. |
+| O13 | **Online means an open live connection**; last seen moves with use (at most every 5 minutes). |
+| O14 | **No single sign-on in version 1**; the sign-in page no longer mentions it. |
+| O15 | **A quiet stretch is 4 days without work**, everywhere. |
+| O16 | **An expense's currency changes from a month**: the line ends and a new one takes over, so past months keep theirs. |
+| O17 | **The company's address and website are settings**, for the letterhead. |
+| O18 | **Money stays exact to the cent**: no tolerance for small balances. |
 
 ## Open questions
 

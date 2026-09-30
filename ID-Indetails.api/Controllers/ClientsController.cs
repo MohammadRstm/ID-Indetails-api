@@ -18,6 +18,18 @@ public sealed class ClientsController(IClientService clientService) : Controller
     public Task<PagedResponse<ClientSummaryResponse>> List([FromQuery] ClientListQuery query, CancellationToken cancellationToken)
         => clientService.ListAsync(query, cancellationToken);
 
+    /// <summary>Warns, while the client form is filled in, about a name or contact already used in the domain. Nothing is saved.</summary>
+    [HttpPost("check")]
+    [HasPermission(PermissionCodes.ClientView)]
+    public Task<ClientCheckResponse> Check(CheckClientRequest request, CancellationToken cancellationToken)
+        => clientService.CheckAsync(request, cancellationToken);
+
+    /// <summary>The client list's header figures and growth chart.</summary>
+    [HttpGet("overview")]
+    [HasPermission(PermissionCodes.ClientView)]
+    public Task<ClientOverviewResponse> Overview([FromQuery] ClientOverviewQuery query, CancellationToken cancellationToken)
+        => clientService.OverviewAsync(query, cancellationToken);
+
     [HttpGet("{clientId:long}")]
     [HasPermission(PermissionCodes.ClientView)]
     public Task<ClientResponse> Get(long clientId, CancellationToken cancellationToken)

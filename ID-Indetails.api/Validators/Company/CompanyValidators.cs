@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Company;
+using ID_Indetails.api.Validators.Clients;
 using ID_Indetails.api.Validators.Common;
 
 namespace ID_Indetails.api.Validators.Company;
@@ -12,9 +13,20 @@ public sealed class UpdateCompanySettingsRequestValidator : AbstractValidator<Up
         RuleFor(x => x.Name)
             .Must(n => !string.IsNullOrWhiteSpace(n)).WithMessage("Company name is required.")
             .MaximumLength(150).WithMessage("Company name must be at most 150 characters.");
+        RuleFor(x => x.Address).ClientText("Address", 300);
+        RuleFor(x => x.Website)
+            .Must(w => string.IsNullOrWhiteSpace(w) || (w.Trim().Length <= 200 && IsWebAddress(w.Trim())))
+            .WithMessage("Website must be a web address such as indetails.com, at most 200 characters.");
         RuleFor(x => x.WeekStart).Must(d => d is 0 or 1).WithMessage("The week starts on Sunday (0) or Monday (1).");
         RuleFor(x => x.DefaultCurrency).Currency();
     }
+
+    /// <summary>A host with a dot (indetails.com), or an http(s) address.</summary>
+    private static bool IsWebAddress(string value)
+        => !value.Any(char.IsWhiteSpace)
+            && Uri.TryCreate(value.Contains("://") ? value : "https://" + value, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https"
+            && uri.Host.Contains('.');
 }
 
 public sealed class SetWorkingTimeRequestValidator : AbstractValidator<SetWorkingTimeRequest>
@@ -78,6 +90,15 @@ public sealed class ChangeOverheadAmountRequestValidator : AbstractValidator<Cha
 {
     public ChangeOverheadAmountRequestValidator()
     {
+        RuleFor(x => x.Amount).Amount("Amount", allowZero: false);
+    }
+}
+
+public sealed class ChangeOverheadCurrencyRequestValidator : AbstractValidator<ChangeOverheadCurrencyRequest>
+{
+    public ChangeOverheadCurrencyRequestValidator()
+    {
+        RuleFor(x => x.Currency).Currency();
         RuleFor(x => x.Amount).Amount("Amount", allowZero: false);
     }
 }

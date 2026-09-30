@@ -98,8 +98,9 @@ public class SearchTests(ApiFactory api) : IClassFixture<ApiFactory>
         capped.Clients.ShouldBeEmpty();
         capped.People.ShouldBeEmpty();
 
-        await (await Client.GetAsync("/api/search?q=", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
-        await (await Client.GetAsync("/api/search?q=%20%20", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        // Nothing typed lists everything, in the same order and cap.
+        (await SearchAsync("", admin.AccessToken)).Projects.Count.ShouldBe(12);
+        (await SearchAsync("  ", admin.AccessToken)).Projects.Count.ShouldBe(12);
         await (await Client.GetAsync($"/api/search?q={new string('a', 101)}", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.GetAsync("/api/search?q=x")).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
     }

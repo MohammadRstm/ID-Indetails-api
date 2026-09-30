@@ -80,7 +80,9 @@ public class ClientMoneyListTests(ApiFactory api) : IClassFixture<ApiFactory>
 
     private async Task<IReadOnlyList<ClientSummaryResponse>> ListAsync(string query, string token)
     {
-        var response = await Client.GetAsync($"/api/clients?pageSize=100&{query}", token);
+        // A query that pages itself keeps its own page size: a repeated pageSize binds only its first value.
+        var paging = query.Contains("pageSize=") ? "" : "pageSize=100&";
+        var response = await Client.GetAsync($"/api/clients?{paging}{query}", token);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
         return (await response.ReadAsync<PagedResponse<ClientSummaryResponse>>()).Items;
     }
@@ -118,5 +120,75 @@ public class ClientMoneyListTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.GetAsync("/api/clients", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync("/api/clients?sort=cost", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+}
+
+/// <summary>Its own database, so the counts are this class's clients only.</summary>
+public class ClientOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
+{
+    private readonly AuthTestSteps _steps = new(api);
+    private HttpClient Client => _steps.Client;
+    private ProjectTestSteps Projects => new(_steps);
+
+    [Fact]
+    public async Task The_overview_counts_clients_their_work_this_month_s_additions_and_growth()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var busy = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
+        var idle = (await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design)).Id;
+        var gone = (await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design)).Id;
+        (await Client.PostEmptyAsync($"/api/clients/{gone}/archive", admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await _steps.ExecuteAsync("UPDATE clients SET created_at = '2025-11-20 10:00:00' WHERE id = @id", ("@id", idle));
+
+        var response = await Client.GetAsync("/api/clients/overview", admin.AccessToken);
+        ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+        var overview = await response.ReadAsync<ClientOverviewResponse>();
+
+        overview.Clients.ShouldBe(2);
+        overview.Archived.ShouldBe(1);
+        overview.WithActiveWork.ShouldBe(1);
+        overview.WithoutProjects.ShouldBe(1);
+        overview.AddedThisMonth.ShouldBe(1);
+        overview.Newest!.Id.ShouldBeOneOf(busy.Client!.Id, gone);
+        overview.Growth.Count.ShouldBe(13);
+        overview.Growth[^1].Total.ShouldBe(3);
+        overview.Growth[^1].Added.Select(c => c.Id).ShouldBe([busy.Client!.Id, gone], ignoreOrder: true);
+
+        // Another domain's clients aren't counted.
+        (await (await Client.GetAsync("/api/clients/overview", siteAdmin.AccessToken)).ReadAsync<ClientOverviewResponse>()).Clients.ShouldBe(0);
+    }
+}
+
+/// <summary>Its own database, so its client doesn't change the overview's counts.</summary>
+public class ClientCheckTests(ApiFactory api) : IClassFixture<ApiFactory>
+{
+    private readonly AuthTestSteps _steps = new(api);
+    private HttpClient Client => _steps.Client;
+    private ProjectTestSteps Projects => new(_steps);
+
+    [Fact]
+    public async Task The_client_form_hears_about_a_name_or_contact_already_used_before_saving()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var existing = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design);
+        var email = await _steps.ScalarAsync<string>("SELECT value FROM client_contacts WHERE client_id = @id", ("@id", existing.Id));
+
+        async Task<ClientCheckResponse> CheckAsync(object body)
+        {
+            var response = await Client.PostJsonAsync("/api/clients/check", body, admin.AccessToken);
+            ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+            return await response.ReadAsync<ClientCheckResponse>();
+        }
+
+        var dupe = await CheckAsync(new { name = existing.Name.ToUpperInvariant(), contacts = new[] { new { kind = "email", value = " " + email.ToUpperInvariant() } } });
+        dupe.NameTaken.ShouldBeTrue();
+        dupe.ContactTakenBy!.ClientId.ShouldBe(existing.Id);
+
+        (await CheckAsync(new { name = existing.Name, contacts = new[] { new { kind = "email", value = email } }, exceptClientId = existing.Id }))
+            .ShouldBe(new ClientCheckResponse(false, null));
+        (await CheckAsync(new { name = "Someone new", contacts = Array.Empty<object>() })).ShouldBe(new ClientCheckResponse(false, null));
     }
 }

@@ -1,4 +1,5 @@
 using ID_Indetails.api.DTO.Request.Employees;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Employees;
@@ -14,9 +15,9 @@ public interface IEmployeeService
 
     Task<EmployeeResponse> UpdateAsync(long userId, UpdateEmployeeRequest request, CancellationToken cancellationToken = default);
 
-    Task<EmployeeResponse> DeactivateAsync(long userId, CancellationToken cancellationToken = default);
+    Task<EmployeeResponse> DeactivateAsync(long userId, DeactivateEmployeeRequest? request, CancellationToken cancellationToken = default);
 
-    Task<EmployeeResponse> ReactivateAsync(long userId, CancellationToken cancellationToken = default);
+    Task<EmployeeResponse> ReactivateAsync(long userId, ReactivateEmployeeRequest? request, CancellationToken cancellationToken = default);
 
     Task<EmployeeResponse> ChangeRoleAsync(long userId, ChangeRoleRequest request, CancellationToken cancellationToken = default);
 
@@ -28,4 +29,14 @@ public interface IEmployeeService
 
     /// <summary>The signed-in user's own name and phone.</summary>
     Task<CurrentUserResponse> UpdateMyProfileAsync(UpdateMyProfileRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Sets the caller's profile photo from their upload.</summary>
+    Task<CurrentUserResponse> SetMyPhotoAsync(AttachFileRequest request, CancellationToken cancellationToken = default);
+
+    Task<CurrentUserResponse> RemoveMyPhotoAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Sets someone's profile photo from the caller's upload.</summary>
+    Task<EmployeeResponse> SetPhotoAsync(long userId, AttachFileRequest request, CancellationToken cancellationToken = default);
+
+    Task<EmployeeResponse> RemovePhotoAsync(long userId, CancellationToken cancellationToken = default);
 }

@@ -101,10 +101,11 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync($"/api/employees/{designer.User.Id}/work-summary", siteWorker.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
-        // Someone who left keeps their history, and their own sessions end.
+        // Someone who left keeps their history. Their access token still signs them in until it expires, but they hold no
+        // permissions any more, so their own pages refuse them.
         (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         (await OkAsync<WorkSummaryResponse>($"/api/employees/{designer.User.Id}/work-summary", designAdmin)).TotalOvertimeMinutes.ShouldBe(240);
-        await (await Client.GetAsync("/api/me/work-summary", designer.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
+        await (await Client.GetAsync("/api/me/work-summary", designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
     [Fact]
@@ -296,7 +297,7 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // Leaving on Thursday 25 June (15:00 in Beirut): the ledger ends that day, and the history that month.
         (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await _steps.ScalarAsync<int>("UPDATE users SET deactivated_at = '2026-06-25 12:00:00' WHERE id = @id; SELECT 1", ("@id", designer.User.Id));
+        await _steps.SetLeftAtAsync(designer.User.Id, "2026-06-25 12:00:00");
         var left = await OkAsync<MyHoursResponse>(url, superAdmin);
         left.TotalMonths.ShouldBe(6);
         left.Months[0].ShouldSatisfyAllConditions(
@@ -329,7 +330,7 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
 
     /// <summary>Moves the joining day to 1 January 2026, so June 2026 is judged in full.</summary>
     private Task JoinedInJanuaryAsync(AuthResponse person)
-        => _steps.ScalarAsync<int>("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id; SELECT 1", ("@id", person.User.Id));
+        => _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
 
     private static DateOnly TodayInBeirut() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut));
 

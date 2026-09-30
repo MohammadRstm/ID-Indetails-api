@@ -25,8 +25,8 @@ public class ClosedMonthTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // Future entries are allowed, so this month's entries can sit anywhere in it whatever the day.
         await Work.SetDesignSettingsAsync(admin.AccessToken, allowFutureEntries: true);
-        var monthStart = CurrentMonthStartUtc();
-        var lastMonth = monthStart.AddDays(-10);
+        var openFrom = OpenFromUtc();
+        var lastMonth = openFrom.AddDays(-10);
         var closed = await InsertAsync(designer, project.Id, lastMonth, minutes: 120, deleted: false);
         var deletedClosed = await InsertAsync(designer, project.Id, lastMonth.AddHours(4), minutes: 60, deleted: true);
 
@@ -41,7 +41,7 @@ public class ClosedMonthTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // This month's work can't be moved back into a closed month, and a closed entry can't be moved out of it
         // by the timeline's swap either.
-        var current = await Work.LogAsync(designer.AccessToken, project.Id, monthStart.AddHours(12), 60);
+        var current = await Work.LogAsync(designer.AccessToken, project.Id, openFrom.AddHours(12), 60);
         await (await Client.PutJsonAsync($"/api/work-entries/{current.Id}",
                 new { projectId = project.Id, description = "Moved back", startedAt = lastMonth.AddHours(8), endedAt = lastMonth.AddHours(9) }, designer.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.MonthClosed);
@@ -49,9 +49,9 @@ public class ClosedMonthTests(ApiFactory api) : IClassFixture<ApiFactory>
             {
                 projectId = project.Id,
                 description = "Swap",
-                startedAt = monthStart.AddHours(20),
-                endedAt = monthStart.AddHours(21),
-                moves = new[] { new { id = closed, startedAt = monthStart.AddHours(14), endedAt = monthStart.AddHours(16) } },
+                startedAt = openFrom.AddHours(20),
+                endedAt = openFrom.AddHours(21),
+                moves = new[] { new { id = closed, startedAt = openFrom.AddHours(14), endedAt = openFrom.AddHours(16) } },
             }, designer.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.MonthClosed);
 
@@ -60,11 +60,12 @@ public class ClosedMonthTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await _steps.ScalarAsync<DateTime>("SELECT started_at FROM work_entries WHERE id = @id", ("@id", closed))).ShouldBe(lastMonth);
     }
 
-    /// <summary>When the current month began in Beirut, in UTC.</summary>
-    private static DateTime CurrentMonthStartUtc()
+    /// <summary>When the earliest open month began in Beirut, in UTC: last month's on the 1st, this month's otherwise.</summary>
+    private static DateTime OpenFromUtc()
     {
         var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut);
-        return TimeZoneInfo.ConvertTimeToUtc(new DateTime(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Unspecified), Beirut);
+        var month = new DateTime(local.Year, local.Month, 1, 0, 0, 0, DateTimeKind.Unspecified);
+        return TimeZoneInfo.ConvertTimeToUtc(local.Day == 1 ? month.AddMonths(-1) : month, Beirut);
     }
 
     private async Task<WorkEntryResponse> EntryAsync(long id, AuthResponse person)
@@ -74,13 +75,16 @@ public class ClosedMonthTests(ApiFactory api) : IClassFixture<ApiFactory>
         return (await response.ReadAsync<WorkEntryDetailResponse>()).Entry;
     }
 
-    /// <summary>An entry written straight to the database, as if it had been logged before the month closed.</summary>
+    /// <summary>
+    /// An entry written straight to the database, as if it had been logged when it ended: long past the edit window,
+    /// which a closed month's refusal still names.
+    /// </summary>
     private async Task<long> InsertAsync(AuthResponse person, long projectId, DateTime startUtc, int minutes, bool deleted)
     {
         await using var connection = await api.Database.OpenConnectionAsync();
         await using var command = new MySqlCommand(
             "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at, deleted_at) " +
-            "VALUES (@u, @p, 'Drawings', @s, @e, UTC_TIMESTAMP(3), @d); SELECT LAST_INSERT_ID();",
+            "VALUES (@u, @p, 'Drawings', @s, @e, @e, @d); SELECT LAST_INSERT_ID();",
             connection);
         command.Parameters.AddWithValue("@u", person.User.Id);
         command.Parameters.AddWithValue("@p", projectId);

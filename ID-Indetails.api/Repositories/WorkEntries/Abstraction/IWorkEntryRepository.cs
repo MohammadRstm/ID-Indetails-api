@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Files.Abstraction;
 
 namespace ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 
@@ -21,11 +22,15 @@ public sealed record WorkEntryView(
     int Minutes,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
-    int CommentCount);
+    int CommentCount,
+    FileView? Attachment,
+    string? ProjectIcon = null,
+    string? ProjectTint = null);
 
 /// <summary>
 /// Live entries on Design projects. Times are UTC; <paramref name="From"/> is inclusive and <paramref name="To"/>
 /// exclusive, both on the start time. <paramref name="Text"/> matches the description or project title.
+/// <paramref name="InternalOnly"/> keeps work on projects with no client.
 /// </summary>
 public sealed record WorkEntrySearch(
     long? UserId = null,
@@ -35,7 +40,8 @@ public sealed record WorkEntrySearch(
     DateTime? To = null,
     string? Text = null,
     int Page = 1,
-    int PageSize = 25);
+    int PageSize = 25,
+    bool InternalOnly = false);
 
 /// <summary>The few fields totals and charts are calculated from.</summary>
 public sealed record WorkRow(long Id, long UserId, long ProjectId, DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt);
@@ -51,13 +57,28 @@ public sealed record WorkProject(
     ProjectStatus Status,
     int ProgressPct,
     DateOnly StartDate,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? Icon,
+    string? Tint);
 
 /// <summary>One person's live work on one project.</summary>
 public sealed record Contribution(long ProjectId, long UserId, string UserName, int Minutes, int Entries, DateTime LastStartedAt);
 
+/// <summary>What a project looks like on cards and lists.</summary>
+public sealed record ProjectCard(long Id, string Title, string? Icon, string? Tint);
+
 /// <summary>Someone of the Design domain, as the Employees page lists them.</summary>
-public sealed record DesignPerson(long Id, string Name, string Email, string? Position, long? TeamId, string? TeamName, string Role, UserStatus Status);
+public sealed record DesignPerson(
+    long Id,
+    string Name,
+    string Email,
+    string? Position,
+    long? TeamId,
+    string? TeamName,
+    string Role,
+    UserStatus Status,
+    DateTime? LastSeenAt,
+    long? PhotoFileId);
 
 public interface IWorkEntryRepository
 {
@@ -105,6 +126,9 @@ public interface IWorkEntryRepository
 
     /// <summary>Titles of the given projects. Not tracked.</summary>
     Task<IReadOnlyDictionary<long, string>> ProjectTitlesAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>These projects' titles, icons and tints, by id. Not tracked.</summary>
+    Task<IReadOnlyDictionary<long, ProjectCard>> ProjectCardsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
 
     /// <summary>Names, emails, teams and domains of the given people. Not tracked.</summary>
     Task<IReadOnlyList<WorkPerson>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);

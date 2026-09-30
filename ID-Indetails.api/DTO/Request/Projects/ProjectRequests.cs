@@ -126,3 +126,17 @@ public sealed record UpdateProjectPricingRequest
 
     public decimal MaterialMarkup { get; init; }
 }
+
+/// <summary>What the project report PDF covers.</summary>
+public sealed record ProjectReportQuery
+{
+    public ProjectReportKind Kind { get; init; } = ProjectReportKind.Internal;
+
+    /// <summary>The work it counts, by company day; money is always the whole project. Both default to the project's span.</summary>
+    public DateOnly? From { get; init; }
+
+    public DateOnly? To { get; init; }
+
+    /// <summary>Repeat the key for each (<c>sections=summary&amp;sections=billing</c>). Empty means every one but the work log.</summary>
+    public IReadOnlyList<ProjectReportSection> Sections { get; init; } = [];
+}

@@ -1,10 +1,12 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Employees;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Employees;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace ID_Indetails.api.Controllers;
 
@@ -34,17 +36,34 @@ public sealed class EmployeesController(IEmployeeService employeeService) : Cont
     public Task<EmployeeResponse> Update(long userId, UpdateEmployeeRequest request, CancellationToken cancellationToken)
         => employeeService.UpdateAsync(userId, request, cancellationToken);
 
-    /// <summary>Blocks sign-in and ends every session. History is kept.</summary>
+    /// <summary>Blocks sign-in and ends every session, and their employment on their last working day. History is kept.</summary>
     [HttpPost("{userId:long}/deactivate")]
     [HasPermission(PermissionCodes.EmployeeManage)]
-    public Task<EmployeeResponse> Deactivate(long userId, CancellationToken cancellationToken)
-        => employeeService.DeactivateAsync(userId, cancellationToken);
+    public Task<EmployeeResponse> Deactivate(
+        long userId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] DeactivateEmployeeRequest? request,
+        CancellationToken cancellationToken)
+        => employeeService.DeactivateAsync(userId, request, cancellationToken);
 
-    /// <summary>Active again, or invited again if they never signed up.</summary>
+    /// <summary>Active again, or invited again if they never signed up. Someone who worked here starts a new period of employment.</summary>
     [HttpPost("{userId:long}/reactivate")]
     [HasPermission(PermissionCodes.EmployeeManage)]
-    public Task<EmployeeResponse> Reactivate(long userId, CancellationToken cancellationToken)
-        => employeeService.ReactivateAsync(userId, cancellationToken);
+    public Task<EmployeeResponse> Reactivate(
+        long userId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ReactivateEmployeeRequest? request,
+        CancellationToken cancellationToken)
+        => employeeService.ReactivateAsync(userId, request, cancellationToken);
+
+    /// <summary>Their profile photo, from the caller's upload.</summary>
+    [HttpPut("{userId:long}/photo")]
+    [HasPermission(PermissionCodes.EmployeeManage)]
+    public Task<EmployeeResponse> SetPhoto(long userId, AttachFileRequest request, CancellationToken cancellationToken)
+        => employeeService.SetPhotoAsync(userId, request, cancellationToken);
+
+    [HttpDelete("{userId:long}/photo")]
+    [HasPermission(PermissionCodes.EmployeeManage)]
+    public Task<EmployeeResponse> RemovePhoto(long userId, CancellationToken cancellationToken)
+        => employeeService.RemovePhotoAsync(userId, cancellationToken);
 
     /// <summary>Changes the role and clears personal permission changes.</summary>
     [HttpPut("{userId:long}/role")]

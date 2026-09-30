@@ -1,4 +1,5 @@
 using ID_Indetails.api.DTO.Request.Employees;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using Microsoft.AspNetCore.Authorization;
@@ -16,4 +17,13 @@ public sealed class ProfileController(IEmployeeService employeeService) : Contro
     [HttpPut("profile")]
     public Task<CurrentUserResponse> UpdateProfile(UpdateMyProfileRequest request, CancellationToken cancellationToken)
         => employeeService.UpdateMyProfileAsync(request, cancellationToken);
+
+    /// <summary>Own profile photo, from an upload of their own.</summary>
+    [HttpPut("photo")]
+    public Task<CurrentUserResponse> SetPhoto(AttachFileRequest request, CancellationToken cancellationToken)
+        => employeeService.SetMyPhotoAsync(request, cancellationToken);
+
+    [HttpDelete("photo")]
+    public Task<CurrentUserResponse> RemovePhoto(CancellationToken cancellationToken)
+        => employeeService.RemoveMyPhotoAsync(cancellationToken);
 }

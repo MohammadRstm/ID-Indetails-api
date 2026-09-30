@@ -11,6 +11,9 @@ public sealed record SaveWorkEntryRequest
 
     public DateTime EndedAt { get; init; }
 
+    /// <summary>A photo or video the caller uploaded (<c>POST /api/files</c>). Null removes it.</summary>
+    public long? AttachmentFileId { get; init; }
+
     /// <summary>
     /// Other entries of the caller moved to make room, saved together with this one (the timeline's swap).
     /// Each must still be changeable.
@@ -95,6 +98,14 @@ public sealed record ProjectWorkQuery
 
     /// <summary>Matches the work description; every word must match.</summary>
     public string? Search { get; init; }
+}
+
+/// <summary>A range of company days, both included: a day, week, month or year of the Timeline tab.</summary>
+public sealed record TimelineEntriesQuery
+{
+    public DateOnly From { get; init; }
+
+    public DateOnly To { get; init; }
 }
 
 public sealed record PeopleWorkQuery

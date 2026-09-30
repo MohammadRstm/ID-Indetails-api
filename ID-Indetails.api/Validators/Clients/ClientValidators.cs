@@ -9,6 +9,8 @@ public sealed class ClientListQueryValidator : AbstractValidator<ClientListQuery
 {
     public ClientListQueryValidator()
     {
+        RuleFor(x => x.IncludeArchived).Must((q, include) => !(include && q.Archived == true))
+            .WithMessage("Ask for archived clients only, or for them alongside the others, not both.");
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
         RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
         RuleFor(x => x.Filter).IsInEnum().WithMessage("Filter must be active, owing or empty.");
@@ -80,4 +82,18 @@ internal static class ClientRuleExtensions
             .Must(c => c.Count <= MaxContacts).WithMessage($"A client can have at most {MaxContacts} contacts.")
             .Must(c => c.Count(x => x.IsPrimary) <= 1).WithMessage("Only one contact can be primary.")
             .ForEach(c => c.SetValidator(new ClientContactRequestValidator()));
+}
+
+public sealed class CheckClientRequestValidator : AbstractValidator<CheckClientRequest>
+{
+    public CheckClientRequestValidator()
+    {
+        RuleFor(x => x.Name).ClientText("Name", 150);
+        RuleFor(x => x.Contacts.Count).LessThanOrEqualTo(20).WithMessage("At most 20 contacts.");
+        RuleForEach(x => x.Contacts).ChildRules(contact =>
+        {
+            contact.RuleFor(c => c.Kind).IsInEnum().WithMessage("Unknown contact kind.");
+            contact.RuleFor(c => c.Value).MaximumLength(200).WithMessage("A contact is at most 200 characters.");
+        });
+    }
 }

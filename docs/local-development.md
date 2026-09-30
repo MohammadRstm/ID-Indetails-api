@@ -84,5 +84,6 @@ dotnet test ID-Indetails.slnx
 ```
 
 - **Unit tests** need nothing running.
-- **Integration tests need the Docker database running.** Each test class creates its own throwaway database (`idi_test_…`) on that server, applies the real migrations, and drops it at the end. Your `id_indetails` database is never touched.
+- **Integration tests need the Docker database running.** A run creates one throwaway database, `idi_test_run`, on that server and applies the real migrations to it once. Before each test class, every row is deleted and the rows the migrations seed are put back (from a snapshot in `idi_test_seed`), so each class starts from the same empty database. The classes run one after another, and the tests of one class share their data. Your `id_indetails` database is never touched.
+- **Leftovers:** the test databases stay after a run, so they can be inspected. The next run drops every `idi_test_…` database first, including ones left by an interrupted run. Don't run two test runs at once: they would share the database.
 - **Credentials:** locally, the tests read the root password from `.env`. In CI, set `ID_INDETAILS_TEST_MYSQL_ADMIN` to an admin connection string without a database, for example `Server=127.0.0.1;Port=3306;User=root;Password=…;`.

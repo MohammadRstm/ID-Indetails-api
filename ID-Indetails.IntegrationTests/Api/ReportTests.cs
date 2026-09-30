@@ -69,6 +69,7 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, idle) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var paused = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         (await Client.PostEmptyAsync($"/api/projects/{paused.Id}/hold", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
@@ -87,6 +88,7 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         quarter.Minutes.ShouldBeGreaterThanOrEqualTo(90);
         quarter.PeopleLoggingThisWeek.ShouldBeGreaterThanOrEqualTo(1);
         quarter.Attention.Count.ShouldBeLessThanOrEqualTo(5);
+        quarter.Attention.Single(a => a.Kind == AttentionKind.NotLogging).People!.ShouldContain(p => p.Id == idle.User.Id);
 
         await (await Client.GetAsync("/api/reports/overview?period=year", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }

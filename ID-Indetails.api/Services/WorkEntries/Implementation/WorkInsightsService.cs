@@ -1,6 +1,8 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Employees;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -17,6 +19,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -38,6 +41,7 @@ public sealed class WorkInsightsService(
     IMeetingRepository meetings,
     IActivityFeedRepository activityFeed,
     IOvertimeService overtime,
+    IPresence presence,
     IClock clock) : IWorkInsightsService
 {
     public const int MinProjectWeeks = 4;
@@ -214,9 +218,25 @@ public sealed class WorkInsightsService(
         var weekStart = WorkStats.WeekStartOf(today, calendar.FirstDayOfWeek);
         var quarterStart = WorkStats.QuarterStartOf(today);
         var focusFrom = today.AddDays(-(FocusDays - 1));
-        var pricer = actor.Has(PermissionCodes.FinancialView)
+        var money = actor.Has(PermissionCodes.FinancialView);
+        var pricer = money
             ? await LabourPricer.LoadAsync(financeSources, projectFinance, people.SelectMany(p => rows[p.Id]).ToList(), clock, cancellationToken)
             : null;
+        var rates = money
+            ? (await financeSources.PayRatesAsync(people.Select(p => p.Id).ToList(), cancellationToken))
+                .GroupBy(r => r.UserId)
+                .ToDictionary(g => g.Key, g => ProjectFinance.RateOn(g.OrderBy(r => r.EffectiveFrom).ToList(), today))
+            : new Dictionary<long, ProjectFinance.PayRate>();
+
+        // This month's overtime depends on each whole day, as everywhere else.
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var overtimeByEntry = await overtime.ByEntryAsync(
+            people.SelectMany(p => rows[p.Id])
+                .Where(r => clock.ToCompanyDate(r.StartedAt) >= monthStart)
+                .Select(r => new LoggedWork(r.Id, r.UserId, r.StartedAt))
+                .ToList(),
+            cancellationToken);
+        var last30From = today.AddDays(-29);
 
         var worked = people.ToDictionary(p => p.Id, p => rows[p.Id].Select(ToWorked).ToList());
         var focusOf = worked.ToDictionary(
@@ -237,6 +257,9 @@ public sealed class WorkInsightsService(
                     p.TeamName,
                     p.Role,
                     p.Status,
+                    p.PhotoFileId,
+                    presence.IsOnline(p.Id),
+                    p.LastSeenAt,
                     WorkStats.Minutes(mine, weekStart, today),
                     WorkStats.Minutes(mine, quarterStart, today),
                     mine.Sum(x => x.Minutes),
@@ -244,6 +267,9 @@ public sealed class WorkInsightsService(
                     rows[p.Id].Select(r => (DateTime?)r.StartedAt).Max(),
                     focus is { } id ? new FocusProjectResponse(id, titles.GetValueOrDefault(id, "")) : null,
                     WorkStats.Weekly(mine, today, SparkWeeks, calendar.FirstDayOfWeek).Select(w => w.Minutes).ToList(),
+                    WorkStats.Minutes(mine, last30From, today),
+                    rows[p.Id].Sum(r => overtimeByEntry.GetValueOrDefault(r.Id)),
+                    rates.TryGetValue(p.Id, out var rate) ? new CurrencyAmountResponse(rate.Currency, rate.HourlyCost) : null,
                     pricer?.Price(rows[p.Id]));
             })
             .OrderByDescending(p => p.WeekMinutes)
@@ -251,7 +277,7 @@ public sealed class WorkInsightsService(
             .ToList();
     }
 
-    public async Task<PersonLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default)
+    public async Task<EmployeeLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
         var person = (await entries.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
@@ -260,24 +286,70 @@ public sealed class WorkInsightsService(
             throw new NotFoundException("Employee not found.");
         }
 
-        var rows = await entries.RowsAsync(new WorkEntrySearch(UserId: userId), cancellationToken);
+        // Work is only logged on Design projects, and someone moved to Execution keeps theirs: only callers who see
+        // Design may see what it cost and on which projects.
+        var rows = actor.CanSee(DomainCodes.Design)
+            ? await entries.RowsAsync(new WorkEntrySearch(UserId: userId), cancellationToken)
+            : [];
         var pricer = await LabourPricer.LoadAsync(financeSources, projectFinance, rows, clock, cancellationToken);
         var quarterStart = WorkStats.QuarterStartOf(clock.CompanyToday);
         var byProject = rows
             .GroupBy(r => r.ProjectId)
             .Select(g => (ProjectId: g.Key, Cost: pricer.Price(g)))
-            .Where(x => x.Cost.Usd > 0)
+            .Where(x => x.Cost.Usd > 0 || x.Cost.Unconverted.Count > 0)
             .OrderByDescending(x => x.Cost.Usd)
             .Take(CostProjects)
             .ToList();
-        var titles = await entries.ProjectTitlesAsync(byProject.Select(x => x.ProjectId).ToList(), cancellationToken);
+        var cards = await entries.ProjectCardsAsync(byProject.Select(x => x.ProjectId).ToList(), cancellationToken);
 
-        return new PersonLabourCostResponse(
+        return new EmployeeLabourCostResponse(
             userId,
             rows.Count,
             pricer.Price(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= quarterStart)),
             pricer.Price(rows),
-            byProject.Select(x => new ProjectLabourCostResponse(x.ProjectId, titles.GetValueOrDefault(x.ProjectId, string.Empty), x.Cost)).ToList());
+            byProject.Select(x => cards.TryGetValue(x.ProjectId, out var card)
+                    ? new ProjectLabourCostResponse(x.ProjectId, card.Title, card.Icon, card.Tint, x.Cost)
+                    : new ProjectLabourCostResponse(x.ProjectId, string.Empty, null, null, x.Cost))
+                .ToList());
+    }
+
+    public async Task<IReadOnlyList<TimelineEntryResponse>> TimelineEntriesAsync(
+        long projectId,
+        TimelineEntriesQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await DesignProjectAsync(actor, projectId, cancellationToken);
+
+        var views = await entries.ListAsync(
+            new WorkEntrySearch(ProjectId: projectId, From: clock.CompanyDayStartUtc(query.From), To: clock.CompanyDayStartUtc(query.To.AddDays(1))),
+            cancellationToken);
+        var teams = (await entries.PeopleAsync(views.Select(v => v.UserId).Distinct().ToList(), cancellationToken))
+            .ToDictionary(p => p.Id, p => p.TeamName);
+
+        return views
+            .OrderBy(v => v.StartedAt).ThenBy(v => v.EndedAt).ThenBy(v => v.UserId).ThenBy(v => v.Id)
+            .Select(v => new TimelineEntryResponse(
+                v.Id, v.UserId, v.UserName, teams.GetValueOrDefault(v.UserId), v.StartedAt, v.EndedAt, v.Minutes, v.Description))
+            .ToList();
+    }
+
+    public async Task<ProjectCostTimelineResponse> CostTimelineAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var project = await projects.GetAsync(projectId, cancellationToken);
+        if (project is null || !actor.CanSee(project.DomainCode))
+        {
+            throw new NotFoundException("Project not found.");
+        }
+
+        var calendar = await CalendarAsync(cancellationToken);
+        var weeks = await projectFinance.CashByWeekAsync(
+            project, clock.ToCompanyDate(project.FinalizedAt ?? clock.UtcNow), calendar.FirstDayOfWeek, cancellationToken);
+
+        return new ProjectCostTimelineResponse(
+            weeks.Select(w => new CostWeekResponse(w.WeekStart, w.MinutesInWeek, w.LabourInWeek, w.SpentInWeek, w.Spent, w.Received)).ToList(),
+            PaymentRules.BaseCurrency);
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken) => permissions.GetAccessAsync(currentUser.Id, cancellationToken);

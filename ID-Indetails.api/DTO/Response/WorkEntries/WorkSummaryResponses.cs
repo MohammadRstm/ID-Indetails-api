@@ -8,7 +8,16 @@ public sealed record WeekTotalResponse(DateOnly WeekStart, int Minutes, int Entr
 public sealed record DayTotalResponse(DateOnly Day, int Minutes);
 
 /// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>
-public sealed record ProjectTimeResponse(long ProjectId, string Title, int Minutes, int OvertimeMinutes, int Entries, DateTime LastStartedAt);
+public sealed record ProjectTimeResponse(
+    long ProjectId,
+    string Title,
+    string? Icon,
+    string? Tint,
+    ProjectStatus Status,
+    int Minutes,
+    int OvertimeMinutes,
+    int Entries,
+    DateTime LastStartedAt);
 
 /// <summary>
 /// One person's work, as their "My work" page and their profile show it. Days are company-time-zone days;
@@ -45,13 +54,15 @@ public sealed record WorkSummaryResponse(
 
 public sealed record ContributorResponse(long Id, string Name);
 
-public sealed record LastActivityResponse(string PersonName, DateTime StartedAt);
+public sealed record LastActivityResponse(long PersonId, string PersonName, DateTime StartedAt);
 
 /// <summary>An open Design project with the caller's own time on it. Other people's hours stay private.</summary>
 public sealed record MyProjectResponse(
     long Id,
     string Title,
     string? Description,
+    string? Icon,
+    string? Tint,
     string? ClientName,
     ProjectStatus Status,
     int ProgressPct,
@@ -63,7 +74,7 @@ public sealed record MyProjectResponse(
     IReadOnlyList<ContributorResponse> Contributors,
     LastActivityResponse? LastActivity);
 
-public sealed record TeamActivityResponse(string PersonName, DateTime StartedAt, string Description);
+public sealed record TeamActivityResponse(long PersonId, string PersonName, DateTime StartedAt, string Description);
 
 /// <param name="MyOvertimeMinutes">The part of <paramref name="MyMinutes"/> that is overtime; the rest is normal time.</param>
 /// <param name="Recent">The caller's 12 latest entries on the project, newest first.</param>

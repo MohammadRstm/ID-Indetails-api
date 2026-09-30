@@ -1,5 +1,6 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Employees;
 using ID_Indetails.api.DTO.Response.Payroll;
 using MySqlConnector;
 using Shouldly;
@@ -7,25 +8,35 @@ using Shouldly;
 namespace ID_Indetails.IntegrationTests.Api;
 
 /// <summary>
-/// People whose account was deactivated stay in the salaries of the months they were active, with their final month
-/// pro-rated to the day they left. June 2026 has 22 working days, 11 of them up to Monday 15 June.
+/// People who left stay in the salaries of the months they were employed, with their final month pro-rated to their
+/// last working day. June 2026 has 22 working days, 11 of them up to Monday 15 June.
 /// </summary>
 public class LeaverSalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
+    private static readonly TimeZoneInfo Beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
+
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
 
+    private static DateOnly Today => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut));
+
     [Fact]
-    public async Task Deactivating_and_reactivating_sets_and_clears_the_leaving_time()
+    public async Task Deactivating_ends_the_employment_today_and_reactivating_the_same_day_continues_it()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var person = await SalariedAsync(superAdmin);
 
-        (await Client.PostEmptyAsync($"/api/employees/{person.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var left = await Client.PostEmptyAsync($"/api/employees/{person.User.Id}/deactivate", superAdmin.AccessToken);
+        ((int)left.StatusCode).ShouldBe(200, await left.Content.ReadAsStringAsync());
+        (await left.ReadAsync<EmployeeResponse>()).LeftOn.ShouldBe(Today);
         (await _steps.ScalarAsync<int>("SELECT deactivated_at IS NOT NULL FROM users WHERE id = @id", ("@id", person.User.Id))).ShouldBe(1);
 
+        // No time away, so nothing to ask and one period that simply goes on.
         (await Client.PostEmptyAsync($"/api/employees/{person.User.Id}/reactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         (await _steps.ScalarAsync<int>("SELECT deactivated_at IS NULL FROM users WHERE id = @id", ("@id", person.User.Id))).ShouldBe(1);
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM employment_periods WHERE user_id = @id AND ended_on IS NULL", ("@id", person.User.Id))).ShouldBe(1);
+        (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM employment_periods WHERE user_id = @id", ("@id", person.User.Id))).ShouldBe(1);
     }
 
     [Fact]
@@ -59,13 +70,23 @@ public class LeaverSalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Someone_deactivated_without_a_known_date_is_left_out_as_before()
+    public async Task Someone_taken_back_later_isn_t_paid_for_the_months_they_were_away()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var person = await SalariedAsync(superAdmin);
-        await DeactivateAsync(superAdmin, person, deactivatedAtUtc: null);
 
-        (await RowAsync(superAdmin, person, "2026-06")).ShouldBeNull();
+        // Left on Sunday 15 March 2026 and back on Friday 1 May.
+        await ExecuteAsync(
+            "UPDATE employment_periods SET ended_on = '2026-03-15' WHERE user_id = @id; " +
+            "INSERT INTO employment_periods (user_id, started_on, created_at) VALUES (@id, '2026-05-01', UTC_TIMESTAMP(3))",
+            ("@id", person.User.Id));
+
+        // March 2026 has 22 working days, 10 of them by 15 March.
+        var march = (await RowAsync(superAdmin, person, "2026-03")).ShouldNotBeNull();
+        march.ProRated.ShouldBeTrue();
+        march.WorkingDaysPaid.ShouldBe(10);
+        (await RowAsync(superAdmin, person, "2026-04")).ShouldBeNull();
+        (await RowAsync(superAdmin, person, "2026-05")).ShouldNotBeNull().ProRated.ShouldBeFalse();
     }
 
     [Fact]
@@ -88,19 +109,18 @@ public class LeaverSalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<AuthResponse> SalariedAsync(AuthResponse superAdmin)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        await ExecuteAsync("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id", ("@id", person.User.Id));
+        await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
                 new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         return person;
     }
 
-    /// <summary>Deactivates through the API, then moves the leaving time into the past (UTC), or clears it.</summary>
-    private async Task DeactivateAsync(AuthResponse superAdmin, AuthResponse person, string? deactivatedAtUtc)
+    /// <summary>Deactivates through the API, then moves the leaving time and last working day into the past (UTC).</summary>
+    private async Task DeactivateAsync(AuthResponse superAdmin, AuthResponse person, string deactivatedAtUtc)
     {
         (await Client.PostEmptyAsync($"/api/employees/{person.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await ExecuteAsync("UPDATE users SET deactivated_at = @at WHERE id = @id",
-            ("@at", deactivatedAtUtc is null ? DBNull.Value : DateTime.Parse(deactivatedAtUtc)), ("@id", person.User.Id));
+        await _steps.SetLeftAtAsync(person.User.Id, deactivatedAtUtc);
     }
 
     private async Task<SalaryRowResponse?> RowAsync(AuthResponse viewer, AuthResponse person, string month)

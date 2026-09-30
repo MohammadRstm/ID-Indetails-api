@@ -42,6 +42,11 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
             query = query.Where(e => e.ClientId == clientId || db.Projects.Any(p => p.Id == e.ProjectId && p.ClientId == clientId));
         }
 
+        if (search.InternalOnly)
+        {
+            query = query.Where(e => e.ProjectId != null && db.Projects.Any(p => p.Id == e.ProjectId && p.ClientId == null));
+        }
+
         if (search.ActorId is { } actorId)
         {
             query = query.Where(e => e.ActorId == actorId);

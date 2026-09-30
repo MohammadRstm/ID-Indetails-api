@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Reports;
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Reports;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
@@ -57,7 +58,13 @@ public sealed class ReportService(
         var to = query.To ?? today;
 
         var views = await entries.ListAsync(
-            new WorkEntrySearch(query.UserId, query.ProjectId, From: clock.CompanyDayStartUtc(from), To: clock.CompanyDayStartUtc(to.AddDays(1))),
+            new WorkEntrySearch(
+                query.UserId,
+                query.ProjectId,
+                query.ClientId,
+                clock.CompanyDayStartUtc(from),
+                clock.CompanyDayStartUtc(to.AddDays(1)),
+                InternalOnly: query.Internal),
             cancellationToken);
         var worked = views.Select(ToWorked).ToList();
         var total = views.Sum(e => e.Minutes);
@@ -244,10 +251,12 @@ public sealed class ReportService(
                 null,
                 null)));
 
-        var notLogging = people.Count(p => p.Role == RoleCodes.Employee && !loggingThisWeek.Contains(p.Id));
-        if (notLogging > 0)
+        var notLogging = people.Where(p => p.Role == RoleCodes.Employee && !loggingThisWeek.Contains(p.Id)).OrderBy(p => p.Name).ToList();
+        if (notLogging.Count > 0)
         {
-            items.Add(new AttentionItemResponse(AttentionKind.NotLogging, null, null, null, null, notLogging));
+            items.Add(new AttentionItemResponse(
+                AttentionKind.NotLogging, null, null, null, null, notLogging.Count,
+                notLogging.Take(3).Select(p => new PersonRefResponse(p.Id, p.Name)).ToList()));
         }
 
         return items.Take(MaxAttentionItems).ToList();

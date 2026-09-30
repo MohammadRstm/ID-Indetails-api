@@ -56,7 +56,8 @@ public sealed class ActivityFeedService(
                 query.ClientId,
                 query.UserId,
                 query.Page,
-                query.PageSize),
+                query.PageSize,
+                query.Internal),
             cancellationToken);
 
         var workIds = items.Where(e => e.SubjectType == "work_entry" && e.SubjectId is not null).Select(e => e.SubjectId!.Value).Distinct().ToList();

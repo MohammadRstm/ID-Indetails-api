@@ -79,6 +79,8 @@ public sealed class MyWorkService(
                     p.Id,
                     p.Title,
                     p.Description,
+                    p.Icon,
+                    p.Tint,
                     p.ClientName,
                     p.Status,
                     p.ProgressPct,
@@ -88,7 +90,7 @@ public sealed class MyWorkService(
                     mine?.Minutes ?? 0,
                     mine?.LastStartedAt,
                     people.OrderByDescending(c => c.Minutes).Select(c => new ContributorResponse(c.UserId, c.UserName)).ToList(),
-                    last is null ? null : new LastActivityResponse(last.UserName, last.LastStartedAt));
+                    last is null ? null : new LastActivityResponse(last.UserId, last.UserName, last.LastStartedAt));
             })
             // Projects the caller worked on first, most recent first; the rest newest first.
             .OrderByDescending(p => p.MyLastStartedAt ?? DateTime.MinValue)
@@ -131,7 +133,7 @@ public sealed class MyWorkService(
                 .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
             ToWeeks(WorkStats.Weekly(myWorked, today, WeeksOnProject, calendar.FirstDayOfWeek)),
             all.Where(e => e.UserId != actor.UserId).OrderByDescending(e => e.StartedAt).Take(TeamActivityOnProject)
-                .Select(e => new TeamActivityResponse(e.UserName, e.StartedAt, e.Description)).ToList());
+                .Select(e => new TeamActivityResponse(e.UserId, e.UserName, e.StartedAt, e.Description)).ToList());
     }
 
     public async Task<MyDayResponse> MyDayAsync(DateOnly? date, CancellationToken cancellationToken = default)
@@ -211,6 +213,9 @@ public sealed class MyWorkService(
                 .Select(g => new ProjectTimeResponse(
                     g.Key,
                     g.First().ProjectTitle,
+                    g.First().ProjectIcon,
+                    g.First().ProjectTint,
+                    g.First().ProjectStatus,
                     g.Sum(e => e.Minutes),
                     g.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
                     g.Count(),

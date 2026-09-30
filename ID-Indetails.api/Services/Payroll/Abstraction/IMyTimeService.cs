@@ -8,6 +8,9 @@ public interface IMyTimeService
 {
     Task<MyScheduleResponse> ScheduleAsync(MyScheduleQuery query, CancellationToken cancellationToken = default);
 
+    /// <summary>The overtime of work the caller is about to log or edit, among their other work that day.</summary>
+    Task<OvertimePreviewResponse> PreviewOvertimeAsync(OvertimePreviewRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>The hours ledger month by month, newest first; Design employees only.</summary>
     Task<MyHoursResponse> HoursAsync(MyHoursQuery query, CancellationToken cancellationToken = default);
 

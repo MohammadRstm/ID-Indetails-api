@@ -13,6 +13,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 | `GET /api/finance/{domain}/summary?from=&to=` | `financial:view` | Revenue, cost, profit and margin over a period, with the billing position (dashboard money cards, Financials header) |
 | `GET /api/finance/{domain}/monthly?months=12` | `financial:view` | Revenue against cost month by month, oldest first (1 to 36 months) |
 | `GET /api/finance/{domain}/projects` | `financial:view` | Every project's all-time money, most profitable first, with totals (Financials projects tab, dashboard "profit by project") |
+| `GET /api/finance/{domain}/projects/export?from=&to=` | `financial:view` | The Financials export (UTF-8 CSV, export rate limit): every project's all-time revenue, hours, labour, expenses, materials, ground labour, cost, profit and margin, then the period's recognised revenue, cost, profit and margin |
 | `GET /api/finance/{domain}/billing?months=12` | `financial:view` | Billing and collections (Financials billing tab, dashboard "money owed" and "invoiced against collected") |
 | `GET /api/finance/{domain}/clients` | `financial:view` | Every client with projects and their money, most revenue first (Financials clients tab, dashboard "top clients") |
 | `GET /api/finance/{domain}/costs?from=&to=` | `financial:view` | Costs over a period: by source, labour by person, expenses by category, the biggest expenses (Financials costs tab) |
@@ -28,7 +29,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ## Rules
 
-- **Revenue in a period** is what the projects recognised then: each project's recognised revenue (revenue × progress, or all of it once done) is spread over the months of its costs (`Recognition.ByMonth`: labour months, or other cost months when there is no labour), and each month counts for the share of it the period covers, up to today. The company overview works the same way. The prototype counted whole calendar months instead.
+- **Revenue in a period** is what the projects recognised then: each project's recognised revenue (revenue × progress, or all of it once done) is spread over the months of its costs (`Recognition.ByMonth`: labour months, or other cost months when there is no labour; with no priced cost at all, the months of its logged hours, then its completion month), and each month counts for the share of it the period covers, up to today. The company overview works the same way. The prototype counted whole calendar months instead.
 - **Cost in a period** is every cost dated inside it, by source: labour (including everyone's paid breaks, hourly and salaried alike), expenses, materials and ground labour. All four are always returned, so the parts add up to the total (the prototype's Execution sub-lines left materials and ground labour out).
 - **Margin** is profit ÷ revenue when there is revenue. For a project it only shows once the project is done, at least 5% along or has 10 hours logged (`marginKnown`). A **client** follows the same rule as a whole: done once every project is, progress = the share of their revenue recognised so far, hours across all their projects.
 - **Billing** (`Business/Billing/ProjectBilling.cs`) is the one billing rule. The project page's `money.billing`, the project and client lists, the client pages and the Financials page all use it, through the same batch load (`MoneyRollup`):
@@ -42,9 +43,9 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 - **Money follow-ups** (`Business/Finance/MoneyAttention.cs`, as in the prototype), 6 at most, in this order:
   - `overdue_invoice`: each overdue invoice, oldest due first, with its number, days overdue and balance;
-  - `finished_owed`: completed projects still owed on their invoices, when none of it is overdue;
+  - `finished_owed`: completed or archived projects still owed on their invoices, when none of it is overdue (auto-archive doesn't wait for payment, so this keeps them in sight);
   - `no_payment`: active client projects with no payment (revenue) agreed;
-  - `cost_high`: active client projects whose cost has passed 85% of the payment, with the cost, the payment and the whole percentage used.
+  - `cost_high` (Design only): active client projects whose cost has passed 85% of the payment, with the cost, the payment and the whole percentage used. An Execution site's payment includes its materials at client price and its cost at what was paid, so the warning would fire on nearly every site.
   The payment is the agreed revenue (Execution: the agreed amount), not what was received. Projects come oldest first.
 - **Upcoming deadlines** are the open requirements of the domain's active and on-hold projects with a deadline up to 14 days from today, overdue ones included, soonest first (then oldest added). `total` and `overdue` count them all; `items` holds the first 8, each with its project, assignees and days left (negative once overdue). Both domains have it.
 

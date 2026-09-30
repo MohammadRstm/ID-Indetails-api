@@ -30,6 +30,9 @@ public interface IMessagingService
     /// <inheritdoc cref="MarkTeamReadAsync"/>
     Task<MessagesBadgeResponse> MarkDirectReadAsync(long userId, CancellationToken cancellationToken = default);
 
+    /// <summary>Whether the caller may read this conversation now: a team chat they are in, or their direct chat with someone they can reach.</summary>
+    Task<bool> CanReadConversationAsync(long conversationId, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Posts a work-entry comment to the entry author's team chat as a card mentioning everyone in it, and returns the
     /// message id. Runs in the caller's transaction. The author must be in a team of the entry's domain, and the

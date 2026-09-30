@@ -8,6 +8,15 @@ namespace ID_Indetails.api.Repositories.Clients.Implementation;
 
 public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepository
 {
+    public async Task<IReadOnlyList<ClientAdded>> AddedAsync(IReadOnlyList<string> domains, string? domain, CancellationToken cancellationToken = default)
+    {
+        var codes = domains.ToList();
+        return await db.Clients.AsNoTracking()
+            .Where(c => codes.Contains(c.DomainCode) && (domain == null || c.DomainCode == domain))
+            .Select(c => new ClientAdded(c.Id, c.Name, c.CreatedAt, c.ArchivedAt != null))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<(IReadOnlyList<ClientRow> Items, int TotalCount)> SearchAsync(
         ClientSearch search,
         CancellationToken cancellationToken = default)
@@ -15,21 +24,26 @@ public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepositor
         var domains = search.Domains.ToList();
         var query = db.Clients.AsNoTracking().Where(c => domains.Contains(c.DomainCode));
 
-        query = search.Archived == true
-            ? query.Where(c => c.ArchivedAt != null)
-            : query.Where(c => c.ArchivedAt == null);
+        if (!search.IncludeArchived)
+        {
+            query = search.Archived == true
+                ? query.Where(c => c.ArchivedAt != null)
+                : query.Where(c => c.ArchivedAt == null);
+        }
 
         if (search.Domain is { } domain)
         {
             query = query.Where(c => c.DomainCode == domain);
         }
 
-        // Every word must appear in the name, organisation or label (the collation ignores case).
+        // Every word must appear in the name, organisation, label, note or a contact (the collation ignores case).
         foreach (var word in (search.Text ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             query = query.Where(c => c.Name.Contains(word)
                 || (c.Organisation != null && c.Organisation.Contains(word))
-                || (c.Label != null && c.Label.Contains(word)));
+                || (c.Label != null && c.Label.Contains(word))
+                || (c.Note != null && c.Note.Contains(word))
+                || c.Contacts.Any(x => x.Value.Contains(word) || x.NormalizedValue.Contains(word)));
         }
 
         if (search.Filter == ClientFilter.Active)

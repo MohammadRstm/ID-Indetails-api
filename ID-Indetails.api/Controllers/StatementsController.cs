@@ -4,6 +4,7 @@ using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Statements;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Statements;
+using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Statements.Abstraction;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,7 +16,7 @@ namespace ID_Indetails.api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api")]
-public sealed class StatementsController(IStatementService statementService) : ControllerBase
+public sealed class StatementsController(IStatementService statementService, IDocumentService documents) : ControllerBase
 {
     [HttpGet("projects/{projectId:long}/statements")]
     [HasAnyPermission(PermissionCodes.StatementCreate, PermissionCodes.StatementSend, PermissionCodes.FinancialView)]
@@ -44,4 +45,19 @@ public sealed class StatementsController(IStatementService statementService) : C
     [HasPermission(PermissionCodes.StatementSend)]
     public Task<StatementResponse> RecordDelivery(long statementId, RecordDeliveryRequest request, CancellationToken cancellationToken)
         => statementService.RecordDeliveryAsync(statementId, request, cancellationToken);
+
+    /// <summary>The statement as a PDF. Downloading it records nothing; record a download delivery for that.</summary>
+    [HttpGet("statements/{statementId:long}/pdf")]
+    [HasAnyPermission(PermissionCodes.StatementCreate, PermissionCodes.StatementSend, PermissionCodes.FinancialView)]
+    public async Task<IActionResult> Pdf(long statementId, CancellationToken cancellationToken)
+    {
+        var pdf = await documents.StatementPdfAsync(statementId, cancellationToken);
+        return File(pdf.Content, "application/pdf", pdf.FileName);
+    }
+
+    /// <summary>Emails the statement to the client with its PDF attached, and records the delivery.</summary>
+    [HttpPost("statements/{statementId:long}/email")]
+    [HasPermission(PermissionCodes.StatementSend)]
+    public Task<StatementResponse> Email(long statementId, EmailDocumentRequest request, CancellationToken cancellationToken)
+        => documents.EmailStatementAsync(statementId, request, cancellationToken);
 }

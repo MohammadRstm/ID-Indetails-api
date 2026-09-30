@@ -104,4 +104,13 @@ public class WorkEntryRulesTests
         WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddDays(2), monthStart.AddDays(-2))!.Code.ShouldBe(ErrorCodes.MonthClosed);
         WorkEntryRules.CheckOpenMonth(monthStart, monthStart.AddDays(-2), monthStart.AddDays(2))!.Kind.ShouldBe(ID_Indetails.api.Business.Common.DenialKind.BusinessRule);
     }
+
+    [Theory]
+    // On the 1st, the month just ended is still open, so last night's work can be logged after midnight.
+    [InlineData("2026-10-01", "2026-09-01")]
+    [InlineData("2026-10-02", "2026-10-01")]
+    [InlineData("2026-10-31", "2026-10-01")]
+    [InlineData("2027-01-01", "2026-12-01")]
+    public void The_month_just_ended_stays_open_through_the_first(string today, string openFrom)
+        => WorkEntryRules.OpenFrom(DateOnly.Parse(today)).ShouldBe(DateOnly.Parse(openFrom));
 }

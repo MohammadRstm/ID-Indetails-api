@@ -30,7 +30,8 @@ public sealed class SearchService(
     public async Task<SearchResponse> SearchAsync(SearchQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
-        var text = query.Q.Trim();
+        // With nothing typed, the palette lists everything, first results first, as in the prototype.
+        var text = (query.Q ?? string.Empty).Trim();
         var left = MaxResults;
 
         var foundProjects = actor.Has(PermissionCodes.ProjectView)

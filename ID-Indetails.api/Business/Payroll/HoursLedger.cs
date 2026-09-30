@@ -43,7 +43,8 @@ public static class HoursLedger
         PersonCalendar calendar,
         IReadOnlyList<Overtime.Split> work,
         Excuses excuses,
-        DateOnly? leftOn = null)
+        DateOnly? leftOn = null,
+        IReadOnlyList<Employment.Gap>? gaps = null)
     {
         var next = month.AddMonths(1);
         var inProgress = today >= month && today < next && !(today > leftOn);
@@ -55,7 +56,12 @@ public static class HoursLedger
 
         var from = joinedOn > month ? joinedOn : month;
 
-        var workingDays = Days(from, until).Select(d => (Day: d, Hours: calendar.HoursOn(d))).Where(d => d.Hours is not null).ToList();
+        // Days away between two periods of employment aren't expected.
+        var workingDays = Days(from, until)
+            .Where(d => !Employment.InGap(gaps, d))
+            .Select(d => (Day: d, Hours: calendar.HoursOn(d)))
+            .Where(d => d.Hours is not null)
+            .ToList();
         var expected = workingDays.Sum(d => d.Hours!.Required);
         var excusedDays = workingDays.Where(d => excuses.Days.Contains(d.Day)).Sum(d => d.Hours!.Required);
         var excused = excuses.WholeMonth ? expected : Math.Min(expected, excuses.Minutes + excusedDays);

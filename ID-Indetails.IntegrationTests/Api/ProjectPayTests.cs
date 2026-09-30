@@ -27,7 +27,7 @@ public class ProjectPayTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<AuthResponse> PaidDesignerAsync(AuthResponse superAdmin, string basis, decimal amount)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        await ExecuteAsync("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id", ("@id", person.User.Id));
+        await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
             new { basis, amount, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();

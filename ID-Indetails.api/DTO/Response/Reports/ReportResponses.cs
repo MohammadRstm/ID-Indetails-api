@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 
@@ -76,7 +77,15 @@ public sealed record WorkReportResponse(
 
 /// <param name="Days">Idle: days since the last work; on hold: days since it was put on hold.</param>
 /// <param name="Count">Not logging: how many people.</param>
-public sealed record AttentionItemResponse(AttentionKind Kind, long? ProjectId, string? Title, int? Days, int? ProgressPct, int? Count);
+/// <param name="People">Not logging: the first 3 of them, A to Z.</param>
+public sealed record AttentionItemResponse(
+    AttentionKind Kind,
+    long? ProjectId,
+    string? Title,
+    int? Days,
+    int? ProgressPct,
+    int? Count,
+    IReadOnlyList<PersonRefResponse>? People = null);
 
 public sealed record StatusCountResponse(ProjectStatus Status, int Count);
 

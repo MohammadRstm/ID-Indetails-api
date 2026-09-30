@@ -4,6 +4,7 @@ using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.Services.Billing.Abstraction;
+using ID_Indetails.api.Services.Documents.Abstraction;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
@@ -12,7 +13,7 @@ namespace ID_Indetails.api.Controllers;
 /// <summary>Invoices. Invoices of a project in a domain the caller can't see read as 404.</summary>
 [ApiController]
 [Route("api")]
-public sealed class InvoicesController(IInvoiceService invoiceService) : ControllerBase
+public sealed class InvoicesController(IInvoiceService invoiceService, IDocumentService documents) : ControllerBase
 {
     [HttpGet("invoices")]
     [HasPermission(PermissionCodes.FinancialView)]
@@ -59,6 +60,21 @@ public sealed class InvoicesController(IInvoiceService invoiceService) : Control
     [HasPermission(PermissionCodes.InvoiceSend)]
     public async Task<ActionResult<InvoiceResponse>> RecordDelivery(long invoiceId, RecordDeliveryRequest request, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await invoiceService.RecordDeliveryAsync(invoiceId, request, cancellationToken));
+
+    /// <summary>The invoice as a PDF, drafts included. Downloading it records nothing; record a download delivery for that.</summary>
+    [HttpGet("invoices/{invoiceId:long}/pdf")]
+    [HasPermission(PermissionCodes.FinancialView)]
+    public async Task<IActionResult> Pdf(long invoiceId, CancellationToken cancellationToken)
+    {
+        var pdf = await documents.InvoicePdfAsync(invoiceId, cancellationToken);
+        return File(pdf.Content, "application/pdf", pdf.FileName);
+    }
+
+    /// <summary>Emails an issued invoice to the client with its PDF attached, and records the delivery.</summary>
+    [HttpPost("invoices/{invoiceId:long}/email")]
+    [HasPermission(PermissionCodes.InvoiceSend)]
+    public async Task<ActionResult<InvoiceResponse>> Email(long invoiceId, EmailDocumentRequest request, CancellationToken cancellationToken)
+        => StatusCode(StatusCodes.Status201Created, await documents.EmailInvoiceAsync(invoiceId, request, cancellationToken));
 
     [HttpPost("invoices/{invoiceId:long}/void")]
     [HasPermission(PermissionCodes.InvoiceVoid)]

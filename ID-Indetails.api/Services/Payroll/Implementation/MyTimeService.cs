@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Payroll;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Payroll;
@@ -30,6 +31,42 @@ public sealed class MyTimeService(
     IWorkEntryRepository entries,
     IClock clock) : IMyTimeService
 {
+    public async Task<OvertimePreviewResponse> PreviewOvertimeAsync(OvertimePreviewRequest request, CancellationToken cancellationToken = default)
+    {
+        var me = await MeAsync(cancellationToken);
+        var startUtc = WorkEntryRules.AsUtc(request.StartedAt);
+        var draft = WorkOn(OvertimePreview.DraftId, startUtc, (int)(WorkEntryRules.AsUtc(request.EndedAt) - startUtc).TotalMinutes);
+        var calendar = (await inputs.CalendarsAsync([me.Id], cancellationToken))[me.Id];
+
+        // The day as it would be: without the entry being edited, and with the moved entries where they would go.
+        var moves = request.Moves.ToDictionary(m => m.Id);
+        var logged = await payroll.WorkAsync(
+            [me.Id], clock.CompanyDayStartUtc(draft.Day.AddDays(-1)), clock.CompanyDayStartUtc(draft.Day.AddDays(2)), cancellationToken);
+        var others = logged
+            .Where(e => e.Id != request.EntryId)
+            .Select(e => moves.TryGetValue(e.Id, out var move)
+                ? WorkOn(e.Id, WorkEntryRules.AsUtc(move.StartedAt), (int)(WorkEntryRules.AsUtc(move.EndedAt) - WorkEntryRules.AsUtc(move.StartedAt)).TotalMinutes)
+                : WorkOn(e.Id, e.StartedAt, e.Minutes));
+
+        var result = OvertimePreview.Of(draft, others, calendar);
+        return new OvertimePreviewResponse(
+            result.Minutes,
+            result.Overtime,
+            result.Hours is null,
+            result.BeforeHours,
+            result.AfterHours,
+            result.PastRequired,
+            result.Hours?.Start,
+            result.Hours?.End,
+            result.Hours?.Required);
+    }
+
+    private Overtime.Work WorkOn(long id, DateTime startUtc, int minutes)
+    {
+        var local = clock.ToCompanyTime(startUtc);
+        return new Overtime.Work(id, DateOnly.FromDateTime(local), (int)local.TimeOfDay.TotalMinutes, minutes);
+    }
+
     public async Task<MyScheduleResponse> ScheduleAsync(MyScheduleQuery query, CancellationToken cancellationToken = default)
     {
         var me = await MeAsync(cancellationToken);
@@ -82,7 +119,8 @@ public sealed class MyTimeService(
             return new MyHoursResponse(false, query.Page, MyTime.MonthsPerPage, 0, []);
         }
 
-        var (months, total) = MyTime.MonthsPage(inputs.JoinedOn(person), clock.CompanyToday, query.Page, inputs.LeftOn(person));
+        var employment = inputs.EmploymentOf(person);
+        var (months, total) = MyTime.MonthsPage(employment.JoinedOn, clock.CompanyToday, query.Page, employment.LeftOn);
         var ledgers = (await inputs.ForAsync([person], months, cancellationToken))
             .Select(m => SelfService.LedgerMonth(m, SalaryCalculator.LedgerOf(m.Input, Overtime.Of(m.Input.Work, m.Input.Calendar))))
             .ToList();
@@ -93,7 +131,7 @@ public sealed class MyTimeService(
     /// <param name="withLedger">Whether to say which overtime made up missing hours and which is paid as overtime.</param>
     private async Task<MyOvertimeResponse> OvertimeOfAsync(User person, SalaryMonthQuery query, bool withLedger, CancellationToken cancellationToken)
     {
-        var month = SelfService.MonthOf(query.Month, clock.CompanyToday, inputs.JoinedOn(person));
+        var month = SelfService.MonthOf(query.Month, clock.CompanyToday, inputs.EmploymentOf(person).JoinedOn);
         var input = (await inputs.ForAsync([person], [month], cancellationToken))[0].Input;
         var work = Overtime.Of(input.Work, input.Calendar);
         var ledger = withLedger && input.LedgerApplies ? SalaryCalculator.LedgerOf(input, work) : null;

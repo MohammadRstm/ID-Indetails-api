@@ -7,7 +7,7 @@ internal static class MeetingMapper
 {
     public static MeetingResponse ToResponse(MeetingView m) => new(
         m.Id,
-        new MeetingProjectResponse(m.ProjectId, m.ProjectTitle),
+        new MeetingProjectResponse(m.ProjectId, m.ProjectTitle, m.ProjectIcon, m.ProjectTint),
         m.StartsAt,
         m.EndsAt,
         (int)(m.EndsAt - m.StartsAt).TotalMinutes,

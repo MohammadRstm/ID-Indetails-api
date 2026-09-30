@@ -79,7 +79,7 @@ public sealed class SalaryService(
     {
         var me = (await payroll.UsersAsync([currentUser.Id], cancellationToken)).Single();
         var today = clock.CompanyToday;
-        var joinedOn = inputs.JoinedOn(me);
+        var joinedOn = inputs.EmploymentOf(me).JoinedOn;
         var month = SelfService.MonthOf(query.Month, today, joinedOn);
         var personMonth = (await inputs.ForAsync([me], [month], cancellationToken))[0];
         var input = personMonth.Input;
@@ -156,7 +156,7 @@ public sealed class SalaryService(
         }
 
         var people = (await payroll.PeopleAsync(
-                actor.VisibleDomains, EmployeeRules.CanSee(actor, null), domain, search?.Trim(), clock.CompanyDayStartUtc(month), cancellationToken))
+                actor.VisibleDomains, EmployeeRules.CanSee(actor, null), domain, search?.Trim(), month, cancellationToken))
             .Where(p => onlyUserId is null || p.Id == onlyUserId)
             .ToList();
 
@@ -165,7 +165,7 @@ public sealed class SalaryService(
 
     public async Task<IReadOnlyList<ShortPerson>> FlaggedAsync(DateOnly month, CancellationToken cancellationToken = default)
     {
-        var people = await payroll.PeopleAsync([DomainCodes.Design], false, DomainCodes.Design, null, clock.CompanyDayStartUtc(month), cancellationToken);
+        var people = await payroll.PeopleAsync([DomainCodes.Design], false, DomainCodes.Design, null, month, cancellationToken);
         return (await ComputeAsync(month, people, cancellationToken))
             .Where(c => c.Result.Ledger is { Flagged: true })
             .Select(c => new ShortPerson(c.User.Id, ToRow(c).Name, c.Result.Ledger!.Short))

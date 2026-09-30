@@ -31,8 +31,8 @@ Features of the Design domain: domain settings, work entries, comments, meetings
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `POST /api/work-entries` | `work_entry:create` | Logs the caller's work: `{ projectId, description, startedAt, endedAt, moves }`. Returns `201` |
-| `PUT /api/work-entries/{id}` | `work_entry:create` | Replaces project, description and times of one of the caller's entries |
+| `POST /api/work-entries` | `work_entry:create` | Logs the caller's work: `{ projectId, description, startedAt, endedAt, attachmentFileId, moves }`. Returns `201` |
+| `PUT /api/work-entries/{id}` | `work_entry:create` | Replaces project, description, times and attachment of one of the caller's entries |
 | `DELETE /api/work-entries/{id}` | `work_entry:create` | Soft delete (`deleted_at`). Returns `204` |
 | `POST /api/work-entries/{id}/restore` | `work_entry:create` | Undoes a delete |
 | `GET /api/work-entries?from=&to=&projectId=&userId=&clientId=&search=&page=1&pageSize=25` | `work_entry:view_all` | Everyone's Design entries, newest first |
@@ -48,9 +48,10 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 - **Description:** required while `requireDescription` is on (`400 description_required`). At most 2000 characters.
 - **Overlap:** a person's entries may not overlap, unless `allowOverlap` is on (`422 entry_overlaps`). Back-to-back entries are fine. Each change locks the person's user row, so two simultaneous changes are checked one after the other.
 - **Changing an entry** (edit, delete, restore) is allowed within the edit window, counted from when it was logged (edits don't extend it), and only while its project still accepts work (`422 edit_window_closed`, `422 project_not_accepting_work`). Responses carry `canEdit` for the caller.
-- **Past months never change.** Work that starts before the current company month (before the 1st, company time zone) can't be logged, edited, moved, deleted or restored, by anyone (`422 month_closed`). An edit or a timeline move is refused when either the entry's current start or its new one is in a closed month. Excusing hours is how a closed month is corrected. `canEdit` is false for such entries. The known exception is pay: a pay change dated back into a closed month still changes that month's salary.
+- **Past months never change.** Work that starts before the current company month (before the 1st, company time zone) can't be logged, edited, moved, deleted or restored, by anyone (`422 month_closed`). The month just ended stays open through the 1st, so work from its last evening can still be logged after midnight (`WorkEntryRules.OpenFrom`). An edit or a timeline move is refused when either the entry's current start or its new one is in a closed month. Excusing hours is how a closed month is corrected. `canEdit` is false for such entries. The known exception is pay: a pay change dated back into a closed month still changes that month's salary.
 - **`moves`** saves the timeline's swap: other entries of the caller moved to make room, `[{ id, startedAt, endedAt }]` (at most 20). They are checked with the new entry and saved in the same transaction, or not at all.
 - The timer runs in the client; stopping it logs an entry through `POST /api/work-entries`.
+- **An entry can carry one photo or video** (`attachmentFileId`, one of the author's own uploads, attached once), returned as `attachment`. Whoever may read the entry can download it ([files.md](files.md)).
 - Logging never adds the person to the project's members.
 
 **Events:** `work_entry_logged`, `work_entry_updated` (also once per moved entry), `work_entry_deleted`, `work_entry_restored`, with the entry as the subject and its minutes in the payload.
@@ -78,7 +79,7 @@ People log, edit, delete and restore only their **own** entries; anyone else's r
 | `GET /api/employees/{userId}/work-summary?from=&to=&projectId=&search=` | `work_entry:view_all` | The same for someone else (their profile). A person of a domain the caller can't see reads as `404` |
 | `GET /api/employees/{userId}/overtime?month=YYYY-MM` | `work_entry:view_all` | Their overtime in a month (this month by default), day by day: the profile's overtime panel (below) |
 | `GET /api/employees/{userId}/hours?page=1` | `salary:view` | Their hours ledger, 12 months a page: the profile's hours balance (below) |
-| `GET /api/employees/{userId}/labour-cost` | `financial:view` | Their profile's "cost to the company": the labour cost of their work this quarter so far and all time, and the 8 projects it cost most on (all time), priced like project cost (paid breaks included) |
+| `GET /api/employees/{userId}/labour-cost` | `financial:view` | Their profile's "cost to the company": the labour cost of their work this quarter so far and all time, and the 8 projects it cost most on (all time, those with only unconverted cost included), priced like project cost (paid breaks included). Work is logged on Design projects only, so a caller who can't see Design (someone moved to Execution, seen by an Execution admin) gets no work and no projects |
 | `GET /api/me/projects` | `work_entry:view_own` | Every active and on-hold Design project, with the caller's own time on it |
 | `GET /api/me/projects/{id}/work` | `work_entry:view_own` | The caller's work on one project and the team's latest entries there |
 | `GET /api/me/day?date=` | `work_entry:view_own` | One day (today by default): the caller's entries and the domain's meetings, earliest first, for the day timeline |
@@ -99,7 +100,8 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 | `GET /api/projects/{id}/work?from=&to=&search=` | `work_entry:view_all` | A Design project's work (the admin project page) |
 | `GET /api/projects/{id}/work/people/{userId}?from=&to=&search=` | `work_entry:view_all` | One person's work on the project (the contributor drawer). `404` if they have none |
 | `GET /api/projects/{id}/timeline` | `work_entry:view_all` | The project's history day by day (the admin Timeline tab) |
-| `GET /api/work/people?search=&teamId=` | `work_entry:view_all` | Everyone of the Design domain who isn't deactivated, with their hours (the Employees page), most this week first |
+| `GET /api/projects/{id}/timeline/entries?from=&to=` | `work_entry:view_all` | The entries that start in a range of company days (both included, at most 366), in time order, each with the person and their team: the Timeline tab's lanes, its "who was working" snapshot and its one-day view grouped by team |
+| `GET /api/work/people?search=&teamId=` | `work_entry:view_all` | Everyone of the Design domain who isn't deactivated, with their hours (the Employees page), most this week first. Each row has `online` and `lastSeenAt` ([messaging.md](messaging.md#online-and-last-seen)), `minutesLast30Days` (the page adds them up per team), `overtimeMinutesThisMonth`, and, with `financial:view`, today's `hourlyRate` and all-time `labourCost` |
 
 - **Project work:** total minutes (with `totalOvertimeMinutes`), entries, people and latest start; the activity level from the last 14 days (busy from 45 h a week, steady from 15 h, quiet with any work, otherwise none) with the last 14 and previous 14 days' minutes; weekly minutes from the project's start (4 to 30 weeks, ending today or on completion); minutes per weekday and hour of the day, each entry spread over the hours it covers; and the contributors within `from`/`to` whose work matches `search` (entries, minutes with `overtimeMinutes`, share of what matched, latest start, last 8 weeks). `search` is the prototype's "filter work text": every word must be in the description. It narrows only the contributors.
 - **Contributor:** within the same `from`, `to` and `search`: minutes with `overtimeMinutes`, entries, share of all the project's minutes, last 10 weeks, and the 40 latest entries.
@@ -143,7 +145,7 @@ Rules (`Business/Meetings/MeetingRules.cs`):
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/reports/work?from=&to=&projectId=&userId=` | `report:view` | The Reports page for a range of company days (default: this quarter so far; at most three years) |
+| `GET /api/reports/work?from=&to=&projectId=&userId=&clientId=&internal=` | `report:view` | The Reports page for a range of company days (default: this quarter so far; at most three years). `clientId` keeps one client's projects, `internal=true` the projects with no client |
 | `GET /api/reports/overview?period=quarter\|month\|last30` | `report:view` | The Design dashboard for a period and the one before it |
 
 Callers who can't see Design (an Execution admin holds `report:view` too) get `404`. Money is only included for callers with `financial:view`, and comes from the shared finance calculator.
@@ -151,16 +153,16 @@ Callers who can't see Design (an Execution admin holds `report:view` too) get `4
 - **Work report:** total minutes (with `overtimeMinutes`), entries, projects, people, the average entry and the busiest week; weekly minutes (3 to 20 weeks ending with the range); minutes by project (status, entries, people, share, weekly), by client (`null` for internal work) and by person (with each person's `overtimeMinutes`); people against the six busiest projects (each row with its `overtimeMinutes`, on every project); Design projects completed in the range (their dates, days taken, and all their minutes and people, whatever the filters); the last 6 quarters of all Design work (whatever the range and filters).
 - **Money** (`financial:view`): labour cost of the range's work; expenses of every Design project dated in the range, in USD (whatever the project and person filters, as in the prototype); their total; the all-time profit of every client project; revenue, cost and profit of each project worked on in the range; and labour cost by person. The prototype's monthly "revenue against cost" chart needs past progress, which isn't kept, so it isn't returned.
 - **Overview:** the period so far against the one before (quarter to date against the same number of days of last quarter, month to date against the whole last month, the last 30 days against the 30 before): minutes (with the period's `overtimeMinutes`), entries, the average entry, weekly minutes of both, how many active people logged this week, minutes by project (top 8), projects by status, and the busiest project this week.
-- **Needs attention** (at most 5, in this order): active projects with no work for 7 days or more (only while `notifyIdle` is on), active projects at 90% or more, projects on hold (with the days since they were put on hold), and how many employees haven't logged this week.
+- **Needs attention** (at most 5, in this order): active projects with no work for 7 days or more (only while `notifyIdle` is on), active projects at 90% or more, projects on hold (with the days since they were put on hold), and how many employees haven't logged this week, with the first 3 of them by name (`people`).
 - **Overtime** is the overtime part of the minutes it stands next to (see "Overtime" above). With a project or person filter, the matching entries are still judged against each person's whole day.
 
 ## Activity feed
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/activity?group=&domain=&projectId=&clientId=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first. `domain` (`design` or `execution`) keeps that domain's events only, without company-level ones; a domain the caller can't see gives an empty page |
+| `GET /api/activity?group=&domain=&projectId=&clientId=&internal=&userId=&page=1&pageSize=40` | `activity:view` | Events of the domains the caller can see, newest first. `domain` (`design` or `execution`) keeps that domain's events only, without company-level ones; a domain the caller can't see gives an empty page. `internal=true` keeps the events of projects with no client (not with `clientId`) |
 | `GET /api/activity/today` | `activity:view` and `work_entry:view_all` | Design work that started today: minutes, entries, people, and minutes by the hour they were logged |
 
-- **Groups** (the filter chips, `Business/Activity/ActivityGroups.cs`): `work` (work entries and their comments), `money` (revenue, expenses, fee, markup, finalising), `billing` (billing settings, exchange rates, invoices, payments), `projects` (projects, progress, requirements, meetings, clients), `people` (people, pay changes, permissions, teams) and `company` (company-level events with no domain).
+- **Groups** (the filter chips, `Business/Activity/ActivityGroups.cs`): `work` (work entries and their comments), `money` (revenue, expenses, fee, markup, finalising, and Execution's materials, prices, labour weeks and labour defaults), `billing` (billing settings, exchange rates, invoices, payments, client statements), `projects` (projects, progress, requirements, meetings, clients), `people` (people, pay changes, permissions, teams) and `company` (company-level events with no domain).
 - **Who sees what:** work events only with `work_entry:view_all`; `amount` and `prevAmount` only with `financial:view` (payloads never hold money; the markup in `material_markup_set`'s payload also needs `financial:view`); company-level events (overhead, working time, schedules, company settings, exchange rates) only with `company:view`. The other domain's events never appear.
 - Each item has the actor, project and client by name, the subject, the payload as recorded, and for work events the entry as it is now (`null` once deleted). `clientId` matches the event's client or its project's client; `userId` matches who did it.

@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Request.Payroll;
@@ -28,6 +29,20 @@ public sealed record MyScheduleQuery
 {
     /// <summary>Today when empty.</summary>
     public DateOnly? Date { get; init; }
+}
+
+/// <summary>Work about to be logged or edited, for the log form's overtime warning.</summary>
+public sealed record OvertimePreviewRequest
+{
+    public DateTime StartedAt { get; init; }
+
+    public DateTime EndedAt { get; init; }
+
+    /// <summary>The entry being edited, left out of the day as it is now.</summary>
+    public long? EntryId { get; init; }
+
+    /// <summary>Other entries the form would move (the day timeline's swaps), where they would go.</summary>
+    public IReadOnlyList<WorkEntryMoveRequest> Moves { get; init; } = [];
 }
 
 public sealed record SalaryMonthQuery

@@ -26,6 +26,11 @@ public interface IEmployeeRepository
     /// there are, so two people can't each remove "another" super admin at the same moment.
     /// </summary>
     Task<int> LockActiveSuperAdminsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The person's latest period of employment, if they ever started. Tracked.</summary>
+    Task<EmploymentPeriod?> LatestPeriodAsync(long userId, CancellationToken cancellationToken = default);
+
+    void AddPeriod(EmploymentPeriod period);
 }
 
 /// <param name="Domains">Home domains the caller can see.</param>
@@ -52,8 +57,10 @@ public sealed record EmployeeRow(
     long? TeamId,
     string? TeamName,
     string? Position,
+    long? PhotoFileId,
     UserStatus Status,
     bool HasPermissionOverrides,
     DateOnly? JoinedOn,
+    DateOnly? LeftOn,
     DateTime? LastSeenAt,
     DateTime CreatedAt);

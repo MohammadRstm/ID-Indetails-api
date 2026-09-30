@@ -33,7 +33,11 @@ public interface IProjectFinanceService
     Task<IReadOnlyDictionary<long, ProjectCostHistory>> CostHistoryAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken = default);
 
     /// <summary>The project's cash position week by week, from its first week to the week of <paramref name="to"/>.</summary>
-    Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(Project project, DateOnly to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(
+        Project project,
+        DateOnly to,
+        DayOfWeek weekStart = DayOfWeek.Monday,
+        CancellationToken cancellationToken = default);
 }
 
 /// <param name="MaterialCharge">Execution: material client prices in USD.</param>
@@ -52,13 +56,20 @@ public sealed record ProjectFinancials(
     decimal? CashProfit,
     decimal? MaterialProfit);
 
-public sealed record WorkDay(long UserId, DateOnly Day);
+public sealed record WorkDay(long UserId, DateOnly Day, int Minutes);
 
 /// <param name="Unconverted">Costs with no exchange rate on their day, in their own currency.</param>
+/// <param name="CompletedOn">When the project was completed, or finalised without being completed.</param>
 public sealed record ProjectCostHistory(
     ProjectFinancials Money,
     IReadOnlyList<Recognition.DatedCost> Costs,
     IReadOnlyList<ProjectFinance.DatedUnconverted> Unconverted,
-    IReadOnlyList<WorkDay> Work);
+    IReadOnlyList<WorkDay> Work,
+    DateOnly? CompletedOn)
+{
+    /// <summary>Its recognised revenue by month (see <see cref="Recognition.ByMonth"/>).</summary>
+    public IReadOnlyDictionary<DateOnly, decimal> RevenueByMonth()
+        => Recognition.ByMonth(Money.Summary.RecognisedToDate, Costs, Work.Select(w => (w.Day, w.Minutes)).ToList(), CompletedOn);
+}
 
 public sealed record BreakCost(long UserId, long ProjectId, ProjectFinance.CostItem Cost);

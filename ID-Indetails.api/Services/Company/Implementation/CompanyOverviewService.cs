@@ -57,7 +57,7 @@ public sealed class CompanyOverviewService(
             var history = projects.Select(p => (Project: p, History: data.History[p.Id])).ToList();
 
             var revenue = PeriodMoney.Round(history.Sum(h => PeriodMoney.Revenue(
-                Recognition.ByMonth(h.History.Money.Summary.RecognisedToDate, h.History.Costs.ToList()), shares)));
+                h.History.RevenueByMonth(), shares)));
             var cost = PeriodMoney.Round(PeriodMoney.Costs(history.SelectMany(h => h.History.Costs), start, end).Total);
             var active = history
                 .Where(h => h.History.Costs.Any(c => InPeriod(c.Day)) || h.History.Work.Any(w => InPeriod(w.Day)))
@@ -123,7 +123,7 @@ public sealed class CompanyOverviewService(
         var revenue = new Dictionary<DateOnly, decimal>();
         foreach (var history in data.History.Values)
         {
-            foreach (var (month, amount) in Recognition.ByMonth(history.Money.Summary.RecognisedToDate, history.Costs.ToList()))
+            foreach (var (month, amount) in history.RevenueByMonth())
             {
                 revenue[month] = revenue.GetValueOrDefault(month) + amount;
             }

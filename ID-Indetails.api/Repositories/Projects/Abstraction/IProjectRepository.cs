@@ -20,6 +20,8 @@ public sealed record ProjectSearch(
     OpenPeriod? OpenDuring = null,
     ProjectSort Sort = ProjectSort.Start);
 
+public sealed record SiteRecorder(long ProjectId, long UserId, string Name, DateTime LastAt);
+
 public interface IProjectRepository
 {
     /// <summary>Not tracked, with client and owner.</summary>
@@ -35,6 +37,9 @@ public interface IProjectRepository
 
     /// <summary>Not tracked, with client and owner.</summary>
     Task<Project?> GetAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>Everyone who recorded materials or labour weeks on these sites, with when they last did. Not tracked.</summary>
+    Task<IReadOnlyList<SiteRecorder>> SiteRecordersAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
     /// <summary>Tracked, and locked (<c>SELECT … FOR UPDATE</c>) until the transaction ends. Call inside a transaction.</summary>
     Task<Project?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default);

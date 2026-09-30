@@ -1,6 +1,14 @@
 namespace ID_Indetails.api.Services.Email.Abstraction;
 
-public sealed record EmailMessage(string ToAddress, string? ToName, string Subject, string HtmlBody, string TextBody);
+public sealed record EmailAttachment(string FileName, string MimeType, byte[] Content);
+
+public sealed record EmailMessage(
+    string ToAddress,
+    string? ToName,
+    string Subject,
+    string HtmlBody,
+    string TextBody,
+    IReadOnlyList<EmailAttachment>? Attachments = null);
 
 public interface IEmailSender
 {

@@ -20,6 +20,9 @@ public sealed record CurrentUserResponse
 
     public string? Position { get; init; }
 
+    /// <summary>Their profile photo, read through <c>GET /api/files/{id}</c>.</summary>
+    public long? PhotoFileId { get; init; }
+
     /// <summary>True until a generated password is replaced. Every other endpoint refuses until then.</summary>
     public required bool MustChangePassword { get; init; }
 

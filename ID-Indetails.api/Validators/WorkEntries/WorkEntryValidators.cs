@@ -12,6 +12,7 @@ public sealed class SaveWorkEntryRequestValidator : AbstractValidator<SaveWorkEn
     public SaveWorkEntryRequestValidator()
     {
         RuleFor(x => x.ProjectId).GreaterThan(0).WithMessage("Pick a project.");
+        RuleFor(x => x.AttachmentFileId).GreaterThan(0).When(x => x.AttachmentFileId is not null).WithMessage("Attach an uploaded file.");
         RuleFor(x => x.Description).MaximumLength(WorkEntryRules.MaxDescriptionLength)
             .WithMessage($"Description must be at most {WorkEntryRules.MaxDescriptionLength} characters.");
         RuleFor(x => x).EntryTimes(x => x.StartedAt, x => x.EndedAt).OverridePropertyName("endedAt");
@@ -97,6 +98,19 @@ public sealed class ProjectWorkQueryValidator : AbstractValidator<ProjectWorkQue
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
         RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
             .WithMessage("The range must end on or after its start.");
+    }
+}
+
+public sealed class TimelineEntriesQueryValidator : AbstractValidator<TimelineEntriesQuery>
+{
+    public const int MaxDays = 366;
+
+    public TimelineEntriesQueryValidator()
+    {
+        RuleFor(x => x.From).NotEmpty().WithMessage("From is required.");
+        RuleFor(x => x.To)
+            .Must((q, to) => to >= q.From && to.DayNumber - q.From.DayNumber < MaxDays)
+            .WithMessage($"The range must end on or after its start, and cover at most {MaxDays} days.");
     }
 }
 

@@ -30,12 +30,14 @@ Rates are append-only, like pay history (`Business/Billing/ExchangeRateRules.cs`
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/invoices?projectId=&clientId=&status=&overdue=&domain=&page=1&pageSize=25` | `financial:view` | Newest first. `status` is `draft`, `sent`, `partial`, `paid` or `void` |
-| `GET /api/invoices/{id}` | `financial:view` | With lines and deliveries |
+| `GET /api/invoices/{id}` | `financial:view` | With lines, deliveries and who drafted it (`createdBy`) |
 | `POST /api/projects/{id}/invoices` | `invoice:create` | A new draft: `{ lines: [{ description, amount }], termsDays, notes, billToName, billToContact }` |
 | `PUT /api/invoices/{id}` | `invoice:create` | Replaces a draft's lines and details |
 | `DELETE /api/invoices/{id}` | `invoice:create` | Discards a draft (deleted, with an `invoice_discarded` event) |
 | `POST /api/invoices/{id}/issue` | `invoice:send` | `{ issuedOn }` (optional; today or earlier) numbers the draft and sets its due date |
-| `POST /api/invoices/{id}/deliveries` | `invoice:send` | Records a delivery: `{ channel: email \| whatsapp \| download, recipient, note }`. Repeatable |
+| `GET /api/invoices/{id}/pdf` | `financial:view` | The invoice as a PDF (`hl-2026-014.pdf`); a draft is marked DRAFT, a voided invoice VOID. Downloading records nothing |
+| `POST /api/invoices/{id}/email` | `invoice:send` | `{ to, note }` emails an issued invoice to the client with its PDF attached and records an `email` delivery. A draft or void invoice answers `422`. If sending fails, nothing is recorded (`503 email_delivery_failed`) |
+| `POST /api/invoices/{id}/deliveries` | `invoice:send` | Records a delivery made outside Hourline: `{ channel: email \| whatsapp \| download, recipient, note }`. Repeatable |
 | `POST /api/invoices/{id}/void` | `invoice:void` | `{ reason }`. Issued invoices only, and only while no live payment is attached |
 
 Rules (`Business/Billing/InvoiceRules.cs`):
@@ -89,4 +91,4 @@ Rules (`Business/Billing/PaymentRules.cs`):
 | `overdue`, `overdueCount` | Left to pay on sent or partly paid invoices past their due date, and how many |
 | `oldestOverdueDays` | Days past due of the oldest overdue invoice; null when none is overdue |
 | `drafts` | The total of draft invoices, kept apart from invoiced |
-| `unconvertedInvoices[]` | Invoices with no exchange rate on their issue day, per currency: left out of the USD figures above, never counted as 0 |
+| `unconvertedInvoices[]` | Invoices with no exchange rate on their issue day (a draft: today), per currency: left out of the USD figures above, never counted as 0 |

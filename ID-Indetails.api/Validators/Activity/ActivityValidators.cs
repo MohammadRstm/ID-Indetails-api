@@ -9,6 +9,8 @@ public sealed class ActivityListQueryValidator : AbstractValidator<ActivityListQ
 {
     public ActivityListQueryValidator()
     {
+        RuleFor(x => x.Internal).Must((q, isInternal) => !(isInternal && q.ClientId is not null))
+            .WithMessage("Choose a client or internal work, not both.");
         RuleFor(x => x.Group).Must(g => g is null || (Enum.IsDefined(g.Value) && g != ActivityGroup.Other))
             .WithMessage("Group must be work, money, billing, projects, people or company.");
         RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);

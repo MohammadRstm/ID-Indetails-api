@@ -1,6 +1,7 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Company;
+using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
@@ -51,9 +52,11 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
             "VALUES (@u, @p, 'Drawings', '2026-06-10 06:00:00', '2026-06-10 12:00:00', UTC_TIMESTAMP(3))",
             ("@u", designer.User.Id), ("@p", project.Id));
 
-        // A June expense and a June invoice in euros, which have no exchange rate: listed, never counted as 0.
-        (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
-            new { label = "Print run", amount = 50m, currency = "EUR", spentOn = "2026-06-15" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        // A June expense and a June invoice in euros, which have no exchange rate: listed, never counted as 0. The API
+        // only takes USD and LBP, so both are switched to euros in the database.
+        var expense = await OkAsync<ExpenseResponse>(Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+            new { label = "Print run", amount = 50m, currency = "USD", spentOn = "2026-06-15" }, superAdmin.AccessToken));
+        await ExecuteAsync("UPDATE project_expenses SET currency = 'EUR' WHERE id = @id", ("@id", expense.Id));
         await new ProjectTestSteps(_steps).SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
         var draft = await OkAsync<InvoiceResponse>(Client.PostJsonAsync($"/api/projects/{project.Id}/invoices",
             new { lines = new[] { new { description = "Stage 1", amount = 3000m } } }, superAdmin.AccessToken));

@@ -29,6 +29,14 @@ public sealed class MyPayController(IMyTimeService myTime, ISalaryService salari
     public Task<MyScheduleResponse> Schedule([FromQuery] MyScheduleQuery query, CancellationToken cancellationToken)
         => myTime.ScheduleAsync(query, cancellationToken);
 
+    /// <summary>
+    /// The overtime of work about to be logged or edited (leaving out the entry being edited, with the moves the form
+    /// would make), and where it falls: the log form's overtime warning. Nothing is saved.
+    /// </summary>
+    [HttpPost("overtime-preview")]
+    public Task<OvertimePreviewResponse> OvertimePreview(OvertimePreviewRequest request, CancellationToken cancellationToken)
+        => myTime.PreviewOvertimeAsync(request, cancellationToken);
+
     /// <summary>The caller's hours ledger, 12 months a page from this month back to the one they joined.</summary>
     [HttpGet("hours")]
     public Task<MyHoursResponse> Hours([FromQuery] MyHoursQuery query, CancellationToken cancellationToken)

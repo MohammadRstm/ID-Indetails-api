@@ -218,3 +218,18 @@ public sealed record MoneyAttentionResponse(
     int? UsedPct);
 
 public sealed record FinanceClientResponse(long ClientId, string Name, string? Label, bool IsArchived, ClientMoneyResponse Money);
+
+/// <summary>The money of every project the list's filters match, in USD, for the header above the list.</summary>
+/// <param name="Profit">Client projects only.</param>
+/// <param name="InternalCost">What internal projects cost.</param>
+/// <param name="HasUnconverted">A cost or invoice of one of them has no exchange rate, so the figures leave it out.</param>
+public sealed record ProjectListTotalsResponse(
+    int Projects,
+    int ClientProjects,
+    int InternalProjects,
+    decimal Revenue,
+    decimal Cost,
+    decimal Profit,
+    decimal InternalCost,
+    bool HasUnconverted,
+    string Currency);

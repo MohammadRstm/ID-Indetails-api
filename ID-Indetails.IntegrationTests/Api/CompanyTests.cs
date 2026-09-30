@@ -28,19 +28,31 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var body = new { name = "  Indetails  ", weekStart = 0, use24HourTime = true, defaultCurrency = "lbp" };
+        var body = new
+        {
+            name = "  Indetails  ",
+            address = " Hamra Street, Beirut, Lebanon ",
+            website = "indetails.com",
+            weekStart = 0,
+            use24HourTime = true,
+            defaultCurrency = "lbp",
+        };
 
         await (await Client.PutJsonAsync("/api/company/settings", body, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         var saved = await OkAsync<CompanySettingsResponse>(Client.PutJsonAsync("/api/company/settings", body, superAdmin.AccessToken));
         saved.IsSetUp.ShouldBeTrue();
         saved.Name.ShouldBe("Indetails");
+        saved.Address.ShouldBe("Hamra Street, Beirut, Lebanon");
+        saved.Website.ShouldBe("indetails.com");
         saved.DefaultCurrency.ShouldBe("LBP");
         saved.TimeZone.ShouldBe("Asia/Beirut");
 
         (await OkAsync<CompanySettingsResponse>(Client.GetAsync("/api/company/settings", admin.AccessToken))).WeekStart.ShouldBe((byte)0);
 
         await (await Client.PutJsonAsync("/api/company/settings", new { name = "", weekStart = 3, defaultCurrency = "EUR" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.PutJsonAsync("/api/company/settings", new { name = "Indetails", website = "not a site" }, superAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
@@ -147,5 +159,44 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.GetAsync("/api/company/overhead", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         design.CostGroup.ShouldBe(OverheadCostGroup.Software);
+    }
+
+    [Fact]
+    public async Task Changing_an_expense_s_currency_keeps_past_months_in_the_old_one()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var thisMonth = new DateOnly(Today.Year, Today.Month, 1);
+        var token = superAdmin.AccessToken;
+        var rent = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",
+            new { name = "Office rent", costGroup = "operating", currency = "LBP", amount = 71_600_000m }, token));
+
+        // Charged this month in LBP, so from next month a new USD line takes over and this one ends with the month.
+        var usd = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync($"/api/company/overhead/{rent.Id}/currency",
+            new { currency = "USD", amount = 800m, fromMonth = Iso(thisMonth.AddMonths(1)) }, token));
+        usd.Id.ShouldNotBe(rent.Id);
+        usd.Name.ShouldBe("Office rent");
+        usd.CostGroup.ShouldBe(OverheadCostGroup.Operating);
+        usd.Currency.ShouldBe("USD");
+        usd.StartedOn.ShouldBe(thisMonth.AddMonths(1));
+        var lines = (await OkAsync<OverheadResponse>(Client.GetAsync("/api/company/overhead", token))).Lines;
+        lines.Single(l => l.Id == rent.Id).EndedOn.ShouldBe(thisMonth.AddMonths(1).AddDays(-1));
+        lines.Single(l => l.Id == rent.Id).CurrentAmount.ShouldBe(71_600_000m);
+
+        // A line not charged before the change just changes.
+        var planned = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",
+            new { name = "Hosting", costGroup = "software", currency = "LBP", amount = 900_000m, startMonth = Iso(thisMonth.AddMonths(2)) }, token));
+        var switched = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync($"/api/company/overhead/{planned.Id}/currency",
+            new { currency = "USD", amount = 10m }, token));
+        switched.Id.ShouldBe(planned.Id);
+        switched.Currency.ShouldBe("USD");
+        switched.Amounts.ShouldHaveSingleItem().Amount.ShouldBe(10m);
+
+        await (await Client.PostJsonAsync($"/api/company/overhead/{usd.Id}/currency", new { currency = "USD", amount = 5m }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.OverheadSameCurrency);
+        await (await Client.PostJsonAsync($"/api/company/overhead/{rent.Id}/currency", new { currency = "USD", amount = 5m }, token))
+            .ShouldFailWithAsync(422, ErrorCodes.OverheadAlreadyCancelled);
+        await (await Client.PostJsonAsync($"/api/company/overhead/{usd.Id}/currency", new { currency = "LBP", amount = 5m }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 }

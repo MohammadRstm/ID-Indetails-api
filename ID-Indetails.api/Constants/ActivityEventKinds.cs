@@ -129,6 +129,7 @@ public static class ActivityEventKinds
     public const string OverheadAdded = "overhead_added";
     public const string OverheadUpdated = "overhead_updated";
     public const string OverheadAmountChanged = "overhead_amount_changed";
+    public const string OverheadCurrencyChanged = "overhead_currency_changed";
     public const string OverheadCancelled = "overhead_cancelled";
     public const string OverheadResumed = "overhead_resumed";
     public const string OverheadRemoved = "overhead_removed";

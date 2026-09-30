@@ -12,7 +12,16 @@ public interface IWorkInsightsService
 
     Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>The entries that start in a range of days, in time order, for the Timeline tab's lanes and one-day view.</summary>
+    Task<IReadOnlyList<TimelineEntryResponse>> TimelineEntriesAsync(
+        long projectId,
+        TimelineEntriesQuery query,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Cost and payments week by week, for the project's money charts and report. Any domain.</summary>
+    Task<ProjectCostTimelineResponse> CostTimelineAsync(long projectId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<PersonWorkResponse>> PeopleAsync(PeopleWorkQuery query, CancellationToken cancellationToken = default);
 
-    Task<PersonLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default);
+    Task<EmployeeLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default);
 }

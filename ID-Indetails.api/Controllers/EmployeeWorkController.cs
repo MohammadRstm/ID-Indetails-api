@@ -18,7 +18,7 @@ public sealed class EmployeeWorkController(IMyWorkService myWorkService, IWorkIn
     /// <summary>What their logged work cost the company: this quarter, all time and by project.</summary>
     [HttpGet("labour-cost")]
     [HasPermission(PermissionCodes.FinancialView)]
-    public Task<PersonLabourCostResponse> LabourCost(long userId, CancellationToken cancellationToken)
+    public Task<EmployeeLabourCostResponse> LabourCost(long userId, CancellationToken cancellationToken)
         => insights.PersonCostAsync(userId, cancellationToken);
 
     [HttpGet("work-summary")]

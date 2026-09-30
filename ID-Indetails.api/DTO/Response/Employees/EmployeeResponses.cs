@@ -24,6 +24,9 @@ public record EmployeeSummaryResponse
 
     public string? Position { get; init; }
 
+    /// <summary>Their profile photo, read through <c>GET /api/files/{id}</c>.</summary>
+    public long? PhotoFileId { get; init; }
+
     public required UserStatus Status { get; init; }
 
     /// <summary>True when their permissions differ from their role defaults.</summary>
@@ -31,7 +34,13 @@ public record EmployeeSummaryResponse
 
     public DateOnly? JoinedOn { get; init; }
 
+    /// <summary>The last working day of someone who left; null while they work here.</summary>
+    public DateOnly? LeftOn { get; init; }
+
     public DateTime? LastSeenAt { get; init; }
+
+    /// <summary>Whether they have the live connection open now.</summary>
+    public bool Online { get; init; }
 }
 
 /// <summary>A person's profile.</summary>

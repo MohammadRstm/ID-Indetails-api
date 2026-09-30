@@ -6,14 +6,23 @@ namespace ID_Indetails.api.DTO.Response.Company;
 
 /// <param name="IsSetUp">False until a super admin first saves the settings; the other values are defaults until then.</param>
 /// <param name="TimeZone">From configuration; every calendar date in the system is in this zone.</param>
+/// <param name="LogoFileId">The company logo, read through <c>GET /api/files/{id}</c> (or <c>GET /api/company/logo</c>).</param>
 public sealed record CompanySettingsResponse(
     bool IsSetUp,
     string Name,
+    string? Address,
+    string? Website,
+    long? LogoFileId,
     string TimeZone,
     byte WeekStart,
     bool Use24HourTime,
     string DefaultCurrency,
     DateTime? UpdatedAt);
+
+/// <summary>What the sign-in page shows before anyone signs in.</summary>
+/// <param name="Name">Null until the company settings are saved.</param>
+/// <param name="HasLogo">Whether <c>GET /api/company/logo</c> has an image.</param>
+public sealed record BrandingResponse(string? Name, bool HasLogo);
 
 /// <param name="RequiredMinutesPerDay">Hours required on a working day: the span minus the break (the break is paid).</param>
 public sealed record WorkingTimePolicyResponse(

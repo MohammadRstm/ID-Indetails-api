@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using ID_Indetails.api.Business.Billing;
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Billing;
@@ -74,6 +75,9 @@ public sealed record InvoiceResponse : InvoiceSummaryResponse
     public DateTime? VoidedAt { get; init; }
 
     public string? VoidReason { get; init; }
+
+    /// <summary>Who drafted it; null when that isn't known.</summary>
+    public PersonRefResponse? CreatedBy { get; init; }
 
     public IReadOnlyList<InvoiceLineResponse> Lines { get; init; } = [];
 

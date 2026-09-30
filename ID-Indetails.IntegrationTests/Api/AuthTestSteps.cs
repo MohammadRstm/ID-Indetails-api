@@ -66,12 +66,18 @@ public sealed class AuthTestSteps(ApiFactory api)
     }
 
     /// <summary>Puts someone in a team directly, without the fields the employee edit needs.</summary>
-    public async Task PutInTeamAsync(long userId, long teamId)
+    public Task PutInTeamAsync(long userId, long teamId)
+        => ExecuteAsync("UPDATE users SET team_id = @t WHERE id = @u", ("@t", teamId), ("@u", userId));
+
+    public async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
     {
         await using var connection = await api.Database.OpenConnectionAsync();
-        await using var command = new MySqlCommand("UPDATE users SET team_id = @t WHERE id = @u", connection);
-        command.Parameters.AddWithValue("@t", teamId);
-        command.Parameters.AddWithValue("@u", userId);
+        await using var command = new MySqlCommand(sql, connection);
+        foreach (var (name, value) in parameters)
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
         await command.ExecuteNonQueryAsync();
     }
 
@@ -86,4 +92,18 @@ public sealed class AuthTestSteps(ApiFactory api)
 
         return (T)Convert.ChangeType((await command.ExecuteScalarAsync())!, typeof(T));
     }
+
+    /// <summary>Moves someone's joining day, and the start of their first period of employment with it.</summary>
+    public Task SetJoinedOnAsync(long userId, string day)
+        => ScalarAsync<int>(
+            "UPDATE users SET joined_on = @day WHERE id = @id; " +
+            "UPDATE employment_periods SET started_on = @day WHERE user_id = @id ORDER BY started_on LIMIT 1; SELECT 1",
+            ("@id", userId), ("@day", day));
+
+    /// <summary>Moves when someone who was deactivated left: their account's deactivation time and last working day.</summary>
+    public Task SetLeftAtAsync(long userId, string utc)
+        => ScalarAsync<int>(
+            "UPDATE users SET deactivated_at = @at WHERE id = @id; " +
+            "UPDATE employment_periods SET ended_on = DATE(@at) WHERE user_id = @id ORDER BY started_on DESC LIMIT 1; SELECT 1",
+            ("@id", userId), ("@at", utc));
 }

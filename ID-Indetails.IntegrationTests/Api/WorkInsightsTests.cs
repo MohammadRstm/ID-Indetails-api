@@ -92,6 +92,37 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task People_rows_carry_the_last_30_days_this_month_s_overtime_and_the_rate_for_money_viewers()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+            new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+
+        // An hour today from 18:00 in Beirut, after hours whatever the weekday: all of it is overtime.
+        var beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, beirut));
+        var evening = TimeZoneInfo.ConvertTimeToUtc(today.ToDateTime(new TimeOnly(18, 0)), beirut);
+        await Work.InsertAsync(designer.User.Id, project.Id, evening.ToString("yyyy-MM-dd HH:mm:ss"), evening.AddHours(1).ToString("yyyy-MM-dd HH:mm:ss"));
+
+        var row = (await (await Client.GetAsync("/api/work/people", admin.AccessToken)).ReadAsync<List<PersonWorkResponse>>())
+            .Single(p => p.Id == designer.User.Id);
+        row.MinutesLast30Days.ShouldBe(60);
+        row.OvertimeMinutesThisMonth.ShouldBe(60);
+        row.HourlyRate.ShouldBe(new CurrencyAmountResponse("USD", 10m));
+
+        // Without financial:view the rate is left out.
+        (await Client.PutJsonAsync($"/api/users/{admin.User.Id}/permissions",
+                new { changes = new[] { new { code = PermissionCodes.FinancialView, action = "revoke", reason = "Hours only" } } }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        (await (await Client.GetAsync("/api/work/people", admin.AccessToken)).ReadAsync<List<PersonWorkResponse>>())
+            .Single(p => p.Id == designer.User.Id).HourlyRate.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Employees_and_other_domains_cannot_reach_the_insights()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

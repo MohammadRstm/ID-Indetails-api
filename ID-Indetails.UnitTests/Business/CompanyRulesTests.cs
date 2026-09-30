@@ -49,6 +49,20 @@ public class CompanyRulesTests
     }
 
     [Fact]
+    public void An_overhead_currency_changes_from_this_month_or_later_and_splits_a_line_already_charged()
+    {
+        OverheadRules.CheckCurrencyChange("LBP", "USD", null, new(2026, 9, 1), Today).ShouldBeNull();
+        OverheadRules.CheckCurrencyChange("LBP", "usd", null, new(2026, 8, 1), Today)!.Code.ShouldBe(ErrorCodes.OverheadMonthInPast);
+        OverheadRules.CheckCurrencyChange("USD", "usd", null, new(2026, 9, 1), Today)!.Code.ShouldBe(ErrorCodes.OverheadSameCurrency);
+        OverheadRules.CheckCurrencyChange("LBP", "USD", new DateOnly(2026, 9, 30), new(2026, 10, 1), Today)!.Code
+            .ShouldBe(ErrorCodes.OverheadAlreadyCancelled);
+
+        OverheadRules.CurrencyChangeSplits(new(2026, 1, 1), new(2026, 10, 1)).ShouldBeTrue();
+        OverheadRules.CurrencyChangeSplits(new(2026, 10, 1), new(2026, 10, 1)).ShouldBeFalse();
+        OverheadRules.CurrencyChangeSplits(new(2026, 11, 1), new(2026, 10, 1)).ShouldBeFalse();
+    }
+
+    [Fact]
     public void Overhead_months_are_never_in_the_past_or_before_a_later_amount()
     {
         OverheadRules.CheckMonth(new(2026, 8, 1), Today, null, "fromMonth")!.Kind.ShouldBe(DenialKind.Validation);

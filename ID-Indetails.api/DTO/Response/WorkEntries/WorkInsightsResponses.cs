@@ -67,6 +67,9 @@ public sealed record FocusProjectResponse(long ProjectId, string Title);
 /// <param name="Focus">The project with the most time in the last 14 days.</param>
 /// <param name="Weekly">The last 8 weeks, oldest first.</param>
 /// <param name="LabourCost">All time; only for callers with financial:view.</param>
+/// <param name="MinutesLast30Days">Logged over the last 30 days, today included: the page adds them up per team.</param>
+/// <param name="OvertimeMinutesThisMonth">This month's overtime, from each whole day (see IOvertimeService).</param>
+/// <param name="HourlyRate">Their hourly cost today, only for callers with financial:view.</param>
 public sealed record PersonWorkResponse(
     long Id,
     string Name,
@@ -75,6 +78,9 @@ public sealed record PersonWorkResponse(
     string? TeamName,
     string Role,
     UserStatus Status,
+    long? PhotoFileId,
+    bool Online,
+    DateTime? LastSeenAt,
     int WeekMinutes,
     int QuarterMinutes,
     int TotalMinutes,
@@ -82,6 +88,9 @@ public sealed record PersonWorkResponse(
     DateTime? LastStartedAt,
     FocusProjectResponse? Focus,
     IReadOnlyList<int> Weekly,
+    int MinutesLast30Days,
+    int OvertimeMinutesThisMonth,
+    CurrencyAmountResponse? HourlyRate,
     LabourCostResponse? LabourCost);
 
 public sealed record TimelinePersonResponse(long UserId, string Name, int Minutes);
@@ -111,14 +120,36 @@ public sealed record ProjectTimelineResponse(
     IReadOnlyList<TimelineEventResponse> Events,
     IReadOnlyList<TimelineGapResponse> Gaps);
 
-public sealed record ProjectLabourCostResponse(long ProjectId, string Title, LabourCostResponse Cost);
+public sealed record ProjectLabourCostResponse(long ProjectId, string Title, string? Icon, string? Tint, LabourCostResponse Cost);
 
 /// <summary>What someone's logged work cost the company (their profile's "cost to the company").</summary>
 /// <param name="ThisQuarter">From the first of this quarter to today.</param>
 /// <param name="ByProject">All time: the 8 projects their work cost most on, in USD, most first.</param>
-public sealed record PersonLabourCostResponse(
+public sealed record EmployeeLabourCostResponse(
     long UserId,
     int EntryCount,
     LabourCostResponse ThisQuarter,
     LabourCostResponse AllTime,
     IReadOnlyList<ProjectLabourCostResponse> ByProject);
+
+/// <param name="Minutes">Hours logged in the week.</param>
+/// <param name="Labour">Employee labour cost of the week (paid breaks included).</param>
+/// <param name="Spent">Every cost of the week: labour, expenses, materials and ground labour.</param>
+/// <param name="CostToDate">Every cost up to the end of the week.</param>
+/// <param name="CollectedToDate">Payments received up to the end of the week.</param>
+public sealed record CostWeekResponse(DateOnly WeekStart, int Minutes, decimal Labour, decimal Spent, decimal CostToDate, decimal CollectedToDate);
+
+/// <summary>A project's cost and payments week by week, from its start to today (or when it was finalised), in USD.</summary>
+public sealed record ProjectCostTimelineResponse(IReadOnlyList<CostWeekResponse> Weeks, string Currency);
+
+/// <summary>One entry on the Timeline tab's lanes and one-day view.</summary>
+/// <param name="TeamName">For grouping the day by team; null for someone in no team.</param>
+public sealed record TimelineEntryResponse(
+    long Id,
+    long UserId,
+    string UserName,
+    string? TeamName,
+    DateTime StartedAt,
+    DateTime EndedAt,
+    int Minutes,
+    string Description);

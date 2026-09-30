@@ -7,7 +7,10 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/projects?search=&status=&clientId=&billingType=&domain=&ownerId=&year=&quarter=&sort=start&page=1&pageSize=25` | `project:view` | Project list, newest start first unless sorted (see "The project list"). Each row has `money` (revenue, recognised, cost, profit, margin, invoiced, outstanding, `hasUnconverted`, `unpricedLabourMinutes`) only for callers with `financial:view` (see [finance.md](finance.md)), and Design rows have `work` only for callers with `work_entry:view_all` |
-| `GET /api/projects/{id}` | `project:view` | A project. `money` is included only for callers with `financial:view` |
+| `GET /api/projects/totals?…` | `financial:view` | The list's header: with the same filters as the list (paging aside), how many projects match (client and internal), their revenue and cost, the profit of the client ones, what the internal ones cost, and `hasUnconverted` when a cost or invoice has no rate. In USD |
+| `GET /api/projects/{id}` | `project:view` | A project, with `heldSince` while it is on hold, and an Execution site's `team`: the people who recorded its materials or labour weeks (the 5 most recent, and how many in all), since projects have no member list. List rows carry the same `team`. `money` is included only for callers with `financial:view` |
+| `GET /api/projects/{id}/report?kind=&from=&to=&sections=` | `financial:view` and `work_entry:view_all` | A Design project's report as a PDF, internal or the client summary ([documents.md](documents.md)) |
+| `GET /api/projects/{id}/cost-timeline` | `financial:view` | Its cost and payments week by week, from its start to this week (or the week it was finalised), in USD: each week's hours, labour cost (paid breaks included) and total cost, and the cost and payments to date. Weeks start on the company's week start. For the payment-vs-cost and weekly labour charts and the project report. Either domain; Execution sites also have `/site-money/timeline` |
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner |
 | `PUT /api/projects/{id}/billing` | `project:edit` | Design only: client work or internal, the client and the revenue |
@@ -18,9 +21,9 @@ Employees hold `project:view`, so they see every project of their domain in any 
 
 ## The project list
 
-- **Filters:** `search` (every word in the title), `status`, `clientId`, `billingType`, `domain`, `ownerId`, and `year` with an optional `quarter` (1–4). A project was **open during** a period when it started by the period's end and wasn't completed before its start (as in the prototype); a period that hasn't started yet matches nothing. A quarter needs a year (`400`).
+- **Filters:** `search` (every word in the title or the description), `status`, `clientId`, `billingType`, `domain`, `ownerId`, and `year` with an optional `quarter` (1–4). A project was **open during** a period when it started by the period's end and wasn't completed before its start (as in the prototype); a period that hasn't started yet matches nothing. A quarter needs a year (`400`).
 - **Sort** (`sort`): `start` (newest start first, the default), `activity` (most recent work first; a project without work counts from when it was added), `hours` (most logged time first), `progress` (furthest along first), `name` (A to Z) or `client` (A to Z, projects without a client last). Money isn't sortable here (decision M7).
-- **`work`** (Design rows, `work_entry:view_all` only; left out otherwise): all-time minutes, the activity level and minutes of the last 14 days (busy from 45 h a week, steady from 15 h, quiet with any work), minutes of the last 8 weeks ending with this one (the company's week start), when the latest work started, the 4 people who logged the most time and how many logged any. Loaded in two batched queries per page.
+- **`work`** (Design rows, `work_entry:view_all` only; left out otherwise): all-time minutes, the activity level and minutes of the last 14 days (busy from 45 h a week, steady from 15 h, quiet with any work), minutes of the last 8 weeks ending with this one (the company's week start), when the latest work started, the 4 people who logged the most time and how many logged any. Loaded for the whole page at once, not per row.
 
 ## Creating a project
 
@@ -36,7 +39,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 - The Execution agreed amount is calculated live while the project is open, and frozen into `projects.revenue` when it is finalised. A material with no exchange rate for its day is left out of the live amount (`money.unconvertedMaterials`), and finalising is refused until the rate is added (`422 exchange_rate_missing`).
 - While a project is finalised (`money.isLocked`), billing, revenue, fee and markup can't change (`422 project_locked`).
 - A project with any invoice or payment can't move to another client or become internal (`422 project_has_billing`), because invoices and payments keep the client they were made for.
-- `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed`, `paidAhead`, `issuedCount`, `paymentCount`, `overdue`, `overdueCount`, `oldestOverdueDays`, `drafts` and `unconvertedInvoices[]` (invoices with no rate on their issue day, left out of the USD figures). It comes from the same billing rule and batch load as the lists and the Financials page (`Business/Billing/ProjectBilling.cs`; see [billing.md](billing.md) and [finance.md](finance.md)).
+- `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed`, `paidAhead`, `issuedCount`, `paymentCount`, `overdue`, `overdueCount`, `oldestOverdueDays`, `drafts` and `unconvertedInvoices[]` (invoices with no rate on their issue day, or drafts with none today, left out of the USD figures). It comes from the same billing rule and batch load as the lists and the Financials page (`Business/Billing/ProjectBilling.cs`; see [billing.md](billing.md) and [finance.md](finance.md)).
 - Cost, profit, margin and the projections come from the shared finance calculator (below).
 
 ## Cost, profit and margin

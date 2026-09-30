@@ -15,7 +15,8 @@ public sealed record ActivityFeedSearch(
     long? ClientId,
     long? ActorId,
     int Page,
-    int PageSize);
+    int PageSize,
+    bool InternalOnly = false);
 
 public sealed record FeedEvent(
     long Id,

@@ -11,6 +11,9 @@ namespace ID_Indetails.api.Business.Company;
 /// from the first of a month, never an earlier month than the current one, so past months keep their cost.</item>
 /// <item>Cancelling ends a line at the end of the current month. It can be resumed until that date
 /// passes; after that, a new line is added.</item>
+/// <item>A line's currency changes from the first of a month, this month or later. A line already charged
+/// before that month ends and a new one with the same name and group takes over, so past months keep their
+/// currency; one not charged before it just changes.</item>
 /// <item>Totals are kept per currency and never converted.</item>
 /// </list>
 /// </summary>
@@ -47,4 +50,25 @@ public static class OverheadRules
     }
 
     public static bool HasEnded(DateOnly? endedOn, DateOnly today) => endedOn is { } end && end < today;
+
+    public static RuleDenial? CheckCurrencyChange(string currency, string newCurrency, DateOnly? endedOn, DateOnly month, DateOnly today)
+    {
+        if (endedOn is not null)
+        {
+            return RuleDenial.BusinessRule(
+                ErrorCodes.OverheadAlreadyCancelled, "This expense is cancelled. Resume it before changing its currency, or add a new one.");
+        }
+
+        if (string.Equals(currency, newCurrency, StringComparison.OrdinalIgnoreCase))
+        {
+            return RuleDenial.Invalid(ErrorCodes.OverheadSameCurrency, "currency", "The expense is already in this currency.");
+        }
+
+        return month < MonthStart(today)
+            ? RuleDenial.Invalid(ErrorCodes.OverheadMonthInPast, "fromMonth", "Past months keep their cost; choose this month or a later one.")
+            : null;
+    }
+
+    /// <summary>Whether a currency change from <paramref name="month"/> ends the line and adds a new one: it was charged before that month.</summary>
+    public static bool CurrencyChangeSplits(DateOnly startedOn, DateOnly month) => startedOn < month;
 }

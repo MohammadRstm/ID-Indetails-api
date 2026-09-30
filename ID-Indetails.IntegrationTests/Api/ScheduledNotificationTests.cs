@@ -171,7 +171,7 @@ public class ScheduledNotificationTests(ApiFactory api) : IClassFixture<ApiFacto
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        await ExecuteAsync("UPDATE users SET joined_on = '2026-01-01' WHERE id = @id", ("@id", designer.User.Id));
+        await _steps.SetJoinedOnAsync(designer.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();

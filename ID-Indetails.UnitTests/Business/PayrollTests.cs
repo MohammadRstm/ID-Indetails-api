@@ -145,4 +145,22 @@ public class PayrollTests
         SalaryCalculator.Calculate(new SalaryCalculator.Input(June, July10, new(2026, 1, 1), false, [], Calendar(), [], [])).ShouldBeNull();
         SalaryCalculator.Calculate(new SalaryCalculator.Input(June, July10, new(2026, 7, 1), false, [Monthly], Calendar(), [], [])).ShouldBeNull();
     }
+
+    [Fact]
+    public void Days_away_between_two_periods_of_employment_are_neither_paid_nor_expected()
+    {
+        // Away from Monday 8 June to Friday 19 June: 10 of June's 22 working days.
+        IReadOnlyList<Employment.Gap> away = [new(new(2026, 6, 8), new(2026, 6, 19))];
+        var input = new SalaryCalculator.Input(June, July10, new(2026, 1, 1), true, [Monthly], Calendar(), [], [], Gaps: away);
+
+        var pay = SalaryCalculator.Calculate(input)!;
+        pay.ProRated.ShouldBeTrue();
+        pay.WorkingDays.ShouldBe(22);
+        pay.WorkingDaysPaid.ShouldBe(12);
+        pay.Ledger!.Expected.ShouldBe(12 * 420);
+
+        // A month spent away entirely isn't paid at all.
+        IReadOnlyList<Employment.Gap> allJune = [new(new(2026, 5, 20), new(2026, 7, 5))];
+        SalaryCalculator.Calculate(input with { Gaps = allJune }).ShouldBeNull();
+    }
 }

@@ -1,6 +1,7 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Company;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.Services.Company.Abstraction;
 using Microsoft.AspNetCore.Authorization;
@@ -23,6 +24,32 @@ public sealed class CompanyController(ICompanySettingsService settings, IWorking
     [HasPermission(PermissionCodes.CompanySettingsManage)]
     public Task<CompanySettingsResponse> UpdateSettings(UpdateCompanySettingsRequest request, CancellationToken cancellationToken)
         => settings.UpdateAsync(request, cancellationToken);
+
+    /// <summary>The logo, from the caller's upload.</summary>
+    [HttpPut("logo")]
+    [HasPermission(PermissionCodes.CompanySettingsManage)]
+    public Task<CompanySettingsResponse> SetLogo(AttachFileRequest request, CancellationToken cancellationToken)
+        => settings.SetLogoAsync(request, cancellationToken);
+
+    [HttpDelete("logo")]
+    [HasPermission(PermissionCodes.CompanySettingsManage)]
+    public Task<CompanySettingsResponse> RemoveLogo(CancellationToken cancellationToken)
+        => settings.RemoveLogoAsync(cancellationToken);
+
+    /// <summary>The company's name and whether it has a logo, for the sign-in page. No sign-in needed.</summary>
+    [HttpGet("branding")]
+    [AllowAnonymous]
+    public Task<BrandingResponse> Branding(CancellationToken cancellationToken) => settings.BrandingAsync(cancellationToken);
+
+    /// <summary>The logo's image, for the sign-in page. No sign-in needed.</summary>
+    [HttpGet("logo")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Logo(CancellationToken cancellationToken)
+    {
+        var logo = await settings.OpenLogoAsync(cancellationToken);
+        Response.Headers.XContentTypeOptions = "nosniff";
+        return File(logo.Content, logo.MimeType);
+    }
 
     /// <summary>The policy in force today and every dated change.</summary>
     [HttpGet("working-time")]

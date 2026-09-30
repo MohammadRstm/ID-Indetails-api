@@ -20,10 +20,13 @@ public sealed class PayrollInputs(
     /// <summary>The hours ledger applies to Design employees only.</summary>
     public static bool LedgerApplies(User person) => person.DomainCode == DomainCodes.Design && person.RoleCode == RoleCodes.Employee;
 
-    public DateOnly JoinedOn(User person) => person.JoinedOn ?? clock.ToCompanyDate(person.CreatedAt);
-
-    public DateOnly? LeftOn(User person)
-        => person.Status == UserStatus.Deactivated && person.DeactivatedAt is { } at ? clock.ToCompanyDate(at) : null;
+    public Employment EmploymentOf(User person)
+        => person.EmploymentPeriods.Count > 0
+            ? new Employment(person.EmploymentPeriods
+                .OrderBy(p => p.StartedOn)
+                .Select(p => new Employment.Period(p.StartedOn, p.EndedOn))
+                .ToList())
+            : new Employment([new Employment.Period(person.JoinedOn ?? clock.ToCompanyDate(person.CreatedAt), null)]);
 
     public async Task<IReadOnlyList<PersonCalendar.Policy>> PoliciesAsync(CancellationToken cancellationToken = default)
         => (await workingTime.GetPoliciesAsync(cancellationToken))
@@ -76,6 +79,7 @@ public sealed class PayrollInputs(
         {
             var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.HourlyCostRate)).ToList();
             var calendar = calendars[person.Id];
+            var employment = EmploymentOf(person);
 
             foreach (var month in months)
             {
@@ -84,7 +88,7 @@ public sealed class PayrollInputs(
                 result.Add(new PersonMonth(person, new SalaryCalculator.Input(
                     month,
                     today,
-                    JoinedOn(person),
+                    employment.JoinedOn,
                     LedgerApplies(person),
                     terms,
                     calendar,
@@ -93,7 +97,8 @@ public sealed class PayrollInputs(
                         .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes))
                         .ToList(),
                     monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
-                    LeftOn(person)),
+                    employment.LeftOn,
+                    employment.Gaps),
                     monthExcuses));
             }
         }

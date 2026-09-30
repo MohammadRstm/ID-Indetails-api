@@ -47,6 +47,8 @@ using ID_Indetails.api.Repositories.Settings.Abstraction;
 using ID_Indetails.api.Repositories.Settings.Implementation;
 using ID_Indetails.api.Repositories.Statements.Abstraction;
 using ID_Indetails.api.Repositories.Statements.Implementation;
+using ID_Indetails.api.Repositories.Files.Abstraction;
+using ID_Indetails.api.Repositories.Files.Implementation;
 using ID_Indetails.api.Repositories.Messaging.Abstraction;
 using ID_Indetails.api.Repositories.Messaging.Implementation;
 using ID_Indetails.api.Repositories.Teams.Abstraction;
@@ -107,8 +109,12 @@ using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.Settings.Implementation;
 using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
+using ID_Indetails.api.Services.Documents.Abstraction;
+using ID_Indetails.api.Services.Documents.Implementation;
 using ID_Indetails.api.Services.Statements.Abstraction;
 using ID_Indetails.api.Services.Statements.Implementation;
+using ID_Indetails.api.Services.Files.Abstraction;
+using ID_Indetails.api.Services.Files.Implementation;
 using ID_Indetails.api.Services.Messaging.Abstraction;
 using ID_Indetails.api.Services.Messaging.Implementation;
 using ID_Indetails.api.Services.Realtime.Abstraction;
@@ -134,6 +140,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddOptions<PasswordResetOptions>().BindConfiguration(PasswordResetOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<FrontendOptions>().BindConfiguration(FrontendOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<FileStorageOptions>().BindConfiguration(FileStorageOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
@@ -143,6 +150,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IUserIdProvider, LiveUserIdProvider>();
         services.AddSingleton<ILivePublisher, SignalRLivePublisher>();
         services.AddScoped<ILiveUpdates, LiveUpdates>();
+        services.AddSingleton<IPresence, Presence>();
+        services.AddScoped<IPresenceService, PresenceService>();
         services.AddSingleton<IClock, SystemClock>();
 
         // Repositories
@@ -154,6 +163,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvitationRepository, InvitationRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IMessagingRepository, MessagingRepository>();
+        services.AddScoped<IFileRepository, FileRepository>();
         services.AddScoped<IActivityEventRepository, ActivityEventRepository>();
         services.AddScoped<IActivityFeedRepository, ActivityFeedRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
@@ -209,6 +219,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectPayService, ProjectPayService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<IMessagingService, MessagingService>();
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
+        services.AddScoped<IFileService, FileService>();
+        services.AddScoped<IFileClaims, FileClaims>();
+        services.AddHostedService<FileCleanupJob>();
         services.AddScoped<ISetupService, SetupService>();
         services.AddScoped<IClientService, ClientService>();
         services.AddScoped<IProjectService, ProjectService>();
@@ -241,6 +255,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMaterialService, MaterialService>();
         services.AddScoped<ILabourService, LabourService>();
         services.AddScoped<IStatementService, StatementService>();
+        services.AddScoped<IDocumentService, DocumentService>();
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();

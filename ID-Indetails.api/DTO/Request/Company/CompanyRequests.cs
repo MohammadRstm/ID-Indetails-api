@@ -6,6 +6,12 @@ public sealed record UpdateCompanySettingsRequest
 {
     public string Name { get; init; } = string.Empty;
 
+    /// <summary>For the letterhead of invoices and statements; empty clears it.</summary>
+    public string? Address { get; init; }
+
+    /// <summary>A web address such as indetails.com; empty clears it.</summary>
+    public string? Website { get; init; }
+
     /// <summary>0 = Sunday, 1 = Monday.</summary>
     public byte WeekStart { get; init; } = 1;
 
@@ -81,5 +87,16 @@ public sealed record ChangeOverheadAmountRequest
     public decimal Amount { get; init; }
 
     /// <summary>First month at the new amount (any day in it); this month when empty.</summary>
+    public DateOnly? FromMonth { get; init; }
+}
+
+public sealed record ChangeOverheadCurrencyRequest
+{
+    public string Currency { get; init; } = string.Empty;
+
+    /// <summary>The monthly amount in the new currency.</summary>
+    public decimal Amount { get; init; }
+
+    /// <summary>First month in the new currency (any day in it); this month when empty.</summary>
     public DateOnly? FromMonth { get; init; }
 }

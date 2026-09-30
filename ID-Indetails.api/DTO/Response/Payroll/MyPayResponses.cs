@@ -179,3 +179,22 @@ public sealed record MyPayResponse(
     MyLedgerMonthResponse? Ledger,
     IReadOnlyList<MyPayDayResponse> Days,
     IReadOnlyList<MyExcuseResponse> Excuses);
+
+/// <summary>
+/// The overtime of work about to be logged, and where it falls, for the log form's warning. The month's shortfall that
+/// overtime first makes up is <c>monthShortMinutes</c> on <c>GET /api/me/schedule</c>.
+/// </summary>
+/// <param name="DayOff">A day off: every minute is overtime, and the other fields are 0 or null.</param>
+/// <param name="AfterHoursMinutes">After the day's end, time past midnight included.</param>
+/// <param name="PastRequiredMinutes">Within the hours, beyond what the day asks for.</param>
+/// <param name="DayStartMinute">The day's hours, in minutes after midnight (company time).</param>
+public sealed record OvertimePreviewResponse(
+    int Minutes,
+    int OvertimeMinutes,
+    bool DayOff,
+    int BeforeHoursMinutes,
+    int AfterHoursMinutes,
+    int PastRequiredMinutes,
+    int? DayStartMinute,
+    int? DayEndMinute,
+    int? RequiredMinutes);
