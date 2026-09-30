@@ -168,6 +168,8 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         card.TaskComment.Author.Id.ShouldBe(engineer.User.Id);
         card.TaskComment.Description.ShouldBe("Stair details");
         card.TaskComment.Minutes.ShouldBe(90);
+        card.TaskComment.Attachment.ShouldBeNull();
+        card.Sender.PhotoFileId.ShouldBeNull();
         card.Mentions.Select(p => p.Id).ShouldContain(teammate.User.Id);
         card.Mentions.Select(p => p.Id).ShouldNotContain(designAdmin.User.Id);
         (await BadgeAsync(teammate)).Mention.ShouldBeTrue();

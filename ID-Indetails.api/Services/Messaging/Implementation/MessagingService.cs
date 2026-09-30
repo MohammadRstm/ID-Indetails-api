@@ -353,14 +353,15 @@ public sealed class MessagingService(
 
         return messages.Select(m => new MessageResponse(
                 m.Id,
-                new ChatPersonResponse(m.Sender.Id, m.Sender.Name),
+                new ChatPersonResponse(m.Sender.Id, m.Sender.Name, m.Sender.PhotoFileId),
                 m.Body,
                 m.Kind,
                 m.Mentions.Select(p => new ChatPersonResponse(p.Id, p.Name)).ToList(),
                 m.Attachments.Select(FileMapper.ToResponse).ToList(),
                 m.RefEntryId is { } entryId && shared.TryGetValue(entryId, out var e)
                     ? new TaskCommentResponse(
-                        e.Id, m.RefCommentId ?? 0, new ChatPersonResponse(e.UserId, e.UserName), e.ProjectId, e.ProjectTitle, e.Description, e.StartedAt, e.Minutes)
+                        e.Id, m.RefCommentId ?? 0, new ChatPersonResponse(e.UserId, e.UserName), e.ProjectId, e.ProjectTitle, e.Description, e.StartedAt, e.Minutes,
+                        e.Attachment is null ? null : FileMapper.ToResponse(e.Attachment))
                     : null,
                 m.CreatedAt))
             .ToList();

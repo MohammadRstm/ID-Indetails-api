@@ -18,7 +18,7 @@ public sealed record ChatPerson(
 
 public sealed record ChatTeam(long Id, string Name, string Domain);
 
-public sealed record MessagePerson(long Id, string Name);
+public sealed record MessagePerson(long Id, string Name, long? PhotoFileId = null);
 
 public sealed record MessageView(
     long Id,

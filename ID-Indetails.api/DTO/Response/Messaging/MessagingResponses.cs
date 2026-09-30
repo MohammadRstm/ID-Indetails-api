@@ -4,7 +4,8 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Messaging;
 
-public sealed record ChatPersonResponse(long Id, string Name);
+/// <param name="PhotoFileId">A message's sender's photo; not given for mentions.</param>
+public sealed record ChatPersonResponse(long Id, string Name, long? PhotoFileId = null);
 
 public sealed record ChatTeamResponse(long Id, string Name, string Domain);
 
@@ -20,6 +21,7 @@ public sealed record ContactResponse(
     long? PhotoFileId);
 
 /// <summary>The work entry a shared comment is about, as it is now.</summary>
+/// <param name="Attachment">The entry's photo or video, if it has one.</param>
 public sealed record TaskCommentResponse(
     long EntryId,
     long CommentId,
@@ -28,7 +30,8 @@ public sealed record TaskCommentResponse(
     string ProjectTitle,
     string Description,
     DateTime StartedAt,
-    int Minutes);
+    int Minutes,
+    FileResponse? Attachment);
 
 /// <param name="Kind"><c>text</c>, or <c>task_comment</c> for a shared work-entry comment.</param>
 /// <param name="TaskComment">For <c>task_comment</c> messages; null once the entry is deleted.</param>
