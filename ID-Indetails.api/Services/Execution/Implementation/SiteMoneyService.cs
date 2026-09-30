@@ -38,7 +38,7 @@ public sealed class SiteMoneyService(
         }
 
         var today = clock.CompanyToday;
-        var weeks = await finance.CashByWeekAsync(project, clock.ToCompanyDate(project.FinalizedAt ?? clock.UtcNow), cancellationToken);
+        var weeks = await finance.CashByWeekAsync(project, clock.ToCompanyDate(project.FinalizedAt ?? clock.UtcNow), cancellationToken: cancellationToken);
         var money = await finance.GetAsync(project, cancellationToken);
         var defaults = LabourRules.DefaultsAt(
             (await labour.ListDefaultsAsync(project.Id, cancellationToken))

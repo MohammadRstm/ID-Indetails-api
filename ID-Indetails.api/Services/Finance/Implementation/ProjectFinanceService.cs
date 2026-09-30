@@ -89,7 +89,11 @@ public sealed class ProjectFinanceService(
             loaded.Received.GetValueOrDefault(project.Id),
             loaded.Rates);
 
-    public async Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(Project project, DateOnly to, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(
+        Project project,
+        DateOnly to,
+        DayOfWeek weekStart = DayOfWeek.Monday,
+        CancellationToken cancellationToken = default)
     {
         long[] ids = [project.Id];
         var rates = new ExchangeRateTable(await sources.ExchangeRatesAsync(cancellationToken));
@@ -105,7 +109,14 @@ public sealed class ProjectFinanceService(
             await sources.GroundLabourAsync(ids, cancellationToken));
         var payments = await sources.PaymentsAsync(project.Id, cancellationToken);
 
-        return ProjectFinance.CashByWeek(items, payments.Select(p => (p.ReceivedOn, p.AmountUsd)), rates, project.StartDate, to);
+        return ProjectFinance.CashByWeek(
+            items,
+            payments.Select(p => (p.ReceivedOn, p.AmountUsd)),
+            entries.Select(e => (clock.ToCompanyDate(e.StartedAt), e.Minutes)),
+            rates,
+            project.StartDate,
+            to,
+            weekStart);
     }
 
     public async Task<IReadOnlyList<BreakCost>> PaidBreaksAsync(

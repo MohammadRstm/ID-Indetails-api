@@ -151,14 +151,41 @@ public class ProjectFinanceTests
                 new CostItem(CostSource.Expenses, "LBP", 900_000m, new DateOnly(2025, 3, 10)),
             ],
             [(new DateOnly(2026, 3, 2), 1000m), (new DateOnly(2026, 3, 9), 500m)],
+            [],
             Rates,
             from: new DateOnly(2026, 3, 3),
             to: new DateOnly(2026, 3, 12));
 
+        // The February material counts in the running total but not in the first week's own cost.
         weeks.ShouldBe([
-            new CashWeek(new DateOnly(2026, 3, 2), Received: 1000m, Spent: 600m, GroundLabour: 400m, ReceivedInWeek: 1000m, GroundLabourInWeek: 400m),
-            new CashWeek(new DateOnly(2026, 3, 9), Received: 1500m, Spent: 610m, GroundLabour: 400m, ReceivedInWeek: 500m, GroundLabourInWeek: 0m),
+            new CashWeek(new DateOnly(2026, 3, 2), Received: 1000m, Spent: 600m, GroundLabour: 400m, ReceivedInWeek: 1000m, GroundLabourInWeek: 400m,
+                SpentInWeek: 400m, LabourInWeek: 0m, MinutesInWeek: 0),
+            new CashWeek(new DateOnly(2026, 3, 9), Received: 1500m, Spent: 610m, GroundLabour: 400m, ReceivedInWeek: 500m, GroundLabourInWeek: 0m,
+                SpentInWeek: 10m, LabourInWeek: 0m, MinutesInWeek: 0),
         ]);
         weeks[^1].Profit.ShouldBe(890m);
+    }
+
+    [Fact]
+    public void Labour_and_hours_add_up_by_the_company_week()
+    {
+        // Weeks starting on Sunday: 1 March 2026 is one.
+        var weeks = CashByWeek(
+            [
+                new CostItem(CostSource.Labour, "USD", 60m, new DateOnly(2026, 3, 2)),
+                new CostItem(CostSource.Labour, "USD", 30m, new DateOnly(2026, 3, 8)),
+                new CostItem(CostSource.Expenses, "USD", 25m, new DateOnly(2026, 3, 8)),
+            ],
+            [],
+            [(new DateOnly(2026, 3, 2), 360), (new DateOnly(2026, 3, 8), 180)],
+            Rates,
+            from: new DateOnly(2026, 3, 2),
+            to: new DateOnly(2026, 3, 9),
+            DayOfWeek.Sunday);
+
+        weeks.Select(w => (w.WeekStart, w.MinutesInWeek, w.LabourInWeek, w.SpentInWeek, w.Spent)).ShouldBe([
+            (new DateOnly(2026, 3, 1), 360, 60m, 60m, 60m),
+            (new DateOnly(2026, 3, 8), 180, 30m, 55m, 115m),
+        ]);
     }
 }

@@ -33,7 +33,11 @@ public interface IProjectFinanceService
     Task<IReadOnlyDictionary<long, ProjectCostHistory>> CostHistoryAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken = default);
 
     /// <summary>The project's cash position week by week, from its first week to the week of <paramref name="to"/>.</summary>
-    Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(Project project, DateOnly to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(
+        Project project,
+        DateOnly to,
+        DayOfWeek weekStart = DayOfWeek.Monday,
+        CancellationToken cancellationToken = default);
 }
 
 /// <param name="MaterialCharge">Execution: material client prices in USD.</param>

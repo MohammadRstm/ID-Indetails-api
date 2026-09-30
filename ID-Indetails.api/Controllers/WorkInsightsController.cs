@@ -35,6 +35,12 @@ public sealed class WorkInsightsController(IWorkInsightsService workInsightsServ
         => workInsightsService.TimelineAsync(projectId, cancellationToken);
 
     /// <summary>Everyone of the Design domain with their hours, most this week first.</summary>
+    /// <summary>Cost and payments week by week: the payment-vs-cost and weekly labour charts, and the project report.</summary>
+    [HttpGet("projects/{projectId:long}/cost-timeline")]
+    [HasPermission(PermissionCodes.FinancialView)]
+    public Task<ProjectCostTimelineResponse> CostTimeline(long projectId, CancellationToken cancellationToken)
+        => workInsightsService.CostTimelineAsync(projectId, cancellationToken);
+
     [HttpGet("work/people")]
     [HasPermission(PermissionCodes.WorkEntryViewAll)]
     public Task<IReadOnlyList<PersonWorkResponse>> People([FromQuery] PeopleWorkQuery query, CancellationToken cancellationToken)

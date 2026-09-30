@@ -12,6 +12,9 @@ public interface IWorkInsightsService
 
     Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>Cost and payments week by week, for the project's money charts and report. Any domain.</summary>
+    Task<ProjectCostTimelineResponse> CostTimelineAsync(long projectId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<PersonWorkResponse>> PeopleAsync(PeopleWorkQuery query, CancellationToken cancellationToken = default);
 
     Task<EmployeeLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default);

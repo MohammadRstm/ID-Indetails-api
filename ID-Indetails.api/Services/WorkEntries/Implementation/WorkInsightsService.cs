@@ -1,5 +1,6 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
@@ -287,6 +288,24 @@ public sealed class WorkInsightsService(
             pricer.Price(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= quarterStart)),
             pricer.Price(rows),
             byProject.Select(x => new ProjectLabourCostResponse(x.ProjectId, titles.GetValueOrDefault(x.ProjectId, string.Empty), x.Cost)).ToList());
+    }
+
+    public async Task<ProjectCostTimelineResponse> CostTimelineAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var project = await projects.GetAsync(projectId, cancellationToken);
+        if (project is null || !actor.CanSee(project.DomainCode))
+        {
+            throw new NotFoundException("Project not found.");
+        }
+
+        var calendar = await CalendarAsync(cancellationToken);
+        var weeks = await projectFinance.CashByWeekAsync(
+            project, clock.ToCompanyDate(project.FinalizedAt ?? clock.UtcNow), calendar.FirstDayOfWeek, cancellationToken);
+
+        return new ProjectCostTimelineResponse(
+            weeks.Select(w => new CostWeekResponse(w.WeekStart, w.MinutesInWeek, w.LabourInWeek, w.SpentInWeek, w.Spent, w.Received)).ToList(),
+            PaymentRules.BaseCurrency);
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken) => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
