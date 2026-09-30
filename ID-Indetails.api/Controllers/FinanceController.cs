@@ -1,9 +1,12 @@
+using System.Text;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Finance;
 using ID_Indetails.api.DTO.Response.Finance;
+using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ID_Indetails.api.Controllers;
 
@@ -27,6 +30,15 @@ public sealed class FinanceController(IDomainFinanceService financeService) : Co
     [HttpGet("projects")]
     public Task<FinanceProjectsResponse> Projects(string domain, CancellationToken cancellationToken)
         => financeService.ProjectsAsync(domain, cancellationToken);
+
+    /// <summary>The Financials export: every project's all-time money, then the period's totals (UTF-8 CSV).</summary>
+    [HttpGet("projects/export")]
+    [EnableRateLimiting(RateLimitPolicies.Export)]
+    public async Task<IActionResult> ExportProjects(string domain, [FromQuery] FinancePeriodQuery query, CancellationToken cancellationToken)
+    {
+        var (fileName, csv) = await financeService.ExportProjectsAsync(domain, query, cancellationToken);
+        return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray(), "text/csv", fileName);
+    }
 
     /// <summary>Billing and collections: the position, aging, invoiced against collected, clients, methods and open invoices.</summary>
     [HttpGet("billing")]

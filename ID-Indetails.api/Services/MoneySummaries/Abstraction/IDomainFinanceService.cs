@@ -12,6 +12,9 @@ public interface IDomainFinanceService
 
     Task<FinanceProjectsResponse> ProjectsAsync(string domain, CancellationToken cancellationToken = default);
 
+    /// <summary>The Financials export: every project's all-time money, then the period's totals, as CSV.</summary>
+    Task<(string FileName, string Csv)> ExportProjectsAsync(string domain, FinancePeriodQuery query, CancellationToken cancellationToken = default);
+
     Task<FinanceBillingResponse> BillingAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<FinanceClientResponse>> ClientsAsync(string domain, CancellationToken cancellationToken = default);

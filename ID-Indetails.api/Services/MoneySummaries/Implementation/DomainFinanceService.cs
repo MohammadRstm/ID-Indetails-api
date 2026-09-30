@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
@@ -16,6 +18,7 @@ using ID_Indetails.api.Repositories.MoneySummaries.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Common.Implementation;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
@@ -94,6 +97,48 @@ public sealed class DomainFinanceService(
                     Rounded(cost.Total), revenue - Rounded(cost.Total), UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
             })
             .ToList();
+    }
+
+    public async Task<(string FileName, string Csv)> ExportProjectsAsync(
+        string domain,
+        FinancePeriodQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var projects = await ProjectsAsync(domain, cancellationToken);
+        var period = await SummaryAsync(domain, query, cancellationToken);
+        static string Pct(decimal? margin) => margin is { } m ? (m * 100).ToString("0.0", CultureInfo.InvariantCulture) : string.Empty;
+
+        var csv = new StringBuilder();
+        Csv.Line(csv, "Project", "Client", "Status", "Billing", "Revenue", "Currency", "Hours", "Labour cost", "Expenses", "Materials",
+            "Ground labour", "Total cost", "Profit", "Margin %");
+        foreach (var p in projects.Projects)
+        {
+            Csv.Line(
+                csv,
+                p.Title,
+                p.ClientName ?? "Internal",
+                p.Status.ToString().ToLowerInvariant(),
+                p.BillingType == BillingType.Client ? "Client" : "Internal",
+                Csv.Money(p.Revenue),
+                PaymentRules.BaseCurrency,
+                p.Hours.ToString("0.00", CultureInfo.InvariantCulture),
+                Csv.Money(p.Cost.Labour),
+                Csv.Money(p.Cost.Expenses),
+                Csv.Money(p.Cost.Materials),
+                Csv.Money(p.Cost.GroundLabour),
+                Csv.Money(p.Cost.Total),
+                Csv.Money(p.Profit),
+                p.MarginKnown ? Pct(p.Margin) : string.Empty);
+        }
+
+        csv.AppendLine();
+        Csv.Line(csv, "Period", $"{period.From:yyyy-MM-dd} to {period.To:yyyy-MM-dd}");
+        Csv.Line(csv, "Revenue recognised", Csv.Money(period.Revenue));
+        Csv.Line(csv, "Total cost", Csv.Money(period.Cost.Total));
+        Csv.Line(csv, "Net profit", Csv.Money(period.Profit));
+        Csv.Line(csv, "Margin %", Pct(period.Margin));
+
+        return ($"financials-{domain}-{period.From:yyyy-MM-dd}-to-{period.To:yyyy-MM-dd}.csv", csv.ToString());
     }
 
     public async Task<FinanceProjectsResponse> ProjectsAsync(string domain, CancellationToken cancellationToken = default)

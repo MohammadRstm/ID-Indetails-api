@@ -13,6 +13,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 | `GET /api/finance/{domain}/summary?from=&to=` | `financial:view` | Revenue, cost, profit and margin over a period, with the billing position (dashboard money cards, Financials header) |
 | `GET /api/finance/{domain}/monthly?months=12` | `financial:view` | Revenue against cost month by month, oldest first (1 to 36 months) |
 | `GET /api/finance/{domain}/projects` | `financial:view` | Every project's all-time money, most profitable first, with totals (Financials projects tab, dashboard "profit by project") |
+| `GET /api/finance/{domain}/projects/export?from=&to=` | `financial:view` | The Financials export (UTF-8 CSV, export rate limit): every project's all-time revenue, hours, labour, expenses, materials, ground labour, cost, profit and margin, then the period's recognised revenue, cost, profit and margin |
 | `GET /api/finance/{domain}/billing?months=12` | `financial:view` | Billing and collections (Financials billing tab, dashboard "money owed" and "invoiced against collected") |
 | `GET /api/finance/{domain}/clients` | `financial:view` | Every client with projects and their money, most revenue first (Financials clients tab, dashboard "top clients") |
 | `GET /api/finance/{domain}/costs?from=&to=` | `financial:view` | Costs over a period: by source, labour by person, expenses by category, the biggest expenses (Financials costs tab) |
