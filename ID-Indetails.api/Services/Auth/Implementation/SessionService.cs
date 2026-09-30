@@ -58,6 +58,7 @@ public sealed class SessionService(
             Team = user.Team is null ? null : new TeamSummaryResponse(user.Team.Id, user.Team.Name),
             Position = user.Position,
             Phone = user.Phone,
+            JoinedOn = user.JoinedOn,
             PhotoFileId = user.PhotoFileId,
             MustChangePassword = user.MustChangePassword,
             Permissions = access.Permissions,

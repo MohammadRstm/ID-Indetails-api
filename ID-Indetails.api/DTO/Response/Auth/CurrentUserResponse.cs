@@ -22,6 +22,9 @@ public sealed record CurrentUserResponse
 
     public string? Phone { get; init; }
 
+    /// <summary>The day they accepted their invitation; null until then.</summary>
+    public DateOnly? JoinedOn { get; init; }
+
     /// <summary>Their profile photo, read through <c>GET /api/files/{id}</c>.</summary>
     public long? PhotoFileId { get; init; }
 

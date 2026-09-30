@@ -147,7 +147,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
 
-        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse(null, false));
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse(null, false, null));
         var logoFile = await UploadPngAsync(Client, superAdmin.AccessToken, "logo.png");
         await (await Client.PutJsonAsync("/api/company/logo", new { fileId = logoFile.Id }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.CompanyNotSetUp);
@@ -157,7 +157,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         var saved = await OkAsync<CompanySettingsResponse>(Client.PutJsonAsync("/api/company/logo", new { fileId = logoFile.Id }, superAdmin.AccessToken));
         saved.LogoFileId.ShouldBe(logoFile.Id);
 
-        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", true));
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", true, logoFile.Id));
         var logo = await Client.GetAsync("/api/company/logo");
         logo.StatusCode.ShouldBe(HttpStatusCode.OK);
         logo.Content.Headers.ContentType!.MediaType.ShouldBe("image/png");
@@ -167,7 +167,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PutJsonAsync("/api/company/logo", new { fileId = theirs.Id }, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         (await OkAsync<CompanySettingsResponse>(Client.DeleteAsync("/api/company/logo", superAdmin.AccessToken))).LogoFileId.ShouldBeNull();
-        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).HasLogo.ShouldBeFalse();
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", false, null));
         await (await Client.GetAsync("/api/company/logo")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }
 
