@@ -7,8 +7,6 @@ public sealed class SearchQueryValidator : AbstractValidator<SearchQuery>
 {
     public SearchQueryValidator()
     {
-        RuleFor(x => x.Q)
-            .Must(q => !string.IsNullOrWhiteSpace(q)).WithMessage("Type something to search for.")
-            .MaximumLength(100).WithMessage("Search must be at most 100 characters.");
+        RuleFor(x => x.Q).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
     }
 }
