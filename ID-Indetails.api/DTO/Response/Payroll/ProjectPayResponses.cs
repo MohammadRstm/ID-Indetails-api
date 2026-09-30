@@ -21,7 +21,8 @@ public sealed record ProjectPayPersonResponse(
     bool RateChanged,
     string Currency,
     decimal Pay,
-    bool Priced);
+    bool Priced,
+    long? PhotoFileId);
 
 public sealed record ProjectPayProjectResponse(
     long ProjectId,

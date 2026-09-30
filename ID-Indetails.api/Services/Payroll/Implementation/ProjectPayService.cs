@@ -214,7 +214,8 @@ public sealed class ProjectPayService(
             work.Select(w => w.Pay.HourlyRate).Distinct().Count() > 1,
             latest.Pay.Currency,
             Math.Round(work.Sum(w => w.Pay.Pay), 2, MidpointRounding.AwayFromZero),
-            work.All(w => w.Pay.Priced));
+            work.All(w => w.Pay.Priced),
+            user.PhotoFileId);
     }
 
     private static IReadOnlyList<CurrencyTotalResponse> Totals(IEnumerable<ProjectPayPersonResponse> people)

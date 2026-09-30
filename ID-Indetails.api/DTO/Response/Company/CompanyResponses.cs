@@ -55,7 +55,8 @@ public sealed record PersonScheduleResponse(
     DateOnly? OwnSince,
     IReadOnlyList<ScheduleDayResponse> Days,
     int RequiredMinutesPerWeek,
-    DateOnly? NextChangeOn);
+    DateOnly? NextChangeOn,
+    long? PhotoFileId);
 
 public sealed record SchedulesResponse(WorkingTimePolicyResponse CompanyWeek, IReadOnlyList<PersonScheduleResponse> People);
 
