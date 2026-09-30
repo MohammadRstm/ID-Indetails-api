@@ -55,6 +55,9 @@ public sealed class DomainFinanceService(
         var cost = PeriodMoney.Costs(projects.SelectMany(p => rollup.Costs(p.Id)), from, to);
         var clientWork = projects.Where(p => p.BillingType == BillingType.Client).Select(p => rollup.Money(p.Id).Summary).ToList();
         var profit = revenue - PeriodMoney.Round(cost.Total);
+        var labourMinutes = (await financeSources.WorkEntriesAsync(projects.Select(p => p.Id).ToList(), cancellationToken))
+            .Where(e => clock.ToCompanyDate(e.StartedAt) is var day && day >= from && day <= to)
+            .Sum(e => e.Minutes);
 
         return new FinanceSummaryResponse(
             domain,
@@ -72,7 +75,8 @@ public sealed class DomainFinanceService(
             clientWork.Sum(s => s.Profit),
             projects.Where(p => p.BillingType == BillingType.Internal).Sum(p => rollup.Money(p.Id).Summary.Cost),
             clientWork.Sum(s => s.Revenue - s.RecognisedToDate),
-            rollup.Position(rollup.Billing(projects)));
+            rollup.Position(rollup.Billing(projects)),
+            labourMinutes);
     }
 
     public async Task<IReadOnlyList<FinanceMonthResponse>> MonthlyAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default)
@@ -272,7 +276,7 @@ public sealed class DomainFinanceService(
         var names = (await people.PeopleAsync(work.Select(w => w.UserId).Distinct().ToList(), cancellationToken)).ToDictionary(p => p.Id, p => p.Name);
         var labour = work
             .GroupBy(w => w.UserId)
-            .Select(g => (UserId: g.Key, Cost: pricer.Price(g)))
+            .Select(g => (UserId: g.Key, Cost: pricer.Price(g), Minutes: g.Sum(w => w.Minutes)))
             .ToList();
 
         var expenses = (await summaries.ExpensesAsync(ids, from, to, cancellationToken))
@@ -291,7 +295,8 @@ public sealed class DomainFinanceService(
                     l.UserId,
                     names.GetValueOrDefault(l.UserId, string.Empty),
                     l.Cost.Usd,
-                    l.Cost.Unconverted.Select(u => new CurrencyTotalResponse(u.Currency, u.Amount)).ToList()))
+                    l.Cost.Unconverted.Select(u => new CurrencyTotalResponse(u.Currency, u.Amount)).ToList(),
+                    l.Minutes))
                 .ToList(),
             expenses
                 .Where(x => x.Usd is not null)

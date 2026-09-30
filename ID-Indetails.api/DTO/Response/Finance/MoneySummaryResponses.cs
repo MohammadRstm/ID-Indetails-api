@@ -31,6 +31,7 @@ public sealed record BillingPositionResponse(
 /// <param name="UnpricedLabourMinutes">Work by people with no pay record, all time.</param>
 /// <param name="StillToEarn">Client revenue not recognised yet.</param>
 /// <param name="Billing">As of today, whatever the period.</param>
+/// <param name="LabourMinutes">Work logged on the domain's projects in the period.</param>
 public sealed record FinanceSummaryResponse(
     string Domain,
     DateOnly From,
@@ -47,7 +48,8 @@ public sealed record FinanceSummaryResponse(
     decimal AllTimeClientProfit,
     decimal AllTimeInternalCost,
     decimal StillToEarn,
-    BillingPositionResponse Billing);
+    BillingPositionResponse Billing,
+    int LabourMinutes);
 
 /// <param name="Unconverted">Costs of the month with no exchange rate on their day, in their own currency.</param>
 public sealed record FinanceMonthResponse(
@@ -125,7 +127,8 @@ public sealed record FinanceBillingResponse(
     IReadOnlyList<OpenInvoiceResponse> OpenInvoices,
     IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
-public sealed record PersonCostResponse(long UserId, string Name, decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted);
+/// <param name="Minutes">The work behind the cost, logged in the period.</param>
+public sealed record PersonCostResponse(long UserId, string Name, decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted, int Minutes);
 
 public sealed record CategoryCostResponse(string Category, decimal Usd);
 
