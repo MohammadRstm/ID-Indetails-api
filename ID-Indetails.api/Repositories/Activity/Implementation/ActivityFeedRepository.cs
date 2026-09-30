@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,7 +40,9 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
 
         if (search.ClientId is { } clientId)
         {
-            query = query.Where(e => e.ClientId == clientId || db.Projects.Any(p => p.Id == e.ProjectId && p.ClientId == clientId));
+            query = query.Where(e => e.ClientId == clientId
+                || (e.SubjectType == ClientSubject && e.SubjectId == clientId)
+                || db.Projects.Any(p => p.Id == e.ProjectId && p.ClientId == clientId));
         }
 
         if (search.InternalOnly)
@@ -71,7 +74,7 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
             .Where(p => projectIds.Contains(p.Id))
             .Select(p => new { p.Id, p.Title, p.ClientId, ClientName = p.Client != null ? p.Client.Name : null })
             .ToDictionaryAsync(p => p.Id, cancellationToken);
-        var clientIds = rows.Where(e => e.ClientId != null).Select(e => e.ClientId!.Value).Distinct().ToList();
+        var clientIds = rows.Select(OwnClientId).OfType<long>().Distinct().ToList();
         var clients = await db.Clients.AsNoTracking()
             .Where(c => clientIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
@@ -79,8 +82,9 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
         var items = rows.Select(e =>
         {
             var project = e.ProjectId is { } p ? projects.GetValueOrDefault(p) : null;
-            var clientId = e.ClientId ?? project?.ClientId;
-            var clientName = e.ClientId is { } c ? clients.GetValueOrDefault(c) : project?.ClientName;
+            var own = OwnClientId(e);
+            var clientId = own ?? project?.ClientId;
+            var clientName = own is { } c ? clients.GetValueOrDefault(c) : project?.ClientName;
             return new FeedEvent(
                 e.Id,
                 e.Kind,
@@ -102,4 +106,9 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
 
         return (items, total);
     }
+
+    private const string ClientSubject = "client";
+
+    /// <summary>The client an event names itself: its client column, or the client it is about (client_added and the like).</summary>
+    private static long? OwnClientId(ActivityEvent e) => e.ClientId ?? (e.SubjectType == ClientSubject ? e.SubjectId : null);
 }

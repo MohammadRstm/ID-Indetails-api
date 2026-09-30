@@ -1,5 +1,6 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Activity;
+using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.Enums;
 using Shouldly;
@@ -105,5 +106,24 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.GetAsync("/api/activity", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync("/api/activity?group=other", designAdmin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
+    public async Task A_client_event_names_its_client_and_shows_under_that_client()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var client = await (await Client.PostJsonAsync("/api/clients", new
+        {
+            name = "Rami Khoury",
+            label = "Client",
+            contacts = new[] { new { kind = "email", value = AuthTestSteps.NewEmail("client"), isWhatsapp = false } },
+        }, admin.AccessToken)).ReadAsync<ClientResponse>();
+
+        var feed = await (await Client.GetAsync($"/api/activity?clientId={client.Id}", admin.AccessToken))
+            .ReadAsync<PagedResponse<ActivityItemResponse>>();
+        var added = feed.Items.Single(i => i.Kind == ActivityEventKinds.ClientAdded);
+        added.Client!.Id.ShouldBe(client.Id);
+        added.Client.Name.ShouldBe("Rami Khoury");
     }
 }
