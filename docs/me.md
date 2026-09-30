@@ -39,6 +39,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/me/schedule?date=` | `work_entry:view_own` | The caller's week, the company policy in force, and one day's hours (today by default) |
+| `POST /api/me/overtime-preview` | `work_entry:view_own` | `{ startedAt, endedAt, entryId, moves }`: the overtime of work about to be logged or edited, among the caller's other work that day (leaving out `entryId`, the entry being edited, and with `moves` applied), and where it falls: before hours, after hours (past midnight included) or past the hours the day asks for, or all of it on a day off. Nothing is saved. The shortfall this overtime first makes up is `monthShortMinutes` above (`Business/Payroll/OvertimePreview.cs`) |
 
 - `schedule`: the caller's week as it stands today, with the same shape as the Schedules screen. It is their own schedule where they have one (`isOwn`, `ownSince`), otherwise the company week. Each working day has its start, end and required minutes, and `nextChangeOn` is a change dated in the future.
 - `companyWeek`: the company policy in force today. Its break and overtime multiplier apply to everyone.

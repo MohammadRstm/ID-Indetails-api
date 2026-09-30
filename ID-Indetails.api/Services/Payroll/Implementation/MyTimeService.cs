@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Payroll;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Payroll;
@@ -30,6 +31,42 @@ public sealed class MyTimeService(
     IWorkEntryRepository entries,
     IClock clock) : IMyTimeService
 {
+    public async Task<OvertimePreviewResponse> PreviewOvertimeAsync(OvertimePreviewRequest request, CancellationToken cancellationToken = default)
+    {
+        var me = await MeAsync(cancellationToken);
+        var startUtc = WorkEntryRules.AsUtc(request.StartedAt);
+        var draft = WorkOn(OvertimePreview.DraftId, startUtc, (int)(WorkEntryRules.AsUtc(request.EndedAt) - startUtc).TotalMinutes);
+        var calendar = (await inputs.CalendarsAsync([me.Id], cancellationToken))[me.Id];
+
+        // The day as it would be: without the entry being edited, and with the moved entries where they would go.
+        var moves = request.Moves.ToDictionary(m => m.Id);
+        var logged = await payroll.WorkAsync(
+            [me.Id], clock.CompanyDayStartUtc(draft.Day.AddDays(-1)), clock.CompanyDayStartUtc(draft.Day.AddDays(2)), cancellationToken);
+        var others = logged
+            .Where(e => e.Id != request.EntryId)
+            .Select(e => moves.TryGetValue(e.Id, out var move)
+                ? WorkOn(e.Id, WorkEntryRules.AsUtc(move.StartedAt), (int)(WorkEntryRules.AsUtc(move.EndedAt) - WorkEntryRules.AsUtc(move.StartedAt)).TotalMinutes)
+                : WorkOn(e.Id, e.StartedAt, e.Minutes));
+
+        var result = OvertimePreview.Of(draft, others, calendar);
+        return new OvertimePreviewResponse(
+            result.Minutes,
+            result.Overtime,
+            result.Hours is null,
+            result.BeforeHours,
+            result.AfterHours,
+            result.PastRequired,
+            result.Hours?.Start,
+            result.Hours?.End,
+            result.Hours?.Required);
+    }
+
+    private Overtime.Work WorkOn(long id, DateTime startUtc, int minutes)
+    {
+        var local = clock.ToCompanyTime(startUtc);
+        return new Overtime.Work(id, DateOnly.FromDateTime(local), (int)local.TimeOfDay.TotalMinutes, minutes);
+    }
+
     public async Task<MyScheduleResponse> ScheduleAsync(MyScheduleQuery query, CancellationToken cancellationToken = default)
     {
         var me = await MeAsync(cancellationToken);

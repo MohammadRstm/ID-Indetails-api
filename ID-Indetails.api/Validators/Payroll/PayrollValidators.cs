@@ -1,4 +1,5 @@
 using FluentValidation;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.Enums;
@@ -78,4 +79,17 @@ internal static class PayrollRuleExtensions
 {
     public static IRuleBuilderOptions<T, string?> Month<T>(this IRuleBuilder<T, string?> rule)
         => rule.Matches("^[0-9]{4}-(0[1-9]|1[0-2])$").WithMessage("Month must look like 2026-06.");
+}
+
+public sealed class OvertimePreviewRequestValidator : AbstractValidator<OvertimePreviewRequest>
+{
+    public OvertimePreviewRequestValidator()
+    {
+        RuleFor(x => x.EndedAt)
+            .Must((r, end) => end > r.StartedAt && (end - r.StartedAt).TotalMinutes <= WorkEntryRules.MaxMinutes)
+            .WithMessage($"The work must end after it starts, and last at most {WorkEntryRules.MaxMinutes / 60} hours.");
+        RuleFor(x => x.Moves)
+            .Must(m => m.Count <= 50 && m.Select(x => x.Id).Distinct().Count() == m.Count)
+            .WithMessage("Each moved entry can appear once, and at most 50 of them.");
+    }
 }
