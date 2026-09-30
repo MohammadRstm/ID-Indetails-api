@@ -25,8 +25,11 @@ public static class ApiServiceCollectionExtensions
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
             })
             .AddJsonOptions(options =>
-                options.JsonSerializerOptions.Converters.Add(
-                    new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower)))
+            {
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
+                // Numbers are JSON numbers, never strings, so the OpenAPI document types them as numbers.
+                options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+            })
             .ConfigureApiBehaviorOptions(options =>
                 // Malformed JSON and unbindable values use the same error shape as validation.
                 options.InvalidModelStateResponseFactory = context =>
@@ -52,8 +55,10 @@ public static class ApiServiceCollectionExtensions
         // Responses written outside MVC (errors from the exception handler, authorization and
         // rate limiting) use these options: same enum format as controller responses.
         services.ConfigureHttpJsonOptions(options =>
-            options.SerializerOptions.Converters.Add(
-                new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower)));
+        {
+            options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
+            options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+        });
 
         services.AddValidatorsFromAssemblyContaining<Program>(includeInternalTypes: true);
 
