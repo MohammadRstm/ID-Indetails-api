@@ -102,6 +102,10 @@ public sealed class HourExcuseService(
             ActorId = actorId,
             SubjectType = "user",
             SubjectId = excuse.UserId,
-            Payload = JsonSerializer.Serialize(new { excuseId = excuse.Id, month = excuse.MonthStart, kind = excuse.Kind.ToString(), isPaid = excuse.IsPaid }),
+            // how much was excused, so the feed can say it
+            Payload = JsonSerializer.Serialize(new
+            {
+                excuseId = excuse.Id, month = excuse.MonthStart, kind = excuse.Kind.ToString(), minutes = excuse.Minutes, days = excuse.Days.Count, isPaid = excuse.IsPaid,
+            }),
         });
 }
