@@ -26,6 +26,27 @@ public sealed record ClientListQuery
     public int PageSize { get; init; } = 25;
 }
 
+/// <summary>What the client form has typed so far, to warn about duplicates before saving.</summary>
+public sealed record CheckClientRequest
+{
+    /// <summary>Needed only by callers who see both domains.</summary>
+    public string? DomainCode { get; init; }
+
+    public string? Name { get; init; }
+
+    public IReadOnlyList<CheckClientContactRequest> Contacts { get; init; } = [];
+
+    /// <summary>The client being edited, which may of course keep its own name and contacts.</summary>
+    public long? ExceptClientId { get; init; }
+}
+
+public sealed record CheckClientContactRequest
+{
+    public ContactKind Kind { get; init; }
+
+    public string Value { get; init; } = string.Empty;
+}
+
 public sealed record ClientOverviewQuery
 {
     /// <summary>Must be a domain the caller can see; both of them when empty.</summary>

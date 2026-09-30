@@ -83,3 +83,17 @@ internal static class ClientRuleExtensions
             .Must(c => c.Count(x => x.IsPrimary) <= 1).WithMessage("Only one contact can be primary.")
             .ForEach(c => c.SetValidator(new ClientContactRequestValidator()));
 }
+
+public sealed class CheckClientRequestValidator : AbstractValidator<CheckClientRequest>
+{
+    public CheckClientRequestValidator()
+    {
+        RuleFor(x => x.Name).ClientText("Name", 150);
+        RuleFor(x => x.Contacts.Count).LessThanOrEqualTo(20).WithMessage("At most 20 contacts.");
+        RuleForEach(x => x.Contacts).ChildRules(contact =>
+        {
+            contact.RuleFor(c => c.Kind).IsInEnum().WithMessage("Unknown contact kind.");
+            contact.RuleFor(c => c.Value).MaximumLength(200).WithMessage("A contact is at most 200 characters.");
+        });
+    }
+}

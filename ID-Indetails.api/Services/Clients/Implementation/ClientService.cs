@@ -42,6 +42,33 @@ public sealed class ClientService(
     public const int WorkMonths = 12;
     public const int WorkPeople = 8;
 
+    public async Task<ClientCheckResponse> CheckAsync(CheckClientRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var domain = request.DomainCode ?? (actor.VisibleDomains.Count == 1 ? actor.VisibleDomains[0] : null)
+            ?? throw new RequestValidationException(ErrorCodes.ValidationFailed, "domainCode", "Choose the domain the client belongs to.");
+        if (!actor.CanSee(domain))
+        {
+            throw new NotFoundException("Domain not found.");
+        }
+
+        var name = request.Name?.Trim();
+        var nameTaken = !string.IsNullOrEmpty(name) && await clients.NameExistsAsync(domain, name, request.ExceptClientId ?? 0, cancellationToken);
+        var contacts = request.Contacts
+            .Where(c => !string.IsNullOrWhiteSpace(c.Value))
+            .Select(c => (c.Kind, ClientRules.Normalize(c.Kind, c.Value)))
+            .ToList();
+        var owner = contacts.Count > 0
+            ? await clients.FindContactOwnerAsync(domain, contacts, request.ExceptClientId, cancellationToken)
+            : null;
+
+        return new ClientCheckResponse(
+            nameTaken,
+            owner is { } taken
+                ? new ClientContactTakenResponse(taken.Client.Id, ClientRules.DisplayName(taken.Client.Name, taken.Client.Organisation), taken.Kind)
+                : null);
+    }
+
     public async Task<ClientOverviewResponse> OverviewAsync(ClientOverviewQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);

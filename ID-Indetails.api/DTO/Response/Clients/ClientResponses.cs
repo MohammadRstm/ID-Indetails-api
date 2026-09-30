@@ -116,3 +116,9 @@ public sealed record ClientOverviewResponse(
     int AddedThisMonth,
     ClientAddedResponse? Newest,
     IReadOnlyList<ClientGrowthMonthResponse> Growth);
+
+/// <param name="ContactTakenBy">The client that already holds one of the contacts; saving would answer 409 contact_taken.</param>
+/// <param name="NameTaken">Another client has the same name: allowed, but worth a second look.</param>
+public sealed record ClientCheckResponse(bool NameTaken, ClientContactTakenResponse? ContactTakenBy);
+
+public sealed record ClientContactTakenResponse(long ClientId, string Name, ContactKind Kind);

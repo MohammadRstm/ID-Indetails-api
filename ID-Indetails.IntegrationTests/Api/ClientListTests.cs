@@ -159,4 +159,28 @@ public class ClientOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         // Another domain's clients aren't counted.
         (await (await Client.GetAsync("/api/clients/overview", siteAdmin.AccessToken)).ReadAsync<ClientOverviewResponse>()).Clients.ShouldBe(0);
     }
+
+    [Fact]
+    public async Task The_client_form_hears_about_a_name_or_contact_already_used_before_saving()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var existing = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design);
+        var email = await _steps.ScalarAsync<string>("SELECT value FROM client_contacts WHERE client_id = @id", ("@id", existing.Id));
+
+        async Task<ClientCheckResponse> CheckAsync(object body)
+        {
+            var response = await Client.PostJsonAsync("/api/clients/check", body, admin.AccessToken);
+            ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+            return await response.ReadAsync<ClientCheckResponse>();
+        }
+
+        var dupe = await CheckAsync(new { name = existing.Name.ToUpperInvariant(), contacts = new[] { new { kind = "email", value = " " + email.ToUpperInvariant() } } });
+        dupe.NameTaken.ShouldBeTrue();
+        dupe.ContactTakenBy!.ClientId.ShouldBe(existing.Id);
+
+        (await CheckAsync(new { name = existing.Name, contacts = new[] { new { kind = "email", value = email } }, exceptClientId = existing.Id }))
+            .ShouldBe(new ClientCheckResponse(false, null));
+        (await CheckAsync(new { name = "Someone new", contacts = Array.Empty<object>() })).ShouldBe(new ClientCheckResponse(false, null));
+    }
 }
