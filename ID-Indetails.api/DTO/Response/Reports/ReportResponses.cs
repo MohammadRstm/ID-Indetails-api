@@ -96,6 +96,9 @@ public sealed record ProjectMinutesResponse(long ProjectId, string Title, int Mi
 /// <param name="PreviousWeekly">As many weeks ending with the previous period, oldest first, for comparison.</param>
 /// <param name="OvertimeMinutes">The part of the period's <paramref name="Minutes"/> that is overtime.</param>
 /// <param name="Attention">At most 5 items.</param>
+/// <param name="PeopleCount">People who logged work in the period.</param>
+/// <param name="ProjectCount">Projects worked on in the period.</param>
+/// <param name="ThisWeekMinutes">Everything logged since the start of this week.</param>
 public sealed record OverviewResponse(
     OverviewPeriod Period,
     DateOnly From,
@@ -115,4 +118,7 @@ public sealed record OverviewResponse(
     IReadOnlyList<AttentionItemResponse> Attention,
     IReadOnlyList<ProjectMinutesResponse> ByProject,
     IReadOnlyList<StatusCountResponse> ProjectsByStatus,
-    ProjectMinutesResponse? BusiestProjectThisWeek);
+    ProjectMinutesResponse? BusiestProjectThisWeek,
+    int PeopleCount,
+    int ProjectCount,
+    int ThisWeekMinutes);

@@ -181,7 +181,10 @@ public sealed class ReportService(
             await AttentionAsync(projects, people, logging, settings, today, cancellationToken),
             ProjectMinutes(current, titles).Take(OverviewProjects).ToList(),
             projects.GroupBy(p => p.Status).Select(g => new StatusCountResponse(g.Key, g.Count())).OrderBy(s => s.Status).ToList(),
-            ProjectMinutes(thisWeek, titles).FirstOrDefault());
+            ProjectMinutes(thisWeek, titles).FirstOrDefault(),
+            current.Select(w => w.UserId).Distinct().Count(),
+            current.Select(w => w.ProjectId).Distinct().Count(),
+            thisWeek.Sum(w => w.Minutes));
     }
 
     /// <summary>The caller's access, once they are known to see Design; otherwise the Design reports are not found.</summary>
