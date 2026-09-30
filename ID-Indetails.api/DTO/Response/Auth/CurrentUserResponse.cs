@@ -20,6 +20,8 @@ public sealed record CurrentUserResponse
 
     public string? Position { get; init; }
 
+    public string? Phone { get; init; }
+
     /// <summary>Their profile photo, read through <c>GET /api/files/{id}</c>.</summary>
     public long? PhotoFileId { get; init; }
 
