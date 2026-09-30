@@ -8,6 +8,7 @@ namespace ID_Indetails.api.DTO.Response.Payroll;
 /// <param name="Basis">Pay basis on their latest day of work in the period; null without a pay record.</param>
 /// <param name="RateChanged">Their hourly rate changed during the period.</param>
 /// <param name="Priced">False when they had no pay record (their time is paid 0).</param>
+/// <param name="MonthlySalary">The salary behind their hourly rate on that latest day, when they are paid monthly.</param>
 public sealed record ProjectPayPersonResponse(
     long UserId,
     string Name,
@@ -22,7 +23,9 @@ public sealed record ProjectPayPersonResponse(
     string Currency,
     decimal Pay,
     bool Priced,
-    long? PhotoFileId);
+    long? PhotoFileId,
+    string? Position,
+    decimal? MonthlySalary);
 
 public sealed record ProjectPayProjectResponse(
     long ProjectId,

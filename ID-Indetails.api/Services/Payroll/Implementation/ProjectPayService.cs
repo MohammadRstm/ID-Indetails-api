@@ -35,7 +35,7 @@ public sealed class ProjectPayService(
     ICompanySettingsService settings,
     IClock clock) : IProjectPayService
 {
-    private sealed record PricedWork(long ProjectId, long UserId, DateOnly Day, ProjectPay.EntryPay Pay, PayBasis? Basis);
+    private sealed record PricedWork(long ProjectId, long UserId, DateOnly Day, ProjectPay.EntryPay Pay, PayBasis? Basis, decimal? MonthlySalary);
 
     public async Task<ProjectPayResponse> GetAsync(ProjectPayQuery query, CancellationToken cancellationToken = default)
     {
@@ -190,7 +190,8 @@ public sealed class ProjectPayService(
                     e.UserId,
                     split.Day,
                     ProjectPay.Of(split, madeUp, terms, calendar.PolicyOn(split.Day).OvertimeMultiplier),
-                    terms?.Basis);
+                    terms?.Basis,
+                    terms?.Basis == PayBasis.Monthly ? terms.Amount : null);
             })
             .ToList();
 
@@ -215,7 +216,9 @@ public sealed class ProjectPayService(
             latest.Pay.Currency,
             Math.Round(work.Sum(w => w.Pay.Pay), 2, MidpointRounding.AwayFromZero),
             work.All(w => w.Pay.Priced),
-            user.PhotoFileId);
+            user.PhotoFileId,
+            user.Position,
+            latest.MonthlySalary);
     }
 
     private static IReadOnlyList<CurrencyTotalResponse> Totals(IEnumerable<ProjectPayPersonResponse> people)
