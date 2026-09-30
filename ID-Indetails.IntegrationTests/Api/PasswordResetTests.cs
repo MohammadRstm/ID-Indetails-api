@@ -20,7 +20,7 @@ public class PasswordResetTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await ForgotAsync(email);
         var message = api.Emails.LastTo(email);
-        message.Subject.ShouldBe("Reset your Hourline password");
+        message.Subject.ShouldBe("Reset your ID InDetails password");
         message.TextBody.ShouldContain("/reset-password?token=");
         var token = api.Emails.ResetTokenFor(email);
 

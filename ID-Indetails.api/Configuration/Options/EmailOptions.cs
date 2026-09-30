@@ -24,9 +24,9 @@ public sealed class EmailOptions
     public string FromAddress { get; init; } = "no-reply@id-indetails.local";
 
     [Required]
-    public string FromName { get; init; } = "Hourline";
+    public string FromName { get; init; } = "ID InDetails";
 
     /// <summary>Product name used in email subjects and bodies.</summary>
     [Required]
-    public string ProductName { get; init; } = "Hourline";
+    public string ProductName { get; init; } = "ID InDetails";
 }

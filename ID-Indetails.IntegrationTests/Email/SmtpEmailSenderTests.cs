@@ -25,7 +25,7 @@ public class SmtpEmailSenderTests
             Host = "127.0.0.1",
             Port = 1025,
             FromAddress = "no-reply@id-indetails.local",
-            FromName = "Hourline",
+            FromName = "ID InDetails",
         }));
 
         await sender.SendAsync(new EmailMessage(
