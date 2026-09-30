@@ -38,6 +38,11 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
             defaultCurrency = "lbp",
         };
 
+        // before anything is saved, the company goes by its default name
+        var fresh = await OkAsync<CompanySettingsResponse>(Client.GetAsync("/api/company/settings", admin.AccessToken));
+        fresh.IsSetUp.ShouldBeFalse();
+        fresh.Name.ShouldBe("ID InDetails");
+
         await (await Client.PutJsonAsync("/api/company/settings", body, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         var saved = await OkAsync<CompanySettingsResponse>(Client.PutJsonAsync("/api/company/settings", body, superAdmin.AccessToken));

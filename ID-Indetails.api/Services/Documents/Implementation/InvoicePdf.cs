@@ -72,7 +72,9 @@ public static class InvoicePdf
         var terms = invoice.TermsDays > 0
             ? $"Payment due within {invoice.TermsDays} days of the invoice date."
             : "Payment due on receipt.";
-        PdfLayout.AddNote(section, $"{terms} Please quote the invoice number with your transfer. {billing?.TermsText}".Trim());
+        // a draft has no number yet: it gets one when it is sent
+        var quote = invoice.Number is { } n ? $"Please quote invoice {n} with your transfer." : "This draft has no number yet; it gets one when it is sent.";
+        PdfLayout.AddNote(section, $"{terms} {quote} {billing?.TermsText}".Trim());
         if (!string.IsNullOrWhiteSpace(billing?.Footer))
         {
             PdfLayout.AddNote(section, billing.Footer, spaceBeforePt: 18);

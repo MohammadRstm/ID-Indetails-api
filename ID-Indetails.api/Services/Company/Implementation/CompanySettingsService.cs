@@ -120,7 +120,8 @@ public sealed class CompanySettingsService(
     private CompanySettingsResponse Describe(CompanySettings? settings)
     {
         var s = settings ?? new CompanySettings();
+        var name = string.IsNullOrWhiteSpace(s.Name) ? options.Value.DefaultName : s.Name;
         return new CompanySettingsResponse(
-            settings is not null, s.Name, s.Address, s.Website, s.LogoFileId, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt);
+            settings is not null, name, s.Address, s.Website, s.LogoFileId, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt);
     }
 }
