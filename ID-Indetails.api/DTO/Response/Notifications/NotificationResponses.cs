@@ -2,9 +2,9 @@ using System.Text.Json;
 
 namespace ID_Indetails.api.DTO.Response.Notifications;
 
-public sealed record NotificationRefResponse(long Id, string Name);
+public sealed record NotificationRefResponse(long Id, string Name, long? PhotoFileId);
 
-public sealed record NotificationProjectResponse(long Id, string Title, string Domain);
+public sealed record NotificationProjectResponse(long Id, string Title, string Domain, string? Icon, string? Tint);
 
 /// <summary>The client writes the text and the link from the kind, the subject and the payload.</summary>
 /// <param name="Count">For rolling digests, how many things it sums up; otherwise 1.</param>

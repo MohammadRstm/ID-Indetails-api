@@ -2,15 +2,18 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Notifications.Abstraction;
 
-/// <summary>A notification as its recipient reads it, with the actor's name and the project's title.</summary>
+/// <summary>A notification as its recipient reads it, with the actor's name and photo and the project's title and tile.</summary>
 public sealed record NotificationView(
     long Id,
     string Kind,
     long? ActorId,
     string? ActorName,
+    long? ActorPhotoFileId,
     long? ProjectId,
     string? ProjectTitle,
     string? ProjectDomain,
+    string? ProjectIcon,
+    string? ProjectTint,
     string? SubjectType,
     long? SubjectId,
     string? Payload,

@@ -64,25 +64,29 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
         var projectIds = rows.Where(n => n.ProjectId != null).Select(n => n.ProjectId!.Value).Distinct().ToList();
         var actors = (await db.Users.AsNoTracking()
                 .Where(u => actorIds.Contains(u.Id))
-                .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+                .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, u.PhotoFileId })
                 .ToListAsync(cancellationToken))
-            .ToDictionary(u => u.Id, u => PersonName.Of(u.FirstName, u.LastName, u.Email));
+            .ToDictionary(u => u.Id, u => (Name: PersonName.Of(u.FirstName, u.LastName, u.Email), u.PhotoFileId));
         var projects = await db.Projects.AsNoTracking()
             .Where(p => projectIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.Title, p.DomainCode })
+            .Select(p => new { p.Id, p.Title, p.DomainCode, p.Icon, p.Tint })
             .ToDictionaryAsync(p => p.Id, cancellationToken);
 
         var items = rows.Select(n =>
         {
             var project = n.ProjectId is { } p ? projects.GetValueOrDefault(p) : null;
+            (string Name, long? PhotoFileId)? actor = n.ActorId is { } a && actors.TryGetValue(a, out var found) ? found : null;
             return new NotificationView(
                 n.Id,
                 n.Kind,
                 n.ActorId,
-                n.ActorId is { } a ? actors.GetValueOrDefault(a) : null,
+                actor?.Name,
+                actor?.PhotoFileId,
                 n.ProjectId,
                 project?.Title,
                 project?.DomainCode,
+                project?.Icon,
+                project?.Tint,
                 n.SubjectType,
                 n.SubjectId,
                 n.Payload,

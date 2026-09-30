@@ -68,8 +68,8 @@ public sealed class NotificationService(
     private static NotificationResponse ToResponse(NotificationView n) => new(
         n.Id,
         n.Kind,
-        n.ActorId is { } a ? new NotificationRefResponse(a, n.ActorName ?? string.Empty) : null,
-        n.ProjectId is { } p ? new NotificationProjectResponse(p, n.ProjectTitle ?? string.Empty, n.ProjectDomain ?? string.Empty) : null,
+        n.ActorId is { } a ? new NotificationRefResponse(a, n.ActorName ?? string.Empty, n.ActorPhotoFileId) : null,
+        n.ProjectId is { } p ? new NotificationProjectResponse(p, n.ProjectTitle ?? string.Empty, n.ProjectDomain ?? string.Empty, n.ProjectIcon, n.ProjectTint) : null,
         n.SubjectType,
         n.SubjectId,
         n.Payload is null ? null : JsonDocument.Parse(n.Payload).RootElement.Clone(),
