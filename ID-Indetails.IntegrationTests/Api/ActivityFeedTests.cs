@@ -2,6 +2,8 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Activity;
 using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.DTO.Response.Reports;
 using ID_Indetails.api.Enums;
 using Shouldly;
 
@@ -109,21 +111,35 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_client_event_names_its_client_and_shows_under_that_client()
+    public async Task Client_events_and_reports_name_the_client_as_everywhere_else()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var organisation = $"Cedar {Guid.NewGuid():N}"[..20];
         var client = await (await Client.PostJsonAsync("/api/clients", new
         {
             name = "Rami Khoury",
+            organisation,
             label = "Client",
             contacts = new[] { new { kind = "email", value = AuthTestSteps.NewEmail("client"), isWhatsapp = false } },
         }, admin.AccessToken)).ReadAsync<ClientResponse>();
 
+        // client_added is about the client (its subject), and names it by its organisation
         var feed = await (await Client.GetAsync($"/api/activity?clientId={client.Id}", admin.AccessToken))
             .ReadAsync<PagedResponse<ActivityItemResponse>>();
         var added = feed.Items.Single(i => i.Kind == ActivityEventKinds.ClientAdded);
         added.Client!.Id.ShouldBe(client.Id);
-        added.Client.Name.ShouldBe("Rami Khoury");
+        added.Client.Name.ShouldBe(organisation);
+
+        var created = await Client.PostJsonAsync("/api/projects",
+            new { title = "Project " + Guid.NewGuid().ToString("N")[..8], domainCode = DomainCodes.Design, clientId = client.Id, revenue = 5000m }, admin.AccessToken);
+        var project = await created.ReadAsync<ProjectResponse>();
+        await Work.LogAsync(employee.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 45, "Moodboard");
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut")));
+        var report = await (await Client.GetAsync($"/api/reports/work?from={today.AddDays(-1):yyyy-MM-dd}&to={today:yyyy-MM-dd}&projectId={project.Id}", admin.AccessToken))
+            .ReadAsync<WorkReportResponse>();
+        report.ByClient.Single().Name.ShouldBe(organisation);
     }
 }

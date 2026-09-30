@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Models;
@@ -72,19 +73,21 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
             .ToDictionary(u => u.Id, u => PersonName.Of(u.FirstName, u.LastName, u.Email));
         var projects = await db.Projects.AsNoTracking()
             .Where(p => projectIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.Title, p.ClientId, ClientName = p.Client != null ? p.Client.Name : null })
+            .Select(p => new { p.Id, p.Title, p.ClientId, ClientName = p.Client != null ? p.Client.Name : null, ClientOrganisation = p.Client != null ? p.Client.Organisation : null })
             .ToDictionaryAsync(p => p.Id, cancellationToken);
         var clientIds = rows.Select(OwnClientId).OfType<long>().Distinct().ToList();
         var clients = await db.Clients.AsNoTracking()
             .Where(c => clientIds.Contains(c.Id))
-            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+            .Select(c => new { c.Id, c.Name, c.Organisation })
+            .ToDictionaryAsync(c => c.Id, c => ClientRules.DisplayName(c.Name, c.Organisation), cancellationToken);
 
         var items = rows.Select(e =>
         {
             var project = e.ProjectId is { } p ? projects.GetValueOrDefault(p) : null;
             var own = OwnClientId(e);
             var clientId = own ?? project?.ClientId;
-            var clientName = own is { } c ? clients.GetValueOrDefault(c) : project?.ClientName;
+            var clientName = own is { } c ? clients.GetValueOrDefault(c)
+                : project?.ClientName is { } name ? ClientRules.DisplayName(name, project.ClientOrganisation) : null;
             return new FeedEvent(
                 e.Id,
                 e.Kind,
