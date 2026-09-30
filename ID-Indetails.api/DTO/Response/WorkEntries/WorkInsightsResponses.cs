@@ -67,6 +67,9 @@ public sealed record FocusProjectResponse(long ProjectId, string Title);
 /// <param name="Focus">The project with the most time in the last 14 days.</param>
 /// <param name="Weekly">The last 8 weeks, oldest first.</param>
 /// <param name="LabourCost">All time; only for callers with financial:view.</param>
+/// <param name="MinutesLast30Days">Logged over the last 30 days, today included: the page adds them up per team.</param>
+/// <param name="OvertimeMinutesThisMonth">This month's overtime, from each whole day (see IOvertimeService).</param>
+/// <param name="HourlyRate">Their hourly cost today, only for callers with financial:view.</param>
 public sealed record PersonWorkResponse(
     long Id,
     string Name,
@@ -85,6 +88,9 @@ public sealed record PersonWorkResponse(
     DateTime? LastStartedAt,
     FocusProjectResponse? Focus,
     IReadOnlyList<int> Weekly,
+    int MinutesLast30Days,
+    int OvertimeMinutesThisMonth,
+    CurrencyAmountResponse? HourlyRate,
     LabourCostResponse? LabourCost);
 
 public sealed record TimelinePersonResponse(long UserId, string Name, int Minutes);

@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Employees;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -217,9 +218,25 @@ public sealed class WorkInsightsService(
         var weekStart = WorkStats.WeekStartOf(today, calendar.FirstDayOfWeek);
         var quarterStart = WorkStats.QuarterStartOf(today);
         var focusFrom = today.AddDays(-(FocusDays - 1));
-        var pricer = actor.Has(PermissionCodes.FinancialView)
+        var money = actor.Has(PermissionCodes.FinancialView);
+        var pricer = money
             ? await LabourPricer.LoadAsync(financeSources, projectFinance, people.SelectMany(p => rows[p.Id]).ToList(), clock, cancellationToken)
             : null;
+        var rates = money
+            ? (await financeSources.PayRatesAsync(people.Select(p => p.Id).ToList(), cancellationToken))
+                .GroupBy(r => r.UserId)
+                .ToDictionary(g => g.Key, g => ProjectFinance.RateOn(g.OrderBy(r => r.EffectiveFrom).ToList(), today))
+            : new Dictionary<long, ProjectFinance.PayRate>();
+
+        // This month's overtime depends on each whole day, as everywhere else.
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var overtimeByEntry = await overtime.ByEntryAsync(
+            people.SelectMany(p => rows[p.Id])
+                .Where(r => clock.ToCompanyDate(r.StartedAt) >= monthStart)
+                .Select(r => new LoggedWork(r.Id, r.UserId, r.StartedAt))
+                .ToList(),
+            cancellationToken);
+        var last30From = today.AddDays(-29);
 
         var worked = people.ToDictionary(p => p.Id, p => rows[p.Id].Select(ToWorked).ToList());
         var focusOf = worked.ToDictionary(
@@ -250,6 +267,9 @@ public sealed class WorkInsightsService(
                     rows[p.Id].Select(r => (DateTime?)r.StartedAt).Max(),
                     focus is { } id ? new FocusProjectResponse(id, titles.GetValueOrDefault(id, "")) : null,
                     WorkStats.Weekly(mine, today, SparkWeeks, calendar.FirstDayOfWeek).Select(w => w.Minutes).ToList(),
+                    WorkStats.Minutes(mine, last30From, today),
+                    rows[p.Id].Sum(r => overtimeByEntry.GetValueOrDefault(r.Id)),
+                    rates.TryGetValue(p.Id, out var rate) ? new CurrencyAmountResponse(rate.Currency, rate.HourlyCost) : null,
                     pricer?.Price(rows[p.Id]));
             })
             .OrderByDescending(p => p.WeekMinutes)
