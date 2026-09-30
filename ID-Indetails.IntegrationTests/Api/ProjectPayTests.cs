@@ -61,8 +61,12 @@ public class ProjectPayTests(ApiFactory api) : IClassFixture<ApiFactory>
         report.To.ShouldBe(new DateOnly(2026, 6, 30));
         var group = report.Projects.ShouldHaveSingleItem();
         group.ProjectId.ShouldBe(project.Id);
-        group.People.Single(p => p.UserId == salaried.User.Id).Pay.ShouldBe(80m);
-        group.People.Single(p => p.UserId == hourly.User.Id).Pay.ShouldBe(160m);
+        group.People.Single(p => p.UserId == salaried.User.Id).ShouldSatisfyAllConditions(
+            p => p.Pay.ShouldBe(80m),
+            p => p.MonthlySalary.ShouldBe(1733.30m));
+        group.People.Single(p => p.UserId == hourly.User.Id).ShouldSatisfyAllConditions(
+            p => p.Pay.ShouldBe(160m),
+            p => p.MonthlySalary.ShouldBeNull());
         group.NormalMinutes.ShouldBe(2 * 480);
         report.Totals.ShouldHaveSingleItem().Total.ShouldBe(240m);
 

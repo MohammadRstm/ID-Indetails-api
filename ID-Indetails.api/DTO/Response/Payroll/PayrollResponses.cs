@@ -61,6 +61,8 @@ public sealed record SalaryRowResponse
 
     public long? PhotoFileId { get; init; }
 
+    public string? Position { get; init; }
+
     public required int WorkingDays { get; init; }
 
     public required int WorkingDaysPaid { get; init; }

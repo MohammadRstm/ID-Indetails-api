@@ -225,6 +225,7 @@ public sealed class SalaryService(
             ProRated = r.ProRated,
             LeftOn = c.Input.LeftOn,
             PhotoFileId = user.PhotoFileId,
+            Position = user.Position,
             WorkingDays = r.WorkingDays,
             WorkingDaysPaid = r.WorkingDaysPaid,
             Deduction = r.Deduction,
