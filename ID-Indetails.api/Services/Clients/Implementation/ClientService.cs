@@ -111,7 +111,8 @@ public sealed class ClientService(
             query.PageSize,
             query.Filter,
             query.Sort,
-            query.IncludeArchived);
+            query.IncludeArchived,
+            query.Reverse);
         IReadOnlyList<ClientRow> rows;
         int total;
         IReadOnlyDictionary<long, ClientMoneyResponse>? money = null;
@@ -121,7 +122,7 @@ public sealed class ClientService(
             var (all, _) = await clients.SearchAsync(search with { Page = 1, PageSize = int.MaxValue }, cancellationToken);
             var allMoney = await MoneyOfAsync(all, cancellationToken);
             var matching = all.Where(r => query.Filter != ClientFilter.Owing || allMoney[r.Client.Id].Billing.Outstanding > 0).ToList();
-            rows = SortedByMoney(matching, allMoney, query.Sort).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToList();
+            rows = SortedByMoney(matching, allMoney, query.Sort, query.Reverse).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToList();
             total = matching.Count;
             money = allMoney;
         }
@@ -388,14 +389,17 @@ public sealed class ClientService(
     private static IEnumerable<ClientRow> SortedByMoney(
         IEnumerable<ClientRow> rows,
         IReadOnlyDictionary<long, ClientMoneyResponse> money,
-        ClientSort sort)
+        ClientSort sort,
+        bool reverse)
     {
+        // highest first, or lowest first when reversed
+        IOrderedEnumerable<ClientRow> By<TKey>(Func<ClientRow, TKey> key) => reverse ? rows.OrderBy(key) : rows.OrderByDescending(key);
         var ordered = sort switch
         {
-            ClientSort.Revenue => rows.OrderByDescending(r => money[r.Client.Id].Revenue),
-            ClientSort.Profit => rows.OrderByDescending(r => money[r.Client.Id].Profit),
-            ClientSort.Margin => rows.OrderByDescending(r => money[r.Client.Id].Margin ?? decimal.MinValue),
-            ClientSort.Outstanding => rows.OrderByDescending(r => money[r.Client.Id].Billing.Outstanding),
+            ClientSort.Revenue => By(r => money[r.Client.Id].Revenue),
+            ClientSort.Profit => By(r => money[r.Client.Id].Profit),
+            ClientSort.Margin => By(r => money[r.Client.Id].Margin ?? decimal.MinValue),
+            ClientSort.Outstanding => By(r => money[r.Client.Id].Billing.Outstanding),
             // Filtered by money but sorted by something else: the repository's order stands.
             _ => null,
         };
