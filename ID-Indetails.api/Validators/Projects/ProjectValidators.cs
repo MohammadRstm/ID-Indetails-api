@@ -99,3 +99,14 @@ internal static class ProjectRuleExtensions
             .Must(v => v is null || v is >= 0 and <= 5).WithMessage("Material markup must be between 0 and 5 (0% to 500%).")
             .Must(v => v is null || decimal.Round(v.Value, 4) == v).WithMessage("Material markup can have at most 4 decimals.");
 }
+
+public sealed class ProjectReportQueryValidator : AbstractValidator<ProjectReportQuery>
+{
+    public ProjectReportQueryValidator()
+    {
+        RuleFor(x => x.Kind).IsInEnum().WithMessage("Kind must be internal or client.");
+        RuleForEach(x => x.Sections).IsInEnum().WithMessage("Unknown report section.");
+        RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
+            .WithMessage("The range must end on or after its start.");
+    }
+}

@@ -20,55 +20,16 @@ This page covers what the API does today, what is in progress, and what the prot
 | Messaging, live updates, online status and last seen | [messaging.md](messaging.md) | #20 |
 | Search | [search.md](search.md) | #22 |
 | Uploads: message and work-entry attachments, profile photos, the company logo and sign-in branding | [files.md](files.md) | `MR-Files` |
+| The prototype gaps: Design cost over time, client overview, list totals, CSV export, wider search, timeline entries, People columns, overtime preview, site teams | [projects.md](projects.md), [clients.md](clients.md), [design.md](design.md), [me.md](me.md) | `MR-Gaps` |
+| PDFs of invoices, statements and project reports; emailing invoices and statements | [documents.md](documents.md) | `MR-Gaps` |
 
 The tests: 342 unit tests and 272 integration tests against real MySQL. The integration run takes about 7 minutes ([local-development.md](local-development.md#tests)).
 
 ## Not built yet
 
-These are compared with the prototype. None needs a schema change unless it says so.
+Every gap found by comparing the API with the prototype on 30 Sep 2026 is built on `MR-Gaps`: Design cost over time, the client overview, list totals and the financials CSV, wider search and filters, the Timeline tab's entries, People page columns, the overtime preview, site teams, project looks, PDFs and emailing. What is left:
 
-### Projects and money
-
-- **A Design project's cost over time.** Weekly cost is needed for the "payment vs cumulative cost" and "cost composition" charts and for the project report (`56-project-finance.js`, `55-project.js`, `58-report.js`). Today only Execution sites get it (`/site-money/timeline`).
-- **The activity feed's Money group** leaves out Execution money: materials, labour weeks, labour defaults and statements (`10-data.js` activity groups).
-- **Client list header figures and growth chart:**
-  - counts: with active work, without projects, added this month, newest;
-  - total revenue, profit and margin, and the largest client's share;
-  - the 13-month growth series (`12-clients.js`, `68-clients.js`).
-- **Wider search and filters:**
-  - projects by description;
-  - clients by note, contact email and phone;
-  - archived clients listed alongside active ones;
-  - an "internal (no client)" filter on activity and reports;
-  - a client filter on `/reports/work`.
-- **Totals for the filtered project list**: revenue, cost, profit and internal cost (`50-admin.js`). Sorting and filtering by money stay out (M7).
-- **Project page details**: when a project went on hold, and who created an invoice.
-- **Financials CSV export** (`65-financials.js`).
-- **Smaller items:**
-  - the overview names people who aren't logging, not only their count;
-  - a duplicate-client check before saving.
-
-### People and work
-
-- **An Execution site's "Team"** on its cards: with no project members (O12), it would be the people who recorded materials or labour there.
-- **The Timeline tab's lanes and one-day view**: these need individual entries with each person's team, not day totals (`59-timeline-*.js`).
-- **People page**:
-  - the rate column for money viewers;
-  - hours per team over the last 30 days;
-  - the "Overtime · this month" column.
-- **Project icon and tint** on My work, my projects, meetings and profile tables. Person ids on team activity.
-- **The log form's overtime preview**:
-  - `/me/schedule?date=` gives the day's totals only;
-  - showing the entry being drafted (before hours, after hours, past 7 h) would need a preview endpoint, so the client doesn't copy the overtime rule.
-- **The search palette with nothing typed.**
-
-### Documents and delivery
-
-- **PDFs** of invoices, statements and project reports, made on the server (O3). The library is open question 3.
-- **Emailing invoices and statements.** Deliveries are recorded, but nothing is sent.
-
-### Outside the API
-
+- **PDF layout.** The documents are a plain first version. The project report doesn't have the prototype's "Performance" charts yet ([documents.md](documents.md)).
 - **The React client** isn't connected yet.
 - **There is no CI pipeline.**
 

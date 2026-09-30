@@ -57,7 +57,9 @@ A statement tells the client which materials were supplied, at the prices they a
 | `POST /api/projects/{id}/statements/preview` | `statement:create` | The statement as it would be made now, with a provisional number; nothing is saved |
 | `POST /api/projects/{id}/statements` | `statement:create` | `{ mode: detail \| total, includeEarlier, excludedMaterialIds, unlistedTypeKeys }` makes and numbers it |
 | `GET /api/statements/{statementId}` | `statement:create`, `statement:send` or `financial:view` | The statement as the client reads it |
-| `POST /api/statements/{statementId}/deliveries` | `statement:send` | `{ channel: email \| whatsapp \| download, recipient, note }` records a send. Repeatable. Saving the PDF counts as a `download` |
+| `GET /api/statements/{statementId}/pdf` | `statement:create`, `statement:send` or `financial:view` | The statement as a PDF (`st-2026-003.pdf`). Downloading records nothing |
+| `POST /api/statements/{statementId}/email` | `statement:send` | `{ to, note }` emails the statement to the client with its PDF attached and records an `email` delivery. If sending fails, nothing is recorded (`503 email_delivery_failed`) |
+| `POST /api/statements/{statementId}/deliveries` | `statement:send` | `{ channel: email \| whatsapp \| download, recipient, note }` records a send made outside Hourline. Repeatable. Saving the PDF counts as a `download` |
 
 Rules (`Business/Statements/StatementRules.cs`):
 
@@ -68,7 +70,7 @@ Rules (`Business/Statements/StatementRules.cs`):
 - **Prices are frozen.** Each line keeps the client price shown, and every material a statement shows becomes *stated*: its price is written to the material and no markup change or manual price moves it again (see Materials).
 - The **payment summary** is snapshotted: what was received and the agreed amount (material client prices plus the fee, from the shared finance calculator), with what remains or was paid ahead. Everyone who may read the statement sees it, `financial:view` or not: it is printed on the client's document (decision M10 in [business-rules-review.md](business-rules-review.md)).
 - **Numbers** are `ST-YYYY-NNN`, one sequence per year across the company, taken from `statement_sequences` under a row lock so a number is never handed out twice. A preview doesn't use one up. Statements can be made while a site is on hold or finalised.
-- The server records sends but doesn't email the statement; the client produces the PDF.
+- **The PDF** is made on the server (see [documents.md](documents.md)). It shows the same rows, totals and payment summary, and ends by saying it is not an invoice.
 - Events: `statement_created` and `statement_sent` (the statement's total in the `amount` column; the number, and the mode or channel, in the payload).
 
 ## Site staff views

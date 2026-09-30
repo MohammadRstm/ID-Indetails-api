@@ -109,6 +109,8 @@ using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.Settings.Implementation;
 using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
+using ID_Indetails.api.Services.Documents.Abstraction;
+using ID_Indetails.api.Services.Documents.Implementation;
 using ID_Indetails.api.Services.Statements.Abstraction;
 using ID_Indetails.api.Services.Statements.Implementation;
 using ID_Indetails.api.Services.Files.Abstraction;
@@ -253,6 +255,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMaterialService, MaterialService>();
         services.AddScoped<ILabourService, LabourService>();
         services.AddScoped<IStatementService, StatementService>();
+        services.AddScoped<IDocumentService, DocumentService>();
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();

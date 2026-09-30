@@ -133,7 +133,7 @@ Answers to the questions raised after the helper sessions' work was merged.
 
 | # | Rule |
 |---|---|
-| O3 | **PDFs are made on the server**, so invoices and statements can be emailed with them. The library is still to be chosen (open question 3). |
+| O3 | **PDFs are made on the server**, so invoices and statements can be emailed with them. The library is PDFsharp with MigraDoc (MIT licence, free for everyone). The layout starts plain and is refined later. The documents have no Arabic ([documents.md](documents.md)). |
 | O4, O5 | **Employment is dated periods** (decision 24): leaving takes a last working day, and time away between two periods isn't paid unless it began that month and the admin says so. |
 | O6 | **The month just ended stays open through the 1st** (D11). |
 | O7 | **The cost warning is Design only** (A1). A material's cost is always what was paid for it; the client price is typed or worked out from the markup, never used as the cost. |
@@ -155,4 +155,3 @@ These have no decision yet. The schema doesn't depend on them.
 
 1. **Public holidays:** a company holiday calendar, or keep excusing per person?
 2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
-3. **The PDF library:** QuestPDF (free for companies under $1M a year in revenue, a paid licence above that) or PdfSharp with MigraDoc (free for everyone, harder to lay out). Either is a new dependency.

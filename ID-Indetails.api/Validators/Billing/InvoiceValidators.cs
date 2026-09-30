@@ -51,6 +51,15 @@ public sealed class RecordDeliveryRequestValidator : AbstractValidator<RecordDel
     }
 }
 
+public sealed class EmailDocumentRequestValidator : AbstractValidator<EmailDocumentRequest>
+{
+    public EmailDocumentRequestValidator()
+    {
+        RuleFor(x => x.To).ValidEmail();
+        RuleFor(x => x.Note).ClientText("Note", 500);
+    }
+}
+
 public sealed class VoidRequestValidator : AbstractValidator<VoidRequest>
 {
     public VoidRequestValidator()

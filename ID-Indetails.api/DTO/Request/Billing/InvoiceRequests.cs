@@ -60,6 +60,15 @@ public sealed record RecordDeliveryRequest
     public string? Note { get; init; }
 }
 
+/// <summary>Emails an invoice or statement to the client with its PDF attached.</summary>
+public sealed record EmailDocumentRequest
+{
+    public string To { get; init; } = string.Empty;
+
+    /// <summary>Kept with the delivery; not in the email.</summary>
+    public string? Note { get; init; }
+}
+
 public sealed record VoidRequest
 {
     public string Reason { get; init; } = string.Empty;

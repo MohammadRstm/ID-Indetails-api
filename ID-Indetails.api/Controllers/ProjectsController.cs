@@ -5,6 +5,7 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,7 +14,10 @@ namespace ID_Indetails.api.Controllers;
 /// <summary>Projects. Projects of a domain the caller can't see read as 404.</summary>
 [ApiController]
 [Route("api/projects")]
-public sealed class ProjectsController(IProjectService projectService, IProjectStatusService statusService) : ControllerBase
+public sealed class ProjectsController(
+    IProjectService projectService,
+    IProjectStatusService statusService,
+    IDocumentService documents) : ControllerBase
 {
     [HttpGet]
     [HasPermission(PermissionCodes.ProjectView)]
@@ -31,6 +35,16 @@ public sealed class ProjectsController(IProjectService projectService, IProjectS
     [HasPermission(PermissionCodes.ProjectView)]
     public Task<ProjectResponse> Get(long projectId, CancellationToken cancellationToken)
         => projectService.GetAsync(projectId, cancellationToken);
+
+    /// <summary>A Design project's report as a PDF: internal (everything) or the client summary (no costs, rates, profit or margin).</summary>
+    [HttpGet("{projectId:long}/report")]
+    [HasPermission(PermissionCodes.FinancialView)]
+    [HasPermission(PermissionCodes.WorkEntryViewAll)]
+    public async Task<IActionResult> Report(long projectId, [FromQuery] ProjectReportQuery query, CancellationToken cancellationToken)
+    {
+        var pdf = await documents.ProjectReportPdfAsync(projectId, query, cancellationToken);
+        return File(pdf.Content, "application/pdf", pdf.FileName);
+    }
 
     [HttpPost]
     [HasPermission(PermissionCodes.ProjectCreate)]
