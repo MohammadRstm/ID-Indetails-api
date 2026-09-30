@@ -159,6 +159,14 @@ public class ClientOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         // Another domain's clients aren't counted.
         (await (await Client.GetAsync("/api/clients/overview", siteAdmin.AccessToken)).ReadAsync<ClientOverviewResponse>()).Clients.ShouldBe(0);
     }
+}
+
+/// <summary>Its own database, so its client doesn't change the overview's counts.</summary>
+public class ClientCheckTests(ApiFactory api) : IClassFixture<ApiFactory>
+{
+    private readonly AuthTestSteps _steps = new(api);
+    private HttpClient Client => _steps.Client;
+    private ProjectTestSteps Projects => new(_steps);
 
     [Fact]
     public async Task The_client_form_hears_about_a_name_or_contact_already_used_before_saving()
