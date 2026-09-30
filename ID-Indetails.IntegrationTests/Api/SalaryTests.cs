@@ -72,6 +72,11 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         short_.DeductionMinutes.ShouldBe(8760 + 20 * 60);
         short_.Salary.BasePay.ShouldBe(73.30m);
         short_.OvertimeWork.ShouldHaveSingleItem().MadeUpMinutes.ShouldBe(60);
+        short_.WorkingDays.Count.ShouldBe(22);
+        short_.WorkingDays.ShouldAllBe(d => d.RequiredMinutes == 420 && d.Date.DayOfWeek != DayOfWeek.Saturday && d.Date.DayOfWeek != DayOfWeek.Sunday);
+
+        var list = await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?month=2026-06&search={designer.User.Email}", superAdmin.AccessToken));
+        list.Summary.ExpectedMinutes.ShouldBe(22 * 420);
 
         // Excusing the other days clears the shortfall; the extra hour is then paid as overtime at 1x (the seeded multiplier).
         var otherDays = Enumerable.Range(2, 29).Select(d => $"2026-06-{d:00}").ToArray();
@@ -101,6 +106,7 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var row = list.Rows.Items.ShouldHaveSingleItem();
         row.TracksHours.ShouldBeFalse();
         row.ExpectedMinutes.ShouldBeNull();
+        list.Summary.ExpectedMinutes.ShouldBeNull();
         row.Total.ShouldBe(1733.30m);
         list.InProgress.ShouldBeFalse();
         list.Totals.ShouldHaveSingleItem().Currency.ShouldBe("USD");

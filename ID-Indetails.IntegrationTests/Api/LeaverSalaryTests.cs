@@ -56,7 +56,10 @@ public class LeaverSalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var detail = await Client.GetAsync($"/api/company/salaries/{leaver.User.Id}?month=2026-06", superAdmin.AccessToken);
         ((int)detail.StatusCode).ShouldBe(200, await detail.Content.ReadAsStringAsync());
-        (await detail.ReadAsync<SalaryDetailResponse>()).MissedDays.Count.ShouldBe(11);
+        var juneDetail = await detail.ReadAsync<SalaryDetailResponse>();
+        juneDetail.MissedDays.Count.ShouldBe(11);
+        // Only the days they were still employed can be excused.
+        juneDetail.WorkingDays.Select(d => d.Date).ShouldBe(juneDetail.MissedDays);
 
         var csv = await (await Client.GetAsync($"/api/company/salaries/export?month=2026-06&search={leaver.User.Email}", superAdmin.AccessToken))
             .Content.ReadAsStringAsync();
