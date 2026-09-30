@@ -40,7 +40,7 @@ public sealed class MeetingService(
         var actor = await ActorAsync(cancellationToken);
         var rows = await meetings.ListAsync(
             new MeetingSearch(
-                actor.VisibleDomains,
+                query.Domain is { } domain ? actor.VisibleDomains.Where(d => d == domain).ToList() : actor.VisibleDomains,
                 query.ProjectId,
                 query.Mine ? actor.UserId : null,
                 query.From is { } from ? clock.CompanyDayStartUtc(from) : null,
