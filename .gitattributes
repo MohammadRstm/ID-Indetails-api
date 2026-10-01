@@ -61,3 +61,8 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+###############################################################################
+# Scripts run on Linux (the deploy script on the server) keep LF line endings.
+###############################################################################
+*.sh text eol=lf
