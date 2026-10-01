@@ -53,12 +53,12 @@ public class CompanyRulesTests
     public void A_cancelled_overhead_line_can_t_be_resumed_once_another_carries_it_on()
     {
         var ended = new DateOnly(2026, 9, 30);
-        (string, OverheadCostGroup, DateOnly)[] carriedOn = [("Office rent", OverheadCostGroup.Operating, new(2026, 10, 1))];
+        (string, long, DateOnly)[] carriedOn = [("Office rent", 2, new(2026, 10, 1))];
 
-        OverheadRules.CheckResume("office rent", OverheadCostGroup.Operating, ended, carriedOn)!.Code.ShouldBe(ErrorCodes.OverheadCarriedOn);
-        OverheadRules.CheckResume("Office rent", OverheadCostGroup.Software, ended, carriedOn).ShouldBeNull();
-        OverheadRules.CheckResume("Office rent", OverheadCostGroup.Operating, ended, [("Office rent", OverheadCostGroup.Operating, new(2026, 11, 1))]).ShouldBeNull();
-        OverheadRules.CheckResume("Office rent", OverheadCostGroup.Operating, ended, []).ShouldBeNull();
+        OverheadRules.CheckResume("office rent", 2, ended, carriedOn)!.Code.ShouldBe(ErrorCodes.OverheadCarriedOn);
+        OverheadRules.CheckResume("Office rent", 1, ended, carriedOn).ShouldBeNull();
+        OverheadRules.CheckResume("Office rent", 2, ended, [("Office rent", 2, new(2026, 11, 1))]).ShouldBeNull();
+        OverheadRules.CheckResume("Office rent", 2, ended, []).ShouldBeNull();
     }
 
     [Fact]
@@ -82,5 +82,22 @@ public class CompanyRulesTests
         OverheadRules.CheckMonth(new(2026, 9, 1), Today, null, "fromMonth").ShouldBeNull();
         OverheadRules.CheckMonth(new(2026, 10, 1), Today, new DateOnly(2026, 11, 1), "fromMonth")!.Kind.ShouldBe(DenialKind.BusinessRule);
         OverheadRules.CheckMonth(new(2026, 11, 1), Today, new DateOnly(2026, 11, 1), "fromMonth").ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_new_overhead_category_goes_after_the_rest_and_before_other()
+    {
+        OverheadRules.NextSortOrder([10, 20, 130, OverheadRules.LastSortOrder]).ShouldBe(140);
+        OverheadRules.NextSortOrder([OverheadRules.LastSortOrder]).ShouldBe(10);
+        OverheadRules.NextSortOrder([]).ShouldBe(10);
+    }
+
+    [Fact]
+    public void Only_a_super_admin_manages_the_categories_and_one_in_use_stays()
+    {
+        OverheadRules.CheckManageGroups(isSuperAdmin: true).ShouldBeNull();
+        OverheadRules.CheckManageGroups(isSuperAdmin: false)!.Kind.ShouldBe(DenialKind.Forbidden);
+        OverheadRules.CheckRemoveGroup(0).ShouldBeNull();
+        OverheadRules.CheckRemoveGroup(2)!.Code.ShouldBe(ErrorCodes.OverheadGroupInUse);
     }
 }

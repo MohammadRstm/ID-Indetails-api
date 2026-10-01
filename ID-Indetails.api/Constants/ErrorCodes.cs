@@ -129,6 +129,9 @@ public static class ErrorCodes
     public const string OverheadNotCancelled = "overhead_not_cancelled";
     public const string OverheadSameCurrency = "overhead_same_currency";
     public const string OverheadCarriedOn = "overhead_carried_on";
+    public const string OverheadGroupNotFound = "overhead_group_not_found";
+    public const string OverheadGroupExists = "overhead_group_exists";
+    public const string OverheadGroupInUse = "overhead_group_in_use";
 
     // Payroll
     public const string SalaryMonthInFuture = "salary_month_in_future";

@@ -74,11 +74,29 @@ public static class OverheadRules
     /// A cancelled line can't be resumed while another with its name and group carries it on from the day after it
     /// ends (a change of currency, or it was added again): both would then be charged.
     /// </summary>
-    public static RuleDenial? CheckResume(string name, OverheadCostGroup group, DateOnly endedOn, IEnumerable<(string Name, OverheadCostGroup Group, DateOnly StartedOn)> others)
-        => others.Any(o => o.StartedOn == endedOn.AddDays(1) && o.Group == group && string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase))
+    public static RuleDenial? CheckResume(string name, long groupId, DateOnly endedOn, IEnumerable<(string Name, long GroupId, DateOnly StartedOn)> others)
+        => others.Any(o => o.StartedOn == endedOn.AddDays(1) && o.GroupId == groupId && string.Equals(o.Name, name, StringComparison.OrdinalIgnoreCase))
             ? RuleDenial.BusinessRule(ErrorCodes.OverheadCarriedOn, "Another line carries this expense on from the next day. Change that one instead.")
             : null;
 
     /// <summary>Whether a currency change from <paramref name="month"/> ends the line and adds a new one: it was charged before that month.</summary>
     public static bool CurrencyChangeSplits(DateOnly startedOn, DateOnly month) => startedOn < month;
+
+    public const int MaxGroupName = 60;
+
+    /// <summary>"Other" sorts last; every other category comes before it, a new one after the rest.</summary>
+    public const int LastSortOrder = 10_000;
+
+    public static int NextSortOrder(IEnumerable<int> existing)
+        => existing.Where(o => o < LastSortOrder).DefaultIfEmpty(0).Max() + 10;
+
+    /// <summary>The categories are the company's own: only a super admin adds, renames or removes one.</summary>
+    public static RuleDenial? CheckManageGroups(bool isSuperAdmin)
+        => isSuperAdmin ? null : RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only a super admin manages the categories of company expenses.");
+
+    /// <summary>A category still used by a line, past ones included, stays: removing it would leave them uncategorised.</summary>
+    public static RuleDenial? CheckRemoveGroup(int lines)
+        => lines > 0
+            ? RuleDenial.BusinessRule(ErrorCodes.OverheadGroupInUse, $"{lines} expense{(lines == 1 ? " uses" : "s use")} this category. Move {(lines == 1 ? "it" : "them")} to another one first.")
+            : null;
 }

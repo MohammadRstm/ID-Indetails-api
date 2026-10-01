@@ -1,5 +1,3 @@
-using ID_Indetails.api.Enums;
-
 namespace ID_Indetails.api.Models;
 
 /// <summary>
@@ -12,7 +10,9 @@ public class OverheadItem
 
     public string Name { get; set; } = string.Empty;
 
-    public OverheadCostGroup CostGroup { get; set; }
+    public long GroupId { get; set; }
+
+    public OverheadGroup Group { get; set; } = null!;
 
     public string Currency { get; set; } = "USD";
 

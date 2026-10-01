@@ -70,7 +70,7 @@ public sealed record OverheadAmountResponse(DateOnly EffectiveFrom, decimal Amou
 public sealed record OverheadLineResponse(
     long Id,
     string Name,
-    OverheadCostGroup CostGroup,
+    OverheadGroupSummaryResponse Group,
     string Currency,
     decimal? CurrentAmount,
     decimal? PerYear,
@@ -79,7 +79,12 @@ public sealed record OverheadLineResponse(
     bool IsCancelled,
     IReadOnlyList<OverheadAmountResponse> Amounts);
 
-public sealed record OverheadGroupTotalResponse(OverheadCostGroup CostGroup, string Currency, decimal Total);
+public sealed record OverheadGroupSummaryResponse(long Id, string Name);
+
+/// <param name="Lines">How many lines use it, past ones included; only one used by none can be removed.</param>
+public sealed record OverheadGroupResponse(long Id, string Name, int Lines);
+
+public sealed record OverheadGroupTotalResponse(long GroupId, string Name, string Currency, decimal Total);
 
 /// <param name="MonthTotals">This month's overhead, one total per currency.</param>
 public sealed record OverheadResponse(

@@ -80,7 +80,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         design.ProjectsWithActivity.ShouldBe(1);
         design.Loggers.ShouldBe(1);
         june.Domains.Single(d => d.Domain == DomainCodes.Execution).Revenue.ShouldBe(0m);
-        june.NetProfit.ShouldBe(3930m - june.Overhead);
+        june.NetProfit.ShouldBe(3930m - june.Overhead - june.SuperAdminSalaries);
         design.UnconvertedCosts.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "EUR", 50m)]);
         design.Invoiced.ShouldBe(0m);
         design.UnconvertedInvoices.ShouldBe([new UnconvertedInvoicesResponse("EUR", 3000m, 1)]);
@@ -113,11 +113,33 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Super_admins_salaries_come_off_the_company_s_net_profit()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null);
+        await _steps.SetJoinedOnAsync(partner.User.Id, "2026-01-01");
+        (await Client.PostJsonAsync($"/api/employees/{partner.User.Id}/pay",
+                new { basis = "monthly", amount = 3100m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        // all of March 2026, then its first 16 of 31 days
+        var march = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-03-01&to=2026-03-31", superAdmin.AccessToken));
+        march.SuperAdminSalaries.ShouldBe(3100m);
+        march.UnconvertedSuperAdminSalaries.ShouldBeEmpty();
+        march.NetProfit.ShouldBe(march.GrossProfit - march.Overhead - 3100m);
+        var half = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-03-01&to=2026-03-16", superAdmin.AccessToken));
+        half.SuperAdminSalaries.ShouldBe(1600m);
+
+        // no project carries it: the businesses' costs don't move
+        march.Domains.ShouldAllBe(d => d.Cost == 0m);
+    }
+
+    [Fact]
     public async Task Company_overhead_is_charged_to_the_period_by_calendar_days()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         (await Client.PostJsonAsync("/api/company/overhead",
-            new { name = "Office rent", costGroup = "operating", currency = "USD", amount = 3000m }, superAdmin.AccessToken))
+            new { name = "Office rent", groupId = 2, currency = "USD", amount = 3000m }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var overview = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview", superAdmin.AccessToken));
@@ -125,7 +147,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         // This month to date: its elapsed share of 3,000 (at least 1 day's worth) is charged.
         overview.Overhead.ShouldBeGreaterThan(0m);
         overview.Overhead.ShouldBeLessThanOrEqualTo(3000m);
-        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead);
+        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead - overview.SuperAdminSalaries);
 
         var months = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?months=1", superAdmin.AccessToken));
         months.ShouldHaveSingleItem().Overhead.ShouldBeGreaterThanOrEqualTo(3000m);

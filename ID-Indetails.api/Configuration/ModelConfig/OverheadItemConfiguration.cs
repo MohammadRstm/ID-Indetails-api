@@ -1,5 +1,3 @@
-using ID_Indetails.api.Data;
-using ID_Indetails.api.Enums;
 using ID_Indetails.api.Extensions;
 using ID_Indetails.api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +11,6 @@ public class OverheadItemConfiguration : IEntityTypeConfiguration<OverheadItem>
     {
         builder.ToTable("overhead_items", t =>
         {
-            t.HasCheckConstraint("ck_overhead_items_cost_group", SnakeCaseEnum.CheckSql<OverheadCostGroup>("cost_group"));
             t.HasCheckConstraint("ck_overhead_items_end_after_start", "`ended_on` IS NULL OR `ended_on` >= `started_on`");
         });
 
@@ -21,6 +18,11 @@ public class OverheadItemConfiguration : IEntityTypeConfiguration<OverheadItem>
 
         builder.Property(x => x.Name).IsRequired().HasMaxLength(150);
         builder.Property(x => x.Currency).IsCurrencyCode();
+
+        builder.HasOne(x => x.Group)
+            .WithMany()
+            .HasForeignKey(x => x.GroupId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne<User>()
             .WithMany()
