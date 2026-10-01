@@ -1,0 +1,20 @@
+# Only the API's source goes into the build context: no secrets, local data, build output or tests.
+**/bin
+**/obj
+**/App_Data
+**/*.user
+.git
+.github
+.vs
+.vscode
+.idea
+.env
+.env.*
+Backups
+docs
+ID-Indetails.UnitTests
+ID-Indetails.IntegrationTests
+docker-compose.yml
+deploy
+Dockerfile
+.dockerignore

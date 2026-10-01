@@ -1,0 +1,212 @@
+# Deploys the API and the client to production. Started by hand only (Actions → Deploy → Run workflow), and the
+# production environment asks a reviewer to approve before anything reaches the server.
+#
+# - Normal: give the API and client refs (branch, tag or commit). Both are built, tagged with their commit
+#   (sha-<7>) and pushed to GHCR, then deployed.
+# - Rollback: give api_tag and/or client_tag of images published earlier; those are deployed without building.
+#
+# The server runs deploy/docker-compose.prod.yml with its own .env; see docs/deployment.md.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_ref:
+        description: API branch, tag or commit to build
+        default: master
+        required: true
+      client_ref:
+        description: Client branch, tag or commit to build
+        default: main
+        required: true
+      api_tag:
+        description: "Rollback: deploy this published API tag instead of building (e.g. sha-1a2b3c4)"
+        required: false
+      client_tag:
+        description: "Rollback: deploy this published client tag instead of building"
+        required: false
+
+# One deployment at a time; a second one waits instead of interrupting the first.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io/mohammadrstm
+
+jobs:
+  publish-api:
+    name: Publish the API images
+    if: inputs.api_tag == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.api_ref }}
+          persist-credentials: false
+
+      - id: tag
+        run: echo "tag=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push the API
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: ${{ env.REGISTRY }}/id-indetails-api:${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=api
+
+      - name: Push the migrations
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: migrations
+          push: true
+          tags: ${{ env.REGISTRY }}/id-indetails-migrations:${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=api
+
+  publish-client:
+    name: Publish the client image
+    if: inputs.client_tag == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      # The client repository is private: a read-only token for it alone (CLIENT_REPO_TOKEN).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MohammadRstm/ID-Indetails-client
+          ref: ${{ inputs.client_ref }}
+          token: ${{ secrets.CLIENT_REPO_TOKEN }}
+          persist-credentials: false
+
+      - id: tag
+        run: echo "tag=sha-$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push the client
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/id-indetails-client:${{ steps.tag.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/MohammadRstm/ID-Indetails-client
+            org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
+
+  deploy:
+    name: Deploy to production
+    needs: [publish-api, publish-client]
+    # runs when each publish either succeeded or was skipped for a rollback tag
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      API_TAG: ${{ inputs.api_tag || needs.publish-api.outputs.tag }}
+      CLIENT_TAG: ${{ inputs.client_tag || needs.publish-client.outputs.tag }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/id-indetails' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: deploy
+          persist-credentials: false
+
+      - name: Check the target is configured
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          missing=""
+          for v in DEPLOY_HOST DEPLOY_USER SSH_KEY KNOWN_HOSTS API_TAG CLIENT_TAG; do [ -n "${!v}" ] || missing="$missing $v"; done
+          if [ -n "$missing" ]; then
+            echo "::error::Not configured:$missing. Set the production environment's secrets (docs/deployment.md)."
+            exit 1
+          fi
+          # the tags go into a command on the server: image-tag characters only
+          for t in "$API_TAG" "$CLIENT_TAG"; do
+            [[ "$t" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "::error::Not an image tag: $t"; exit 1; }
+          done
+
+      # The server's host key is pinned (DEPLOY_KNOWN_HOSTS): an unknown or changed key stops the deployment.
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 644 ~/.ssh/known_hosts
+          printf 'Host target\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  StrictHostKeyChecking yes\n' \
+            "$DEPLOY_HOST" "$DEPLOY_USER" > ~/.ssh/config
+
+      - name: Deploy
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scp deploy/docker-compose.prod.yml deploy/deploy.sh deploy/backup.sh deploy/Caddyfile "target:$DEPLOY_PATH/"
+          # the registry token lives only as long as this job; it is passed on stdin and removed afterwards
+          ssh target "cd '$DEPLOY_PATH' && docker login ghcr.io -u '${{ github.actor }}' --password-stdin" <<< "$REGISTRY_TOKEN"
+          status=0
+          ssh target "cd '$DEPLOY_PATH' && chmod +x deploy.sh backup.sh && API_TAG='$API_TAG' CLIENT_TAG='$CLIENT_TAG' ./deploy.sh" || status=$?
+          ssh target "docker logout ghcr.io" || true
+          exit $status
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy: ${{ job.status }}"
+            echo "| | Image |"
+            echo "|---|---|"
+            echo "| API | \`$REGISTRY/id-indetails-api:$API_TAG\` |"
+            echo "| Migrations | \`$REGISTRY/id-indetails-migrations:$API_TAG\` |"
+            echo "| Client | \`$REGISTRY/id-indetails-client:$CLIENT_TAG\` |"
+            echo ""
+            echo "To roll back, run Deploy again with an earlier api_tag / client_tag."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -rf ~/.ssh

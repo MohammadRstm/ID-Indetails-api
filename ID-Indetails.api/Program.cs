@@ -11,12 +11,19 @@ builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddApi(builder.Configuration);
 builder.Services.AddAuth(builder.Configuration);
 builder.Services.AddApplicationServices();
+builder.Services.AddHosting(builder.Configuration, builder.Environment);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+// First, so everything after sees the visitor's address and scheme, not the proxy's (production only).
+if (HostingServiceCollectionExtensions.BehindProxy(app.Configuration))
+{
+    app.UseForwardedHeaders();
+}
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -41,6 +48,8 @@ app.UseMiddleware<LastSeenMiddleware>();
 app.UseMiddleware<LiveUpdatesMiddleware>();
 
 app.MapControllers();
+// For the container platform, on the private network: nginx doesn't serve it publicly.
+app.MapHealthChecks(HostingServiceCollectionExtensions.HealthPath).AllowAnonymous().DisableRateLimiting();
 app.MapHub<LiveHub>(LiveHub.Path);
 
 app.Run();
