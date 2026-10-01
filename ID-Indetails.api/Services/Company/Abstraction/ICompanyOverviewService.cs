@@ -11,4 +11,7 @@ public interface ICompanyOverviewService
 
     /// <summary>The last <paramref name="months"/> months, this one included.</summary>
     Task<IReadOnlyList<CompanyMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default);
+
+    /// <summary>The months of a year, January first, up to this month in the current year. Never a future year.</summary>
+    Task<IReadOnlyList<CompanyMonthResponse>> YearAsync(int year, CancellationToken cancellationToken = default);
 }

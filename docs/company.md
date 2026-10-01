@@ -22,7 +22,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `POST /api/company/overhead/{id}/currency` | `overhead:manage` | `{ currency, amount, fromMonth }`: charges it in another currency from a month (this month when empty). Returns the line charged from then |
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
 | `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
-| `GET /api/company/overview/monthly?months=13` | `company:view` | Revenue, costs and overhead per month: the profit before and after company expenses (1–36 months) |
+| `GET /api/company/overview/monthly?months=13` or `?year=2026` | `company:view` | Revenue, costs and overhead per month: the profit before and after company expenses (the last 1–36 months, or a year's months from January, up to this month in the current year; a future year, or one before 2000, is `400`) |
 | `GET /api/company/salaries?month=YYYY-MM&domain=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary |
 | `GET /api/company/salaries/{userId}?month=YYYY-MM` | `salary:view` | How one person's pay adds up |
 | `GET /api/company/salaries/export?month=YYYY-MM&domain=&search=` | `salary:view` | The filtered list as CSV, with a total per currency (10 a minute per user) |
@@ -106,7 +106,7 @@ Always calculated, from the shared finance calculator (`Business/Finance/`), in 
 - **Invoices** are converted at the rate of their issue day. Those with no rate are left out of invoiced and outstanding and listed per currency in `unconvertedInvoices[]`, per domain and for the company.
 - **Per domain:** revenue, cost, profit and margin; projects with work or costs in the period and active projects; active employees and who logged work; clients served and all clients; invoiced (issued in the period), collected (received in the period) and outstanding today.
 - **Company:** both domains' profit less **company overhead**, charged by the calendar days of each month the period covers and converted at the rate on the first of the month. Overhead with no rate for its month is listed as unconverted instead of being added in.
-- **Monthly:** each month's recognised revenue, labour, expenses, materials, ground labour and overhead, with the profit before and after company expenses. This feeds the chart on the company expenses page.
+- **Monthly:** each month's revenue (money received), labour, expenses, materials, ground labour and overhead, with the profit before and after company expenses. This feeds the chart on the company expenses page, a year at a time.
 
 ## Project pay
 

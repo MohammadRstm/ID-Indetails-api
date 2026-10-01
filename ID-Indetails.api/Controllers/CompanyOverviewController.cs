@@ -19,8 +19,13 @@ public sealed class CompanyOverviewController(ICompanyOverviewService overview) 
     public Task<CompanyOverviewResponse> Get([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
         => overview.GetAsync(from, to, cancellationToken);
 
-    /// <summary>Revenue, costs and overhead month by month: the "profit before and after company expenses" chart.</summary>
+    /// <summary>
+    /// Revenue, costs and overhead month by month: the "profit before and after company expenses" chart. The last
+    /// <paramref name="months"/> months, or the months of a <paramref name="year"/> (up to this month in the current one).
+    /// </summary>
     [HttpGet("monthly")]
-    public Task<IReadOnlyList<CompanyMonthResponse>> Monthly([FromQuery] int months, CancellationToken cancellationToken)
-        => overview.MonthlyAsync(Math.Clamp(months == 0 ? 13 : months, 1, MaxMonths), cancellationToken);
+    public Task<IReadOnlyList<CompanyMonthResponse>> Monthly([FromQuery] int months, [FromQuery] int? year, CancellationToken cancellationToken)
+        => year is { } y
+            ? overview.YearAsync(y, cancellationToken)
+            : overview.MonthlyAsync(Math.Clamp(months == 0 ? 13 : months, 1, MaxMonths), cancellationToken);
 }
