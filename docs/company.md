@@ -24,7 +24,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
 | `GET /api/company/overview/monthly?months=13` | `company:view` | Revenue, costs and overhead per month: the profit before and after company expenses (1–36 months) |
 | `GET /api/company/salaries?month=YYYY-MM&domain=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary |
-| `GET /api/company/salaries/{userId}?month=YYYY-MM` | `salary:view` | How one person's pay adds up |
+| `GET /api/company/salaries/{userId}?month=YYYY-MM` | `salary:view` | How one person's pay adds up, and where their hours went (`projects`) |
 | `GET /api/company/salaries/export?month=YYYY-MM&domain=&search=` | `salary:view` | The filtered list as CSV, with a total per currency (10 a minute per user) |
 | `GET /api/company/project-pay?unit=week\|month\|quarter&date=&projectId=` | `salary:view` | What each Design project paid its people in a period |
 | `GET /api/company/project-pay/export?…` | `salary:view` | The same as CSV (10 a minute per user) |
@@ -93,6 +93,8 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 - Totals are per currency and never converted.
 
 **Excuses:** `kind` is `minutes` (with `minutes`), `days` (with days of that month) or `whole_month`; `isPaid` defaults to true; the note defaults by kind. Never for a future month (`400 excuse_month_in_future`). Removing one is a soft delete.
+
+**Where the hours went** (the detail's `projects`): the month's work grouped by project, most time first: entries, hours within schedule, overtime that made up a shortfall, the rest of the overtime, and what those hours were paid, as Project pay prices them (below). Paid breaks and deductions belong to no project, so the rows don't add up to the salary. A person paid in two currencies in the month has a row per currency. Empty for people who don't log hours.
 
 **Export:** UTF-8 CSV with a BOM. Values that start with `=`, `+`, `-` or `@` are prefixed with `'` so spreadsheets don't run them as formulas.
 

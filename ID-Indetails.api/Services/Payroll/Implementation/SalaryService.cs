@@ -80,7 +80,63 @@ public sealed class SalaryService(
                 .Select(w => new OvertimeWorkResponse(w.Id, w.Day, w.Minutes, w.Overtime, MadeUp(w)))
                 .ToList(),
             person.Excuses.Select(HourExcuseService.ToResponse).ToList(),
-            workingDays);
+            workingDays,
+            await ProjectsAsync(userId, month, result, input, cancellationToken));
+    }
+
+    /// <summary>The month's work grouped by project, each entry paid as Project pay pays it.</summary>
+    private async Task<IReadOnlyList<SalaryProjectResponse>> ProjectsAsync(
+        long userId,
+        DateOnly month,
+        SalaryCalculator.Result result,
+        SalaryCalculator.Input input,
+        CancellationToken cancellationToken)
+    {
+        if (result.Work.Count == 0)
+        {
+            return [];
+        }
+
+        // A day either side covers the time-zone offset, as the salary's own work does.
+        var projectOf = (await payroll.WorkAsync(
+                [userId],
+                month.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                month.AddMonths(1).AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                cancellationToken))
+            .ToDictionary(e => e.Id, e => e.ProjectId);
+        var priced = result.Work
+            .Where(w => projectOf.ContainsKey(w.Id))
+            .Select(w =>
+            {
+                var madeUp = result.Ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
+                var terms = SalaryCalculator.TermsOn(input.PayHistory, w.Day);
+                return (ProjectId: projectOf[w.Id], Work: w, MadeUp: madeUp,
+                    Pay: ProjectPay.Of(w, madeUp, terms, input.Calendar.PolicyOn(w.Day).OvertimeMultiplier));
+            })
+            .ToList();
+
+        var ids = priced.Select(p => p.ProjectId).Distinct().ToList();
+        var titles = (await payroll.ProjectsAsync(DomainCodes.Design, cancellationToken))
+            .Where(p => ids.Contains(p.Id))
+            .ToDictionary(p => p.Id, p => p.Title);
+        var looks = await payroll.ProjectLooksAsync(ids, cancellationToken);
+
+        return priced
+            .GroupBy(p => (p.ProjectId, p.Pay.Currency))
+            .Select(g => new SalaryProjectResponse(
+                g.Key.ProjectId,
+                titles.GetValueOrDefault(g.Key.ProjectId, "Project"),
+                looks.GetValueOrDefault(g.Key.ProjectId)?.Icon,
+                looks.GetValueOrDefault(g.Key.ProjectId)?.Tint,
+                g.Count(),
+                g.Sum(p => p.Work.Normal),
+                g.Sum(p => p.MadeUp),
+                g.Sum(p => p.Work.Overtime - p.MadeUp),
+                Math.Round(g.Sum(p => p.Pay.Pay), 2, MidpointRounding.AwayFromZero),
+                g.Key.Currency))
+            .OrderByDescending(p => p.NormalMinutes + p.MadeUpMinutes + p.OvertimeMinutes)
+            .ThenBy(p => p.Title)
+            .ToList();
     }
 
     public async Task<MyPayResponse> GetMineAsync(SalaryMonthQuery query, CancellationToken cancellationToken = default)
