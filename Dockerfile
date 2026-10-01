@@ -16,8 +16,8 @@ RUN dotnet restore ID-Indetails.api/ID-Indetails.api.csproj
 COPY ID-Indetails.api/ ID-Indetails.api/
 RUN dotnet publish ID-Indetails.api/ID-Indetails.api.csproj -c Release -o /app/publish --no-restore -p:UseAppHost=false
 
-# The migrations as one executable. It needs the model only, so the connection string here is a placeholder;
-# the real one is given when the bundle runs (--connection).
+# The migrations as one executable. It needs the model only, so the connection string here is a placeholder. When
+# it runs, the bundle builds the API's services, so it reads the real one from ConnectionStrings__Default.
 FROM build AS migrations-build
 ARG EF_VERSION=9.0.20
 RUN dotnet tool install --tool-path /tools dotnet-ef --version ${EF_VERSION}
@@ -27,6 +27,8 @@ RUN ConnectionStrings__Default="Server=placeholder;Database=placeholder" \
 
 # --- migrations: run once, before the new API starts -----------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS migrations
+# Ubuntu's security fixes, without waiting for the base image to be rebuilt with them.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 COPY --from=migrations-build --chown=root:root /out/efbundle /efbundle
 USER $APP_UID
 ENTRYPOINT ["/efbundle"]
@@ -34,6 +36,8 @@ ENTRYPOINT ["/efbundle"]
 # --- runtime: the API, as the image's unprivileged user, plain HTTP on 8080 behind the client's nginx -------------
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 WORKDIR /app
+# Ubuntu's security fixes, without waiting for the base image to be rebuilt with them.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=root:root /app/publish .
 # Uploads (FileStorage:RootPath) go on a volume mounted here; the app may write only there.
 RUN mkdir -p /app/App_Data/files && chown -R $APP_UID /app/App_Data
