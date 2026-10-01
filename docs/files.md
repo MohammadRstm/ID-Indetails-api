@@ -10,7 +10,7 @@ Photos and videos: attachments on messages and work entries, profile photos and 
 | `GET /api/files/{id}` | Signed in, see below | The content, shown inline, with `X-Content-Type-Options: nosniff`. Videos can be read in ranges |
 | `PUT /api/me/photo`, `DELETE /api/me/photo` | Signed in | `{ fileId }`: the caller's profile photo, from an upload of their own. Returns the signed-in user |
 | `PUT /api/employees/{id}/photo`, `DELETE …` | `employee:manage` | `{ fileId }`: someone's profile photo, from the caller's upload. Other domains read as `404`; a super admin's needs `employee:invite_super_admin` |
-| `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo. The settings must be saved first (`422 company_not_set_up`) |
+| `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, at any time, before the rest of the settings too |
 | `GET /api/company/branding` | Anyone | `{ name, hasLogo }` for the sign-in page; `name` is null until the settings are saved |
 | `GET /api/company/logo` | Anyone | The logo's image, or `404` |
 

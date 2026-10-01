@@ -8,7 +8,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 |---|---|---|
 | `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices and statements), time zone, week start, time format, default currency |
 | `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row. Address (up to 300 characters) and website (a web address such as `indetails.com`) are optional; leaving one out clears it |
-| `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, from the caller's upload; the settings must be saved first ([files.md](files.md)) |
+| `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, from the caller's upload, whether or not the rest of the settings were saved ([files.md](files.md)) |
 | `GET /api/company/branding`, `GET /api/company/logo` | Anyone | The name and whether there is a logo, and the logo's image, for the sign-in page |
 | `GET /api/company/working-time` | Signed in | The policy in force today and every dated policy, newest first |
 | `POST /api/company/working-time` | `working_time:manage` | A new working week, break and overtime multiplier from a date |
@@ -33,7 +33,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 ## Settings
 
-- Until a super admin first saves them, `isSetUp` is false and the other values are defaults.
+- Until a super admin first saves them, `isSetUp` is false and the other values are defaults. A logo can be set before that; it creates the settings with no name, so they still read as not set up.
 - The time zone comes from configuration (`Company:TimeZone`, default `Asia/Beirut`) and is shown, not edited: every calendar date in the system depends on it.
 - The settings are cached and dropped when saved.
 

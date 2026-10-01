@@ -97,8 +97,13 @@ public sealed class CompanySettingsService(
     private async Task<CompanySettingsResponse> ChangeLogoAsync(long? fileId, CancellationToken cancellationToken)
     {
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
-        var settings = await company.GetSettingsAsync(forUpdate: true, cancellationToken)
-            ?? throw new BusinessRuleException(ErrorCodes.CompanyNotSetUp, "Save the company settings before its logo.");
+        var settings = await company.GetSettingsAsync(forUpdate: true, cancellationToken);
+        if (settings is null)
+        {
+            // The logo may come first: the row starts with no name, so the settings still read as not set up.
+            settings = new CompanySettings { TimeZone = options.Value.TimeZone };
+            company.AddSettings(settings);
+        }
 
         settings.LogoFileId = fileId is { } id ? (await fileClaims.ClaimAsync(id, FileKind.Image, cancellationToken)).Id : null;
         settings.UpdatedAt = clock.UtcNow;
@@ -120,8 +125,8 @@ public sealed class CompanySettingsService(
     private CompanySettingsResponse Describe(CompanySettings? settings)
     {
         var s = settings ?? new CompanySettings();
-        var name = string.IsNullOrWhiteSpace(s.Name) ? options.Value.DefaultName : s.Name;
+        var named = !string.IsNullOrWhiteSpace(s.Name);
         return new CompanySettingsResponse(
-            settings is not null, name, s.Address, s.Website, s.LogoFileId, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt);
+            named, named ? s.Name : options.Value.DefaultName, s.Address, s.Website, s.LogoFileId, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt);
     }
 }
