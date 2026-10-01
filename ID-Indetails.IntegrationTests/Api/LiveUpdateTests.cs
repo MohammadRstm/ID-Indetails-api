@@ -11,9 +11,6 @@ namespace ID_Indetails.IntegrationTests.Api;
 /// <summary>Who gets which live signal. The signals are captured instead of sent (see <see cref="CapturingLivePublisher"/>).</summary>
 public class LiveUpdateTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
-    private const long Engineering = 1;
-    private const long Data = 3;
-
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
     private ProjectTestSteps Projects => new(_steps);
@@ -29,21 +26,23 @@ public class LiveUpdateTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_message_signals_everyone_in_the_chat_and_a_failed_request_signals_no_one()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var engineer = await InTeamAsync(superAdmin, Engineering);
-        var teammate = await InTeamAsync(superAdmin, Engineering);
-        var analyst = await InTeamAsync(superAdmin, Data);
+        var engineering = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Engineering")).Id;
+        var data = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Data")).Id;
+        var engineer = await InTeamAsync(superAdmin, engineering);
+        var teammate = await InTeamAsync(superAdmin, engineering);
+        var analyst = await InTeamAsync(superAdmin, data);
 
-        (await Client.PostJsonAsync($"/api/messages/teams/{Engineering}", new { body = "Standup in 5" }, engineer.AccessToken))
+        (await Client.PostJsonAsync($"/api/messages/teams/{engineering}", new { body = "Standup in 5" }, engineer.AccessToken))
             .StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        var chat = new LiveChat(Engineering, null);
+        var chat = new LiveChat(engineering, null);
         api.Live.SentTo(teammate.User.Id, LiveSignals.Messages).ShouldBe([chat]);
         api.Live.SentTo(engineer.User.Id, LiveSignals.Messages).ShouldBe([chat]);
         api.Live.SentTo(superAdmin.User.Id, LiveSignals.Messages).ShouldContain(chat);
         api.Live.SentTo(analyst.User.Id, LiveSignals.Messages).ShouldBeEmpty();
 
         // Not in that chat: refused, and nobody hears anything.
-        await (await Client.PostJsonAsync($"/api/messages/teams/{Engineering}", new { body = "Me too" }, analyst.AccessToken))
+        await (await Client.PostJsonAsync($"/api/messages/teams/{engineering}", new { body = "Me too" }, analyst.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
         api.Live.SentTo(teammate.User.Id, LiveSignals.Messages).Count.ShouldBe(1);
 
@@ -60,8 +59,9 @@ public class LiveUpdateTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_new_notification_rings_the_bell_and_reading_it_updates_the_readers_other_devices()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var engineering = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Engineering")).Id;
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var employee = await InTeamAsync(superAdmin, Engineering);
+        var employee = await InTeamAsync(superAdmin, engineering);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         var rings = api.Live.SentTo(employee.User.Id, LiveSignals.Notifications).Count;
         rings.ShouldBeGreaterThan(0);

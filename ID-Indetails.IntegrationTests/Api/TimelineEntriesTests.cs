@@ -17,7 +17,8 @@ public class TimelineEntriesTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, ben) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        await _steps.PutInTeamAsync(anna.User.Id, 2);
+        var team = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Design");
+        await _steps.PutInTeamAsync(anna.User.Id, team.Id);
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
 
@@ -34,7 +35,7 @@ public class TimelineEntriesTests(ApiFactory api) : IClassFixture<ApiFactory>
             (anna.User.Id, "Facade study", 180),
             (ben.User.Id, "Section drawings", 120),
         ]);
-        day[0].TeamName.ShouldBe("Design");
+        day[0].TeamName.ShouldBe(team.Name);
 
         var week = await (await Client.GetAsync($"/api/projects/{project.Id}/timeline/entries?from=2026-06-08&to=2026-06-14", admin.AccessToken))
             .ReadAsync<List<TimelineEntryResponse>>();

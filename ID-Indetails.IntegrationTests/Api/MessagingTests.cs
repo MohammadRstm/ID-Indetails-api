@@ -10,16 +10,12 @@ namespace ID_Indetails.IntegrationTests.Api;
 
 public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
-    // Each test talks in its own team's chat: the tests share one database.
-    private const long Engineering = 1;
-    private const long DesignTeam = 2;
-    private const long Data = 3;
-
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
     private ProjectTestSteps Projects => new(_steps);
     private WorkEntryTestSteps Work => new(_steps);
 
+    // Each test talks in teams of its own: the tests share one database, and a new company has no teams.
     private async Task<AuthResponse> InTeamAsync(AuthResponse superAdmin, string domain, long teamId)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, domain);
@@ -47,13 +43,15 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_team_talks_in_its_chat_with_mentions_unread_counts_and_pages()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var engineering = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Engineering")).Id;
+        var data = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Data")).Id;
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
-        var engineer = await InTeamAsync(superAdmin, DomainCodes.Design, Engineering);
-        var teammate = await InTeamAsync(superAdmin, DomainCodes.Design, Engineering);
-        var analyst = await InTeamAsync(superAdmin, DomainCodes.Design, Data);
+        var engineer = await InTeamAsync(superAdmin, DomainCodes.Design, engineering);
+        var teammate = await InTeamAsync(superAdmin, DomainCodes.Design, engineering);
+        var analyst = await InTeamAsync(superAdmin, DomainCodes.Design, data);
 
-        var first = await SendAsync($"teams/{Engineering}", new { body = " Morning ", mentionIds = new[] { teammate.User.Id } }, engineer);
+        var first = await SendAsync($"teams/{engineering}", new { body = " Morning ", mentionIds = new[] { teammate.User.Id } }, engineer);
         first.Body.ShouldBe("Morning");
         first.Kind.ShouldBe(MessageKinds.Text);
         first.Mentions.ShouldHaveSingleItem().Id.ShouldBe(teammate.User.Id);
@@ -62,19 +60,19 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await BadgeAsync(engineer)).ShouldBe(new MessagesBadgeResponse(0, false));
         var chat = (await OkAsync<List<ConversationResponse>>(Client.GetAsync("/api/messages/conversations", teammate.AccessToken))).First();
         chat.Type.ShouldBe(ConversationType.Group);
-        chat.Team!.Id.ShouldBe(Engineering);
+        chat.Team!.Id.ShouldBe(engineering);
         chat.LastMessage!.Id.ShouldBe(first.Id);
         chat.Unread.ShouldBe(1);
         chat.UnreadMention.ShouldBeTrue();
 
         // The domain's admins and the super admins are in every team chat of it; other teams and domains aren't.
-        (await PageAsync($"teams/{Engineering}", designAdmin)).Items.ShouldHaveSingleItem().Id.ShouldBe(first.Id);
-        (await PageAsync($"teams/{Engineering}", superAdmin)).Items.ShouldHaveSingleItem();
-        await (await Client.GetAsync($"/api/messages/teams/{Engineering}", analyst.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
-        await (await Client.GetAsync($"/api/messages/teams/{Engineering}", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        (await PageAsync($"teams/{engineering}", designAdmin)).Items.ShouldHaveSingleItem().Id.ShouldBe(first.Id);
+        (await PageAsync($"teams/{engineering}", superAdmin)).Items.ShouldHaveSingleItem();
+        await (await Client.GetAsync($"/api/messages/teams/{engineering}", analyst.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.GetAsync($"/api/messages/teams/{engineering}", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         var analystChats = await OkAsync<List<ConversationResponse>>(Client.GetAsync("/api/messages/conversations", analyst.AccessToken));
-        analystChats.ShouldHaveSingleItem().Team!.Id.ShouldBe(Data);
-        var members = (await OkAsync<List<ContactResponse>>(Client.GetAsync($"/api/messages/teams/{Engineering}/members", engineer.AccessToken)))
+        analystChats.ShouldHaveSingleItem().Team!.Id.ShouldBe(data);
+        var members = (await OkAsync<List<ContactResponse>>(Client.GetAsync($"/api/messages/teams/{engineering}/members", engineer.AccessToken)))
             .Select(p => p.Id).ToList();
         members.ShouldContain(engineer.User.Id);
         members.ShouldContain(teammate.User.Id);
@@ -83,24 +81,24 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         members.ShouldNotContain(analyst.User.Id);
         members.ShouldNotContain(executionAdmin.User.Id);
 
-        await (await Client.PostJsonAsync($"/api/messages/teams/{Engineering}", new { body = "Hi", mentionIds = new[] { analyst.User.Id } }, engineer.AccessToken))
+        await (await Client.PostJsonAsync($"/api/messages/teams/{engineering}", new { body = "Hi", mentionIds = new[] { analyst.User.Id } }, engineer.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
-        await (await Client.PostJsonAsync($"/api/messages/teams/{Engineering}", new { body = "  " }, engineer.AccessToken))
+        await (await Client.PostJsonAsync($"/api/messages/teams/{engineering}", new { body = "  " }, engineer.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
 
-        (await OkAsync<MessagesBadgeResponse>(Client.PostEmptyAsync($"/api/messages/teams/{Engineering}/read", teammate.AccessToken)))
+        (await OkAsync<MessagesBadgeResponse>(Client.PostEmptyAsync($"/api/messages/teams/{engineering}/read", teammate.AccessToken)))
             .ShouldBe(new MessagesBadgeResponse(0, false));
 
         // Pages come oldest first, with older ones behind `before`.
         for (var i = 1; i <= 3; i++)
         {
-            await SendAsync($"teams/{Engineering}", new { body = $"Update {i}" }, teammate);
+            await SendAsync($"teams/{engineering}", new { body = $"Update {i}" }, teammate);
         }
 
-        var latest = await PageAsync($"teams/{Engineering}?limit=2", engineer);
+        var latest = await PageAsync($"teams/{engineering}?limit=2", engineer);
         latest.Items.Select(m => m.Body).ShouldBe(["Update 2", "Update 3"]);
         latest.HasMore.ShouldBeTrue();
-        var older = await PageAsync($"teams/{Engineering}?before={latest.Items[0].Id}&limit=10", engineer);
+        var older = await PageAsync($"teams/{engineering}?before={latest.Items[0].Id}&limit=10", engineer);
         older.Items.Select(m => m.Body).ShouldBe(["Morning", "Update 1"]);
         older.HasMore.ShouldBeFalse();
         (await BadgeAsync(engineer)).Unread.ShouldBe(3);
@@ -110,8 +108,10 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task People_message_their_own_domain_and_the_super_admins_directly()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var engineer = await InTeamAsync(superAdmin, DomainCodes.Design, Engineering);
-        var analyst = await InTeamAsync(superAdmin, DomainCodes.Design, Data);
+        var engineering = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Engineering")).Id;
+        var data = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Data")).Id;
+        var engineer = await InTeamAsync(superAdmin, DomainCodes.Design, engineering);
+        var analyst = await InTeamAsync(superAdmin, DomainCodes.Design, data);
         var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
 
         var hello = await SendAsync($"direct/{analyst.User.Id}", new { body = "Got a minute?" }, engineer);
@@ -149,10 +149,11 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_comment_shared_to_the_team_chat_is_a_card_for_everyone_in_it()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var designTeam = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Design")).Id;
         await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var engineer = await InTeamAsync(superAdmin, DomainCodes.Design, DesignTeam);
-        var teammate = await InTeamAsync(superAdmin, DomainCodes.Design, DesignTeam);
+        var engineer = await InTeamAsync(superAdmin, DomainCodes.Design, designTeam);
+        var teammate = await InTeamAsync(superAdmin, DomainCodes.Design, designTeam);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var entry = await Work.LogAsync(engineer.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(4), 90, "Stair details");
 
@@ -160,7 +161,7 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { body = "Great detail on the landing", sendToGroup = true }, designAdmin.AccessToken));
         comment.SentToGroup.ShouldBeTrue();
 
-        var card = (await PageAsync($"teams/{DesignTeam}", teammate)).Items.Single(m => m.Kind == MessageKinds.TaskComment);
+        var card = (await PageAsync($"teams/{designTeam}", teammate)).Items.Single(m => m.Kind == MessageKinds.TaskComment);
         card.Sender.Id.ShouldBe(designAdmin.User.Id);
         card.Body.ShouldBe("Great detail on the landing");
         card.TaskComment!.EntryId.ShouldBe(entry.Id);
