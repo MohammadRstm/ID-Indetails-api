@@ -115,9 +115,30 @@ public sealed record HourExcuseResponse(
 /// <summary>A working day of someone's month, with the minutes it requires.</summary>
 public sealed record SalaryDayResponse(DateOnly Date, int RequiredMinutes);
 
+/// <summary>
+/// The hours someone worked on one project in the month, and what they were paid for them (as on Project pay:
+/// hours within schedule and made-up hours at their rate that day, the rest of the overtime at the multiplier).
+/// </summary>
+/// <param name="NormalMinutes">Worked within their scheduled hours.</param>
+/// <param name="MadeUpMinutes">Overtime that made up hours they were short, paid as normal hours.</param>
+/// <param name="OvertimeMinutes">The rest of the overtime, paid at the overtime rate.</param>
+/// <param name="Pay">In <paramref name="Currency"/>; a person paid in two currencies that month has a row for each.</param>
+public sealed record SalaryProjectResponse(
+    long ProjectId,
+    string Title,
+    string? Icon,
+    string? Tint,
+    int Entries,
+    int NormalMinutes,
+    int MadeUpMinutes,
+    int OvertimeMinutes,
+    decimal Pay,
+    string Currency);
+
 /// <param name="MissedDays">Working days with no work within hours and no excuse.</param>
 /// <param name="DeductionMinutes">Shortfall (with the paid break of each missed day) and unpaid excuses.</param>
 /// <param name="WorkingDays">The month's working days while the person was employed, to choose days to excuse from.</param>
+/// <param name="Projects">Where their hours and overtime went, most time first. Empty for people who don't log hours.</param>
 public sealed record SalaryDetailResponse(
     SalaryRowResponse Salary,
     bool InProgress,
@@ -127,4 +148,5 @@ public sealed record SalaryDetailResponse(
     IReadOnlyList<DateOnly> MissedDays,
     IReadOnlyList<OvertimeWorkResponse> OvertimeWork,
     IReadOnlyList<HourExcuseResponse> Excuses,
-    IReadOnlyList<SalaryDayResponse> WorkingDays);
+    IReadOnlyList<SalaryDayResponse> WorkingDays,
+    IReadOnlyList<SalaryProjectResponse> Projects);

@@ -75,6 +75,17 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         short_.WorkingDays.Count.ShouldBe(22);
         short_.WorkingDays.ShouldAllBe(d => d.RequiredMinutes == 420 && d.Date.DayOfWeek != DayOfWeek.Saturday && d.Date.DayOfWeek != DayOfWeek.Sunday);
 
+        // where the hours went: the day's 7h in schedule and the made-up hour, both at 10 an hour
+        var onProject = short_.Projects.ShouldHaveSingleItem();
+        onProject.ProjectId.ShouldBe(project.Id);
+        onProject.Title.ShouldBe(project.Title);
+        onProject.Entries.ShouldBe(1);
+        onProject.NormalMinutes.ShouldBe(420);
+        onProject.MadeUpMinutes.ShouldBe(60);
+        onProject.OvertimeMinutes.ShouldBe(0);
+        onProject.Pay.ShouldBe(80m);
+        onProject.Currency.ShouldBe("USD");
+
         var list = await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?month=2026-06&search={designer.User.Email}", superAdmin.AccessToken));
         list.Summary.ExpectedMinutes.ShouldBe(22 * 420);
 
@@ -93,6 +104,8 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         excused.Salary.BasePay.ShouldBe(1733.30m);
         excused.Salary.OvertimePay.ShouldBe(10m);
         excused.Excuses.ShouldHaveSingleItem();
+        excused.Projects.ShouldHaveSingleItem().OvertimeMinutes.ShouldBe(60);
+        excused.Projects[0].MadeUpMinutes.ShouldBe(0);
 
         (await Client.DeleteAsync($"/api/hour-excuses/{excuse.Id}", superAdmin.AccessToken)).StatusCode
             .ShouldBe(System.Net.HttpStatusCode.NoContent);
@@ -113,6 +126,8 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         list.Summary.ExpectedMinutes.ShouldBeNull();
         row.Total.ShouldBe(1733.30m);
         list.InProgress.ShouldBeFalse();
+        (await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{siteWorker.User.Id}?month=2026-06", superAdmin.AccessToken)))
+            .Projects.ShouldBeEmpty();
         list.Totals.ShouldHaveSingleItem().Currency.ShouldBe("USD");
     }
 
