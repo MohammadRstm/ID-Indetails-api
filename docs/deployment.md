@@ -32,7 +32,8 @@ access token as `?access_token=`, and sign-up and reset links carry theirs in th
   - `ASPNETCORE_ENVIRONMENT=Production` is set, and diagnostics are off.
   - Its health check calls `GET /health`.
 - `migrations`: `dotnet ef migrations bundle`. The bundle is built with a placeholder connection string because it
-  needs only the model; the real one is given as `--connection` when it runs.
+  needs only the model; when it runs, it reads the real one from `ConnectionStrings__Default`, like the API. That keeps the password off the
+  command line.
 
 ### What production checks at start-up
 

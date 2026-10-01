@@ -114,7 +114,7 @@ jobs:
           for i in $(seq 1 60); do docker exec mysql mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" --silent && break; sleep 2; done
           db="Server=127.0.0.1;Port=3306;Database=id_indetails;User=root;Password=$MYSQL_ROOT_PASSWORD;"
 
-          docker run --rm --network host id-indetails-migrations:ci --connection "$db" || fail "the migrations didn't apply"
+          docker run --rm --network host -e ConnectionStrings__Default="$db" id-indetails-migrations:ci || fail "the migrations didn't apply"
 
           docker run -d --name api --network host --read-only --tmpfs /tmp \
             --mount type=volume,source=files,target=/app/App_Data/files \

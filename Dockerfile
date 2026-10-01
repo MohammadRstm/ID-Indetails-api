@@ -16,8 +16,8 @@ RUN dotnet restore ID-Indetails.api/ID-Indetails.api.csproj
 COPY ID-Indetails.api/ ID-Indetails.api/
 RUN dotnet publish ID-Indetails.api/ID-Indetails.api.csproj -c Release -o /app/publish --no-restore -p:UseAppHost=false
 
-# The migrations as one executable. It needs the model only, so the connection string here is a placeholder;
-# the real one is given when the bundle runs (--connection).
+# The migrations as one executable. It needs the model only, so the connection string here is a placeholder. When
+# it runs, the bundle builds the API's services, so it reads the real one from ConnectionStrings__Default.
 FROM build AS migrations-build
 ARG EF_VERSION=9.0.20
 RUN dotnet tool install --tool-path /tools dotnet-ef --version ${EF_VERSION}
