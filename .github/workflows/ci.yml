@@ -88,6 +88,7 @@ jobs:
         with:
           context: .
           target: runtime
+          no-cache-filters: runtime
           load: true
           push: false
           tags: id-indetails-api:ci
@@ -99,6 +100,7 @@ jobs:
         with:
           context: .
           target: migrations
+          no-cache-filters: migrations
           load: true
           push: false
           tags: id-indetails-migrations:ci
