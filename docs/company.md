@@ -90,6 +90,7 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
   - Unpaid excuses are deducted too: unpaid minutes at the hourly rate, each unpaid day off as the full paid day, an unpaid whole month as the whole salary. The deduction never exceeds the salary.
 - **Hourly:** hours within schedule and made-up hours at the rate in force each day, plus the paid break of each working day they worked, plus overtime at the rate × multiplier. Excuses don't change their pay (they are paid for what they log).
 - Admins who log hours are paid overtime the same way, without an hours ledger. Execution staff don't log hours: they are paid their salary.
+- **Super admins** are paid a monthly salary, set like anyone else's (an hourly pay is refused, `400 super_admin_paid_monthly`, on a pay change or an invitation). Their pay never depends on hours: they needn't log any, and any they do earn no overtime or paid breaks (and count as normal hours on Project pay). It is pro-rated on their working days in a month they join or leave, and unpaid excuses are deducted, as for anyone on a salary. Their rows say hours aren't tracked (`tracksHours` is true for Design's people only).
 - Totals are per currency and never converted.
 
 **Excuses:** `kind` is `minutes` (with `minutes`), `days` (with days of that month) or `whole_month`; `isPaid` defaults to true; the note defaults by kind. Never for a future month (`400 excuse_month_in_future`). Removing one is a soft delete.

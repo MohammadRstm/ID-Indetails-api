@@ -161,6 +161,11 @@ public sealed class ProjectPayService(
                 var work = Overtime.Of(
                     monthWork.Where(e => e.UserId == userId && e.Work.Day.Month == month.Month && e.Work.Day.Year == month.Year).Select(e => e.Work),
                     calendar);
+                if (!PayrollInputs.PaidForHours(user))
+                {
+                    // a super admin earns no overtime: all their time is priced as normal hours
+                    work = work.Select(w => w with { Overtime = 0 }).ToList();
+                }
 
                 var employment = inputs.EmploymentOf(user);
                 var ledger = user.DomainCode == DomainCodes.Design && user.RoleCode == RoleCodes.Employee

@@ -20,6 +20,9 @@ public sealed class PayrollInputs(
     /// <summary>The hours ledger applies to Design employees only.</summary>
     public static bool LedgerApplies(User person) => person.DomainCode == DomainCodes.Design && person.RoleCode == RoleCodes.Employee;
 
+    /// <summary>A super admin's pay is their salary whatever hours they log: their work earns no overtime or paid breaks.</summary>
+    public static bool PaidForHours(User person) => person.RoleCode != RoleCodes.SuperAdmin;
+
     public Employment EmploymentOf(User person)
         => person.EmploymentPeriods.Count > 0
             ? new Employment(person.EmploymentPeriods
@@ -93,7 +96,7 @@ public sealed class PayrollInputs(
                     terms,
                     calendar,
                     work[person.Id]
-                        .Where(e => DateOnly.FromDateTime(e.Local) >= month && DateOnly.FromDateTime(e.Local) < next)
+                        .Where(e => PaidForHours(person) && DateOnly.FromDateTime(e.Local) >= month && DateOnly.FromDateTime(e.Local) < next)
                         .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes))
                         .ToList(),
                     monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
