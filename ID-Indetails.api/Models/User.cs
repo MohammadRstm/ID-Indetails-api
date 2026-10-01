@@ -41,6 +41,18 @@ public class User
     /// </summary>
     public DateTime? DeactivatedAt { get; set; }
 
+    /// <summary>
+    /// When a super admin ended all their sessions; set until a super admin restores their sign-in. While it is set,
+    /// every request, refresh and sign-in of theirs is refused.
+    /// </summary>
+    public DateTime? SessionsRevokedAt { get; set; }
+
+    /// <summary>
+    /// Access tokens issued before this are refused for good, so a token copied before their sessions were ended
+    /// doesn't work again once sign-in is restored. Kept after the restore.
+    /// </summary>
+    public DateTime? SessionsValidFrom { get; set; }
+
     /// <summary>Set for accounts created with a generated password (the first super admin).</summary>
     public bool MustChangePassword { get; set; }
 

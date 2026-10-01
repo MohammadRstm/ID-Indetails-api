@@ -21,7 +21,7 @@ public sealed class UserRepository(IdIndetailsDbContext db) : IUserRepository
         => db.Users
             .AsNoTracking()
             .Where(u => u.Id == id)
-            .Select(u => new UserRoleSnapshot(u.Id, u.RoleCode, u.DomainCode, u.Status))
+            .Select(u => new UserRoleSnapshot(u.Id, u.RoleCode, u.DomainCode, u.Status, u.SessionsRevokedAt, u.SessionsValidFrom))
             .SingleOrDefaultAsync(cancellationToken);
 
     public Task<User?> GetByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default)

@@ -152,6 +152,49 @@ public sealed class EmployeeService(
         return await DescribeAsync(actor, userId, cancellationToken);
     }
 
+    public async Task<EmployeeResponse> EndSessionsAsync(long userId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
+        Throw(EmployeeRules.CheckEndSessions(actor, TargetOf(user), alreadyEnded: user.SessionsRevokedAt is not null));
+
+        // Refresh tokens are revoked now; access tokens are refused from their next request (SessionRules).
+        var now = clock.UtcNow;
+        user.SessionsRevokedAt = now;
+        user.SessionsValidFrom = now;
+        user.UpdatedAt = now;
+        await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
+        activity.Add(UserEvent(user, ActivityEventKinds.SessionsEnded, actor.UserId, null));
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        permissions.Forget(user.Id);
+
+        return await DescribeAsync(actor, userId, cancellationToken);
+    }
+
+    public async Task<EmployeeResponse> RestoreSignInAsync(long userId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
+        Throw(EmployeeRules.CheckRestoreSignIn(actor, TargetOf(user), ended: user.SessionsRevokedAt is not null));
+
+        // SessionsValidFrom stays: whatever was issued before the sessions were ended is still refused.
+        user.SessionsRevokedAt = null;
+        user.UpdatedAt = clock.UtcNow;
+        activity.Add(UserEvent(user, ActivityEventKinds.SignInRestored, actor.UserId, null));
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        permissions.Forget(user.Id);
+
+        return await DescribeAsync(actor, userId, cancellationToken);
+    }
+
     public async Task<EmployeeResponse> ReactivateAsync(long userId, ReactivateEmployeeRequest? request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
@@ -457,6 +500,7 @@ public sealed class EmployeeService(
             LeftOn = row.LeftOn,
             LastSeenAt = row.LastSeenAt,
             Online = presence.IsOnline(row.Id),
+            SessionsRevokedAt = row.SessionsRevokedAt,
             Phone = row.Phone,
             CreatedAt = row.CreatedAt,
             CurrentPay = pay is null ? null : ToPay(pay),
@@ -534,6 +578,7 @@ public sealed class EmployeeService(
         LeftOn = row.LeftOn,
         LastSeenAt = row.LastSeenAt,
         Online = presence.IsOnline(row.Id),
+        SessionsRevokedAt = row.SessionsRevokedAt,
     };
 
     private static PayResponse ToPay(UserPayHistory p)

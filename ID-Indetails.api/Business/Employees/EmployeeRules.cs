@@ -60,6 +60,44 @@ public static class EmployeeRules
             : null;
     }
 
+    /// <summary>
+    /// Ending all of someone's sessions, which also blocks their sign-in until it is restored: a super admin's to do,
+    /// to someone else's working account.
+    /// </summary>
+    public static RuleDenial? CheckEndSessions(UserAccess actor, Target target, bool alreadyEnded)
+    {
+        if (CheckSessionsActor(actor, target) is { } denial)
+        {
+            return denial;
+        }
+
+        if (target.Status != UserStatus.Active)
+        {
+            return RuleDenial.BusinessRule(ErrorCodes.UserDeactivated, "Only a working account has sessions to end.");
+        }
+
+        return alreadyEnded
+            ? RuleDenial.BusinessRule(ErrorCodes.SessionsAlreadyEnded, "Their sessions are already ended.")
+            : null;
+    }
+
+    /// <summary>Letting someone whose sessions were ended sign in again: a super admin's to do.</summary>
+    public static RuleDenial? CheckRestoreSignIn(UserAccess actor, Target target, bool ended)
+        => CheckSessionsActor(actor, target)
+            ?? (ended ? null : RuleDenial.BusinessRule(ErrorCodes.SessionsNotEnded, "Their sign-in isn't suspended."));
+
+    private static RuleDenial? CheckSessionsActor(UserAccess actor, Target target)
+    {
+        if (!actor.IsSuperAdmin)
+        {
+            return RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "Only a super admin can end or restore someone's sessions.");
+        }
+
+        return target.Id == actor.UserId
+            ? RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "You cannot end or restore your own sessions.")
+            : null;
+    }
+
     public static RuleDenial? CheckReactivate(UserAccess actor, Target target)
     {
         if (CheckCanChange(actor, target) is { } denial)

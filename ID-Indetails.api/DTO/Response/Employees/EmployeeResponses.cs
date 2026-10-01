@@ -41,6 +41,9 @@ public record EmployeeSummaryResponse
 
     /// <summary>Whether they have the live connection open now.</summary>
     public bool Online { get; init; }
+
+    /// <summary>When a super admin ended their sessions; they can't sign in until it is restored. Null otherwise.</summary>
+    public DateTime? SessionsRevokedAt { get; init; }
 }
 
 /// <summary>A person's profile.</summary>

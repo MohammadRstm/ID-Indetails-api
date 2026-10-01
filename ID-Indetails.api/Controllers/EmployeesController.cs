@@ -54,6 +54,18 @@ public sealed class EmployeesController(IEmployeeService employeeService) : Cont
         CancellationToken cancellationToken)
         => employeeService.ReactivateAsync(userId, request, cancellationToken);
 
+    /// <summary>Signs them out everywhere at once and blocks their sign-in until a super admin restores it. Super admins only.</summary>
+    [HttpPost("{userId:long}/sessions/end")]
+    [HasPermission(PermissionCodes.EmployeeManage)]
+    public Task<EmployeeResponse> EndSessions(long userId, CancellationToken cancellationToken)
+        => employeeService.EndSessionsAsync(userId, cancellationToken);
+
+    /// <summary>Lets them sign in again after their sessions were ended. Super admins only.</summary>
+    [HttpPost("{userId:long}/sessions/restore")]
+    [HasPermission(PermissionCodes.EmployeeManage)]
+    public Task<EmployeeResponse> RestoreSignIn(long userId, CancellationToken cancellationToken)
+        => employeeService.RestoreSignInAsync(userId, cancellationToken);
+
     /// <summary>Their profile photo, from the caller's upload.</summary>
     [HttpPut("{userId:long}/photo")]
     [HasPermission(PermissionCodes.EmployeeManage)]

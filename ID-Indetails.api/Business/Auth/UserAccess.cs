@@ -20,6 +20,12 @@ public sealed record UserAccess(
     bool IsJoker,
     IReadOnlyList<string> VisibleDomains)
 {
+    /// <summary>Set while a super admin has ended their sessions: no token of theirs is accepted.</summary>
+    public DateTime? SessionsRevokedAt { get; init; }
+
+    /// <summary>Tokens issued before this are refused for good.</summary>
+    public DateTime? SessionsValidFrom { get; init; }
+
     public bool IsSuperAdmin => Role == RoleCodes.SuperAdmin;
 
     public bool Has(string permission) => Permissions.Contains(permission);

@@ -18,6 +18,7 @@ public static class ErrorCodes
     public const string PasswordChangeRequired = "password_change_required";
     public const string CurrentPasswordIncorrect = "current_password_incorrect";
     public const string PasswordResetInvalid = "password_reset_invalid";
+    public const string SignInSuspended = "sign_in_suspended";
 
     // Accounts and invitations
     public const string EmailAlreadyRegistered = "email_already_registered";
@@ -36,6 +37,8 @@ public static class ErrorCodes
     public const string EmployeeChangeNotAllowed = "employee_change_not_allowed";
     public const string LastSuperAdmin = "last_super_admin";
     public const string UserAlreadyDeactivated = "user_already_deactivated";
+    public const string SessionsAlreadyEnded = "sessions_already_ended";
+    public const string SessionsNotEnded = "sessions_not_ended";
     public const string UserNotDeactivated = "user_not_deactivated";
     public const string LastWorkingDayInvalid = "last_working_day_invalid";
     public const string PayGapRequired = "pay_gap_required";
