@@ -41,6 +41,7 @@ public sealed class PermissionService(
             : user.Status == UserStatus.Deactivated
                 ? UserAccess.None(userId, user.RoleCode, user.DomainCode)
                 : await ResolveAsync(user.Id, user.RoleCode, user.DomainCode, cancellationToken);
+        access = access with { SessionsRevokedAt = user?.SessionsRevokedAt, SessionsValidFrom = user?.SessionsValidFrom };
 
         cache.Set(key, access, CacheFor);
         return access;

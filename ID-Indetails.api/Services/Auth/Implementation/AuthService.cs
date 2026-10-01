@@ -43,6 +43,12 @@ public sealed class AuthService(
             throw new UnauthenticatedException(ErrorCodes.InvalidCredentials, InvalidCredentialsMessage);
         }
 
+        // Only said once the password is right, so it never tells a stranger anything about the account.
+        if (user.SessionsRevokedAt is not null)
+        {
+            throw new ForbiddenException(ErrorCodes.SignInSuspended, SessionRules.SuspendedMessage);
+        }
+
         if (check == PasswordCheck.SuccessRehashNeeded)
         {
             user.PasswordHash = passwords.Hash(user, request.Password);
@@ -86,6 +92,12 @@ public sealed class AuthService(
         {
             await refreshTokens.RevokeAllActiveForUserAsync(presented.UserId, now, cancellationToken);
             throw new UnauthenticatedException(ErrorCodes.RefreshTokenInvalid, SessionExpiredMessage);
+        }
+
+        if (user.SessionsRevokedAt is not null)
+        {
+            await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
+            throw new UnauthenticatedException(ErrorCodes.SignInSuspended, SessionRules.SuspendedMessage);
         }
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);

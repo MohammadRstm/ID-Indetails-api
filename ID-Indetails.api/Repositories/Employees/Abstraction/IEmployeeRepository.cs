@@ -63,4 +63,5 @@ public sealed record EmployeeRow(
     DateOnly? JoinedOn,
     DateOnly? LeftOn,
     DateTime? LastSeenAt,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    DateTime? SessionsRevokedAt);

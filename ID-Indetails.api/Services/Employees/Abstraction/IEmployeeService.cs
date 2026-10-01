@@ -19,6 +19,12 @@ public interface IEmployeeService
 
     Task<EmployeeResponse> ReactivateAsync(long userId, ReactivateEmployeeRequest? request, CancellationToken cancellationToken = default);
 
+    /// <summary>Signs them out everywhere at once and blocks their sign-in until <see cref="RestoreSignInAsync"/>.</summary>
+    Task<EmployeeResponse> EndSessionsAsync(long userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Lets someone whose sessions were ended sign in again. Their old sessions stay ended.</summary>
+    Task<EmployeeResponse> RestoreSignInAsync(long userId, CancellationToken cancellationToken = default);
+
     Task<EmployeeResponse> ChangeRoleAsync(long userId, ChangeRoleRequest request, CancellationToken cancellationToken = default);
 
     Task<EmployeeResponse> MoveAsync(long userId, MoveEmployeeRequest request, CancellationToken cancellationToken = default);

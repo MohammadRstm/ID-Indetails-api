@@ -41,4 +41,5 @@ public interface IUserRepository
     void AddPayHistory(UserPayHistory payHistory);
 }
 
-public sealed record UserRoleSnapshot(long Id, string RoleCode, string? DomainCode, UserStatus Status);
+public sealed record UserRoleSnapshot(
+    long Id, string RoleCode, string? DomainCode, UserStatus Status, DateTime? SessionsRevokedAt, DateTime? SessionsValidFrom);

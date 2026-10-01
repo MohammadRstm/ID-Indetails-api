@@ -113,5 +113,6 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
                 ? u.EmploymentPeriods.OrderByDescending(p => p.StartedOn).Select(p => p.EndedOn).FirstOrDefault()
                 : null,
             u.LastSeenAt,
-            u.CreatedAt));
+            u.CreatedAt,
+            u.SessionsRevokedAt));
 }

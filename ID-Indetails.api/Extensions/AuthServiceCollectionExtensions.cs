@@ -2,14 +2,17 @@ using System.Text;
 using System.Threading.RateLimiting;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Authorization.Handlers;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Hubs;
 using ID_Indetails.api.Middlewares;
 using ID_Indetails.api.RateLimiting;
+using ID_Indetails.api.Services.Auth.Abstraction;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ID_Indetails.api.Extensions;
@@ -63,6 +66,24 @@ public static class AuthServiceCollectionExtensions
                         }
 
                         return Task.CompletedTask;
+                    },
+
+                    // Sessions a super admin ended stay ended (SessionRules), read from the per-user access cache.
+                    OnTokenValidated = async context =>
+                    {
+                        if (!long.TryParse(context.Principal?.FindFirst(AuthClaimTypes.UserId)?.Value, out var userId)
+                            || context.SecurityToken is not JsonWebToken token)
+                        {
+                            context.Fail("The token has no user.");
+                            return;
+                        }
+
+                        var access = await context.HttpContext.RequestServices.GetRequiredService<IPermissionService>()
+                            .GetAccessAsync(userId, context.HttpContext.RequestAborted);
+                        if (!SessionRules.Accepts(token.IssuedAt, access.SessionsRevokedAt, access.SessionsValidFrom))
+                        {
+                            context.Fail("The session was ended.");
+                        }
                     },
                 };
             });

@@ -14,6 +14,8 @@ public static class ActivityEventKinds
     public const string EmployeeUpdated = "employee_updated";
     public const string EmployeeDeactivated = "employee_deactivated";
     public const string EmployeeReactivated = "employee_reactivated";
+    public const string SessionsEnded = "sessions_ended";
+    public const string SignInRestored = "sign_in_restored";
     public const string RoleChanged = "role_changed";
     public const string EmployeeMoved = "employee_moved";
     public const string PayChanged = "pay_changed";

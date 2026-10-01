@@ -3429,6 +3429,16 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(32)")
                         .HasColumnName("role_code");
 
+                    b.Property<DateTime?>("SessionsRevokedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("sessions_revoked_at");
+
+                    b.Property<DateTime?>("SessionsValidFrom")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("sessions_valid_from");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
