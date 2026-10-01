@@ -35,8 +35,8 @@ Employees hold `project:view`, so they see every project of their domain in any 
 
 ## Money
 
-- **Design revenue** is typed in. **Execution revenue** is the agreed amount: material client prices plus the project fee. A material's client price is its manual price, otherwise cost × (1 + markup), rounded to cents, then converted to USD at the exchange rate in force on the day the material was added. Ground labour is never billed.
-- The Execution agreed amount is calculated live while the project is open, and frozen into `projects.revenue` when it is finalised. A material with no exchange rate for its day is left out of the live amount (`money.unconvertedMaterials`), and finalising is refused until the rate is added (`422 exchange_rate_missing`).
+- **Design revenue** is the agreed payment, typed in. **Execution revenue** is the agreed amount: the project fee (optional, 0 when there is none) plus the client prices of the materials **sent to the client** on a statement. A material counts from the first time a statement listing it is sent (emailed, or a WhatsApp send or a download recorded: any delivery); until then its cost counts but its price doesn't (`money.unsentMaterialCharge` and `money.unsentMaterials` say what is waiting). A material's client price is its manual price, otherwise cost × (1 + markup), rounded to cents, then converted to USD at the exchange rate in force on the day the material was added; once stated, it is frozen. Ground labour is never billed.
+- The Execution agreed amount is calculated live while the project is open, and frozen into `projects.revenue` when it is finalised. Finalising is refused while a material has no exchange rate for its day (`422 exchange_rate_missing`), or while one hasn't been sent to the client (`422 materials_not_sent`): send a statement first, so nothing is left out of what the client owes.
 - While a project is finalised (`money.isLocked`), billing, revenue, fee and markup can't change (`422 project_locked`).
 - A project with any invoice or payment can't move to another client or become internal (`422 project_has_billing`), because invoices and payments keep the client they were made for.
 - `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced`, `owed`, `paidAhead`, `issuedCount`, `paymentCount`, `overdue`, `overdueCount`, `oldestOverdueDays`, `drafts` and `unconvertedInvoices[]` (invoices with no rate on their issue day, or drafts with none today, left out of the USD figures). It comes from the same billing rule and batch load as the lists and the Financials page (`Business/Billing/ProjectBilling.cs`; see [billing.md](billing.md) and [finance.md](finance.md)).
@@ -54,7 +54,7 @@ Every project money figure comes from one place: `Business/Finance/ProjectFinanc
 - **Margin** = profit ÷ revenue, only once it means something: the project is completed or archived, at least 5% along, or has at least 10 hours logged. Otherwise `null`.
 - **Projected** cost, profit and margin = cost ÷ progress, for open client projects at least 5% along.
 - **Recognised to date** = revenue × progress, or all of it once completed or archived.
-- **Execution:** `cashProfit` = received − cost, and `materialProfit` = material charge − material cost.
+- **Execution:** `cashProfit` = received − cost, and `materialProfit` = what the materials sent to the client earn (their charge − their cost).
 - **Cash by week** (`ProjectFinance.CashByWeek`): payments received and cost added up week by week, Monday to Sunday. Execution sites show it on `GET /api/projects/{id}/site-money/timeline` (see [execution.md](execution.md)).
 
 ## Status

@@ -28,6 +28,7 @@ public sealed record WorkEntryRow(long ProjectId, long UserId, DateTime StartedA
 
 public sealed record ExpenseRow(long ProjectId, string Currency, decimal Amount, DateOnly SpentOn);
 
-public sealed record MaterialRow(long ProjectId, string Currency, decimal Total, decimal? ClientPrice, DateTime AddedAt);
+/// <param name="SentAt">When a client statement listing it was first sent (any delivery); null until then.</param>
+public sealed record MaterialRow(long ProjectId, string Currency, decimal Total, decimal? ClientPrice, DateTime AddedAt, DateTime? SentAt);
 
 public sealed record GroundLabourRow(long ProjectId, DateOnly WorkDate, decimal Cost);

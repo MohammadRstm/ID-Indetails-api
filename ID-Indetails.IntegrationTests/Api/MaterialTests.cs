@@ -44,9 +44,15 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.PriceSource.ShouldBe(MaterialRules.PriceSource.Auto),
             m => m.Markup.ShouldBe(0.10m));
 
+        // their cost counts straight away; their client prices once they are sent to the client
         var money = (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!;
         money.Cost.Materials.ShouldBe(21_225m);
-        money.MaterialCharge.ShouldBe(23_347.50m);
+        money.MaterialCharge.ShouldBe(0m);
+        money.UnsentMaterialCharge.ShouldBe(23_347.50m);
+        asAdmin.Items.ShouldAllBe(m => m.SentOn == null);
+        await Projects.SendStatementAsync(admin.AccessToken, project.Id);
+        (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!.MaterialCharge.ShouldBe(23_347.50m);
+        (await ListAsync(project.Id, admin.AccessToken)).Items.ShouldAllBe(m => m.SentOn != null);
 
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'material_added'", ("@p", project.Id))).ShouldBe(3);
@@ -130,7 +136,11 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var material = (await AddAsync(project.Id, superAdmin.AccessToken, new { name = "Sand", amount = 80m }))[0];
 
-        await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken);
+        // completing freezes what the client owes, so every material must have been sent to them
+        await (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.MaterialsNotSent);
+        await Projects.SendStatementAsync(superAdmin.AccessToken, project.Id);
+        (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PostJsonAsync($"/api/projects/{project.Id}/materials", new { items = new[] { new { name = "Late", amount = 5m } } }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProjectLocked);
         await (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{material.Id}", new { name = "Sand", amount = 90m }, superAdmin.AccessToken))
@@ -145,7 +155,9 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         locked.Items.Single().CanEdit.ShouldBeFalse();
 
         await Client.PostEmptyAsync($"/api/projects/{project.Id}/reopen", superAdmin.AccessToken);
-        (await Client.DeleteAsync($"/api/projects/{project.Id}/materials/{material.Id}", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await ListAsync(project.Id, superAdmin.AccessToken)).CanAdd.ShouldBeTrue();
+        (await Client.PostJsonAsync($"/api/projects/{project.Id}/materials", new { items = new[] { new { name = "Late", amount = 5m } } }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
     }
 
     [Fact]

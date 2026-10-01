@@ -465,6 +465,8 @@ public sealed class ProjectService(
             ProjectFee = p.ProjectFee,
             MaterialMarkup = p.MaterialMarkup,
             MaterialCharge = money.MaterialCharge,
+            UnsentMaterialCharge = money.UnsentMaterialCharge,
+            UnsentMaterials = money.UnsentMaterials,
             ExpenseTotals = expenseTotals,
             Billing = rollup.ProjectBillingOf(p),
             Cost = new ProjectCostResponse(

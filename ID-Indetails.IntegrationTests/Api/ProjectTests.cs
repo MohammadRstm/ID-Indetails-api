@@ -64,13 +64,25 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             await insert.ExecuteNonQueryAsync();
         }
 
+        // not sent to the client yet: their cost counts, their client prices don't
         var priced = await (await Client.GetAsync($"/api/projects/{site.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>();
-        priced.Money!.MaterialCharge.ShouldBe(270m);
-        priced.Money.Revenue.ShouldBe(1270m);
+        priced.Money!.MaterialCharge.ShouldBe(0m);
+        priced.Money.UnsentMaterialCharge.ShouldBe(270m);
+        priced.Money.UnsentMaterials.ShouldBe(2);
+        priced.Money.Revenue.ShouldBe(1000m);
 
         var repriced = await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing",
             new { projectFee = 1500m, materialMarkup = 0.25m }, admin.AccessToken)).ReadAsync<ProjectResponse>();
-        repriced.Money!.Revenue.ShouldBe(1800m);
+        repriced.Money!.Revenue.ShouldBe(1500m);
+        repriced.Money.UnsentMaterialCharge.ShouldBe(300m);
+
+        // sent on a statement, they join the revenue at the prices the client was shown
+        await Projects.SendStatementAsync(admin.AccessToken, site.Id);
+        var sent = await (await Client.GetAsync($"/api/projects/{site.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>();
+        sent.Money!.MaterialCharge.ShouldBe(300m);
+        sent.Money.MaterialProfit.ShouldBe(70m);
+        sent.Money.UnsentMaterials.ShouldBe(0);
+        sent.Money.Revenue.ShouldBe(1800m);
 
         var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
         await (await Client.PostJsonAsync("/api/projects", new { title = "Internal site", billingType = "internal", projectFee = 1, materialMarkup = 0 }, admin.AccessToken))

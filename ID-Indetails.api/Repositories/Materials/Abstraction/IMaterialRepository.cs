@@ -2,8 +2,11 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Materials.Abstraction;
 
-/// <summary>A live material with the name of who recorded it and whether it is on a client statement.</summary>
-public sealed record MaterialRecord(ProjectMaterial Material, string AddedByName, bool IsStated);
+/// <summary>
+/// A live material with the name of who recorded it, whether it is on a client statement, and when such a statement was
+/// first sent to the client (null until then).
+/// </summary>
+public sealed record MaterialRecord(ProjectMaterial Material, string AddedByName, bool IsStated, DateTime? SentAt);
 
 public interface IMaterialRepository
 {

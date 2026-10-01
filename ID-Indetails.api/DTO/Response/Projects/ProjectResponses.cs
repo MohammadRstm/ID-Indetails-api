@@ -28,8 +28,14 @@ public sealed record ProjectMoneyResponse
 
     public decimal? MaterialMarkup { get; init; }
 
-    /// <summary>Execution: what the client is charged for materials.</summary>
+    /// <summary>Execution: the client prices of the materials sent to the client on a statement, which are part of revenue.</summary>
     public decimal? MaterialCharge { get; init; }
+
+    /// <summary>Execution: the client prices of the materials not sent yet; sending them on a statement adds them to revenue.</summary>
+    public decimal? UnsentMaterialCharge { get; init; }
+
+    /// <summary>Execution: how many materials haven't been sent to the client yet.</summary>
+    public int UnsentMaterials { get; init; }
 
     /// <summary>Project expenses, one total per currency.</summary>
     public IReadOnlyList<CurrencyTotalResponse> ExpenseTotals { get; init; } = [];
@@ -55,7 +61,7 @@ public sealed record ProjectMoneyResponse
     /// <summary>Execution: received − cost.</summary>
     public decimal? CashProfit { get; init; }
 
-    /// <summary>Execution: material charge − material cost.</summary>
+    /// <summary>Execution: what the materials sent earn, their charge − their cost.</summary>
     public decimal? MaterialProfit { get; init; }
 
     /// <summary>Execution: materials left out of the charge because no exchange rate covered their day.</summary>

@@ -292,6 +292,7 @@ public sealed class MaterialService(
             AddedBy = new PersonRefResponse(m.AddedById, row.AddedByName),
             UpdatedAt = m.UpdatedAt,
             IsStated = row.IsStated,
+            SentOn = row.SentAt is { } sent ? clock.ToCompanyDate(sent) : null,
             CanEdit = open && canWrite && SiteRules.CanChange(m.AddedById == actor.UserId, actor.Has(PermissionCodes.MaterialManage)),
             ClientPrice = money ? price : null,
             PriceSource = money ? MaterialRules.SourceOf(m.ClientPrice, row.IsStated) : null,

@@ -1,6 +1,7 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.DTO.Response.Statements;
 using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
@@ -45,5 +46,19 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
             defaultTermsDays = 45,
         }, accessToken);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// A detailed statement of the site's new materials, sent (saved as a download): from then their client prices are
+    /// revenue. Returns the statement's id.
+    /// </summary>
+    public async Task<long> SendStatementAsync(string accessToken, long projectId)
+    {
+        var made = await Client.PostJsonAsync($"/api/projects/{projectId}/statements", new { mode = "detail" }, accessToken);
+        ((int)made.StatusCode).ShouldBe(201, await made.Content.ReadAsStringAsync());
+        var statement = await made.ReadAsync<StatementResponse>();
+        var sent = await Client.PostJsonAsync($"/api/statements/{statement.Id}/deliveries", new { channel = "download" }, accessToken);
+        ((int)sent.StatusCode).ShouldBe(200, await sent.Content.ReadAsStringAsync());
+        return statement.Id!.Value;
     }
 }
