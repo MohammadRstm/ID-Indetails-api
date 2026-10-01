@@ -41,8 +41,9 @@ public class StatementTests(ApiFactory api) : IClassFixture<ApiFactory>
         statement.ShouldSatisfyAllConditions(
             s => s.Total.ShouldBe(330m),
             s => s.Received.ShouldBe(500m),
-            s => s.Agreed.ShouldBe(2430m),
-            s => s.Remaining.ShouldBe(1930m),
+            // the fee and the materials on it: the tiles left out aren't owed until a statement sends them
+            s => s.Agreed.ShouldBe(1330m),
+            s => s.Remaining.ShouldBe(830m),
             s => s.Since.ShouldBeNull(),
             s => s.CreatedBy!.Id.ShouldBe(admin.User.Id));
 
@@ -54,11 +55,18 @@ public class StatementTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.PriceSource.ShouldBe(MaterialRules.PriceSource.Stated));
         list.Items.Single(m => m.Id == materials[1].Id).ClientPrice.ShouldBe(1500m);
 
+        // made but not sent yet: nothing is revenue; sending it adds the cement at its stated price
         var money = (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!;
-        money.MaterialCharge.ShouldBe(1830m);
+        money.MaterialCharge.ShouldBe(0m);
+        money.UnsentMaterialCharge.ShouldBe(1830m);
+        await PostAsync<StatementResponse>($"/api/statements/{statement.Id}/deliveries", new { channel = "download" }, admin.AccessToken, 200);
+        money = (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!;
+        money.MaterialCharge.ShouldBe(330m);
+        money.UnsentMaterialCharge.ShouldBe(1500m);
+        money.Revenue.ShouldBe(1330m);
 
         var again = await (await Client.GetAsync($"/api/statements/{statement.Id}", admin.AccessToken)).ReadAsync<StatementResponse>();
-        again.Agreed.ShouldBe(2430m);
+        again.Agreed.ShouldBe(1330m);
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'statement_created'", ("@p", project.Id))).ShouldBe(1);
     }
@@ -134,9 +142,11 @@ public class StatementTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         await AddMaterialsAsync(project.Id, superAdmin.AccessToken, new { name = "Glass", amount = 900m });
-        await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken);
+        // every material sent before completing, which freezes what is owed
+        await Projects.SendStatementAsync(superAdmin.AccessToken, project.Id);
+        (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
-        var statement = await PostAsync<StatementResponse>($"/api/projects/{project.Id}/statements", new { mode = "detail" }, superAdmin.AccessToken, 201);
+        var statement = await PostAsync<StatementResponse>($"/api/projects/{project.Id}/statements", new { mode = "detail", includeEarlier = true }, superAdmin.AccessToken, 201);
 
         statement.Total.ShouldBe(990m);
         statement.Agreed.ShouldBe(1990m);

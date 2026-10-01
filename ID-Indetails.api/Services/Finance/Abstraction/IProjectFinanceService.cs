@@ -40,11 +40,13 @@ public interface IProjectFinanceService
         CancellationToken cancellationToken = default);
 }
 
-/// <param name="MaterialCharge">Execution: material client prices in USD.</param>
+/// <param name="MaterialCharge">Execution: the client prices, in USD, of the materials sent to the client on a statement: part of revenue.</param>
+/// <param name="UnsentMaterialCharge">Execution: the client prices of the materials not sent yet, which a statement will add to revenue.</param>
+/// <param name="UnsentMaterials">Execution: how many materials haven't been sent to the client yet.</param>
 /// <param name="UnconvertedMaterials">Execution: materials left out of the charge for want of an exchange rate.</param>
 /// <param name="UnpricedLabourMinutes">Worked time of people with no pay record, left out of labour cost.</param>
 /// <param name="CashProfit">Execution: received − cost.</param>
-/// <param name="MaterialProfit">Execution: material charge − material cost.</param>
+/// <param name="MaterialProfit">Execution: what the materials sent earn: their charge − their cost.</param>
 public sealed record ProjectFinancials(
     ProjectFinance.Summary Summary,
     ProjectFinance.Costs Costs,
@@ -54,7 +56,9 @@ public sealed record ProjectFinancials(
     int UnconvertedMaterials,
     decimal Received,
     decimal? CashProfit,
-    decimal? MaterialProfit);
+    decimal? MaterialProfit,
+    decimal? UnsentMaterialCharge = null,
+    int UnsentMaterials = 0);
 
 public sealed record WorkDay(long UserId, DateOnly Day, int Minutes);
 

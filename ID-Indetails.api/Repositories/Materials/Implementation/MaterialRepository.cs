@@ -39,5 +39,6 @@ public sealed class MaterialRepository(IdIndetailsDbContext db) : IMaterialRepos
            select new MaterialRecord(
                m,
                (u.FirstName + " " + u.LastName).Trim(),
-               db.ClientStatementLines.Any(l => l.MaterialId == m.Id));
+               db.ClientStatementLines.Any(l => l.MaterialId == m.Id),
+               db.ClientStatementLines.Where(l => l.MaterialId == m.Id).SelectMany(l => l.Statement.Deliveries).Min(d => (DateTime?)d.SentAt));
 }

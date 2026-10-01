@@ -2,6 +2,7 @@ using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Clients;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.Statements;
 using ID_Indetails.api.Constants;
@@ -14,6 +15,7 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.Materials.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Statements.Abstraction;
@@ -32,6 +34,7 @@ public sealed class StatementService(
     IMaterialRepository materials,
     IStatementRepository statements,
     IProjectFinanceService finance,
+    IProjectFinanceRepository financeSources,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -203,7 +206,8 @@ public sealed class StatementService(
         CancellationToken cancellationToken)
     {
         var markup = project.MaterialMarkup ?? 0;
-        var candidates = (await materials.ListAsync(project.Id, cancellationToken))
+        var records = await materials.ListAsync(project.Id, cancellationToken);
+        var candidates = records
             .Select(r => new StatementRules.Material(
                 r.Material.Id,
                 r.Material.Name,
@@ -224,9 +228,20 @@ public sealed class StatementService(
             throw denial.ToException();
         }
 
+        // Revenue counts materials once they are sent; the client reads this statement as sent, so its own materials count too.
         var money = await finance.GetAsync(project, cancellationToken);
+        var agreed = money.Summary.Revenue;
+        var unsent = records.Where(r => r.SentAt is null).ToDictionary(r => r.Material.Id, r => r.Material);
+        if (project.RevenueLockedAt is null && lines.Any(l => unsent.ContainsKey(l.MaterialId)))
+        {
+            // in USD, as revenue is: each at the rate of the day it was added
+            var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
+            agreed += lines.Where(l => unsent.ContainsKey(l.MaterialId))
+                .Sum(l => rates.ToUsd(l.Price, unsent[l.MaterialId].Currency, clock.ToCompanyDate(unsent[l.MaterialId].AddedAt)) ?? 0);
+        }
+
         var latest = await statements.LatestCreatedAtAsync(project.Id, cancellationToken);
-        return (lines, new StatementRules.PaymentPosition(money.Received, money.Summary.Revenue), latest is { } at ? clock.ToCompanyDate(at) : null);
+        return (lines, new StatementRules.PaymentPosition(money.Received, agreed), latest is { } at ? clock.ToCompanyDate(at) : null);
     }
 
     private async Task<StatementResponse> DescribeAsync(UserAccess actor, long statementId, CancellationToken cancellationToken)

@@ -198,17 +198,27 @@ public sealed class ProjectFinanceService(
         var costs = ProjectFinance.ToUsd(items, rates);
 
         var isExecution = project.DomainCode == DomainCodes.Execution;
-        decimal? materialCharge = null;
-        var unconvertedMaterials = 0;
+        decimal? materialCharge = null, materialProfit = null, unsentCharge = null;
+        int unconvertedMaterials = 0, unsent = 0;
         var revenue = project.Revenue;
 
         if (isExecution)
         {
-            (var charge, unconvertedMaterials) = ProjectFinance.MaterialCharge(
-                materials.Select(m => (new ExecutionPricing.Material(m.Total, m.ClientPrice), m.Currency, clock.ToCompanyDate(m.AddedAt))),
-                project.MaterialMarkup ?? 0,
-                rates);
+            // A material is revenue once a statement listing it has been sent to the client; until then only its cost counts.
+            var markup = project.MaterialMarkup ?? 0;
+            var sentRows = materials.Where(m => m.SentAt is not null).ToList();
+            var unsentRows = materials.Where(m => m.SentAt is null).ToList();
+            IEnumerable<(ExecutionPricing.Material, string, DateOnly)> Priced(IEnumerable<MaterialRow> rows)
+                => rows.Select(m => (new ExecutionPricing.Material(m.Total, m.ClientPrice), m.Currency, clock.ToCompanyDate(m.AddedAt)));
+            var (charge, unconvertedSent) = ProjectFinance.MaterialCharge(Priced(sentRows), markup, rates);
+            var (pending, unconvertedUnsent) = ProjectFinance.MaterialCharge(Priced(unsentRows), markup, rates);
+            var sentCost = sentRows.Sum(m => rates.ToUsd(m.Total, m.Currency, clock.ToCompanyDate(m.AddedAt)) ?? 0);
+
             materialCharge = charge;
+            materialProfit = charge - Math.Round(sentCost, 2, MidpointRounding.AwayFromZero);
+            unsentCharge = pending;
+            unsent = unsentRows.Count;
+            unconvertedMaterials = unconvertedSent + unconvertedUnsent;
 
             // Open Execution projects are priced live; finalising freezes the agreed amount into Revenue.
             if (project.RevenueLockedAt is null)
@@ -236,6 +246,8 @@ public sealed class ProjectFinanceService(
             unconvertedMaterials,
             received,
             isExecution ? received - costs.Total : null,
-            isExecution ? materialCharge - costs.Materials : null);
+            materialProfit,
+            unsentCharge,
+            unsent);
     }
 }

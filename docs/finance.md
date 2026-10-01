@@ -29,7 +29,11 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ## Rules
 
-- **Revenue in a period** is what the projects recognised then: each project's recognised revenue (revenue × progress, or all of it once done) is spread over the months of its costs (`Recognition.ByMonth`: labour months, or other cost months when there is no labour; with no priced cost at all, the months of its logged hours, then its completion month), and each month counts for the share of it the period covers, up to today. The company overview works the same way. The prototype counted whole calendar months instead.
+- **Revenue in a period** is the money received in it: the projects' live payments, each counted on the day it arrived (`PeriodMoney.Received`). It moves as soon as a payment is recorded, whatever a project's progress; completing a project changes nothing but stops its amounts changing. The company overview works the same way.
+- **Expected revenue in a period** (`expectedRevenue`, `Business/Finance/ExpectedRevenue.cs`) is what was agreed in it, kept apart from what was received:
+  - a client project's payment (Design) or fee (Execution) counts on the day it was set, and a change counts its difference on the day it changed (from the `revenue_set`, `revenue_changed` and `project_fee_set` events);
+  - an Execution material counts at its client price, in USD at the rate of the day it was added, on the day a statement listing it was first sent to the client.
+  The monthly figures carry it too, for charts. The company overview shows no expected revenue: only what was received, less costs.
 - **Cost in a period** is every cost dated inside it, by source: labour (including everyone's paid breaks, hourly and salaried alike), expenses, materials and ground labour. All four are always returned, so the parts add up to the total (the prototype's Execution sub-lines left materials and ground labour out).
 - **Margin** is profit ÷ revenue when there is revenue. For a project it only shows once the project is done, at least 5% along or has 10 hours logged (`marginKnown`). A **client** follows the same rule as a whole: done once every project is, progress = the share of their revenue recognised so far, hours across all their projects.
 - **Billing** (`Business/Billing/ProjectBilling.cs`) is the one billing rule. The project page's `money.billing`, the project and client lists, the client pages and the Financials page all use it, through the same batch load (`MoneyRollup`):
@@ -51,7 +55,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ## Response notes
 
-- **Summary:** `revenue`, `cost { labour, expenses, materials, groundLabour, total }`, `profit`, `margin`, `unconverted[]`, `unpricedLabourMinutes`, counts of client and internal projects, all-time client revenue and profit and internal cost, `stillToEarn` (client revenue not recognised yet), and `billing` (the position as of today, whatever the period).
+- **Summary:** `revenue` (received), `expectedRevenue`, `cost { labour, expenses, materials, groundLabour, total }`, `profit`, `margin`, `unconverted[]`, `unpricedLabourMinutes`, counts of client and internal projects, all-time client revenue and profit and internal cost, `stillToEarn` (client revenue not recognised yet), and `billing` (the position as of today, whatever the period).
 - **Monthly:** each month's revenue, cost by source, profit and `unconverted[]` (costs of that month with no rate).
 - **Billing:** `position` (value, invoiced, issued count, received, payment count, on account, outstanding, overdue, overdue count, days overdue of the oldest, not yet invoiced, drafts), `aging[]`, `monthly[]` (invoiced by issue month, collected by the month received), `byClient[]` (clients with invoices or drafts, most outstanding first), `byMethod[]`, `openInvoices[]` (soonest due first) and `unconvertedInvoices[]`.
 - **Costs:** labour by person is the 10 people who cost most; the biggest expenses are the 12 largest in USD (unconverted ones last); `unconverted[]` lists the period's costs with no rate, by source and currency.

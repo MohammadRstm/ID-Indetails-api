@@ -1,5 +1,6 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.DTO.Response.Statements;
 using ID_Indetails.api.Enums;
 using MySqlConnector;
 using Shouldly;
@@ -128,6 +129,16 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.PostJsonAsync($"/api/projects/{site.Id}/payments", new { amount = 500m, currency = "USD" }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
+        // Not sent to the client yet: their cost counts, their charge (220 + 990,000 LBP, 11.06) waits for a statement.
+        var unsent = await MoneyAsync(site.Id, admin.AccessToken);
+        unsent.MaterialCharge.ShouldBe(0m);
+        unsent.UnsentMaterialCharge.ShouldBe(231.06m);
+        unsent.Revenue.ShouldBe(1000m);
+        unsent.Profit.ShouldBe(729.94m);
+        unsent.MaterialProfit.ShouldBe(0m);
+
+        var statementId = await Projects.SendStatementAsync(admin.AccessToken, site.Id);
+        (await (await Client.GetAsync($"/api/statements/{statementId}", admin.AccessToken)).ReadAsync<StatementResponse>()).Agreed.ShouldBe(1231.06m);
         var money = await MoneyAsync(site.Id, admin.AccessToken);
 
         // Charge: 220 + 990,000 LBP (11.06). Cost: 200 + 900,000 LBP (10.06) + 60 ground labour.

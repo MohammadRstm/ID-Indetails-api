@@ -18,6 +18,9 @@ public sealed record InvoiceMoneyRow(
 
 public sealed record PaymentMoneyRow(long ProjectId, long ClientId, long? InvoiceId, DateOnly ReceivedOn, decimal AmountUsd, PaymentMethod Method);
 
+/// <summary>A project's agreed payment (Design) or fee (Execution) being set or changed: the new amount, and the one before.</summary>
+public sealed record AgreedChangeRow(long ProjectId, DateTime OccurredAt, decimal Amount, decimal? PrevAmount);
+
 public sealed record ExpenseDetailRow(long Id, long ProjectId, string Label, string Category, string Currency, decimal Amount, DateOnly SpentOn);
 
 /// <summary>What the money summaries read besides the shared finance calculator. One query each, whatever the number of projects.</summary>
@@ -34,6 +37,9 @@ public interface IMoneySummaryRepository
 
     /// <summary>Invoices of these projects, drafts and voided ones included.</summary>
     Task<IReadOnlyList<InvoiceMoneyRow>> InvoicesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Every time these projects' agreed payment or fee was set or changed, from the activity log.</summary>
+    Task<IReadOnlyList<AgreedChangeRow>> AgreedChangesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
     /// <summary>Live payments of these projects.</summary>
     Task<IReadOnlyList<PaymentMoneyRow>> PaymentsAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);

@@ -21,6 +21,8 @@ public class SiteMoneyTests(ApiFactory api) : IClassFixture<ApiFactory>
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         await Client.PostJsonAsync($"/api/projects/{site.Id}/payments", new { amount = 2000m, currency = "USD" }, superAdmin.AccessToken);
         await Client.PostJsonAsync($"/api/projects/{site.Id}/materials", new { items = new[] { new { name = "Cement", amount = 200m } } }, superAdmin.AccessToken);
+        // sent to the client, so its price is part of what is agreed
+        await Projects.SendStatementAsync(superAdmin.AccessToken, site.Id);
         await Client.PostJsonAsync($"/api/projects/{site.Id}/labour-defaults", new { workers = 5, dailyPay = 40m }, superAdmin.AccessToken);
         var week = (await (await Client.GetAsync($"/api/projects/{site.Id}/labour-weeks", superAdmin.AccessToken)).ReadAsync<LabourWeekListResponse>()).Weeks[0].WeekStart;
         var day = (await (await Client.GetAsync($"/api/projects/{site.Id}/labour-weeks/{week:yyyy-MM-dd}", superAdmin.AccessToken))

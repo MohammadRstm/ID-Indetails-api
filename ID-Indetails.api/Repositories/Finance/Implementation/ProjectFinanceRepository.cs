@@ -38,7 +38,8 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
         => await db.ProjectMaterials
             .AsNoTracking()
             .Where(m => projectIds.Contains(m.ProjectId) && m.DeletedAt == null)
-            .Select(m => new MaterialRow(m.ProjectId, m.Currency, m.Total, m.ClientPrice, m.AddedAt))
+            .Select(m => new MaterialRow(m.ProjectId, m.Currency, m.Total, m.ClientPrice, m.AddedAt,
+                db.ClientStatementLines.Where(l => l.MaterialId == m.Id).SelectMany(l => l.Statement.Deliveries).Min(d => (DateTime?)d.SentAt)))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<GroundLabourRow>> GroundLabourAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
