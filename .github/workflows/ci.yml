@@ -42,6 +42,12 @@ jobs:
             --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --default-time-zone=+00:00
           for i in $(seq 1 60); do docker exec mysql mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" --silent && break; sleep 2; done
 
+      # The SMTP sender's test delivers a real email to Mailpit and reads it back, as in development.
+      - name: Start Mailpit
+        run: |
+          docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:v1.31.2
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8025/api/v1/info >/dev/null && break; sleep 1; done
+
       - name: Restore
         run: dotnet restore ID-Indetails.slnx
 
