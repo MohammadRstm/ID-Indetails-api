@@ -27,6 +27,8 @@ RUN ConnectionStrings__Default="Server=placeholder;Database=placeholder" \
 
 # --- migrations: run once, before the new API starts -----------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS migrations
+# Ubuntu's security fixes, without waiting for the base image to be rebuilt with them.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 COPY --from=migrations-build --chown=root:root /out/efbundle /efbundle
 USER $APP_UID
 ENTRYPOINT ["/efbundle"]
@@ -34,6 +36,8 @@ ENTRYPOINT ["/efbundle"]
 # --- runtime: the API, as the image's unprivileged user, plain HTTP on 8080 behind the client's nginx -------------
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 WORKDIR /app
+# Ubuntu's security fixes, without waiting for the base image to be rebuilt with them.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=root:root /app/publish .
 # Uploads (FileStorage:RootPath) go on a volume mounted here; the app may write only there.
 RUN mkdir -p /app/App_Data/files && chown -R $APP_UID /app/App_Data
