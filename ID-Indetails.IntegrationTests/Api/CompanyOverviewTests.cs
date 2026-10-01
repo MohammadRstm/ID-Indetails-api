@@ -99,6 +99,16 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         juneMonth.ProfitBeforeOverhead.ShouldBe(3930m);
         months.Single(m => m.Month == new DateOnly(2026, 7, 1)).Revenue.ShouldBe(6000m);
 
+        // a year's months, January first, the same figures
+        var year = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2026", superAdmin.AccessToken));
+        year[0].Month.ShouldBe(new DateOnly(2026, 1, 1));
+        year.ShouldAllBe(m => m.Month.Year == 2026);
+        year.Single(m => m.Month == new DateOnly(2026, 6, 1)).ShouldBe(juneMonth);
+        var before = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2025", superAdmin.AccessToken));
+        before.Select(m => m.Month).ShouldBe(Enumerable.Range(1, 12).Select(m => new DateOnly(2025, m, 1)));
+        await (await Client.GetAsync($"/api/company/overview/monthly?year={DateTime.UtcNow.Year + 2}", superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
         await (await Client.GetAsync("/api/company/overview", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 

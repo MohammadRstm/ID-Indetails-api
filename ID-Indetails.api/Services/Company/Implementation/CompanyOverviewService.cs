@@ -7,6 +7,7 @@ using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
@@ -28,6 +29,8 @@ public sealed class CompanyOverviewService(
     IOverheadRepository overheads,
     IClock clock) : ICompanyOverviewService
 {
+    public const int MinYear = 2000;
+
     private sealed record Data(
         IReadOnlyList<Project> Projects,
         IReadOnlyDictionary<long, ProjectCostHistory> History,
@@ -114,10 +117,27 @@ public sealed class CompanyOverviewService(
             UnconvertedInvoices(invoices.Where(i => data.Rates.ToUsd(i.Total, i.Currency, clock.ToCompanyDate(i.IssuedAt)) is null)));
     }
 
-    public async Task<IReadOnlyList<CompanyMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<CompanyMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default)
     {
         var thisMonth = Recognition.MonthOf(clock.CompanyToday);
-        var keys = Enumerable.Range(0, months).Select(i => thisMonth.AddMonths(i - months + 1)).ToList();
+        return MonthsAsync(Enumerable.Range(0, months).Select(i => thisMonth.AddMonths(i - months + 1)).ToList(), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<CompanyMonthResponse>> YearAsync(int year, CancellationToken cancellationToken = default)
+    {
+        var thisMonth = Recognition.MonthOf(clock.CompanyToday);
+        if (year > thisMonth.Year || year < MinYear)
+        {
+            throw new RequestValidationException(
+                ErrorCodes.ValidationFailed, "year", $"Choose a year from {MinYear} to {thisMonth.Year}.");
+        }
+
+        var months = year == thisMonth.Year ? thisMonth.Month : 12;
+        return MonthsAsync(Enumerable.Range(1, months).Select(m => new DateOnly(year, m, 1)).ToList(), cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<CompanyMonthResponse>> MonthsAsync(IReadOnlyList<DateOnly> keys, CancellationToken cancellationToken)
+    {
         var data = await LoadAsync(cancellationToken);
 
         var received = (await company.PaymentsAsync(cancellationToken)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();
