@@ -185,11 +185,11 @@ jobs:
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          scp deploy/docker-compose.prod.yml deploy/deploy.sh "target:$DEPLOY_PATH/"
+          scp deploy/docker-compose.prod.yml deploy/deploy.sh deploy/backup.sh deploy/Caddyfile "target:$DEPLOY_PATH/"
           # the registry token lives only as long as this job; it is passed on stdin and removed afterwards
           ssh target "cd '$DEPLOY_PATH' && docker login ghcr.io -u '${{ github.actor }}' --password-stdin" <<< "$REGISTRY_TOKEN"
           status=0
-          ssh target "cd '$DEPLOY_PATH' && chmod +x deploy.sh && API_TAG='$API_TAG' CLIENT_TAG='$CLIENT_TAG' ./deploy.sh" || status=$?
+          ssh target "cd '$DEPLOY_PATH' && chmod +x deploy.sh backup.sh && API_TAG='$API_TAG' CLIENT_TAG='$CLIENT_TAG' ./deploy.sh" || status=$?
           ssh target "docker logout ghcr.io" || true
           exit $status
 

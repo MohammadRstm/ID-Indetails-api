@@ -1,8 +1,8 @@
 # Production only: the stack the Deploy workflow runs on the server. Development doesn't use it.
 #
 # The images come from GHCR, tagged by the workflow (API_TAG, CLIENT_TAG). Everything else comes from .env next to
-# this file on the server, which only the deploy user can read (see .env.production.example). Only the client's
-# nginx is reachable from outside, and only on the host's loopback, for the TLS proxy in front.
+# this file on the server, which only the deploy user can read (see .env.production.example). Only Caddy is
+# reachable from outside (80 and 443): it handles HTTPS and forwards to the client's nginx.
 name: id-indetails
 
 services:
@@ -48,8 +48,9 @@ services:
     environment:
       ConnectionStrings__Default: Server=db;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?}
-      Setup__SuperAdminKey: ${SETUP_SUPER_ADMIN_KEY:?}
-      Frontend__BaseUrl: ${PUBLIC_URL:?}
+      # Only while creating the first super admin; empty, the setup endpoint doesn't exist (docs/server-setup.md).
+      Setup__SuperAdminKey: ${SETUP_SUPER_ADMIN_KEY:-}
+      Frontend__BaseUrl: https://${PUBLIC_DOMAIN:?}
       Email__Host: ${SMTP_HOST:?}
       Email__Port: ${SMTP_PORT:-587}
       Email__UseStartTls: ${SMTP_STARTTLS:-true}
@@ -76,12 +77,32 @@ services:
     security_opt: [no-new-privileges:true]
     environment:
       API_UPSTREAM: http://api:8080
-    ports:
-      - "${WEB_BIND:-127.0.0.1:8080}:8080"
     networks: [proxy]
     depends_on:
       api:
         condition: service_healthy
+
+  # HTTPS: the certificate for PUBLIC_DOMAIN, renewed by itself, kept on the caddy_data volume.
+  caddy:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?}
+      ACME_EMAIL: ${ACME_EMAIL:?}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [proxy]
+    depends_on:
+      - web
 
 networks:
   # MySQL and the API: no route outside.
@@ -95,3 +116,5 @@ networks:
 volumes:
   db_data:
   files:
+  caddy_data:
+  caddy_config:
