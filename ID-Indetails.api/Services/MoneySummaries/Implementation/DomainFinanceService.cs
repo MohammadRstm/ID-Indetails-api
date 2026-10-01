@@ -4,6 +4,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Finance;
@@ -52,6 +53,7 @@ public sealed class DomainFinanceService(
         // revenue is the money received: it moves as soon as a payment is recorded, whatever the project's progress
         var received = ReceivedOn(projects, rollup);
         var revenue = PeriodMoney.Received(received, from, to);
+        var agreed = await AgreedAsync(projects, cancellationToken);
         var cost = PeriodMoney.Costs(projects.SelectMany(p => rollup.Costs(p.Id)), from, to);
         var clientWork = projects.Where(p => p.BillingType == BillingType.Client).Select(p => rollup.Money(p.Id).Summary).ToList();
         var profit = revenue - PeriodMoney.Round(cost.Total);
@@ -64,6 +66,7 @@ public sealed class DomainFinanceService(
             from,
             to,
             revenue,
+            ExpectedRevenue.In(agreed, from, to),
             PeriodCost(cost),
             profit,
             PeriodMoney.Margin(profit, revenue),
@@ -86,6 +89,7 @@ public sealed class DomainFinanceService(
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var rollup = await rollups.LoadAsync(projects, cancellationToken);
         var received = ReceivedOn(projects, rollup);
+        var agreed = await AgreedAsync(projects, cancellationToken);
         var costs = projects.SelectMany(p => rollup.Costs(p.Id)).ToList();
         var unconverted = projects.SelectMany(p => rollup.Unconverted(p.Id)).ToList();
 
@@ -96,10 +100,39 @@ public sealed class DomainFinanceService(
                 var revenue = PeriodMoney.Received(received, month, end);
                 var cost = PeriodMoney.Costs(costs, month, end);
                 return new FinanceMonthResponse(
-                    month, revenue, Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.Materials), Rounded(cost.GroundLabour),
+                    month, revenue, ExpectedRevenue.In(agreed, month, end), Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.Materials), Rounded(cost.GroundLabour),
                     Rounded(cost.Total), revenue - Rounded(cost.Total), UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// What the client projects agreed, dated: payments and fees as they were set or changed, and Execution materials at their
+    /// client price, converted at the rate of the day they were added, on the day they were first sent.
+    /// </summary>
+    private async Task<IReadOnlyList<ExpectedRevenue.Agreed>> AgreedAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken)
+    {
+        var client = projects.Where(p => p.BillingType == BillingType.Client).ToDictionary(p => p.Id);
+        var ids = client.Keys.ToList();
+        var agreed = (await summaries.AgreedChangesAsync(ids, cancellationToken))
+            .Select(c => ExpectedRevenue.Change(clock.ToCompanyDate(c.OccurredAt), c.Amount, c.PrevAmount))
+            .ToList();
+
+        var sites = client.Values.Where(p => p.DomainCode == DomainCodes.Execution).Select(p => p.Id).ToList();
+        if (sites.Count > 0)
+        {
+            var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
+            foreach (var m in (await financeSources.MaterialsAsync(sites, cancellationToken)).Where(m => m.SentAt is not null))
+            {
+                var price = ExecutionPricing.ClientPrice(new ExecutionPricing.Material(m.Total, m.ClientPrice), client[m.ProjectId].MaterialMarkup ?? 0);
+                if (rates.ToUsd(price, m.Currency, clock.ToCompanyDate(m.AddedAt)) is { } usd)
+                {
+                    agreed.Add(new ExpectedRevenue.Agreed(clock.ToCompanyDate(m.SentAt!.Value), usd));
+                }
+            }
+        }
+
+        return agreed;
     }
 
     /// <summary>The domain's live payments as dated USD amounts, for revenue.</summary>

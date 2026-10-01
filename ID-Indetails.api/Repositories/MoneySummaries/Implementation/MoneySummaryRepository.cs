@@ -1,3 +1,4 @@
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.MoneySummaries.Abstraction;
@@ -36,6 +37,16 @@ public sealed class MoneySummaryRepository(IdIndetailsDbContext db) : IMoneySumm
                 i.VoidedAt != null,
                 db.Payments.Where(p => p.InvoiceId == i.Id && p.VoidedAt == null).Sum(p => (decimal?)p.AmountUsd) ?? 0))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<AgreedChangeRow>> AgreedChangesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
+    {
+        string[] kinds = [ActivityEventKinds.RevenueSet, ActivityEventKinds.RevenueChanged, ActivityEventKinds.ProjectFeeSet];
+        return await db.ActivityEvents
+            .AsNoTracking()
+            .Where(e => kinds.Contains(e.Kind) && e.SubjectType == "project" && e.SubjectId != null && projectIds.Contains(e.SubjectId.Value))
+            .Select(e => new AgreedChangeRow(e.SubjectId!.Value, e.OccurredAt, e.Amount ?? 0, e.PrevAmount))
+            .ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<PaymentMoneyRow>> PaymentsAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
         => await db.Payments
