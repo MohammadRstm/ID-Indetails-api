@@ -7,6 +7,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # EF Core, its MySQL provider (Pomelo) and the naming conventions move a major version together, once Pomelo
+    # supports it: a new EF Core major alone doesn't build. Minor and patch updates still come.
+    ignore:
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Pomelo.EntityFrameworkCore.MySql"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "EFCore.NamingConventions"
+        update-types: ["version-update:semver-major"]
     groups:
       nuget:
         patterns: ["*"]
