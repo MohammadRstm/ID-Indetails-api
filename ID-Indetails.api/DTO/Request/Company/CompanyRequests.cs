@@ -64,7 +64,8 @@ public sealed record CreateOverheadRequest
 {
     public string Name { get; init; } = string.Empty;
 
-    public OverheadCostGroup CostGroup { get; init; }
+    /// <summary>Its category (<c>GET /api/company/overhead/groups</c>).</summary>
+    public long GroupId { get; init; }
 
     public string Currency { get; init; } = "USD";
 
@@ -79,7 +80,13 @@ public sealed record UpdateOverheadRequest
 {
     public string Name { get; init; } = string.Empty;
 
-    public OverheadCostGroup CostGroup { get; init; }
+    public long GroupId { get; init; }
+}
+
+/// <summary>A category of company expenses: its name.</summary>
+public sealed record OverheadGroupRequest
+{
+    public string Name { get; init; } = string.Empty;
 }
 
 public sealed record ChangeOverheadAmountRequest

@@ -1544,7 +1544,7 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.OverheadItem", b =>
+            modelBuilder.Entity("ID_Indetails.api.Models.OverheadGroup", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -1553,11 +1553,139 @@ namespace ID_Indetails.api.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<string>("CostGroup")
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("cost_group");
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id")
+                        .HasName("pk_overhead_groups");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_overhead_groups_name");
+
+                    b.ToTable("overhead_groups", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Software & services",
+                            SortOrder = 10
+                        },
+                        new
+                        {
+                            Id = 2L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Operating costs",
+                            SortOrder = 20
+                        },
+                        new
+                        {
+                            Id = 3L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Rent & utilities",
+                            SortOrder = 30
+                        },
+                        new
+                        {
+                            Id = 4L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Internet & phone",
+                            SortOrder = 40
+                        },
+                        new
+                        {
+                            Id = 5L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Marketing & advertising",
+                            SortOrder = 50
+                        },
+                        new
+                        {
+                            Id = 6L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Professional fees",
+                            SortOrder = 60
+                        },
+                        new
+                        {
+                            Id = 7L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Insurance",
+                            SortOrder = 70
+                        },
+                        new
+                        {
+                            Id = 8L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Office supplies",
+                            SortOrder = 80
+                        },
+                        new
+                        {
+                            Id = 9L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Equipment & maintenance",
+                            SortOrder = 90
+                        },
+                        new
+                        {
+                            Id = 10L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Vehicles & transport",
+                            SortOrder = 100
+                        },
+                        new
+                        {
+                            Id = 11L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Bank fees",
+                            SortOrder = 110
+                        },
+                        new
+                        {
+                            Id = 12L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Taxes & licences",
+                            SortOrder = 120
+                        },
+                        new
+                        {
+                            Id = 13L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Training & memberships",
+                            SortOrder = 130
+                        },
+                        new
+                        {
+                            Id = 14L,
+                            CreatedAt = new DateTime(2026, 10, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Other",
+                            SortOrder = 10000
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.OverheadItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
                         .HasPrecision(3)
@@ -1579,6 +1707,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("date")
                         .HasColumnName("ended_on");
 
+                    b.Property<long>("GroupId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("group_id");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -1595,10 +1727,11 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("CreatedById")
                         .HasDatabaseName("ix_overhead_items_created_by_id");
 
+                    b.HasIndex("GroupId")
+                        .HasDatabaseName("ix_overhead_items_group_id");
+
                     b.ToTable("overhead_items", null, t =>
                         {
-                            t.HasCheckConstraint("ck_overhead_items_cost_group", "`cost_group` IN ('software', 'operating')");
-
                             t.HasCheckConstraint("ck_overhead_items_end_after_start", "`ended_on` IS NULL OR `ended_on` >= `started_on`");
                         });
                 });
@@ -4498,6 +4631,15 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_overhead_items_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.OverheadGroup", "Group")
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_overhead_items_overhead_groups_group_id");
+
+                    b.Navigation("Group");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.PasswordResetToken", b =>

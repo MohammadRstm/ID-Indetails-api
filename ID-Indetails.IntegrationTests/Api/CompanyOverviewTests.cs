@@ -117,7 +117,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         (await Client.PostJsonAsync("/api/company/overhead",
-            new { name = "Office rent", costGroup = "operating", currency = "USD", amount = 3000m }, superAdmin.AccessToken))
+            new { name = "Office rent", groupId = 2, currency = "USD", amount = 3000m }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var overview = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview", superAdmin.AccessToken));

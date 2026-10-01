@@ -61,6 +61,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
 
     // Company layer
+    public DbSet<OverheadGroup> OverheadGroups => Set<OverheadGroup>();
+
     public DbSet<OverheadItem> OverheadItems => Set<OverheadItem>();
     public DbSet<OverheadAmount> OverheadAmounts => Set<OverheadAmount>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
@@ -104,7 +106,6 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<ContactKind>(configurationBuilder);
         StoreAsSnakeCase<DeliveryChannel>(configurationBuilder);
         StoreAsSnakeCase<PaymentMethod>(configurationBuilder);
-        StoreAsSnakeCase<OverheadCostGroup>(configurationBuilder);
         StoreAsSnakeCase<ConversationType>(configurationBuilder);
         StoreAsSnakeCase<EditWindow>(configurationBuilder);
         StoreAsSnakeCase<EntryNotificationMode>(configurationBuilder);
