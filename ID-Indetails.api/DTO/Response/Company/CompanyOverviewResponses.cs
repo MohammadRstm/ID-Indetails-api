@@ -36,7 +36,10 @@ public sealed record DomainOverviewResponse(
 
 /// <param name="Overhead">Company expenses charged to the period (by calendar days), in USD.</param>
 /// <param name="UnconvertedOverhead">Overhead with no exchange rate for its month, left out of <see cref="Overhead"/>.</param>
-/// <param name="NetProfit">Both domains' profit less company overhead.</param>
+/// <param name="SuperAdminSalaries">The super admins' pay for the period (by calendar days, like overhead), in USD: they log no
+/// hours, so no project carries it.</param>
+/// <param name="UnconvertedSuperAdminSalaries">Their pay in a currency with no rate for its month, left out of <see cref="SuperAdminSalaries"/>.</param>
+/// <param name="NetProfit">Both domains' profit less company overhead and the super admins' salaries.</param>
 /// <param name="UnconvertedInvoices">Both domains' invoices with no exchange rate on their issue day.</param>
 public sealed record CompanyOverviewResponse(
     DateOnly From,
@@ -47,6 +50,8 @@ public sealed record CompanyOverviewResponse(
     decimal GrossProfit,
     decimal Overhead,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedOverhead,
+    decimal SuperAdminSalaries,
+    IReadOnlyList<CurrencyTotalResponse> UnconvertedSuperAdminSalaries,
     decimal NetProfit,
     decimal Invoiced,
     decimal Collected,

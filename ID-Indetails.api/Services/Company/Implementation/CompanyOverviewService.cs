@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Company;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Expenses;
@@ -11,22 +12,27 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
+using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 
 namespace ID_Indetails.api.Services.Company.Implementation;
 
 /// <summary>
 /// Company totals from the shared finance calculator: revenue recognised and spread over the months of
 /// each project's costs (<c>Business/Finance/Recognition</c>), costs on their day, and overhead charged by
-/// calendar days and converted at the rate of its month.
+/// calendar days and converted at the rate of its month. Super admins' salaries are company costs like overhead:
+/// they log no hours, so no project carries their pay.
 /// </summary>
 public sealed class CompanyOverviewService(
     ICompanyFinanceRepository company,
     IProjectFinanceService finance,
     IProjectFinanceRepository financeSources,
     IOverheadRepository overheads,
+    IPayrollRepository payroll,
+    IPayrollInputs payrollInputs,
     IClock clock) : ICompanyOverviewService
 {
     public const int MinYear = 2000;
@@ -97,6 +103,7 @@ public sealed class CompanyOverviewService(
         }).ToList();
 
         var (overhead, unconverted) = await OverheadAsync(shares.Select(s => (s.Month, s.Calendar)), data.Rates, cancellationToken);
+        var (salaries, unconvertedSalaries) = await SuperAdminSalariesAsync(shares, data.Rates, cancellationToken);
         var gross = domains.Sum(d => d.Profit);
 
         return new CompanyOverviewResponse(
@@ -108,7 +115,9 @@ public sealed class CompanyOverviewService(
             gross,
             overhead,
             unconverted,
-            gross - overhead,
+            salaries,
+            unconvertedSalaries,
+            gross - overhead - salaries,
             domains.Sum(d => d.Invoiced),
             domains.Sum(d => d.Collected),
             domains.Sum(d => d.Outstanding),
@@ -200,6 +209,40 @@ public sealed class CompanyOverviewService(
                 {
                     unconverted[line.Currency] = unconverted.GetValueOrDefault(line.Currency) + amount.Value * share;
                 }
+            }
+        }
+
+        return (PeriodMoney.Round(usd), unconverted.Select(u => new CurrencyTotalResponse(u.Key, PeriodMoney.Round(u.Value))).ToList());
+    }
+
+    /// <summary>
+    /// The super admins' pay over the period, as Salaries works it out for each month it touches, times the share of the
+    /// month's calendar days the period covers (like overhead), converted at the rate on the first of the month.
+    /// </summary>
+    private async Task<(decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted)> SuperAdminSalariesAsync(
+        IReadOnlyList<Recognition.MonthShare> shares,
+        ExchangeRateTable rates,
+        CancellationToken cancellationToken)
+    {
+        var people = await payroll.PeopleAsync([], includeSuperAdmins: true, domain: null, search: null, shares[0].Month, cancellationToken);
+        var usd = 0m;
+        var unconverted = new Dictionary<string, decimal>();
+
+        foreach (var month in await payrollInputs.ForAsync(people, shares.Select(s => s.Month).ToList(), cancellationToken))
+        {
+            if (SalaryCalculator.Calculate(month.Input) is not { } pay)
+            {
+                continue;
+            }
+
+            var amount = pay.Total * shares.Single(s => s.Month == month.Input.Month).Calendar;
+            if (rates.ToUsd(amount, pay.Terms.Currency, month.Input.Month) is { } converted)
+            {
+                usd += converted;
+            }
+            else
+            {
+                unconverted[pay.Terms.Currency] = unconverted.GetValueOrDefault(pay.Terms.Currency) + amount;
             }
         }
 
