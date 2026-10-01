@@ -151,13 +151,17 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
 
         (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse(null, false, null));
+        // the logo needn't wait for the rest of the settings: they still read as not set up
         var logoFile = await UploadPngAsync(Client, superAdmin.AccessToken, "logo.png");
-        await (await Client.PutJsonAsync("/api/company/logo", new { fileId = logoFile.Id }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.CompanyNotSetUp);
+        var first = await OkAsync<CompanySettingsResponse>(Client.PutJsonAsync("/api/company/logo", new { fileId = logoFile.Id }, superAdmin.AccessToken));
+        first.LogoFileId.ShouldBe(logoFile.Id);
+        first.IsSetUp.ShouldBeFalse();
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse(null, true, logoFile.Id));
 
-        (await Client.PutJsonAsync("/api/company/settings", new { name = "Indetails", defaultCurrency = "USD" }, superAdmin.AccessToken))
-            .IsSuccessStatusCode.ShouldBeTrue();
-        var saved = await OkAsync<CompanySettingsResponse>(Client.PutJsonAsync("/api/company/logo", new { fileId = logoFile.Id }, superAdmin.AccessToken));
+        // saving the settings afterwards keeps it
+        var saved = await OkAsync<CompanySettingsResponse>(
+            Client.PutJsonAsync("/api/company/settings", new { name = "Indetails", defaultCurrency = "USD" }, superAdmin.AccessToken));
+        saved.IsSetUp.ShouldBeTrue();
         saved.LogoFileId.ShouldBe(logoFile.Id);
 
         (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", true, logoFile.Id));
