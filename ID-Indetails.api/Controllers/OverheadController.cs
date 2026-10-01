@@ -25,6 +25,33 @@ public sealed class OverheadController(IOverheadService overhead) : ControllerBa
     public Task<IReadOnlyList<OverheadMonthResponse>> Monthly([FromQuery] int months, CancellationToken cancellationToken)
         => overhead.MonthlyAsync(Math.Clamp(months == 0 ? 13 : months, 1, MaxMonths), cancellationToken);
 
+    /// <summary>Every category, first to last ("Other" last), with how many lines use each.</summary>
+    [HttpGet("groups")]
+    [HasAnyPermission(PermissionCodes.CompanyView, PermissionCodes.OverheadManage)]
+    public Task<IReadOnlyList<OverheadGroupResponse>> Groups(CancellationToken cancellationToken)
+        => overhead.GroupsAsync(cancellationToken);
+
+    /// <summary>A new category, listed before "Other". Super admins only.</summary>
+    [HttpPost("groups")]
+    [HasPermission(PermissionCodes.OverheadManage)]
+    public async Task<ActionResult<OverheadGroupResponse>> AddGroup(OverheadGroupRequest request, CancellationToken cancellationToken)
+        => StatusCode(StatusCodes.Status201Created, await overhead.AddGroupAsync(request, cancellationToken));
+
+    /// <summary>Renames a category; its lines keep it. Super admins only.</summary>
+    [HttpPut("groups/{id:long}")]
+    [HasPermission(PermissionCodes.OverheadManage)]
+    public Task<OverheadGroupResponse> RenameGroup(long id, OverheadGroupRequest request, CancellationToken cancellationToken)
+        => overhead.RenameGroupAsync(id, request, cancellationToken);
+
+    /// <summary>Removes a category no line uses (<c>422 overhead_group_in_use</c> otherwise). Super admins only.</summary>
+    [HttpDelete("groups/{id:long}")]
+    [HasPermission(PermissionCodes.OverheadManage)]
+    public async Task<IActionResult> RemoveGroup(long id, CancellationToken cancellationToken)
+    {
+        await overhead.RemoveGroupAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     [HttpPost]
     [HasPermission(PermissionCodes.OverheadManage)]
     public async Task<ActionResult<OverheadLineResponse>> Create(CreateOverheadRequest request, CancellationToken cancellationToken)

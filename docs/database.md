@@ -40,7 +40,7 @@ The database is the second line of defence. The API must still filter every quer
 | Execution site costs and pricing | `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `client_statements`, `client_statement_lines`, `client_statement_deliveries`, `statement_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
 | Working time and hours ledger | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days` |
-| Company layer | `overhead_items`, `overhead_amounts`, `company_settings`, `domain_settings` |
+| Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `company_settings`, `domain_settings` |
 
 ## Execution pricing
 

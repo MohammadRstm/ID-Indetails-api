@@ -1,4 +1,5 @@
 using FluentValidation;
+using ID_Indetails.api.Business.Company;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Company;
 using ID_Indetails.api.Validators.Clients;
@@ -71,7 +72,7 @@ public sealed class CreateOverheadRequestValidator : AbstractValidator<CreateOve
     public CreateOverheadRequestValidator()
     {
         RuleFor(x => x.Name).OverheadName();
-        RuleFor(x => x.CostGroup).IsInEnum().WithMessage("Group must be software or operating.");
+        RuleFor(x => x.GroupId).GreaterThan(0).WithMessage("Choose the category.");
         RuleFor(x => x.Currency).Currency();
         RuleFor(x => x.Amount).Amount("Amount", allowZero: false);
     }
@@ -82,7 +83,17 @@ public sealed class UpdateOverheadRequestValidator : AbstractValidator<UpdateOve
     public UpdateOverheadRequestValidator()
     {
         RuleFor(x => x.Name).OverheadName();
-        RuleFor(x => x.CostGroup).IsInEnum().WithMessage("Group must be software or operating.");
+        RuleFor(x => x.GroupId).GreaterThan(0).WithMessage("Choose the category.");
+    }
+}
+
+public sealed class OverheadGroupRequestValidator : AbstractValidator<OverheadGroupRequest>
+{
+    public OverheadGroupRequestValidator()
+    {
+        RuleFor(x => x.Name)
+            .Must(n => !string.IsNullOrWhiteSpace(n)).WithMessage("Name the category.")
+            .MaximumLength(OverheadRules.MaxGroupName).WithMessage($"A category's name is at most {OverheadRules.MaxGroupName} characters.");
     }
 }
 

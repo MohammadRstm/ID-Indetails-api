@@ -30,7 +30,6 @@ public class ValueConverterTests
         AssertRoundTrip<ContactKind>();
         AssertRoundTrip<DeliveryChannel>();
         AssertRoundTrip<PaymentMethod>();
-        AssertRoundTrip<OverheadCostGroup>();
         AssertRoundTrip<ConversationType>();
         AssertRoundTrip<EditWindow>();
         AssertRoundTrip<EntryNotificationMode>();

@@ -132,9 +132,9 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
         var token = superAdmin.AccessToken;
 
         var design = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",
-            new { name = "Design tools", costGroup = "software", currency = "USD", amount = 100m }, token));
+            new { name = "Design tools", groupId = 1, currency = "USD", amount = 100m }, token));
         await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",
-            new { name = "Generator", costGroup = "operating", currency = "LBP", amount = 895_000m }, token));
+            new { name = "Generator", groupId = 2, currency = "LBP", amount = 895_000m }, token));
 
         // A raise from next month leaves this month at 100.
         var raised = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync($"/api/company/overhead/{design.Id}/amounts",
@@ -161,11 +161,67 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // A line that hasn't started yet is simply removed when cancelled.
         var planned = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",
-            new { name = "Next year", costGroup = "software", currency = "USD", amount = 10m, startMonth = Iso(thisMonth.AddMonths(2)) }, token));
+            new { name = "Next year", groupId = 1, currency = "USD", amount = 10m, startMonth = Iso(thisMonth.AddMonths(2)) }, token));
         (await Client.PostEmptyAsync($"/api/company/overhead/{planned.Id}/cancel", token)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
 
         await (await Client.GetAsync("/api/company/overhead", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
-        design.CostGroup.ShouldBe(OverheadCostGroup.Software);
+        design.Group.ShouldBe(new OverheadGroupSummaryResponse(1, "Software & services"));
+    }
+
+    [Fact]
+    public async Task Super_admins_manage_the_categories_and_one_in_use_stays()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var token = superAdmin.AccessToken;
+
+        // seeded, first to last, "Other" at the end
+        var seeded = await OkAsync<List<OverheadGroupResponse>>(Client.GetAsync("/api/company/overhead/groups", token));
+        seeded[0].Name.ShouldBe("Software & services");
+        seeded[1].Name.ShouldBe("Operating costs");
+        seeded[^1].Name.ShouldBe("Other");
+        seeded.Count.ShouldBe(14);
+
+        // a new one goes before "Other", and names are unique whatever their case
+        var studio = await OkAsync<OverheadGroupResponse>(Client.PostJsonAsync("/api/company/overhead/groups", new { name = "  Studio costs " }, token));
+        studio.Name.ShouldBe("Studio costs");
+        var listed = await OkAsync<List<OverheadGroupResponse>>(Client.GetAsync("/api/company/overhead/groups", token));
+        listed[^2].Id.ShouldBe(studio.Id);
+        listed[^1].Name.ShouldBe("Other");
+        await (await Client.PostJsonAsync("/api/company/overhead/groups", new { name = "studio COSTS" }, token))
+            .ShouldFailWithAsync(409, ErrorCodes.OverheadGroupExists);
+        await (await Client.PostJsonAsync("/api/company/overhead/groups", new { name = " " }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        // a line put in it, and moved by renaming nothing
+        var line = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",
+            new { name = "Studio cleaning", groupId = studio.Id, currency = "USD", amount = 150m }, token));
+        line.Group.ShouldBe(new OverheadGroupSummaryResponse(studio.Id, "Studio costs"));
+        (await OkAsync<OverheadGroupResponse>(Client.PutJsonAsync($"/api/company/overhead/groups/{studio.Id}", new { name = "Studio upkeep" }, token)))
+            .Lines.ShouldBe(1);
+        var totals = (await OkAsync<OverheadResponse>(Client.GetAsync("/api/company/overhead", token))).GroupTotals;
+        totals.ShouldContain(t => t.GroupId == studio.Id && t.Name == "Studio upkeep" && t.Currency == "USD" && t.Total == 150m);
+
+        // in use, it stays; once its line moves, it can go
+        await (await Client.DeleteAsync($"/api/company/overhead/groups/{studio.Id}", token)).ShouldFailWithAsync(422, ErrorCodes.OverheadGroupInUse);
+        (await OkAsync<OverheadLineResponse>(Client.PutJsonAsync($"/api/company/overhead/{line.Id}", new { name = "Studio cleaning", groupId = 2 }, token)))
+            .Group.Name.ShouldBe("Operating costs");
+        (await Client.DeleteAsync($"/api/company/overhead/groups/{studio.Id}", token)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+        await (await Client.PostJsonAsync("/api/company/overhead",
+                new { name = "Gone", groupId = studio.Id, currency = "USD", amount = 1m }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.OverheadGroupNotFound);
+
+        // only super admins manage them, even with overhead:manage; anyone who sees the expenses reads them
+        var manager = (await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design)).Auth;
+        var granted = await Client.PutJsonAsync($"/api/users/{manager.User.Id}/permissions", new
+        {
+            changes = new[] { new { code = PermissionCodes.OverheadManage, action = PermissionChangeAction.Grant, reason = "Covering expenses" } },
+        }, token);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+        (await Client.GetAsync("/api/company/overhead/groups", manager.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
+        await (await Client.PostJsonAsync("/api/company/overhead/groups", new { name = "Snacks" }, manager.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.GetAsync("/api/company/overhead/groups", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
     [Fact]
@@ -176,14 +232,14 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
         var thisMonth = new DateOnly(Today.Year, Today.Month, 1);
         var token = superAdmin.AccessToken;
         var rent = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",
-            new { name = "Office rent", costGroup = "operating", currency = "LBP", amount = 71_600_000m }, token));
+            new { name = "Office rent", groupId = 2, currency = "LBP", amount = 71_600_000m }, token));
 
         // Charged this month in LBP, so from next month a new USD line takes over and this one ends with the month.
         var usd = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync($"/api/company/overhead/{rent.Id}/currency",
             new { currency = "USD", amount = 800m, fromMonth = Iso(thisMonth.AddMonths(1)) }, token));
         usd.Id.ShouldNotBe(rent.Id);
         usd.Name.ShouldBe("Office rent");
-        usd.CostGroup.ShouldBe(OverheadCostGroup.Operating);
+        usd.Group.Id.ShouldBe(2);
         usd.Currency.ShouldBe("USD");
         usd.StartedOn.ShouldBe(thisMonth.AddMonths(1));
         var lines = (await OkAsync<OverheadResponse>(Client.GetAsync("/api/company/overhead", token))).Lines;
@@ -194,7 +250,7 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // A line not charged before the change just changes.
         var planned = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync("/api/company/overhead",
-            new { name = "Hosting", costGroup = "software", currency = "LBP", amount = 900_000m, startMonth = Iso(thisMonth.AddMonths(2)) }, token));
+            new { name = "Hosting", groupId = 1, currency = "LBP", amount = 900_000m, startMonth = Iso(thisMonth.AddMonths(2)) }, token));
         var switched = await OkAsync<OverheadLineResponse>(Client.PostJsonAsync($"/api/company/overhead/{planned.Id}/currency",
             new { currency = "USD", amount = 10m }, token));
         switched.Id.ShouldBe(planned.Id);
