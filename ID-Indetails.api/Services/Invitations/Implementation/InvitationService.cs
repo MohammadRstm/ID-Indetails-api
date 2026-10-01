@@ -51,6 +51,11 @@ public sealed class InvitationService(
             throw new ForbiddenException(ErrorCodes.InvitationNotAllowed, decision.DenialReason!);
         }
 
+        if (request.Pay is { } terms && PayRules.CheckBasis(request.Role, terms.Basis) is { } denial)
+        {
+            throw denial.ToException();
+        }
+
         if (request.TeamId is { } teamId)
         {
             var team = await teams.GetByIdAsync(teamId, cancellationToken);

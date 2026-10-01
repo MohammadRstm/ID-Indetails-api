@@ -132,6 +132,48 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_super_admin_is_paid_their_salary_whatever_hours_they_log()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null);
+        await _steps.SetJoinedOnAsync(partner.User.Id, "2026-01-01");
+
+        // a super admin's pay can't depend on hours, at a pay change or an invitation
+        await (await Client.PostJsonAsync($"/api/employees/{partner.User.Id}/pay",
+                new { basis = "hourly", amount = 20m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.SuperAdminPaidMonthly);
+        await (await Client.PostJsonAsync("/api/invitations", new
+            {
+                email = $"super-{Guid.NewGuid():N}@example.test",
+                role = RoleCodes.SuperAdmin,
+                pay = new { basis = "hourly", amount = 20m, currency = "USD" },
+            }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.SuperAdminPaidMonthly);
+        (await Client.PostJsonAsync($"/api/employees/{partner.User.Id}/pay",
+                new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        // Saturday 6 June, a day off: overtime for anyone else
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        await ExecuteAsync(
+            "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
+            "VALUES (@u, @p, 'Review', '2026-06-06 06:00:00', '2026-06-06 10:00:00', UTC_TIMESTAMP(3))",
+            ("@u", partner.User.Id), ("@p", project.Id));
+
+        var list = await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?month=2026-06&search={partner.User.Email}", superAdmin.AccessToken));
+        var row = list.Rows.Items.ShouldHaveSingleItem();
+        row.Domain.ShouldBeNull();
+        row.TracksHours.ShouldBeFalse();
+        row.ExpectedMinutes.ShouldBeNull();
+        row.OvertimeMinutes.ShouldBe(0);
+        row.OvertimePay.ShouldBe(0m);
+        row.Total.ShouldBe(1733.30m);
+        var detail = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{partner.User.Id}?month=2026-06", superAdmin.AccessToken));
+        detail.PaidBreakPay.ShouldBe(0m);
+        detail.Projects.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task An_unpaid_day_off_is_deducted_as_a_full_paid_day()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

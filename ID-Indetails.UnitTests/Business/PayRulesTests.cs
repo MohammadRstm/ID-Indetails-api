@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Pay;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using Shouldly;
 
@@ -13,6 +14,14 @@ public class PayRulesTests
     [Fact]
     public void Monthly_salary_is_divided_by_average_monthly_hours()
         => PayRules.HourlyCostRate(PayBasis.Monthly, 3000m).ShouldBe(17.3080m); // 3000 / 173.33
+
+    [Theory]
+    [InlineData(RoleCodes.SuperAdmin, PayBasis.Monthly, true)]
+    [InlineData(RoleCodes.SuperAdmin, PayBasis.Hourly, false)]
+    [InlineData(RoleCodes.Admin, PayBasis.Hourly, true)]
+    [InlineData(RoleCodes.Employee, PayBasis.Hourly, true)]
+    public void Only_a_super_admin_must_be_paid_monthly(string role, PayBasis basis, bool allowed)
+        => (PayRules.CheckBasis(role, basis) is null).ShouldBe(allowed);
 
     [Fact]
     public void Monthly_rate_is_rounded_to_four_decimals()

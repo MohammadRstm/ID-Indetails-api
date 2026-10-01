@@ -269,7 +269,8 @@ public sealed class SalaryService(
             Amount = r.Terms.Amount,
             Currency = r.Terms.Currency,
             HourlyRate = r.Terms.HourlyRate,
-            TracksHours = user.DomainCode != DomainCodes.Execution,
+            // Design's people log hours; Execution staff and super admins are paid their salary
+            TracksHours = user.DomainCode == DomainCodes.Design,
             ExpectedMinutes = r.Ledger?.Expected,
             NormalMinutes = r.NormalMinutes,
             MadeUpMinutes = r.MadeUpMinutes,
