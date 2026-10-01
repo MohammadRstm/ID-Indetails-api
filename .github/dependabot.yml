@@ -1,14 +1,15 @@
-# Weekly update pull requests, grouped per ecosystem. They go through CI and are merged by hand: nothing upgrades
-# itself, and the backend rules ask for no dependency upgrade without review.
+# Security updates only. Dependabot opens a pull request when a package this repository uses has a known
+# vulnerability with a fix (the repository's "Dependabot security updates" setting, which is on). Routine version
+# updates are off: open-pull-requests-limit 0 stops them. Every pull request goes through CI and is merged by hand.
 version: 2
 updates:
   - package-ecosystem: nuget
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
-    # EF Core, its MySQL provider (Pomelo) and the naming conventions move a major version together, once Pomelo
-    # supports it: a new EF Core major alone doesn't build. Minor and patch updates still come.
+    open-pull-requests-limit: 0
+    # EF Core, its MySQL provider (Pomelo) and the naming conventions move a major version together, by hand, once
+    # Pomelo supports it: a new EF Core major alone doesn't build.
     ignore:
       - dependency-name: "Microsoft.EntityFrameworkCore*"
         update-types: ["version-update:semver-major"]
@@ -16,23 +17,9 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "EFCore.NamingConventions"
         update-types: ["version-update:semver-major"]
-    groups:
-      nuget:
-        patterns: ["*"]
-        update-types: [minor, patch]
-
-  - package-ecosystem: docker
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      base-images:
-        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-    groups:
-      actions:
-        patterns: ["*"]
+    open-pull-requests-limit: 0
