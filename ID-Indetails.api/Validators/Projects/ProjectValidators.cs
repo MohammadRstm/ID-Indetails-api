@@ -33,6 +33,7 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
     {
         RuleFor(x => x.Title).ClientText("Title", 200, required: true);
         RuleFor(x => x.Description).ClientText("Description", 2000);
+        RuleFor(x => x.Location).ClientText("Location", 200);
         RuleFor(x => x.Icon).ClientText("Icon", 40);
         RuleFor(x => x.Tint).ProjectTint();
         RuleFor(x => x.DomainCode).ValidDomain().When(x => x.DomainCode is not null);
@@ -63,6 +64,7 @@ public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProj
     {
         RuleFor(x => x.Title).ClientText("Title", 200, required: true);
         RuleFor(x => x.Description).ClientText("Description", 2000);
+        RuleFor(x => x.Location).ClientText("Location", 200);
         RuleFor(x => x.Icon).ClientText("Icon", 40);
         RuleFor(x => x.Tint).ProjectTint();
         RuleFor(x => x.OwnerId).GreaterThan(0).WithMessage("Owner is required.");

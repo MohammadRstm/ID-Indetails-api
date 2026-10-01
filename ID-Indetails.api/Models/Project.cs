@@ -17,6 +17,9 @@ public class Project
 
     public string? Description { get; set; }
 
+    /// <summary>Where the work is: a site's address, a building, a town. Free text, optional.</summary>
+    public string? Location { get; set; }
+
     public string? Icon { get; set; }
 
     public string? Tint { get; set; }

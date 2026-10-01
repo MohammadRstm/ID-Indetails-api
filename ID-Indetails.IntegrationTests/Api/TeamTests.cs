@@ -12,14 +12,16 @@ public class TeamTests(ApiFactory api) : IClassFixture<ApiFactory>
     private static string NewName() => $"Team {Guid.NewGuid():N}"[..20];
 
     [Fact]
-    public async Task Everyone_sees_the_seeded_teams_of_their_own_domains()
+    public async Task Everyone_sees_the_teams_of_their_own_domains()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var siteOperations = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Execution, "Site Operations");
+        await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Interiors");
 
         var mine = await (await Client.GetAsync("/api/teams", employee.AccessToken)).ReadAsync<List<TeamResponse>>();
         mine.ShouldAllBe(t => t.Domain == DomainCodes.Execution);
-        mine.Select(t => t.Name).ShouldContain("Site Operations");
+        mine.Select(t => t.Name).ShouldContain(siteOperations.Name);
 
         var all = await (await Client.GetAsync("/api/teams", superAdmin.AccessToken)).ReadAsync<List<TeamResponse>>();
         all.Select(t => t.Domain).Distinct().ShouldBe(DomainCodes.All, ignoreOrder: true);

@@ -73,7 +73,12 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var paused = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         (await Client.PostEmptyAsync($"/api/projects/{paused.Id}/hold", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await Work.LogAsync(employee.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 90);
+        var loggedAt = WorkEntryTestSteps.HoursAgo(3);
+        await Work.LogAsync(employee.AccessToken, project.Id, loggedAt, 90);
+        // in the first hours of a day, "3 hours ago" was yesterday, which may be last week or last quarter
+        var beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
+        var loggedToday = TimeZoneInfo.ConvertTimeFromUtc(loggedAt, beirut).Date == TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, beirut).Date;
+        var expected = loggedToday ? 90 : 0;
 
         foreach (var period in new[] { "quarter", "month", "last30" })
         {
@@ -85,11 +90,11 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var quarter = await (await Client.GetAsync("/api/reports/overview", admin.AccessToken)).ReadAsync<OverviewResponse>();
         quarter.Period.ShouldBe(OverviewPeriod.Quarter);
-        quarter.Minutes.ShouldBeGreaterThanOrEqualTo(90);
-        quarter.PeopleLoggingThisWeek.ShouldBeGreaterThanOrEqualTo(1);
-        quarter.PeopleCount.ShouldBeGreaterThanOrEqualTo(1);
-        quarter.ProjectCount.ShouldBeGreaterThanOrEqualTo(1);
-        quarter.ThisWeekMinutes.ShouldBeGreaterThanOrEqualTo(90);
+        quarter.Minutes.ShouldBeGreaterThanOrEqualTo(expected);
+        quarter.PeopleLoggingThisWeek.ShouldBeGreaterThanOrEqualTo(loggedToday ? 1 : 0);
+        quarter.PeopleCount.ShouldBeGreaterThanOrEqualTo(loggedToday ? 1 : 0);
+        quarter.ProjectCount.ShouldBeGreaterThanOrEqualTo(loggedToday ? 1 : 0);
+        quarter.ThisWeekMinutes.ShouldBeGreaterThanOrEqualTo(expected);
         quarter.Attention.Count.ShouldBeLessThanOrEqualTo(5);
         quarter.Attention.Single(a => a.Kind == AttentionKind.NotLogging).People!.ShouldContain(p => p.Id == idle.User.Id);
 

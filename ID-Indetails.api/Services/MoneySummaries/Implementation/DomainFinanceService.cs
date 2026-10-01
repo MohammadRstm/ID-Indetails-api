@@ -49,9 +49,9 @@ public sealed class DomainFinanceService(
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var rollup = await rollups.LoadAsync(projects, cancellationToken);
 
-        var shares = Recognition.Months(from, to, clock.CompanyToday);
-        var revenue = PeriodMoney.Round(projects.Sum(p =>
-            PeriodMoney.Revenue(rollup.RevenueByMonth(p.Id), shares)));
+        // revenue is the money received: it moves as soon as a payment is recorded, whatever the project's progress
+        var received = ReceivedOn(projects, rollup);
+        var revenue = PeriodMoney.Received(received, from, to);
         var cost = PeriodMoney.Costs(projects.SelectMany(p => rollup.Costs(p.Id)), from, to);
         var clientWork = projects.Where(p => p.BillingType == BillingType.Client).Select(p => rollup.Money(p.Id).Summary).ToList();
         var profit = revenue - PeriodMoney.Round(cost.Total);
@@ -74,7 +74,8 @@ public sealed class DomainFinanceService(
             clientWork.Sum(s => s.Revenue),
             clientWork.Sum(s => s.Profit),
             projects.Where(p => p.BillingType == BillingType.Internal).Sum(p => rollup.Money(p.Id).Summary.Cost),
-            clientWork.Sum(s => s.Revenue - s.RecognisedToDate),
+            projects.Where(p => p.BillingType == BillingType.Client)
+                .Sum(p => Math.Max(0, rollup.Money(p.Id).Summary.Revenue - rollup.Payments.Where(x => x.ProjectId == p.Id).Sum(x => x.AmountUsd))),
             rollup.Position(rollup.Billing(projects)),
             labourMinutes);
     }
@@ -84,9 +85,7 @@ public sealed class DomainFinanceService(
         await CheckDomainAsync(domain, cancellationToken);
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var rollup = await rollups.LoadAsync(projects, cancellationToken);
-        var byMonth = projects
-            .Select(p => rollup.RevenueByMonth(p.Id))
-            .ToList();
+        var received = ReceivedOn(projects, rollup);
         var costs = projects.SelectMany(p => rollup.Costs(p.Id)).ToList();
         var unconverted = projects.SelectMany(p => rollup.Unconverted(p.Id)).ToList();
 
@@ -94,13 +93,20 @@ public sealed class DomainFinanceService(
             .Select(month =>
             {
                 var end = month.AddMonths(1).AddDays(-1);
-                var revenue = PeriodMoney.Round(byMonth.Sum(m => m.GetValueOrDefault(month)));
+                var revenue = PeriodMoney.Received(received, month, end);
                 var cost = PeriodMoney.Costs(costs, month, end);
                 return new FinanceMonthResponse(
                     month, revenue, Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.Materials), Rounded(cost.GroundLabour),
                     Rounded(cost.Total), revenue - Rounded(cost.Total), UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
             })
             .ToList();
+    }
+
+    /// <summary>The domain's live payments as dated USD amounts, for revenue.</summary>
+    private static IReadOnlyList<(DateOnly Day, decimal Usd)> ReceivedOn(IReadOnlyCollection<Project> projects, MoneyRollup rollup)
+    {
+        var ids = projects.Select(p => p.Id).ToHashSet();
+        return rollup.Payments.Where(p => ids.Contains(p.ProjectId)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();
     }
 
     public async Task<(string FileName, string Csv)> ExportProjectsAsync(

@@ -44,7 +44,7 @@ public sealed class CompanyOverviewService(
         }
 
         bool InPeriod(DateOnly day) => day >= start && day <= end;
-        var shares = Recognition.Months(start, end, today);
+        var shares = Recognition.Months(start, end);
         var data = await LoadAsync(cancellationToken);
         var employees = await company.EmployeesAsync(cancellationToken);
         var clients = await company.ClientsAsync(cancellationToken);
@@ -56,8 +56,8 @@ public sealed class CompanyOverviewService(
             var projects = data.Projects.Where(p => p.DomainCode == domain).ToList();
             var history = projects.Select(p => (Project: p, History: data.History[p.Id])).ToList();
 
-            var revenue = PeriodMoney.Round(history.Sum(h => PeriodMoney.Revenue(
-                h.History.RevenueByMonth(), shares)));
+            // revenue is the money received, counted on the day it arrived: live as payments are recorded
+            var revenue = PeriodMoney.Received(payments.Where(p => p.Domain == domain).Select(p => (p.ReceivedOn, p.AmountUsd)), start, end);
             var cost = PeriodMoney.Round(PeriodMoney.Costs(history.SelectMany(h => h.History.Costs), start, end).Total);
             var active = history
                 .Where(h => h.History.Costs.Any(c => InPeriod(c.Day)) || h.History.Work.Any(w => InPeriod(w.Day)))
@@ -120,14 +120,7 @@ public sealed class CompanyOverviewService(
         var keys = Enumerable.Range(0, months).Select(i => thisMonth.AddMonths(i - months + 1)).ToList();
         var data = await LoadAsync(cancellationToken);
 
-        var revenue = new Dictionary<DateOnly, decimal>();
-        foreach (var history in data.History.Values)
-        {
-            foreach (var (month, amount) in history.RevenueByMonth())
-            {
-                revenue[month] = revenue.GetValueOrDefault(month) + amount;
-            }
-        }
+        var received = (await company.PaymentsAsync(cancellationToken)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();
 
         var costs = data.History.Values.SelectMany(h => h.Costs).ToList();
 
@@ -140,7 +133,7 @@ public sealed class CompanyOverviewService(
             var expenses = PeriodMoney.Round(cost.Expenses);
             var materials = PeriodMoney.Round(cost.Materials);
             var ground = PeriodMoney.Round(cost.GroundLabour);
-            var monthRevenue = PeriodMoney.Round(revenue.GetValueOrDefault(month));
+            var monthRevenue = PeriodMoney.Received(received, month, month.AddMonths(1).AddDays(-1));
             var before = monthRevenue - labour - expenses - materials - ground;
 
             result.Add(new CompanyMonthResponse(month, monthRevenue, labour, expenses, materials, ground, overhead, before, before - overhead));

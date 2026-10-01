@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Teams;
 using MySqlConnector;
 using Shouldly;
 
@@ -43,6 +44,15 @@ public sealed class AuthTestSteps(ApiFactory api)
             first.AccessToken)).ShouldSignInAsync();
 
         return (email, password, auth);
+    }
+
+    /// <summary>A new team of <paramref name="domain"/>, made by a super admin (a new company has none), its name made unique.</summary>
+    public async Task<TeamResponse> CreateTeamAsync(AuthResponse superAdmin, string domain, string name)
+    {
+        var response = await Client.PostJsonAsync("/api/teams",
+            new { name = $"{name} {Guid.NewGuid().ToString("N")[..6]}", domainCode = domain }, superAdmin.AccessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        return await response.ReadAsync<TeamResponse>();
     }
 
     /// <summary>Invites someone as <paramref name="inviter"/> and completes their signup.</summary>

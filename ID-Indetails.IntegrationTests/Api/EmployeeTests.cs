@@ -10,10 +10,6 @@ namespace ID_Indetails.IntegrationTests.Api;
 
 public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
-    // Seeded teams (Constants/TeamSeed.cs).
-    private const long DesignEngineering = 1;
-    private const long ExecutionSiteOperations = 7;
-
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
 
@@ -81,15 +77,17 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var url = $"/api/employees/{employee.User.Id}";
+        var interiors = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Interiors");
+        var siteOperations = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Execution, "Site Operations");
 
         var updated = await OkAsync<EmployeeResponse>(Client.PutJsonAsync(url, new
         {
-            firstName = "Maya", lastName = "Saab", phone = "+961 3 000 000", position = "Architect", teamId = DesignEngineering,
+            firstName = "Maya", lastName = "Saab", phone = "+961 3 000 000", position = "Architect", teamId = interiors.Id,
         }, designAdmin.AccessToken));
         updated.Position.ShouldBe("Architect");
-        updated.Team!.Name.ShouldBe("Engineering");
+        updated.Team!.Name.ShouldBe(interiors.Name);
 
-        await (await Client.PutJsonAsync(url, new { firstName = "Maya", lastName = "Saab", teamId = ExecutionSiteOperations }, designAdmin.AccessToken))
+        await (await Client.PutJsonAsync(url, new { firstName = "Maya", lastName = "Saab", teamId = siteOperations.Id }, designAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.TeamNotInDomain);
         await (await Client.PutJsonAsync(url, new { firstName = "", lastName = "Saab" }, designAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
@@ -197,16 +195,18 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var url = $"/api/employees/{employee.User.Id}/domain";
+        var interiors = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Interiors");
+        var siteOperations = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Execution, "Site Operations");
 
         await (await Client.PutJsonAsync(url, new { domainCode = DomainCodes.Execution }, designAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.EmployeeChangeNotAllowed);
-        await (await Client.PutJsonAsync(url, new { domainCode = DomainCodes.Execution, teamId = DesignEngineering }, superAdmin.AccessToken))
+        await (await Client.PutJsonAsync(url, new { domainCode = DomainCodes.Execution, teamId = interiors.Id }, superAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.TeamNotInDomain);
 
         var moved = await OkAsync<EmployeeResponse>(Client.PutJsonAsync(url,
-            new { domainCode = DomainCodes.Execution, teamId = ExecutionSiteOperations }, superAdmin.AccessToken));
+            new { domainCode = DomainCodes.Execution, teamId = siteOperations.Id }, superAdmin.AccessToken));
         moved.Domain.ShouldBe(DomainCodes.Execution);
-        moved.Team!.Name.ShouldBe("Site Operations");
+        moved.Team!.Name.ShouldBe(siteOperations.Name);
 
         // Now out of the design admin's reach.
         await (await Client.GetAsync($"/api/employees/{employee.User.Id}", designAdmin.AccessToken))

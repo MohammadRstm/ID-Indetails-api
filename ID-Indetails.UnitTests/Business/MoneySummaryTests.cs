@@ -14,13 +14,12 @@ public class MoneySummaryTests
         => new(id, 1, 1, IsIssued: true, IsVoided: false, dueOn, total, paid);
 
     [Fact]
-    public void Period_revenue_weights_each_month_and_cost_counts_on_its_day()
+    public void Period_revenue_is_the_money_received_in_it_and_cost_counts_on_its_day()
     {
-        var byMonth = new Dictionary<DateOnly, decimal> { [new(2026, 8, 1)] = 1000m, [new(2026, 9, 1)] = 600m };
-        var shares = Recognition.Months(new DateOnly(2026, 8, 17), new DateOnly(2026, 9, 29), Today);
+        (DateOnly, decimal)[] payments = [(new(2026, 8, 16), 400m), (new(2026, 8, 17), 1000m), (new(2026, 9, 29), 600.004m)];
 
-        // August 17-31 is 15 of 31 days; September is covered up to today.
-        PeriodMoney.Revenue(byMonth, shares).ShouldBe(1000m * 15 / 31 + 600m, 0.01m);
+        // each payment on the day it arrived, rounded to the cent
+        PeriodMoney.Received(payments, new DateOnly(2026, 8, 17), new DateOnly(2026, 9, 29)).ShouldBe(1600m);
 
         var costs = PeriodMoney.Costs(
             [
@@ -84,7 +83,8 @@ public class MoneySummaryTests
         position.Overdue.ShouldBe(600m);
         position.OverdueCount.ShouldBe(1);
         position.OldestOverdueDue.ShouldBe(Today.AddDays(-10));
-        position.NotYetInvoiced.ShouldBe(1200m);
+        position.NotYetInvoiced.ShouldBe(1000m);
+        position.LeftToInvoice.ShouldBe(1200m);
         position.Drafts.ShouldBe(250m);
         position.PaymentCount.ShouldBe(3);
         position.Owed.ShouldBe(1900m);

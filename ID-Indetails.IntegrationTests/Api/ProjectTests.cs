@@ -125,6 +125,40 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_project_can_say_where_the_work_is()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
+
+        var created = await Client.PostJsonAsync("/api/projects", new
+        {
+            title = "Apartment fit-out", domainCode = DomainCodes.Execution, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m,
+            location = "  Achrafieh, Beirut  ",
+        }, admin.AccessToken);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        var project = await created.ReadAsync<ProjectResponse>();
+        project.Location.ShouldBe("Achrafieh, Beirut");
+
+        var list = await (await Client.GetAsync("/api/projects?domain=execution&pageSize=100", admin.AccessToken)).ReadAsync<PagedResponse<ProjectSummaryResponse>>();
+        list.Items.Single(p => p.Id == project.Id).Location.ShouldBe("Achrafieh, Beirut");
+
+        async Task<ProjectResponse> EditAsync(object body)
+        {
+            var response = await Client.PutJsonAsync($"/api/projects/{project.Id}", body, admin.AccessToken);
+            ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+            return await response.ReadAsync<ProjectResponse>();
+        }
+
+        (await EditAsync(new { title = "Apartment fit-out", ownerId = admin.User.Id, location = "Jounieh" })).Location.ShouldBe("Jounieh");
+        // optional: an edit without one clears it
+        (await EditAsync(new { title = "Apartment fit-out", ownerId = admin.User.Id })).Location.ShouldBeNull();
+
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}", new { title = "Apartment fit-out", location = new string('x', 201) }, admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
     public async Task Archived_and_other_domain_clients_cannot_be_chosen()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

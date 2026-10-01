@@ -12,7 +12,7 @@ namespace ID_Indetails.UnitTests.Services;
 
 public class DocumentPdfTests
 {
-    private static readonly Letterhead Head = new("Hourline Studio", "Beirut, Lebanon", "hourline.test", null);
+    private static readonly Letterhead Head = new("ID InDetails", "Beirut, Lebanon", "id-indetails.test", null);
 
     private static int Pages(byte[] pdf)
     {
@@ -40,7 +40,7 @@ public class DocumentPdfTests
     [Fact]
     public void An_invoice_fits_one_page_and_a_long_one_runs_onto_more()
     {
-        var billing = new BillingSettings { BankAccount = "Hourline SAL", BankName = "Bank Audi", Iban = "LB00 0000", Footer = "Thank you." };
+        var billing = new BillingSettings { BankAccount = "ID InDetails SAL", BankName = "Bank Audi", Iban = "LB00 0000", Footer = "Thank you." };
 
         Pages(InvoicePdf.Render(Invoice(3), new DateOnly(2026, 9, 30), Head, billing)).ShouldBe(1);
         Pages(InvoicePdf.Render(Invoice(80), new DateOnly(2026, 9, 30), Head, billing)).ShouldBeGreaterThan(1);

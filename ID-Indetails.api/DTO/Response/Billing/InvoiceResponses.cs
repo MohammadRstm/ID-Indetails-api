@@ -5,7 +5,7 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Billing;
 
-public sealed record InvoiceProjectResponse(long Id, string Title);
+public sealed record InvoiceProjectResponse(long Id, string Title, string? Location = null);
 
 public sealed record InvoiceClientResponse(long Id, string DisplayName);
 

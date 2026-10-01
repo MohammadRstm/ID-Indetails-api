@@ -289,7 +289,7 @@ public sealed class InvoiceService(
         {
             Id = i.Id,
             Domain = i.Project.DomainCode,
-            Project = new InvoiceProjectResponse(i.Project.Id, i.Project.Title),
+            Project = new InvoiceProjectResponse(i.Project.Id, i.Project.Title, i.Project.Location),
             Client = new InvoiceClientResponse(i.Client.Id, ClientRules.DisplayName(i.Client.Name, i.Client.Organisation)),
             Number = i.Number,
             Status = shownStatus,

@@ -12,4 +12,7 @@ public sealed class CompanyOptions
     /// <summary>IANA time zone that decides what "today" means (join dates, pay effective dates).</summary>
     [Required]
     public string TimeZone { get; init; } = "Asia/Beirut";
+
+    /// <summary>The company's name until one is saved in its settings: on documents, emails and the settings page.</summary>
+    public string DefaultName { get; init; } = "ID InDetails";
 }

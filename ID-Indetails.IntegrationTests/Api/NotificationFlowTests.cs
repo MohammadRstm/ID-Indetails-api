@@ -11,7 +11,6 @@ namespace ID_Indetails.IntegrationTests.Api;
 /// <summary>Who hears about what: the notifications each change sends.</summary>
 public class NotificationFlowTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
-    private const long ExecutionSiteOperations = 7;
 
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
@@ -154,7 +153,7 @@ public class NotificationFlowTests(ApiFactory api) : IClassFixture<ApiFactory>
         granted.Payload!.Value.GetProperty("granted")[0].GetString().ShouldBe(PermissionCodes.ClientView);
 
         await OkAsync<object>(Client.PutJsonAsync($"/api/employees/{employee.User.Id}/domain",
-            new { domainCode = DomainCodes.Execution, teamId = ExecutionSiteOperations }, superAdmin.AccessToken));
+            new { domainCode = DomainCodes.Execution, teamId = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Execution, "Site Operations")).Id }, superAdmin.AccessToken));
         (await OfKindAsync(employee.AccessToken, NotificationKinds.DomainChanged)).ShouldHaveSingleItem()
             .Payload!.Value.GetProperty("to").GetString().ShouldBe(DomainCodes.Execution);
     }

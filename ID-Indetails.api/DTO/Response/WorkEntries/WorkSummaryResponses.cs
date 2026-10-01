@@ -64,6 +64,7 @@ public sealed record MyProjectResponse(
     string? Icon,
     string? Tint,
     string? ClientName,
+    string? Location,
     ProjectStatus Status,
     int ProgressPct,
     DateOnly StartDate,

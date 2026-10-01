@@ -29,7 +29,7 @@ public sealed record BillingPositionResponse(
 /// <param name="Revenue">Recognised in the period (by progress, spread over each project's cost months).</param>
 /// <param name="Unconverted">Costs of the period with no exchange rate on their day, in their own currency.</param>
 /// <param name="UnpricedLabourMinutes">Work by people with no pay record, all time.</param>
-/// <param name="StillToEarn">Client revenue not recognised yet.</param>
+/// <param name="StillToEarn">Agreed payments of client projects not received yet (each project's, never below zero).</param>
 /// <param name="Billing">As of today, whatever the period.</param>
 /// <param name="LabourMinutes">Work logged on the domain's projects in the period.</param>
 public sealed record FinanceSummaryResponse(

@@ -1,4 +1,3 @@
-using ID_Indetails.api.Constants;
 using ID_Indetails.api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -23,6 +22,5 @@ public class TeamConfiguration : IEntityTypeConfiguration<Team>
             .HasForeignKey(x => x.DomainCode)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasData(TeamSeed.Teams);
     }
 }

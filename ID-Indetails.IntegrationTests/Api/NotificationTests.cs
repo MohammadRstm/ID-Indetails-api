@@ -9,7 +9,6 @@ namespace ID_Indetails.IntegrationTests.Api;
 
 public class NotificationTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
-    private const long ExecutionSiteOperations = 7;
 
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
@@ -89,7 +88,7 @@ public class NotificationTests(ApiFactory api) : IClassFixture<ApiFactory>
         var id = (await AssignedAsync(employee.AccessToken)).ShouldHaveSingleItem().Id;
 
         var moved = await Client.PutJsonAsync($"/api/employees/{employee.User.Id}/domain",
-            new { domainCode = DomainCodes.Execution, teamId = ExecutionSiteOperations }, superAdmin.AccessToken);
+            new { domainCode = DomainCodes.Execution, teamId = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Execution, "Site Operations")).Id }, superAdmin.AccessToken);
         moved.IsSuccessStatusCode.ShouldBeTrue(await moved.Content.ReadAsStringAsync());
 
         // What's left is the move itself, which belongs to no project.

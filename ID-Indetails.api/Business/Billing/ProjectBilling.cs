@@ -10,7 +10,10 @@ namespace ID_Indetails.api.Business.Billing;
 /// <item>Received: every live payment, on account or not. On account: payments not tied to an invoice; they count as
 /// received but never reduce outstanding.</item>
 /// <item>Overdue: invoices still sent or partly paid whose due date is before today (<see cref="InvoiceRules.IsOverdue"/>).</item>
-/// <item>Not yet invoiced: revenue (the agreed amount in Execution) minus invoiced, never below zero.</item>
+/// <item>Not yet invoiced: the part of the revenue (the agreed amount in Execution) neither invoiced nor already
+/// received on account, never below zero. Money paid up front leaves nothing to ask for.</item>
+/// <item>Left to invoice: revenue minus invoiced, never below zero; what a new invoice can still be for (including
+/// money received on account, which an invoice can take on).</item>
 /// <item>Owed and paid ahead: revenue against everything received, whether or not it was invoiced.</item>
 /// </list>
 /// </summary>
@@ -43,6 +46,7 @@ public static class ProjectBilling
         int OverdueCount,
         DateOnly? OldestOverdueDue,
         decimal NotYetInvoiced,
+        decimal LeftToInvoice,
         decimal Drafts,
         decimal Owed,
         decimal PaidAhead);
@@ -60,6 +64,7 @@ public static class ProjectBilling
         var overdue = issued.Where(i => i.IsOverdue(today)).ToList();
         var invoiced = issued.Sum(i => i.Total);
         var received = payments.Sum(p => p.AmountUsd);
+        var onAccount = payments.Where(p => p.InvoiceId is null).Sum(p => p.AmountUsd);
 
         return new Summary(
             revenue,
@@ -68,10 +73,11 @@ public static class ProjectBilling
             issued.Sum(i => i.Balance),
             received,
             payments.Count,
-            payments.Where(p => p.InvoiceId is null).Sum(p => p.AmountUsd),
+            onAccount,
             overdue.Sum(i => i.Balance),
             overdue.Count,
             overdue.Count > 0 ? overdue.Min(i => i.DueOn) : null,
+            Math.Max(0, revenue - invoiced - onAccount),
             Math.Max(0, revenue - invoiced),
             invoices.Where(i => !i.IsIssued && !i.IsVoided).Sum(i => i.Total),
             Math.Max(0, revenue - received),

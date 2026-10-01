@@ -32,8 +32,6 @@ public sealed class MoneyRollup(
 
     public IReadOnlyList<Recognition.DatedCost> Costs(long projectId) => history[projectId].Costs;
 
-    public IReadOnlyDictionary<DateOnly, decimal> RevenueByMonth(long projectId) => history[projectId].RevenueByMonth();
-
     /// <summary>The project's costs with no exchange rate on their day.</summary>
     public IReadOnlyList<ProjectFinance.DatedUnconverted> Unconverted(long projectId) => history[projectId].Unconverted;
 
@@ -71,6 +69,7 @@ public sealed class MoneyRollup(
             b.Received,
             b.OnAccount,
             b.NotYetInvoiced,
+            b.LeftToInvoice,
             b.Owed,
             b.PaidAhead,
             b.IssuedCount,

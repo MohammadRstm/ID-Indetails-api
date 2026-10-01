@@ -39,6 +39,9 @@ public sealed record CreateProjectRequest
 
     public string? Description { get; init; }
 
+    /// <summary>Where the work is: a site's address, a building, a town.</summary>
+    public string? Location { get; init; }
+
     public string? Icon { get; init; }
 
     public string? Tint { get; init; }
@@ -99,6 +102,9 @@ public sealed record UpdateProjectRequest
     public string Title { get; init; } = string.Empty;
 
     public string? Description { get; init; }
+
+    /// <summary>Where the work is: a site's address, a building, a town.</summary>
+    public string? Location { get; init; }
 
     public string? Icon { get; init; }
 
