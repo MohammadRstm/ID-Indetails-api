@@ -32,7 +32,9 @@ services:
   migrations:
     image: ghcr.io/mohammadrstm/id-indetails-migrations:${API_TAG:?}
     profiles: [migrate]
-    command: ["--connection", "Server=db;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};"]
+    # The bundle builds the API's services, which read the connection string from the environment.
+    environment:
+      ConnectionStrings__Default: Server=db;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};
     networks: [data]
     depends_on:
       db:

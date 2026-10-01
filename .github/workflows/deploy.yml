@@ -70,6 +70,7 @@ jobs:
         with:
           context: .
           target: runtime
+          no-cache-filters: runtime
           push: true
           tags: ${{ env.REGISTRY }}/id-indetails-api:${{ steps.tag.outputs.tag }}
           labels: |
@@ -83,6 +84,7 @@ jobs:
         with:
           context: .
           target: migrations
+          no-cache-filters: migrations
           push: true
           tags: ${{ env.REGISTRY }}/id-indetails-migrations:${{ steps.tag.outputs.tag }}
           labels: |
