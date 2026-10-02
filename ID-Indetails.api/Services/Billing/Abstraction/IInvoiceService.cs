@@ -41,6 +41,18 @@ public interface IInvoiceService
         Func<InvoiceResponse, string, CancellationToken, Task> email,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// For the reminders run, with nobody signed in: when the domain sends reminders and this invoice, still owed past
+    /// its due date, is due its next one by <paramref name="dueBy"/>, has <paramref name="email"/> send it to the
+    /// address it was last emailed to, or the client's email, and records it. With no address, whoever may send the
+    /// domain's invoices is asked once to chase it. False when nothing was sent.
+    /// </summary>
+    Task<bool> SendReminderAsync(
+        long invoiceId,
+        DateOnly dueBy,
+        Func<InvoiceResponse, string, CancellationToken, Task> email,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Tells whoever scheduled the draft, once, that it couldn't be sent and is tried again.</summary>
     Task ScheduledSendFailedAsync(long invoiceId, CancellationToken cancellationToken = default);
 }

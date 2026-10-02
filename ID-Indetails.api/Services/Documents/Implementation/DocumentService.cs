@@ -59,6 +59,13 @@ public sealed class DocumentService(
             invoiceId, new RecordDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = to, Note = request.Note }, cancellationToken);
     }
 
+    public async Task EmailInvoiceReminderAsync(InvoiceResponse invoice, string to, CancellationToken cancellationToken = default)
+    {
+        var pdf = await RenderInvoiceAsync(invoice, cancellationToken);
+        var company = await companySettings.GetAsync(cancellationToken);
+        await SendAsync(DocumentEmails.InvoiceReminder(to, invoice, company.Name, pdf), "invoice reminder", invoice.Id, cancellationToken);
+    }
+
     public async Task EmailScheduledInvoiceAsync(InvoiceResponse invoice, string to, CancellationToken cancellationToken = default)
     {
         var pdf = await RenderInvoiceAsync(invoice, cancellationToken);

@@ -24,6 +24,22 @@ public static class DocumentEmails
             pdf);
     }
 
+    /// <summary>An automatic reminder of an overdue invoice, from the company's accounts.</summary>
+    public static EmailMessage InvoiceReminder(string to, InvoiceResponse invoice, string companyName, PdfFile pdf)
+    {
+        var due = invoice.DueOn is { } day ? PdfLayout.Date(day) : "receipt";
+        var amount = PdfLayout.Money(invoice.Balance ?? invoice.Total, invoice.Currency);
+        return Message(
+            to,
+            $"Reminder: invoice {invoice.Number} - {invoice.Project.Title}",
+            invoice.BillToName ?? invoice.Client.DisplayName,
+            $"This is a reminder that invoice {invoice.Number} for {invoice.Project.Title} was due on {due}, and {amount} of it is still to be paid. The invoice is attached.",
+            "If you have already paid, thank you, and please ignore this message.",
+            "Accounts",
+            companyName,
+            pdf);
+    }
+
     public static EmailMessage Statement(string to, StatementResponse statement, string companyName, string senderName, PdfFile pdf)
     {
         var left = statement.PaidAhead > 0

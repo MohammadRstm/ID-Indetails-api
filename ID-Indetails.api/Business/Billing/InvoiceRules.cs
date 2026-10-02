@@ -58,6 +58,13 @@ public static class InvoiceRules
             ? RuleDenial.BusinessRule(ErrorCodes.InvoiceNotDraft, "Only a draft invoice can be changed or discarded. Void and reissue it instead.")
             : null;
 
+    /// <summary>
+    /// The day an overdue invoice's next reminder is due: <paramref name="firstAfterDays"/> after its due date, then
+    /// <paramref name="everyDays"/> after the last one sent; null once <paramref name="max"/> have been sent.
+    /// </summary>
+    public static DateOnly? NextReminderOn(DateOnly dueOn, int sent, DateOnly? lastSentOn, int firstAfterDays, int everyDays, int max)
+        => sent >= max ? null : lastSentOn is { } last ? last.AddDays(everyDays) : dueOn.AddDays(firstAfterDays);
+
     /// <summary>Auto invoice splits what is left to bill into 2 to this many invoices.</summary>
     public const int MaxPlanInvoices = 24;
 

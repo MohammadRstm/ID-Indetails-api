@@ -19,5 +19,8 @@ public class InvoiceDelivery
 
     public string? Note { get; set; }
 
+    /// <summary>An automatic reminder of an overdue invoice: counted and spaced by the domain's reminder settings.</summary>
+    public bool IsReminder { get; set; }
+
     public Invoice Invoice { get; set; } = null!;
 }

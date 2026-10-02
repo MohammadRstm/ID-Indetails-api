@@ -85,6 +85,9 @@ public static class NotificationKinds
     /// <summary>A scheduled invoice couldn't be sent on its day and is tried again every hour (subject: the invoice). Once, to whoever scheduled it.</summary>
     public const string InvoiceSendFailed = "invoice_send_failed";
 
+    /// <summary>An overdue invoice is due a reminder, but its client has no email address (subject: the invoice). Once, to whoever may send the domain's invoices.</summary>
+    public const string InvoiceReminderDue = "invoice_reminder_due";
+
     /// <summary>A client payment was recorded (subject: the payment). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string PaymentRecorded = "payment_recorded";
 

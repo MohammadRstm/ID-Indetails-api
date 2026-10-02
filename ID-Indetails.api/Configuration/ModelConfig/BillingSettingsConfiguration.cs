@@ -10,7 +10,12 @@ public class BillingSettingsConfiguration : IEntityTypeConfiguration<BillingSett
     public void Configure(EntityTypeBuilder<BillingSettings> builder)
     {
         builder.ToTable("billing_settings", t =>
-            t.HasCheckConstraint("ck_billing_settings_terms_non_negative", "`default_terms_days` >= 0"));
+        {
+            t.HasCheckConstraint("ck_billing_settings_terms_non_negative", "`default_terms_days` >= 0");
+            t.HasCheckConstraint(
+                "ck_billing_settings_reminders",
+                "`reminder_first_after_days` BETWEEN 1 AND 60 AND `reminder_every_days` BETWEEN 1 AND 60 AND `reminder_max` BETWEEN 1 AND 10");
+        });
 
         builder.HasKey(x => x.DomainCode);
 

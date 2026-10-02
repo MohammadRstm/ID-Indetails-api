@@ -235,6 +235,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IBillingSettingsService, BillingSettingsService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInvoiceScheduleService, InvoiceScheduleService>();
+        services.AddScoped<IInvoiceReminderService, InvoiceReminderService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IDomainSettingsService, DomainSettingsService>();
         services.AddScoped<IWorkLogNotifier, WorkLogNotifier>();

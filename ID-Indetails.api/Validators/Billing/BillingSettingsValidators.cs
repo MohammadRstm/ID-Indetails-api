@@ -20,6 +20,9 @@ public sealed class SaveBillingSettingsRequestValidator : AbstractValidator<Save
             .Matches("^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$").WithMessage("SWIFT code must be 8 or 11 letters or digits.");
         RuleFor(x => x.TermsText).ClientText("Terms", 2000);
         RuleFor(x => x.Footer).ClientText("Footer", 500);
+        RuleFor(x => x.ReminderFirstAfterDays).InclusiveBetween(1, 60).WithMessage("The first reminder goes 1 to 60 days after the due date.");
+        RuleFor(x => x.ReminderEveryDays).InclusiveBetween(1, 60).WithMessage("Reminders are 1 to 60 days apart.");
+        RuleFor(x => x.ReminderMax).InclusiveBetween(1, 10).WithMessage("An invoice gets 1 to 10 reminders.");
     }
 }
 
