@@ -50,6 +50,26 @@ public static class PaymentRules
             : null;
     }
 
+    /// <summary>
+    /// The payments on account (oldest first) a newly issued invoice takes: each one whole, while it fits what the invoice
+    /// has left to pay. A payment bigger than what is left stays on account, to be applied by hand or to a later invoice.
+    /// </summary>
+    public static IReadOnlyList<long> ToApply(decimal invoiceTotal, IEnumerable<(long Id, decimal AmountUsd)> onAccount)
+    {
+        var left = invoiceTotal;
+        var applied = new List<long>();
+        foreach (var (id, amount) in onAccount)
+        {
+            if (amount <= left)
+            {
+                applied.Add(id);
+                left -= amount;
+            }
+        }
+
+        return applied;
+    }
+
     /// <summary>Only Execution sites take an initial payment, and at most one live one.</summary>
     public static RuleDenial? CheckInitial(bool isInitial, string projectDomain, bool projectHasLiveInitial)
     {
