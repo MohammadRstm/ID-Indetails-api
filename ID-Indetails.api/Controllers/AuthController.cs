@@ -69,6 +69,7 @@ public sealed class AuthController(
 
     /// <summary>A super admin's own new sign-in address, with their password. Signs out every other session.</summary>
     [HttpPost("change-email")]
+    [Authorize]
     public async Task<ActionResult<AuthResponse>> ChangeEmail(ChangeMyEmailRequest request, CancellationToken cancellationToken)
         => SignedIn(await signInEmail.ChangeMineAsync(request, cancellationToken));
 
