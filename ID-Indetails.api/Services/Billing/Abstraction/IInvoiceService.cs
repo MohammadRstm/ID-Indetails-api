@@ -22,4 +22,25 @@ public interface IInvoiceService
     Task<InvoiceResponse> RecordDeliveryAsync(long invoiceId, RecordDeliveryRequest request, CancellationToken cancellationToken = default);
 
     Task<InvoiceResponse> VoidAsync(long invoiceId, VoidRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Auto invoice: the drafts, each scheduled for its day. Use <c>IInvoiceScheduleService</c>, which also sends today's.</summary>
+    Task<IReadOnlyList<InvoiceResponse>> CreatePlanAsync(long projectId, InvoicePlanRequest request, CancellationToken cancellationToken = default);
+
+    Task<InvoiceResponse> ScheduleAsync(long invoiceId, ScheduleInvoiceRequest request, CancellationToken cancellationToken = default);
+
+    Task<InvoiceResponse> UnscheduleAsync(long invoiceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// For the scheduled sending, with nobody signed in: issues a scheduled draft whose day has come, in the name of
+    /// whoever scheduled it, and has <paramref name="email"/> send it before anything is saved, so a failed email
+    /// leaves it a scheduled draft. Nothing is emailed when what was paid on account settles it. A draft with no
+    /// address isn't issued: whoever scheduled it is told to send it. False when there was nothing to send.
+    /// </summary>
+    Task<bool> SendScheduledAsync(
+        long invoiceId,
+        Func<InvoiceResponse, string, CancellationToken, Task> email,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Tells whoever scheduled the draft, once, that it couldn't be sent and is tried again.</summary>
+    Task ScheduledSendFailedAsync(long invoiceId, CancellationToken cancellationToken = default);
 }

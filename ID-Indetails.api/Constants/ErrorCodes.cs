@@ -100,6 +100,7 @@ public static class ErrorCodes
     public const string InvoiceVoided = "invoice_voided";
     public const string InvoiceHasPayments = "invoice_has_payments";
     public const string IssueDateInFuture = "issue_date_in_future";
+    public const string SendDateInPast = "send_date_in_past";
     public const string PaymentExceedsBalance = "payment_exceeds_balance";
     public const string PaymentTooSmall = "payment_too_small";
     public const string ExchangeRateMissing = "exchange_rate_missing";

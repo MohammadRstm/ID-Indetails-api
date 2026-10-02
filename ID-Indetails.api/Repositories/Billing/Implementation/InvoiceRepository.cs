@@ -97,6 +97,14 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
         return Row(row.Invoice, row.Project, row.Client, row.Paid);
     }
 
+    public async Task<IReadOnlyList<long>> ScheduledDueAsync(DateOnly dueBy, CancellationToken cancellationToken = default)
+        => await db.Invoices
+            .Where(i => i.SendOn != null && i.SendOn <= dueBy && i.IssuedAt == null && i.VoidedAt == null)
+            .OrderBy(i => i.SendOn)
+            .ThenBy(i => i.Id)
+            .Select(i => i.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<Invoice?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default)
     {
         var invoice = (await db.Invoices

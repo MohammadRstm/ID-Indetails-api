@@ -45,6 +45,40 @@ public sealed record SaveInvoiceRequest
     public string? BillToContact { get; init; }
 }
 
+/// <summary>Auto invoice: what is left to bill, split into drafts that are issued and emailed on their own days.</summary>
+public sealed record InvoicePlanRequest
+{
+    public IReadOnlyList<PlannedInvoiceRequest> Invoices { get; init; } = [];
+
+    /// <summary>Defaults to the domain's billing settings.</summary>
+    public int? TermsDays { get; init; }
+
+    /// <summary>Printed on each invoice for the client.</summary>
+    public string? Notes { get; init; }
+
+    /// <summary>The client address each is emailed to on its day; null to be told to send them yourself.</summary>
+    public string? SendTo { get; init; }
+}
+
+public sealed record PlannedInvoiceRequest
+{
+    /// <summary>Today or later (company time zone).</summary>
+    public DateOnly SendOn { get; init; }
+
+    public decimal Amount { get; init; }
+
+    /// <summary>Its one line, e.g. "Villa Mounir - payment 2 of 3".</summary>
+    public string Description { get; init; } = string.Empty;
+}
+
+/// <summary>When a draft goes out, and where; see <see cref="InvoicePlanRequest"/>.</summary>
+public sealed record ScheduleInvoiceRequest
+{
+    public DateOnly SendOn { get; init; }
+
+    public string? SendTo { get; init; }
+}
+
 public sealed record IssueInvoiceRequest
 {
     /// <summary>Today or an earlier day (company time zone). Defaults to today.</summary>

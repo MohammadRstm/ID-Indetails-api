@@ -59,6 +59,14 @@ public sealed class DocumentService(
             invoiceId, new RecordDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = to, Note = request.Note }, cancellationToken);
     }
 
+    public async Task EmailScheduledInvoiceAsync(InvoiceResponse invoice, string to, CancellationToken cancellationToken = default)
+    {
+        var pdf = await RenderInvoiceAsync(invoice, cancellationToken);
+        var company = await companySettings.GetAsync(cancellationToken);
+        var sender = invoice.ScheduledBy?.Name ?? company.Name;
+        await SendAsync(DocumentEmails.Invoice(to, invoice, company.Name, sender, pdf), "invoice", invoice.Id, cancellationToken);
+    }
+
     public async Task<PdfFile> StatementPdfAsync(long statementId, CancellationToken cancellationToken = default)
         => await RenderStatementAsync(await statementService.GetAsync(statementId, cancellationToken), cancellationToken);
 

@@ -58,6 +58,14 @@ public static class InvoiceRules
             ? RuleDenial.BusinessRule(ErrorCodes.InvoiceNotDraft, "Only a draft invoice can be changed or discarded. Void and reissue it instead.")
             : null;
 
+    /// <summary>Auto invoice splits what is left to bill into 2 to this many invoices.</summary>
+    public const int MaxPlanInvoices = 24;
+
+    public static RuleDenial? CheckSendOn(DateOnly sendOn, DateOnly today)
+        => sendOn < today
+            ? RuleDenial.Invalid(ErrorCodes.SendDateInPast, "sendOn", "A scheduled invoice goes out today or later.")
+            : null;
+
     public static RuleDenial? CheckIssueDate(DateOnly issuedOn, DateOnly today)
         => issuedOn > today
             ? RuleDenial.Invalid(ErrorCodes.IssueDateInFuture, "issuedOn", "An invoice can't be issued with a future date.")

@@ -40,6 +40,18 @@ public class Invoice
 
     public long? VoidedById { get; set; }
 
+    /// <summary>
+    /// A scheduled draft: the day the hourly job issues it and emails it to <see cref="SendTo"/>, from 9:00 (company
+    /// time). Cleared once it is issued, however that happens.
+    /// </summary>
+    public DateOnly? SendOn { get; set; }
+
+    /// <summary>The address a scheduled draft is emailed to; null when whoever scheduled it sends it themselves.</summary>
+    public string? SendTo { get; set; }
+
+    /// <summary>Who scheduled it: the email is signed with their name, and they are told when it goes out.</summary>
+    public long? ScheduledById { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public long? CreatedById { get; set; }

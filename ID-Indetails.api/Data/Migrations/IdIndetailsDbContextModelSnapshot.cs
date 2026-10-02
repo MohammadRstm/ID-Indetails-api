@@ -1039,6 +1039,19 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("project_id");
 
+                    b.Property<long?>("ScheduledById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("scheduled_by_id");
+
+                    b.Property<DateOnly?>("SendOn")
+                        .HasColumnType("date")
+                        .HasColumnName("send_on");
+
+                    b.Property<string>("SendTo")
+                        .HasMaxLength(254)
+                        .HasColumnType("varchar(254)")
+                        .HasColumnName("send_to");
+
                     b.Property<int>("TermsDays")
                         .HasColumnType("int")
                         .HasColumnName("terms_days");
@@ -1083,6 +1096,12 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("ProjectId")
                         .HasDatabaseName("ix_invoices_project_id");
 
+                    b.HasIndex("ScheduledById")
+                        .HasDatabaseName("ix_invoices_scheduled_by_id");
+
+                    b.HasIndex("SendOn")
+                        .HasDatabaseName("ix_invoices_send_on");
+
                     b.HasIndex("VoidedById")
                         .HasDatabaseName("ix_invoices_voided_by_id");
 
@@ -1091,6 +1110,8 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_invoices_issued_has_due_date", "`issued_at` IS NULL OR `due_at` IS NOT NULL");
 
                             t.HasCheckConstraint("ck_invoices_numbered_when_issued", "(`number` IS NULL) = (`issued_at` IS NULL)");
+
+                            t.HasCheckConstraint("ck_invoices_scheduled_is_draft", "`send_on` IS NULL OR `issued_at` IS NULL");
 
                             t.HasCheckConstraint("ck_invoices_terms_non_negative", "`terms_days` >= 0");
 
@@ -4422,6 +4443,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_invoices_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ScheduledById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_invoices_users_scheduled_by_id");
 
                     b.HasOne("ID_Indetails.api.Models.User", null)
                         .WithMany()

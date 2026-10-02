@@ -59,6 +59,11 @@ public class InvoiceRulesTests
         InvoiceRules.CheckIssueDate(Today.AddDays(-30), Today).ShouldBeNull();
         InvoiceRules.CheckIssueDate(Today.AddDays(1), Today)!.Code.ShouldBe(ErrorCodes.IssueDateInFuture);
 
+        // a scheduled invoice goes out today or later, never on a day already gone
+        InvoiceRules.CheckSendOn(Today, Today).ShouldBeNull();
+        InvoiceRules.CheckSendOn(Today.AddDays(60), Today).ShouldBeNull();
+        InvoiceRules.CheckSendOn(Today.AddDays(-1), Today)!.Code.ShouldBe(ErrorCodes.SendDateInPast);
+
         InvoiceRules.CheckLive(isIssued: false, isVoided: false)!.Code.ShouldBe(ErrorCodes.InvoiceNotIssued);
         InvoiceRules.CheckLive(isIssued: true, isVoided: true)!.Code.ShouldBe(ErrorCodes.InvoiceVoided);
 

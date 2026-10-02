@@ -17,6 +17,9 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             // A number is assigned exactly when the invoice is issued, never to a draft.
             t.HasCheckConstraint("ck_invoices_numbered_when_issued", "(`number` IS NULL) = (`issued_at` IS NULL)");
             t.HasCheckConstraint("ck_invoices_issued_has_due_date", "`issued_at` IS NULL OR `due_at` IS NOT NULL");
+
+            // Only a draft waits for its day.
+            t.HasCheckConstraint("ck_invoices_scheduled_is_draft", "`send_on` IS NULL OR `issued_at` IS NULL");
         });
 
         builder.HasKey(x => x.Id);
@@ -29,6 +32,10 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(x => x.BillToName).HasMaxLength(200);
         builder.Property(x => x.BillToContact).HasMaxLength(255);
         builder.Property(x => x.VoidReason).HasMaxLength(500);
+        builder.Property(x => x.SendTo).HasMaxLength(254);
+
+        // the hourly job's search for drafts whose day has come
+        builder.HasIndex(x => x.SendOn);
 
         builder.HasOne(x => x.Project)
             .WithMany()
@@ -48,6 +55,11 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasOne<User>()
             .WithMany()
             .HasForeignKey(x => x.CreatedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.ScheduledById)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

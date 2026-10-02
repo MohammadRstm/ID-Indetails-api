@@ -19,6 +19,9 @@ public interface IDocumentService
     /// <summary>Sends an issued invoice with its PDF and records the delivery. Nothing is recorded if sending fails.</summary>
     Task<InvoiceResponse> EmailInvoiceAsync(long invoiceId, EmailDocumentRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>A scheduled invoice on its day, signed by whoever scheduled it. Records nothing: the scheduled sending does.</summary>
+    Task EmailScheduledInvoiceAsync(InvoiceResponse invoice, string to, CancellationToken cancellationToken = default);
+
     Task<PdfFile> StatementPdfAsync(long statementId, CancellationToken cancellationToken = default);
 
     /// <summary>Sends the statement with its PDF and records the delivery. Nothing is recorded if sending fails.</summary>
