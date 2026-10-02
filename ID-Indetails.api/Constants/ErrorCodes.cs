@@ -45,6 +45,7 @@ public static class ErrorCodes
     public const string PayGapNotAsked = "pay_gap_not_asked";
     public const string RoleUnchanged = "role_unchanged";
     public const string DomainUnchanged = "domain_unchanged";
+    public const string EmailUnchanged = "email_unchanged";
     public const string SuperAdminHasNoDomain = "super_admin_has_no_domain";
     public const string SuperAdminPaidMonthly = "super_admin_paid_monthly";
     public const string PayDateInFuture = "pay_date_in_future";

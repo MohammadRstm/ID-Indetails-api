@@ -143,4 +143,19 @@ public class EmployeeRulesTests
         EmployeeRules.CheckPayChange(DesignAdmin, Employee(status: UserStatus.Deactivated))!.Code.ShouldBe(ErrorCodes.UserDeactivated);
         EmployeeRules.CheckPayChange(DesignAdmin, Employee(status: UserStatus.Invited)).ShouldBeNull();
     }
+
+    [Fact]
+    public void Only_a_super_admin_changes_sign_in_addresses_their_own_only_with_their_password()
+    {
+        EmployeeRules.CheckEmailChange(SuperAdmin, Employee()).ShouldBeNull();
+        EmployeeRules.CheckEmailChange(SuperAdmin, Employee(status: UserStatus.Invited)).ShouldBeNull();
+        EmployeeRules.CheckEmailChange(SuperAdmin, SuperAdminTarget()).ShouldBeNull();
+        EmployeeRules.CheckEmailChange(SuperAdmin, Employee(status: UserStatus.Deactivated))!.Code.ShouldBe(ErrorCodes.UserDeactivated);
+        EmployeeRules.CheckEmailChange(SuperAdmin, new Target(SuperAdmin.UserId, RoleCodes.SuperAdmin, null, UserStatus.Active))!
+            .Kind.ShouldBe(DenialKind.Forbidden);
+        EmployeeRules.CheckEmailChange(CrossDomainAdmin, Employee())!.Kind.ShouldBe(DenialKind.Forbidden);
+
+        EmployeeRules.CheckOwnEmailChange(SuperAdmin).ShouldBeNull();
+        EmployeeRules.CheckOwnEmailChange(DesignAdmin)!.Kind.ShouldBe(DenialKind.Forbidden);
+    }
 }

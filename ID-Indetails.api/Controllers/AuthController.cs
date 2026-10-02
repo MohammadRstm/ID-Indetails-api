@@ -1,8 +1,10 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.DTO.Request.Auth;
+using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.Auth.Abstraction;
+using ID_Indetails.api.Services.Employees.Abstraction;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -15,6 +17,7 @@ public sealed class AuthController(
     IAuthService authService,
     IPasswordResetService passwordReset,
     ICurrentUser currentUser,
+    ISignInEmailService signInEmail,
     RefreshTokenCookie refreshCookie) : ControllerBase
 {
     /// <summary>Signs in. Returns the access token; the refresh token is set as an HttpOnly cookie.</summary>
@@ -63,6 +66,12 @@ public sealed class AuthController(
     [Authorize(Policy = AuthorizationPolicies.AllowPendingPasswordChange)]
     public async Task<ActionResult<AuthResponse>> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
         => SignedIn(await authService.ChangePasswordAsync(currentUser.Id, request, cancellationToken));
+
+    /// <summary>A super admin's own new sign-in address, with their password. Signs out every other session.</summary>
+    [HttpPost("change-email")]
+    [Authorize]
+    public async Task<ActionResult<AuthResponse>> ChangeEmail(ChangeMyEmailRequest request, CancellationToken cancellationToken)
+        => SignedIn(await signInEmail.ChangeMineAsync(request, cancellationToken));
 
     /// <summary>
     /// Emails a link for choosing a new password to the active account with this email. Always answers 204, so it

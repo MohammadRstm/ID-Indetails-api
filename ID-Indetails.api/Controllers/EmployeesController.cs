@@ -16,7 +16,7 @@ namespace ID_Indetails.api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/employees")]
-public sealed class EmployeesController(IEmployeeService employeeService) : ControllerBase
+public sealed class EmployeesController(IEmployeeService employeeService, ISignInEmailService signInEmail) : ControllerBase
 {
     /// <summary>People list with search, filters and paging. Deactivated people only when asked for.</summary>
     [HttpGet]
@@ -78,6 +78,12 @@ public sealed class EmployeesController(IEmployeeService employeeService) : Cont
         => employeeService.RemovePhotoAsync(userId, cancellationToken);
 
     /// <summary>Changes the role and clears personal permission changes.</summary>
+    /// <summary>A new sign-in address (super admins only). Ends their sessions; someone invited gets a new invitation there.</summary>
+    [HttpPut("{userId:long}/email")]
+    [HasPermission(PermissionCodes.EmployeeManage)]
+    public Task<EmployeeResponse> ChangeEmail(long userId, ChangeEmailRequest request, CancellationToken cancellationToken)
+        => signInEmail.ChangeAsync(userId, request, cancellationToken);
+
     [HttpPut("{userId:long}/role")]
     [HasPermission(PermissionCodes.EmployeeManage)]
     public Task<EmployeeResponse> ChangeRole(long userId, ChangeRoleRequest request, CancellationToken cancellationToken)

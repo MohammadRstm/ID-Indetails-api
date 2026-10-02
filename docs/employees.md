@@ -18,6 +18,7 @@ People management covers everyone with an account: super admins, admins and empl
 | `PUT /api/employees/{id}/photo`, `DELETE …` | `employee:manage` | `{ fileId }`: their profile photo, from the caller's upload ([files.md](files.md)) |
 | `POST /api/employees/{id}/deactivate` | `employee:manage` | `{ lastWorkingDay }` (optional, today when empty): blocks sign-in, ends every session and ends their employment on that day |
 | `POST /api/employees/{id}/reactivate` | `employee:manage` | `{ payGap }` (only when they left earlier this month): undoes a deactivation |
+| `PUT /api/employees/{id}/email` | `employee:manage`, super admins only | `{ email }`: a new sign-in address (below) |
 | `PUT /api/employees/{id}/role` | `employee:manage` | Changes the role |
 | `PUT /api/employees/{id}/domain` | `employee:manage` | Moves someone to the other domain |
 | `GET /api/employees/{id}/pay` | `employee:pay_manage` | Pay history, newest first |
@@ -28,7 +29,7 @@ People management covers everyone with an account: super admins, admins and empl
 | `PUT /api/teams/{id}` | `team:manage` | Renames a team |
 | `DELETE /api/teams/{id}` | `team:manage` | Deletes an empty team |
 
-Every change writes an `activity_events` row (`employee_updated`, `employee_deactivated`, `employee_reactivated`, `role_changed`, `employee_moved`, `pay_changed`, `team_created`, `team_renamed`, `team_deleted`). Pay events never carry amounts, because the activity feed is readable without financial access.
+Every change writes an `activity_events` row (`employee_updated`, `employee_deactivated`, `employee_reactivated`, `employee_email_changed`, `role_changed`, `employee_moved`, `pay_changed`, `team_created`, `team_renamed`, `team_deleted`). Pay events never carry amounts, because the activity feed is readable without financial access.
 
 ## The people list
 
@@ -43,7 +44,17 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 
 - Admins edit name, phone, position and team. Names are required once someone has signed up; an invited person's may stay empty. The team must belong to the person's domain.
 - People edit their own name and phone (`PUT /api/me/profile`). Email, position, team and pay are managed by the company. Their own pay, hours, overtime, schedule and requirements are in [me.md](me.md). Their profile's work, overtime and hours balance, as others see them, are in [design.md](design.md).
-- **Nobody** can change an email address. There is no endpoint for it.
+- Only **super admins** change sign-in addresses (below).
+
+## Changing a sign-in address
+
+A super admin sets someone's new address with `PUT /api/employees/{id}/email`, and their own with `POST /api/auth/change-email` (`{ email, currentPassword }`, [authentication.md](authentication.md)), never their own through the first. It takes effect at once (`Services/Employees/Implementation/SignInEmailService.cs`):
+
+- The address must be new (`422 email_unchanged`) and nobody else's, invited or not (`409 email_already_registered`). A deactivated account's isn't changed (`422 user_deactivated`).
+- The person's sessions end: refresh tokens are revoked and the access tokens they hold are refused from their next request, as when a super admin ends them, but their sign-in isn't suspended. Changing your own keeps only the session you are using.
+- The new address is emailed inside the transaction, so if it can't be reached nothing changes (`503 email_delivery_failed`). The old address is then told it no longer signs in, without the new one, since whoever reads that mailbox now may not be the person. A failure there is only logged: a mailbox that no longer works is often the reason for the change.
+- Someone still **invited** gets neither email: the link sent to the old address stops working and the invitation is sent again to the new one. If that email fails the address is still changed, and the `503` says to resend the invitation.
+- The `employee_email_changed` event holds no addresses, because the activity feed is read more widely than the people list.
 
 ## Rules that protect accounts
 

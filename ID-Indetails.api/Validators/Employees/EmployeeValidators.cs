@@ -69,6 +69,25 @@ public sealed class ChangePayRequestValidator : AbstractValidator<ChangePayReque
     }
 }
 
+public sealed class ChangeEmailRequestValidator : AbstractValidator<ChangeEmailRequest>
+{
+    public ChangeEmailRequestValidator()
+    {
+        RuleFor(x => x.Email).ValidEmail();
+    }
+}
+
+public sealed class ChangeMyEmailRequestValidator : AbstractValidator<ChangeMyEmailRequest>
+{
+    public ChangeMyEmailRequestValidator()
+    {
+        RuleFor(x => x.Email).ValidEmail();
+        RuleFor(x => x.CurrentPassword)
+            .NotEmpty().WithMessage("Current password is required.")
+            .MaximumLength(ValidationRules.PasswordMaxLength).WithMessage("Current password is too long.");
+    }
+}
+
 public sealed class UpdateMyProfileRequestValidator : AbstractValidator<UpdateMyProfileRequest>
 {
     public UpdateMyProfileRequestValidator()
