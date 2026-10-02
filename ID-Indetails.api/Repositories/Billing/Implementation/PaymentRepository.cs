@@ -70,5 +70,10 @@ public sealed class PaymentRepository(IdIndetailsDbContext db) : IPaymentReposit
     public Task<bool> HasLiveInitialAsync(long projectId, CancellationToken cancellationToken = default)
         => db.Payments.AnyAsync(p => p.ProjectId == projectId && p.IsInitial && p.VoidedAt == null, cancellationToken);
 
+    public async Task<IReadOnlyList<Payment>> OnAccountForUpdateAsync(long projectId, CancellationToken cancellationToken = default)
+        => await db.Payments
+            .FromSql($"SELECT * FROM `payments` WHERE `project_id` = {projectId} AND `invoice_id` IS NULL AND `voided_at` IS NULL ORDER BY `received_on`, `id` FOR UPDATE")
+            .ToListAsync(cancellationToken);
+
     public void Add(Payment payment) => db.Payments.Add(payment);
 }

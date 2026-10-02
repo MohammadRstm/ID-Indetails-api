@@ -32,6 +32,7 @@ public sealed class InvoiceService(
     IPermissionService permissions,
     IProjectRepository projects,
     IInvoiceRepository invoices,
+    IPaymentRepository payments,
     IBillingSettingsRepository billingSettings,
     IUserRepository users,
     IActivityEventRepository activity,
@@ -150,6 +151,26 @@ public sealed class InvoiceService(
         invoice.UpdatedAt = clock.UtcNow;
 
         activity.Add(InvoiceEvent(domain, invoice, ActivityEventKinds.InvoiceIssued, actor.UserId, invoice.Total, new { number = invoice.Number }));
+
+        // What the client already paid on account pays the new invoice, so it isn't shown as owed (or chased) twice.
+        var onAccount = await payments.OnAccountForUpdateAsync(invoice.ProjectId, cancellationToken);
+        var applied = PaymentRules.ToApply(invoice.Total, onAccount.Select(p => (p.Id, p.AmountUsd))).ToHashSet();
+        foreach (var payment in onAccount.Where(p => applied.Contains(p.Id)))
+        {
+            payment.InvoiceId = invoice.Id;
+            activity.Add(new ActivityEvent
+            {
+                DomainCode = domain,
+                Kind = ActivityEventKinds.PaymentApplied,
+                OccurredAt = clock.UtcNow,
+                ActorId = actor.UserId,
+                ProjectId = payment.ProjectId,
+                SubjectType = "payment",
+                SubjectId = payment.Id,
+                Amount = payment.AmountUsd,
+                Payload = JsonSerializer.Serialize(new { invoiceNumber = invoice.Number, automatic = true }, EventJson),
+            });
+        }
         // Whoever sees the domain's money; the payload never holds amounts.
         await notifications.SendAsync(
             new NotificationDraft(NotificationKinds.InvoiceIssued, actor.UserId, domain, invoice.ProjectId, "invoice", invoice.Id,

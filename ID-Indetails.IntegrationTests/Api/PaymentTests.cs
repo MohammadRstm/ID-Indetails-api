@@ -46,12 +46,13 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 50_000m);
         await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Design);
 
-        // Applying a payment on account races recording a new one: only one of them fits.
+        // Applying a payment on account races recording a new one: only one of them fits. Each round has its own project,
+        // since a payment left on account would pay the next invoice when it is issued.
         for (var round = 0; round < 5; round++)
         {
+            var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 50_000m);
             var invoice = await IssuedInvoiceAsync(project.Id, admin.AccessToken, 1000m);
             var onAccount = await RecordAsync(project.Id, admin.AccessToken, new { amount = 700m, currency = "USD" });
 
@@ -77,25 +78,32 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
         onAccount.InvoiceId.ShouldBeNull();
         onAccount.AmountUsd.ShouldBe(2000m);
 
+        // Issuing an invoice settles it with what was paid on account, so it isn't shown as owed twice.
         await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Design);
         var invoice = await IssuedInvoiceAsync(project.Id, admin.AccessToken, 3000m);
-
-        var partial = await RecordAsync(project.Id, admin.AccessToken, new { amount = 1000m, currency = "USD", invoiceId = invoice.Id, reference = "TRX-1" });
-        partial.InvoiceNumber.ShouldBe(invoice.Number);
-        var afterPartial = await InvoiceAsync(invoice.Id, admin.AccessToken);
-        afterPartial.Status.ShouldBe(InvoiceStatus.Partial);
-        afterPartial.Balance.ShouldBe(2000m);
-
-        await (await Client.PostJsonAsync($"/api/projects/{project.Id}/payments", new { amount = 2000.01m, currency = "USD", invoiceId = invoice.Id }, admin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.PaymentExceedsBalance);
-
-        // The earlier payment on account settles the rest.
-        var applied = await (await Client.PutJsonAsync($"/api/payments/{onAccount.Id}/invoice", new { invoiceId = invoice.Id }, admin.AccessToken))
-            .ReadAsync<PaymentResponse>();
-        applied.InvoiceId.ShouldBe(invoice.Id);
-        (await InvoiceAsync(invoice.Id, admin.AccessToken)).Status.ShouldBe(InvoiceStatus.Paid);
+        invoice.Status.ShouldBe(InvoiceStatus.Partial);
+        invoice.Balance.ShouldBe(1000m);
+        (await (await Client.GetAsync($"/api/payments/{onAccount.Id}", admin.AccessToken)).ReadAsync<PaymentResponse>()).InvoiceId.ShouldBe(invoice.Id);
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE kind = 'payment_applied' AND subject_id = @p AND JSON_EXTRACT(payload, '$.automatic') = true",
+            ("@p", onAccount.Id))).ShouldBe(1);
         await (await Client.PutJsonAsync($"/api/payments/{onAccount.Id}/invoice", new { invoiceId = invoice.Id }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.PaymentAlreadyApplied);
+
+        await (await Client.PostJsonAsync($"/api/projects/{project.Id}/payments", new { amount = 1000.01m, currency = "USD", invoiceId = invoice.Id }, admin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.PaymentExceedsBalance);
+
+        // Money arriving after the invoice is held on account until someone applies it.
+        var later = await RecordAsync(project.Id, admin.AccessToken, new { amount = 400m, currency = "USD" });
+        later.InvoiceId.ShouldBeNull();
+        var applied = await (await Client.PutJsonAsync($"/api/payments/{later.Id}/invoice", new { invoiceId = invoice.Id }, admin.AccessToken))
+            .ReadAsync<PaymentResponse>();
+        applied.InvoiceId.ShouldBe(invoice.Id);
+        (await InvoiceAsync(invoice.Id, admin.AccessToken)).Balance.ShouldBe(600m);
+
+        var partial = await RecordAsync(project.Id, admin.AccessToken, new { amount = 600m, currency = "USD", invoiceId = invoice.Id, reference = "TRX-1" });
+        partial.InvoiceNumber.ShouldBe(invoice.Number);
+        (await InvoiceAsync(invoice.Id, admin.AccessToken)).Status.ShouldBe(InvoiceStatus.Paid);
 
         await (await Client.PostJsonAsync($"/api/invoices/{invoice.Id}/void", new { reason = "Mistake" }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.InvoiceHasPayments);
@@ -109,15 +117,39 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var money = (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!.Billing;
         money.Invoiced.ShouldBe(3000m);
-        money.Received.ShouldBe(2000m);
-        money.Outstanding.ShouldBe(1000m);
+        money.Received.ShouldBe(2400m);
+        money.Outstanding.ShouldBe(600m);
         money.NotYetInvoiced.ShouldBe(7000m);
-        money.Owed.ShouldBe(8000m);
+        money.Owed.ShouldBe(7600m);
 
         var live = await (await Client.GetAsync($"/api/payments?projectId={project.Id}", admin.AccessToken)).ReadAsync<PagedResponse<PaymentResponse>>();
-        live.Items.Count.ShouldBe(1);
+        live.Items.Count.ShouldBe(2);
         var all = await (await Client.GetAsync($"/api/payments?projectId={project.Id}&includeVoided=true", admin.AccessToken)).ReadAsync<PagedResponse<PaymentResponse>>();
-        all.Items.Count.ShouldBe(2);
+        all.Items.Count.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task An_issued_invoice_takes_the_payments_on_account_that_fit_oldest_first()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var project = await Projects.CreateProjectAsync(token, DomainCodes.Design, revenue: 10_000m);
+        await Projects.SetUpBillingAsync(token, DomainCodes.Design);
+
+        var first = await RecordAsync(project.Id, token, new { amount = 900m, currency = "USD", receivedOn = "2026-06-01" });
+        var second = await RecordAsync(project.Id, token, new { amount = 300m, currency = "USD", receivedOn = "2026-06-02" });
+
+        // the older 900 fits the 1,000; the 300 doesn't fit what is left, so it stays on account
+        var invoice = await IssuedInvoiceAsync(project.Id, token, 1000m);
+        invoice.Balance.ShouldBe(100m);
+        (await (await Client.GetAsync($"/api/payments/{first.Id}", token)).ReadAsync<PaymentResponse>()).InvoiceId.ShouldBe(invoice.Id);
+        (await (await Client.GetAsync($"/api/payments/{second.Id}", token)).ReadAsync<PaymentResponse>()).InvoiceId.ShouldBeNull();
+        (await (await Client.GetAsync($"/api/projects/{project.Id}", token)).ReadAsync<ProjectResponse>()).Money!.Billing.OnAccount.ShouldBe(300m);
+
+        // the next invoice takes the 300 left on account, never a voided payment
+        var mistake = await RecordAsync(project.Id, token, new { amount = 50m, currency = "USD" });
+        (await Client.PostJsonAsync($"/api/payments/{mistake.Id}/void", new { reason = "Wrong project" }, token)).IsSuccessStatusCode.ShouldBeTrue();
+        (await IssuedInvoiceAsync(project.Id, token, 500m)).Balance.ShouldBe(200m);
     }
 
     [Fact]

@@ -25,5 +25,8 @@ public interface IPaymentRepository
 
     Task<bool> HasLiveInitialAsync(long projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>The project's live payments on account, oldest received first. Tracked, and locked until the transaction ends.</summary>
+    Task<IReadOnlyList<Payment>> OnAccountForUpdateAsync(long projectId, CancellationToken cancellationToken = default);
+
     void Add(Payment payment);
 }

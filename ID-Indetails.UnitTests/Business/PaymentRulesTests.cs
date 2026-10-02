@@ -88,4 +88,14 @@ public class PaymentRulesTests
         paid.LeftToInvoice.ShouldBe(12_000m);
         paid.Owed.ShouldBe(0m);
     }
+
+    [Fact]
+    public void A_new_invoice_takes_each_payment_on_account_that_fits_oldest_first()
+    {
+        PaymentRules.ToApply(1000m, [(1, 900m), (2, 300m), (3, 100m)]).ShouldBe([1L, 3L]);
+        PaymentRules.ToApply(1000m, [(1, 300m), (2, 900m)]).ShouldBe([1L]);
+        PaymentRules.ToApply(1000m, [(1, 400m), (2, 600m), (3, 1m)]).ShouldBe([1L, 2L]);
+        PaymentRules.ToApply(1000m, [(1, 1500m)]).ShouldBeEmpty();
+        PaymentRules.ToApply(1000m, []).ShouldBeEmpty();
+    }
 }
