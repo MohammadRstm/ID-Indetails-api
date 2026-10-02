@@ -5,6 +5,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
+using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Notifications.Abstraction;
@@ -53,6 +54,7 @@ public sealed class ScheduledNotifications(
     ISalaryService salaries,
     IProjectFinanceService finance,
     IProjectAutoArchive autoArchive,
+    IInvoiceScheduleService invoiceSchedule,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IClock clock) : IScheduledNotifications
@@ -75,6 +77,7 @@ public sealed class ScheduledNotifications(
             ScheduledCheck.CostWarnings => CostWarningsAsync(cancellationToken),
             ScheduledCheck.DraftInvoices => DraftInvoicesAsync(today, cancellationToken),
             ScheduledCheck.AutoArchive => autoArchive.RunAsync(cancellationToken),
+            ScheduledCheck.ScheduledInvoices => invoiceSchedule.RunAsync(cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(check)),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -281,7 +284,8 @@ public sealed class ScheduledNotifications(
         {
             var (items, total) = await invoices.SearchAsync(
                 new InvoiceSearch(DomainCodes.All, null, null, InvoiceStatus.Draft, null, null, today, page, PageSize), cancellationToken);
-            foreach (var invoice in items.Select(r => r.Invoice).Where(i => i.CreatedAt <= createdBy))
+            // a scheduled draft waits for its day, not for someone
+            foreach (var invoice in items.Select(r => r.Invoice).Where(i => i.CreatedAt <= createdBy && (i.SendOn is null || i.SendOn < today)))
             {
                 var domain = invoice.Project.DomainCode;
                 if (!holders.TryGetValue(domain, out var moneyPeople))

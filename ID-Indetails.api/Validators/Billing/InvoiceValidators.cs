@@ -1,4 +1,5 @@
 using FluentValidation;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.Validators.Clients;
 using ID_Indetails.api.Validators.Common;
@@ -38,6 +39,35 @@ public sealed class SaveInvoiceRequestValidator : AbstractValidator<SaveInvoiceR
         RuleFor(x => x.Notes).ClientText("Notes", 2000);
         RuleFor(x => x.BillToName).ClientText("Bill-to name", 200);
         RuleFor(x => x.BillToContact).ClientText("Bill-to contact", 255);
+    }
+}
+
+public sealed class InvoicePlanRequestValidator : AbstractValidator<InvoicePlanRequest>
+{
+    public InvoicePlanRequestValidator()
+    {
+        RuleFor(x => x.Invoices)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("Add the invoices.")
+            .Must(i => i.Count is >= 2 and <= InvoiceRules.MaxPlanInvoices)
+            .WithMessage($"Split it into 2 to {InvoiceRules.MaxPlanInvoices} invoices.");
+        RuleForEach(x => x.Invoices).ChildRules(invoice =>
+        {
+            invoice.RuleFor(i => i.Description).ClientText("Description", 500, required: true);
+            invoice.RuleFor(i => i.Amount).Amount("Amount", allowZero: false);
+        });
+        RuleFor(x => x.TermsDays).InclusiveBetween(0, 365).When(x => x.TermsDays is not null)
+            .WithMessage("Payment terms must be between 0 and 365 days.");
+        RuleFor(x => x.Notes).ClientText("Notes", 2000);
+        RuleFor(x => x.SendTo!).ValidEmail().When(x => x.SendTo is not null);
+    }
+}
+
+public sealed class ScheduleInvoiceRequestValidator : AbstractValidator<ScheduleInvoiceRequest>
+{
+    public ScheduleInvoiceRequestValidator()
+    {
+        RuleFor(x => x.SendTo!).ValidEmail().When(x => x.SendTo is not null);
     }
 }
 

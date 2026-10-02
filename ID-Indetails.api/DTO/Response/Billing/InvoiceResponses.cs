@@ -51,6 +51,9 @@ public record InvoiceSummaryResponse
     public DateOnly? DueOn { get; init; }
 
     public DateTime CreatedAt { get; init; }
+
+    /// <summary>A scheduled draft's day to go out; null for anything else.</summary>
+    public DateOnly? SendOn { get; init; }
 }
 
 public sealed record InvoiceResponse : InvoiceSummaryResponse
@@ -78,6 +81,12 @@ public sealed record InvoiceResponse : InvoiceSummaryResponse
 
     /// <summary>Who drafted it; null when that isn't known.</summary>
     public PersonRefResponse? CreatedBy { get; init; }
+
+    /// <summary>Where a scheduled draft is emailed on its day; null when whoever scheduled it sends it themselves.</summary>
+    public string? SendTo { get; init; }
+
+    /// <summary>Who scheduled it, while it is scheduled.</summary>
+    public PersonRefResponse? ScheduledBy { get; init; }
 
     public IReadOnlyList<InvoiceLineResponse> Lines { get; init; } = [];
 
