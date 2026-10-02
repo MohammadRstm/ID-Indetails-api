@@ -9,8 +9,8 @@ namespace ID_Indetails.api.Services.Permissions.Abstraction;
 /// </summary>
 public interface IPermissionManagementService
 {
-    /// <summary>What the caller holds, with what each allows.</summary>
-    Task<IReadOnlyList<HeldPermissionResponse>> GetMineAsync(CancellationToken cancellationToken = default);
+    /// <summary>What the caller holds, and what their role gives but was taken away from them, with what each allows.</summary>
+    Task<IReadOnlyList<MyPermissionResponse>> GetMineAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<PermissionDefinitionResponse>> GetCatalogAsync(CancellationToken cancellationToken = default);
 

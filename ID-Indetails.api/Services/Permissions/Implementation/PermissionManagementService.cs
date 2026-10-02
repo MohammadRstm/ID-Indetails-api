@@ -38,12 +38,13 @@ public sealed class PermissionManagementService(
             .Select(p => new PermissionDefinitionResponse(
                 p.Code,
                 p.Description,
+                PermissionExplanations.Of(p.Code),
                 p.DomainCode,
                 RoleCodes.All.Where(r => grants.TryGetValue(r, out var g) && g.Any(x => x.Code == p.Code)).ToList()))
             .ToList();
     }
 
-    public async Task<IReadOnlyList<HeldPermissionResponse>> GetMineAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MyPermissionResponse>> GetMineAsync(CancellationToken cancellationToken = default)
     {
         // an access token outlives a deactivation
         var me = await users.GetRoleSnapshotAsync(currentUser.Id, cancellationToken) is { Status: UserStatus.Active } user
@@ -54,8 +55,12 @@ public sealed class PermissionManagementService(
         var fromRole = mine.RoleDefaults.ToHashSet();
 
         return (await permissionRepository.GetAllAsync(cancellationToken))
-            .Where(p => held.Contains(p.Code))
-            .Select(p => new HeldPermissionResponse(p.Code, p.Description, fromRole.Contains(p.Code)))
+            .Where(p => held.Contains(p.Code) || fromRole.Contains(p.Code))
+            .Select(p => new MyPermissionResponse(
+                p.Code,
+                p.Description,
+                PermissionExplanations.Of(p.Code),
+                !held.Contains(p.Code) ? PermissionSource.Removed : fromRole.Contains(p.Code) ? PermissionSource.Role : PermissionSource.Granted))
             .ToList();
     }
 

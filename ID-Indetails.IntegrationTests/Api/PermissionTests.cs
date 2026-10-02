@@ -67,19 +67,20 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
         await ShouldChangeAsync(superAdmin, employee.User.Id, PermissionChangeAction.Grant, PermissionCodes.ClientCreate);
         await ShouldChangeAsync(superAdmin, employee.User.Id, PermissionChangeAction.Revoke, taken);
 
-        var mine = await (await Client.GetAsync("/api/me/permissions", employee.AccessToken)).ReadAsync<List<HeldPermissionResponse>>();
+        var mine = await (await Client.GetAsync("/api/me/permissions", employee.AccessToken)).ReadAsync<List<MyPermissionResponse>>();
         var me = await (await Client.GetAsync("/api/auth/me", employee.AccessToken)).ReadAsync<CurrentUserResponse>();
-        mine.Select(p => p.Code).ShouldBe(me.Permissions, ignoreOrder: true);
-        mine.ShouldNotContain(p => p.Code == taken);
-        mine.ShouldAllBe(p => p.Description.Length > 0);
-        mine.Single(p => p.Code == PermissionCodes.ClientCreate).FromRole.ShouldBeFalse();
-        mine.Where(p => p.Code != PermissionCodes.ClientCreate).ShouldAllBe(p => p.FromRole);
+        mine.Where(p => p.Source != PermissionSource.Removed).Select(p => p.Code).ShouldBe(me.Permissions, ignoreOrder: true);
+        mine.Single(p => p.Code == taken).Source.ShouldBe(PermissionSource.Removed);
+        mine.ShouldAllBe(p => p.Description.Length > 0 && p.Explanation.Length > 0);
+        mine.Single(p => p.Code == PermissionCodes.ClientCreate).Source.ShouldBe(PermissionSource.Granted);
+        mine.Where(p => p.Code != PermissionCodes.ClientCreate && p.Code != taken).ShouldAllBe(p => p.Source == PermissionSource.Role);
 
         // a super admin holds every one, all from the role
         var catalog = await (await Client.GetAsync("/api/permissions", superAdmin.AccessToken)).ReadAsync<List<PermissionDefinitionResponse>>();
-        var all = await (await Client.GetAsync("/api/me/permissions", superAdmin.AccessToken)).ReadAsync<List<HeldPermissionResponse>>();
+        var all = await (await Client.GetAsync("/api/me/permissions", superAdmin.AccessToken)).ReadAsync<List<MyPermissionResponse>>();
         all.Count.ShouldBe(catalog.Count);
-        all.ShouldAllBe(p => p.FromRole);
+        all.ShouldAllBe(p => p.Source == PermissionSource.Role);
+        catalog.ShouldAllBe(p => p.Explanation.Length > 0);
     }
 
     [Fact]

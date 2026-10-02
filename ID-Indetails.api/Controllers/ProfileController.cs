@@ -29,8 +29,11 @@ public sealed class ProfileController(IEmployeeService employeeService, IPermiss
     public Task<CurrentUserResponse> RemovePhoto(CancellationToken cancellationToken)
         => employeeService.RemoveMyPhotoAsync(cancellationToken);
 
-    /// <summary>Every permission they hold, what it allows, and whether their role gives it or it was given to them.</summary>
+    /// <summary>
+    /// Every permission they hold, and every one their role gives that was taken away from them, with what each allows
+    /// and where it comes from.
+    /// </summary>
     [HttpGet("permissions")]
-    public Task<IReadOnlyList<HeldPermissionResponse>> Permissions(CancellationToken cancellationToken)
+    public Task<IReadOnlyList<MyPermissionResponse>> Permissions(CancellationToken cancellationToken)
         => permissionService.GetMineAsync(cancellationToken);
 }

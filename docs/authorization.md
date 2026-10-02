@@ -37,8 +37,8 @@ The result is a `UserAccess`: the permissions, whether the user is a joker, and 
 
 | Method and path | Access | Purpose |
 |---|---|---|
-| `GET /api/me/permissions` | Signed in | What the caller holds: each permission's code, description, and `fromRole` (false when it was given to them on top of their role) |
-| `GET /api/permissions` | `permission:manage` | Every permission, its description, domain and the roles that hold it by default |
+| `GET /api/me/permissions` | Signed in | The caller's permissions: each one's code, description, `explanation` and `source`: `role`, `granted` (given on top of their role) or `removed` (their role gives it, but it was taken away, so they don't hold it) |
+| `GET /api/permissions` | `permission:manage` | Every permission, its description and `explanation` (what it lets someone do, from `Business/Auth/PermissionExplanations.cs`), domain and the roles that hold it by default |
 | `GET /api/users/{userId}/permissions` | `permission:manage` | Role defaults, overrides, effective permissions, joker flag and visible domains |
 | `PUT /api/users/{userId}/permissions` | `permission:manage` | Applies a list of changes in one go |
 
