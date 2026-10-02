@@ -8,6 +8,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
@@ -42,6 +43,9 @@ public sealed class InvoiceService(
 {
     private const int FallbackTermsDays = 30;
     private const string NotFoundMessage = "Invoice not found.";
+
+    /// <summary>How the scheduled sending reads an invoice: in any domain, with what was paid.</summary>
+    private static readonly UserAccess Sending = new(0, RoleCodes.SuperAdmin, null, [PermissionCodes.FinancialView], false, DomainCodes.All);
 
     public async Task<PagedResponse<InvoiceSummaryResponse>> ListAsync(InvoiceListQuery query, CancellationToken cancellationToken = default)
     {
@@ -140,17 +144,205 @@ public sealed class InvoiceService(
         var issuedOn = request.IssuedOn ?? today;
         Throw(InvoiceRules.CheckIssueDate(issuedOn, today));
 
-        var settings = await billingSettings.GetAsync(domain, cancellationToken)
-            ?? throw new BusinessRuleException(
-                ErrorCodes.BillingSettingsMissing, "Set up this domain's billing settings before issuing invoices.");
+        await IssueAsync(invoice, domain, issuedOn, actor.UserId, automatic: false, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
+        return await DescribeAsync(actor, invoice.Id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<InvoiceResponse>> CreatePlanAsync(
+        long projectId,
+        InvoicePlanRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var project = await projects.GetAsync(projectId, cancellationToken);
+        if (project is null || !actor.CanSee(project.DomainCode))
+        {
+            throw new NotFoundException("Project not found.");
+        }
+
+        Throw(InvoiceRules.CheckBillable(project.BillingType, project.ClientId));
+        // they are issued with nobody there, so the domain must already be able to issue invoices
+        var settings = await SettingsToIssueAsync(project.DomainCode, cancellationToken);
+        foreach (var planned in request.Invoices)
+        {
+            Throw(InvoiceRules.CheckSendOn(planned.SendOn, clock.CompanyToday));
+        }
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var created = new List<Invoice>();
+        foreach (var planned in request.Invoices)
+        {
+            var invoice = new Invoice
+            {
+                ProjectId = project.Id,
+                ClientId = project.ClientId!.Value,
+                Currency = project.RevenueCurrency,
+                TermsDays = request.TermsDays ?? settings.DefaultTermsDays,
+                CreatedAt = clock.UtcNow,
+                CreatedById = actor.UserId,
+                SendOn = planned.SendOn,
+                SendTo = Clean(request.SendTo),
+                ScheduledById = actor.UserId,
+            };
+            Apply(invoice, new SaveInvoiceRequest
+            {
+                Lines = [new InvoiceLineRequest { Description = planned.Description, Amount = planned.Amount }],
+                Notes = request.Notes,
+            });
+            invoices.Add(invoice);
+            created.Add(invoice);
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        foreach (var invoice in created)
+        {
+            activity.Add(InvoiceEvent(project.DomainCode, invoice, ActivityEventKinds.InvoiceCreated, actor.UserId, invoice.Total,
+                new { sendOn = invoice.SendOn }));
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var plan = new List<InvoiceResponse>();
+        foreach (var invoice in created)
+        {
+            plan.Add(await DescribeAsync(actor, invoice.Id, cancellationToken));
+        }
+
+        return plan;
+    }
+
+    public async Task<InvoiceResponse> ScheduleAsync(long invoiceId, ScheduleInvoiceRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var (invoice, domain) = await VisibleInvoiceForUpdateAsync(actor, invoiceId, cancellationToken);
+        Throw(InvoiceRules.CheckDraft(invoice.IssuedAt is not null, invoice.VoidedAt is not null));
+        Throw(InvoiceRules.CheckSendOn(request.SendOn, clock.CompanyToday));
+        await SettingsToIssueAsync(domain, cancellationToken);
+
+        invoice.SendOn = request.SendOn;
+        invoice.SendTo = Clean(request.SendTo);
+        invoice.ScheduledById = actor.UserId;
+        invoice.UpdatedAt = clock.UtcNow;
+        activity.Add(InvoiceEvent(domain, invoice, ActivityEventKinds.InvoiceScheduled, actor.UserId, invoice.Total, new { sendOn = invoice.SendOn }));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return await DescribeAsync(actor, invoice.Id, cancellationToken);
+    }
+
+    /// <summary>It stays a draft, sent by hand. Nothing to do when it isn't scheduled.</summary>
+    public async Task<InvoiceResponse> UnscheduleAsync(long invoiceId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var (invoice, domain) = await VisibleInvoiceForUpdateAsync(actor, invoiceId, cancellationToken);
+        Throw(InvoiceRules.CheckDraft(invoice.IssuedAt is not null, invoice.VoidedAt is not null));
+
+        if (invoice.SendOn is not null)
+        {
+            EndSchedule(invoice);
+            invoice.UpdatedAt = clock.UtcNow;
+            activity.Add(InvoiceEvent(domain, invoice, ActivityEventKinds.InvoiceScheduled, actor.UserId, invoice.Total));
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(actor, invoice.Id, cancellationToken);
+    }
+
+    public async Task<bool> SendScheduledAsync(
+        long invoiceId,
+        Func<InvoiceResponse, string, CancellationToken, Task> email,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var invoice = await invoices.GetForUpdateAsync(invoiceId, cancellationToken);
+        // sent by hand, unscheduled, discarded or moved on meanwhile
+        if (invoice is not { IssuedAt: null, VoidedAt: null, SendOn: { } sendOn } || sendOn > clock.CompanyToday)
+        {
+            return false;
+        }
+
+        var domain = (await projects.GetAsync(invoice.ProjectId, cancellationToken))!.DomainCode;
+        var scheduledBy = invoice.ScheduledById;
+        if (invoice.SendTo is not { } to)
+        {
+            // nowhere to email it, so whoever scheduled it sends it (on WhatsApp, say), which issues it
+            await notifications.SendOnceAsync(
+                new NotificationDraft(NotificationKinds.InvoiceSendDue, null, domain, invoice.ProjectId, "invoice", invoice.Id, new { sendOn }),
+                $"invoice-send-due:{invoice.Id}:{sendOn:yyyy-MM-dd}", ToWhoScheduled(scheduledBy), cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return false;
+        }
+
+        await IssueAsync(invoice, domain, clock.CompanyToday, scheduledBy, automatic: true, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        var issued = await DescribeAsync(Sending, invoice.Id, cancellationToken);
+        // what was paid on account may have settled it: the client isn't sent a bill they have paid
+        var emailed = issued.Balance > 0;
+        if (emailed)
+        {
+            await email(issued, to, cancellationToken);
+            invoices.AddDelivery(new InvoiceDelivery
+            {
+                InvoiceId = invoice.Id,
+                Channel = DeliveryChannel.Email,
+                Recipient = to,
+                Note = "Sent automatically, as scheduled",
+                SentAt = clock.UtcNow,
+                SentById = scheduledBy,
+            });
+            activity.Add(InvoiceEvent(domain, invoice, ActivityEventKinds.InvoiceSent, scheduledBy, null,
+                new { number = invoice.Number, channel = DeliveryChannel.Email, automatic = true }));
+        }
+
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.InvoiceSentAutomatically, null, domain, invoice.ProjectId, "invoice", invoice.Id,
+                new { number = invoice.Number, to = emailed ? to : null }),
+            ToWhoScheduled(scheduledBy),
+            cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task ScheduledSendFailedAsync(long invoiceId, CancellationToken cancellationToken = default)
+    {
+        if (await invoices.GetAsync(invoiceId, cancellationToken) is not { Invoice: { IssuedAt: null, SendOn: { } sendOn } invoice })
+        {
+            return;
+        }
+
+        await notifications.SendOnceAsync(
+            new NotificationDraft(NotificationKinds.InvoiceSendFailed, null, invoice.Project.DomainCode, invoice.ProjectId, "invoice", invoice.Id,
+                new { sendTo = invoice.SendTo }),
+            $"invoice-send-failed:{invoice.Id}:{sendOn:yyyy-MM-dd}", ToWhoScheduled(invoice.ScheduledById), cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Numbers the locked draft and dates it, pays it with what is on account, and tells whoever sees the domain's
+    /// money. Its schedule ends: a draft sent before its day isn't sent again on it.
+    /// </summary>
+    private async Task IssueAsync(Invoice invoice, string domain, DateOnly issuedOn, long? actorId, bool automatic, CancellationToken cancellationToken)
+    {
+        var today = clock.CompanyToday;
+        var settings = await SettingsToIssueAsync(domain, cancellationToken);
         var sequence = await invoices.NextSequenceAsync(domain, issuedOn.Year, cancellationToken);
         invoice.Number = InvoiceRules.Number(settings.InvoicePrefix, issuedOn.Year, sequence);
         invoice.IssuedAt = issuedOn == today ? clock.UtcNow : Noon(issuedOn);
         invoice.DueAt = Noon(issuedOn.AddDays(invoice.TermsDays));
         invoice.UpdatedAt = clock.UtcNow;
+        EndSchedule(invoice);
 
-        activity.Add(InvoiceEvent(domain, invoice, ActivityEventKinds.InvoiceIssued, actor.UserId, invoice.Total, new { number = invoice.Number }));
+        activity.Add(InvoiceEvent(domain, invoice, ActivityEventKinds.InvoiceIssued, actorId, invoice.Total,
+            automatic ? new { number = invoice.Number, automatic = true } : (object)new { number = invoice.Number }));
 
         // What the client already paid on account pays the new invoice, so it isn't shown as owed (or chased) twice.
         var onAccount = await payments.OnAccountForUpdateAsync(invoice.ProjectId, cancellationToken);
@@ -163,7 +355,7 @@ public sealed class InvoiceService(
                 DomainCode = domain,
                 Kind = ActivityEventKinds.PaymentApplied,
                 OccurredAt = clock.UtcNow,
-                ActorId = actor.UserId,
+                ActorId = actorId,
                 ProjectId = payment.ProjectId,
                 SubjectType = "payment",
                 SubjectId = payment.Id,
@@ -173,15 +365,25 @@ public sealed class InvoiceService(
         }
         // Whoever sees the domain's money; the payload never holds amounts.
         await notifications.SendAsync(
-            new NotificationDraft(NotificationKinds.InvoiceIssued, actor.UserId, domain, invoice.ProjectId, "invoice", invoice.Id,
+            new NotificationDraft(NotificationKinds.InvoiceIssued, actorId, domain, invoice.ProjectId, "invoice", invoice.Id,
                 new { number = invoice.Number }),
             await notifications.HoldersAsync(domain, PermissionCodes.FinancialView, cancellationToken),
             cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        return await DescribeAsync(actor, invoice.Id, cancellationToken);
     }
+
+    private async Task<BillingSettings> SettingsToIssueAsync(string domain, CancellationToken cancellationToken)
+        => await billingSettings.GetAsync(domain, cancellationToken)
+            ?? throw new BusinessRuleException(
+                ErrorCodes.BillingSettingsMissing, "Set up this domain's billing settings before issuing invoices.");
+
+    private static void EndSchedule(Invoice invoice)
+    {
+        invoice.SendOn = null;
+        invoice.SendTo = null;
+        invoice.ScheduledById = null;
+    }
+
+    private static long[] ToWhoScheduled(long? scheduledById) => scheduledById is { } id ? [id] : [];
 
     public async Task<InvoiceResponse> RecordDeliveryAsync(
         long invoiceId,
@@ -282,9 +484,12 @@ public sealed class InvoiceService(
 
         var i = row.Invoice;
         var creator = i.CreatedById is { } creatorId ? await users.GetByIdAsync(creatorId, cancellationToken) : null;
+        var scheduler = i.ScheduledById is { } schedulerId ? await users.GetByIdAsync(schedulerId, cancellationToken) : null;
         return new InvoiceResponse(Summary(row, actor.Has(PermissionCodes.FinancialView)))
         {
             CreatedBy = creator is null ? null : new PersonRefResponse(creator.Id, PersonName.Of(creator.FirstName, creator.LastName, creator.Email)),
+            SendTo = i.SendTo,
+            ScheduledBy = scheduler is null ? null : new PersonRefResponse(scheduler.Id, PersonName.Of(scheduler.FirstName, scheduler.LastName, scheduler.Email)),
             TermsDays = i.TermsDays,
             Notes = i.Notes,
             BillToName = i.BillToName,
@@ -322,10 +527,11 @@ public sealed class InvoiceService(
             IssuedAt = i.IssuedAt,
             DueOn = dueOn,
             CreatedAt = i.CreatedAt,
+            SendOn = i.SendOn,
         };
     }
 
-    private ActivityEvent InvoiceEvent(string domain, Invoice invoice, string kind, long actorId, decimal? amount, object? payload = null) => new()
+    private ActivityEvent InvoiceEvent(string domain, Invoice invoice, string kind, long? actorId, decimal? amount, object? payload = null) => new()
     {
         DomainCode = domain,
         Kind = kind,

@@ -13,7 +13,10 @@ namespace ID_Indetails.api.Controllers;
 /// <summary>Invoices. Invoices of a project in a domain the caller can't see read as 404.</summary>
 [ApiController]
 [Route("api")]
-public sealed class InvoicesController(IInvoiceService invoiceService, IDocumentService documents) : ControllerBase
+public sealed class InvoicesController(
+    IInvoiceService invoiceService,
+    IInvoiceScheduleService invoiceSchedule,
+    IDocumentService documents) : ControllerBase
 {
     [HttpGet("invoices")]
     [HasPermission(PermissionCodes.FinancialView)]
@@ -75,6 +78,28 @@ public sealed class InvoicesController(IInvoiceService invoiceService, IDocument
     [HasPermission(PermissionCodes.InvoiceSend)]
     public async Task<ActionResult<InvoiceResponse>> Email(long invoiceId, EmailDocumentRequest request, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await documents.EmailInvoiceAsync(invoiceId, request, cancellationToken));
+
+    /// <summary>
+    /// Auto invoice: 2 to 24 drafts, each issued and emailed on its own day from 9:00 (company time); any dated today
+    /// go out at once. Scheduling sending needs <c>invoice:send</c> too.
+    /// </summary>
+    [HttpPost("projects/{projectId:long}/invoice-plan")]
+    [HasPermission(PermissionCodes.InvoiceCreate)]
+    [HasPermission(PermissionCodes.InvoiceSend)]
+    public async Task<ActionResult<IReadOnlyList<InvoiceResponse>>> CreatePlan(long projectId, InvoicePlanRequest request, CancellationToken cancellationToken)
+        => StatusCode(StatusCodes.Status201Created, await invoiceSchedule.CreatePlanAsync(projectId, request, cancellationToken));
+
+    /// <summary>Gives a draft a day to go out on, or moves it.</summary>
+    [HttpPut("invoices/{invoiceId:long}/schedule")]
+    [HasPermission(PermissionCodes.InvoiceSend)]
+    public Task<InvoiceResponse> Schedule(long invoiceId, ScheduleInvoiceRequest request, CancellationToken cancellationToken)
+        => invoiceService.ScheduleAsync(invoiceId, request, cancellationToken);
+
+    /// <summary>It stays a draft, to send by hand.</summary>
+    [HttpDelete("invoices/{invoiceId:long}/schedule")]
+    [HasPermission(PermissionCodes.InvoiceSend)]
+    public Task<InvoiceResponse> Unschedule(long invoiceId, CancellationToken cancellationToken)
+        => invoiceService.UnscheduleAsync(invoiceId, cancellationToken);
 
     [HttpPost("invoices/{invoiceId:long}/void")]
     [HasPermission(PermissionCodes.InvoiceVoid)]

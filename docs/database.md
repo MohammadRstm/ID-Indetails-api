@@ -144,6 +144,8 @@ The `CompanyAddressAndWebsite` migration adds the optional `address` and `websit
 
 The `DropProjectMembers` migration drops `project_members` and `disciplines`. Nothing used them, and projects have no member list: anyone in the domain may work on any project (30 Sep 2026).
 
+The `InvoiceSchedule` migration adds three nullable columns to `invoices` for Auto invoice ([billing.md](billing.md#auto-invoice)): `send_on` (indexed, for the hourly run), `send_to` and `scheduled_by_id` (a user), and a check that only a draft has a `send_on` (2 Oct 2026).
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Migrations

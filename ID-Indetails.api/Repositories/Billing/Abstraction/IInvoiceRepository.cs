@@ -43,6 +43,9 @@ public interface IInvoiceRepository
     /// </summary>
     Task<int> NextSequenceAsync(string domainCode, int year, CancellationToken cancellationToken = default);
 
+    /// <summary>Scheduled drafts whose day is <paramref name="dueBy"/> or earlier, the earliest first.</summary>
+    Task<IReadOnlyList<long>> ScheduledDueAsync(DateOnly dueBy, CancellationToken cancellationToken = default);
+
     void Add(Invoice invoice);
 
     void AddDelivery(InvoiceDelivery delivery);

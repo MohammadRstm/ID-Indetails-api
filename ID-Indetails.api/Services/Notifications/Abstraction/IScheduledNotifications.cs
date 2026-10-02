@@ -10,6 +10,7 @@ public enum ScheduledCheck
     CostWarnings,
     DraftInvoices,
     AutoArchive,
+    ScheduledInvoices,
 }
 
 /// <summary>

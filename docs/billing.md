@@ -39,6 +39,9 @@ Rates are append-only, like pay history (`Business/Billing/ExchangeRateRules.cs`
 | `POST /api/invoices/{id}/email` | `invoice:send` | `{ to, note }` emails an issued invoice to the client with its PDF attached and records an `email` delivery. A draft or void invoice answers `422`. If sending fails, nothing is recorded (`503 email_delivery_failed`) |
 | `POST /api/invoices/{id}/deliveries` | `invoice:send` | Records a delivery made outside Hourline: `{ channel: email \| whatsapp \| download, recipient, note }`. Repeatable |
 | `POST /api/invoices/{id}/void` | `invoice:void` | `{ reason }`. Issued invoices only, and only while no live payment is attached |
+| `POST /api/projects/{id}/invoice-plan` | `invoice:create` and `invoice:send` | Auto invoice (below): `{ invoices: [{ sendOn, amount, description }], termsDays, notes, sendTo }`. `201` with the invoices |
+| `PUT /api/invoices/{id}/schedule` | `invoice:send` | `{ sendOn, sendTo }` gives a draft a day to go out on, or moves it |
+| `DELETE /api/invoices/{id}/schedule` | `invoice:send` | Cancels a draft's schedule; it stays a draft |
 
 Rules (`Business/Billing/InvoiceRules.cs`):
 
@@ -52,6 +55,19 @@ Rules (`Business/Billing/InvoiceRules.cs`):
 - Events: `invoice_created`, `invoice_updated`, `invoice_discarded`, `invoice_issued`, `invoice_sent` (the channel in the payload), `invoice_voided` (the reason in the payload). The total is in the `amount` column.
 
 **Who sees what was paid:** the invoice write endpoints (create, edit, issue, deliveries, void) answer with the invoice. For callers without `financial:view`, it leaves out `paid`, `balance` and `isOverdue`, and a partly or fully paid invoice reads as `sent`. They still see the amounts they invoice. The `payment_exceeds_balance` error doesn't state the balance.
+
+## Auto invoice
+
+What is left to bill, split into 2 to 24 invoices that go out on their own days (`Services/Billing/Implementation/InvoiceScheduleService.cs`):
+
+- Each is a **draft with a one-line description, a day (`sendOn`, today or later, `400 send_date_in_past`) and an address (`sendTo`)**, scheduled by the caller (`scheduledBy`). The domain's billing settings must already exist (`422 billing_settings_missing`), since they are issued with nobody there. Until its day a scheduled draft is an ordinary draft: it can be edited, moved, sent by hand early or discarded. Issuing it in any way ends its schedule.
+- **On its day**, from 9:00 company time, the hourly run issues it on that day and emails it with its PDF, signed with the name of whoever scheduled it, and records an `email` delivery ("Sent automatically, as scheduled"). Days already gone go out on the next run whatever the hour. A plan's invoices dated today go out as the plan is made.
+- **Issued and emailed together:** if the email fails, nothing is saved, so it stays a scheduled draft and is tried again on every run. Whoever scheduled it is told once (`invoice_send_failed`).
+- **Already paid:** what is on account pays it when it is issued, as for any invoice. One it settles is issued but not emailed: the client isn't sent a bill they have paid.
+- **No address:** it isn't issued. On its day whoever scheduled it is told once to send it themselves (`invoice_send_due`), on WhatsApp for example.
+- Whoever scheduled it is told when it goes out (`invoice_sent_automatically`, with `to` null when it wasn't emailed). It still goes out if they have left or lost the permission since: it was the company's decision.
+- The "draft still waiting" reminder leaves scheduled drafts alone until their day has passed.
+- Events: `invoice_created` (with `sendOn`), `invoice_scheduled` (`sendOn`, none when cancelled), and the usual `invoice_issued` and `invoice_sent`, with `automatic: true` when the run sent them.
 
 ## Payments
 

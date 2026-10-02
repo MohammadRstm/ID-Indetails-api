@@ -76,6 +76,15 @@ public static class NotificationKinds
     /// <summary>An invoice was issued (subject: the invoice). Sent to whoever sees the domain's money.</summary>
     public const string InvoiceIssued = "invoice_issued";
 
+    /// <summary>A scheduled invoice went out on its day (subject: the invoice; <c>to</c> is null when what was on account paid it, so it wasn't emailed). Sent to whoever scheduled it.</summary>
+    public const string InvoiceSentAutomatically = "invoice_sent_automatically";
+
+    /// <summary>A scheduled invoice with no address to email reached its day (subject: the invoice). Once, to whoever scheduled it, to send it themselves.</summary>
+    public const string InvoiceSendDue = "invoice_send_due";
+
+    /// <summary>A scheduled invoice couldn't be sent on its day and is tried again every hour (subject: the invoice). Once, to whoever scheduled it.</summary>
+    public const string InvoiceSendFailed = "invoice_send_failed";
+
     /// <summary>A client payment was recorded (subject: the payment). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string PaymentRecorded = "payment_recorded";
 
