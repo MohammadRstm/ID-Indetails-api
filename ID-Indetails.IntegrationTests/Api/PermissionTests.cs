@@ -59,6 +59,30 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Everyone_reads_their_own_permissions_with_what_each_allows_and_where_it_comes_from()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var taken = employee.User.Permissions.First();
+        await ShouldChangeAsync(superAdmin, employee.User.Id, PermissionChangeAction.Grant, PermissionCodes.ClientCreate);
+        await ShouldChangeAsync(superAdmin, employee.User.Id, PermissionChangeAction.Revoke, taken);
+
+        var mine = await (await Client.GetAsync("/api/me/permissions", employee.AccessToken)).ReadAsync<List<HeldPermissionResponse>>();
+        var me = await (await Client.GetAsync("/api/auth/me", employee.AccessToken)).ReadAsync<CurrentUserResponse>();
+        mine.Select(p => p.Code).ShouldBe(me.Permissions, ignoreOrder: true);
+        mine.ShouldNotContain(p => p.Code == taken);
+        mine.ShouldAllBe(p => p.Description.Length > 0);
+        mine.Single(p => p.Code == PermissionCodes.ClientCreate).FromRole.ShouldBeFalse();
+        mine.Where(p => p.Code != PermissionCodes.ClientCreate).ShouldAllBe(p => p.FromRole);
+
+        // a super admin holds every one, all from the role
+        var catalog = await (await Client.GetAsync("/api/permissions", superAdmin.AccessToken)).ReadAsync<List<PermissionDefinitionResponse>>();
+        var all = await (await Client.GetAsync("/api/me/permissions", superAdmin.AccessToken)).ReadAsync<List<HeldPermissionResponse>>();
+        all.Count.ShouldBe(catalog.Count);
+        all.ShouldAllBe(p => p.FromRole);
+    }
+
+    [Fact]
     public async Task A_revoked_default_is_refused_immediately()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

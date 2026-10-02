@@ -7,3 +7,7 @@ public sealed record PermissionDefinitionResponse(
     string Description,
     string? Domain,
     IReadOnlyList<string> DefaultFor);
+
+/// <summary>A permission the caller holds.</summary>
+/// <param name="FromRole">False when it was given to them on top of their role.</param>
+public sealed record HeldPermissionResponse(string Code, string Description, bool FromRole);

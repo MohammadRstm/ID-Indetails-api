@@ -43,6 +43,22 @@ public sealed class PermissionManagementService(
             .ToList();
     }
 
+    public async Task<IReadOnlyList<HeldPermissionResponse>> GetMineAsync(CancellationToken cancellationToken = default)
+    {
+        // an access token outlives a deactivation
+        var me = await users.GetRoleSnapshotAsync(currentUser.Id, cancellationToken) is { Status: UserStatus.Active } user
+            ? user
+            : throw new UnauthenticatedException(ErrorCodes.Unauthenticated, "Your session has expired. Sign in again.");
+        var mine = await DescribeAsync(me.Id, me.RoleCode, me.DomainCode, previousRole: null, cancellationToken);
+        var held = mine.Permissions.ToHashSet();
+        var fromRole = mine.RoleDefaults.ToHashSet();
+
+        return (await permissionRepository.GetAllAsync(cancellationToken))
+            .Where(p => held.Contains(p.Code))
+            .Select(p => new HeldPermissionResponse(p.Code, p.Description, fromRole.Contains(p.Code)))
+            .ToList();
+    }
+
     public async Task<UserPermissionsResponse> GetForUserAsync(long userId, CancellationToken cancellationToken = default)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
