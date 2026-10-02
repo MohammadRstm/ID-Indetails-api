@@ -19,6 +19,18 @@ public sealed record SaveBillingSettingsRequest
     public string? TermsText { get; init; }
 
     public string? Footer { get; init; }
+
+    /// <summary>Email clients reminders of their overdue invoices.</summary>
+    public bool RemindersEnabled { get; init; }
+
+    /// <summary>1 to 60 days after the due date, the first reminder.</summary>
+    public int ReminderFirstAfterDays { get; init; } = 1;
+
+    /// <summary>1 to 60 days from one reminder to the next.</summary>
+    public int ReminderEveryDays { get; init; } = 7;
+
+    /// <summary>1 to 10 reminders an invoice gets at most.</summary>
+    public int ReminderMax { get; init; } = 3;
 }
 
 public sealed record AddExchangeRateRequest

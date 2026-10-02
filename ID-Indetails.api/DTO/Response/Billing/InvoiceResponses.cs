@@ -11,7 +11,8 @@ public sealed record InvoiceClientResponse(long Id, string DisplayName);
 
 public sealed record InvoiceLineResponse(long Id, int Position, string Description, decimal Amount);
 
-public sealed record InvoiceDeliveryResponse(long Id, DeliveryChannel Channel, string? Recipient, DateTime SentAt, string? Note);
+/// <param name="IsReminder">An automatic reminder of the overdue invoice.</param>
+public sealed record InvoiceDeliveryResponse(long Id, DeliveryChannel Channel, string? Recipient, DateTime SentAt, string? Note, bool IsReminder = false);
 
 public record InvoiceSummaryResponse
 {

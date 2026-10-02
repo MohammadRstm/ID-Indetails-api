@@ -145,6 +145,22 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(8)")
                         .HasColumnName("invoice_prefix");
 
+                    b.Property<int>("ReminderEveryDays")
+                        .HasColumnType("int")
+                        .HasColumnName("reminder_every_days");
+
+                    b.Property<int>("ReminderFirstAfterDays")
+                        .HasColumnType("int")
+                        .HasColumnName("reminder_first_after_days");
+
+                    b.Property<int>("ReminderMax")
+                        .HasColumnType("int")
+                        .HasColumnName("reminder_max");
+
+                    b.Property<bool>("RemindersEnabled")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("reminders_enabled");
+
                     b.Property<string>("Swift")
                         .HasMaxLength(11)
                         .HasColumnType("varchar(11)")
@@ -172,6 +188,8 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("billing_settings", null, t =>
                         {
+                            t.HasCheckConstraint("ck_billing_settings_reminders", "`reminder_first_after_days` BETWEEN 1 AND 60 AND `reminder_every_days` BETWEEN 1 AND 60 AND `reminder_max` BETWEEN 1 AND 10");
+
                             t.HasCheckConstraint("ck_billing_settings_terms_non_negative", "`default_terms_days` >= 0");
                         });
                 });
@@ -1137,6 +1155,10 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Property<long>("InvoiceId")
                         .HasColumnType("bigint")
                         .HasColumnName("invoice_id");
+
+                    b.Property<bool>("IsReminder")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_reminder");
 
                     b.Property<string>("Note")
                         .HasMaxLength(500)

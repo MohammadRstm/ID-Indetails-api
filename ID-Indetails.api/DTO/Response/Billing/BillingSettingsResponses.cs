@@ -10,6 +10,10 @@ public sealed record BillingSettingsResponse(
     string? Swift,
     string? TermsText,
     string? Footer,
+    bool RemindersEnabled,
+    int ReminderFirstAfterDays,
+    int ReminderEveryDays,
+    int ReminderMax,
     DateTime? UpdatedAt);
 
 /// <summary>How many units of <see cref="Currency"/> one US dollar buys, from <see cref="EffectiveFrom"/>.</summary>

@@ -55,6 +55,7 @@ public sealed class ScheduledNotifications(
     IProjectFinanceService finance,
     IProjectAutoArchive autoArchive,
     IInvoiceScheduleService invoiceSchedule,
+    IInvoiceReminderService invoiceReminders,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IClock clock) : IScheduledNotifications
@@ -78,6 +79,7 @@ public sealed class ScheduledNotifications(
             ScheduledCheck.DraftInvoices => DraftInvoicesAsync(today, cancellationToken),
             ScheduledCheck.AutoArchive => autoArchive.RunAsync(cancellationToken),
             ScheduledCheck.ScheduledInvoices => invoiceSchedule.RunAsync(cancellationToken),
+            ScheduledCheck.InvoiceReminders => invoiceReminders.RunAsync(cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(check)),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);

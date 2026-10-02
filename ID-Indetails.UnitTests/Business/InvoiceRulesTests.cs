@@ -59,6 +59,12 @@ public class InvoiceRulesTests
         InvoiceRules.CheckIssueDate(Today.AddDays(-30), Today).ShouldBeNull();
         InvoiceRules.CheckIssueDate(Today.AddDays(1), Today)!.Code.ShouldBe(ErrorCodes.IssueDateInFuture);
 
+        // reminders: the first some days after the due date, the next some days after the last, up to the most
+        var due = new DateOnly(2026, 9, 1);
+        InvoiceRules.NextReminderOn(due, 0, null, 1, 7, 3).ShouldBe(new DateOnly(2026, 9, 2));
+        InvoiceRules.NextReminderOn(due, 1, new DateOnly(2026, 9, 5), 1, 7, 3).ShouldBe(new DateOnly(2026, 9, 12));
+        InvoiceRules.NextReminderOn(due, 3, new DateOnly(2026, 9, 20), 1, 7, 3).ShouldBeNull();
+
         // a scheduled invoice goes out today or later, never on a day already gone
         InvoiceRules.CheckSendOn(Today, Today).ShouldBeNull();
         InvoiceRules.CheckSendOn(Today.AddDays(60), Today).ShouldBeNull();

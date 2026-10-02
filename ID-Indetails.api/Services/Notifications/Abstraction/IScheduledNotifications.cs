@@ -11,6 +11,7 @@ public enum ScheduledCheck
     DraftInvoices,
     AutoArchive,
     ScheduledInvoices,
+    InvoiceReminders,
 }
 
 /// <summary>

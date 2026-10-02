@@ -14,6 +14,7 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
+using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -35,6 +36,7 @@ public sealed class InvoiceService(
     IInvoiceRepository invoices,
     IPaymentRepository payments,
     IBillingSettingsRepository billingSettings,
+    IClientRepository clients,
     IUserRepository users,
     IActivityEventRepository activity,
     INotificationSender notifications,
@@ -312,6 +314,77 @@ public sealed class InvoiceService(
         return true;
     }
 
+    public async Task<bool> SendReminderAsync(
+        long invoiceId,
+        DateOnly dueBy,
+        Func<InvoiceResponse, string, CancellationToken, Task> email,
+        CancellationToken cancellationToken = default)
+    {
+        // locked first, so a run on another instance waits and then sees this reminder
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var invoice = await invoices.GetForUpdateAsync(invoiceId, cancellationToken);
+        if (invoice is not { IssuedAt: not null, VoidedAt: null })
+        {
+            return false;
+        }
+
+        var domain = (await projects.GetAsync(invoice.ProjectId, cancellationToken))!.DomainCode;
+        if (await billingSettings.GetAsync(domain, cancellationToken) is not { RemindersEnabled: true } settings)
+        {
+            return false;
+        }
+
+        var issued = await DescribeAsync(Sending, invoice.Id, cancellationToken);
+        var today = clock.CompanyToday;
+        // paid meanwhile, or not past due
+        if (!(issued.Balance > 0) || issued.DueOn is not { } dueOn || dueOn >= today)
+        {
+            return false;
+        }
+
+        var reminders = issued.Deliveries.Where(d => d.IsReminder).ToList();
+        var lastOn = reminders.Count == 0 ? (DateOnly?)null : clock.ToCompanyDate(reminders.Max(d => d.SentAt));
+        if (InvoiceRules.NextReminderOn(dueOn, reminders.Count, lastOn, settings.ReminderFirstAfterDays, settings.ReminderEveryDays, settings.ReminderMax)
+            is not { } nextOn || nextOn > dueBy)
+        {
+            return false;
+        }
+
+        var to = issued.Deliveries.Where(d => d.Channel == DeliveryChannel.Email && d.Recipient is not null)
+                .OrderByDescending(d => d.SentAt).Select(d => d.Recipient).FirstOrDefault()
+            ?? (await clients.GetAsync(invoice.ClientId, cancellationToken))?.Client.Contacts
+                .Where(c => c.Kind == ContactKind.Email).OrderByDescending(c => c.IsPrimary).ThenBy(c => c.Id).Select(c => c.Value).FirstOrDefault();
+        if (to is null)
+        {
+            // nowhere to email it: whoever sends the domain's invoices chases it, on WhatsApp say
+            await notifications.SendOnceAsync(
+                new NotificationDraft(NotificationKinds.InvoiceReminderDue, null, domain, invoice.ProjectId, "invoice", invoice.Id, new { number = invoice.Number }),
+                $"invoice-reminder-due:{invoice.Id}",
+                await notifications.HoldersAsync(domain, PermissionCodes.InvoiceSend, cancellationToken),
+                cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return false;
+        }
+
+        var number = reminders.Count + 1;
+        await email(issued, to, cancellationToken);
+        invoices.AddDelivery(new InvoiceDelivery
+        {
+            InvoiceId = invoice.Id,
+            Channel = DeliveryChannel.Email,
+            Recipient = to,
+            Note = $"Automatic reminder {number} of {settings.ReminderMax}",
+            SentAt = clock.UtcNow,
+            IsReminder = true,
+        });
+        activity.Add(InvoiceEvent(domain, invoice, ActivityEventKinds.InvoiceSent, null, null,
+            new { number = invoice.Number, channel = DeliveryChannel.Email, reminder = number, automatic = true }));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
     public async Task ScheduledSendFailedAsync(long invoiceId, CancellationToken cancellationToken = default)
     {
         if (await invoices.GetAsync(invoiceId, cancellationToken) is not { Invoice: { IssuedAt: null, SendOn: { } sendOn } invoice })
@@ -497,7 +570,7 @@ public sealed class InvoiceService(
             VoidedAt = i.VoidedAt,
             VoidReason = i.VoidReason,
             Lines = i.Lines.Select(l => new InvoiceLineResponse(l.Id, l.Position, l.Description, l.Amount)).ToList(),
-            Deliveries = i.Deliveries.Select(d => new InvoiceDeliveryResponse(d.Id, d.Channel, d.Recipient, d.SentAt, d.Note)).ToList(),
+            Deliveries = i.Deliveries.Select(d => new InvoiceDeliveryResponse(d.Id, d.Channel, d.Recipient, d.SentAt, d.Note, d.IsReminder)).ToList(),
         };
     }
 

@@ -64,6 +64,10 @@ public sealed class BillingSettingsService(
         row.Swift = Clean(request.Swift)?.ToUpperInvariant();
         row.TermsText = Clean(request.TermsText);
         row.Footer = Clean(request.Footer);
+        row.RemindersEnabled = request.RemindersEnabled;
+        row.ReminderFirstAfterDays = request.ReminderFirstAfterDays;
+        row.ReminderEveryDays = request.ReminderEveryDays;
+        row.ReminderMax = request.ReminderMax;
         row.UpdatedAt = clock.UtcNow;
         row.UpdatedById = actorId;
 
@@ -143,5 +147,6 @@ public sealed class BillingSettingsService(
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static BillingSettingsResponse ToResponse(BillingSettings s) => new(
-        s.DomainCode, s.InvoicePrefix, s.DefaultTermsDays, s.BankAccount, s.BankName, s.Iban, s.Swift, s.TermsText, s.Footer, s.UpdatedAt);
+        s.DomainCode, s.InvoicePrefix, s.DefaultTermsDays, s.BankAccount, s.BankName, s.Iban, s.Swift, s.TermsText, s.Footer,
+        s.RemindersEnabled, s.ReminderFirstAfterDays, s.ReminderEveryDays, s.ReminderMax, s.UpdatedAt);
 }

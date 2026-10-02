@@ -9,7 +9,7 @@ Billing is a cash ledger kept apart from profitability: invoices and payments ne
 | `GET /api/billing-settings/{domain}` | `billing_settings:manage` or `financial:view` | The domain's settings, or `404 billing_settings_missing` before they are set up |
 | `PUT /api/billing-settings/{domain}` | `billing_settings:manage` | Creates them the first time, replaces them afterwards |
 
-- Each domain has its own settings: invoice prefix, default payment terms (0–365 days), bank account, bank name, IBAN, SWIFT, terms text and footer.
+- Each domain has its own settings: invoice prefix, default payment terms (0–365 days), bank account, bank name, IBAN, SWIFT, terms text and footer, and its overdue reminders (below): `remindersEnabled` (off until turned on), `reminderFirstAfterDays` (1–60, default 1), `reminderEveryDays` (1–60, default 7) and `reminderMax` (1–10, default 3).
 - The **invoice prefix** is 1–8 capital letters or digits. It can be changed at any time; invoices already issued keep their number. Invoice numbers are unique across the company, so two domains can't use the same prefix (`409 invoice_prefix_taken`).
 - The settings are not seeded. No invoice can be issued in a domain until they exist.
 - A domain the caller can't see, or an unknown domain, reads as `404`. Every save writes `billing_settings_updated`.
@@ -68,6 +68,16 @@ What is left to bill, split into 2 to 24 invoices that go out on their own days 
 - Whoever scheduled it is told when it goes out (`invoice_sent_automatically`, with `to` null when it wasn't emailed). It still goes out if they have left or lost the permission since: it was the company's decision.
 - The "draft still waiting" reminder leaves scheduled drafts alone until their day has passed.
 - Events: `invoice_created` (with `sendOn`), `invoice_scheduled` (`sendOn`, none when cancelled), and the usual `invoice_issued` and `invoice_sent`, with `automatic: true` when the run sent them.
+
+## Reminders of overdue invoices
+
+In a domain whose billing settings turn them on, the hourly run emails clients reminders of their overdue invoices (`Services/Billing/Implementation/InvoiceReminderService.cs`, rule in `InvoiceRules.NextReminderOn`):
+
+- An invoice gets its first reminder `reminderFirstAfterDays` after its due date, then one every `reminderEveryDays` after the last, at most `reminderMax`. Today's go out from 9:00 company time; any due earlier go on the next run. They stop as soon as nothing is owed or the invoice is voided.
+- Each goes to the address the invoice was last emailed to, otherwise the client's email contact (the primary one first), with the invoice PDF attached and what is still owed, signed "Accounts" and the company name.
+- It is recorded as an `email` delivery with `isReminder` ("Automatic reminder 1 of 3"), which is what counts and spaces them, and as an `invoice_sent` event with `reminder` and `automatic: true` in the payload. The invoice row is locked while this is decided, so two API instances never send the same reminder.
+- A failed email records nothing, so the next run tries again.
+- **No email address:** whoever may send the domain's invoices (`invoice:send`) is told once (`invoice_reminder_due`) to chase it themselves, on WhatsApp for example. Automatic WhatsApp messages would need the WhatsApp Business Platform or a provider, and aren't built.
 
 ## Payments
 
