@@ -82,6 +82,20 @@ public sealed record UpdateMyProfileRequest
     public string? Phone { get; init; }
 }
 
+/// <summary>A new sign-in address, set by a super admin.</summary>
+public sealed record ChangeEmailRequest
+{
+    public string Email { get; init; } = string.Empty;
+}
+
+/// <summary>A super admin's own new sign-in address, confirmed with their password.</summary>
+public sealed record ChangeMyEmailRequest
+{
+    public string Email { get; init; } = string.Empty;
+
+    public string CurrentPassword { get; init; } = string.Empty;
+}
+
 public sealed record DeactivateEmployeeRequest
 {
     /// <summary>Their last day of work, paid; today when empty.</summary>

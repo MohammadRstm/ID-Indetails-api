@@ -213,6 +213,32 @@ public static class EmployeeRules
             : null;
     }
 
+    /// <summary>
+    /// Changing someone's sign-in address: a super admin's to do, for an account that isn't deactivated. Their own goes
+    /// through <see cref="CheckOwnEmailChange"/>, with their password.
+    /// </summary>
+    public static RuleDenial? CheckEmailChange(UserAccess actor, Target target)
+    {
+        if (CheckOwnEmailChange(actor) is { } denial)
+        {
+            return denial;
+        }
+
+        if (target.Id == actor.UserId)
+        {
+            return RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "Change your own sign-in address from your profile, with your password.");
+        }
+
+        return target.Status == UserStatus.Deactivated
+            ? RuleDenial.BusinessRule(ErrorCodes.UserDeactivated, "This account is deactivated; reactivate it before changing its sign-in address.")
+            : null;
+    }
+
+    public static RuleDenial? CheckOwnEmailChange(UserAccess actor)
+        => actor.IsSuperAdmin
+            ? null
+            : RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "Only a super admin changes sign-in addresses.");
+
     /// <summary>Setting someone's pay: never your own, never a deactivated account.</summary>
     public static RuleDenial? CheckPayChange(UserAccess actor, Target target)
     {

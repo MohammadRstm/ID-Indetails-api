@@ -107,5 +107,57 @@ public static class AccountEmails
         return new EmailMessage(toAddress, firstName, subject, html, text);
     }
 
+    /// <summary>To the new sign-in address: from now on, this is the one to sign in with.</summary>
+    public static EmailMessage SignInAddressSet(string productName, string toAddress, string? firstName, string loginUrl)
+    {
+        var greeting = string.IsNullOrWhiteSpace(firstName) ? "Hello," : $"Hello {firstName},";
+        var subject = $"Your {productName} sign-in address has changed";
+
+        var html = $"""
+            <p>{Encode(greeting)}</p>
+            <p>You now sign in to <strong>{Encode(productName)}</strong> with this email address, and your usual password.</p>
+            <p><a href="{Encode(loginUrl)}">Sign in</a></p>
+            <p>Anywhere you were signed in with your old address has been signed out.</p>
+            """;
+
+        var text = $"""
+            {greeting}
+
+            You now sign in to {productName} with this email address, and your usual password.
+
+            Sign in: {loginUrl}
+
+            Anywhere you were signed in with your old address has been signed out.
+            """;
+
+        return new EmailMessage(toAddress, firstName, subject, html, text);
+    }
+
+    /// <summary>
+    /// To the old sign-in address, which no longer signs in. It doesn't say the new one: whoever reads this mailbox now
+    /// may not be the person.
+    /// </summary>
+    public static EmailMessage SignInAddressReplaced(string productName, string toAddress, string? firstName)
+    {
+        var greeting = string.IsNullOrWhiteSpace(firstName) ? "Hello," : $"Hello {firstName},";
+        var subject = $"Your {productName} sign-in address has changed";
+
+        var html = $"""
+            <p>{Encode(greeting)}</p>
+            <p>Your <strong>{Encode(productName)}</strong> account now signs in with a different email address. This one no longer signs in.</p>
+            <p>If you didn't expect this, contact a super admin of your company.</p>
+            """;
+
+        var text = $"""
+            {greeting}
+
+            Your {productName} account now signs in with a different email address. This one no longer signs in.
+
+            If you didn't expect this, contact a super admin of your company.
+            """;
+
+        return new EmailMessage(toAddress, firstName, subject, html, text);
+    }
+
     private static string Encode(string value) => WebUtility.HtmlEncode(value);
 }
