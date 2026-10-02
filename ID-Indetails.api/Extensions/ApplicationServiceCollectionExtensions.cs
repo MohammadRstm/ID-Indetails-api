@@ -205,6 +205,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IPermissionManagementService, PermissionManagementService>();
         services.AddScoped<IEmployeeService, EmployeeService>();
+        services.AddScoped<ISignInEmailService, SignInEmailService>();
         services.AddScoped<IProjectFinanceService, ProjectFinanceService>();
         services.AddScoped<ICompanySettingsService, CompanySettingsService>();
         services.AddScoped<IWorkingTimeService, WorkingTimeService>();
