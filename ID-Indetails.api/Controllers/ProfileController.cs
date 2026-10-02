@@ -1,7 +1,9 @@
 using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Permissions;
 using ID_Indetails.api.Services.Employees.Abstraction;
+using ID_Indetails.api.Services.Permissions.Abstraction;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,7 +13,7 @@ namespace ID_Indetails.api.Controllers;
 [ApiController]
 [Route("api/me")]
 [Authorize]
-public sealed class ProfileController(IEmployeeService employeeService) : ControllerBase
+public sealed class ProfileController(IEmployeeService employeeService, IPermissionManagementService permissionService) : ControllerBase
 {
     /// <summary>Own name and phone. Email, position, team and pay are managed by the company.</summary>
     [HttpPut("profile")]
@@ -26,4 +28,9 @@ public sealed class ProfileController(IEmployeeService employeeService) : Contro
     [HttpDelete("photo")]
     public Task<CurrentUserResponse> RemovePhoto(CancellationToken cancellationToken)
         => employeeService.RemoveMyPhotoAsync(cancellationToken);
+
+    /// <summary>Every permission they hold, what it allows, and whether their role gives it or it was given to them.</summary>
+    [HttpGet("permissions")]
+    public Task<IReadOnlyList<HeldPermissionResponse>> Permissions(CancellationToken cancellationToken)
+        => permissionService.GetMineAsync(cancellationToken);
 }
