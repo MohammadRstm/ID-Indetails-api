@@ -31,7 +31,7 @@ public sealed class BillingSettingsController(IBillingSettingsService billingSet
 
     /// <summary>Every dated rate, newest first per currency.</summary>
     [HttpGet("exchange-rates")]
-    [HasPermission(PermissionCodes.FinancialView)]
+    [HasAnyPermission(PermissionCodes.FinancialView, PermissionCodes.ExchangeRateManage)]
     public Task<IReadOnlyList<ExchangeRateResponse>> ListExchangeRates([FromQuery] ExchangeRateListQuery query, CancellationToken cancellationToken)
         => billingSettingsService.ListExchangeRatesAsync(query, cancellationToken);
 }
