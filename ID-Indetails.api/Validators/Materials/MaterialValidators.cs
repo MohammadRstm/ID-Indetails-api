@@ -29,18 +29,24 @@ public sealed class MaterialEntryRequestValidator : AbstractValidator<MaterialEn
     {
         RuleFor(x => x.Name).ClientText("Type", 200, required: true);
         RuleFor(x => x.Quantity)
-            .Must(v => v is null || (v > 0 && v <= MaxQuantity && decimal.Round(v.Value, 3) == v))
-            .WithMessage("Quantity must be more than zero, with at most 3 decimals.");
+            .Must(v => v is null || (v > 0 && decimal.Round(v.Value, 3) == v)).WithMessage("Quantity must be more than zero, with at most 3 decimals.")
+            .Must(v => v is null || v <= MaxQuantity).WithMessage("Quantity is too large.");
         RuleFor(x => x.Unit).ClientText("Unit", 20);
         RuleFor(x => x.UnitCost)
-            .Must(v => v is null || (v > 0 && v <= MaxUnitCost && decimal.Round(v.Value, 4) == v))
-            .WithMessage("Unit cost must be more than zero, with at most 4 decimals.");
+            .Must(v => v is null || (v > 0 && decimal.Round(v.Value, 4) == v)).WithMessage("Unit cost must be more than zero, with at most 4 decimals.")
+            .Must(v => v is null || v <= MaxUnitCost).WithMessage("Unit cost is too large.")
+            // the cost they give is stored as an amount
+            .Must((x, cost) => x.Quantity is not > 0 || cost is not > 0 || x.Quantity.Value * cost.Value <= MoneyRules.MaxAmount)
+            .WithMessage("Quantity × unit cost is too large.");
         RuleFor(x => x.Amount).Amount("Total", allowZero: false);
         RuleFor(x => x.Supplier).ClientText("Supplier", 200);
         RuleFor(x => x.Note).ClientText("Note", 500);
         RuleFor(x => x.Amount)
             .Must((x, amount) => (x.Quantity is > 0 && x.UnitCost is > 0) || amount is > 0)
-            .WithMessage("Give the total, or a quantity and a unit cost.");
+            .WithMessage("Give the total, or a quantity and a unit cost.")
+            // a total typed over quantity × unit cost sets the unit cost to total ÷ quantity
+            .Must((x, amount) => x.Quantity is not > 0 || x.UnitCost is not > 0 || amount is not > 0 || amount.Value / x.Quantity.Value <= MaxUnitCost)
+            .WithMessage("This total for that quantity makes the unit cost too large.");
     }
 }
 

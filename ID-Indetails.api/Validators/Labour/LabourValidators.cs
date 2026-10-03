@@ -24,7 +24,8 @@ public sealed class SubmitLabourWeekRequestValidator : AbstractValidator<SubmitL
         RuleForEach(x => x.Days).ChildRules(day =>
         {
             day.RuleFor(d => d.Workers).Workers();
-            day.RuleFor(d => d.DailyPay).Amount("Daily pay");
+            day.RuleFor(d => d.DailyPay).Amount("Daily pay")
+                .Must((d, pay) => d.Workers * pay <= MoneyRules.MaxAmount).WithMessage("Workers × daily pay is too large.");
         });
         RuleFor(x => x.Note).ClientText("Note", 500);
     }

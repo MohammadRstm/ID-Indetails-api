@@ -45,11 +45,10 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         RuleFor(x => x.MaterialMarkup).MaterialMarkup();
         RuleFor(x => x.InitialPayment!).ChildRules(payment =>
         {
-            payment.RuleFor(p => p.Amount).Amount("Initial payment", allowZero: false);
+            payment.RuleFor(p => p.Amount).Amount("Initial payment", allowZero: false)
+                .Must((p, amount) => MoneyRules.FitsInUsd(amount, p.FxRate)).WithMessage("At this exchange rate, the initial payment in US dollars is too large.");
             payment.RuleFor(p => p.Currency).Currency();
-            payment.RuleFor(p => p.FxRate)
-                .Must(r => r is null || (r > 0 && decimal.Round(r.Value, 6) == r))
-                .WithMessage("Exchange rate must be more than zero with at most 6 decimals.");
+            payment.RuleFor(p => p.FxRate).Rate();
             payment.RuleFor(p => p.Method).IsInEnum().WithMessage("Method must be bank, cheque, cash or other.");
             payment.RuleFor(p => p.Reference).ClientText("Reference", 100);
             payment.RuleFor(p => p.Note).ClientText("Note", 500);
