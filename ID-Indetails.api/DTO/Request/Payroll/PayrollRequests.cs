@@ -43,6 +43,9 @@ public sealed record OvertimePreviewRequest
 
     /// <summary>Other entries the form would move (the day timeline's swaps), where they would go.</summary>
     public IReadOnlyList<WorkEntryMoveRequest> Moves { get; init; } = [];
+
+    /// <summary>Other entries the form would delete, left out of the day.</summary>
+    public IReadOnlyList<long> Deletes { get; init; } = [];
 }
 
 public sealed record SalaryMonthQuery

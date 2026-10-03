@@ -19,6 +19,12 @@ public sealed record SaveWorkEntryRequest
     /// Each must still be changeable.
     /// </summary>
     public IReadOnlyList<WorkEntryMoveRequest> Moves { get; init; } = [];
+
+    /// <summary>
+    /// Other entries of the caller deleted on the timeline, deleted together with this save, so this one can take
+    /// their time. Each must still be changeable.
+    /// </summary>
+    public IReadOnlyList<long> Deletes { get; init; } = [];
 }
 
 public sealed record WorkEntryMoveRequest

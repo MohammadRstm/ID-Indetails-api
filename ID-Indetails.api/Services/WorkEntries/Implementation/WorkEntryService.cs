@@ -60,6 +60,7 @@ public sealed class WorkEntryService(
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
         Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
 
+        await DeleteOthersAsync(actor, request.Deletes, settings, cancellationToken);
         var moved = await ApplyMovesAsync(actor, request.Moves, settings, cancellationToken);
         await CheckOverlapAsync(actor.UserId, [new WorkEntryRules.Span(0, entry.StartedAt, entry.EndedAt, project.Title), .. moved.Select(SpanOf)], settings, cancellationToken);
 
@@ -83,6 +84,11 @@ public sealed class WorkEntryService(
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
 
         var entry = Own(actor, await entries.GetForUpdateAsync(id, cancellationToken));
+        if (request.Deletes.Contains(entry.Id))
+        {
+            Throw(RuleDenial.Invalid(ErrorCodes.ValidationFailed, "deletes", "The entry being saved can't be deleted with it."));
+        }
+
         Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt, WorkEntryRules.AsUtc(request.StartedAt)));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
         var project = entry.ProjectId == request.ProjectId
@@ -101,6 +107,7 @@ public sealed class WorkEntryService(
         }
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
 
+        await DeleteOthersAsync(actor, request.Deletes, settings, cancellationToken);
         var moved = await ApplyMovesAsync(actor, request.Moves.Where(m => m.Id != entry.Id).ToList(), settings, cancellationToken);
         await CheckOverlapAsync(actor.UserId, [new WorkEntryRules.Span(entry.Id, entry.StartedAt, entry.EndedAt, project.Title), .. moved.Select(SpanOf)], settings, cancellationToken);
 
@@ -167,6 +174,31 @@ public sealed class WorkEntryService(
     /// <summary>Other people's entries read as not found, whatever the caller may view.</summary>
     private static WorkEntry Own(UserAccess actor, WorkEntry? entry)
         => entry is not null && entry.UserId == actor.UserId ? entry : throw new NotFoundException("Work entry not found.");
+
+    /// <summary>
+    /// Deletes the caller's other entries the timeline deleted, with the same checks as deleting one on its own.
+    /// Saved at once, within the transaction, so the overlap check no longer sees them.
+    /// </summary>
+    private async Task DeleteOthersAsync(UserAccess actor, IReadOnlyList<long> ids, DomainSettings settings, CancellationToken cancellationToken)
+    {
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        var tracked = await entries.ListOwnForUpdateAsync(actor.UserId, ids, cancellationToken);
+        foreach (var id in ids)
+        {
+            var entry = tracked.SingleOrDefault(e => e.Id == id) ?? throw new NotFoundException("Work entry not found.");
+            Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
+            Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
+
+            entry.DeletedAt = clock.UtcNow;
+            activity.Add(EntryEvent(entry, ActivityEventKinds.WorkEntryDeleted, actor.UserId));
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
 
     /// <summary>Moves the caller's other entries to their new times.</summary>
     private async Task<IReadOnlyList<WorkEntry>> ApplyMovesAsync(

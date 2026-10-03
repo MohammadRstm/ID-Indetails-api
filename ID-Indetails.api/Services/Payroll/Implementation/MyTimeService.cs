@@ -38,12 +38,12 @@ public sealed class MyTimeService(
         var draft = WorkOn(OvertimePreview.DraftId, startUtc, (int)(WorkEntryRules.AsUtc(request.EndedAt) - startUtc).TotalMinutes);
         var calendar = (await inputs.CalendarsAsync([me.Id], cancellationToken))[me.Id];
 
-        // The day as it would be: without the entry being edited, and with the moved entries where they would go.
+        // The day as it would be: without the entry being edited or those deleted, and with the moved entries where they would go.
         var moves = request.Moves.ToDictionary(m => m.Id);
         var logged = await payroll.WorkAsync(
             [me.Id], clock.CompanyDayStartUtc(draft.Day.AddDays(-1)), clock.CompanyDayStartUtc(draft.Day.AddDays(2)), cancellationToken);
         var others = logged
-            .Where(e => e.Id != request.EntryId)
+            .Where(e => e.Id != request.EntryId && !request.Deletes.Contains(e.Id))
             .Select(e => moves.TryGetValue(e.Id, out var move)
                 ? WorkOn(e.Id, WorkEntryRules.AsUtc(move.StartedAt), (int)(WorkEntryRules.AsUtc(move.EndedAt) - WorkEntryRules.AsUtc(move.StartedAt)).TotalMinutes)
                 : WorkOn(e.Id, e.StartedAt, e.Minutes));

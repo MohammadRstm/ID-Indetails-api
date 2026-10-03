@@ -39,6 +39,9 @@ public class OvertimePreviewTests(ApiFactory api) : IClassFixture<ApiFactory>
             moves = new[] { new { id = logged, startedAt = "2026-06-01T15:00:00Z", endedAt = "2026-06-01T16:00:00Z" } },
         })).OvertimeMinutes.ShouldBe(0);
 
+        // Deleting the logged entry on the timeline frees the day too.
+        (await PreviewAsync(designer, new { draft.startedAt, draft.endedAt, deletes = new[] { logged } })).OvertimeMinutes.ShouldBe(30);
+
         var saturday = await PreviewAsync(designer, new { startedAt = "2026-06-06T07:00:00Z", endedAt = "2026-06-06T08:00:00Z" });
         saturday.DayOff.ShouldBeTrue();
         saturday.OvertimeMinutes.ShouldBe(60);

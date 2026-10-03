@@ -91,5 +91,8 @@ public sealed class OvertimePreviewRequestValidator : AbstractValidator<Overtime
         RuleFor(x => x.Moves)
             .Must(m => m.Count <= 50 && m.Select(x => x.Id).Distinct().Count() == m.Count)
             .WithMessage("Each moved entry can appear once, and at most 50 of them.");
+        RuleFor(x => x.Deletes)
+            .Must(d => d.Count <= 50 && d.Distinct().Count() == d.Count)
+            .WithMessage("Each deleted entry can appear once, and at most 50 of them.");
     }
 }
