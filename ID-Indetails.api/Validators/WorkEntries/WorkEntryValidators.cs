@@ -18,6 +18,10 @@ public sealed class SaveWorkEntryRequestValidator : AbstractValidator<SaveWorkEn
         RuleFor(x => x).EntryTimes(x => x.StartedAt, x => x.EndedAt).OverridePropertyName("endedAt");
         RuleFor(x => x.Moves).Must(m => m.Count <= MaxMoves).WithMessage($"At most {MaxMoves} entries can be moved at once.");
         RuleFor(x => x.Moves).Must(m => m.Select(x => x.Id).Distinct().Count() == m.Count).WithMessage("An entry can only be moved once.");
+        RuleFor(x => x.Deletes)
+            .Must(d => d.Count <= MaxMoves && d.Distinct().Count() == d.Count && d.All(id => id > 0))
+            .WithMessage($"Each deleted entry can appear once, and at most {MaxMoves} of them.")
+            .Must((x, d) => !x.Moves.Any(m => d.Contains(m.Id))).WithMessage("An entry can't be both moved and deleted.");
         RuleForEach(x => x.Moves).ChildRules(move =>
         {
             move.RuleFor(m => m.Id).GreaterThan(0).WithMessage("Entry id is required.");

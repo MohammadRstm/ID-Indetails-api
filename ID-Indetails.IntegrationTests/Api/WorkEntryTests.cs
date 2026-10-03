@@ -112,6 +112,46 @@ public class WorkEntryTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Entries_deleted_on_the_timeline_are_deleted_with_the_save_and_only_with_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var start = WorkEntryTestSteps.HoursAgo(8);
+        var old = await Work.LogAsync(employee.AccessToken, project.Id, start, 60, "Old sketch");
+        var other = await Work.LogAsync(employee.AccessToken, project.Id, start.AddHours(2), 60, "Other");
+        object Body(DateTime from, long[] deletes, object[]? moves = null) => new
+        {
+            projectId = project.Id, description = "Instead", startedAt = from, endedAt = from.AddHours(1), deletes, moves = moves ?? [],
+        };
+        Task<int> Live(long id) => _steps.ScalarAsync<int>("SELECT COUNT(*) FROM work_entries WHERE id = @id AND deleted_at IS NULL", ("@id", id));
+
+        // in its place, in one save: the overlap check no longer sees it
+        var saved = await Client.PostJsonAsync("/api/work-entries", Body(start, [old.Id]), employee.AccessToken);
+        ((int)saved.StatusCode).ShouldBe(201, await saved.Content.ReadAsStringAsync());
+        (await Live(old.Id)).ShouldBe(0);
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE kind = 'work_entry_deleted' AND subject_id = @id", ("@id", old.Id))).ShouldBe(1);
+
+        // a save that fails deletes nothing
+        await (await Client.PostJsonAsync("/api/work-entries", Body(start, [other.Id]), employee.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.EntryOverlaps);
+        (await Live(other.Id)).ShouldBe(1);
+
+        // never someone else's, never one both moved and deleted, never the entry being saved
+        var (_, _, colleague) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await (await Client.PostJsonAsync("/api/work-entries", Body(start.AddHours(4), [other.Id]), colleague.AccessToken))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.PostJsonAsync("/api/work-entries",
+                Body(start.AddHours(4), [other.Id], [new { id = other.Id, startedAt = start.AddHours(5), endedAt = start.AddHours(6) }]), employee.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.PutJsonAsync($"/api/work-entries/{other.Id}", Body(start.AddHours(2), [other.Id]), employee.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        (await Live(other.Id)).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Entries_past_the_edit_window_are_locked()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
