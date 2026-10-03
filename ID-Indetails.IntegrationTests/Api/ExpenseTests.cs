@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+using System.Text;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Projects;
@@ -10,6 +12,41 @@ public class ExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
     private ProjectTestSteps Projects => new(_steps);
+
+    [Fact]
+    public async Task A_value_that_cannot_be_read_is_named_in_words_never_in_the_readers_own()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var url = $"/api/projects/{project.Id}/expenses";
+
+        // too large for any number the API reads into an amount (a decimal stops near 7.9e28)
+        var huge = await Client.PostJsonAsync(url, new { label = "Taxi", amount = 1e40, currency = "USD" }, superAdmin.AccessToken);
+        var body = await huge.Content.ReadAsStringAsync();
+        var error = await huge.ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        error.Message.ShouldBe("Amount is too large.");
+        error.Errors.ShouldNotBeNull().Keys.ShouldBe(["$.amount"]);
+        error.Errors["$.amount"].ShouldBe(["Amount is too large."]);
+        body.ShouldNotContain("System.");
+        body.ShouldNotContain("LineNumber");
+
+        // readable, but more than an amount column holds: the validator says so
+        (await (await Client.PostJsonAsync(url, new { label = "Taxi", amount = 100_000_000_000_000_000_000m, currency = "USD" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!["amount"].ShouldBe(["Amount is too large."]);
+
+        // a word where a number goes
+        (await (await Client.PostJsonAsync(url, new { label = "Taxi", amount = "lots", currency = "USD" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Message.ShouldBe("Amount isn't valid.");
+
+        // not JSON at all
+        var broken = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent("{\"label\": ", Encoding.UTF8, "application/json") };
+        broken.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAdmin.AccessToken);
+        var unreadable = await Client.SendAsync(broken);
+        var text = await unreadable.Content.ReadAsStringAsync();
+        await unreadable.ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        text.ShouldNotContain("System.");
+        text.ShouldNotContain("LineNumber");
+    }
 
     [Fact]
     public async Task Admin_adds_and_removes_expenses_with_totals_per_currency()
