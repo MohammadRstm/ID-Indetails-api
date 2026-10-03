@@ -28,7 +28,8 @@ public sealed class SaveInvoiceRequestValidator : AbstractValidator<SaveInvoiceR
         RuleFor(x => x.Lines)
             .Cascade(CascadeMode.Stop)
             .NotNull().WithMessage("Add at least one line.")
-            .Must(l => l.Count is >= 1 and <= MaxLines).WithMessage($"An invoice has 1 to {MaxLines} lines.");
+            .Must(l => l.Count is >= 1 and <= MaxLines).WithMessage($"An invoice has 1 to {MaxLines} lines.")
+            .Must(l => l.Sum(line => line.Amount) <= MoneyRules.MaxAmount).WithMessage("The invoice's total is too large.");
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
             line.RuleFor(l => l.Description).ClientText("Description", 500, required: true);

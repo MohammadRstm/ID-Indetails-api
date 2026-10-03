@@ -29,24 +29,22 @@ public static class ApiServiceCollectionExtensions
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
                 // Numbers are JSON numbers, never strings, so the OpenAPI document types them as numbers.
                 options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+                // The JSON reader's messages name .NET types and byte positions: BindingErrors says what was wrong instead.
+                options.AllowInputFormatterExceptionMessages = false;
             })
             .ConfigureApiBehaviorOptions(options =>
                 // Malformed JSON and unbindable values use the same error shape as validation.
                 options.InvalidModelStateResponseFactory = context =>
                 {
-                    var errors = context.ModelState
-                        .Where(entry => entry.Value?.Errors.Count > 0)
-                        .ToDictionary(
-                            entry => entry.Key,
-                            entry => entry.Value!.Errors
-                                .Select(e => string.IsNullOrWhiteSpace(e.ErrorMessage) ? "The value is invalid." : e.ErrorMessage)
-                                .ToArray());
+                    var errors = BindingErrors.Of(context.ModelState);
+                    // one problem is said as it is ("Amount is too large."), so it reads well wherever it is shown
+                    var messages = errors.Values.SelectMany(m => m).Distinct().ToList();
 
                     var body = ApiErrorWriter.Build(
                         context.HttpContext,
                         ErrorType.Validation,
                         ErrorCodes.ValidationFailed,
-                        "The request body is invalid.",
+                        messages.Count == 1 ? messages[0] : "One or more fields are invalid.",
                         errors);
 
                     return new BadRequestObjectResult(body);

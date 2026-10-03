@@ -3,6 +3,8 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using MySqlConnector;
 
 namespace ID_Indetails.api.Middlewares;
 
@@ -10,6 +12,7 @@ namespace ID_Indetails.api.Middlewares;
 /// The one place exceptions become HTTP responses.
 /// <list type="bullet">
 /// <item><see cref="ValidationException"/> (FluentValidation): 400 with field errors.</item>
+/// <item>A number too large for its database column: 400, said in words.</item>
 /// <item><see cref="AppException"/>: its own status, code and client-safe message.</item>
 /// <item>Anything else: logged in full, and the client gets a generic 500 with only a trace id.</item>
 /// </list>
@@ -35,6 +38,19 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
                     "One or more fields are invalid.",
                     errors,
                     cancellationToken);
+                return true;
+
+            // A number the validators let through that still doesn't fit its column (a sum, a product, a
+            // conversion): the client's request, not a server fault, said in words.
+            case DbUpdateException { InnerException: MySqlException { ErrorCode: MySqlErrorCode.WarningDataOutOfRange } }:
+                logger.LogWarning(exception, "A value too large for its column. TraceId {TraceId}", ApiErrorWriter.TraceIdOf(httpContext));
+
+                await ApiErrorWriter.WriteAsync(
+                    httpContext,
+                    ErrorType.Validation,
+                    ErrorCodes.ValidationFailed,
+                    "A number here is too large to be saved.",
+                    cancellationToken: cancellationToken);
                 return true;
 
             case AppException app:

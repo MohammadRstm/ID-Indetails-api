@@ -21,11 +21,10 @@ public sealed class RecordPaymentRequestValidator : AbstractValidator<RecordPaym
 {
     public RecordPaymentRequestValidator()
     {
-        RuleFor(x => x.Amount).Amount("Amount", allowZero: false);
+        RuleFor(x => x.Amount).Amount("Amount", allowZero: false)
+            .Must((x, amount) => MoneyRules.FitsInUsd(amount, x.FxRate)).WithMessage("At this exchange rate, the amount in US dollars is too large.");
         RuleFor(x => x.Currency).Currency();
-        RuleFor(x => x.FxRate)
-            .Must(r => r is null || (r > 0 && decimal.Round(r.Value, 6) == r))
-            .WithMessage("Exchange rate must be more than zero with at most 6 decimals.");
+        RuleFor(x => x.FxRate).Rate();
         RuleFor(x => x.Method).IsInEnum().WithMessage("Method must be bank, cheque, cash or other.");
         RuleFor(x => x.Reference).ClientText("Reference", 100);
         RuleFor(x => x.Note).ClientText("Note", 500);
