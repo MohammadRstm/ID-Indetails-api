@@ -84,6 +84,19 @@ public class BillingSettingsTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Whoever_may_set_the_exchange_rate_can_read_the_rates_without_seeing_financials()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var granted = await Client.PutJsonAsync($"/api/users/{employee.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.ExchangeRateManage, action = "grant", reason = "Sets the LBP rate" } } }, superAdmin.AccessToken);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+
+        (await Client.GetAsync("/api/exchange-rates", employee.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.GetAsync("/api/billing-settings/design", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+    }
+
+    [Fact]
     public async Task Only_super_admins_add_dated_exchange_rates()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
