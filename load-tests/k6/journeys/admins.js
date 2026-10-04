@@ -240,8 +240,9 @@ function people(session) {
   get(session, `/api/employees/${userId}/work-summary`);
   get(session, `/api/work-entries?userId=${userId}&page=1&pageSize=18`);
   get(session, `/api/employees/${userId}/labour-cost`);
-  get(session, `/api/employees/${userId}/overtime?month=${month(now)}`);
-  get(session, `/api/employees/${userId}/pay`);
+  // A super admin's overtime and pay are only for those who see the whole company: refusals here are the rules.
+  get(session, `/api/employees/${userId}/overtime?month=${month(now)}`, { expect: [200, 403, 404] });
+  get(session, `/api/employees/${userId}/pay`, { expect: [200, 403, 404] });
 }
 
 function siteStaff(session) {
