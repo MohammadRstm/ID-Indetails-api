@@ -80,10 +80,16 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
     public Task<long?> LastMessageIdAsync(long conversationId, CancellationToken cancellationToken = default)
         => db.Messages.Where(m => m.ConversationId == conversationId).MaxAsync(m => (long?)m.Id, cancellationToken);
 
-    public Task<ConversationRead?> ReadForUpdateAsync(long userId, long conversationId, CancellationToken cancellationToken = default)
-        => db.ConversationReads.SingleOrDefaultAsync(r => r.UserId == userId && r.ConversationId == conversationId, cancellationToken);
-
-    public void Add(ConversationRead read) => db.ConversationReads.Add(read);
+    public Task MoveReadMarkerAsync(long userId, long conversationId, long messageId, DateTime now, CancellationToken cancellationToken = default)
+        => db.Database.ExecuteSqlAsync(
+            $"""
+            INSERT INTO `conversation_reads` (`user_id`, `conversation_id`, `last_read_message_id`, `updated_at`)
+            VALUES ({userId}, {conversationId}, {messageId}, {now}) AS new
+            ON DUPLICATE KEY UPDATE
+                `updated_at` = IF(new.`last_read_message_id` > COALESCE(`conversation_reads`.`last_read_message_id`, 0), new.`updated_at`, `conversation_reads`.`updated_at`),
+                `last_read_message_id` = GREATEST(COALESCE(`conversation_reads`.`last_read_message_id`, 0), new.`last_read_message_id`)
+            """,
+            cancellationToken);
 
     public async Task<IReadOnlyList<ConversationState>> StatesAsync(
         long userId,

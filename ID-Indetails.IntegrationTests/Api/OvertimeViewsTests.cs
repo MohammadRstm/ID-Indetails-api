@@ -105,7 +105,7 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         // permissions any more, so their own pages refuse them.
         (await Client.PostEmptyAsync($"/api/employees/{designer.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         (await OkAsync<WorkSummaryResponse>($"/api/employees/{designer.User.Id}/work-summary", designAdmin)).TotalOvertimeMinutes.ShouldBe(240);
-        await (await Client.GetAsync("/api/me/work-summary", designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.GetAsync("/api/me/work-summary", designer.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
     }
 
     [Fact]

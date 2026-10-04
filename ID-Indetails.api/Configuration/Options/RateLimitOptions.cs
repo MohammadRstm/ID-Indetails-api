@@ -26,9 +26,24 @@ public sealed class RateLimitOptions
     [Range(1, 10_000)]
     public int UploadPermitsPerMinute { get; init; } = 30;
 
-    /// <summary>Login, refresh, invitation validate/accept: requests per IP per minute.</summary>
+    /// <summary>Session refreshes, per IP per minute. Every page load refreshes, so a shared office address needs room.</summary>
+    [Range(1, 10_000)]
+    public int RefreshPermitsPerMinute { get; init; } = 60;
+
+    /// <summary>Requests that send email to an address the caller chooses, per signed-in user per minute.</summary>
+    [Range(1, 10_000)]
+    public int EmailPermitsPerMinute { get; init; } = 10;
+
+    /// <summary>
+    /// Login, password reset, invitation validate/accept: requests per IP per minute. Also the password checks of a
+    /// signed-in person (change password or sign-in address), per user.
+    /// </summary>
     [Range(1, 10_000)]
     public int AuthPermitsPerMinute { get; init; } = 10;
+
+    /// <summary>Bug reports, per signed-in user per hour.</summary>
+    [Range(1, 1_000)]
+    public int BugReportPermitsPerHour { get; init; } = 5;
 
     /// <summary>Super-admin setup: requests per IP per hour.</summary>
     [Range(1, 10_000)]

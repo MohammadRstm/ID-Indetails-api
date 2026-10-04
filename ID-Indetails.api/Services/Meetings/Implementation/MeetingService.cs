@@ -107,6 +107,7 @@ public sealed class MeetingService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var meeting = await VisibleMeetingAsync(actor, id, cancellationToken);
         Throw(CheckChange(actor, meeting));
+        Throw(MeetingRules.CheckProject(meeting.Project.Status));
 
         meeting.DeletedAt = clock.UtcNow;
         activity.Add(MeetingEvent(meeting, meeting.Project.DomainCode, ActivityEventKinds.MeetingDeleted, actor.UserId));

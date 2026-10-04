@@ -49,7 +49,10 @@ The API refuses to start in Production with development settings:
 - As in development, the connection string and a JWT signing key of at least 32 characters are required.
 
 The refresh cookie is always `HttpOnly`, `Secure` and `SameSite=Strict`, on `/api/auth` only. `GET /health`
-answers only `Healthy` or `Unhealthy` (whether the database answers). It isn't public, because nginx doesn't proxy it.
+answers only `Healthy` or `Unhealthy` (whether the database answers). It isn't public, because nginx doesn't proxy it;
+`GET /api/health` answers the same for anyone, for an uptime monitor (see Monitoring), under the anonymous rate limit.
+Every API answer carries `Cache-Control: no-store` (unless an endpoint sets its own) and `X-Content-Type-Options:
+nosniff`. Request bodies are limited to 1 MB (uploads to 101 MB, on `/api/files` only), in nginx and in the API.
 
 ## Preparing the server and GitHub (once)
 
@@ -73,25 +76,58 @@ Actions → **Deploy** → Run workflow:
 The workflow:
 
 1. Builds the API, the migrations and the client, tags them `sha-<7>` of their commit, and pushes them to GHCR.
-2. Copies `docker-compose.prod.yml`, `Caddyfile`, `deploy.sh` and `backup.sh` to the server, and logs in to GHCR with the job's short-lived
-   token, passed on stdin and logged out afterwards.
-3. Runs `deploy.sh`: pull, migrate, start the new API and client, wait until both are healthy, then start Caddy.
-   It records the deployed tags in `deployed.env`.
+2. Copies `docker-compose.prod.yml`, `Caddyfile`, `deploy.sh`, `backup.sh` and `api-db-user.sh` to the server, and logs in to
+   GHCR with the job's short-lived token, passed on stdin and logged out afterwards.
+3. Runs `deploy.sh`: pull, start the database, make sure the API's own database user exists (`api-db-user.sh`), migrate,
+   replace the API and the client and wait until both are healthy, then start and reload Caddy (so a changed
+   `Caddyfile` applies). It records the deployed tags in `deployed.env`.
+
+**This is an in-place deployment, not blue-green.** There is one API and one client container; Compose stops each
+and starts its replacement under the same name. While the new API starts and passes its health check, `/api` and
+`/hubs` answer 502 (half a minute or so), and while the client is replaced the site does too. The browser client
+retries and the live connection reconnects, so people mostly see a short pause. If the new API never becomes
+healthy, the deployment fails and the broken version stays up until the previous tags are deployed again (below).
+
+The running API connects to MySQL as `MYSQL_API_USER`, which may read and write rows but not change the schema. Only
+the migrations connect as the schema owner (`MYSQL_USER`).
 4. Writes the deployed image tags in the run's summary.
 
 Only one deployment runs at a time; a second one waits. Running it again with the same tags is safe.
 
 ## Rolling back
 
-Run Deploy with `api_tag` and/or `client_tag` set to tags from an earlier run's summary, or from the package pages
-in GHCR. Those images are deployed without building.
+Run Deploy with **both** `api_tag` and `client_tag` set to tags from an earlier run's summary (or the package pages
+in GHCR); for the side that doesn't change, give the tag that runs now (`deployed.env` on the server). A rollback
+builds nothing: it deploys published images only, so no new code or migration slips in.
 
-A migration isn't undone by deploying an older API. Migrations here only add, so an older API normally keeps working
-on the newer schema. If one ever removes or renames something, roll the database back from a backup taken before the
-deployment, and say so in that migration's pull request.
+A migration isn't undone by deploying an older API: the older API runs on the newer schema. That works when every
+migration since that version only added things. Some past migrations did remove or rename (`ExecutionPricingAndWorkingTime`,
+`DropProjectMembers`, `RemoveSeededTeams`, `OverheadGroups`), so rolling back across them needs the database
+restored from a backup taken before the deployment (docs/server-setup.md), losing what was written since. Write new
+migrations to add first and remove only in a later release, and say so in a migration's pull request when it can't.
+No backup is taken automatically before migrating yet; take one by hand (`./backup.sh`) before a deployment with a
+migration that removes anything.
 
 ## Logs and status
 
 - The run's log and summary in Actions show what was deployed and where it failed.
 - On the server, `docker compose -f docker-compose.prod.yml ps` and `… logs api web`. API logs never contain tokens
-  or passwords. nginx logs carry no query strings or referrers.
+  or passwords. nginx logs carry no query strings or referrers. Every container's log is rotated (5 × 10 MB,
+  compressed), so logs can't fill the disk.
+- Security events (refused sign-ins, rate limits reached, replayed refresh tokens) are warnings under the
+  `ID_Indetails.api.Security` category, with the user id or the visitor's IP: `… logs api | grep Security`.
+
+## Monitoring
+
+Nothing on the server tells anyone when something breaks; set these up outside it:
+
+- **Uptime:** point a monitor (UptimeRobot, Better Stack or similar; their free plans do) at
+  `https://<PUBLIC_DOMAIN>/api/health` every 5 minutes. It answers `200 Healthy` when the API and the database
+  respond, `503 Unhealthy` otherwise, and nothing else. Alert by email after two failures. The same monitor can
+  watch the certificate's expiry (Let's Encrypt no longer emails about it).
+- **Backups:** have the nightly cron ping a heartbeat (healthchecks.io or similar) after `backup.sh` succeeds, so a
+  missed or failed backup is noticed.
+- **Disk:** an alert at 80% full (most VPS providers offer one), since MySQL stops when the disk is full.
+- **Deploys:** GitHub emails whoever ran Deploy when it fails.
+- **Errors:** what to alert on in the logs, once they're shipped somewhere: `Error` level from the API (unexpected
+  errors, failed jobs and emails), repeated 5xx, and bursts of `ID_Indetails.api.Security` warnings.

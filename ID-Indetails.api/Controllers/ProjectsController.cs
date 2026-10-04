@@ -5,9 +5,11 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ID_Indetails.api.Controllers;
 
@@ -40,6 +42,7 @@ public sealed class ProjectsController(
     [HttpGet("{projectId:long}/report")]
     [HasPermission(PermissionCodes.FinancialView)]
     [HasPermission(PermissionCodes.WorkEntryViewAll)]
+    [EnableRateLimiting(RateLimitPolicies.Export)]
     public async Task<IActionResult> Report(long projectId, [FromQuery] ProjectReportQuery query, CancellationToken cancellationToken)
     {
         var pdf = await documents.ProjectReportPdfAsync(projectId, query, cancellationToken);

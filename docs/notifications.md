@@ -26,6 +26,8 @@ Every notification goes through one sender (`INotificationSender`), which applie
 - only active people who can see the notification's domain;
 - no money in payloads, so a notification can't reveal amounts to someone who later loses `financial:view`. The page it links to checks permissions as usual.
 
+Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged` and `work_digest` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`).
+
 "Holders of a permission" means the active people who hold it and can see the domain, super admins and people granted it from the other domain included. "The domain's people" means the active admins and employees whose home domain it is; super admins are left out of these broadcasts.
 
 Some notifications are **rolling digests**: one per person per digest key. Each repeat adds 1 to `count`, takes the newest payload and actor, and shows as new and unread again.

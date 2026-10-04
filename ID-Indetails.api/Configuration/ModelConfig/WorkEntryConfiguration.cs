@@ -23,6 +23,8 @@ public class WorkEntryConfiguration : IEntityTypeConfiguration<WorkEntry>
         // The two main read paths: a project's work over time, and a person's work over time.
         builder.HasIndex(x => new { x.ProjectId, x.StartedAt });
         builder.HasIndex(x => new { x.UserId, x.StartedAt });
+        // Today's work on the dashboard, reports and the scheduled checks filter by time alone.
+        builder.HasIndex(x => x.StartedAt);
 
         builder.HasOne(x => x.User)
             .WithMany()

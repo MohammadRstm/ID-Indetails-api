@@ -23,6 +23,7 @@ public sealed class InvitationsController(
     /// </summary>
     [HttpPost]
     [HasAnyPermission(PermissionCodes.EmployeeInvite, PermissionCodes.EmployeeInviteSuperAdmin)]
+    [EnableRateLimiting(RateLimitPolicies.Email)]
     public async Task<ActionResult<InvitationResponse>> Create(CreateInvitationRequest request, CancellationToken cancellationToken)
     {
         var invitation = await invitationService.CreateAsync(request, cancellationToken);
@@ -32,6 +33,7 @@ public sealed class InvitationsController(
     /// <summary>Emails a fresh signup link; the previous link stops working.</summary>
     [HttpPost("{userId:long}/resend")]
     [HasAnyPermission(PermissionCodes.EmployeeInvite, PermissionCodes.EmployeeInviteSuperAdmin)]
+    [EnableRateLimiting(RateLimitPolicies.Email)]
     public Task<InvitationResponse> Resend(long userId, CancellationToken cancellationToken)
         => invitationService.ResendAsync(userId, cancellationToken);
 

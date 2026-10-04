@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.DTO.Request.Requirements;
 using ID_Indetails.api.Validators.Clients;
+using ID_Indetails.api.Validators.Common;
 
 namespace ID_Indetails.api.Validators.Requirements;
 
@@ -11,6 +12,7 @@ public sealed class SaveRequirementRequestValidator : AbstractValidator<SaveRequ
     public SaveRequirementRequestValidator()
     {
         RuleFor(x => x.Text).ClientText("Text", 500, required: true);
+        RuleFor(x => x.Deadline).ThisCentury("The deadline");
         RuleFor(x => x.AssigneeIds)
             .NotNull().WithMessage("Assignees must be a list.")
             .Must(ids => ids is null || ids.Count <= MaxAssignees).WithMessage($"At most {MaxAssignees} assignees.")

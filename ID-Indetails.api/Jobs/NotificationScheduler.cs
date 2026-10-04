@@ -31,7 +31,7 @@ public sealed class NotificationScheduler(
                     await using var scope = scopes.CreateAsyncScope();
                     await scope.ServiceProvider.GetRequiredService<IScheduledNotifications>().RunAsync(check, stoppingToken);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
                 {
                     logger.LogError(ex, "The scheduled notification check {Check} failed.", check);
                 }

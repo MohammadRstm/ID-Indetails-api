@@ -45,12 +45,23 @@ public sealed class ActivityFeedService(
             return new PagedResponse<ActivityItemResponse>([], query.Page, query.PageSize, 0);
         }
 
+        var hidden = new List<string>(seesWork ? [] : ActivityGroups.KindsOf(ActivityGroup.Work));
+        if (!actor.Has(PermissionCodes.SalaryView))
+        {
+            hidden.AddRange([ActivityEventKinds.HoursExcused, ActivityEventKinds.HoursExcuseRemoved]);
+        }
+
+        if (!actor.Has(PermissionCodes.CompanyView))
+        {
+            hidden.Add(ActivityEventKinds.ScheduleChanged);
+        }
+
         var (items, total) = await feed.SearchAsync(
             new ActivityFeedSearch(
                 domains,
                 withCompany,
                 query.Group is { } group and not ActivityGroup.Company ? ActivityGroups.KindsOf(group) : null,
-                seesWork ? [] : ActivityGroups.KindsOf(ActivityGroup.Work),
+                hidden,
                 query.Group == ActivityGroup.Company,
                 query.ProjectId,
                 query.ClientId,

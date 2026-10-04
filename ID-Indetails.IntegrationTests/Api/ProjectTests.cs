@@ -117,7 +117,10 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.PutJsonAsync($"/api/projects/{project.Id}", new { title = "X", ownerId = outsider.User.Id }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.OwnerNotAllowed);
-        (await Client.PutJsonAsync($"/api/projects/{project.Id}", new { title = "X", ownerId = superAdmin.User.Id }, admin.AccessToken))
+        // a super admin may own it, but only someone who sees both domains (and so super admins) can pick one
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}", new { title = "X", ownerId = superAdmin.User.Id }, admin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.OwnerNotAllowed);
+        (await Client.PutJsonAsync($"/api/projects/{project.Id}", new { title = "X", ownerId = superAdmin.User.Id }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var other = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design);

@@ -109,6 +109,8 @@ using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.Settings.Implementation;
 using ID_Indetails.api.Services.Setup.Abstraction;
 using ID_Indetails.api.Services.Setup.Implementation;
+using ID_Indetails.api.Services.Support.Abstraction;
+using ID_Indetails.api.Services.Support.Implementation;
 using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Documents.Implementation;
 using ID_Indetails.api.Services.Statements.Abstraction;
@@ -140,6 +142,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddOptions<PasswordResetOptions>().BindConfiguration(PasswordResetOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<FrontendOptions>().BindConfiguration(FrontendOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<BugReportOptions>().BindConfiguration(BugReportOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<FileStorageOptions>().BindConfiguration(FileStorageOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)
             .ValidateDataAnnotations()
@@ -263,6 +266,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();
         services.AddScoped<ISearchService, SearchService>();
+        services.AddScoped<IBugReportService, BugReportService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         return services;

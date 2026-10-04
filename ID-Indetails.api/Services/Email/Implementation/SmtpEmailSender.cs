@@ -26,7 +26,8 @@ public sealed class SmtpEmailSender(IOptions<EmailOptions> options) : IEmailSend
 
         mime.Body = body.ToMessageBody();
 
-        using var client = new SmtpClient();
+        // a slow mail server mustn't hold a request (or the rows it locked) for MailKit's default two minutes
+        using var client = new SmtpClient { Timeout = (int)TimeSpan.FromSeconds(15).TotalMilliseconds };
         await client.ConnectAsync(
             _options.Host,
             _options.Port,

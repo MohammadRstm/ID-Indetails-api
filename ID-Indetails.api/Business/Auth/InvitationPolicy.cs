@@ -59,4 +59,13 @@ public static class InvitationPolicy
             ? Decision.Allow(domain)
             : Decision.Deny("You can only invite people into a domain you work in.");
     }
+
+    /// <summary>
+    /// Nobody hands out more than they hold: the role's default permissions in the domain the person joins must all be
+    /// the inviter's own (super admins hold everything). Null when they are.
+    /// </summary>
+    public static string? CheckDefaultsHeld(UserAccess inviter, IEnumerable<string> roleDefaults)
+        => PermissionChangePolicy.NotHeld(inviter, roleDefaults) is { Count: > 0 } notHeld
+            ? $"You can only invite someone into a role whose permissions you hold yourself. You do not hold: {string.Join(", ", notHeld)}."
+            : null;
 }

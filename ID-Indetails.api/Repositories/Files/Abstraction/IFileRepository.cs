@@ -23,6 +23,9 @@ public interface IFileRepository
     /// <summary>Up to <paramref name="limit"/> files uploaded before <paramref name="cutoff"/> and attached to nothing. Tracked.</summary>
     Task<IReadOnlyList<StoredFile>> UnusedBeforeAsync(DateTime cutoff, int limit, CancellationToken cancellationToken = default);
 
+    /// <summary>How many bytes the person has uploaded since <paramref name="since"/>, deleted uploads included.</summary>
+    Task<long> BytesUploadedSinceAsync(long userId, DateTime since, CancellationToken cancellationToken = default);
+
     void Add(StoredFile file);
 
     void Remove(StoredFile file);

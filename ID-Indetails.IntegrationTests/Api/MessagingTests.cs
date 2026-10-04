@@ -168,7 +168,9 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         card.TaskComment.CommentId.ShouldBe(comment.Id);
         card.TaskComment.Author.Id.ShouldBe(engineer.User.Id);
         card.TaskComment.Description.ShouldBe("Stair details");
-        card.TaskComment.Minutes.ShouldBe(90);
+        // a teammate doesn't learn how long a colleague worked; the author and whoever sees everyone's work do
+        card.TaskComment.Minutes.ShouldBeNull();
+        (await PageAsync($"teams/{designTeam}", engineer)).Items.Single(m => m.Kind == MessageKinds.TaskComment).TaskComment!.Minutes.ShouldBe(90);
         card.TaskComment.Attachment.ShouldBeNull();
         card.Sender.PhotoFileId.ShouldBeNull();
         card.Mentions.Select(p => p.Id).ShouldContain(teammate.User.Id);

@@ -102,6 +102,11 @@ public sealed class ClientService(
             throw new ForbiddenException(ErrorCodes.Forbidden, "Sorting or filtering clients by money needs financial:view.");
         }
 
+        if (query.Sort == ClientSort.Hours && !actor.Has(PermissionCodes.WorkEntryViewAll))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Sorting clients by hours needs work_entry:view_all.");
+        }
+
         var search = new ClientSearch(
             actor.VisibleDomains,
             query.Search?.Trim(),

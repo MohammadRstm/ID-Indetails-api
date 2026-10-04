@@ -17,6 +17,9 @@ public static class FileRules
     public const long MaxImageBytes = 10 * 1024 * 1024;
     public const long MaxVideoBytes = 100 * 1024 * 1024;
 
+    /// <summary>What one person may upload in a day, so nobody can fill the disk the database shares.</summary>
+    public const long DailyBytesPerPerson = 2L * 1024 * 1024 * 1024;
+
     /// <summary>How many leading bytes <see cref="Detect"/> needs.</summary>
     public const int HeaderLength = 12;
 
@@ -85,6 +88,12 @@ public static class FileRules
             ? RuleDenial.BusinessRule(ErrorCodes.FileTooLarge, $"{(kind == FileKind.Image ? "Photos" : "Videos")} can be at most {max / 1024 / 1024} MB.")
             : null;
     }
+
+    /// <param name="uploadedToday">What the person uploaded in the last 24 hours, in bytes.</param>
+    public static RuleDenial? CheckDailyQuota(long uploadedToday, long sizeBytes)
+        => uploadedToday + sizeBytes > DailyBytesPerPerson
+            ? RuleDenial.BusinessRule(ErrorCodes.UploadQuotaReached, $"You can upload up to {DailyBytesPerPerson / 1024 / 1024 / 1024} GB a day. Try again tomorrow.")
+            : null;
 
     /// <summary>The client's file name made safe to show and to send back: no path, plain characters, the real extension.</summary>
     public static string SafeName(string? clientName, string extension)
