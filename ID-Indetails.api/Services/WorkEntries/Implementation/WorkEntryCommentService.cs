@@ -51,7 +51,7 @@ public sealed class WorkEntryCommentService(
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
         var entry = await entries.GetViewAsync(workEntryId, cancellationToken);
-        if (entry is null || !actor.CanSee(entry.ProjectDomain))
+        if (entry is null || !WorkEntryQueryService.CanRead(actor, entry))
         {
             throw new NotFoundException("Work entry not found.");
         }

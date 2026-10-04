@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.DTO.Request.Billing;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Validators.Clients;
 using ID_Indetails.api.Validators.Common;
 using ID_Indetails.api.Validators.Employees;
@@ -78,6 +79,7 @@ public sealed class RecordDeliveryRequestValidator : AbstractValidator<RecordDel
     {
         RuleFor(x => x.Channel).IsInEnum().WithMessage("Channel must be email, whatsapp or download.");
         RuleFor(x => x.Recipient).ClientText("Recipient", 255);
+        RuleFor(x => x.Recipient!).ValidEmail().When(x => x.Channel == DeliveryChannel.Email && x.Recipient is not null);
         RuleFor(x => x.Note).ClientText("Note", 500);
     }
 }

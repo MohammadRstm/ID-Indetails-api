@@ -51,6 +51,16 @@ public sealed class InvitationService(
             throw new ForbiddenException(ErrorCodes.InvitationNotAllowed, decision.DenialReason!);
         }
 
+        if (await DefaultsNotHeldAsync(inviter, request.Role, decision.DomainCode, cancellationToken) is { } notHeld)
+        {
+            throw new ForbiddenException(ErrorCodes.InvitationNotAllowed, notHeld);
+        }
+
+        if (request.Pay is not null && !inviter.Has(PermissionCodes.EmployeePayManage))
+        {
+            throw new ForbiddenException(ErrorCodes.InvitationNotAllowed, "Setting someone's pay needs the permission to change pay.");
+        }
+
         if (request.Pay is { } terms && PayRules.CheckBasis(request.Role, terms.Basis) is { } denial)
         {
             throw denial.ToException();
@@ -128,7 +138,8 @@ public sealed class InvitationService(
         var decision = user is null
             ? null
             : InvitationPolicy.Evaluate(inviter, user.RoleCode, user.DomainCode);
-        if (user is null || decision is not { Allowed: true })
+        if (user is null || decision is not { Allowed: true }
+            || await DefaultsNotHeldAsync(inviter, user.RoleCode, user.DomainCode, cancellationToken) is not null)
         {
             throw new NotFoundException("User not found.");
         }
@@ -201,6 +212,12 @@ public sealed class InvitationService(
     }
 
     /// <summary>Tells whoever sent the invitation, and whoever invites people into that domain.</summary>
+    private async Task<string?> DefaultsNotHeldAsync(UserAccess inviter, string role, string? domain, CancellationToken cancellationToken)
+    {
+        var grants = await permissions.GetGrantsByRoleAsync(cancellationToken);
+        return InvitationPolicy.CheckDefaultsHeld(inviter, EffectivePermissions.RoleDefaults(role, domain, grants[role]));
+    }
+
     private async Task NotifyAcceptedAsync(UserInvitation invitation, CancellationToken cancellationToken)
     {
         var user = invitation.User;

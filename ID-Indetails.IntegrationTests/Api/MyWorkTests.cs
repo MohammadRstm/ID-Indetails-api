@@ -58,13 +58,14 @@ public class MyWorkTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.PostEmptyAsync($"/api/projects/{paused.Id}/hold", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         (await Client.PostEmptyAsync($"/api/projects/{done.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
-        await Work.LogAsync(employee.AccessToken, worked.Id, WorkEntryTestSteps.HoursAgo(4), 45, "Mine");
+        await Work.LogAsync(employee.AccessToken, worked.Id, WorkEntryTestSteps.HoursAgo(5), 45, "Mine");
         await Work.LogAsync(colleague.AccessToken, worked.Id, WorkEntryTestSteps.HoursAgo(4), 200, "Theirs");
 
         var mine = await (await Client.GetAsync("/api/me/projects", employee.AccessToken)).ReadAsync<List<MyProjectResponse>>();
         mine.ShouldNotContain(p => p.Id == done.Id);
         mine[0].Id.ShouldBe(worked.Id);
         mine[0].MyMinutes.ShouldBe(45);
+        // whoever worked last first: ordering by time spent would rank colleagues by their hours
         mine[0].Contributors.Select(c => c.Id).ShouldBe([colleague.User.Id, employee.User.Id]);
         var onHold = mine.Single(p => p.Id == paused.Id);
         onHold.AcceptsWork.ShouldBeFalse();

@@ -43,21 +43,22 @@ public interface INotificationRepository
 
     /// <summary>
     /// A page of the recipient's notifications, newest first. Ones about a project of a domain outside
-    /// <paramref name="visibleDomains"/> are left out. Not tracked.
+    /// <paramref name="visibleDomains"/>, and ones of <paramref name="hiddenKinds"/>, are left out. Not tracked.
     /// </summary>
     Task<(IReadOnlyList<NotificationView> Items, int TotalCount)> SearchAsync(
         long recipientId,
         IReadOnlyList<string> visibleDomains,
+        IReadOnlyList<string> hiddenKinds,
         bool unreadOnly,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
 
     /// <summary>Unread notifications, counted the way <see cref="SearchAsync"/> lists them.</summary>
-    Task<int> CountUnreadAsync(long recipientId, IReadOnlyList<string> visibleDomains, CancellationToken cancellationToken = default);
+    Task<int> CountUnreadAsync(long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds, CancellationToken cancellationToken = default);
 
     /// <summary>One of the recipient's notifications, if <see cref="SearchAsync"/> would list it. Tracked.</summary>
-    Task<Notification?> GetForUpdateAsync(long id, long recipientId, IReadOnlyList<string> visibleDomains, CancellationToken cancellationToken = default);
+    Task<Notification?> GetForUpdateAsync(long id, long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds, CancellationToken cancellationToken = default);
 
     /// <summary>Marks every unread notification of the recipient read, straight in the database.</summary>
     Task MarkAllReadAsync(long recipientId, DateTime readAt, CancellationToken cancellationToken = default);

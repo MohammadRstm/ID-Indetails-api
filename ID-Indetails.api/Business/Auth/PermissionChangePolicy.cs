@@ -52,16 +52,17 @@ public static class PermissionChangePolicy
                 "This account is deactivated; its permissions cannot be changed.");
         }
 
-        if (!actor.IsSuperAdmin)
-        {
-            var notHeld = codes.Where(c => !actor.Has(c)).Distinct().Order(StringComparer.Ordinal).ToList();
-            if (notHeld.Count > 0)
-            {
-                return new Denial(DenialKind.Forbidden, ErrorCodes.PermissionChangeNotAllowed,
-                    $"You can only change permissions you hold yourself. You do not hold: {string.Join(", ", notHeld)}.");
-            }
-        }
-
-        return null;
+        var notHeld = NotHeld(actor, codes);
+        return notHeld.Count > 0
+            ? new Denial(DenialKind.Forbidden, ErrorCodes.PermissionChangeNotAllowed,
+                $"You can only change permissions you hold yourself. You do not hold: {string.Join(", ", notHeld)}.")
+            : null;
     }
+
+    /// <summary>
+    /// The codes the actor doesn't hold and so may not hand out, by any route: a permission change, an invitation or a
+    /// role change. Super admins hold everything.
+    /// </summary>
+    public static IReadOnlyList<string> NotHeld(UserAccess actor, IEnumerable<string> codes)
+        => actor.IsSuperAdmin ? [] : codes.Where(c => !actor.Has(c)).Distinct().Order(StringComparer.Ordinal).ToList();
 }

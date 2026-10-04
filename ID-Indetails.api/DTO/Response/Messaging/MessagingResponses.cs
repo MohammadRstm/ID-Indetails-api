@@ -30,7 +30,7 @@ public sealed record TaskCommentResponse(
     string ProjectTitle,
     string Description,
     DateTime StartedAt,
-    int Minutes,
+    int? Minutes,
     FileResponse? Attachment);
 
 /// <param name="Kind"><c>text</c>, or <c>task_comment</c> for a shared work-entry comment.</param>

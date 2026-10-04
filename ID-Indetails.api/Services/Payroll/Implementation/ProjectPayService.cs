@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Clients;
+using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
@@ -132,7 +133,10 @@ public sealed class ProjectPayService(
             .Where(e => InRange(clock.ToCompanyDate(e.StartedAt), from, until))
             .ToList();
         var userIds = periodWork.Select(e => e.UserId).Distinct().ToList();
-        var users = (await payroll.UsersAsync(userIds, cancellationToken)).ToDictionary(u => u.Id);
+        var users = (await payroll.UsersAsync(userIds, cancellationToken))
+            .Where(u => EmployeeRules.CanSee(actor, u.DomainCode))
+            .ToDictionary(u => u.Id);
+        periodWork = periodWork.Where(e => users.ContainsKey(e.UserId)).ToList();
         var pay = (await payroll.PayHistoryAsync(userIds, cancellationToken)).ToLookup(p => p.UserId, p =>
             new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.HourlyCostRate));
         var personal = (await schedules.SchedulesAsync(userIds, cancellationToken)).ToLookup(s => s.UserId);

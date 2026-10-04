@@ -42,11 +42,13 @@ public sealed class CompanyOverviewService(
         IReadOnlyDictionary<long, ProjectCostHistory> History,
         ExchangeRateTable Rates);
 
+    private static readonly DateOnly EarliestDay = new(2000, 1, 1);
+
     public async Task<CompanyOverviewResponse> GetAsync(DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
     {
         var today = clock.CompanyToday;
         var end = to is { } t && t < today ? t : today;
-        var start = from ?? Recognition.MonthOf(end);
+        var start = from is { } f && f > EarliestDay ? f : from is null ? Recognition.MonthOf(end) : EarliestDay;
         if (start > end)
         {
             start = end;

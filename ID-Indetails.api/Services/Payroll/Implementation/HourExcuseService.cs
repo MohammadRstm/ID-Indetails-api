@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
@@ -42,6 +43,7 @@ public sealed class HourExcuseService(
             throw new NotFoundException("Employee not found.");
         }
 
+        CheckNotOwn(actor, user.Id);
         var month = DateOnly.ParseExact(request.Month + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture);
         var days = request.Kind == ExcuseKind.Days ? request.Days.Distinct().Order().ToList() : [];
         ExcuseRules.Check(month, clock.CompanyToday, request.Kind, days).ThrowIfDenied();
@@ -84,10 +86,21 @@ public sealed class HourExcuseService(
             throw new NotFoundException(NotFoundMessage);
         }
 
+        CheckNotOwn(actor, user.Id);
+
         excuse.DeletedAt = clock.UtcNow;
         excuse.DeletedById = actor.UserId;
         Record(user.DomainCode, excuse, ActivityEventKinds.HoursExcuseRemoved, actor.UserId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>Excused hours count towards pay, and nobody sets their own pay.</summary>
+    private static void CheckNotOwn(UserAccess actor, long userId)
+    {
+        if (userId == actor.UserId)
+        {
+            throw new ForbiddenException(ErrorCodes.EmployeeChangeNotAllowed, "You cannot excuse your own hours.");
+        }
     }
 
     public static HourExcuseResponse ToResponse(HourExcuse x)

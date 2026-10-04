@@ -58,6 +58,8 @@ Rules (`Business/Auth/PermissionChangePolicy.cs`):
 - Nobody changes their own permissions (`403 permission_change_not_allowed`).
 - Deactivated accounts can't be changed (`422 user_deactivated`). Invited ones can, so access is ready when they sign up.
 - `permission:manage` is itself grantable, so super admins can **delegate**. A delegate who isn't a super admin may only grant, revoke or reset permissions they hold themselves (`403 permission_change_not_allowed`), so nobody can hand out more than they have.
+- The same holds for the other ways of handing permissions out. Inviting someone needs every default of their role in the domain they join (`403 invitation_not_allowed`), and so does giving someone a new role (`403 permission_change_not_allowed`). A role change also drops the person's personal changes, which would give back any permission taken from them by hand, so for someone with revoked permissions it also needs `permission:manage`. Super admins hold everything.
+- **One permission of the other domain opens that domain.** Granting a permission limited to the other domain (for example `material:create` to a Design admin) makes its data visible to them, and then every permission they hold that isn't limited to a domain (`project:edit`, `financial:view`, `invoice:void` and so on) applies there too. Grant such permissions only to people trusted with that domain. Making permissions domain-aware is a planned change.
 - A person in a domain the caller can't see reads as `404`.
 - Unknown permission codes answer `400 unknown_permission`.
 

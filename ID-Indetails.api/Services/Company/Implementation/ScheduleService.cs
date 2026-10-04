@@ -67,6 +67,12 @@ public sealed class ScheduleService(
             throw new BusinessRuleException(ErrorCodes.UserDeactivated, "This account is deactivated.");
         }
 
+        // A schedule sets the hours someone owes, which decides their pay; nobody sets their own pay.
+        if (user.Id == actor.UserId)
+        {
+            throw new ForbiddenException(ErrorCodes.EmployeeChangeNotAllowed, "You cannot set your own schedule.");
+        }
+
         EmployeeRules.CheckCanChange(actor, new EmployeeRules.Target(user.Id, user.RoleCode, user.DomainCode, user.Status)).ThrowIfDenied();
 
         var schedule = await schedules.GetForUpdateAsync(user.Id, effectiveFrom, cancellationToken);

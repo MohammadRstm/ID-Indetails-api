@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Expenses;
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Projects;
@@ -62,6 +63,11 @@ public sealed class ProjectService(
     public async Task<PagedResponse<ProjectSummaryResponse>> ListAsync(ProjectListQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
+        if (query.Sort == ProjectSort.Hours && !actor.Has(PermissionCodes.WorkEntryViewAll))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Sorting projects by hours needs work_entry:view_all.");
+        }
+
         var period = OpenPeriodOf(query.Year, query.Quarter);
         if (period is { } future && future.From > clock.CompanyToday)
         {
@@ -164,6 +170,11 @@ public sealed class ProjectService(
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
             domain, request.BillingType, request.ClientId, request.Revenue, request.ProjectFee, request.MaterialMarkup)));
         Throw(ProjectRules.CheckInitialPayment(domain, request.InitialPayment is not null));
+        if (domain == DomainCodes.Execution && !actor.Has(PermissionCodes.ProjectPricingManage))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "A site's fee and material markup are set when it is created, which needs the permission to manage pricing.");
+        }
+
         if (request.InitialPayment is not null && !actor.Has(PermissionCodes.PaymentRecord))
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Recording the initial payment needs the permission to record payments.");
@@ -184,7 +195,7 @@ public sealed class ProjectService(
 
         await EnsureClientAsync(request.ClientId, domain, cancellationToken);
         var ownerId = request.OwnerId ?? actor.UserId;
-        await EnsureOwnerAsync(ownerId, domain, cancellationToken);
+        await EnsureOwnerAsync(actor, ownerId, domain, cancellationToken);
 
         var now = clock.UtcNow;
         var project = new Project
@@ -272,7 +283,7 @@ public sealed class ProjectService(
 
         if (request.OwnerId != project.OwnerId)
         {
-            await EnsureOwnerAsync(request.OwnerId, project.DomainCode, cancellationToken);
+            await EnsureOwnerAsync(actor, request.OwnerId, project.DomainCode, cancellationToken);
             activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectOwnerSet, actor.UserId,
                 new { ownerId = request.OwnerId, prevOwnerId = project.OwnerId }));
             project.OwnerId = request.OwnerId;
@@ -404,11 +415,12 @@ public sealed class ProjectService(
         Throw(ProjectRules.CheckClient(row.Client.ArchivedAt is not null));
     }
 
-    private async Task EnsureOwnerAsync(long ownerId, string domain, CancellationToken cancellationToken)
+    /// <summary>Someone the caller can't see (a super admin, for a caller in one domain) reads as no one, so ids can't be probed.</summary>
+    private async Task EnsureOwnerAsync(UserAccess actor, long ownerId, string domain, CancellationToken cancellationToken)
     {
         var owner = await users.GetRoleSnapshotAsync(ownerId, cancellationToken);
-        Throw(ProjectRules.CheckOwner(
-            owner is null ? null : new ProjectRules.Person(owner.RoleCode, owner.DomainCode, owner.Status), domain));
+        var visible = owner is not null && (owner.Id == actor.UserId || EmployeeRules.CanSee(actor, owner.DomainCode));
+        Throw(ProjectRules.CheckOwner(visible ? new ProjectRules.Person(owner!.RoleCode, owner.DomainCode, owner.Status) : null, domain));
     }
 
     private async Task<ProjectResponse> DescribeAsync(UserAccess actor, long projectId, CancellationToken cancellationToken)
