@@ -36,6 +36,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'load-test-seed'
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    # bash -eo pipefail: a failing seed fails its step even though tee copies its output.
+    defaults:
+      run:
+        shell: bash
     env:
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
@@ -86,7 +90,7 @@ jobs:
           dotnet "$TOOL" migrate
 
       - name: Seed
-        run: dotnet "$TOOL" seed --users "$USERS" --months "$MONTHS" --anchor "$ANCHOR" --roster "$OUT/roster.json" | tee "$OUT/seed-1.log"
+        run: dotnet "$TOOL" seed --users "$USERS" --months "$MONTHS" --anchor "$ANCHOR" --roster "$OUT/roster.json" 2>&1 | tee "$OUT/seed-1.log"
 
       - name: Fingerprint the first seed
         run: dotnet "$TOOL" fingerprint | tee "$OUT/fingerprint-1.txt"
@@ -101,7 +105,7 @@ jobs:
       - name: Seed again from scratch
         run: |
           dotnet "$TOOL" reset --confirm idi_loadtest
-          dotnet "$TOOL" seed --users "$USERS" --months "$MONTHS" --anchor "$ANCHOR" --roster "$OUT/roster-2.json" | tee "$OUT/seed-2.log"
+          dotnet "$TOOL" seed --users "$USERS" --months "$MONTHS" --anchor "$ANCHOR" --roster "$OUT/roster-2.json" 2>&1 | tee "$OUT/seed-2.log"
 
       - name: The same data both times
         run: |

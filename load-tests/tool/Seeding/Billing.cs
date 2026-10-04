@@ -91,14 +91,17 @@ public sealed class Billing(World world, ApiClient api, SimulatedClock clock)
         }
 
         var invoice = new SeedInvoice(created.Id(), project, total);
-        await api.PostAsync(admin.Token, $"/api/invoices/{invoice.Id}/issue");
+        var issued = await api.PostAsync(admin.Token, $"/api/invoices/{invoice.Id}/issue");
         invoice.IssuedOn = day;
+        // Issuing applies what the client paid on account (an Execution site's initial payment), as the API does.
+        invoice.Paid = total - issued.GetProperty("balance").GetDecimal();
         world.Tally.Add("invoices.issued");
         await api.PostAsync(admin.Token, $"/api/invoices/{invoice.Id}/deliveries", Random.Chance(0.8)
             ? new RecordDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = project.Client.Email }
             : new RecordDeliveryRequest { Channel = DeliveryChannel.Download });
 
-        if (Random.Chance(0.02))
+        // Only an invoice nobody has paid anything against can be voided.
+        if (invoice.Paid == 0 && Random.Chance(0.02))
         {
             await api.PostAsync(admin.Token, $"/api/invoices/{invoice.Id}/void", new VoidRequest { Reason = "LT issued with the wrong amount" });
             world.Tally.Add("invoices.voided");
@@ -111,21 +114,32 @@ public sealed class Billing(World world, ApiClient api, SimulatedClock clock)
         world.Invoices.Add(invoice);
     }
 
-    /// <summary>Most pay in full within weeks, some in two parts, some never during the history.</summary>
+    /// <summary>Most pay what is left in full within weeks, some in two parts, some never during the history.</summary>
     private void PlanPayments(SeedInvoice invoice, DateOnly day)
     {
+        var left = invoice.Total - invoice.Paid;
         var roll = Random.NextDouble();
+        if (left <= 0)
+        {
+            return;
+        }
+
         if (roll < 0.72)
         {
-            invoice.Payments.Add((day.AddDays(Random.Next(7, 41)), invoice.Total));
+            invoice.Payments.Add((day.AddDays(Random.Next(7, 41)), left));
         }
         else if (roll < 0.85)
         {
-            var first = decimal.Round(invoice.Total * Random.Amount(0.4m, 0.6m, 0.05m), 0);
-            invoice.Payments.Add((day.AddDays(Random.Next(10, 31)), first));
-            if (Random.Chance(0.5))
+            var first = decimal.Round(left * Random.Amount(0.4m, 0.6m, 0.05m), 0);
+            if (first <= 0)
             {
-                invoice.Payments.Add((day.AddDays(Random.Next(35, 61)), invoice.Total - first));
+                return;
+            }
+
+            invoice.Payments.Add((day.AddDays(Random.Next(10, 31)), first));
+            if (Random.Chance(0.5) && left - first > 0)
+            {
+                invoice.Payments.Add((day.AddDays(Random.Next(35, 61)), left - first));
             }
         }
     }
@@ -147,7 +161,7 @@ public sealed class Billing(World world, ApiClient api, SimulatedClock clock)
     /// </summary>
     private async Task RecordPaymentAsync(SeedInvoice invoice, decimal amountUsd, DateOnly day)
     {
-        var inPounds = amountUsd < invoice.Total && Random.Chance(0.3);
+        var inPounds = amountUsd < invoice.Total - invoice.Paid && Random.Chance(0.3);
         var (currency, rate) = inPounds ? ("LBP", 89500m) : ("USD", 1m);
         var amount = inPounds ? decimal.Floor(amountUsd * rate) : amountUsd;
         await api.PostAsync(Invoicer(invoice.Project, day).Token, $"/api/projects/{invoice.Project.Id}/payments", new RecordPaymentRequest
