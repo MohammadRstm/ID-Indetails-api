@@ -20,8 +20,8 @@ public static class Csv
             return string.Empty;
         }
 
-        // A leading =, +, - or @ would run as a formula in a spreadsheet (names are typed by users).
-        if ("=+-@".Contains(value[0]) && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+        // A leading =, +, -, @, tab or carriage return would run as a formula in a spreadsheet (names are typed by users).
+        if ("=+-@\t\r".Contains(value[0]) && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
         {
             value = "'" + value;
         }

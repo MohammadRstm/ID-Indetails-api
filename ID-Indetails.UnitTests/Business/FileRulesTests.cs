@@ -52,4 +52,13 @@ public class FileRulesTests
         FileRules.SafeName(null, ".mp4").ShouldBe("file.mp4");
         FileRules.SafeName(new string('a', 300), ".jpg").Length.ShouldBe(FileRules.MaxNameLength + 4);
     }
+
+    [Fact]
+    public void Each_person_uploads_at_most_two_gigabytes_a_day()
+    {
+        FileRules.CheckDailyQuota(0, FileRules.MaxVideoBytes).ShouldBeNull();
+        FileRules.CheckDailyQuota(FileRules.DailyBytesPerPerson - FileRules.MaxVideoBytes, FileRules.MaxVideoBytes).ShouldBeNull();
+        FileRules.CheckDailyQuota(FileRules.DailyBytesPerPerson - FileRules.MaxVideoBytes + 1, FileRules.MaxVideoBytes)!
+            .Code.ShouldBe(ErrorCodes.UploadQuotaReached);
+    }
 }

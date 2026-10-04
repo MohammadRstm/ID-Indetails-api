@@ -20,7 +20,7 @@ public sealed class EmployeeListQueryValidator : AbstractValidator<EmployeeListQ
         RuleFor(x => x.Role).ValidRole().When(x => x.Role is not null);
         RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
         RuleFor(x => x.Status).IsInEnum().WithMessage("Status must be invited, active or deactivated.");
-        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, MaxPageSize).WithMessage($"Page size must be between 1 and {MaxPageSize}.");
     }
 }
@@ -60,11 +60,8 @@ public sealed class ChangePayRequestValidator : AbstractValidator<ChangePayReque
     public ChangePayRequestValidator()
     {
         RuleFor(x => x.Basis).IsInEnum().WithMessage("Pay basis must be hourly or monthly.");
-        RuleFor(x => x.Amount)
-            .GreaterThan(0).WithMessage("Pay amount must be greater than zero.")
-            .LessThan(1_000_000_000m).WithMessage("Pay amount is too large.");
-        RuleFor(x => x.Currency)
-            .Matches("^[A-Za-z]{3}$").WithMessage("Currency must be a 3-letter code such as USD or LBP.");
+        RuleFor(x => x.Amount).Amount("Pay amount", allowZero: false);
+        RuleFor(x => x.Currency).Currency();
         RuleFor(x => x.Note).MaximumLength(255).WithMessage("Note must be at most 255 characters.");
     }
 }

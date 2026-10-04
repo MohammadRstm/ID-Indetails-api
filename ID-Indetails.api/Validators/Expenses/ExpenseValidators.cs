@@ -13,6 +13,7 @@ public sealed class CreateExpenseRequestValidator : AbstractValidator<CreateExpe
         RuleFor(x => x.Label).ClientText("Label", 200, required: true);
         RuleFor(x => x.Amount).Amount("Amount", allowZero: false);
         RuleFor(x => x.Currency).Currency();
+        RuleFor(x => x.SpentOn).ThisCentury("The date");
         RuleFor(x => x.Category)
             .Must(c => c is null || ExpenseRules.Categories.Contains(c))
             .WithMessage($"Category must be one of: {string.Join(", ", ExpenseRules.Categories)}.");

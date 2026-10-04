@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace ID_Indetails.api.Business.Common;
@@ -16,6 +17,17 @@ public static class Csv
         return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text.ToString())];
     }
 
+    /// <summary>
+    /// Quoted only when needed. Text starting with =, +, -, @, a tab or a carriage return would run as a formula in a
+    /// spreadsheet (descriptions and names are typed by people), so it gets a leading apostrophe; numbers stay numbers.
+    /// </summary>
     private static string Field(string value)
-        => value.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? '"' + value.Replace("\"", "\"\"") + '"' : value;
+    {
+        if (value.Length > 0 && "=+-@\t\r".Contains(value[0]) && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
+        {
+            value = "'" + value;
+        }
+
+        return value.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? '"' + value.Replace("\"", "\"\"") + '"' : value;
+    }
 }

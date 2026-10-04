@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.DTO.Request.WorkEntries;
+using ID_Indetails.api.Validators.Common;
 using ID_Indetails.api.Validators.Employees;
 
 namespace ID_Indetails.api.Validators.WorkEntries;
@@ -55,7 +56,7 @@ public sealed class WorkEntryListQueryValidator : AbstractValidator<WorkEntryLis
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
         RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
             .WithMessage("The range must end on or after its start.");
-        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
     }
@@ -68,7 +69,7 @@ public sealed class MyWorkEntryListQueryValidator : AbstractValidator<MyWorkEntr
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
         RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
             .WithMessage("The range must end on or after its start.");
-        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
     }
