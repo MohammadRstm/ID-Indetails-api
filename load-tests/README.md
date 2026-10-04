@@ -161,3 +161,66 @@ dotnet run --project load-tests\tool -c Release -- check
 It also works on a development MySQL. `idi_loadtest` lives beside your own databases there, as the integration tests'
 `idi_test_*` do. Set `LT_DB_HOSTNAME` to what that server answers to `SELECT @@hostname`, and make up a GUID for
 `LT_INSTANCE_ID`. Afterwards, `drop --confirm idi_loadtest --identity` leaves the server as it was.
+
+## Seeding the test data
+
+`seed` fills a freshly reset `idi_loadtest` with a company's worth of realistic data, by playing it through the real
+API.
+
+**How it works**
+- The tool hosts the API in its own process, as the integration tests do, on a simulated clock.
+- It replays the months day by day:
+  - the company is set up and people are invited and accept;
+  - admins create clients, projects and requirements;
+  - designers log their work every evening;
+  - site crews record materials and weekly labour;
+  - invoices are issued and paid, and statements are made;
+  - teams chat, and the scheduled checks run every morning.
+- Everything is written by the API itself: activity history, notifications, invoice and statement numbers, progress.
+  So the data keeps every rule the API keeps.
+- Email stays in the seeder's memory, and the seeder fails on any address outside `@loadtest.invalid`.
+
+**Who's in it**
+
+| | At 200 users |
+|---|---|
+| Super admins | 4 |
+| Design admins | 8 |
+| Execution admins | 8 |
+| Design employees | 108 (5% part-time) |
+| Execution employees | 72 |
+
+- A few people join or leave during the history, and a few are "jokers" with personal permission changes.
+- Everyone is named by persona and number, e.g. `lt.design.employee.007@loadtest.invalid`, "LT Design Employee 007".
+- Clients, projects and suppliers start with "LT".
+- Every test user's password is `LT_USER_PASSWORD`. It is never committed or written to a file.
+
+**What it covers**
+- `--months` whole months before the anchor day (default today), up to the day before.
+- The anchor day itself is left free for the load test to log work in.
+- The same `--users`, `--months`, `--random-seed` and `--anchor` give the same data, except the salted password hashes.
+
+**Afterwards, `seed` checks the result**
+- what it created against what the database holds, table by table;
+- the data rules (`verify`);
+- email safety.
+
+It writes `load-tests/reports/roster.json` (git-ignored): every test user's address, persona, ids and status, for
+the k6 scenarios.
+
+### Where to run it
+
+- **Full size (200 users, 3 months): on GitHub**, never on a laptop.
+  - It is about 50,000 API requests and takes MySQL a while.
+  - The **Load-test seed** workflow runs it on the runner, against a throwaway MySQL. It never touches the server.
+  - It checks everything, seeds a second time to prove the data comes out identical, and keeps the snapshot,
+    roster and logs as the run's artifact.
+  - It runs only when asked: Actions → Load-test seed → Run workflow, or the `load-test-seed` label on a pull request.
+- **Locally:** only the smallest run (`--users 20 --months 1`, about 2 minutes), against a development MySQL as
+  described above. In **cmd**:
+
+  ```bat
+  set LT_USER_PASSWORD=<a made-up password, 10+ characters>
+  dotnet run --project load-tests\tool -c Release -- reset --confirm idi_loadtest
+  dotnet run --project load-tests\tool -c Release -- seed --users 20 --months 1
+  ```

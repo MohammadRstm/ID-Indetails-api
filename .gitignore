@@ -366,3 +366,6 @@ FodyWeavers.xsd
 
 # Uploaded files (FileStorage:RootPath)
 ID-Indetails.api/App_Data/
+
+# Load-test output: rosters, snapshots, k6 results and reports (load-tests/README.md).
+load-tests/reports/
