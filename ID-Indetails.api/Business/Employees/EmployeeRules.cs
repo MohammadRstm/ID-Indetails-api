@@ -178,21 +178,22 @@ public static class EmployeeRules
     }
 
     /// <summary>
-    /// A role change hands the person the new role's defaults and drops their personal permission changes. Nobody but a
-    /// super admin hands out a default they don't hold themselves, and permissions taken away by hand only come back
-    /// this way for someone who may manage permissions.
+    /// A role change, or a move to the other domain, hands the person the defaults of their (new) role in their (new)
+    /// domain and drops their personal permission changes. Nobody but a super admin hands out a default they don't hold
+    /// themselves, and a permission taken away by hand only comes back this way for someone who may manage permissions.
     /// </summary>
-    public static RuleDenial? CheckRoleHandOut(UserAccess actor, IEnumerable<string> newRoleDefaults, bool hasRevokedPermissions)
+    /// <param name="revoked">The person's permissions taken away by hand.</param>
+    public static RuleDenial? CheckRoleHandOut(UserAccess actor, IReadOnlyCollection<string> newDefaults, IEnumerable<string> revoked)
     {
-        if (PermissionChangePolicy.NotHeld(actor, newRoleDefaults) is { Count: > 0 } notHeld)
+        if (PermissionChangePolicy.NotHeld(actor, newDefaults) is { Count: > 0 } notHeld)
         {
             return RuleDenial.Forbidden(ErrorCodes.PermissionChangeNotAllowed,
                 $"You can only give someone a role whose permissions you hold yourself. You do not hold: {string.Join(", ", notHeld)}.");
         }
 
-        return hasRevokedPermissions && !actor.IsSuperAdmin && !actor.Has(PermissionCodes.PermissionManage)
+        return !actor.IsSuperAdmin && !actor.Has(PermissionCodes.PermissionManage) && revoked.Any(newDefaults.Contains)
             ? RuleDenial.Forbidden(ErrorCodes.PermissionChangeNotAllowed,
-                "Some of their permissions were taken away by hand. A new role would give them back, which needs the permission to manage permissions.")
+                "Some of their permissions were taken away by hand, and this would give them back, which needs the permission to manage permissions.")
             : null;
     }
 

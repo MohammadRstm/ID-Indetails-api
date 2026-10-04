@@ -163,7 +163,7 @@ public static class AuthServiceCollectionExtensions
 
                 http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(SecurityLog.Category).LogWarning(
                     "Rate limit reached on {Method} {Path} by {Caller}.",
-                    http.Request.Method, http.Request.Path, SecurityLog.Caller(http));
+                    http.Request.Method, SecurityLog.OneLine(http.Request.Path.Value), SecurityLog.Caller(http));
                 return new ValueTask(ApiErrorWriter.WriteAsync(
                     http,
                     ErrorType.RateLimited,

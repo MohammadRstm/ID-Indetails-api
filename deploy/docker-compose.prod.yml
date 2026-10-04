@@ -33,7 +33,7 @@ services:
       - db_data:/var/lib/mysql
     networks: [data]
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      test: ["CMD", "mysqladmin", "ping", "--protocol=tcp", "-h", "127.0.0.1", "--silent"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -76,6 +76,7 @@ services:
       Email__Username: ${SMTP_USERNAME:-}
       Email__Password: ${SMTP_PASSWORD:-}
       Email__FromAddress: ${SMTP_FROM:?}
+      BugReports__ToAddress: ${BUG_REPORTS_TO:-mohammadrstm2004@gmail.com}
       # The client's nginx, and the TLS proxy before it, are trusted for the visitor's address and scheme.
       Proxy__KnownNetworks__0: 172.30.0.0/24
     volumes:

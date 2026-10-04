@@ -18,6 +18,13 @@ public static partial class ValidationRules
             .MaximumLength(254).WithMessage("Email must be at most 254 characters.")
             .Must(IsPlainEmail).WithMessage("Enter a valid email address.");
 
+    /// <summary>An address to look an account up by (sign-in, password reset): any address an account may already have.</summary>
+    public static IRuleBuilderOptions<T, string> LookupEmail<T>(this IRuleBuilder<T, string> rule)
+        => rule
+            .NotEmpty().WithMessage("Email is required.")
+            .MaximumLength(254).WithMessage("Email must be at most 254 characters.")
+            .Must(e => e.Contains('@')).WithMessage("Enter a valid email address.");
+
     /// <summary>
     /// One address: a name, an @ and a domain with a dot, with no spaces, control characters or the characters that
     /// would add headers or recipients to a mailto link (? % , ; &lt; &gt;).

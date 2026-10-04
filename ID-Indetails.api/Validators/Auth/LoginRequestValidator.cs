@@ -8,7 +8,7 @@ public sealed class LoginRequestValidator : AbstractValidator<LoginRequest>
 {
     public LoginRequestValidator()
     {
-        RuleFor(x => x.Email).ValidEmail();
+        RuleFor(x => x.Email).LookupEmail();
 
         // No strength rules on login: existing passwords are only checked against their hash.
         RuleFor(x => x.Password)

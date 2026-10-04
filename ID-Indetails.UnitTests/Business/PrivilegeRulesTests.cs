@@ -20,11 +20,11 @@ public class PrivilegeRulesTests
     public void Nobody_but_a_super_admin_hands_out_a_role_default_they_lack()
     {
         var manager = Actor(RoleCodes.Employee, PermissionCodes.ProjectView, PermissionCodes.EmployeeManage);
-        EmployeeRules.CheckRoleHandOut(manager, AdminDefaults, hasRevokedPermissions: false)!.Code.ShouldBe(ErrorCodes.PermissionChangeNotAllowed);
+        EmployeeRules.CheckRoleHandOut(manager, AdminDefaults, revoked: [])!.Code.ShouldBe(ErrorCodes.PermissionChangeNotAllowed);
         InvitationPolicy.CheckDefaultsHeld(manager, AdminDefaults)!.ShouldContain(PermissionCodes.FinancialView);
 
         var admin = Actor(RoleCodes.Admin, AdminDefaults);
-        EmployeeRules.CheckRoleHandOut(admin, AdminDefaults, hasRevokedPermissions: false).ShouldBeNull();
+        EmployeeRules.CheckRoleHandOut(admin, AdminDefaults, revoked: []).ShouldBeNull();
         InvitationPolicy.CheckDefaultsHeld(admin, AdminDefaults).ShouldBeNull();
 
         var superAdmin = new UserAccess(1, RoleCodes.SuperAdmin, null, [], false, DomainCodes.All);
@@ -34,10 +34,27 @@ public class PrivilegeRulesTests
     [Fact]
     public void Permissions_taken_away_by_hand_come_back_with_a_new_role_only_for_someone_who_manages_permissions()
     {
-        EmployeeRules.CheckRoleHandOut(Actor(RoleCodes.Admin, AdminDefaults), AdminDefaults, hasRevokedPermissions: true)!
-            .Kind.ShouldBe(DenialKind.Forbidden);
-        EmployeeRules.CheckRoleHandOut(Actor(RoleCodes.Admin, [.. AdminDefaults, PermissionCodes.PermissionManage]), AdminDefaults, hasRevokedPermissions: true)
-            .ShouldBeNull();
+        string[] revoked = [PermissionCodes.FinancialView];
+        EmployeeRules.CheckRoleHandOut(Actor(RoleCodes.Admin, AdminDefaults), AdminDefaults, revoked)!.Kind.ShouldBe(DenialKind.Forbidden);
+        EmployeeRules.CheckRoleHandOut(Actor(RoleCodes.Admin, [.. AdminDefaults, PermissionCodes.PermissionManage]), AdminDefaults, revoked).ShouldBeNull();
+        // a role that doesn't give it back (a demotion) is fine
+        EmployeeRules.CheckRoleHandOut(Actor(RoleCodes.Admin, AdminDefaults), [PermissionCodes.ProjectView], revoked).ShouldBeNull();
+    }
+
+    [Fact]
+    public void The_session_cut_off_keeps_a_token_of_this_very_second_however_late_in_it()
+    {
+        var late = new DateTime(2026, 10, 4, 9, 30, 15, 999, DateTimeKind.Utc).AddTicks(9_000);
+        SessionRules.Accepts(new DateTime(2026, 10, 4, 9, 30, 15, DateTimeKind.Utc), null, SessionRules.CutOffKeepingThisSecond(late)).ShouldBeTrue();
+        SessionRules.Accepts(new DateTime(2026, 10, 4, 9, 30, 14, DateTimeKind.Utc), null, SessionRules.CutOffKeepingThisSecond(late)).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_refresh_token_sent_again_moments_after_its_rotation_is_a_lost_answer_not_theft()
+    {
+        var rotated = new DateTime(2026, 10, 4, 9, 30, 0, DateTimeKind.Utc);
+        RefreshTokenRules.WithinReuseGrace(rotated, rotated.AddSeconds(5)).ShouldBeTrue();
+        RefreshTokenRules.WithinReuseGrace(rotated, rotated.AddSeconds(31)).ShouldBeFalse();
     }
 
     [Fact]

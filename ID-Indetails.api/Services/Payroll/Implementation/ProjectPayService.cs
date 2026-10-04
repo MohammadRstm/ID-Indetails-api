@@ -132,10 +132,10 @@ public sealed class ProjectPayService(
         var periodWork = (await payroll.WorkOnProjectsAsync(projects.Select(p => p.Id).ToList(), Utc(from.AddDays(-1)), Utc(until.AddDays(1)), cancellationToken))
             .Where(e => InRange(clock.ToCompanyDate(e.StartedAt), from, until))
             .ToList();
-        var userIds = periodWork.Select(e => e.UserId).Distinct().ToList();
-        var users = (await payroll.UsersAsync(userIds, cancellationToken))
+        var users = (await payroll.UsersAsync(periodWork.Select(e => e.UserId).Distinct().ToList(), cancellationToken))
             .Where(u => EmployeeRules.CanSee(actor, u.DomainCode))
             .ToDictionary(u => u.Id);
+        var userIds = users.Keys.ToList();
         periodWork = periodWork.Where(e => users.ContainsKey(e.UserId)).ToList();
         var pay = (await payroll.PayHistoryAsync(userIds, cancellationToken)).ToLookup(p => p.UserId, p =>
             new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.HourlyCostRate));

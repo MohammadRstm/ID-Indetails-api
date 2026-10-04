@@ -18,7 +18,7 @@ public static class SessionRules
     /// A <c>sessions_valid_from</c> that ends every access token issued before <paramref name="now"/> but keeps the one
     /// handed out to the person making the change, in this very second.
     /// </summary>
-    public static DateTime CutOffKeepingThisSecond(DateTime now) => now.AddSeconds(-1);
+    public static DateTime CutOffKeepingThisSecond(DateTime now) => WholeSecond(now).AddSeconds(-1);
 
     private static DateTime WholeSecond(DateTime at) => at.AddTicks(-(at.Ticks % TimeSpan.TicksPerSecond));
 }

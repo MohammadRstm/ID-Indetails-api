@@ -46,11 +46,17 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, limited) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        await ChangeAsync(superAdmin, limited.User.Id, "revoke", PermissionCodes.FinancialView);
+        var (_, _, demoted) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        // meeting:create comes with the employee role too
+        await ChangeAsync(superAdmin, limited.User.Id, "revoke", PermissionCodes.MeetingCreate);
+        await ChangeAsync(superAdmin, demoted.User.Id, "revoke", PermissionCodes.FinancialView);
 
         await (await Client.PutJsonAsync($"/api/employees/{limited.User.Id}/role", new { role = RoleCodes.Employee }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.PermissionChangeNotAllowed);
         (await Client.PutJsonAsync($"/api/employees/{limited.User.Id}/role", new { role = RoleCodes.Employee }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        // a role that doesn't give the permission back is anyone's to hand out
+        (await Client.PutJsonAsync($"/api/employees/{demoted.User.Id}/role", new { role = RoleCodes.Employee }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
     }
 
@@ -93,6 +99,40 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         await (await Client.GetAsync($"/api/employees/{superAdmin.User.Id}/pay", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await ChangeAsync(superAdmin, admin.User.Id, "grant", PermissionCodes.SalaryView);
         (await Client.GetAsync($"/api/employees/{superAdmin.User.Id}/pay", admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Project_pay_leaves_out_people_the_reader_cant_see()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await ChangeAsync(superAdmin, admin.User.Id, "grant", PermissionCodes.SalaryView);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        await Work.LogAsync(designer.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 60, "Plans");
+        await Work.LogAsync(superAdmin.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(6), 60, "Review");
+
+        var pay = await Client.GetAsync("/api/company/project-pay", admin.AccessToken);
+        ((int)pay.StatusCode).ShouldBe(200, await pay.Content.ReadAsStringAsync());
+        var text = await pay.Content.ReadAsStringAsync();
+        text.ShouldContain($"\"userId\":{designer.User.Id},");
+        text.ShouldNotContain($"\"userId\":{superAdmin.User.Id},");
+    }
+
+    [Fact]
+    public async Task Moving_someone_to_the_other_domain_needs_its_permissions()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, colleague) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        // one Execution permission opens Execution to them, not its admin defaults
+        await ChangeAsync(superAdmin, admin.User.Id, "grant", PermissionCodes.MaterialCreate);
+
+        await (await Client.PutJsonAsync($"/api/employees/{colleague.User.Id}/domain", new { domainCode = DomainCodes.Execution }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.PermissionChangeNotAllowed);
+        (await Client.PutJsonAsync($"/api/employees/{colleague.User.Id}/domain", new { domainCode = DomainCodes.Execution }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
     }
 
     [Fact]

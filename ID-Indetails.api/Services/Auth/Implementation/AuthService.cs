@@ -76,7 +76,7 @@ public sealed class AuthService(
 
         if (presented.RevokedAt is not null)
         {
-            if (presented.ReplacedById is not null)
+            if (presented.ReplacedById is not null && !RefreshTokenRules.WithinReuseGrace(presented.RevokedAt.Value, now))
             {
                 await SignOutEverywhereAfterReuseAsync(presented, now, cancellationToken);
                 permissions.Forget(presented.UserId);
@@ -105,13 +105,10 @@ public sealed class AuthService(
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
-        // Claim the token atomically. If another request rotated it a moment earlier, this
-        // presentation is a reuse.
+        // Claim the token atomically. If another request rotated it a moment earlier (two tabs at once), this one is
+        // refused, within the reuse grace (RefreshTokenRules).
         if (!await refreshTokens.TryRevokeAsync(presented.Id, now, cancellationToken))
         {
-            await SignOutEverywhereAfterReuseAsync(presented, now, cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            permissions.Forget(presented.UserId);
             throw new UnauthenticatedException(ErrorCodes.RefreshTokenReused, SessionExpiredMessage);
         }
 

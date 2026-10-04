@@ -18,8 +18,9 @@ echo "Deploying API ${API_TAG}, client ${CLIENT_TAG}"
 "${compose[@]}" --profile migrate run --rm migrations
 "${compose[@]}" up -d --wait --wait-timeout 180 api web
 "${compose[@]}" up -d caddy
-# Caddy reads its file only when it starts: reload it, so a changed Caddyfile applies
-"${compose[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+# Caddy reads its file only when it starts: reload it, so a changed Caddyfile applies (restart it if it isn't
+# answering yet because it was just recreated)
+"${compose[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile || "${compose[@]}" restart caddy
 "${compose[@]}" ps
 # What runs now, for commands run by hand on the server (docs/server-setup.md) and backup.sh.
 printf 'API_TAG=%s

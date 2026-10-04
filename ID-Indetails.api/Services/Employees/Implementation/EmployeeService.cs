@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Constants;
@@ -283,10 +284,7 @@ public sealed class EmployeeService(
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         var (decision, denial) = EmployeeRules.CheckRoleChange(actor, TargetOf(user), request.Role, request.DomainCode, superAdmins);
         Throw(denial);
-        var grants = await permissions.GetGrantsByRoleAsync(cancellationToken);
-        var revoked = (await permissionRepository.GetOverridesAsync(user.Id, cancellationToken: cancellationToken))
-            .Any(o => o.Effect == PermissionEffect.Revoke);
-        Throw(EmployeeRules.CheckRoleHandOut(actor, EffectivePermissions.RoleDefaults(decision!.Role, decision.Domain, grants[decision.Role]), revoked));
+        Throw(await CheckHandOutAsync(actor, user.Id, decision!.Role, decision.Domain, cancellationToken));
 
         var previousRole = user.RoleCode;
         var previousDomain = user.DomainCode;
@@ -324,6 +322,7 @@ public sealed class EmployeeService(
 
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckMove(actor, TargetOf(user), request.DomainCode));
+        Throw(await CheckHandOutAsync(actor, user.Id, user.RoleCode, request.DomainCode, cancellationToken));
         await EnsureTeamInDomainAsync(request.TeamId, request.DomainCode, cancellationToken);
 
         var previousDomain = user.DomainCode;
@@ -530,6 +529,16 @@ public sealed class EmployeeService(
         {
             throw new RequestValidationException(ErrorCodes.TeamNotInDomain, "teamId", "The team does not exist in this domain.");
         }
+    }
+
+    /// <summary><see cref="EmployeeRules.CheckRoleHandOut"/> for someone about to get <paramref name="role"/>'s defaults in <paramref name="domain"/>.</summary>
+    private async Task<RuleDenial?> CheckHandOutAsync(UserAccess actor, long userId, string role, string? domain, CancellationToken cancellationToken)
+    {
+        var grants = await permissions.GetGrantsByRoleAsync(cancellationToken);
+        var revoked = (await permissionRepository.GetOverridesAsync(userId, cancellationToken: cancellationToken))
+            .Where(o => o.Effect == PermissionEffect.Revoke)
+            .Select(o => o.PermissionCode);
+        return EmployeeRules.CheckRoleHandOut(actor, EffectivePermissions.RoleDefaults(role, domain, grants[role]).ToList(), revoked);
     }
 
     private static bool SeesPayOf(UserAccess actor, string role)

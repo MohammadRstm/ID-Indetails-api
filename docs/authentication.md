@@ -95,7 +95,7 @@ Permissions are **not** in the token, and the `role` claim is informational only
 - **Lifetime:** each refresh token lasts 1 day (`RefreshToken:ExpirationDays`). Every refresh replaces it, so an active session keeps going and an idle one ends after a day.
 - **Cookie:** `idi_refresh`, with `HttpOnly`, `Secure`, `SameSite=Strict` and `Path=/api/auth`. JavaScript can't read it, and it's only sent to the auth endpoints.
 - **Storage:** a random token is generated and discarded. The cookie carries its SHA-256 hash, and the database stores the SHA-256 of the cookie value. Nothing in the database can be replayed as a cookie.
-- **Reuse detection:** presenting a refresh cookie that was already rotated revokes **all** of that user's sessions, because the old cookie may have been stolen.
+- **Reuse detection:** presenting a refresh cookie that was rotated more than 30 seconds ago revokes **all** of that user's sessions, because the old cookie may have been stolen. Within those 30 seconds (an answer lost on a bad connection, two tabs at once) it is only refused (`Business/Auth/RefreshTokenRules.cs`).
 - **Other revocations:** changing or resetting the password and logging out revoke refresh tokens too.
 
 ## Using it from the React client
@@ -103,7 +103,7 @@ Permissions are **not** in the token, and the `role` claim is informational only
 - **Send cookies.** Call the auth endpoints with credentials (`withCredentials: true` in axios) so the browser sends and stores the refresh cookie.
 - **Run the API behind the Vite dev proxy.** Proxy `/api` to `https://localhost:7187`, so the browser sees one origin. With `SameSite=Strict`, the cookie is not sent from `http://localhost:5173` to `https://localhost:7187` directly, because those count as different sites. In production, serve the client and API from the same site.
 - **Keep the access token in memory.** On page load, call `POST /api/auth/refresh` to get a new one. If it fails, show the login page.
-- **Refresh once at a time.** Several tabs or requests refreshing with the same cookie at the same moment look like token reuse and sign the user out. Let one refresh run and have other requests wait for it.
+- **Refresh once at a time.** Several tabs or requests refreshing with the same cookie at the same moment get one new session and refusals for the rest. Let one refresh run and have other requests wait for it.
 - **React to the error `code`,** not the message. For example, `password_change_required` means "go to the change-password screen".
 
 ## Errors

@@ -20,7 +20,7 @@ on:
         default: main
         required: true
       api_tag:
-        description: "Rollback: deploy this published API tag instead of building (e.g. sha-1a2b3c4)"
+        description: "Rollback: deploy this published API tag (e.g. sha-1a2b3c4). A rollback needs both tags and builds nothing"
         required: false
       client_tag:
         description: "Rollback: deploy this published client tag instead of building"

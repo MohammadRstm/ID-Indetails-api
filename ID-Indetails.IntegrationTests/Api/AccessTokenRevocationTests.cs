@@ -68,6 +68,10 @@ public class AccessTokenRevocationTests(ApiFactory api) : IClassFixture<ApiFacto
     {
         var (_, _, _, _, cookie) = await SignedInEmployeeAsync();
         var rotated = await (await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: cookie)).ShouldSignInAsync();
+        // replayed after the grace that covers a lost answer
+        await _steps.ExecuteAsync(
+            "UPDATE refresh_tokens SET revoked_at = DATE_SUB(revoked_at, INTERVAL 1 MINUTE) WHERE user_id = @u AND replaced_by_id IS NOT NULL",
+            ("@u", rotated.User.Id));
 
         await (await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: cookie)).ShouldFailWithAsync(401, ErrorCodes.RefreshTokenInvalid);
 
