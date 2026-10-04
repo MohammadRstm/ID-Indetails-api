@@ -110,7 +110,8 @@ seed_db="lt-seed-$RUN_ID"
 seed_root=$(openssl rand -hex 16); mask "$seed_root"
 docker run -d --name "$seed_db" --hostname idi-loadtest-seed -p 127.0.0.1:13307:3306 -e MYSQL_ROOT_PASSWORD="$seed_root" mysql:8.4 \
     --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --default-time-zone=+00:00 > /dev/null
-for _ in $(seq 1 60); do docker exec "$seed_db" mysqladmin ping -uroot -p"$seed_root" --silent 2> /dev/null && break; sleep 2; done
+# Over TCP: while it first initialises, MySQL runs a temporary server that answers on its socket only.
+for _ in $(seq 1 90); do docker exec "$seed_db" mysqladmin ping -h 127.0.0.1 -uroot -p"$seed_root" --silent 2> /dev/null && break; sleep 2; done
 seed_tool() {
     LT_DB_CONNECTION="Server=127.0.0.1;Port=13307;User=root;Password=$seed_root;Database=idi_loadtest;" LT_DB_HOSTNAME=idi-loadtest-seed \
         LT_INSTANCE_ID=00000000-0000-4000-8000-000000000001 LT_USER_PASSWORD="$USER_PASSWORD" dotnet "$TOOL" "$@"

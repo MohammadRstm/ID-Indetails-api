@@ -31,8 +31,10 @@ services:
     # Loopback only: the load-test tool reaches it through an SSH tunnel. Production's database publishes no port.
     ports:
       - "127.0.0.1:13306:3306"
+    # Over TCP, as the API and the tool connect: during its first start MySQL runs a temporary server that answers
+    # only on its socket, which "localhost" would ask.
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 10s
       timeout: 5s
       retries: 12
