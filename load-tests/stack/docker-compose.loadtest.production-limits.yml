@@ -5,3 +5,4 @@ services:
     environment:
       RateLimiting__AuthPermitsPerMinute: "10"
       RateLimiting__AnonymousPermitsPerMinute: "60"
+      RateLimiting__RefreshPermitsPerMinute: "60"

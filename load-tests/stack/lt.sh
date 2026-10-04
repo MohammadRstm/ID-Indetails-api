@@ -10,6 +10,10 @@
 #   ./lt.sh verify-email      the running API sends to Mailpit and can't reach anything outside
 #   ./lt.sh mail-count        how many emails Mailpit has caught
 #   ./lt.sh status | logs [service...] | restart <service...>
+#   ./lt.sh load-snapshot <file.sql.gz>   replace idi_loadtest with seeded data (checks lt-db's identity first)
+#   ./lt.sh monitor start|stop            sample the server into monitor/ while a test runs
+#   ./lt.sh collect <file.tar.gz>         the run's logs, samples and Mailpit count, for the runner to fetch
+#   ./lt.sh chaos restart-api|kill-api|restart-db|pause-db <seconds>|restart-proxy   (recovery tests)
 #   ./lt.sh down              remove the containers, keep the data
 #   ./lt.sh purge             remove the containers and every load-test volume (database, uploads, certificates)
 set -euo pipefail
@@ -226,6 +230,112 @@ EOF
     echo "Wrote $here/.env with new random secrets."
 }
 
+# The certificates for Mailpit's STARTTLS: an authority made for this environment, which signs one certificate for
+# lt-mail and whose key is then deleted. The API trusts this authority alone.
+mail_certs() {
+    [ ! -f certs/mail.crt ] || return 0
+    mkdir -p certs
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=LT load-test mail authority"         -keyout certs/ca.key -out certs/ca.crt > /dev/null 2>&1
+    openssl req -newkey rsa:2048 -nodes -subj "/CN=lt-mail" -keyout certs/mail.key -out certs/mail.csr > /dev/null 2>&1
+    printf 'subjectAltName=DNS:lt-mail
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+' > certs/mail.ext
+    openssl x509 -req -in certs/mail.csr -CA certs/ca.crt -CAkey certs/ca.key -CAcreateserial -days 3650         -extfile certs/mail.ext -out certs/mail.crt > /dev/null 2>&1
+    rm -f certs/ca.key certs/ca.srl certs/mail.csr certs/mail.ext
+    # Read by the containers' own users. The key only ever protects mail inside this environment's internal network.
+    chmod 644 certs/*
+}
+
+# SQL as root inside the load-test database container: the project's own lt-db, never another server.
+db_sql() {
+    compose exec -T -e MYSQL_PWD="$(env_value LT_DB_ROOT_PASSWORD)" lt-db mysql -uroot -N -B "$@"
+}
+
+load_snapshot() {
+    local file=${1:-} identity
+    [[ "$file" == *.sql.gz && -f "$file" ]] || fail "Usage: ./lt.sh load-snapshot <file.sql.gz>, as the seed makes it."
+    # The tool's guard, again: the marker its init wrote, with this environment's id, on the idi-loadtest-db server.
+    identity=$(db_sql -e "SELECT CONCAT(@@hostname, ' ', instance_id) FROM idi_loadtest_identity.identity" 2>/dev/null) \
+        || fail "lt-db carries no load-test identity: run the tool's init against it first."
+    [ "$identity" = "idi-loadtest-db $(env_value LT_INSTANCE_ID)" ] || fail "lt-db doesn't carry this environment's identity."
+    db_sql -e "DROP DATABASE IF EXISTS idi_loadtest; CREATE DATABASE idi_loadtest CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+    gunzip -c "$file" | db_sql idi_loadtest
+    echo "Loaded $file into idi_loadtest."
+}
+
+monitor() {
+    case "${1:-}" in
+        start)
+            if [ -f monitor/pid ] && kill -0 "$(cat monitor/pid)" 2>/dev/null; then
+                fail "Monitoring is already running."
+            fi
+            rm -rf monitor && mkdir -p monitor
+            # Statement statistics and the slow log count from now on, for this run only.
+            db_sql -e "TRUNCATE performance_schema.events_statements_summary_by_digest"
+            compose exec -T lt-db sh -c ': > /var/lib/mysql/slow.log'
+            db_sql -e "FLUSH SLOW LOGS"
+            nohup bash ./monitor.sh > monitor/monitor.out 2>&1 &
+            echo $! > monitor/pid
+            echo "Monitoring into $here/monitor, every 10 seconds."
+            ;;
+        stop)
+            if [ -f monitor/pid ]; then
+                kill "$(cat monitor/pid)" 2>/dev/null || true
+                rm -f monitor/pid
+            fi
+            # Statement shapes only (digests): never the values a query carried.
+            db_sql -e "SELECT DIGEST_TEXT, COUNT_STAR, ROUND(SUM_TIMER_WAIT/1e9,1), ROUND(AVG_TIMER_WAIT/1e9,2), ROUND(MAX_TIMER_WAIT/1e9,1),
+                         SUM_ROWS_EXAMINED, SUM_ROWS_SENT, SUM_NO_INDEX_USED
+                       FROM performance_schema.events_statements_summary_by_digest WHERE SCHEMA_NAME = 'idi_loadtest'
+                       ORDER BY SUM_TIMER_WAIT DESC LIMIT 30" > monitor/statements.tsv || true
+            db_sql -e "SHOW ENGINE INNODB STATUS" | sed 's/\n/\n/g' | awk '/LATEST DETECTED DEADLOCK/,/^TRANSACTIONS$/' > monitor/deadlock.txt || true
+            compose exec -T lt-db cat /var/lib/mysql/slow.log > monitor/slow.log || true
+            echo "Stopped monitoring; the samples are in $here/monitor."
+            ;;
+        *)
+            fail "Usage: ./lt.sh monitor start|stop"
+            ;;
+    esac
+}
+
+collect() {
+    local file=${1:-} service
+    [[ "$file" == *.tar.gz ]] || fail "Usage: ./lt.sh collect <name>.tar.gz"
+    rm -rf collected && mkdir -p collected
+    for service in "${SERVICES[@]}"; do
+        compose logs --no-color --no-log-prefix "$service" > "collected/$service.log" 2>&1 || true
+    done
+    mail_count > collected/mail-count.txt 2>/dev/null || echo unknown > collected/mail-count.txt
+    compose ps > collected/status.txt 2>&1 || true
+    [ ! -d monitor ] || cp -r monitor collected/monitor
+    [ ! -f chaos.log ] || cp chaos.log collected/chaos.log
+    tar -czf "$file" -C collected .
+    rm -rf collected
+    echo "Collected the run's logs and samples into $file."
+}
+
+# Recovery tests break the load-test environment on purpose, and only it: every action goes through compose -p
+# idi-loadtest. Each is logged with its time, so the report can line errors up with it.
+chaos() {
+    local action=${1:-} seconds=${2:-30}
+    case "$action" in
+        restart-api) compose restart lt-api ;;
+        # Production's API restarts by itself (unless-stopped); here the start stands in for that.
+        kill-api) docker kill --signal KILL "$(compose ps -q lt-api)" > /dev/null && compose start lt-api ;;
+        restart-db) compose restart lt-db ;;
+        pause-db)
+            [[ "$seconds" =~ ^[0-9]{1,3}$ ]] || fail "pause-db takes a number of seconds, up to 999."
+            echo "$(date -u +%FT%TZ) chaos pause-db start" >> chaos.log
+            compose stop lt-db && sleep "$seconds" && compose start lt-db
+            ;;
+        restart-proxy) compose restart lt-proxy lt-web ;;
+        *) fail "Usage: ./lt.sh chaos restart-api|kill-api|restart-db|pause-db <seconds>|restart-proxy" ;;
+    esac
+    echo "$(date -u +%FT%TZ) chaos $action done" | tee -a chaos.log
+}
+
 command=${1:-}
 [ $# -gt 0 ] && shift
 case "$command" in
@@ -242,6 +352,7 @@ case "$command" in
         require_all
         parse_options "$@"
         check_rendered_config
+        mail_certs
         compose up -d --wait --wait-timeout 180 "${services[@]}"
         if [ -n "$(compose ps -q lt-api)" ]; then
             verify_email
@@ -270,6 +381,22 @@ case "$command" in
         [ ${#services[@]} -gt 0 ] || fail "Name the services to restart: ${SERVICES[*]}"
         compose restart "${services[@]}"
         ;;
+    load-snapshot)
+        require_all
+        load_snapshot "$@"
+        ;;
+    monitor)
+        require_all
+        monitor "$@"
+        ;;
+    collect)
+        require_all
+        collect "$@"
+        ;;
+    chaos)
+        require_all
+        chaos "$@"
+        ;;
     down)
         require_all
         compose down --remove-orphans
@@ -280,10 +407,11 @@ case "$command" in
             [[ "$volume" == "${PROJECT}_"* ]] || fail "Volume $volume carries the $PROJECT label but not its name. Nothing removed."
         done < <(docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT")
         compose down -v --remove-orphans
-        echo "Removed the load-test containers, networks and volumes."
+        rm -rf certs monitor collected chaos.log snapshot.sql.gz collected.tar.gz
+        echo "Removed the load-test containers, networks, volumes and files."
         ;;
     *)
-        sed -n '2,14p' "$0" >&2
+        sed -n '2,18p' "$0" >&2
         exit 2
         ;;
 esac

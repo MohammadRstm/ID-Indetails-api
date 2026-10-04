@@ -16,6 +16,10 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
       - --default-time-zone=+00:00
+      # Only here, not in production: statements slower than half a second, for the run report.
+      - --slow-query-log=ON
+      - --long-query-time=0.5
+      - --slow-query-log-file=/var/lib/mysql/slow.log
     environment:
       MYSQL_ROOT_PASSWORD: ${LT_DB_ROOT_PASSWORD:?}
       MYSQL_DATABASE: idi_loadtest
@@ -34,12 +38,19 @@ services:
       retries: 12
       start_period: 30s
 
-  # Catches every email the API sends. It relays nothing, and it sits on the internal network only.
+  # Catches every email the API sends. It relays nothing, and it sits on the internal network only. STARTTLS, as the
+  # production API insists on, with a certificate from this environment's own authority (lt.sh makes both).
   lt-mail:
     image: axllent/mailpit:v1.31.2
     restart: "no"
     environment:
       MP_MAX_MESSAGES: "20000"
+      MP_SMTP_TLS_CERT: /certs/mail.crt
+      MP_SMTP_TLS_KEY: /certs/mail.key
+      MP_SMTP_REQUIRE_STARTTLS: "true"
+    volumes:
+      - ./certs/mail.crt:/certs/mail.crt:ro
+      - ./certs/mail.key:/certs/mail.key:ro
     networks: [lt-backend]
 
   lt-api:
@@ -59,25 +70,37 @@ services:
       # Mail goes to Mailpit, always. Literal values on purpose: nothing in .env can change them.
       Email__Host: lt-mail
       Email__Port: "1025"
-      Email__UseStartTls: "false"
+      Email__UseStartTls: "true"
       Email__Username: ""
       Email__Password: ""
       Email__FromAddress: no-reply@loadtest.invalid
       Email__FromName: Hourline load test
+      # The only certificate authority the API trusts is this environment's, which signed Mailpit's certificate: a real
+      # mail server's certificate would fail, on top of there being no route to one.
+      SSL_CERT_FILE: /certs/ca.crt
+      SSL_CERT_DIR: /certs
       # nginx (lt-backend) and Caddy (lt-edge) forward the visitor's address.
       Proxy__KnownNetworks__0: 172.30.101.0/24
       Proxy__KnownNetworks__1: 172.30.102.0/24
-      # k6 sends everything from one address, so the per-IP limits are raised. The per-user limit stays production's
-      # 300 a minute. `lt.sh up --production-rate-limits` restores production's per-IP limits to test them.
+      # k6 sends everything from one address, so the per-IP limits are raised (sign-in, anonymous requests, and
+      # refreshes, whose own limit is ignored by API versions that don't have it yet). The per-user limits stay
+      # production's, 300 requests a minute. `lt.sh up --production-rate-limits` restores the per-IP ones to test them.
       RateLimiting__AuthPermitsPerMinute: "100000"
       RateLimiting__AnonymousPermitsPerMinute: "100000"
+      RateLimiting__RefreshPermitsPerMinute: "100000"
       # Nothing scheduled runs in a normal test: the notification scheduler issues and emails scheduled invoices and
       # overdue reminders, and the file cleanup deletes rows the verification counts. `lt.sh up --email-test` turns
       # both on.
       NotificationScheduler__Enabled: "false"
       FileStorage__CleanupEnabled: "false"
+      # One JSON object per line with UTC times, so the run report can count errors per load step. Production keeps
+      # the default text format; what is logged doesn't change.
+      Logging__Console__FormatterName: json
+      Logging__Console__FormatterOptions__UseUtcTimestamp: "true"
+      Logging__Console__FormatterOptions__TimestampFormat: "yyyy-MM-ddTHH:mm:ss.fffZ"
     volumes:
       - lt_files:/app/App_Data/files
+      - ./certs/ca.crt:/certs/ca.crt:ro
     networks: [lt-backend]
     depends_on:
       lt-db:
