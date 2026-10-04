@@ -54,15 +54,15 @@ public sealed class EmployeesController(IEmployeeService employeeService, ISignI
         CancellationToken cancellationToken)
         => employeeService.ReactivateAsync(userId, request, cancellationToken);
 
-    /// <summary>Signs them out everywhere at once and blocks their sign-in until a super admin restores it. Super admins only.</summary>
+    /// <summary>Signs them out everywhere at once and blocks their sign-in until it is restored.</summary>
     [HttpPost("{userId:long}/sessions/end")]
-    [HasPermission(PermissionCodes.EmployeeManage)]
+    [HasPermission(PermissionCodes.SessionManage)]
     public Task<EmployeeResponse> EndSessions(long userId, CancellationToken cancellationToken)
         => employeeService.EndSessionsAsync(userId, cancellationToken);
 
-    /// <summary>Lets them sign in again after their sessions were ended. Super admins only.</summary>
+    /// <summary>Lets them sign in again after their sessions were ended.</summary>
     [HttpPost("{userId:long}/sessions/restore")]
-    [HasPermission(PermissionCodes.EmployeeManage)]
+    [HasPermission(PermissionCodes.SessionManage)]
     public Task<EmployeeResponse> RestoreSignIn(long userId, CancellationToken cancellationToken)
         => employeeService.RestoreSignInAsync(userId, cancellationToken);
 
@@ -77,13 +77,13 @@ public sealed class EmployeesController(IEmployeeService employeeService, ISignI
     public Task<EmployeeResponse> RemovePhoto(long userId, CancellationToken cancellationToken)
         => employeeService.RemovePhotoAsync(userId, cancellationToken);
 
-    /// <summary>Changes the role and clears personal permission changes.</summary>
-    /// <summary>A new sign-in address (super admins only). Ends their sessions; someone invited gets a new invitation there.</summary>
+    /// <summary>A new sign-in address. Ends their sessions; someone invited gets a new invitation there.</summary>
     [HttpPut("{userId:long}/email")]
-    [HasPermission(PermissionCodes.EmployeeManage)]
+    [HasPermission(PermissionCodes.EmployeeChangeEmail)]
     public Task<EmployeeResponse> ChangeEmail(long userId, ChangeEmailRequest request, CancellationToken cancellationToken)
         => signInEmail.ChangeAsync(userId, request, cancellationToken);
 
+    /// <summary>Changes the role and clears personal permission changes.</summary>
     [HttpPut("{userId:long}/role")]
     [HasPermission(PermissionCodes.EmployeeManage)]
     public Task<EmployeeResponse> ChangeRole(long userId, ChangeRoleRequest request, CancellationToken cancellationToken)

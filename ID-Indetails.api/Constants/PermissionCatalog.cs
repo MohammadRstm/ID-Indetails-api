@@ -59,6 +59,8 @@ public static class PermissionCatalog
         new(P.EmployeeInvite, "Invite new people"),
         new(P.EmployeePayManage, "Set and change employee pay"),
         new(P.EmployeeInviteSuperAdmin, "Invite super admins"),
+        new(P.EmployeeChangeEmail, "Change sign-in addresses"),
+        new(P.SessionManage, "End people's sessions and restore their sign-in"),
         new(P.PermissionManage, "Grant and revoke other people's permissions"),
         new(P.TeamManage, "Create, rename and delete teams"),
 
@@ -68,6 +70,7 @@ public static class PermissionCatalog
 
         new(P.CompanyView, "View the company overview across both domains"),
         new(P.OverheadManage, "Manage company overhead"),
+        new(P.OverheadCategoryManage, "Add, rename and remove company expense categories"),
         new(P.SalaryView, "View what each employee is owed"),
         new(P.CompanySettingsManage, "Edit company-wide settings"),
         new(P.WorkingTimeManage, "Set the company working week, break and overtime multiplier"),
@@ -80,6 +83,7 @@ public static class PermissionCatalog
         P.CompanyView, P.OverheadManage, P.SalaryView, P.CompanySettingsManage,
         P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse,
         P.EmployeeInviteSuperAdmin, P.PermissionManage, P.ExchangeRateManage,
+        P.OverheadCategoryManage, P.SessionManage, P.EmployeeChangeEmail,
     ];
 
     private static readonly string[] EmployeeGrants =

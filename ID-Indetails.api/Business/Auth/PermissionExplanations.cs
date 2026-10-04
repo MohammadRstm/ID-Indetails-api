@@ -60,6 +60,8 @@ public static class PermissionExplanations
         [PermissionCodes.EmployeeView] = "See the people in the business, their profiles and their work.",
         [PermissionCodes.EmployeeInvite] = "Invite new admins and employees to the business, and resend their invitations.",
         [PermissionCodes.EmployeeInviteSuperAdmin] = "Invite super admins, and change super admins' accounts.",
+        [PermissionCodes.EmployeeChangeEmail] = "Change the address people sign in with, their own included (with their password). It ends their sessions; a super admin's also needs \"Invite super admins\".",
+        [PermissionCodes.SessionManage] = "Sign someone out everywhere at once and block their sign-in until it is restored, then restore it. Never your own; a super admin's also needs \"Invite super admins\".",
         [PermissionCodes.EmployeeManage] = "Edit people's profiles, teams and positions, change their role or business, and deactivate or reactivate their accounts.",
         [PermissionCodes.EmployeePayManage] = "See and change what people are paid, from a date onwards.",
         [PermissionCodes.PermissionManage] = "Give people permissions beyond their role or take some away. Anyone but a super admin can only hand out permissions they hold.",
@@ -72,7 +74,8 @@ public static class PermissionExplanations
 
         // The company
         [PermissionCodes.CompanyView] = "See the company area: the overview and finances of both businesses together.",
-        [PermissionCodes.OverheadManage] = "Manage the company's own expenses, such as rent and software, and their categories.",
+        [PermissionCodes.OverheadManage] = "Manage the company's own expenses, such as rent and software.",
+        [PermissionCodes.OverheadCategoryManage] = "Add, rename and remove the categories the company's expenses are sorted into. A category still in use can't be removed.",
         [PermissionCodes.SalaryView] = "See what each person is owed each month, from their pay and hours.",
         [PermissionCodes.CompanySettingsManage] = "Change the company's name, logo, address and other company-wide settings.",
         [PermissionCodes.WorkingTimeManage] = "Set the company's working week, daily break and overtime rate.",

@@ -4,7 +4,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 
 namespace ID_Indetails.api.Services.Employees.Abstraction;
 
-/// <summary>A super admin changing a sign-in address: someone else's, or their own with their password.</summary>
+/// <summary>Changing a sign-in address (<c>employee:change_email</c>): someone else's, or one's own with one's password.</summary>
 public interface ISignInEmailService
 {
     Task<EmployeeResponse> ChangeAsync(long userId, ChangeEmailRequest request, CancellationToken cancellationToken = default);

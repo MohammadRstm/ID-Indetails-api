@@ -23,9 +23,9 @@ using Microsoft.Extensions.Options;
 namespace ID_Indetails.api.Services.Employees.Implementation;
 
 /// <summary>
-/// A super admin changing a sign-in address, which takes effect at once:
+/// Changing a sign-in address (<c>employee:change_email</c>), which takes effect at once:
 /// <list type="bullet">
-/// <item>the person's sessions end: someone else's from their next request, as when a super admin ends them; your own
+/// <item>the person's sessions end: someone else's from their next request, as when their sessions are ended; your own
 /// keeps only the one you are using;</item>
 /// <item>the new address is told inside the transaction, so nothing changes if it can't be reached; the old one is told
 /// afterwards, if it still can be;</item>
@@ -100,7 +100,6 @@ public sealed class SignInEmailService(
 
     public async Task<AuthSession> ChangeMineAsync(ChangeMyEmailRequest request, CancellationToken cancellationToken = default)
     {
-        Throw(EmployeeRules.CheckOwnEmailChange(await permissions.GetAccessAsync(currentUser.Id, cancellationToken)));
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
         var user = await users.GetByIdForUpdateAsync(currentUser.Id, cancellationToken) is { Status: UserStatus.Active } self

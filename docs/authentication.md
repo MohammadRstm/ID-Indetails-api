@@ -11,7 +11,7 @@ There is **no self-signup**. A developer creates the first super admin. After th
 | `POST /api/auth/refresh` | Refresh cookie | Rotates the refresh cookie and returns a new access token |
 | `POST /api/auth/logout` | Refresh cookie | Revokes the refresh token and clears the cookie |
 | `POST /api/auth/change-password` | Signed in (allowed while a temporary password is pending) | Sets a new password and signs out every other session |
-| `POST /api/auth/change-email` | Signed-in super admin | `{ email, currentPassword }`. Their own new sign-in address; signs out every other session ([employees.md](employees.md#changing-a-sign-in-address)) |
+| `POST /api/auth/change-email` | `employee:change_email` | `{ email, currentPassword }`. Their own new sign-in address; signs out every other session ([employees.md](employees.md#changing-a-sign-in-address)) |
 | `POST /api/auth/forgot-password` | Anyone | `{ email }`. Emails a reset link to an active account with that email. Always `204` |
 | `POST /api/auth/reset-password` | Anyone with a link | `{ token, password }`. Sets the new password and signs out everywhere. `204` |
 | `GET /api/auth/me` | Signed in (allowed while a temporary password is pending) | Current user, effective permissions, `isJoker` and `visibleDomains` |

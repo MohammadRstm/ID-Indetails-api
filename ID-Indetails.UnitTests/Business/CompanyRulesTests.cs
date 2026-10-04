@@ -93,10 +93,8 @@ public class CompanyRulesTests
     }
 
     [Fact]
-    public void Only_a_super_admin_manages_the_categories_and_one_in_use_stays()
+    public void A_category_in_use_stays()
     {
-        OverheadRules.CheckManageGroups(isSuperAdmin: true).ShouldBeNull();
-        OverheadRules.CheckManageGroups(isSuperAdmin: false)!.Kind.ShouldBe(DenialKind.Forbidden);
         OverheadRules.CheckRemoveGroup(0).ShouldBeNull();
         OverheadRules.CheckRemoveGroup(2)!.Code.ShouldBe(ErrorCodes.OverheadGroupInUse);
     }

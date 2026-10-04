@@ -14,7 +14,7 @@ public class SessionRulesTests
     private static readonly UserAccess SuperAdmin = new(
         1, RoleCodes.SuperAdmin, null, [PermissionCodes.EmployeeManage, PermissionCodes.EmployeeInviteSuperAdmin], false, DomainCodes.All);
 
-    private static readonly UserAccess DesignAdmin = new(2, RoleCodes.Admin, DomainCodes.Design, [PermissionCodes.EmployeeManage], false, [DomainCodes.Design]);
+    private static readonly UserAccess DesignAdmin = new(2, RoleCodes.Admin, DomainCodes.Design, [PermissionCodes.SessionManage], false, [DomainCodes.Design]);
 
     private static Target Employee(UserStatus status = UserStatus.Active) => new(10, RoleCodes.Employee, DomainCodes.Design, status);
 
@@ -36,14 +36,20 @@ public class SessionRulesTests
     }
 
     [Fact]
-    public void Only_a_super_admin_ends_or_restores_sessions_and_never_their_own()
+    public void Sessions_are_never_ones_own_to_end_and_a_super_admin_s_need_the_permission_to_invite_super_admins()
     {
-        EmployeeRules.CheckEndSessions(DesignAdmin, Employee(), alreadyEnded: false).ShouldNotBeNull();
-        EmployeeRules.CheckRestoreSignIn(DesignAdmin, Employee(), ended: true).ShouldNotBeNull();
+        EmployeeRules.CheckEndSessions(DesignAdmin, Employee(), alreadyEnded: false).ShouldBeNull();
+        EmployeeRules.CheckRestoreSignIn(DesignAdmin, Employee(), ended: true).ShouldBeNull();
+        EmployeeRules.CheckEndSessions(DesignAdmin, new Target(2, RoleCodes.Admin, DomainCodes.Design, UserStatus.Active), alreadyEnded: false)
+            .ShouldNotBeNull().Code.ShouldBe(ErrorCodes.EmployeeChangeNotAllowed);
         EmployeeRules.CheckEndSessions(SuperAdmin, new Target(1, RoleCodes.SuperAdmin, null, UserStatus.Active), alreadyEnded: false)
             .ShouldNotBeNull().Code.ShouldBe(ErrorCodes.EmployeeChangeNotAllowed);
-        EmployeeRules.CheckEndSessions(SuperAdmin, Employee(), alreadyEnded: false).ShouldBeNull();
-        EmployeeRules.CheckRestoreSignIn(SuperAdmin, Employee(), ended: true).ShouldBeNull();
+
+        var otherSuperAdmin = new Target(3, RoleCodes.SuperAdmin, null, UserStatus.Active);
+        EmployeeRules.CheckEndSessions(DesignAdmin, otherSuperAdmin, alreadyEnded: false)
+            .ShouldNotBeNull().Code.ShouldBe(ErrorCodes.EmployeeChangeNotAllowed);
+        EmployeeRules.CheckRestoreSignIn(DesignAdmin, otherSuperAdmin, ended: true).ShouldNotBeNull();
+        EmployeeRules.CheckEndSessions(SuperAdmin, otherSuperAdmin, alreadyEnded: false).ShouldBeNull();
     }
 
     [Fact]

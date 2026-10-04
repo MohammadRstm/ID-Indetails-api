@@ -31,21 +31,21 @@ public sealed class OverheadController(IOverheadService overhead) : ControllerBa
     public Task<IReadOnlyList<OverheadGroupResponse>> Groups(CancellationToken cancellationToken)
         => overhead.GroupsAsync(cancellationToken);
 
-    /// <summary>A new category, listed before "Other". Super admins only.</summary>
+    /// <summary>A new category, listed before "Other".</summary>
     [HttpPost("groups")]
-    [HasPermission(PermissionCodes.OverheadManage)]
+    [HasPermission(PermissionCodes.OverheadCategoryManage)]
     public async Task<ActionResult<OverheadGroupResponse>> AddGroup(OverheadGroupRequest request, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await overhead.AddGroupAsync(request, cancellationToken));
 
-    /// <summary>Renames a category; its lines keep it. Super admins only.</summary>
+    /// <summary>Renames a category; its lines keep it.</summary>
     [HttpPut("groups/{id:long}")]
-    [HasPermission(PermissionCodes.OverheadManage)]
+    [HasPermission(PermissionCodes.OverheadCategoryManage)]
     public Task<OverheadGroupResponse> RenameGroup(long id, OverheadGroupRequest request, CancellationToken cancellationToken)
         => overhead.RenameGroupAsync(id, request, cancellationToken);
 
-    /// <summary>Removes a category no line uses (<c>422 overhead_group_in_use</c> otherwise). Super admins only.</summary>
+    /// <summary>Removes a category no line uses (<c>422 overhead_group_in_use</c> otherwise).</summary>
     [HttpDelete("groups/{id:long}")]
-    [HasPermission(PermissionCodes.OverheadManage)]
+    [HasPermission(PermissionCodes.OverheadCategoryManage)]
     public async Task<IActionResult> RemoveGroup(long id, CancellationToken cancellationToken)
     {
         await overhead.RemoveGroupAsync(id, cancellationToken);

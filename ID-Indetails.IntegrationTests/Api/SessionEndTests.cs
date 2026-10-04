@@ -4,7 +4,7 @@ using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
 
-/// <summary>A super admin ending someone's sessions, for an account someone else is using, and restoring their sign-in.</summary>
+/// <summary>Ending someone's sessions (<c>session:manage</c>), for an account someone else is using, and restoring their sign-in.</summary>
 public class SessionEndTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
     private readonly AuthTestSteps _steps = new(api);
@@ -47,16 +47,39 @@ public class SessionEndTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Only_a_super_admin_ends_sessions_and_never_their_own()
+    public async Task Whoever_holds_session_manage_ends_sessions_but_never_their_own_or_a_super_admin_s()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
+        // an admin's defaults don't include it
         await (await Client.PostEmptyAsync($"/api/employees/{employee.User.Id}/sessions/end", admin.AccessToken))
-            .ShouldFailWithAsync(403, ErrorCodes.EmployeeChangeNotAllowed);
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.PostEmptyAsync($"/api/employees/{superAdmin.User.Id}/sessions/end", superAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.EmployeeChangeNotAllowed);
         (await Client.GetAsync("/api/auth/me", employee.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        // given it, and an Execution permission so they see both domains and so super admins too
+        var granted = await Client.PutJsonAsync($"/api/users/{admin.User.Id}/permissions", new
+        {
+            changes = new[]
+            {
+                new { code = PermissionCodes.SessionManage, action = "grant", reason = "Handles lost laptops" },
+                new { code = PermissionCodes.MaterialCreate, action = "grant", reason = "Helps on site" },
+            },
+        }, superAdmin.AccessToken);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+
+        var ended = await Client.PostEmptyAsync($"/api/employees/{employee.User.Id}/sessions/end", admin.AccessToken);
+        ended.IsSuccessStatusCode.ShouldBeTrue(await ended.Content.ReadAsStringAsync());
+        await (await Client.GetAsync("/api/auth/me", employee.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
+        (await Client.PostEmptyAsync($"/api/employees/{employee.User.Id}/sessions/restore", admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        await (await Client.PostEmptyAsync($"/api/employees/{admin.User.Id}/sessions/end", admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.EmployeeChangeNotAllowed);
+        await (await Client.PostEmptyAsync($"/api/employees/{superAdmin.User.Id}/sessions/end", admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.EmployeeChangeNotAllowed);
+        (await Client.GetAsync("/api/auth/me", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
     }
 }

@@ -54,6 +54,8 @@ public static class PermissionCodes
     public const string EmployeeInvite = "employee:invite";
     public const string EmployeePayManage = "employee:pay_manage";
     public const string EmployeeInviteSuperAdmin = "employee:invite_super_admin";
+    public const string EmployeeChangeEmail = "employee:change_email";
+    public const string SessionManage = "session:manage";
     public const string PermissionManage = "permission:manage";
     public const string TeamManage = "team:manage";
 
@@ -65,6 +67,7 @@ public static class PermissionCodes
     // Company layer (super admin)
     public const string CompanyView = "company:view";
     public const string OverheadManage = "overhead:manage";
+    public const string OverheadCategoryManage = "overhead_category:manage";
     public const string SalaryView = "salary:view";
     public const string CompanySettingsManage = "company_settings:manage";
     public const string WorkingTimeManage = "working_time:manage";

@@ -124,7 +124,7 @@ The initial migration seeds:
 - **`roles`:** `super_admin`, `admin` and `employee`.
 - **`permissions` and `role_permissions`:** from `Constants/PermissionCatalog.cs`.
 
-`user_permission_overrides` holds individual people's differences from their role defaults (see [authorization.md](authorization.md)). The `UserPermissionOverrides` migration adds it, with the `permission:manage` and `employee:invite_super_admin` permissions.
+`user_permission_overrides` holds individual people's differences from their role defaults (see [authorization.md](authorization.md)). The `UserPermissionOverrides` migration adds it, with the `permission:manage` and `employee:invite_super_admin` permissions. The `CompanyPermissions` migration adds `overhead_category:manage`, `session:manage` and `employee:change_email`, held by super admins, for what used to be theirs alone: expense categories, ending sessions and sign-in addresses.
 
 Permission and role strings match the React client's `config/permissions.ts` and `config/roles.ts`.
 

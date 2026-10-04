@@ -18,7 +18,9 @@ People management covers everyone with an account: super admins, admins and empl
 | `PUT /api/employees/{id}/photo`, `DELETE …` | `employee:manage` | `{ fileId }`: their profile photo, from the caller's upload ([files.md](files.md)) |
 | `POST /api/employees/{id}/deactivate` | `employee:manage` | `{ lastWorkingDay }` (optional, today when empty): blocks sign-in, ends every session and ends their employment on that day |
 | `POST /api/employees/{id}/reactivate` | `employee:manage` | `{ payGap }` (only when they left earlier this month): undoes a deactivation |
-| `PUT /api/employees/{id}/email` | `employee:manage`, super admins only | `{ email }`: a new sign-in address (below) |
+| `PUT /api/employees/{id}/email` | `employee:change_email` | `{ email }`: a new sign-in address (below) |
+| `POST /api/employees/{id}/sessions/end` | `session:manage` | Signs them out everywhere and blocks their sign-in until it is restored. Never one's own |
+| `POST /api/employees/{id}/sessions/restore` | `session:manage` | Lets them sign in again; the sessions that were ended stay ended |
 | `PUT /api/employees/{id}/role` | `employee:manage` | Changes the role |
 | `PUT /api/employees/{id}/domain` | `employee:manage` | Moves someone to the other domain |
 | `GET /api/employees/{id}/pay` | `employee:pay_manage` | Pay history, newest first |
@@ -48,17 +50,17 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 
 ## Changing a sign-in address
 
-A super admin sets someone's new address with `PUT /api/employees/{id}/email`, and their own with `POST /api/auth/change-email` (`{ email, currentPassword }`, [authentication.md](authentication.md)), never their own through the first. It takes effect at once (`Services/Employees/Implementation/SignInEmailService.cs`):
+Whoever holds `employee:change_email` (super admins by default) sets someone's new address with `PUT /api/employees/{id}/email`, and their own with `POST /api/auth/change-email` (`{ email, currentPassword }`, [authentication.md](authentication.md)), never their own through the first. It takes effect at once (`Services/Employees/Implementation/SignInEmailService.cs`):
 
 - The address must be new (`422 email_unchanged`) and nobody else's, invited or not (`409 email_already_registered`). A deactivated account's isn't changed (`422 user_deactivated`).
-- The person's sessions end: refresh tokens are revoked and the access tokens they hold are refused from their next request, as when a super admin ends them, but their sign-in isn't suspended. Changing your own keeps only the session you are using.
+- The person's sessions end: refresh tokens are revoked and the access tokens they hold are refused from their next request, as when their sessions are ended, but their sign-in isn't suspended. Changing your own keeps only the session you are using.
 - The new address is emailed inside the transaction, so if it can't be reached nothing changes (`503 email_delivery_failed`). The old address is then told it no longer signs in, without the new one, since whoever reads that mailbox now may not be the person. A failure there is only logged: a mailbox that no longer works is often the reason for the change.
 - Someone still **invited** gets neither email: the link sent to the old address stops working and the invitation is sent again to the new one. If that email fails the address is still changed, and the `503` says to resend the invitation.
 - The `employee_email_changed` event holds no addresses, because the activity feed is read more widely than the people list.
 
 ## Rules that protect accounts
 
-- Changing a super admin's account in any way (profile, pay, status, role) also needs `employee:invite_super_admin`.
+- Changing a super admin's account in any way (profile, pay, status, role, sign-in address, sessions) also needs `employee:invite_super_admin`.
 - Nobody deactivates, re-roles, moves or sets the pay of their own account.
 - The **last active super admin** can never be deactivated or given another role, so the company always has one. Every active super admin's row is locked while this is checked, so two requests can't each remove "the other one".
 

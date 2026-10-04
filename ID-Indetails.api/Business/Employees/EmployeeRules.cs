@@ -61,12 +61,12 @@ public static class EmployeeRules
     }
 
     /// <summary>
-    /// Ending all of someone's sessions, which also blocks their sign-in until it is restored: a super admin's to do,
-    /// to someone else's working account.
+    /// Ending all of someone's sessions, which also blocks their sign-in until it is restored (<c>session:manage</c>):
+    /// someone else's working account.
     /// </summary>
     public static RuleDenial? CheckEndSessions(UserAccess actor, Target target, bool alreadyEnded)
     {
-        if (CheckSessionsActor(actor, target) is { } denial)
+        if (CheckSessionsTarget(actor, target) is { } denial)
         {
             return denial;
         }
@@ -81,22 +81,15 @@ public static class EmployeeRules
             : null;
     }
 
-    /// <summary>Letting someone whose sessions were ended sign in again: a super admin's to do.</summary>
+    /// <summary>Letting someone whose sessions were ended sign in again (<c>session:manage</c>).</summary>
     public static RuleDenial? CheckRestoreSignIn(UserAccess actor, Target target, bool ended)
-        => CheckSessionsActor(actor, target)
+        => CheckSessionsTarget(actor, target)
             ?? (ended ? null : RuleDenial.BusinessRule(ErrorCodes.SessionsNotEnded, "Their sign-in isn't suspended."));
 
-    private static RuleDenial? CheckSessionsActor(UserAccess actor, Target target)
-    {
-        if (!actor.IsSuperAdmin)
-        {
-            return RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "Only a super admin can end or restore someone's sessions.");
-        }
-
-        return target.Id == actor.UserId
+    private static RuleDenial? CheckSessionsTarget(UserAccess actor, Target target)
+        => target.Id == actor.UserId
             ? RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "You cannot end or restore your own sessions.")
-            : null;
-    }
+            : CheckCanChange(actor, target);
 
     public static RuleDenial? CheckReactivate(UserAccess actor, Target target)
     {
@@ -214,30 +207,25 @@ public static class EmployeeRules
     }
 
     /// <summary>
-    /// Changing someone's sign-in address: a super admin's to do, for an account that isn't deactivated. Their own goes
-    /// through <see cref="CheckOwnEmailChange"/>, with their password.
+    /// Changing someone's sign-in address (<c>employee:change_email</c>), for an account that isn't deactivated. One's
+    /// own goes through <c>POST /api/auth/change-email</c>, with their password.
     /// </summary>
     public static RuleDenial? CheckEmailChange(UserAccess actor, Target target)
     {
-        if (CheckOwnEmailChange(actor) is { } denial)
-        {
-            return denial;
-        }
-
         if (target.Id == actor.UserId)
         {
             return RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "Change your own sign-in address from your profile, with your password.");
+        }
+
+        if (CheckCanChange(actor, target) is { } denial)
+        {
+            return denial;
         }
 
         return target.Status == UserStatus.Deactivated
             ? RuleDenial.BusinessRule(ErrorCodes.UserDeactivated, "This account is deactivated; reactivate it before changing its sign-in address.")
             : null;
     }
-
-    public static RuleDenial? CheckOwnEmailChange(UserAccess actor)
-        => actor.IsSuperAdmin
-            ? null
-            : RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "Only a super admin changes sign-in addresses.");
 
     /// <summary>Setting someone's pay: never your own, never a deactivated account.</summary>
     public static RuleDenial? CheckPayChange(UserAccess actor, Target target)
