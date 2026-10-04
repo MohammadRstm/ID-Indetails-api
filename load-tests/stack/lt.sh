@@ -353,7 +353,11 @@ case "$command" in
         parse_options "$@"
         check_rendered_config
         mail_certs
-        compose up -d --wait --wait-timeout 180 "${services[@]}"
+        if ! compose up -d --wait --wait-timeout 180 "${services[@]}"; then
+            compose ps -a
+            compose logs --no-color --tail 40
+            fail "The environment didn't start (the logs above say why)."
+        fi
         if [ -n "$(compose ps -q lt-api)" ]; then
             verify_email
         fi

@@ -61,10 +61,15 @@ fi
 tunnel_pid=""
 seed_db=""
 monitoring=false
+started=false
 cleanup() {
     local status=$?
     log "Cleaning up"
     if $monitoring; then lt monitor stop > /dev/null 2>&1 || true; fi
+    # A failed run keeps what the environment logged, for finding out why.
+    if [ "$status" -ne 0 ] && $started && [ ! -d "$OUT/collected" ]; then
+        lt collect collected.tar.gz > /dev/null 2>&1 && fetch collected.tar.gz "$OUT/collected.tar.gz" > /dev/null 2>&1             && mkdir -p "$OUT/collected" && tar -xzf "$OUT/collected.tar.gz" -C "$OUT/collected" && rm -f "$OUT/collected.tar.gz" || true
+    fi
     [ -z "$tunnel_pid" ] || kill "$tunnel_pid" 2>/dev/null || true
     [ -z "$seed_db" ] || docker rm -f "$seed_db" > /dev/null 2>&1 || true
     if [ "${KEEP:-false}" = true ]; then
@@ -127,6 +132,7 @@ docker rm -f "$seed_db" > /dev/null && seed_db=""
 # ---- The load-test environment ---------------------------------------------------------------------------------------
 
 log "Starting the load-test database and loading the snapshot"
+started=true
 lt up lt-db
 if [ "$TARGET" = server ]; then
     ssh "${ssh_opts[@]}" -o ExitOnForwardFailure=yes -N -L 13306:127.0.0.1:13306 "$LT_SSH" &
