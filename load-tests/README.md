@@ -1,17 +1,29 @@
 # Load and stress testing
 
-This suite finds out how Hourline behaves with about 50 people (the real expected use), with 200, and beyond. It
-checks speed, errors, and whether the data is still right afterwards. k6 plays the users. The application under test
-is the real production images, running in a separate load-test environment on the production server.
+This suite finds out how Hourline behaves with about 50 people (the expected use), with 200, and beyond. It measures
+speed, errors and the server's load, and checks afterwards that the data is still right. k6 plays the users.
 
-It is built in stages. So far: **the isolated environment and its database (stage 2)**. Seeding, the k6 scenarios,
-verification, monitoring and the reports come next.
+- **What gets tested:** the real production images (API and client), running in a separate load-test environment.
+  That environment runs either on the production server or, as a rehearsal, on a GitHub runner.
+- **Who runs it:** one GitHub workflow, or one script, runs everything: seeding, the test, monitoring, verification,
+  the report and clean-up.
+
+Contents:
+1. [Safety rules](#safety-rules)
+2. [How a test runs](#how-a-test-runs)
+3. [Running tests](#running-tests)
+4. [Setting up the server (once)](#setting-up-the-server-once)
+5. [Reading the results](#reading-the-results)
+6. [Watching the server during a test](#watching-the-server-during-a-test)
+7. [Clean-up](#clean-up)
+8. [The test data](#the-test-data)
+9. [Reference: the tool, lt.sh, the files](#reference)
 
 ## Safety rules
 
 ### Production is never touched
 
-The load-test environment runs next to production on the same server, but shares nothing with it.
+The load-test environment can run on the production server, next to production, but shares nothing with it.
 
 | What | Production | Load test |
 |---|---|---|
@@ -32,139 +44,315 @@ Several checks stop a command before it changes anything:
   - It must answer `SELECT @@hostname` with `LT_DB_HOSTNAME` (`idi-loadtest-db` on the server).
   - It must hold a marker, `idi_loadtest_identity.identity`, whose id equals `LT_INSTANCE_ID`.
   - `init` writes the marker once. It won't mark a server whose `idi_loadtest` already has tables it didn't create.
-- **The tool reads its settings from `LT_*` environment variables only.** It never reads the API's settings, user
-  secrets or `ConnectionStrings:Default`.
+  - `lt.sh load-snapshot` makes the same check before it replaces the data.
+- **Settings come from `LT_*` variables only.** The tool never reads the API's settings, user secrets or
+  `ConnectionStrings:Default`.
 - **Destructive commands want the database's name typed out:** `reset --confirm idi_loadtest`.
-- **`lt.sh` refuses to run** in production's folder, or with an `.env` that holds production's setting names
-  (`SMTP_*`, `MYSQL_*`, `JWT_SIGNING_KEY`, …).
+- **`lt.sh` refuses to run** in production's folder, or with an `.env` holding production's setting names
+  (`SMTP_*`, `MYSQL_*`, `JWT_SIGNING_KEY`, …). It never reads production's `.env`, and neither does the runner.
 - **`lt.sh` checks the rendered compose configuration before anything starts.**
   - The services are the five load-test ones.
-  - Every volume and network belongs to the `idi-loadtest` project.
-  - Only `lt-db` (loopback 13306) and `lt-proxy` (8443) publish ports.
-- **No route between the two.** Production's database is on its internal network with no published port, so the
-  load-test containers, and the tool through its SSH tunnel to `127.0.0.1:13306`, can't reach it at all.
-- **Separate secrets.** The load-test API has its own JWT signing key, so tokens of one environment are worthless in
+  - Every volume and network belongs to `idi-loadtest`.
+  - Only `lt-db` (on loopback, 13306) and `lt-proxy` (8443) publish ports.
+- **No route between the two.** Production's database is on an internal network with no published port, so the
+  load-test containers, and the tool through its SSH tunnel to `127.0.0.1:13306`, can't reach it.
+- **Separate secrets.** The load-test API has its own JWT signing key, so one environment's tokens are worthless in
   the other.
+- **Clean-up is scoped.** `lt.sh purge` removes only volumes labelled and named `idi-loadtest_`.
 
 ### Email never reaches anyone
 
-- **Mailpit only.** The load-test API's SMTP settings are written as literals in `stack/docker-compose.loadtest.yml`:
-  `lt-mail:1025`, no credentials, from `no-reply@loadtest.invalid`. They aren't read from `.env`, which has no mail
-  settings at all.
-  - `lt.sh` refuses to start any configuration with another SMTP host, a username or a password, or a sender
-    outside `@loadtest.invalid`.
-  - Once the API runs, `lt.sh` checks the running container's settings again.
-- **Even a wrong setting couldn't send.** The API sits only on `lt-backend`, an internal Docker network with no route
-  out of the server.
-  - `lt.sh up` and `lt.sh verify-email` prove it: a connection from the API to a public address must fail.
-  - Mailpit must answer at `lt-mail:1025`.
-  - Mailpit itself relays nothing, so whatever the API sends stops there. `lt.sh mail-count` says how many it caught.
-- **Undeliverable addresses.** Every address in the load-test database ends in `@loadtest.invalid`: user accounts,
-  client contacts, invoice recipients and delivery records.
-  - `.invalid` is reserved never to exist (RFC 2606).
+- **Mailpit only.** The load-test API's SMTP settings are literals in `stack/docker-compose.loadtest.yml`:
+  `lt-mail:1025`, STARTTLS, no credentials, from `no-reply@loadtest.invalid`. `.env` has no mail settings.
+  - `lt.sh` refuses any configuration with another SMTP host, a username or password, or a sender outside
+    `@loadtest.invalid`.
+  - Once the API runs, it checks the running container's settings again.
+- **Even a wrong setting couldn't send.**
+  - The API sits only on `lt-backend`, an internal Docker network with no route off the server. `lt.sh up` proves it:
+    a connection from the API to a public address must fail, and Mailpit must answer at `lt-mail:1025`.
+  - The API trusts one certificate authority alone: the one `lt.sh` made for this environment, which signed
+    Mailpit's certificate (production insists on STARTTLS). A real mail server's certificate would be refused too.
+- **Undeliverable addresses.** Every address in the load-test database ends in `@loadtest.invalid`, a domain reserved
+  never to exist (RFC 2606).
   - The tool's `check` refuses a database holding any other address.
-  - No production address is ever seeded.
-- **Nothing scheduled runs in a normal test.**
-  - The notification scheduler is off: it issues and emails scheduled invoices, and it emails overdue reminders.
-  - The file cleanup is off too.
-  - Only `lt.sh up --email-test` (the dedicated notification and email test) switches them on, still with Mailpit.
-- **Normal tests leave out the endpoints that send email.** They test the application, not the mail provider:
+  - The seeder fails on any email to another address.
+- **Nothing scheduled runs in a normal test.** The notification scheduler (which issues and emails scheduled invoices
+  and overdue reminders) and the file clean-up are off. Only the email test (`lt.sh up --email-test`) turns them on,
+  still with Mailpit.
+- **Normal tests call no endpoint that sends email.** The k6 scripts refuse these unless `EMAIL_TEST=true`:
 
   | Endpoint | Emails |
   |---|---|
   | `POST /api/auth/forgot-password` | a reset link |
   | `POST /api/auth/change-email`, `PUT /api/employees/{id}/email` | the old and the new address |
   | `POST /api/invitations`, `POST /api/invitations/{id}/resend` | an invitation link |
-  | `POST /api/invoices/{id}/email` | the invoice PDF to the client |
-  | `POST /api/statements/{id}/email` | the statement PDF to the client |
+  | `POST /api/invoices/{id}/email`, `POST /api/statements/{id}/email` | the PDF to the client |
   | `POST /api/setup/super-admin` | a temporary password (disabled here: no setup key) |
-  | `POST /api/projects/{id}/invoice-plan`, `PUT /api/invoices/{id}/schedule` | nothing at once; the scheduler issues and emails them on their day |
+  | `POST /api/projects/{id}/invoice-plan`, `PUT /api/invoices/{id}/schedule` | later, when the scheduler runs |
 
-  This is every caller of `IEmailSender` (password reset, invitations, sign-in address changes, documents, setup). The
-  k6 suite will refuse these unless the email test is running.
+- **A normal run fails if Mailpit caught anything**, since that would mean an email path ran that shouldn't have.
 
-## What's here
+## How a test runs
 
-| Path | What |
-|---|---|
-| `stack/docker-compose.loadtest.yml` | The load-test environment: `lt-db`, `lt-mail`, `lt-api`, `lt-web`, `lt-proxy` |
-| `stack/docker-compose.loadtest.email-test.yml` | Opt-in: the scheduler on, for the email test |
-| `stack/docker-compose.loadtest.production-limits.yml` | Opt-in: production's per-IP rate limits, for the rate-limit test |
-| `stack/Caddyfile.loadtest` | HTTPS on 8443 behind the gate key |
-| `stack/.env.loadtest.example` | The load-test settings (no mail settings, no production names) |
-| `stack/lt.sh` | Starts, checks, stops and removes the environment on the server |
-| `tool/` | `ID-Indetails.LoadTests.Tool`: creates, checks, resets and drops the load-test database |
-| `tool-tests/` | Its unit tests |
-
-## The environment
+`load-tests/scripts/run.sh` does every step, whether a workflow or a person starts it:
 
 ```text
-k6 ──HTTPS :8443, X-LoadTest-Key──▶ lt-proxy (Caddy) ──▶ lt-web (nginx) ──/api, /hubs──▶ lt-api ──▶ lt-db
-                                    lt-edge network                    lt-backend (internal: no route out)
-                                                                       lt-api ──SMTP──▶ lt-mail (Mailpit)
-the tool ──SSH tunnel──▶ 127.0.0.1:13306 ──▶ lt-db
+ runner (GitHub, or any Linux machine)                    target (the server, or the runner itself)
+ ─────────────────────────────────────                    ─────────────────────────────────────────
+ 1. check the target ───────────── SSH ─────────────────▶ lt.sh check (guards, rendered configuration)
+ 2. seed N users into a throwaway MySQL here
+ 3. copy the snapshot ─────────── scp ─────────────────▶ 4. lt-db started; tool init + load-snapshot (identity checked)
+                                                          5. lt.sh up: the environment, email isolation proved
+ 6. smoke test (bigger profiles only) ── HTTPS :8443 ──▶    lt-proxy → lt-web → lt-api → lt-db
+ 7. monitoring on ────────────────────────────────────▶ monitor.sh samples the server every 10 s
+ 8. k6: the profile ─────────── HTTPS :8443 + gate key ─▶ (recovery: lt.sh chaos actions meanwhile)
+ 9. collect ◀─────────────────── scp ─────────────────── logs, samples, statement digests, Mailpit count
+10. verify the database (tool, through the SSH tunnel)
+11. report: report.md, report.json, verification.md
+12. clean-up, whatever happened ──────────────────────▶ lt.sh purge (unless KEEP=true)
 ```
 
-- `lt-api` and `lt-web` are the production images (`API_TAG`, `CLIENT_TAG`), and `lt-db` is the same MySQL 8.4. The
-  API runs in its Production mode, with production's start-up checks.
-- The only differences from production are configuration: the database, the secrets, Mailpit, the per-IP rate limits
-  and the switched-off scheduler.
-- **Rate limits.** k6 sends from one address, so the sign-in and anonymous per-IP limits are raised. The per-user
-  limit stays at production's 300 a minute. `lt.sh up --production-rate-limits` restores production's per-IP limits
-  for the test that checks they still answer 429.
-- **Restarts.** Nothing restarts by itself (`restart: "no"`), so the environment never comes back after a reboot.
+## Running tests
 
-### `lt.sh`
+### The profiles
 
-```bash
-./lt.sh init-env <public-ip> <api-tag> <client-tag>   # once: .env with new random secrets
-./lt.sh check                                         # every guard, starts nothing
-./lt.sh up lt-db                                      # the database alone (for the tool)
-./lt.sh up                                            # everything; then verifies email isolation
-./lt.sh verify-email                                  # again, any time
-./lt.sh mail-count                                    # emails Mailpit caught (0 in a normal test)
-./lt.sh status | logs [service] | restart <service>
-./lt.sh down                                          # remove the containers, keep the data
-./lt.sh purge                                         # remove everything, data included
-```
+| Profile | What it does | Users seeded | Roughly |
+|---|---|---|---|
+| `smoke` | 5 users for 4 minutes: does every journey work end to end? | 68 | 15 min |
+| `load` | The expected use: 50 users for 30 minutes | 68 | 50 min |
+| `stages` | 50, 70, 100, 150, 200 users, each reached by a 2-minute ramp and held 6 minutes | 215 | 75 min |
+| `stress` | Up to 300 users in steps of 50 | 320 | 100 min |
+| `spike` | 50 users, a jump to 200 in 15 seconds for 4 minutes, back to 50 | 215 | 50 min |
+| `soak` | 60 users for 3 hours: leaks, growing tables, slow drift | 68 | 3 h 40 min |
+| `breakpoint` | +25 users every 4 minutes up to 400; stops when errors pass 5% or p95 passes 3 s | 425 | up to 90 min |
+| `recovery` | 50 users for 20 minutes while the API is restarted, killed, the database paused 30 s and the proxy restarted | 68 | 45 min |
+| `concurrency` | 12 races: several people act on the same record at the same instant (below) | 215 | 35 min |
+| `rate-limits` | Production's per-address limits restored; checks they answer 429, never worse | 68 | 20 min |
+| `email` | Calls every endpoint that sends email once; Mailpit must catch them all | 68 | 20 min |
 
-## The load-test database and the tool
+Times include seeding (about 4 minutes per 50 users) and are for a GitHub runner.
 
-The tool references the API project, so it uses the API's own DbContext and migrations. A schema change that the
-tool doesn't match breaks its build.
+- **Sizes and timings** are in `k6/profiles/*.json`: steps, ramps, holds, pass/fail thresholds, and `think` (the pace:
+  1 is a person's). Change them there.
+- **Users:** every virtual user is always the same test user. So a profile needs at least as many active users as its
+  peak, and `run.sh` seeds that many plus a margin.
 
-| Variable | Value |
-|---|---|
-| `LT_DB_CONNECTION` | Admin connection string to the load-test server, with `Database=idi_loadtest` |
-| `LT_DB_HOSTNAME` | What that server answers to `SELECT @@hostname`. On the server: `idi-loadtest-db` |
-| `LT_INSTANCE_ID` | `LT_INSTANCE_ID` from the load-test `.env` |
+**The races** (`concurrency`):
+- one project edited by 12 admins at once;
+- ten requirements ticked at once, and one requirement ticked by three people;
+- six payments on one 100-dollar invoice;
+- eight drafts issued at once (numbering);
+- three statements on one project;
+- a material deleted while a statement is made;
+- one person logging the same time in two tabs;
+- one labour week saved three times at once;
+- two permission changes to one person;
+- two exchange rates for the same day;
+- a project completed while five people log work on it.
 
-| Command | Does |
-|---|---|
-| `init` | Marks the server as this load-test environment (once) and creates `idi_loadtest` |
-| `check` | Verifies the server, that every migration is applied, and that no address is deliverable. Changes nothing |
-| `migrate` | Applies the API's pending migrations |
-| `reset --confirm idi_loadtest` | Drops `idi_loadtest`, creates it again and migrates it |
-| `drop --confirm idi_loadtest [--identity]` | Drops `idi_loadtest`, and with `--identity` the server's marker too |
+Each must answer only as the rules allow (never a 5xx) and leave the record in a state some order of the requests
+explains. The database verification then checks everything else.
 
-Exit codes: `0` done or ready, `1` refused or not ready, `2` usage.
+### A rehearsal on GitHub (no server needed)
 
-Run it in Release, so the build never touches a Debug API you have running. In **cmd**:
+The whole environment runs in Docker on the runner, with this branch's API and the client's `main`, built there.
+It never contacts the production server. The runner isn't the server (2 cores, 7 GB, and k6 shares them), so
+rehearsal numbers are only indicative. It is the way to try a change to the suite, or to the API, before a real run.
+
+- **Actions → Load test → Run workflow**, target `runner`, and a profile; or
+- add the label `load-test:<profile>` to a pull request (for example `load-test:smoke`). Remove the label and add it
+  again to run again.
+
+### On the server
+
+Once the server is set up ([below](#setting-up-the-server-once)):
+
+1. Pick a quiet time. The load-test environment shares the server's 2 CPUs and 4 GB with production, so a big
+   profile slows production while it runs. Run `smoke` first.
+2. **Actions → Load test → Run workflow**:
+   - target `server`, and a profile;
+   - `api_tag` and `client_tag`: the images to test, as Deploy published them (`sha-<7>`). Leave them empty to keep
+     the ones in the load-test `.env`. To test what production runs: `cat /opt/id-indetails/deployed.env` on the
+     server.
+   - `keep`: leave the environment up afterwards, to look around (then purge it yourself).
+3. Approve the run if the `loadtest` environment asks.
+
+Only one server run at a time: a second one waits.
+
+### From your PC
+
+Don't run big tests from the laptop: k6 at 200 users plus a tunnel is heavy, and the results would measure your
+connection. Use the workflow.
+
+To try a k6 script against an environment that is already up (with KEEP), use a smoke-sized run with k6 installed
+(`winget install k6`). In **cmd**, from the repository:
 
 ```bat
-set LT_DB_CONNECTION=Server=127.0.0.1;Port=13306;User=root;Password=<LT_DB_ROOT_PASSWORD>;Database=idi_loadtest;
-set LT_DB_HOSTNAME=idi-loadtest-db
-set LT_INSTANCE_ID=<LT_INSTANCE_ID>
-dotnet run --project load-tests\tool -c Release -- check
+set BASE_URL=https://<server-ip>:8443
+set GATE_KEY=<LT_GATE_KEY from the server's load-test .env>
+set USER_PASSWORD=<the password the data was seeded with>
+k6 run -e PROFILE=smoke -e THINK=0.3 load-tests\k6\main.js
 ```
 
-It also works on a development MySQL. `idi_loadtest` lives beside your own databases there, as the integration tests'
-`idi_test_*` do. Set `LT_DB_HOSTNAME` to what that server answers to `SELECT @@hostname`, and make up a GUID for
-`LT_INSTANCE_ID`. Afterwards, `drop --confirm idi_loadtest --identity` leaves the server as it was.
+`USER_PASSWORD` is only known to the run that seeded the data. To try scripts this way, seed with your own password
+(see [The test data](#the-test-data)).
 
-## Seeding the test data
+## Setting up the server (once)
 
-`seed` fills a freshly reset `idi_loadtest` with a company's worth of realistic data, by playing it through the real
+Before the first server run. The steps marked **(your PC)** are typed in **cmd**; **(server)** in the server's shell,
+as the `deploy` user.
+
+1. **A key for load tests (your PC).** It is used for nothing else, so it can be removed on its own later.
+
+   ```bat
+   ssh-keygen -t ed25519 -f "%USERPROFILE%\.ssh\idi_loadtest" -N "" -C "id-indetails load tests"
+   type "%USERPROFILE%\.ssh\idi_loadtest.pub"
+   ```
+
+   Add that line to `/home/deploy/.ssh/authorized_keys` on the server **(server)**: `nano ~/.ssh/authorized_keys`.
+
+2. **The folder and its files (your PC).** The workflow refreshes these files on every run; this first copy only
+   lets `lt.sh` write its settings.
+
+   ```bat
+   cd C:\Users\masst\source\repos\ID-Indetails
+   ssh -i "%USERPROFILE%\.ssh\idi_loadtest" deploy@<server-ip> "mkdir -p idi-loadtest"
+   scp -i "%USERPROFILE%\.ssh\idi_loadtest" load-tests\stack\lt.sh load-tests\stack\monitor.sh load-tests\stack\Caddyfile.loadtest load-tests\stack\docker-compose.loadtest.yml load-tests\stack\docker-compose.loadtest.email-test.yml load-tests\stack\docker-compose.loadtest.production-limits.yml deploy@<server-ip>:idi-loadtest/
+   ```
+
+3. **The load-test settings (server).** Fresh random secrets, in `~/idi-loadtest/.env`, readable by `deploy` only.
+   The tags are the images production runs now.
+
+   ```bash
+   cd ~/idi-loadtest && chmod +x lt.sh monitor.sh
+   cat /opt/id-indetails/deployed.env        # API_TAG=sha-… and CLIENT_TAG=sha-…
+   ./lt.sh init-env <server-public-ip> <API_TAG> <CLIENT_TAG>
+   ./lt.sh check
+   ```
+
+   `check` should end with `Config ok: mail to Mailpit only, API on an internal network, scheduler off`.
+
+4. **Port 8443.** Docker opens it past ufw, only while a test runs. If your provider has its own firewall in its
+   panel, allow TCP 8443 there. Requests without the gate key get a bare 404.
+
+5. **GitHub (browser).** In **ID-Indetails-api → Settings → Environments → New environment `loadtest`**:
+   - Required reviewers: you, if you want to approve each server run.
+   - Environment secrets:
+     - `LOADTEST_HOST`: the server's IP or name;
+     - `LOADTEST_USER`: `deploy`;
+     - `LOADTEST_SSH_KEY`: the whole content of `%USERPROFILE%\.ssh\idi_loadtest` (the private key);
+     - `LOADTEST_KNOWN_HOSTS`: the same line as the `production` environment's `DEPLOY_KNOWN_HOSTS`.
+
+6. **The first run:** Actions → Load test → target `server`, profile `smoke`.
+
+To stop using it: delete the `loadtest` environment, remove the key's line from `authorized_keys`, and on the server
+`cd ~/idi-loadtest && ./lt.sh purge && cd .. && rm -rf idi-loadtest`.
+
+## Reading the results
+
+Each run's artifact (Actions → the run → Artifacts, kept 14 days) is a folder:
+
+| File | What |
+|---|---|
+| `report.md` | The report: start here. It is also the run's summary page |
+| `report.json` | The same numbers, for comparing runs |
+| `verification.md`, `verification.json` | The database checks |
+| `k6-summary.json` | Everything k6 measured, per endpoint and load step |
+| `k6-console.log` | The scripts' LEDGER (every change), ERROR (every unexpected answer) and AFTERWARDS (races) lines |
+| `seed.log`, `roster.json` | How the data was seeded, and the test users (no passwords) |
+| `collected/` | From the server: `lt-api.log`, `lt-web.log` (nginx), `lt-db.log`, `monitor/` samples, `statements.tsv`, `deadlock.txt`, `slow.log`, `mail-count.txt`, `chaos.log` |
+
+**`report.md`, section by section:**
+- **The headline.**
+  - Requests, failed share, the 50th/95th/99th percentile response times, and the thresholds.
+  - The database verdict, and the Mailpit count.
+  - **Where it degrades:** the first steady step whose 95th percentile doubles the first step's (or passes 1.5 s),
+    or whose errors pass 1%.
+- **Per load step.**
+  - Requests, requests per second, percentiles, failed share, 4xx, 5xx and timeouts.
+  - The server's CPU and memory peaks, and the database connections, in that step.
+  - Compare the steps to see what changes as users grow.
+- **Slowest endpoints:** the 95th percentile per endpoint, and how the slowest ones change step by step.
+- **Errors seen by the users:** by kind (401, 403, 404, 409, 422, 429, 5xx, timeouts), then by endpoint, status, the
+  API's error code and step. The trace ids of server errors are listed for the logs.
+- **What the server logged:** exceptions by type (database deadlocks, lock waits, connection-pool exhaustion
+  and too many connections are named), warnings and errors by message template, the requests the API refused by
+  error code, and nginx's view: its 5xx and the API's own answer times without network and TLS.
+- **The server:** peaks and averages of every sample, the statements that took MySQL the most time (shapes, never
+  values), and whether a deadlock was recorded.
+- **Data integrity:** the verification's verdict and anything broken.
+- **Recovery** (recovery profile): each chaos action, how many requests failed around it, and how long until the last.
+
+**Investigating a failure:**
+1. Find the endpoint and error code in the errors table, and the step it started in.
+2. Take a trace id and search `collected/lt-api.log` for it: the API's log line for that request, with the exception
+   if there was one.
+3. Look at the same step in the server samples (`collected/monitor/*.csv`): CPU at 100%, memory or swap climbing,
+   database connections at the pool's size (100) or threads piling up.
+4. `collected/monitor/statements.tsv` shows which statements took the time; `deadlock.txt` the last deadlock;
+   `slow.log` every statement over half a second.
+5. Rehearse a fix with a `load-test:<profile>` label before trying it on the server.
+
+**The numbers, briefly:**
+- **p50** is the typical request; **p95** the slow end most people still meet; **p99** the worst 1%.
+- **Failed** counts every answer the scripts didn't expect, including 4xx.
+- **Unexpected** counts the same, but tagged with the error code.
+- The database checks are pass or fail. A mismatch means a lost, duplicated or wrong write.
+
+**What verification checks** (`tool verify`, after every run):
+- **Data rules** that must always hold (18 of them):
+  - progress matches requirements;
+  - nobody's work overlaps;
+  - Design work only on Design projects by Design people;
+  - assignees in their project's domain;
+  - Execution records only on Execution projects;
+  - no statement lists a removed or foreign material;
+  - invoices and payments for the project's client;
+  - totals equal their lines;
+  - numbering without gaps, with the sequences holding the last number;
+  - no invoice overpaid;
+  - USD amounts at their rates;
+  - nothing logged after completion;
+  - email safety.
+- **What the run changed**, from its ledger:
+  - every record it made exists once (more means duplicates, fewer lost writes);
+  - deleted, done, voided and issued exactly as it left them;
+  - each record belongs to its maker;
+  - each edited project shows its last edit.
+- **The races' own checks.**
+
+## Watching the server during a test
+
+The run samples the server by itself (`monitor.sh`, every 10 seconds), and the samples are in the report. To watch
+live, over SSH:
+
+```bash
+cd ~/idi-loadtest
+./lt.sh status                 # containers and health
+docker stats                   # CPU and memory of every container, production's included
+./lt.sh logs lt-api            # the API's latest log lines
+tail -f monitor/host.csv       # the samples as they're taken
+uptime; free -m                # load and memory
+```
+
+`monitor.sh` reads `/proc`, `docker stats` and the load-test MySQL's own counters. It installs nothing and takes a few
+processes every 10 seconds. A full Prometheus and Grafana setup would take a good part of the 4 GB this server has.
+Production itself has no monitoring yet; that is a separate decision.
+
+## Clean-up
+
+- **Every run cleans up after itself.** `run.sh` purges the load-test environment from a trap: on success, on
+  failure, and when cancelled. That removes its containers, volumes (database, uploads, certificates), files and the
+  SSH tunnel.
+  - Purging doesn't rely on k6's `teardown()`.
+  - The seeding MySQL on the runner is removed too.
+- **With `keep`**, the environment stays up. Purge it yourself when done: `cd ~/idi-loadtest && ./lt.sh purge`.
+- **After a broken run** (a lost connection, say), check `./lt.sh status` on the server, and purge.
+- **Production's containers, volumes and files are never part of any of this.**
+
+## The test data
+
+`seed` fills a freshly reset `idi_loadtest` with a company's worth of realistic data by playing it through the real
 API.
 
 **How it works**
@@ -178,7 +366,7 @@ API.
   - teams chat, and the scheduled checks run every morning.
 - Everything is written by the API itself: activity history, notifications, invoice and statement numbers, progress.
   So the data keeps every rule the API keeps.
-- Email stays in the seeder's memory, and the seeder fails on any address outside `@loadtest.invalid`.
+- Email stays in the seeder's memory, and any address outside `@loadtest.invalid` fails the seed.
 
 **Who's in it**
 
@@ -193,34 +381,112 @@ API.
 - A few people join or leave during the history, and a few are "jokers" with personal permission changes.
 - Everyone is named by persona and number, e.g. `lt.design.employee.007@loadtest.invalid`, "LT Design Employee 007".
 - Clients, projects and suppliers start with "LT".
-- Every test user's password is `LT_USER_PASSWORD`. It is never committed or written to a file.
+- Every test user's password is `LT_USER_PASSWORD`. The runner makes up a new one per run, gives it to k6 in memory,
+  and never writes it down.
 
 **What it covers**
 - `--months` whole months before the anchor day (default today), up to the day before.
-- The anchor day itself is left free for the load test to log work in.
-- The same `--users`, `--months`, `--random-seed` and `--anchor` give the same data, except the salted password hashes.
+- The anchor day is left free for the load test to log work in.
+- The same `--users`, `--months`, `--random-seed` and `--anchor` give the same data, except the salted password
+  hashes.
 
 **Afterwards, `seed` checks the result**
 - what it created against what the database holds, table by table;
 - the data rules (`verify`);
 - email safety.
 
-It writes `load-tests/reports/roster.json` (git-ignored): every test user's address, persona, ids and status, for
-the k6 scenarios.
+It writes the roster (`roster.json`): every test user's address, persona, ids and status.
 
-### Where to run it
-
-- **Full size (200 users, 3 months): on GitHub**, never on a laptop.
-  - It is about 50,000 API requests and takes MySQL a while.
-  - The **Load-test seed** workflow runs it on the runner, against a throwaway MySQL. It never touches the server.
+**Where it runs**
+- **Full size: on GitHub, never on a laptop.** It is about 50,000 API requests.
+  - The **Load-test seed** workflow runs it on the runner against a throwaway MySQL, and never touches the server.
+  - It runs only when asked: Actions → Load-test seed → Run workflow, or the `load-test-seed` label on a pull
+    request.
   - It checks everything, seeds a second time to prove the data comes out identical, and keeps the snapshot,
-    roster and logs as the run's artifact.
-  - It runs only when asked: Actions → Load-test seed → Run workflow, or the `load-test-seed` label on a pull request.
-- **Locally:** only the smallest run (`--users 20 --months 1`, about 2 minutes), against a development MySQL as
-  described above. In **cmd**:
+    roster and logs as the artifact.
+  - Every Load test run seeds its own data the same way.
+- **Locally:** only the smallest run, against a development MySQL (a separate `idi_loadtest` beside your own
+  databases, as the integration tests' `idi_test_*`). In **cmd**:
 
   ```bat
+  set LT_DB_CONNECTION=Server=127.0.0.1;Port=3308;User=root;Password=<MYSQL_ROOT_PASSWORD from .env>;Database=idi_loadtest;
+  set LT_DB_HOSTNAME=<what SELECT @@hostname answers on that server>
+  set LT_INSTANCE_ID=<a GUID you make up>
   set LT_USER_PASSWORD=<a made-up password, 10+ characters>
+  dotnet run --project load-tests\tool -c Release -- init
   dotnet run --project load-tests\tool -c Release -- reset --confirm idi_loadtest
   dotnet run --project load-tests\tool -c Release -- seed --users 20 --months 1
+  dotnet run --project load-tests\tool -c Release -- drop --confirm idi_loadtest --identity
   ```
+
+## Reference
+
+### The tool (`load-tests/tool`)
+
+The tool references the API project, so it uses the API's own DbContext, migrations and request types. A change it
+doesn't match breaks its build in CI.
+
+| Command | Does |
+|---|---|
+| `init` | Marks the server as this load-test environment (once) and creates `idi_loadtest` |
+| `check` | Verifies the server, that every migration is applied, and that no address is deliverable |
+| `migrate` | Applies the API's pending migrations |
+| `reset --confirm idi_loadtest` | Drops `idi_loadtest`, creates it again and migrates it |
+| `drop --confirm idi_loadtest [--identity]` | Drops `idi_loadtest`, and with `--identity` the server's marker too |
+| `seed [--users 200] [--months 3] [--random-seed 42] [--anchor yyyy-MM-dd] [--roster path]` | Seeds a fresh database through the API, then checks it |
+| `verify [--log k6-console.log --run RUN_ID] [--out folder]` | The data rules; with a run's log, also what the run changed and the races |
+| `fingerprint` | A digest of every table, to compare two seeds |
+| `report --dir <run folder>` | Writes report.md and report.json (needs no database) |
+
+Settings: `LT_DB_CONNECTION`, `LT_DB_HOSTNAME`, `LT_INSTANCE_ID`, and for `seed` `LT_USER_PASSWORD`. Exit codes: `0`
+done or passed, `1` refused, not ready or failed, `2` usage.
+
+### `lt.sh` (`load-tests/stack`, on the server in `~/idi-loadtest`)
+
+```bash
+./lt.sh init-env <public-ip> <api-tag> <client-tag>   # once: .env with new random secrets
+./lt.sh check [--email-test] [--production-rate-limits]   # every guard; starts nothing
+./lt.sh up [--email-test] [--production-rate-limits] [service...]   # start; then proves email isolation
+./lt.sh verify-email | mail-count | status | logs [service] | restart <service>
+./lt.sh load-snapshot <file.sql.gz>                   # replace idi_loadtest (checks lt-db's identity)
+./lt.sh monitor start|stop                            # samples into monitor/
+./lt.sh collect <file.tar.gz>                         # a run's logs and samples
+./lt.sh chaos restart-api|kill-api|restart-db|pause-db <seconds>|restart-proxy
+./lt.sh down                                          # remove the containers, keep the data
+./lt.sh purge                                         # remove everything, data included
+```
+
+### `run.sh` (`load-tests/scripts`)
+
+Run on Linux with Docker, .NET 10, k6 2.x and `jq`. Environment:
+- `TARGET` (`runner` or `server`) and `PROFILE`;
+- `USERS`, `MONTHS`, `KEEP`, `OUT`;
+- for the server, `LT_SSH` (`user@host`), `LT_SSH_KEY` (a key file) and, optionally, `API_TAG` and `CLIENT_TAG`.
+
+### Files
+
+| Path | What |
+|---|---|
+| `stack/docker-compose.loadtest.yml` | The environment: `lt-db`, `lt-mail`, `lt-api`, `lt-web`, `lt-proxy` |
+| `stack/docker-compose.loadtest.email-test.yml` | Opt-in: the scheduler on, for the email test |
+| `stack/docker-compose.loadtest.production-limits.yml` | Opt-in: production's per-address limits, for the rate-limit test |
+| `stack/Caddyfile.loadtest` | HTTPS on 8443 behind the gate key |
+| `stack/lt.sh`, `stack/monitor.sh` | Running, guarding, sampling and breaking the environment |
+| `stack/.env.loadtest.example` | The load-test settings (no mail settings, no production names) |
+| `tool/`, `tool-tests/` | `ID-Indetails.LoadTests.Tool` and its unit tests |
+| `k6/main.js` | The user journeys, driven by a profile |
+| `k6/journeys/`, `k6/lib/` | The pages each persona visits, and the HTTP, session, live-connection and ledger layers |
+| `k6/profiles/*.json` | The load profiles |
+| `k6/concurrency.js`, `k6/rate-limits.js`, `k6/email.js` | The races, the rate-limit test, the email test |
+| `scripts/run.sh` | A whole run |
+| `../.github/workflows/load-test.yml`, `load-test-seed.yml` | The workflows |
+
+### What differs from production in the load-test environment
+
+These are configuration only; the images are production's:
+- the database, the secrets and Mailpit;
+- per-address rate limits raised (all traffic comes from one address; per-user limits unchanged);
+- the scheduler and the file clean-up off;
+- JSON logs;
+- MySQL's slow-query log;
+- containers don't restart by themselves.
