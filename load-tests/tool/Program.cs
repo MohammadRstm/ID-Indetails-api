@@ -1,8 +1,10 @@
+using System.Globalization;
+using ID_Indetails.LoadTests.Tool.Seeding;
 using MySqlConnector;
 
 namespace ID_Indetails.LoadTests.Tool;
 
-/// <summary>Creates, checks, resets and drops the load-test database. See load-tests/README.md.</summary>
+/// <summary>Creates, seeds, checks, resets and drops the load-test database. See load-tests/README.md.</summary>
 public static class Program
 {
     private const string Usage = """
@@ -13,16 +15,35 @@ public static class Program
           migrate                       Apply the API's pending migrations to idi_loadtest
           reset --confirm idi_loadtest  Drop idi_loadtest, create it again and migrate it
           drop --confirm idi_loadtest   Drop idi_loadtest. Add --identity to remove the server's marker too
+          seed                          Seed a freshly reset idi_loadtest through the API, then verify it. Options:
+                                          --users 200  --months 3  --random-seed 42
+                                          --anchor yyyy-MM-dd (default today; the history ends the day before)
+                                          --roster load-tests/reports/roster.json (the test users, for k6)
+          verify                        Check the rules the data must keep. Changes nothing
+          fingerprint                   Print a digest of every table, to compare two seeds. Changes nothing
 
         Settings come from the environment only:
           LT_DB_CONNECTION  admin connection string to the load-test server, with Database=idi_loadtest
           LT_DB_HOSTNAME    the hostname that server reports (SELECT @@hostname)
           LT_INSTANCE_ID    the load-test environment's id (LT_INSTANCE_ID in its .env)
+          LT_USER_PASSWORD  seed only: the password every test user gets (at least 10 characters)
         """;
+
+    private const string IdentityFlag = "--identity";
+
+    private static readonly Dictionary<string, string[]> Options = new()
+    {
+        ["init"] = [], ["check"] = [], ["migrate"] = [], ["verify"] = [], ["fingerprint"] = [],
+        ["reset"] = ["--confirm"],
+        ["drop"] = ["--confirm", IdentityFlag],
+        ["seed"] = ["--users", "--months", "--random-seed", "--anchor", "--roster"],
+    };
 
     public static async Task<int> Main(string[] args)
     {
-        if (Parse(args) is not { } command)
+        var command = Parse(args);
+        var seed = command?.Name == "seed" ? SeedOptions(command.Options) : null;
+        if (command is null || (command.Name == "seed" && seed is null))
         {
             Console.Error.WriteLine(Usage);
             return ExitCodes.Usage;
@@ -44,6 +65,7 @@ public static class Program
         }
 
         var commands = new Commands(settings, new LoadTestServer(settings), Console.Out);
+        var confirmed = command.Options.GetValueOrDefault("--confirm") == LoadTestNames.Database;
         try
         {
             return command.Name switch
@@ -51,8 +73,11 @@ public static class Program
                 "init" => await commands.InitAsync(),
                 "check" => await commands.CheckAsync(),
                 "migrate" => await commands.MigrateAsync(),
-                "reset" => await commands.ResetAsync(command.Confirmed),
-                _ => await commands.DropAsync(command.Confirmed, command.WithIdentity),
+                "reset" => await commands.ResetAsync(confirmed),
+                "drop" => await commands.DropAsync(confirmed, command.Options.ContainsKey(IdentityFlag)),
+                "seed" => await commands.SeedAsync(seed!.Value.Plan, seed.Value.Roster, Environment.GetEnvironmentVariable("LT_USER_PASSWORD")),
+                "verify" => await commands.VerifyAsync(),
+                _ => await commands.FingerprintAsync(),
             };
         }
         catch (MySqlException ex)
@@ -60,34 +85,65 @@ public static class Program
             Console.Error.WriteLine($"MySQL error: {ex.Message}");
             return ExitCodes.Failed;
         }
+        catch (SeedingException ex)
+        {
+            Console.Error.WriteLine($"SEED FAILED {ex.Message}");
+            return ExitCodes.Failed;
+        }
     }
 
-    private sealed record Command(string Name, bool Confirmed, bool WithIdentity);
+    private sealed record Command(string Name, IReadOnlyDictionary<string, string> Options);
 
     private static Command? Parse(string[] args)
     {
-        if (args is not [("init" or "check" or "migrate" or "reset" or "drop") and var name, .. var options])
+        if (args.Length == 0 || !Options.TryGetValue(args[0], out var allowed))
         {
             return null;
         }
 
-        var confirmed = false;
-        var withIdentity = false;
-        for (var i = 0; i < options.Length; i++)
+        var options = new Dictionary<string, string>();
+        for (var i = 1; i < args.Length; i++)
         {
-            switch (options[i])
+            var name = args[i];
+            if (!allowed.Contains(name) || options.ContainsKey(name))
             {
-                case "--confirm" when name is "reset" or "drop" && i + 1 < options.Length:
-                    confirmed = options[++i] == LoadTestNames.Database;
-                    break;
-                case "--identity" when name is "drop":
-                    withIdentity = true;
-                    break;
-                default:
-                    return null;
+                return null;
+            }
+
+            if (name == IdentityFlag)
+            {
+                options[name] = "true";
+            }
+            else if (i + 1 < args.Length)
+            {
+                options[name] = args[++i];
+            }
+            else
+            {
+                return null;
             }
         }
 
-        return new Command(name, confirmed, withIdentity);
+        return new Command(args[0], options);
+    }
+
+    /// <summary>The seed plan from the options, or null when one of them isn't a number or a date.</summary>
+    private static (SeedPlan Plan, string Roster)? SeedOptions(IReadOnlyDictionary<string, string> options)
+    {
+        static int? Number(string? text, int fallback) => text is null ? fallback : int.TryParse(text, out var n) ? n : null;
+
+        var users = Number(options.GetValueOrDefault("--users"), 200);
+        var months = Number(options.GetValueOrDefault("--months"), 3);
+        var seed = Number(options.GetValueOrDefault("--random-seed"), 42);
+        DateOnly? anchor = options.TryGetValue("--anchor", out var text)
+            ? DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day) ? day : null
+            : Commands.CompanyToday();
+        if (users is null || months is null || seed is null || anchor is null)
+        {
+            return null;
+        }
+
+        return (new SeedPlan(users.Value, months.Value, seed.Value, anchor.Value),
+            options.GetValueOrDefault("--roster") ?? Path.Combine("load-tests", "reports", "roster.json"));
     }
 }

@@ -1,4 +1,6 @@
 using ID_Indetails.LoadTests.Tool.Safety;
+using ID_Indetails.LoadTests.Tool.Seeding;
+using ID_Indetails.LoadTests.Tool.Verification;
 
 namespace ID_Indetails.LoadTests.Tool;
 
@@ -100,6 +102,85 @@ public sealed class Commands(LoadTestSettings settings, LoadTestServer server, T
         }
 
         return ExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Seeds a freshly reset database through the API, then checks the result: what was created against what the
+    /// database holds, the data rules and email safety. Writes the roster of test users for k6.
+    /// </summary>
+    public async Task<int> SeedAsync(SeedPlan plan, string rosterPath, string? password)
+    {
+        if (plan.Users < SeedPlan.MinimumUsers || plan.Months is < 1 or > 12 || plan.Anchor > CompanyToday())
+        {
+            output.WriteLine($"REFUSED    Seed at least {SeedPlan.MinimumUsers} users over 1 to 12 months, anchored today or earlier.");
+            return ExitCodes.Usage;
+        }
+
+        if (password is not { Length: >= 10 })
+        {
+            output.WriteLine("REFUSED    Set LT_USER_PASSWORD, at least 10 characters: every test user signs in with it.");
+            return ExitCodes.Usage;
+        }
+
+        if (await GuardedIdentityAsync(GuardMode.Existing) is not { } identity || !await ReportReadinessAsync(identity))
+        {
+            return ExitCodes.Failed;
+        }
+
+        if (!await server.IsEmptyAsync())
+        {
+            output.WriteLine($"REFUSED    {Database} already holds people. Seed a fresh one: reset --confirm {Database} first.");
+            return ExitCodes.Failed;
+        }
+
+        var world = await new Seeder(settings, plan, password, output).RunAsync();
+        await Seeder.WriteRosterAsync(world, rosterPath);
+        output.WriteLine($"Roster     {Path.GetFullPath(rosterPath)}");
+
+        var counts = await SeedCounts.CompareAsync(settings.ConnectionString, world.Tally.Counts);
+        foreach (var count in counts)
+        {
+            output.WriteLine($"{(count.Matches ? "Count" : "MISMATCH"),-10} {count.What}: created {count.Expected}, database {count.Actual}");
+        }
+
+        var rulesHold = await ReportChecksAsync();
+        var ready = await ReportReadinessAsync(await server.ReadIdentityAsync());
+        return counts.All(c => c.Matches) && rulesHold && ready ? ExitCodes.Ok : ExitCodes.Failed;
+    }
+
+    public async Task<int> VerifyAsync()
+        => await GuardedIdentityAsync(GuardMode.Existing) is { } identity && await ReportReadinessAsync(identity) && await ReportChecksAsync()
+            ? ExitCodes.Ok
+            : ExitCodes.Failed;
+
+    public async Task<int> FingerprintAsync()
+    {
+        if (await GuardedIdentityAsync(GuardMode.Existing) is null)
+        {
+            return ExitCodes.Failed;
+        }
+
+        foreach (var line in await Fingerprint.TakeAsync(settings.ConnectionString))
+        {
+            output.WriteLine(line);
+        }
+
+        return ExitCodes.Ok;
+    }
+
+    /// <summary>Today in the company's time zone, by the real clock.</summary>
+    public static DateOnly CompanyToday()
+        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(SimulatedClock.TimeZone)));
+
+    private async Task<bool> ReportChecksAsync()
+    {
+        var results = await DataChecks.RunAsync(settings.ConnectionString);
+        foreach (var result in results)
+        {
+            output.WriteLine(result.Violations == 0 ? $"Holds      {result.Name}" : $"BROKEN     {result.Name}: {result.Violations} rows");
+        }
+
+        return results.All(r => r.Violations == 0);
     }
 
     /// <summary>The server's identity when the guard lets the command go ahead, otherwise null.</summary>

@@ -86,6 +86,13 @@ public sealed class LoadTestServer(LoadTestSettings settings)
         return new MigrationStatus(applied.Count(known.Contains), known.Count, applied.Where(m => !known.Contains(m)).ToList());
     }
 
+    /// <summary>Whether the database holds no people yet: freshly reset, ready to seed.</summary>
+    public async Task<bool> IsEmptyAsync()
+    {
+        await using var connection = await OpenAsync(settings.ConnectionString);
+        return await ScalarAsync<long>(connection, "SELECT COUNT(*) FROM `users`") == 0;
+    }
+
     /// <summary>Rows per address column that hold an address outside <see cref="EmailSafety.Domain"/>.</summary>
     public async Task<IReadOnlyList<(string Column, long Rows)>> FindDeliverableAddressesAsync()
     {
