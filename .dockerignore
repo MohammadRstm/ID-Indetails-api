@@ -14,6 +14,7 @@ Backups
 docs
 ID-Indetails.UnitTests
 ID-Indetails.IntegrationTests
+load-tests
 docker-compose.yml
 deploy
 Dockerfile

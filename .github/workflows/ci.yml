@@ -58,6 +58,9 @@ jobs:
       - name: Unit tests
         run: dotnet test ID-Indetails.UnitTests -c Release --no-build
 
+      - name: Load-test tool tests
+        run: dotnet test load-tests/tool-tests -c Release --no-build
+
       - name: Integration tests
         env:
           ID_INDETAILS_TEST_MYSQL_ADMIN: Server=127.0.0.1;Port=3306;User=root;Password=${{ env.MYSQL_ROOT_PASSWORD }};

@@ -2,4 +2,8 @@
   <Project Path="ID-Indetails.api/ID-Indetails.api.csproj" />
   <Project Path="ID-Indetails.UnitTests/ID-Indetails.UnitTests.csproj" />
   <Project Path="ID-Indetails.IntegrationTests/ID-Indetails.IntegrationTests.csproj" />
+  <Folder Name="/load-tests/">
+    <Project Path="load-tests/tool/ID-Indetails.LoadTests.Tool.csproj" />
+    <Project Path="load-tests/tool-tests/ID-Indetails.LoadTests.Tool.Tests.csproj" />
+  </Folder>
 </Solution>

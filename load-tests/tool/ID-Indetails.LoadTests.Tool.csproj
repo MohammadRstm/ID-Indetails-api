@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ID_Indetails.LoadTests.Tool</RootNamespace>
+  </PropertyGroup>
+
+  <!-- The API's own DbContext, entities and migrations: a schema change breaks this build instead of a test run. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\ID-Indetails.api\ID-Indetails.api.csproj" />
+  </ItemGroup>
+
+</Project>
