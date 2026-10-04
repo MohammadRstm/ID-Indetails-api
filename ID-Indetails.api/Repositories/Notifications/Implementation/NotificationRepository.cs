@@ -12,8 +12,11 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
 {
     public void Add(Notification notification) => db.Notifications.Add(notification);
 
-    public Task<Notification?> GetDigestForUpdateAsync(long recipientId, string digestKey, CancellationToken cancellationToken = default)
-        => db.Notifications.SingleOrDefaultAsync(n => n.RecipientId == recipientId && n.DigestKey == digestKey, cancellationToken);
+    public async Task<Notification?> GetDigestForUpdateAsync(long recipientId, string digestKey, CancellationToken cancellationToken = default)
+        => (await db.Notifications
+                .FromSql($"SELECT * FROM `notifications` WHERE `recipient_id` = {recipientId} AND `digest_key` = {digestKey} FOR UPDATE")
+                .ToListAsync(cancellationToken))
+            .SingleOrDefault();
 
     public async Task<IReadOnlySet<long>> RecipientsWithKeyAsync(
         string digestKey,
@@ -41,12 +44,13 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
     public async Task<(IReadOnlyList<NotificationView> Items, int TotalCount)> SearchAsync(
         long recipientId,
         IReadOnlyList<string> visibleDomains,
+        IReadOnlyList<string> hiddenKinds,
         bool unreadOnly,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        var query = Visible(recipientId, visibleDomains).AsNoTracking();
+        var query = Visible(recipientId, visibleDomains, hiddenKinds).AsNoTracking();
         if (unreadOnly)
         {
             query = query.Where(n => n.ReadAt == null);
@@ -98,22 +102,24 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
         return (items, total);
     }
 
-    public Task<int> CountUnreadAsync(long recipientId, IReadOnlyList<string> visibleDomains, CancellationToken cancellationToken = default)
-        => Visible(recipientId, visibleDomains).AsNoTracking().CountAsync(n => n.ReadAt == null, cancellationToken);
+    public Task<int> CountUnreadAsync(long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds, CancellationToken cancellationToken = default)
+        => Visible(recipientId, visibleDomains, hiddenKinds).AsNoTracking().CountAsync(n => n.ReadAt == null, cancellationToken);
 
-    public Task<Notification?> GetForUpdateAsync(long id, long recipientId, IReadOnlyList<string> visibleDomains, CancellationToken cancellationToken = default)
-        => Visible(recipientId, visibleDomains).SingleOrDefaultAsync(n => n.Id == id, cancellationToken);
+    public Task<Notification?> GetForUpdateAsync(long id, long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds, CancellationToken cancellationToken = default)
+        => Visible(recipientId, visibleDomains, hiddenKinds).SingleOrDefaultAsync(n => n.Id == id, cancellationToken);
 
     public Task MarkAllReadAsync(long recipientId, DateTime readAt, CancellationToken cancellationToken = default)
         => db.Notifications
             .Where(n => n.RecipientId == recipientId && n.ReadAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(n => n.ReadAt, readAt), cancellationToken);
 
-    /// <summary>The recipient's notifications, less those about a project they can no longer see.</summary>
-    private IQueryable<Notification> Visible(long recipientId, IReadOnlyList<string> visibleDomains)
+    /// <summary>The recipient's notifications, less those about a project they can no longer see, and of a kind they may no longer read.</summary>
+    private IQueryable<Notification> Visible(long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds)
     {
         var domains = visibleDomains.ToList();
+        var hidden = hiddenKinds.ToList();
         return db.Notifications.Where(n => n.RecipientId == recipientId
+            && !hidden.Contains(n.Kind)
             && (n.ProjectId == null || db.Projects.Any(p => p.Id == n.ProjectId && domains.Contains(p.DomainCode))));
     }
 }

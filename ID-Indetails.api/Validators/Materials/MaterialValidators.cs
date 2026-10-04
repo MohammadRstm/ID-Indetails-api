@@ -10,7 +10,7 @@ public sealed class MaterialListQueryValidator : AbstractValidator<MaterialListQ
 {
     public MaterialListQueryValidator()
     {
-        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
         RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)

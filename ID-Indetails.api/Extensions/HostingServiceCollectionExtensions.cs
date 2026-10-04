@@ -1,14 +1,20 @@
 using System.Net;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.HealthChecks;
-using Microsoft.AspNetCore.HttpOverrides;
 using IPNetwork = System.Net.IPNetwork;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace ID_Indetails.api.Extensions;
 
 public static class HostingServiceCollectionExtensions
 {
     public const string HealthPath = "/health";
+
+    /// <summary>The health check anyone may call (an uptime monitor): it answers Healthy or Unhealthy, nothing more.</summary>
+    public const string PublicHealthPath = "/api/health";
+
+    public const long MaxRequestBodyBytes = 1024 * 1024;
 
     /// <summary>
     /// The health probe, trust in the proxies in front of the API when there are any (<see cref="ProxyOptions"/>), and,
@@ -17,6 +23,9 @@ public static class HostingServiceCollectionExtensions
     public static IServiceCollection AddHosting(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
+
+        // No request needs more than a little JSON; uploads set their own limit on their endpoint.
+        services.Configure<KestrelServerOptions>(options => options.Limits.MaxRequestBodySize = MaxRequestBodyBytes);
 
         var proxy = configuration.GetSection(ProxyOptions.SectionName).Get<ProxyOptions>() ?? new();
         services.Configure<ForwardedHeadersOptions>(options =>
@@ -51,7 +60,11 @@ public static class HostingServiceCollectionExtensions
             .ValidateOnStart();
         services.AddOptions<EmailOptions>()
             .Validate(o => !IsLocal(o.Host), "Email:Host must be the production SMTP server.")
+            .Validate(o => o.UseStartTls, "Email:UseStartTls must be on, so mail and the SMTP password travel encrypted.")
             .Validate(o => !o.FromAddress.EndsWith(".local", StringComparison.OrdinalIgnoreCase), "Email:FromAddress must be a real address.")
+            .ValidateOnStart();
+        services.AddOptions<SetupOptions>().BindConfiguration(SetupOptions.SectionName)
+            .Validate(o => o.SuperAdminKey.Length is 0 or >= 32, "Setup:SuperAdminKey must be empty or at least 32 characters.")
             .ValidateOnStart();
         services.AddOptions<ClientCorsOptions>().BindConfiguration(ClientCorsOptions.SectionName)
             .Validate(o => !o.AllowedOrigins.Any(origin => !IsPublicHttps(origin)), "Cors:AllowedOrigins may only list public https origins.")

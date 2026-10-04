@@ -177,6 +177,26 @@ public static class EmployeeRules
                 ErrorCodes.ValidationFailed, "domainCode", "Changing the role keeps the domain. Move the person to the other domain separately."));
     }
 
+    /// <summary>
+    /// A role change, or a move to the other domain, hands the person the defaults of their (new) role in their (new)
+    /// domain and drops their personal permission changes. Nobody but a super admin hands out a default they don't hold
+    /// themselves, and a permission taken away by hand only comes back this way for someone who may manage permissions.
+    /// </summary>
+    /// <param name="revoked">The person's permissions taken away by hand.</param>
+    public static RuleDenial? CheckRoleHandOut(UserAccess actor, IReadOnlyCollection<string> newDefaults, IEnumerable<string> revoked)
+    {
+        if (PermissionChangePolicy.NotHeld(actor, newDefaults) is { Count: > 0 } notHeld)
+        {
+            return RuleDenial.Forbidden(ErrorCodes.PermissionChangeNotAllowed,
+                $"You can only give someone a role whose permissions you hold yourself. You do not hold: {string.Join(", ", notHeld)}.");
+        }
+
+        return !actor.IsSuperAdmin && !actor.Has(PermissionCodes.PermissionManage) && revoked.Any(newDefaults.Contains)
+            ? RuleDenial.Forbidden(ErrorCodes.PermissionChangeNotAllowed,
+                "Some of their permissions were taken away by hand, and this would give them back, which needs the permission to manage permissions.")
+            : null;
+    }
+
     /// <summary>Moving someone to the other domain. Only callers who see both domains can.</summary>
     public static RuleDenial? CheckMove(UserAccess actor, Target target, string newDomain)
     {

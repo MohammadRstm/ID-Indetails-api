@@ -1,4 +1,5 @@
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Messaging;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Messaging;
@@ -10,11 +11,13 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Messaging.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
+using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Files.Implementation;
 using ID_Indetails.api.Services.Messaging.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
+using ID_Indetails.api.Services.WorkEntries.Implementation;
 
 namespace ID_Indetails.api.Services.Messaging.Implementation;
 
@@ -25,6 +28,7 @@ namespace ID_Indetails.api.Services.Messaging.Implementation;
 /// </summary>
 public sealed class MessagingService(
     ICurrentUser currentUser,
+    IPermissionService permissions,
     IMessagingRepository messaging,
     IWorkEntryRepository entries,
     IFileClaims fileClaims,
@@ -299,8 +303,7 @@ public sealed class MessagingService(
         messaging.Add(message);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        await MoveReadMarkerAsync(senderId, conversation.Id, message.Id, cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await messaging.MoveReadMarkerAsync(senderId, conversation.Id, message.Id, clock.UtcNow, cancellationToken);
         return message;
     }
 
@@ -311,23 +314,7 @@ public sealed class MessagingService(
             return;
         }
 
-        await MoveReadMarkerAsync(me.Id, conversation.Id, lastId, cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-    }
-
-    /// <summary>Read markers only move forward.</summary>
-    private async Task MoveReadMarkerAsync(long userId, long conversationId, long messageId, CancellationToken cancellationToken)
-    {
-        var read = await messaging.ReadForUpdateAsync(userId, conversationId, cancellationToken);
-        if (read is null)
-        {
-            messaging.Add(new ConversationRead { UserId = userId, ConversationId = conversationId, LastReadMessageId = messageId, UpdatedAt = clock.UtcNow });
-        }
-        else if ((read.LastReadMessageId ?? 0) < messageId)
-        {
-            read.LastReadMessageId = messageId;
-            read.UpdatedAt = clock.UtcNow;
-        }
+        await messaging.MoveReadMarkerAsync(me.Id, conversation.Id, lastId, clock.UtcNow, cancellationToken);
     }
 
     private async Task<MessagePageResponse> PageAsync(Conversation? conversation, MessagePageQuery query, CancellationToken cancellationToken)
@@ -350,6 +337,7 @@ public sealed class MessagingService(
     {
         var entryIds = messages.Where(m => m.RefEntryId is not null).Select(m => m.RefEntryId!.Value).Distinct().ToList();
         var shared = entryIds.Count > 0 ? (await entries.ViewsByIdAsync(entryIds, cancellationToken)).ToDictionary(e => e.Id) : [];
+        var viewer = shared.Count > 0 ? await permissions.GetAccessAsync(currentUser.Id, cancellationToken) : null;
 
         return messages.Select(m => new MessageResponse(
                 m.Id,
@@ -358,13 +346,22 @@ public sealed class MessagingService(
                 m.Kind,
                 m.Mentions.Select(p => new ChatPersonResponse(p.Id, p.Name)).ToList(),
                 m.Attachments.Select(FileMapper.ToResponse).ToList(),
-                m.RefEntryId is { } entryId && shared.TryGetValue(entryId, out var e)
-                    ? new TaskCommentResponse(
-                        e.Id, m.RefCommentId ?? 0, new ChatPersonResponse(e.UserId, e.UserName), e.ProjectId, e.ProjectTitle, e.Description, e.StartedAt, e.Minutes,
-                        e.Attachment is null ? null : FileMapper.ToResponse(e.Attachment))
-                    : null,
+                m.RefEntryId is { } entryId && shared.TryGetValue(entryId, out var e) ? TaskCard(m, e, viewer!) : null,
                 m.CreatedAt))
             .ToList();
+    }
+
+    /// <summary>
+    /// The entry behind a shared comment. Colleagues' hours stay private: how long it took, and its attachment, show
+    /// only to those who may read the entry itself (its author, and whoever sees everyone's work).
+    /// </summary>
+    private static TaskCommentResponse TaskCard(MessageView m, WorkEntryView e, UserAccess viewer)
+    {
+        var readable = WorkEntryQueryService.CanRead(viewer, e);
+        return new TaskCommentResponse(
+            e.Id, m.RefCommentId ?? 0, new ChatPersonResponse(e.UserId, e.UserName), e.ProjectId, e.ProjectTitle, e.Description, e.StartedAt,
+            readable ? e.Minutes : null,
+            readable && e.Attachment is not null ? FileMapper.ToResponse(e.Attachment) : null);
     }
 
     private void TeamChanged(ChatTeam team, IEnumerable<long> memberIds)

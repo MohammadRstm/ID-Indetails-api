@@ -46,6 +46,7 @@ public sealed class FileService(
             ?? throw new BusinessRuleException(
                 ErrorCodes.FileTypeNotAllowed, "Only photos (JPEG, PNG, WebP, HEIC) and videos (MP4, MOV, WebM) can be uploaded.");
         FileRules.CheckSize(detected.Kind, length).ThrowIfDenied();
+        FileRules.CheckDailyQuota(await files.BytesUploadedSinceAsync(me.UserId, clock.UtcNow.AddDays(-1), cancellationToken), length).ThrowIfDenied();
 
         content.Position = 0;
         var key = await storage.SaveAsync(content, detected.Extension, cancellationToken);

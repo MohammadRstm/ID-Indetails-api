@@ -29,6 +29,8 @@ public static class ApiServiceCollectionExtensions
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
                 // Numbers are JSON numbers, never strings, so the OpenAPI document types them as numbers.
                 options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+                // An explicit null for a property that can't be null is refused, so lists and texts are never null.
+                options.JsonSerializerOptions.RespectNullableAnnotations = true;
                 // The JSON reader's messages name .NET types and byte positions: BindingErrors says what was wrong instead.
                 options.AllowInputFormatterExceptionMessages = false;
             })
@@ -56,6 +58,7 @@ public static class ApiServiceCollectionExtensions
         {
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
             options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+            options.SerializerOptions.RespectNullableAnnotations = true;
         });
 
         services.AddValidatorsFromAssemblyContaining<Program>(includeInternalTypes: true);

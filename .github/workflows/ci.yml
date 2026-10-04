@@ -128,7 +128,7 @@ jobs:
             -e Jwt__SigningKey="$(openssl rand -base64 48)" \
             -e Setup__SuperAdminKey="$(openssl rand -base64 32)" \
             -e Frontend__BaseUrl=https://app.example.com \
-            -e Email__Host=smtp.example.com -e Email__FromAddress=no-reply@example.com \
+            -e Email__Host=smtp.example.com -e Email__UseStartTls=true -e Email__FromAddress=no-reply@example.com \
             -e Proxy__KnownNetworks__0=172.16.0.0/12 \
             id-indetails-api:ci
           # /health answers 503 when unhealthy, which curl -f treats as a failure
@@ -136,6 +136,8 @@ jobs:
           curl -fs -o /dev/null http://127.0.0.1:8080/health || fail "the API isn't healthy"
           [ "$(docker exec api id -u)" != "0" ] || fail "the API runs as root"
           [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/auth/me)" = "401" ] || fail "an API route doesn't answer 401 when signed out"
+          # the public health check, for an uptime monitor, says only whether it's up
+          [ "$(curl -s http://127.0.0.1:8080/api/health)" = "Healthy" ] || fail "the public health check doesn't answer Healthy"
           # development settings must stop it
           docker rm -f api >/dev/null
           status=0

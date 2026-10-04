@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Notifications;
 using ID_Indetails.api.DTO.Request.Notifications;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Notifications;
@@ -29,20 +30,23 @@ public sealed class NotificationService(
 
     public async Task<PagedResponse<NotificationResponse>> ListAsync(NotificationListQuery query, CancellationToken cancellationToken = default)
     {
-        var domains = await VisibleDomainsAsync(cancellationToken);
+        var (domains, hidden) = await ReaderAsync(cancellationToken);
         var (items, total) = await notifications.SearchAsync(
-            currentUser.Id, domains, query.UnreadOnly, query.Page, query.PageSize, cancellationToken);
+            currentUser.Id, domains, hidden, query.UnreadOnly, query.Page, query.PageSize, cancellationToken);
 
         return new PagedResponse<NotificationResponse>(items.Select(ToResponse).ToList(), query.Page, query.PageSize, total);
     }
 
     public async Task<UnreadCountResponse> UnreadCountAsync(CancellationToken cancellationToken = default)
-        => new(await notifications.CountUnreadAsync(currentUser.Id, await VisibleDomainsAsync(cancellationToken), cancellationToken));
+    {
+        var (domains, hidden) = await ReaderAsync(cancellationToken);
+        return new(await notifications.CountUnreadAsync(currentUser.Id, domains, hidden, cancellationToken));
+    }
 
     public async Task<UnreadCountResponse> MarkReadAsync(long id, CancellationToken cancellationToken = default)
     {
-        var domains = await VisibleDomainsAsync(cancellationToken);
-        var notification = await notifications.GetForUpdateAsync(id, currentUser.Id, domains, cancellationToken)
+        var (domains, hidden) = await ReaderAsync(cancellationToken);
+        var notification = await notifications.GetForUpdateAsync(id, currentUser.Id, domains, hidden, cancellationToken)
             ?? throw new NotFoundException(NotFound);
 
         if (notification.ReadAt is null)
@@ -52,7 +56,7 @@ public sealed class NotificationService(
             live.NotificationsChanged([currentUser.Id]);
         }
 
-        return new UnreadCountResponse(await notifications.CountUnreadAsync(currentUser.Id, domains, cancellationToken));
+        return new UnreadCountResponse(await notifications.CountUnreadAsync(currentUser.Id, domains, hidden, cancellationToken));
     }
 
     public async Task<UnreadCountResponse> MarkAllReadAsync(CancellationToken cancellationToken = default)
@@ -62,8 +66,12 @@ public sealed class NotificationService(
         return new UnreadCountResponse(0);
     }
 
-    private async Task<IReadOnlyList<string>> VisibleDomainsAsync(CancellationToken cancellationToken)
-        => (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).VisibleDomains;
+    /// <summary>The domains the reader sees, and the kinds they may no longer read (<see cref="NotificationAccess"/>).</summary>
+    private async Task<(IReadOnlyList<string> Domains, IReadOnlyList<string> HiddenKinds)> ReaderAsync(CancellationToken cancellationToken)
+    {
+        var access = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        return (access.VisibleDomains, NotificationAccess.HiddenKinds(access));
+    }
 
     private static NotificationResponse ToResponse(NotificationView n) => new(
         n.Id,

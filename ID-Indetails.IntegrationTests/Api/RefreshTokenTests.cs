@@ -34,9 +34,20 @@ public class RefreshTokenTests(ApiFactory api) : IClassFixture<ApiFactory>
         var first = await LoginCookieAsync(email, password);
         var otherDevice = await LoginCookieAsync(email, password);
 
-        var second = (await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: first)).RefreshCookie()!;
+        var rotated = await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: first);
+        var second = rotated.RefreshCookie()!;
+        var userId = (await rotated.ShouldSignInAsync()).User.Id;
 
-        // The old cookie comes back (e.g. stolen): refused, and every session is revoked.
+        // sent again at once, it's a lost answer: refused, and nobody else is signed out
+        await (await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: first))
+            .ShouldFailWithAsync(401, ErrorCodes.RefreshTokenInvalid);
+        (await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: otherDevice)).IsSuccessStatusCode.ShouldBeTrue();
+        otherDevice = await LoginCookieAsync(email, password);
+        await _steps.ExecuteAsync(
+            "UPDATE refresh_tokens SET revoked_at = DATE_SUB(revoked_at, INTERVAL 1 MINUTE) WHERE user_id = @u AND replaced_by_id IS NOT NULL",
+            ("@u", userId));
+
+        // The old cookie comes back later (e.g. stolen): refused, and every session is revoked.
         await (await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: first))
             .ShouldFailWithAsync(401, ErrorCodes.RefreshTokenInvalid);
         await (await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: second))

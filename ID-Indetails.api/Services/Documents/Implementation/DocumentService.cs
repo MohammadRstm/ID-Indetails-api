@@ -10,6 +10,7 @@ using ID_Indetails.api.DTO.Response.Statements;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
+using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -26,6 +27,7 @@ namespace ID_Indetails.api.Services.Documents.Implementation;
 /// <summary>Reads through the invoice and statement services, so visibility and what each caller sees stay theirs.</summary>
 public sealed class DocumentService(
     ICurrentUser currentUser,
+    IPermissionService permissions,
     IInvoiceService invoiceService,
     IStatementService statementService,
     IProjectService projectService,
@@ -106,6 +108,7 @@ public sealed class DocumentService(
             ? await workInsights.TimelineEntriesAsync(projectId, new TimelineEntriesQuery { From = from, To = to }, cancellationToken)
             : [];
         var billing = Show(ProjectReportSection.Billing);
+        var seesClient = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Has(PermissionCodes.ClientView);
         var report = new ProjectReport(
             query.Kind,
             sections,
@@ -119,7 +122,7 @@ public sealed class DocumentService(
             Show(ProjectReportSection.Expenses) ? await expenseService.ListAsync(projectId, cancellationToken) : null,
             billing ? (await invoiceService.ListAsync(new InvoiceListQuery { ProjectId = projectId, PageSize = MaxRows }, cancellationToken)).Items : [],
             billing ? (await paymentService.ListAsync(new PaymentListQuery { ProjectId = projectId, PageSize = MaxRows }, cancellationToken)).Items : [],
-            Show(ProjectReportSection.Client) && project.Client is { } client ? await clientService.GetAsync(client.Id, cancellationToken) : null,
+            Show(ProjectReportSection.Client) && seesClient && project.Client is { } client ? await clientService.GetAsync(client.Id, cancellationToken) : null,
             log.OrderByDescending(e => e.StartedAt).Take(ProjectReportPdf.LogRows).ToList(),
             log.Count,
             clock.ToCompanyTime);

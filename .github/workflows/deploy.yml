@@ -20,7 +20,7 @@ on:
         default: main
         required: true
       api_tag:
-        description: "Rollback: deploy this published API tag instead of building (e.g. sha-1a2b3c4)"
+        description: "Rollback: deploy this published API tag (e.g. sha-1a2b3c4). A rollback needs both tags and builds nothing"
         required: false
       client_tag:
         description: "Rollback: deploy this published client tag instead of building"
@@ -40,7 +40,8 @@ env:
 jobs:
   publish-api:
     name: Publish the API images
-    if: inputs.api_tag == ''
+    # a rollback (either tag given) builds nothing: it deploys published images only
+    if: inputs.api_tag == '' && inputs.client_tag == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -94,7 +95,7 @@ jobs:
 
   publish-client:
     name: Publish the client image
-    if: inputs.client_tag == ''
+    if: inputs.api_tag == '' && inputs.client_tag == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -163,7 +164,7 @@ jobs:
           missing=""
           for v in DEPLOY_HOST DEPLOY_USER SSH_KEY KNOWN_HOSTS API_TAG CLIENT_TAG; do [ -n "${!v}" ] || missing="$missing $v"; done
           if [ -n "$missing" ]; then
-            echo "::error::Not configured:$missing. Set the production environment's secrets (docs/deployment.md)."
+            echo "::error::Not configured:$missing. Set the production environment's secrets (docs/deployment.md). A rollback needs both api_tag and client_tag."
             exit 1
           fi
           # the tags go into a command on the server: image-tag characters only
@@ -187,11 +188,11 @@ jobs:
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          scp deploy/docker-compose.prod.yml deploy/deploy.sh deploy/backup.sh deploy/Caddyfile "target:$DEPLOY_PATH/"
+          scp deploy/docker-compose.prod.yml deploy/deploy.sh deploy/backup.sh deploy/api-db-user.sh deploy/Caddyfile "target:$DEPLOY_PATH/"
           # the registry token lives only as long as this job; it is passed on stdin and removed afterwards
           ssh target "cd '$DEPLOY_PATH' && docker login ghcr.io -u '${{ github.actor }}' --password-stdin" <<< "$REGISTRY_TOKEN"
           status=0
-          ssh target "cd '$DEPLOY_PATH' && chmod +x deploy.sh backup.sh && API_TAG='$API_TAG' CLIENT_TAG='$CLIENT_TAG' ./deploy.sh" || status=$?
+          ssh target "cd '$DEPLOY_PATH' && chmod +x deploy.sh backup.sh api-db-user.sh && API_TAG='$API_TAG' CLIENT_TAG='$CLIENT_TAG' ./deploy.sh" || status=$?
           ssh target "docker logout ghcr.io" || true
           exit $status
 

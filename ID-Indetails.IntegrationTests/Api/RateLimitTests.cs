@@ -61,3 +61,49 @@ public class UserRateLimitTests(UserRateLimitedApiFactory api) : IClassFixture<U
         (await _steps.Client.GetAsync("/api/teams", second.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
     }
 }
+
+/// <summary>Its own factory: refreshing must keep working for people whose shared address used up the sign-in limit.</summary>
+public class RefreshRateLimitTests(RateLimitedApiFactory api) : IClassFixture<RateLimitedApiFactory>
+{
+    private readonly AuthTestSteps _steps = new(api);
+
+    [Fact]
+    public async Task Refreshing_has_its_own_limit_so_failed_sign_ins_from_the_same_address_dont_sign_everyone_out()
+    {
+        var (email, password, _) = await _steps.ActiveSuperAdminAsync();
+        var cookie = (await _steps.Client.PostJsonAsync("/api/auth/login", new { email, password })).RefreshCookie()!;
+
+        var refused = false;
+        for (var i = 0; i < 10 && !refused; i++)
+        {
+            refused = (int)(await _steps.Client.PostJsonAsync("/api/auth/login", new { email = "guess@test.local", password = $"guess-{i}" })).StatusCode == 429;
+        }
+
+        refused.ShouldBeTrue();
+        await (await _steps.Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: cookie)).ShouldSignInAsync();
+    }
+}
+
+public class CredentialRateLimitTests(RateLimitedApiFactory api) : IClassFixture<RateLimitedApiFactory>
+{
+    private readonly AuthTestSteps _steps = new(api);
+
+    [Fact]
+    public async Task Guessing_the_current_password_with_a_stolen_token_is_limited_per_person()
+    {
+        var (_, _, auth) = await _steps.ActiveSuperAdminAsync();
+
+        // signing up changed the temporary password once; the limit is 3 a minute
+        for (var i = 0; i < 2; i++)
+        {
+            await (await _steps.Client.PostJsonAsync("/api/auth/change-password",
+                new { currentPassword = $"guess-number-{i}", newPassword = "a-brand-new-passphrase" }, auth.AccessToken))
+                .ShouldFailWithAsync(400, ErrorCodes.CurrentPasswordIncorrect);
+        }
+
+        var limited = await _steps.Client.PostJsonAsync("/api/auth/change-password",
+            new { currentPassword = "guess-number-9", newPassword = "a-brand-new-passphrase" }, auth.AccessToken);
+        await limited.ShouldFailWithAsync(429, ErrorCodes.TooManyRequests);
+        limited.Headers.RetryAfter.ShouldNotBeNull();
+    }
+}

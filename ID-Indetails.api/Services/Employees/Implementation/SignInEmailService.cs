@@ -38,6 +38,7 @@ public sealed class SignInEmailService(
     IPermissionService permissions,
     IUserRepository users,
     IRefreshTokenRepository refreshTokens,
+    IPasswordResetRepository resets,
     IInvitationRepository invitations,
     IInvitationService invitationService,
     IEmployeeService employees,
@@ -74,6 +75,8 @@ public sealed class SignInEmailService(
             {
                 user.SessionsValidFrom = now;
                 await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
+                // a reset link sent to the old address mustn't open the account under its new one
+                await resets.ExpirePendingForUserAsync(user.Id, now, cancellationToken);
             }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -111,11 +114,15 @@ public sealed class SignInEmailService(
         }
 
         var oldEmail = await SetAsync(user, request.Email, user.Id, cancellationToken);
-        await refreshTokens.RevokeAllActiveForUserAsync(user.Id, clock.UtcNow, cancellationToken);
+        var now = clock.UtcNow;
+        user.SessionsValidFrom = SessionRules.CutOffKeepingThisSecond(now);
+        await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
+        await resets.ExpirePendingForUserAsync(user.Id, now, cancellationToken);
         var session = await sessions.StartAsync(user, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await TellNewAddressAsync(user, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        permissions.Forget(user.Id);
 
         await TellOldAddressAsync(user, oldEmail);
         return session;

@@ -3,6 +3,7 @@ using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Validators.Common;
 using ID_Indetails.api.Validators.Employees;
 
 namespace ID_Indetails.api.Validators.Payroll;
@@ -16,7 +17,7 @@ public sealed class SalaryListQueryValidator : AbstractValidator<SalaryListQuery
             .Must(d => d is null || DomainCodes.All.Contains(d))
             .WithMessage($"Domain must be one of: {string.Join(", ", DomainCodes.All)}.");
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
-        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
     }

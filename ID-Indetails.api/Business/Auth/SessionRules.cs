@@ -14,5 +14,11 @@ public static class SessionRules
         => sessionsRevokedAt is null
             && (sessionsValidFrom is not { } from || tokenIssuedAt >= WholeSecond(from).AddSeconds(1));
 
+    /// <summary>
+    /// A <c>sessions_valid_from</c> that ends every access token issued before <paramref name="now"/> but keeps the one
+    /// handed out to the person making the change, in this very second.
+    /// </summary>
+    public static DateTime CutOffKeepingThisSecond(DateTime now) => WholeSecond(now).AddSeconds(-1);
+
     private static DateTime WholeSecond(DateTime at) => at.AddTicks(-(at.Ticks % TimeSpan.TicksPerSecond));
 }

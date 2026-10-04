@@ -89,6 +89,7 @@ public static class ErrorCodes
     // Files
     public const string FileTypeNotAllowed = "file_type_not_allowed";
     public const string FileTooLarge = "file_too_large";
+    public const string UploadQuotaReached = "upload_quota_reached";
     public const string FileInUse = "file_in_use";
 
     // Billing

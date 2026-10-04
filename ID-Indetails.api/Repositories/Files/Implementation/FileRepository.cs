@@ -7,6 +7,9 @@ namespace ID_Indetails.api.Repositories.Files.Implementation;
 
 public sealed class FileRepository(IdIndetailsDbContext db) : IFileRepository
 {
+    public async Task<long> BytesUploadedSinceAsync(long userId, DateTime since, CancellationToken cancellationToken = default)
+        => await db.Files.Where(f => f.UploadedById == userId && f.CreatedAt >= since).SumAsync(f => (long?)f.SizeBytes, cancellationToken) ?? 0;
+
     public Task<StoredFile?> GetAsync(long id, CancellationToken cancellationToken = default)
         => db.Files.AsNoTracking().SingleOrDefaultAsync(f => f.Id == id, cancellationToken);
 

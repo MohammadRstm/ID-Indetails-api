@@ -4040,6 +4040,9 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("AttachmentFileId")
                         .HasDatabaseName("ix_work_entries_attachment_file_id");
 
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("ix_work_entries_started_at");
+
                     b.HasIndex("ProjectId", "StartedAt")
                         .HasDatabaseName("ix_work_entries_project_id_started_at");
 

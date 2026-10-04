@@ -41,6 +41,8 @@ public class ProductionSettingsTests
     [InlineData("Email:FromAddress", "no-reply@id-indetails.local")]
     [InlineData("Cors:AllowedOrigins:0", "http://localhost:5173")]
     [InlineData("Proxy:KnownNetworks:0", null)]
+    [InlineData("Email:UseStartTls", "false")]
+    [InlineData("Setup:SuperAdminKey", "short-setup-key")]
     public async Task Production_refuses_to_start_on_development_settings(string key, string? value)
     {
         // null: the setting is missing
@@ -68,6 +70,8 @@ public sealed class ProductionApiFactory(IReadOnlyDictionary<string, string> set
         ["Frontend:BaseUrl"] = "https://app.example.com",
         ["Email:Host"] = "smtp.example.com",
         ["Email:FromAddress"] = "no-reply@example.com",
+        ["Email:UseStartTls"] = "true",
+        ["Setup:SuperAdminKey"] = "a-production-setup-key-of-at-least-32-characters",
         ["Proxy:KnownNetworks:0"] = "172.16.0.0/12",
     };
 

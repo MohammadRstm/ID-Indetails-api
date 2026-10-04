@@ -196,7 +196,7 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Inviting_a_super_admin_needs_its_own_permission_which_can_be_granted()
+    public async Task Inviting_a_super_admin_needs_its_own_permission_and_every_permission_a_super_admin_holds()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
@@ -207,7 +207,9 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await ShouldChangeAsync(superAdmin, admin.User.Id, PermissionChangeAction.Grant, PermissionCodes.EmployeeInviteSuperAdmin);
 
-        ((int)(await Client.PostJsonAsync("/api/invitations", Invite(), admin.AccessToken)).StatusCode).ShouldBe(201);
+        await (await Client.PostJsonAsync("/api/invitations", Invite(), admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
+        ((int)(await Client.PostJsonAsync("/api/invitations", Invite(), superAdmin.AccessToken)).StatusCode).ShouldBe(201);
     }
 
     [Fact]

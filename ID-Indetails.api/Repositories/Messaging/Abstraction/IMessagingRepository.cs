@@ -84,9 +84,9 @@ public interface IMessagingRepository
     Task<long?> LastMessageIdAsync(long conversationId, CancellationToken cancellationToken = default);
 
     /// <summary>The user's read marker in the conversation. Tracked.</summary>
-    Task<ConversationRead?> ReadForUpdateAsync(long userId, long conversationId, CancellationToken cancellationToken = default);
+    /// <summary>Moves the person's read marker forward to <paramref name="messageId"/> (never back), creating it if needed.</summary>
+    Task MoveReadMarkerAsync(long userId, long conversationId, long messageId, DateTime now, CancellationToken cancellationToken = default);
 
-    void Add(ConversationRead read);
 
     /// <summary>
     /// The user's existing conversations: the group chats of <paramref name="teamIds"/> and their direct chats. Unread

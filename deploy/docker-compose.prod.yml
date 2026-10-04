@@ -5,10 +5,18 @@
 # reachable from outside (80 and 443): it handles HTTPS and forwards to the client's nginx.
 name: id-indetails
 
+# Every container's log is rotated: 5 files of 10 MB, compressed, so logs can't fill the disk the database shares.
+x-logging: &logging
+  driver: local
+  options:
+    max-size: 10m
+    max-file: "5"
+
 services:
   db:
     image: mysql:8.4
     restart: unless-stopped
+    logging: *logging
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
@@ -18,11 +26,14 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:?}
       MYSQL_USER: ${MYSQL_USER:?}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?}
+      # The API's own user, with data rights only; created on each deployment (api-db-user.sh).
+      MYSQL_API_USER: ${MYSQL_API_USER:?}
+      MYSQL_API_PASSWORD: ${MYSQL_API_PASSWORD:?}
     volumes:
       - db_data:/var/lib/mysql
     networks: [data]
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      test: ["CMD", "mysqladmin", "ping", "--protocol=tcp", "-h", "127.0.0.1", "--silent"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -32,7 +43,11 @@ services:
   migrations:
     image: ghcr.io/mohammadrstm/id-indetails-migrations:${API_TAG:?}
     profiles: [migrate]
-    # The bundle builds the API's services, which read the connection string from the environment.
+    logging: *logging
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # The bundle builds the API's services, which read the connection string from the environment. It alone connects
+    # as the schema owner.
     environment:
       ConnectionStrings__Default: Server=db;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};
     networks: [data]
@@ -43,12 +58,14 @@ services:
   api:
     image: ghcr.io/mohammadrstm/id-indetails-api:${API_TAG:?}
     restart: unless-stopped
+    logging: *logging
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     environment:
-      ConnectionStrings__Default: Server=db;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};
+      # Data rights only: the running API can't alter or drop tables.
+      ConnectionStrings__Default: Server=db;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_API_USER};Password=${MYSQL_API_PASSWORD};
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?}
       # Only while creating the first super admin; empty, the setup endpoint doesn't exist (docs/server-setup.md).
       Setup__SuperAdminKey: ${SETUP_SUPER_ADMIN_KEY:-}
@@ -59,6 +76,7 @@ services:
       Email__Username: ${SMTP_USERNAME:-}
       Email__Password: ${SMTP_PASSWORD:-}
       Email__FromAddress: ${SMTP_FROM:?}
+      BugReports__ToAddress: ${BUG_REPORTS_TO:-mohammadrstm2004@gmail.com}
       # The client's nginx, and the TLS proxy before it, are trusted for the visitor's address and scheme.
       Proxy__KnownNetworks__0: 172.30.0.0/24
     volumes:
@@ -71,6 +89,7 @@ services:
   web:
     image: ghcr.io/mohammadrstm/id-indetails-client:${CLIENT_TAG:?}
     restart: unless-stopped
+    logging: *logging
     read_only: true
     tmpfs:
       - /tmp:uid=101,gid=101
@@ -81,13 +100,16 @@ services:
       API_UPSTREAM: http://api:8080
     networks: [proxy]
     depends_on:
+      # nginx looks the API up once, when it starts: it restarts with the API, so it never keeps a stale address
       api:
         condition: service_healthy
+        restart: true
 
   # HTTPS: the certificate for PUBLIC_DOMAIN, renewed by itself, kept on the caddy_data volume.
   caddy:
     image: caddy:2.11-alpine
     restart: unless-stopped
+    logging: *logging
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]
     security_opt: [no-new-privileges:true]

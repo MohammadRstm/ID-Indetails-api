@@ -61,7 +61,9 @@ Whoever holds `employee:change_email` (super admins by default) sets someone's n
 ## Rules that protect accounts
 
 - Changing a super admin's account in any way (profile, pay, status, role, sign-in address, sessions) also needs `employee:invite_super_admin`.
-- Nobody deactivates, re-roles, moves or sets the pay of their own account.
+- Nobody deactivates, re-roles, moves or sets the pay of their own account, excuses their own hours or sets their own schedule (`403 employee_change_not_allowed`): all of these decide their own pay.
+- Giving someone a role, or moving them to the other domain, needs every default of that role there; when those defaults include a permission taken from them by hand it also needs `permission:manage` ([authorization.md](authorization.md)).
+- A super admin's pay is company-level: it shows (and `GET /api/employees/{id}/pay` answers) only with `salary:view` or `employee:invite_super_admin`. Their logged hours cost projects nothing; their salary is counted once, on the company overview.
 - The **last active super admin** can never be deactivated or given another role, so the company always has one. Every active super admin's row is locked while this is checked, so two requests can't each remove "the other one".
 
 ## Deactivating and reactivating

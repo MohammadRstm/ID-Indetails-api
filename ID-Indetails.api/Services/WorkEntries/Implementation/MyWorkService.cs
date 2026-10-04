@@ -1,5 +1,6 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -49,7 +50,7 @@ public sealed class MyWorkService(
     {
         var actor = await ActorAsync(cancellationToken);
         var person = (await entries.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
-        if (person is null || !actor.CanSee(person.DomainCode))
+        if (person is null || !EmployeeRules.CanSee(actor, person.DomainCode))
         {
             throw new NotFoundException("Employee not found.");
         }
@@ -90,7 +91,7 @@ public sealed class MyWorkService(
                     WorkEntryRules.AcceptsWork(p.Status, settings.HoldLogging),
                     mine?.Minutes ?? 0,
                     mine?.LastStartedAt,
-                    people.OrderByDescending(c => c.Minutes).Select(c => new ContributorResponse(c.UserId, c.UserName)).ToList(),
+                    people.OrderByDescending(c => c.LastStartedAt).Select(c => new ContributorResponse(c.UserId, c.UserName)).ToList(),
                     last is null ? null : new LastActivityResponse(last.UserId, last.UserName, last.LastStartedAt));
             })
             // Projects the caller worked on first, most recent first; the rest newest first.

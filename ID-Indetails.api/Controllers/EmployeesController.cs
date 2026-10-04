@@ -4,9 +4,11 @@ using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Employees;
+using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ID_Indetails.api.Controllers;
 
@@ -80,6 +82,7 @@ public sealed class EmployeesController(IEmployeeService employeeService, ISignI
     /// <summary>A new sign-in address. Ends their sessions; someone invited gets a new invitation there.</summary>
     [HttpPut("{userId:long}/email")]
     [HasPermission(PermissionCodes.EmployeeChangeEmail)]
+    [EnableRateLimiting(RateLimitPolicies.Email)]
     public Task<EmployeeResponse> ChangeEmail(long userId, ChangeEmailRequest request, CancellationToken cancellationToken)
         => signInEmail.ChangeAsync(userId, request, cancellationToken);
 

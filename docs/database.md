@@ -2,6 +2,8 @@
 
 MySQL 8.4 (see [local-development.md](local-development.md)), accessed through EF Core 9 with the Pomelo provider. The context is `Data/IdIndetailsDbContext.cs`, entities are in `Models/`, and their table mappings are in `Configuration/ModelConfig/`.
 
+EF Core 9 is supported until 10 November 2026, and Pomelo has no release for EF Core 10 yet. Until that changes, the API stays on the newest EF Core 9 patch and references the driver under Pomelo (MySqlConnector) directly, so the driver keeps getting its fixes. Moving to EF Core 10 through Microting's fork of Pomelo (`Microting.EntityFrameworkCore.MySql`) is the planned next step; it keeps the same driver and migration format.
+
 > Any change to entities, configurations, seed data or migrations needs explicit approval first (CLAUDE.md §9). That includes applying a migration.
 
 ## Single company, two domains
@@ -149,6 +151,12 @@ The `InvoiceSchedule` migration adds three nullable columns to `invoices` for Au
 The `InvoiceReminders` migration adds the reminder settings to `billing_settings` (`reminders_enabled`, off, and `reminder_first_after_days`, `reminder_every_days`, `reminder_max`, which existing rows get as 1, 7 and 3, with a range check), and `is_reminder` to `invoice_deliveries` ([billing.md](billing.md#reminders-of-overdue-invoices)) (2 Oct 2026).
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
+
+## Who connects
+
+The running API connects as its own user (`MYSQL_API_USER`), granted `SELECT, INSERT, UPDATE, DELETE` on the
+schema and nothing else: it can't create, alter or drop tables. Only the migrations connect as the schema owner
+(`MYSQL_USER`). Each deployment creates the API user, or updates its password, with `deploy/api-db-user.sh`.
 
 ## Migrations
 

@@ -3,10 +3,12 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Documents.Abstraction;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ID_Indetails.api.Controllers;
 
@@ -67,6 +69,7 @@ public sealed class InvoicesController(
     /// <summary>The invoice as a PDF, drafts included. Downloading it records nothing; record a download delivery for that.</summary>
     [HttpGet("invoices/{invoiceId:long}/pdf")]
     [HasPermission(PermissionCodes.FinancialView)]
+    [EnableRateLimiting(RateLimitPolicies.Export)]
     public async Task<IActionResult> Pdf(long invoiceId, CancellationToken cancellationToken)
     {
         var pdf = await documents.InvoicePdfAsync(invoiceId, cancellationToken);
@@ -76,6 +79,7 @@ public sealed class InvoicesController(
     /// <summary>Emails an issued invoice to the client with its PDF attached, and records the delivery.</summary>
     [HttpPost("invoices/{invoiceId:long}/email")]
     [HasPermission(PermissionCodes.InvoiceSend)]
+    [EnableRateLimiting(RateLimitPolicies.Email)]
     public async Task<ActionResult<InvoiceResponse>> Email(long invoiceId, EmailDocumentRequest request, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await documents.EmailInvoiceAsync(invoiceId, request, cancellationToken));
 
@@ -86,6 +90,7 @@ public sealed class InvoicesController(
     [HttpPost("projects/{projectId:long}/invoice-plan")]
     [HasPermission(PermissionCodes.InvoiceCreate)]
     [HasPermission(PermissionCodes.InvoiceSend)]
+    [EnableRateLimiting(RateLimitPolicies.Email)]
     public async Task<ActionResult<IReadOnlyList<InvoiceResponse>>> CreatePlan(long projectId, InvoicePlanRequest request, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await invoiceSchedule.CreatePlanAsync(projectId, request, cancellationToken));
 

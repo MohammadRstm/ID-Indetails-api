@@ -6,7 +6,7 @@ Photos and videos: attachments on messages and work entries, profile photos and 
 
 | Endpoint | Who | What |
 |---|---|---|
-| `POST /api/files` | Signed in | Multipart field `file`. `201` with `{ id, name, mimeType, kind, sizeBytes, createdAt }`. Its own rate limit (`RateLimiting:UploadPermitsPerMinute`, 30 a minute) |
+| `POST /api/files` | Signed in | Multipart field `file`. `201` with `{ id, name, mimeType, kind, sizeBytes, createdAt }`. Its own rate limit (`RateLimiting:UploadPermitsPerMinute`, 30 a minute), and at most 2 GB a person in any 24 hours (`422 upload_quota_reached`), so nobody can fill the disk |
 | `GET /api/files/{id}` | Signed in, see below | The content, shown inline, with `X-Content-Type-Options: nosniff`. Videos can be read in ranges |
 | `PUT /api/me/photo`, `DELETE /api/me/photo` | Signed in | `{ fileId }`: the caller's profile photo, from an upload of their own. Returns the signed-in user |
 | `PUT /api/employees/{id}/photo`, `DELETE …` | `employee:manage` | `{ fileId }`: someone's profile photo, from the caller's upload. Other domains read as `404`; a super admin's needs `employee:invite_super_admin` |

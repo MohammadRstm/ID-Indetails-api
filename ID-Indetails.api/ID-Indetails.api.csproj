@@ -21,6 +21,9 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.20" />
+    <!-- The driver under Pomelo. Pomelo 9 asks only for 2.4.0 or later, so it is referenced here to get the driver's
+         fixes while EF Core stays on 9 (docs/database.md). -->
+    <PackageReference Include="MySqlConnector" Version="2.6.2" />
     <PackageReference Include="PDFsharp-MigraDoc" Version="6.2.4" />
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
   </ItemGroup>

@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.DTO.Request.Clients;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Validators.Common;
 using ID_Indetails.api.Validators.Employees;
 
 namespace ID_Indetails.api.Validators.Clients;
@@ -16,7 +17,7 @@ public sealed class ClientListQueryValidator : AbstractValidator<ClientListQuery
         RuleFor(x => x.Filter).IsInEnum().WithMessage("Filter must be active, owing or empty.");
         RuleFor(x => x.Sort).IsInEnum()
             .WithMessage("Sort must be name, projects, hours, activity, revenue, profit, margin or outstanding.");
-        RuleFor(x => x.Page).GreaterThanOrEqualTo(1).WithMessage("Page must be 1 or more.");
+        RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
     }
@@ -53,7 +54,7 @@ public sealed class ClientContactRequestValidator : AbstractValidator<ClientCont
     {
         RuleFor(x => x.Kind).IsInEnum().WithMessage("Contact kind must be email or phone.");
         RuleFor(x => x.Value).ClientText("Contact", 255, required: true);
-        RuleFor(x => x.Value).EmailAddress().WithMessage("Enter a valid email address.").When(x => x.Kind == ContactKind.Email);
+        RuleFor(x => x.Value).Must(ValidationRules.IsPlainEmail).WithMessage("Enter a valid email address.").When(x => x.Kind == ContactKind.Email);
         RuleFor(x => x.Value)
             .Must(v => v.Count(char.IsAsciiDigit) is >= 6 and <= 20)
             .WithMessage("Enter a phone number with 6 to 20 digits.")
