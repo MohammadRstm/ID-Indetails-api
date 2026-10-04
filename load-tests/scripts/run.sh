@@ -156,6 +156,8 @@ lt up "${options[@]}"
 
 k6_env=(-e "BASE_URL=$BASE_URL" -e "GATE_KEY=$GATE_KEY" -e "USER_PASSWORD=$USER_PASSWORD" -e "ROSTER=$OUT/roster.json"
     -e "OUT=$OUT" -e "COMPANY_UTC_OFFSET=$(TZ=Asia/Beirut date +%:z)")
+# Only the email test may call the endpoints that send email (k6/lib/api.js refuses them otherwise).
+[ "$PROFILE" != email ] || k6_env+=(-e EMAIL_TEST=true)
 
 if [[ "$PROFILE" =~ ^(load|stages|stress|spike|soak|breakpoint|recovery)$ ]]; then
     log "Smoke test before the real one"
@@ -200,7 +202,7 @@ mkdir -p "$OUT/collected" && tar -xzf "$OUT/collected.tar.gz" -C "$OUT/collected
 # endpoint that sends email and runs no scheduler. One there means an email path ran that shouldn't have.
 caught=$(tr -dc '0-9' < "$OUT/collected/mail-count.txt")
 if [ "$PROFILE" = email ]; then
-    expected=$(grep -o 'EXPECTED_EMAILS [0-9]*' "$OUT/k6-console.log" | awk '{print $2}' | tail -1)
+    expected=$(grep -so 'EXPECTED_EMAILS [0-9]*' "$OUT/k6-console.log" | awk '{print $2}' | tail -1 || true)
     log "Mailpit caught ${caught:-?} emails; the test sent ${expected:-?}"
     [ "${caught:-0}" -ge "${expected:-1}" ] || { echo "Mailpit caught fewer emails than the test sent." >&2; k6_status=1; }
 elif [ "${caught:-0}" != 0 ]; then
