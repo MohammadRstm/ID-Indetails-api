@@ -1,9 +1,11 @@
+using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Clients;
 using ID_Indetails.api.DTO.Request.Expenses;
 using ID_Indetails.api.DTO.Request.Labour;
 using ID_Indetails.api.DTO.Request.Meetings;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Request.Requirements;
+using ID_Indetails.api.DTO.Request.Statements;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.LoadTests.Tool.Seeding;
@@ -245,6 +247,16 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
             if (!project.Owner.WorksOn(day))
             {
                 project.Owner = world.AnyAdmin(project.Domain, day);
+            }
+
+            // A site is only completed once the client has had every material on a statement: a final one first.
+            if (action == "complete" && project.Unstated.Count > 0)
+            {
+                var statement = await api.PostAsync(project.Owner.Token, $"/api/projects/{project.Id}/statements", new CreateStatementRequest { Mode = StatementMode.Detail });
+                await api.PostAsync(project.Owner.Token, $"/api/statements/{statement.Id()}/deliveries", new RecordDeliveryRequest { Channel = DeliveryChannel.Download });
+                project.Unstated.Clear();
+                project.LastStatementOn = day;
+                world.Tally.Add("statements");
             }
 
             await api.PostAsync(project.Owner.Token, $"/api/projects/{project.Id}/{action}");
