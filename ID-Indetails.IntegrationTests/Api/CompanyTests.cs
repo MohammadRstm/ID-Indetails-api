@@ -211,7 +211,7 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
                 new { name = "Gone", groupId = studio.Id, currency = "USD", amount = 1m }, token))
             .ShouldFailWithAsync(400, ErrorCodes.OverheadGroupNotFound);
 
-        // only super admins manage them, even with overhead:manage; anyone who sees the expenses reads them
+        // overhead:manage doesn't manage them, overhead_category:manage does; anyone who sees the expenses reads them
         var manager = (await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design)).Auth;
         var granted = await Client.PutJsonAsync($"/api/users/{manager.User.Id}/permissions", new
         {
@@ -222,6 +222,14 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync("/api/company/overhead/groups", new { name = "Snacks" }, manager.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync("/api/company/overhead/groups", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        var categories = await Client.PutJsonAsync($"/api/users/{manager.User.Id}/permissions", new
+        {
+            changes = new[] { new { code = PermissionCodes.OverheadCategoryManage, action = PermissionChangeAction.Grant, reason = "Tidies the categories" } },
+        }, token);
+        categories.IsSuccessStatusCode.ShouldBeTrue(await categories.Content.ReadAsStringAsync());
+        var snacks = await OkAsync<OverheadGroupResponse>(Client.PostJsonAsync("/api/company/overhead/groups", new { name = "Snacks" }, manager.AccessToken));
+        (await Client.DeleteAsync($"/api/company/overhead/groups/{snacks.Id}", manager.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
     }
 
     [Fact]

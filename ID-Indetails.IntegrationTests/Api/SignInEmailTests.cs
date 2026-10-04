@@ -4,7 +4,7 @@ using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
 
-/// <summary>A super admin changing a sign-in address: someone else's, someone still invited, and their own.</summary>
+/// <summary>Changing a sign-in address (<c>employee:change_email</c>): someone else's, someone still invited, and one's own.</summary>
 public class SignInEmailTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
     private readonly AuthTestSteps _steps = new(api);
@@ -101,16 +101,33 @@ public class SignInEmailTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Only_a_super_admin_changes_an_address_and_never_a_deactivated_ones()
+    public async Task Only_whoever_holds_employee_change_email_changes_an_address_and_never_a_deactivated_ones()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, adminPassword, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, password, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
+        // no role but super admin holds it by default
         await (await ChangeAsync(employee.User.Id, AuthTestSteps.NewEmail(), admin.AccessToken))
-            .ShouldFailWithAsync(403, ErrorCodes.EmployeeChangeNotAllowed);
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.PostJsonAsync("/api/auth/change-email", new { email = AuthTestSteps.NewEmail(), currentPassword = password }, employee.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        // given it, an admin changes someone's, and their own with their password, but never a super admin's
+        var granted = await Client.PutJsonAsync($"/api/users/{admin.User.Id}/permissions", new
+        {
+            changes = new[]
+            {
+                new { code = PermissionCodes.EmployeeChangeEmail, action = "grant", reason = "Looks after accounts" },
+                new { code = PermissionCodes.MaterialCreate, action = "grant", reason = "Sees both domains" },
+            },
+        }, superAdmin.AccessToken);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+        (await ChangeAsync(employee.User.Id, AuthTestSteps.NewEmail(), admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await ChangeAsync(superAdmin.User.Id, AuthTestSteps.NewEmail(), admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.EmployeeChangeNotAllowed);
+        await (await Client.PostJsonAsync("/api/auth/change-email", new { email = AuthTestSteps.NewEmail(), currentPassword = adminPassword }, admin.AccessToken))
+            .ShouldSignInAsync();
 
         (await Client.PostEmptyAsync($"/api/employees/{employee.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await ChangeAsync(employee.User.Id, AuthTestSteps.NewEmail(), superAdmin.AccessToken))

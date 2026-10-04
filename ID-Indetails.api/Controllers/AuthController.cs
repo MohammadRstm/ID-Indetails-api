@@ -1,4 +1,5 @@
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Auth;
 using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Response.Auth;
@@ -67,9 +68,9 @@ public sealed class AuthController(
     public async Task<ActionResult<AuthResponse>> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
         => SignedIn(await authService.ChangePasswordAsync(currentUser.Id, request, cancellationToken));
 
-    /// <summary>A super admin's own new sign-in address, with their password. Signs out every other session.</summary>
+    /// <summary>The caller's own new sign-in address, with their password. Signs out every other session.</summary>
     [HttpPost("change-email")]
-    [Authorize]
+    [HasPermission(PermissionCodes.EmployeeChangeEmail)]
     public async Task<ActionResult<AuthResponse>> ChangeEmail(ChangeMyEmailRequest request, CancellationToken cancellationToken)
         => SignedIn(await signInEmail.ChangeMineAsync(request, cancellationToken));
 

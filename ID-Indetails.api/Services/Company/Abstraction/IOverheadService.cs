@@ -27,11 +27,11 @@ public interface IOverheadService
     /// <summary>Every category of company expenses, first to last ("Other" last).</summary>
     Task<IReadOnlyList<OverheadGroupResponse>> GroupsAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Adds a category before "Other" (super admins only).</summary>
+    /// <summary>Adds a category before "Other".</summary>
     Task<OverheadGroupResponse> AddGroupAsync(OverheadGroupRequest request, CancellationToken cancellationToken = default);
 
     Task<OverheadGroupResponse> RenameGroupAsync(long id, OverheadGroupRequest request, CancellationToken cancellationToken = default);
 
-    /// <summary>Removes a category no line uses (super admins only).</summary>
+    /// <summary>Removes a category no line uses.</summary>
     Task RemoveGroupAsync(long id, CancellationToken cancellationToken = default);
 }

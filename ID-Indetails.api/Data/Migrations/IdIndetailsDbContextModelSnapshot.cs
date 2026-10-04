@@ -2181,6 +2181,16 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "employee:change_email",
+                            Description = "Change sign-in addresses"
+                        },
+                        new
+                        {
+                            Code = "session:manage",
+                            Description = "End people's sessions and restore their sign-in"
+                        },
+                        new
+                        {
                             Code = "permission:manage",
                             Description = "Grant and revoke other people's permissions"
                         },
@@ -2213,6 +2223,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "overhead:manage",
                             Description = "Manage company overhead"
+                        },
+                        new
+                        {
+                            Code = "overhead_category:manage",
+                            Description = "Add, rename and remove company expense categories"
                         },
                         new
                         {
@@ -3118,6 +3133,16 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "employee:change_email"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "session:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "permission:manage"
                         },
                         new
@@ -3149,6 +3174,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "super_admin",
                             PermissionCode = "overhead:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "overhead_category:manage"
                         },
                         new
                         {

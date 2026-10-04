@@ -19,7 +19,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `POST /api/company/overhead` | `overhead:manage` | Adds a line |
 | `PUT /api/company/overhead/{id}` | `overhead:manage` | Renames it or changes its category |
 | `GET /api/company/overhead/groups` | `company:view` or `overhead:manage` | The categories, first to last ("Other" last), with how many lines use each |
-| `POST /api/company/overhead/groups`, `PUT …/{id}`, `DELETE …/{id}` | `overhead:manage`, and a super admin | Adds (before "Other"), renames or removes (unused only) a category |
+| `POST /api/company/overhead/groups`, `PUT …/{id}`, `DELETE …/{id}` | `overhead_category:manage` | Adds (before "Other"), renames or removes (unused only) a category |
 | `POST /api/company/overhead/{id}/amounts` | `overhead:manage` | A new monthly amount from a month |
 | `POST /api/company/overhead/{id}/currency` | `overhead:manage` | `{ currency, amount, fromMonth }`: charges it in another currency from a month (this month when empty). Returns the line charged from then |
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
@@ -59,7 +59,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 - A line has a name, a **category** (`groupId`), a currency (USD or LBP) and a monthly amount.
 - **Categories** (`overhead_groups`) are listed first to last, "Other" always last. Thirteen are seeded (Software & services, Operating costs, Rent & utilities, Internet & phone, Marketing & advertising, Professional fees, Insurance, Office supplies, Equipment & maintenance, Vehicles & transport, Bank fees, Taxes & licences, Training & memberships) and then Other. Lines made before categories existed are in Software & services or Operating costs, as their old group was.
-  - Only a **super admin** adds, renames or removes one (`403` for anyone else, `overhead:manage` included). A new one goes before Other. Names are unique, whatever their case (`409 overhead_group_exists`), and at most 60 characters.
+  - Whoever holds `overhead_category:manage` adds, renames or removes one (`403` for anyone else, `overhead:manage` included). A new one goes before Other. Names are unique, whatever their case (`409 overhead_group_exists`), and at most 60 characters.
   - One that any line uses, past ones included, can't be removed (`422 overhead_group_in_use`): move its lines first. A line put in a category that no longer exists is `400 overhead_group_not_found`.
 - It is charged **in full** for every month from its start month to its end month.
 - **Amount changes are dated** from the first of a month, this month or later, and never before a later change that already exists. Past months keep their cost. A change for a month that already has one replaces it.

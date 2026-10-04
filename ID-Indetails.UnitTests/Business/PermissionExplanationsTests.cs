@@ -15,7 +15,7 @@ public class PermissionExplanationsTests
             .Select(f => (string)f.GetRawConstantValue()!)
             .ToList();
 
-        codes.Count.ShouldBe(49);
+        codes.Count.ShouldBe(52);
         PermissionExplanations.All.Keys.ShouldBe(codes, ignoreOrder: true);
         PermissionExplanations.All.Values.ShouldAllBe(text => text.Length > 20 && text.EndsWith('.'));
         PermissionExplanations.Of("nothing:like_this").ShouldBeEmpty();

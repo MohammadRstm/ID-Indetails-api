@@ -90,10 +90,6 @@ public static class OverheadRules
     public static int NextSortOrder(IEnumerable<int> existing)
         => existing.Where(o => o < LastSortOrder).DefaultIfEmpty(0).Max() + 10;
 
-    /// <summary>The categories are the company's own: only a super admin adds, renames or removes one.</summary>
-    public static RuleDenial? CheckManageGroups(bool isSuperAdmin)
-        => isSuperAdmin ? null : RuleDenial.Forbidden(ErrorCodes.Forbidden, "Only a super admin manages the categories of company expenses.");
-
     /// <summary>A category still used by a line, past ones included, stays: removing it would leave them uncategorised.</summary>
     public static RuleDenial? CheckRemoveGroup(int lines)
         => lines > 0

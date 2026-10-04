@@ -10,7 +10,6 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
-using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
 
@@ -19,7 +18,6 @@ namespace ID_Indetails.api.Services.Company.Implementation;
 /// <summary>Company overhead (see <c>Business/Company/OverheadRules</c>).</summary>
 public sealed class OverheadService(
     ICurrentUser currentUser,
-    IPermissionService permissions,
     IOverheadRepository overheads,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
@@ -233,7 +231,6 @@ public sealed class OverheadService(
 
     public async Task<OverheadGroupResponse> AddGroupAsync(OverheadGroupRequest request, CancellationToken cancellationToken = default)
     {
-        await CheckManageGroupsAsync(cancellationToken);
         var name = request.Name.Trim();
         await EnsureNameFreeAsync(name, null, cancellationToken);
 
@@ -250,7 +247,6 @@ public sealed class OverheadService(
 
     public async Task<OverheadGroupResponse> RenameGroupAsync(long id, OverheadGroupRequest request, CancellationToken cancellationToken = default)
     {
-        await CheckManageGroupsAsync(cancellationToken);
         var group = await overheads.GetGroupForUpdateAsync(id, cancellationToken) ?? throw new NotFoundException(GroupNotFoundMessage);
         var name = request.Name.Trim();
         await EnsureNameFreeAsync(name, id, cancellationToken);
@@ -262,16 +258,12 @@ public sealed class OverheadService(
 
     public async Task RemoveGroupAsync(long id, CancellationToken cancellationToken = default)
     {
-        await CheckManageGroupsAsync(cancellationToken);
         var group = await overheads.GetGroupForUpdateAsync(id, cancellationToken) ?? throw new NotFoundException(GroupNotFoundMessage);
         OverheadRules.CheckRemoveGroup(await overheads.LinesInGroupAsync(id, cancellationToken)).ThrowIfDenied();
 
         overheads.RemoveGroup(group);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
-
-    private async Task CheckManageGroupsAsync(CancellationToken cancellationToken)
-        => OverheadRules.CheckManageGroups((await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).IsSuperAdmin).ThrowIfDenied();
 
     private async Task EnsureNameFreeAsync(string name, long? exceptId, CancellationToken cancellationToken)
     {

@@ -11,6 +11,7 @@ public class PermissionCatalogTests
     [
         PermissionCodes.CompanyView, PermissionCodes.OverheadManage,
         PermissionCodes.SalaryView, PermissionCodes.CompanySettingsManage, PermissionCodes.ExchangeRateManage,
+        PermissionCodes.OverheadCategoryManage, PermissionCodes.SessionManage, PermissionCodes.EmployeeChangeEmail,
     ];
 
     [Fact]

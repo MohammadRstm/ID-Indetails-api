@@ -145,7 +145,7 @@ public class EmployeeRulesTests
     }
 
     [Fact]
-    public void Only_a_super_admin_changes_sign_in_addresses_their_own_only_with_their_password()
+    public void Sign_in_addresses_change_for_others_never_ones_own_this_way_and_a_super_admin_s_needs_the_permission_to_invite_super_admins()
     {
         EmployeeRules.CheckEmailChange(SuperAdmin, Employee()).ShouldBeNull();
         EmployeeRules.CheckEmailChange(SuperAdmin, Employee(status: UserStatus.Invited)).ShouldBeNull();
@@ -153,9 +153,9 @@ public class EmployeeRulesTests
         EmployeeRules.CheckEmailChange(SuperAdmin, Employee(status: UserStatus.Deactivated))!.Code.ShouldBe(ErrorCodes.UserDeactivated);
         EmployeeRules.CheckEmailChange(SuperAdmin, new Target(SuperAdmin.UserId, RoleCodes.SuperAdmin, null, UserStatus.Active))!
             .Kind.ShouldBe(DenialKind.Forbidden);
-        EmployeeRules.CheckEmailChange(CrossDomainAdmin, Employee())!.Kind.ShouldBe(DenialKind.Forbidden);
 
-        EmployeeRules.CheckOwnEmailChange(SuperAdmin).ShouldBeNull();
-        EmployeeRules.CheckOwnEmailChange(DesignAdmin)!.Kind.ShouldBe(DenialKind.Forbidden);
+        // employee:change_email is checked by the endpoint; the rules are about whose address it is
+        EmployeeRules.CheckEmailChange(DesignAdmin, Employee()).ShouldBeNull();
+        EmployeeRules.CheckEmailChange(DesignAdmin, SuperAdminTarget())!.Code.ShouldBe(ErrorCodes.EmployeeChangeNotAllowed);
     }
 }
