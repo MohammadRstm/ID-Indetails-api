@@ -85,9 +85,9 @@ services:
       # k6 sends everything from one address, so the per-IP limits are raised (sign-in, anonymous requests, and
       # refreshes, whose own limit is ignored by API versions that don't have it yet). The per-user limits stay
       # production's, 300 requests a minute. `lt.sh up --production-rate-limits` restores the per-IP ones to test them.
-      RateLimiting__AuthPermitsPerMinute: "100000"
+      RateLimiting__AuthPermitsPerMinute: "10000"
       RateLimiting__AnonymousPermitsPerMinute: "100000"
-      RateLimiting__RefreshPermitsPerMinute: "100000"
+      RateLimiting__RefreshPermitsPerMinute: "10000"
       # Nothing scheduled runs in a normal test: the notification scheduler issues and emails scheduled invoices and
       # overdue reminders, and the file cleanup deletes rows the verification counts. `lt.sh up --email-test` turns
       # both on.

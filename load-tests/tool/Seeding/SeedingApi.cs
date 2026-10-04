@@ -58,8 +58,8 @@ public sealed class SeedingApi(string connectionString, SimulatedClock clock, Se
         builder.UseSetting("RateLimiting:SetupPermitsPerHour", "10000");
         builder.UseSetting("RateLimiting:ExportPermitsPerMinute", "10000");
         builder.UseSetting("RateLimiting:UploadPermitsPerMinute", "10000");
-        builder.UseSetting("RateLimiting:RefreshPermitsPerMinute", "100000");
-        builder.UseSetting("RateLimiting:EmailPermitsPerMinute", "100000");
+        builder.UseSetting("RateLimiting:RefreshPermitsPerMinute", "10000");
+        builder.UseSetting("RateLimiting:EmailPermitsPerMinute", "10000");
         // The seeder runs the scheduled checks itself, at simulated times.
         builder.UseSetting("NotificationScheduler:Enabled", "false");
         builder.UseSetting("FileStorage:RootPath", _filesRoot);
