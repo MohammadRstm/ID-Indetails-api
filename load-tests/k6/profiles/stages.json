@@ -1,0 +1,41 @@
+{
+  "name": "stages",
+  "description": "The staged test: 50, 70, 100, 150 and 200 users, each reached by a ramp and held steady, so each step can be read on its own.",
+  "think": 1,
+  "steps": [
+    {
+      "users": 50,
+      "ramp": "2m",
+      "hold": "6m"
+    },
+    {
+      "users": 70,
+      "ramp": "2m",
+      "hold": "6m"
+    },
+    {
+      "users": 100,
+      "ramp": "2m",
+      "hold": "6m"
+    },
+    {
+      "users": 150,
+      "ramp": "2m",
+      "hold": "6m"
+    },
+    {
+      "users": 200,
+      "ramp": "2m",
+      "hold": "6m"
+    }
+  ],
+  "rampDown": "1m",
+  "thresholds": {
+    "http_req_failed": [
+      "rate<0.05"
+    ],
+    "http_req_duration": [
+      "p(95)<3000"
+    ]
+  }
+}

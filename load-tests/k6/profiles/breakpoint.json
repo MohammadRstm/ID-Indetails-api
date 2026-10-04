@@ -1,0 +1,99 @@
+{
+  "name": "breakpoint",
+  "description": "Adds 25 users every 4 minutes up to 400 and stops when errors pass 5% or the 95th percentile passes 3 seconds. Needs 400 seeded users.",
+  "think": 1,
+  "steps": [
+    {
+      "users": 50,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 75,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 100,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 125,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 150,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 175,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 200,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 225,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 250,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 275,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 300,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 325,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 350,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 375,
+      "ramp": "1m",
+      "hold": "3m"
+    },
+    {
+      "users": 400,
+      "ramp": "1m",
+      "hold": "3m"
+    }
+  ],
+  "rampDown": "1m",
+  "thresholds": {
+    "http_req_failed": [
+      {
+        "threshold": "rate<0.05",
+        "abortOnFail": true,
+        "delayAbortEval": "1m"
+      }
+    ],
+    "http_req_duration": [
+      {
+        "threshold": "p(95)<3000",
+        "abortOnFail": true,
+        "delayAbortEval": "1m"
+      }
+    ]
+  }
+}

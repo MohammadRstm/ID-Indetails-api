@@ -1,0 +1,46 @@
+{
+  "name": "stress",
+  "description": "Past the target: up to 300 users in steps of 50, to see what gives first. Needs 300 seeded users.",
+  "think": 1,
+  "steps": [
+    {
+      "users": 50,
+      "ramp": "2m",
+      "hold": "5m"
+    },
+    {
+      "users": 100,
+      "ramp": "2m",
+      "hold": "5m"
+    },
+    {
+      "users": 150,
+      "ramp": "2m",
+      "hold": "5m"
+    },
+    {
+      "users": 200,
+      "ramp": "2m",
+      "hold": "5m"
+    },
+    {
+      "users": 250,
+      "ramp": "2m",
+      "hold": "5m"
+    },
+    {
+      "users": 300,
+      "ramp": "2m",
+      "hold": "5m"
+    }
+  ],
+  "rampDown": "1m",
+  "thresholds": {
+    "http_req_failed": [
+      "rate<0.05"
+    ],
+    "http_req_duration": [
+      "p(95)<3000"
+    ]
+  }
+}

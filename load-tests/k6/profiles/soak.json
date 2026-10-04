@@ -1,0 +1,24 @@
+{
+  "name": "soak",
+  "description": "60 users for three hours: leaks, growing tables and slow drift show over time.",
+  "think": 1,
+  "steps": [
+    {
+      "users": 60,
+      "ramp": "5m",
+      "hold": "3h"
+    }
+  ],
+  "rampDown": "2m",
+  "thresholds": {
+    "http_req_failed": [
+      "rate<0.01"
+    ],
+    "http_req_duration": [
+      "p(95)<1500"
+    ],
+    "checks": [
+      "rate>0.99"
+    ]
+  }
+}
