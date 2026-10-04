@@ -1,0 +1,214 @@
+# Runs a load test with load-tests/scripts/run.sh (load-tests/README.md). Only when asked, never on a push:
+# - by hand: Actions → Load test → Run workflow, choosing the target and the profile;
+# - by adding a label "load-test:<profile>" to a pull request (a rehearsal on the runner; remove and add it again to
+#   run again), e.g. load-test:smoke, load-test:concurrency.
+#
+# Targets:
+# - runner: everything on the GitHub runner. The load-test environment runs in Docker there with this branch's API
+#   and the client's main branch, built on the spot. It never contacts the production server. A rehearsal: the
+#   runner is not the server, so its numbers are only indicative.
+# - server: the load-test environment on the production server, over SSH, with the published images of api_tag and
+#   client_tag (default: what the server's load-test .env says). It needs the "loadtest" environment's secrets.
+#
+# Either way the report, the database verification, the k6 numbers and the server's logs and samples are the run's
+# artifact, and the report is the run's summary.
+name: Load test
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where the load-test environment runs
+        type: choice
+        options: [runner, server]
+        default: runner
+      profile:
+        description: Load profile (load-tests/README.md)
+        type: choice
+        options: [smoke, load, stages, stress, spike, soak, breakpoint, recovery, concurrency, rate-limits, email]
+        default: smoke
+      users:
+        description: "Test users to seed (empty: what the profile needs)"
+        required: false
+      months:
+        description: Months of seeded history
+        default: "3"
+      api_tag:
+        description: "Server only: the API image tag to test (sha-<7>; empty: the load-test .env's)"
+        required: false
+      client_tag:
+        description: "Server only: the client image tag to test"
+        required: false
+      keep:
+        description: Leave the load-test environment running afterwards
+        type: boolean
+        default: false
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  K6_VERSION: "2.3.0"
+
+jobs:
+  runner:
+    name: Load test on the runner
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'runner')
+      || (github.event_name == 'pull_request' && startsWith(github.event.label.name, 'load-test:'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    concurrency:
+      group: load-test-runner-${{ github.ref }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The client repository is private: a read-only token for it alone, as the Deploy workflow uses.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MohammadRstm/ID-Indetails-client
+          ref: main
+          path: client
+          token: ${{ secrets.CLIENT_REPO_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
+        with:
+          k6-version: ${{ env.K6_VERSION }}
+
+      - name: Which test
+        id: which
+        env:
+          LABEL: ${{ github.event.label.name }}
+          INPUT_PROFILE: ${{ inputs.profile }}
+        run: |
+          profile=${INPUT_PROFILE:-${LABEL#load-test:}}
+          [[ "$profile" =~ ^(smoke|load|stages|stress|spike|soak|breakpoint|recovery|concurrency|rate-limits|email)$ ]] \
+            || { echo "::error::Unknown profile $profile"; exit 1; }
+          echo "profile=$profile" >> "$GITHUB_OUTPUT"
+
+      - name: Build the images under test
+        run: |
+          docker build --target runtime -t ghcr.io/mohammadrstm/id-indetails-api:rehearsal .
+          docker build -t ghcr.io/mohammadrstm/id-indetails-client:rehearsal client
+
+      - name: Run
+        env:
+          TARGET: runner
+          PROFILE: ${{ steps.which.outputs.profile }}
+          USERS: ${{ inputs.users }}
+          MONTHS: ${{ inputs.months || '3' }}
+          KEEP: "false"
+          OUT: ${{ github.workspace }}/load-tests/reports/run
+        run: bash load-tests/scripts/run.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          report=load-tests/reports/run/report.md
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -f load-tests/reports/run/verification.md ]; then cat load-tests/reports/run/verification.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: load-test-${{ steps.which.outputs.profile }}-${{ github.run_id }}
+          path: load-tests/reports/run
+          retention-days: 14
+
+  server:
+    name: Load test on the server
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'server'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    # Its secrets: LOADTEST_HOST, LOADTEST_USER, LOADTEST_SSH_KEY, LOADTEST_KNOWN_HOSTS (load-tests/README.md).
+    environment: loadtest
+    concurrency:
+      group: load-test-server
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
+        with:
+          k6-version: ${{ env.K6_VERSION }}
+
+      # The server's host key is pinned: an unknown or changed key stops the run.
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.LOADTEST_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LOADTEST_KNOWN_HOSTS }}
+          HOST: ${{ secrets.LOADTEST_HOST }}
+          SSH_USER: ${{ secrets.LOADTEST_USER }}
+        run: |
+          for v in SSH_KEY KNOWN_HOSTS HOST SSH_USER; do [ -n "${!v}" ] || { echo "::error::The loadtest environment lacks $v."; exit 1; }; done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/loadtest_key && chmod 600 ~/.ssh/loadtest_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          echo "LT_SSH=$SSH_USER@$HOST" >> "$GITHUB_ENV"
+
+      # Only if the images aren't on the server already; the token lives as long as this job.
+      - name: Log the server in to GHCR
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ssh -i ~/.ssh/loadtest_key "$LT_SSH" "docker login ghcr.io -u '${{ github.actor }}' --password-stdin" <<< "$REGISTRY_TOKEN"
+
+      - name: Run
+        env:
+          TARGET: server
+          LT_SSH_KEY: /home/runner/.ssh/loadtest_key
+          PROFILE: ${{ inputs.profile }}
+          USERS: ${{ inputs.users }}
+          MONTHS: ${{ inputs.months }}
+          API_TAG: ${{ inputs.api_tag }}
+          CLIENT_TAG: ${{ inputs.client_tag }}
+          KEEP: ${{ inputs.keep }}
+          OUT: ${{ github.workspace }}/load-tests/reports/run
+        run: bash load-tests/scripts/run.sh
+
+      - name: Log the server out of GHCR
+        if: always()
+        run: ssh -i ~/.ssh/loadtest_key "$LT_SSH" "docker logout ghcr.io" || true
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f load-tests/reports/run/report.md ]; then cat load-tests/reports/run/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if [ -f load-tests/reports/run/verification.md ]; then cat load-tests/reports/run/verification.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: load-test-${{ inputs.profile }}-${{ github.run_id }}
+          path: load-tests/reports/run
+          retention-days: 14
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -rf ~/.ssh
