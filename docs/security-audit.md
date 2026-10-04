@@ -43,7 +43,7 @@ to act as another user, no secret in the repositories or their history.
 | M13 | The setup endpoint creates super admins for as long as its key is set, and the key had no strength rule. | **Fixed as decided:** production refuses a key shorter than 32 characters; it stays usable while set (empty it after use, as `server-setup.md` says). |
 | M14 | Security events weren't traceable (no IP or user on refused sign-ins, nothing on 429s). | **Fixed:** warnings under `ID_Indetails.api.Security` with user id or IP; the logged path is stripped of control characters, so it can't forge a line. |
 | M15 | The work-log digest read under REPEATABLE READ could miss a concurrent digest (duplicate key → 500, or a lost count). | **Fixed:** locking read. |
-| M16 | EF Core 9 (and Pomelo 9) leave support on 10 Nov 2026; Pomelo 10 isn't out. | **Open decision:** wait for Pomelo 10 and watch advisories, or move to Oracle's provider. |
+| M16 | EF Core 9 (and Pomelo 9) leave support on 10 Nov 2026; Pomelo 10 isn't out. | **Decided:** stay on the newest EF Core 9 patch and keep the driver current (MySqlConnector 2.6.2, PR #80); then try Microting's fork of Pomelo for EF Core 10. Oracle's provider was set aside: it would mean a new driver and rebuilding the migration history. |
 | M17 | Deploy can build any ref, rebuilds instead of shipping the CI-tested image, and `CLIENT_REPO_TOKEN` is a repository secret. | **Open:** restrict refs to `master`/`main`/tags, move the token to an environment (GitHub settings). |
 
 ## Low (fixed)
@@ -107,7 +107,7 @@ packages.
 | Monitoring / alerting | FAIL until the external monitor is set up (M7) |
 | Report a bug | PASS |
 | Secrets / configuration | PASS WITH NOTES (`MYSQL_API_USER` to add on the server) |
-| Dependencies | PASS WITH NOTES (EF Core 9 end of support, M16) |
+| Dependencies | PASS WITH NOTES (EF Core 9 after 10 Nov 2026 until the move to EF Core 10, M16) |
 | File uploads / storage | PASS WITH NOTES (backups on the same disk) |
 | Cache security | PASS |
 | API security | PASS |
