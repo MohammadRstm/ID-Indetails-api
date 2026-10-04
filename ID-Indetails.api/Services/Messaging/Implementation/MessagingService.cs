@@ -303,8 +303,7 @@ public sealed class MessagingService(
         messaging.Add(message);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        await MoveReadMarkerAsync(senderId, conversation.Id, message.Id, cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await messaging.MoveReadMarkerAsync(senderId, conversation.Id, message.Id, clock.UtcNow, cancellationToken);
         return message;
     }
 
@@ -315,23 +314,7 @@ public sealed class MessagingService(
             return;
         }
 
-        await MoveReadMarkerAsync(me.Id, conversation.Id, lastId, cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-    }
-
-    /// <summary>Read markers only move forward.</summary>
-    private async Task MoveReadMarkerAsync(long userId, long conversationId, long messageId, CancellationToken cancellationToken)
-    {
-        var read = await messaging.ReadForUpdateAsync(userId, conversationId, cancellationToken);
-        if (read is null)
-        {
-            messaging.Add(new ConversationRead { UserId = userId, ConversationId = conversationId, LastReadMessageId = messageId, UpdatedAt = clock.UtcNow });
-        }
-        else if ((read.LastReadMessageId ?? 0) < messageId)
-        {
-            read.LastReadMessageId = messageId;
-            read.UpdatedAt = clock.UtcNow;
-        }
+        await messaging.MoveReadMarkerAsync(me.Id, conversation.Id, lastId, clock.UtcNow, cancellationToken);
     }
 
     private async Task<MessagePageResponse> PageAsync(Conversation? conversation, MessagePageQuery query, CancellationToken cancellationToken)

@@ -31,7 +31,7 @@ public sealed class FileCleanupJob(
                     logger.LogInformation("Deleted {Count} unused uploads.", deleted);
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(ex, "Deleting unused uploads failed.");
             }

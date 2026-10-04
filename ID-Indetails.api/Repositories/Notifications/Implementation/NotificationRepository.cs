@@ -12,8 +12,11 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
 {
     public void Add(Notification notification) => db.Notifications.Add(notification);
 
-    public Task<Notification?> GetDigestForUpdateAsync(long recipientId, string digestKey, CancellationToken cancellationToken = default)
-        => db.Notifications.SingleOrDefaultAsync(n => n.RecipientId == recipientId && n.DigestKey == digestKey, cancellationToken);
+    public async Task<Notification?> GetDigestForUpdateAsync(long recipientId, string digestKey, CancellationToken cancellationToken = default)
+        => (await db.Notifications
+                .FromSql($"SELECT * FROM `notifications` WHERE `recipient_id` = {recipientId} AND `digest_key` = {digestKey} FOR UPDATE")
+                .ToListAsync(cancellationToken))
+            .SingleOrDefault();
 
     public async Task<IReadOnlySet<long>> RecipientsWithKeyAsync(
         string digestKey,
