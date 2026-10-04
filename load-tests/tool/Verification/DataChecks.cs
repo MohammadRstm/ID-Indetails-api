@@ -54,6 +54,17 @@ public static class DataChecks
                  + (SELECT COUNT(*) FROM labour_weeks l JOIN projects p ON p.id = l.project_id WHERE p.domain_code <> 'execution')
                  + (SELECT COUNT(*) FROM client_statements s JOIN projects p ON p.id = s.project_id WHERE p.domain_code <> 'execution')
             """),
+        ("No statement lists a removed material", """
+            SELECT COUNT(*) FROM client_statement_lines l JOIN project_materials m ON m.id = l.material_id WHERE m.deleted_at IS NOT NULL
+            """),
+        ("Materials are recorded by Execution people or super admins", """
+            SELECT COUNT(*) FROM project_materials m JOIN users u ON u.id = m.added_by_id WHERE u.domain_code = 'design'
+            """),
+        ("No work was logged on a project after it was completed", """
+            SELECT COUNT(*) FROM work_entries w JOIN projects p ON p.id = w.project_id
+            WHERE w.deleted_at IS NULL AND p.status IN ('completed', 'archived') AND p.completed_at IS NOT NULL
+              AND w.created_at > p.completed_at
+            """),
         ("A statement lists only its own project's materials", """
             SELECT COUNT(*) FROM client_statement_lines l JOIN client_statements s ON s.id = l.statement_id
               JOIN project_materials m ON m.id = l.material_id WHERE m.project_id <> s.project_id

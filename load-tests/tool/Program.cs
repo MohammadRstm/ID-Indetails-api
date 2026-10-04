@@ -1,4 +1,5 @@
 using System.Globalization;
+using ID_Indetails.LoadTests.Tool.Report;
 using ID_Indetails.LoadTests.Tool.Seeding;
 using MySqlConnector;
 
@@ -19,8 +20,11 @@ public static class Program
                                           --users 200  --months 3  --random-seed 42
                                           --anchor yyyy-MM-dd (default today; the history ends the day before)
                                           --roster load-tests/reports/roster.json (the test users, for k6)
-          verify                        Check the rules the data must keep. Changes nothing
+          verify                        Check the rules the data must keep. Changes nothing. After a k6 run, also:
+                                          --log <k6 console output>  --run <RUN_ID>  (what the run changed, the races)
+                                          --out <folder>             (writes verification.json and verification.md)
           fingerprint                   Print a digest of every table, to compare two seeds. Changes nothing
+          report --dir <run folder>     Write report.md and report.json from a run's results (needs no database)
 
         Settings come from the environment only:
           LT_DB_CONNECTION  admin connection string to the load-test server, with Database=idi_loadtest
@@ -33,7 +37,9 @@ public static class Program
 
     private static readonly Dictionary<string, string[]> Options = new()
     {
-        ["init"] = [], ["check"] = [], ["migrate"] = [], ["verify"] = [], ["fingerprint"] = [],
+        ["init"] = [], ["check"] = [], ["migrate"] = [], ["fingerprint"] = [],
+        ["verify"] = ["--log", "--run", "--out"],
+        ["report"] = ["--dir"],
         ["reset"] = ["--confirm"],
         ["drop"] = ["--confirm", IdentityFlag],
         ["seed"] = ["--users", "--months", "--random-seed", "--anchor", "--roster"],
@@ -47,6 +53,18 @@ public static class Program
         {
             Console.Error.WriteLine(Usage);
             return ExitCodes.Usage;
+        }
+
+        if (command.Name == "report")
+        {
+            if (command.Options.GetValueOrDefault("--dir") is not { } folder || !File.Exists(Path.Combine(folder, "k6-summary.json")))
+            {
+                Console.Error.WriteLine("report --dir needs a run folder holding k6-summary.json.");
+                return ExitCodes.Usage;
+            }
+
+            Console.Write(await RunReport.WriteAsync(folder));
+            return ExitCodes.Ok;
         }
 
         LoadTestSettings settings;
@@ -76,7 +94,8 @@ public static class Program
                 "reset" => await commands.ResetAsync(confirmed),
                 "drop" => await commands.DropAsync(confirmed, command.Options.ContainsKey(IdentityFlag)),
                 "seed" => await commands.SeedAsync(seed!.Value.Plan, seed.Value.Roster, Environment.GetEnvironmentVariable("LT_USER_PASSWORD")),
-                "verify" => await commands.VerifyAsync(),
+                "verify" => await commands.VerifyAsync(
+                    command.Options.GetValueOrDefault("--log"), command.Options.GetValueOrDefault("--run"), command.Options.GetValueOrDefault("--out")),
                 _ => await commands.FingerprintAsync(),
             };
         }

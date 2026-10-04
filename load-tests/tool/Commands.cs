@@ -148,10 +148,36 @@ public sealed class Commands(LoadTestSettings settings, LoadTestServer server, T
         return counts.All(c => c.Matches) && rulesHold && ready ? ExitCodes.Ok : ExitCodes.Failed;
     }
 
-    public async Task<int> VerifyAsync()
-        => await GuardedIdentityAsync(GuardMode.Existing) is { } identity && await ReportReadinessAsync(identity) && await ReportChecksAsync()
-            ? ExitCodes.Ok
-            : ExitCodes.Failed;
+    /// <summary>
+    /// The data rules, and with a k6 run's console output, what that run changed against what the database holds and
+    /// the race checks. With an output folder, writes verification.json and verification.md there.
+    /// </summary>
+    public async Task<int> VerifyAsync(string? runLogPath, string? runId, string? outFolder)
+    {
+        if (await GuardedIdentityAsync(GuardMode.Existing) is not { } identity || !await ReportReadinessAsync(identity))
+        {
+            return ExitCodes.Failed;
+        }
+
+        var rules = await DataChecks.RunAsync(settings.ConnectionString);
+        var log = runLogPath is null ? new RunLog() : RunLog.Read(runLogPath);
+        IReadOnlyList<Expectation> ledger = runId is null || log.Ledger.Count == 0
+            ? []
+            : await LedgerChecks.CompareAsync(settings.ConnectionString, runId, log.Ledger);
+        var races = log.Afterwards
+            .Select(a => (a.GetProperty("race").GetString()!, a.GetProperty("rule").GetString()!, a.GetProperty("holds").GetBoolean()))
+            .ToList();
+        var changes = log.Ledger.GroupBy(e => e.GetProperty("kind").GetString()!).ToDictionary(g => g.Key, g => g.Count());
+
+        var report = new VerificationReport(runId ?? "none", rules, ledger, races, changes);
+        output.Write(report.Markdown());
+        if (outFolder is not null)
+        {
+            await report.WriteAsync(outFolder);
+        }
+
+        return report.Passed ? ExitCodes.Ok : ExitCodes.Failed;
+    }
 
     public async Task<int> FingerprintAsync()
     {
