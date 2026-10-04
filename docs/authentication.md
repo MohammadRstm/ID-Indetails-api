@@ -20,7 +20,15 @@ There is **no self-signup**. A developer creates the first super admin. After th
 | `POST /api/invitations/validate` | Anyone with a link | What the signup page shows (email, role, domain, team, position) |
 | `POST /api/invitations/accept` | Anyone with a link | Sets name, phone and password, activates the account, signs in |
 
-Every request counts against a global limit: 300 a minute per signed-in user, or 60 a minute per IP without a valid access token. Login, refresh, forgot and reset password and the two public invitation endpoints are also limited per IP to 10 a minute (together), and the setup endpoint to 5 an hour. File exports are limited to 10 a minute per user. All limits are in the `RateLimiting` configuration section; going over answers `429 too_many_requests`.
+Every request counts against a global limit: 300 a minute per signed-in user, or 60 a minute per IP without a valid access token. On top of it:
+
+- Login, forgot and reset password and the two public invitation endpoints: 10 a minute per IP, together (`auth`).
+- Refresh: 60 a minute per IP on its own (`refresh`), since every page load refreshes and an office shares one address; the refresh token itself is the secret.
+- Change password and change sign-in address, which check the current password: 10 a minute per person (`credential`).
+- Requests that email an address the caller chooses (invoice and statement emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
+- Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Bug reports: 5 an hour per person. Setup: 5 an hour per IP.
+
+All limits are in the `RateLimiting` configuration section. Going over answers `429 too_many_requests` with a `Retry-After` header, and is logged as a warning under the `ID_Indetails.api.Security` category with the caller (user id, or IP when signed out). Refused sign-ins are logged there too, with the IP only.
 
 ## Creating the first super admin
 
@@ -67,7 +75,7 @@ An unknown, used, expired or replaced link, or one whose account has since been 
 
 ### Access token
 
-A JWT signed with HMAC-SHA256, valid for **3 hours** (`Jwt:AccessTokenMinutes`). Send it as `Authorization: Bearer <token>`. Claims:
+A JWT signed with HMAC-SHA256, valid for **15 minutes** (`Jwt:AccessTokenMinutes`); the client refreshes it silently when it runs out. Send it as `Authorization: Bearer <token>`. Claims:
 
 | Claim | Value |
 |---|---|
@@ -136,6 +144,6 @@ dotnet user-secrets set "Setup:SuperAdminKey" "<random key>" --project ID-Indeta
 
 ## Known limitations
 
-- **Access tokens can't be revoked.** When a user is deactivated or changes their password, access tokens already issued keep working until they expire (up to 3 hours). Refresh tokens stop working immediately.
+- **Access tokens end with the session.** A password reset, deactivation, ended sessions, a replayed refresh token and a new sign-in address set by someone else refuse every access token issued before (`users.sessions_valid_from`, `Business/Auth/SessionRules.cs`). Changing your own password or sign-in address does the same for your other devices and keeps the one you used. The live connection closes when its token expires, so it follows within 15 minutes. These also cancel any pending password-reset link.
 - **No "forgot password" flow yet.** The `password_reset_tokens` table is ready for it.
 - **No invitation revoke endpoint.** An invitation can be resent (which cancels the old link) but not cancelled on its own. That belongs with the employee-management feature.

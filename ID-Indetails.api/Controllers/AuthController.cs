@@ -3,6 +3,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Auth;
 using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
@@ -19,30 +20,42 @@ public sealed class AuthController(
     IPasswordResetService passwordReset,
     ICurrentUser currentUser,
     ISignInEmailService signInEmail,
-    RefreshTokenCookie refreshCookie) : ControllerBase
+    RefreshTokenCookie refreshCookie,
+    ILoggerFactory loggers) : ControllerBase
 {
     /// <summary>Signs in. Returns the access token; the refresh token is set as an HttpOnly cookie.</summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Auth)]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
-        => SignedIn(await authService.LoginAsync(request, cancellationToken));
+    {
+        try
+        {
+            return SignedIn(await authService.LoginAsync(request, cancellationToken));
+        }
+        catch (UnauthenticatedException)
+        {
+            // Who tried is the address only: the email typed may not be anyone's.
+            loggers.CreateLogger(SecurityLog.Category).LogWarning("Sign-in refused for {Caller}.", SecurityLog.Caller(HttpContext));
+            throw;
+        }
+    }
 
     /// <summary>Exchanges the refresh cookie for a new access token and a new refresh cookie.</summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
-    [EnableRateLimiting(RateLimitPolicies.Auth)]
+    [EnableRateLimiting(RateLimitPolicies.Refresh)]
     public async Task<ActionResult<AuthResponse>> Refresh(CancellationToken cancellationToken)
     {
         try
         {
             return SignedIn(await authService.RefreshAsync(refreshCookie.Read(Request), cancellationToken));
         }
-        catch
+        catch (UnauthenticatedException)
         {
-            // A refresh that fails for any reason leaves no stale cookie behind. The global
-            // exception handler resets response headers before writing the error, so the
-            // cookie is cleared as that error response starts rather than here.
+            // A refresh the server refuses leaves no stale cookie behind; a passing failure (a database blip) keeps it,
+            // so the client's retry can still restore the session. The global exception handler resets response
+            // headers before writing the error, so the cookie is cleared as that error response starts.
             Response.OnStarting(() =>
             {
                 refreshCookie.Clear(Response);
@@ -65,12 +78,14 @@ public sealed class AuthController(
     /// <summary>Changes the password. The only action allowed while a temporary password is pending.</summary>
     [HttpPost("change-password")]
     [Authorize(Policy = AuthorizationPolicies.AllowPendingPasswordChange)]
+    [EnableRateLimiting(RateLimitPolicies.Credential)]
     public async Task<ActionResult<AuthResponse>> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
         => SignedIn(await authService.ChangePasswordAsync(currentUser.Id, request, cancellationToken));
 
     /// <summary>The caller's own new sign-in address, with their password. Signs out every other session.</summary>
     [HttpPost("change-email")]
     [HasPermission(PermissionCodes.EmployeeChangeEmail)]
+    [EnableRateLimiting(RateLimitPolicies.Credential)]
     public async Task<ActionResult<AuthResponse>> ChangeEmail(ChangeMyEmailRequest request, CancellationToken cancellationToken)
         => SignedIn(await signInEmail.ChangeMineAsync(request, cancellationToken));
 

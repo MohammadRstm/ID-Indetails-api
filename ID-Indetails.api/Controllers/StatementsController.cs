@@ -4,9 +4,11 @@ using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Statements;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Statements;
+using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Statements.Abstraction;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ID_Indetails.api.Controllers;
 
@@ -49,6 +51,7 @@ public sealed class StatementsController(IStatementService statementService, IDo
     /// <summary>The statement as a PDF. Downloading it records nothing; record a download delivery for that.</summary>
     [HttpGet("statements/{statementId:long}/pdf")]
     [HasAnyPermission(PermissionCodes.StatementCreate, PermissionCodes.StatementSend, PermissionCodes.FinancialView)]
+    [EnableRateLimiting(RateLimitPolicies.Export)]
     public async Task<IActionResult> Pdf(long statementId, CancellationToken cancellationToken)
     {
         var pdf = await documents.StatementPdfAsync(statementId, cancellationToken);
@@ -58,6 +61,7 @@ public sealed class StatementsController(IStatementService statementService, IDo
     /// <summary>Emails the statement to the client with its PDF attached, and records the delivery.</summary>
     [HttpPost("statements/{statementId:long}/email")]
     [HasPermission(PermissionCodes.StatementSend)]
+    [EnableRateLimiting(RateLimitPolicies.Email)]
     public Task<StatementResponse> Email(long statementId, EmailDocumentRequest request, CancellationToken cancellationToken)
         => documents.EmailStatementAsync(statementId, request, cancellationToken);
 }

@@ -16,6 +16,8 @@ namespace ID_Indetails.api.Services.Auth.Implementation;
 public sealed class AuthService(
     IUserRepository users,
     IRefreshTokenRepository refreshTokens,
+    IPasswordResetRepository resets,
+    IPermissionService permissions,
     IUnitOfWork unitOfWork,
     IPasswordService passwords,
     ISessionService sessions,
@@ -77,6 +79,7 @@ public sealed class AuthService(
             if (presented.ReplacedById is not null)
             {
                 await SignOutEverywhereAfterReuseAsync(presented, now, cancellationToken);
+                permissions.Forget(presented.UserId);
             }
 
             throw new UnauthenticatedException(ErrorCodes.RefreshTokenInvalid, SessionExpiredMessage);
@@ -108,6 +111,7 @@ public sealed class AuthService(
         {
             await SignOutEverywhereAfterReuseAsync(presented, now, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            permissions.Forget(presented.UserId);
             throw new UnauthenticatedException(ErrorCodes.RefreshTokenReused, SessionExpiredMessage);
         }
 
@@ -153,12 +157,16 @@ public sealed class AuthService(
         user.PasswordHash = passwords.Hash(user, request.NewPassword);
         user.MustChangePassword = false;
         user.UpdatedAt = now;
+        // every other device is signed out, the access tokens it holds included; this one gets a new session
+        user.SessionsValidFrom = SessionRules.CutOffKeepingThisSecond(now);
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
+        await resets.ExpirePendingForUserAsync(user.Id, now, cancellationToken);
         var session = await sessions.StartAsync(user, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        permissions.Forget(user.Id);
 
         return session;
     }
@@ -181,5 +189,12 @@ public sealed class AuthService(
             token.Id, token.UserId);
 
         await refreshTokens.RevokeAllActiveForUserAsync(token.UserId, now, cancellationToken);
+
+        // whoever replayed the token may hold an access token from it: those stop working too
+        if (await users.GetByIdAsync(token.UserId, cancellationToken) is { } user)
+        {
+            user.SessionsValidFrom = now;
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
     }
 }

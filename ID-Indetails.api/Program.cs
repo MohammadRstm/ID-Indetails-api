@@ -50,7 +50,7 @@ app.UseMiddleware<LiveUpdatesMiddleware>();
 app.MapControllers();
 // For the container platform, on the private network: nginx doesn't serve it publicly.
 app.MapHealthChecks(HostingServiceCollectionExtensions.HealthPath).AllowAnonymous().DisableRateLimiting();
-app.MapHub<LiveHub>(LiveHub.Path);
+app.MapHub<LiveHub>(LiveHub.Path, options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

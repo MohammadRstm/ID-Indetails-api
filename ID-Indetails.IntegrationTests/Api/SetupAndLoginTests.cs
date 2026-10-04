@@ -76,7 +76,7 @@ public class SetupAndLoginTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Access_token_carries_the_agreed_claims_and_lasts_three_hours()
+    public async Task Access_token_carries_the_agreed_claims_and_lasts_a_quarter_of_an_hour()
     {
         var (email, _, auth) = await _steps.ActiveSuperAdminAsync();
         var jwt = new JsonWebToken(auth.AccessToken);
@@ -86,7 +86,7 @@ public class SetupAndLoginTests(ApiFactory api) : IClassFixture<ApiFactory>
         jwt.GetClaim(AuthClaimTypes.LastName).Value.ShouldBe("Haddad");
         jwt.GetClaim(AuthClaimTypes.Role).Value.ShouldBe(RoleCodes.SuperAdmin);
         jwt.TryGetClaim(AuthClaimTypes.Domain, out _).ShouldBeFalse();
-        (jwt.ValidTo - jwt.IssuedAt).ShouldBe(TimeSpan.FromHours(3));
+        (jwt.ValidTo - jwt.IssuedAt).ShouldBe(TimeSpan.FromMinutes(15));
         auth.User.Permissions.ShouldContain(PermissionCodes.CompanyView);
     }
 

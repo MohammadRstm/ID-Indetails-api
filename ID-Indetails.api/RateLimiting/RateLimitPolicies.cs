@@ -6,6 +6,15 @@ public static class RateLimitPolicies
     /// <summary>Endpoints that take passwords or tokens: slows down guessing.</summary>
     public const string Auth = "auth";
 
+    /// <summary>Session refreshes: per IP, roomier than <see cref="Auth"/>, since the refresh token itself is the secret.</summary>
+    public const string Refresh = "refresh";
+
+    /// <summary>A signed-in person's own password checks (change password or sign-in address): per user.</summary>
+    public const string Credential = "credential";
+
+    /// <summary>Requests that email an address the caller chooses (invoices, statements, invitations): per user.</summary>
+    public const string Email = "email";
+
     /// <summary>The developer-only setup endpoint.</summary>
     public const string Setup = "setup";
 

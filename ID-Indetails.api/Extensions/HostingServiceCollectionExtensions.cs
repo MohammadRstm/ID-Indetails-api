@@ -51,7 +51,11 @@ public static class HostingServiceCollectionExtensions
             .ValidateOnStart();
         services.AddOptions<EmailOptions>()
             .Validate(o => !IsLocal(o.Host), "Email:Host must be the production SMTP server.")
+            .Validate(o => o.UseStartTls, "Email:UseStartTls must be on, so mail and the SMTP password travel encrypted.")
             .Validate(o => !o.FromAddress.EndsWith(".local", StringComparison.OrdinalIgnoreCase), "Email:FromAddress must be a real address.")
+            .ValidateOnStart();
+        services.AddOptions<SetupOptions>().BindConfiguration(SetupOptions.SectionName)
+            .Validate(o => o.SuperAdminKey.Length is 0 or >= 32, "Setup:SuperAdminKey must be empty or at least 32 characters.")
             .ValidateOnStart();
         services.AddOptions<ClientCorsOptions>().BindConfiguration(ClientCorsOptions.SectionName)
             .Validate(o => !o.AllowedOrigins.Any(origin => !IsPublicHttps(origin)), "Cors:AllowedOrigins may only list public https origins.")

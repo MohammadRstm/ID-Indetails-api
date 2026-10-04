@@ -139,8 +139,9 @@ public sealed class EmployeeService(
         user.Status = UserStatus.Deactivated;
         user.DeactivatedAt = now;
         user.UpdatedAt = now;
+        user.SessionsValidFrom = now;
 
-        // Signed out everywhere, and any pending signup link stops working.
+        // Signed out everywhere (the access tokens they hold too), and any pending signup link stops working.
         await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
         await invitations.RevokePendingForUserAsync(user.Id, now, cancellationToken);
         activity.Add(UserEvent(user, ActivityEventKinds.EmployeeDeactivated, actor.UserId, period is null ? null : new { lastWorkingDay = lastDay }));

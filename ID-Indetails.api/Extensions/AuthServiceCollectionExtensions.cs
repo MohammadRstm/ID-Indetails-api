@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Threading.RateLimiting;
 using ID_Indetails.api.Authorization;
@@ -124,6 +125,18 @@ public static class AuthServiceCollectionExtensions
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.AuthPermitsPerMinute, Window = TimeSpan.FromMinutes(1) }));
 
+            options.AddPolicy(RateLimitPolicies.Refresh, context => RateLimitPartition.GetFixedWindowLimiter(
+                "refresh:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => PerMinute(limits.RefreshPermitsPerMinute)));
+
+            options.AddPolicy(RateLimitPolicies.Credential, context => RateLimitPartition.GetFixedWindowLimiter(
+                "credential:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => PerMinute(limits.AuthPermitsPerMinute)));
+
+            options.AddPolicy(RateLimitPolicies.Email, context => RateLimitPartition.GetFixedWindowLimiter(
+                "email:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => PerMinute(limits.EmailPermitsPerMinute)));
+
             options.AddPolicy(RateLimitPolicies.Export, context => RateLimitPartition.GetFixedWindowLimiter(
                 "export:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                 _ => PerMinute(limits.ExportPermitsPerMinute)));
@@ -140,12 +153,24 @@ public static class AuthServiceCollectionExtensions
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.SetupPermitsPerHour, Window = TimeSpan.FromHours(1) }));
 
-            options.OnRejected = (context, cancellationToken) => new ValueTask(ApiErrorWriter.WriteAsync(
-                context.HttpContext,
-                ErrorType.RateLimited,
-                ErrorCodes.TooManyRequests,
-                "Too many requests. Please wait a minute and try again.",
-                cancellationToken: cancellationToken));
+            options.OnRejected = (context, cancellationToken) =>
+            {
+                var http = context.HttpContext;
+                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                {
+                    http.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+                }
+
+                http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(SecurityLog.Category).LogWarning(
+                    "Rate limit reached on {Method} {Path} by {Caller}.",
+                    http.Request.Method, http.Request.Path, SecurityLog.Caller(http));
+                return new ValueTask(ApiErrorWriter.WriteAsync(
+                    http,
+                    ErrorType.RateLimited,
+                    ErrorCodes.TooManyRequests,
+                    "Too many requests. Please wait a minute and try again.",
+                    cancellationToken: cancellationToken));
+            };
         });
 
         return services;

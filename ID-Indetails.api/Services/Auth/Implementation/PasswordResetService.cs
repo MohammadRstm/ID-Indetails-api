@@ -23,6 +23,7 @@ public sealed class PasswordResetService(
     IUserRepository users,
     IPasswordResetRepository resets,
     IRefreshTokenRepository refreshTokens,
+    IPermissionService permissions,
     IUnitOfWork unitOfWork,
     IPasswordService passwords,
     IEmailSender emailSender,
@@ -92,11 +93,14 @@ public sealed class PasswordResetService(
         user.PasswordHash = passwords.Hash(user, request.Password);
         user.MustChangePassword = false;
         user.UpdatedAt = now;
+        // signed out everywhere: refresh tokens and the access tokens already handed out
+        user.SessionsValidFrom = now;
 
         await resets.ExpirePendingForUserAsync(user.Id, now, cancellationToken);
         await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        permissions.Forget(user.Id);
     }
 
     private async Task SendAsync(EmailMessage message, long userId)
