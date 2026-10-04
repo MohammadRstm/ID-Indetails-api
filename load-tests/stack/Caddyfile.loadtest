@@ -1,0 +1,29 @@
+# The load-test environment's front door (docker-compose.loadtest.yml). HTTPS on 8443 with a certificate from Caddy's
+# own local authority (k6 doesn't verify it), compressed like production's Caddy, and open only to requests that carry
+# the gate key. Everything else gets a bare 404, so a scanner that finds the port learns nothing. No access log, as in
+# production.
+{
+	admin off
+	auto_https disable_redirects
+	skip_install_trust
+	default_sni {$LT_PUBLIC_HOST}
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://{$LT_PUBLIC_HOST}:8443 {
+	tls internal
+
+	@gated header X-LoadTest-Key {$LT_GATE_KEY}
+	handle @gated {
+		request_header -X-LoadTest-Key
+		encode zstd gzip
+		header -Server
+		reverse_proxy lt-web:8080
+	}
+
+	handle {
+		respond 404
+	}
+}

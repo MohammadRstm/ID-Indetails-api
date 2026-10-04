@@ -1,0 +1,141 @@
+# The load-test environment (load-tests/README.md). It runs on the production server beside the real stack but
+# shares nothing with it: its own project name, networks, volumes, secrets, database server and mail catcher. Only
+# lt.sh starts it, for a test window, and `lt.sh purge` removes it with its data. Nothing restarts it by itself.
+#
+# Email can't leave: the API is only on lt-backend, an internal network with no route out of the server, and its
+# SMTP settings are written here as literals pointing at Mailpit (lt-mail). lt.sh refuses to start any other.
+name: idi-loadtest
+
+services:
+  lt-db:
+    image: mysql:8.4
+    # The tool refuses any database server that doesn't answer SELECT @@hostname with this name.
+    hostname: idi-loadtest-db
+    restart: "no"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${LT_DB_ROOT_PASSWORD:?}
+      MYSQL_DATABASE: idi_loadtest
+      MYSQL_USER: idi_loadtest_app
+      MYSQL_PASSWORD: ${LT_DB_APP_PASSWORD:?}
+    volumes:
+      - lt_db_data:/var/lib/mysql
+    networks: [lt-backend, lt-dbhost]
+    # Loopback only: the load-test tool reaches it through an SSH tunnel. Production's database publishes no port.
+    ports:
+      - "127.0.0.1:13306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # Catches every email the API sends. It relays nothing, and it sits on the internal network only.
+  lt-mail:
+    image: axllent/mailpit:v1.31.2
+    restart: "no"
+    environment:
+      MP_MAX_MESSAGES: "20000"
+    networks: [lt-backend]
+
+  lt-api:
+    image: ghcr.io/mohammadrstm/id-indetails-api:${API_TAG:?}
+    restart: "no"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      ConnectionStrings__Default: Server=lt-db;Port=3306;Database=idi_loadtest;User=idi_loadtest_app;Password=${LT_DB_APP_PASSWORD:?};
+      Jwt__SigningKey: ${LT_JWT_SIGNING_KEY:?}
+      # Empty: the setup endpoint answers 404. The tool creates the test users.
+      Setup__SuperAdminKey: ""
+      # Emailed links would point here: a reserved name that never resolves.
+      Frontend__BaseUrl: https://loadtest.invalid
+      # Mail goes to Mailpit, always. Literal values on purpose: nothing in .env can change them.
+      Email__Host: lt-mail
+      Email__Port: "1025"
+      Email__UseStartTls: "false"
+      Email__Username: ""
+      Email__Password: ""
+      Email__FromAddress: no-reply@loadtest.invalid
+      Email__FromName: Hourline load test
+      # nginx (lt-backend) and Caddy (lt-edge) forward the visitor's address.
+      Proxy__KnownNetworks__0: 172.30.101.0/24
+      Proxy__KnownNetworks__1: 172.30.102.0/24
+      # k6 sends everything from one address, so the per-IP limits are raised. The per-user limit stays production's
+      # 300 a minute. `lt.sh up --production-rate-limits` restores production's per-IP limits to test them.
+      RateLimiting__AuthPermitsPerMinute: "100000"
+      RateLimiting__AnonymousPermitsPerMinute: "100000"
+      # Nothing scheduled runs in a normal test: the notification scheduler issues and emails scheduled invoices and
+      # overdue reminders, and the file cleanup deletes rows the verification counts. `lt.sh up --email-test` turns
+      # both on.
+      NotificationScheduler__Enabled: "false"
+      FileStorage__CleanupEnabled: "false"
+    volumes:
+      - lt_files:/app/App_Data/files
+    networks: [lt-backend]
+    depends_on:
+      lt-db:
+        condition: service_healthy
+      lt-mail:
+        condition: service_started
+
+  lt-web:
+    image: ghcr.io/mohammadrstm/id-indetails-client:${CLIENT_TAG:?}
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:uid=101,gid=101
+      - /etc/nginx/conf.d:uid=101,gid=101
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      API_UPSTREAM: http://lt-api:8080
+    networks: [lt-backend, lt-edge]
+    depends_on:
+      lt-api:
+        condition: service_healthy
+
+  # HTTPS on 8443 with Caddy's own certificate, open only to requests carrying the gate key (Caddyfile.loadtest).
+  lt-proxy:
+    image: caddy:2.11-alpine
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      LT_PUBLIC_HOST: ${LT_PUBLIC_HOST:?}
+      LT_GATE_KEY: ${LT_GATE_KEY:?}
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./Caddyfile.loadtest:/etc/caddy/Caddyfile:ro
+      - lt_caddy_data:/data
+      - lt_caddy_config:/config
+    networks: [lt-edge]
+    depends_on:
+      - lt-web
+
+networks:
+  # The database, the mail catcher, the API and nginx: no route out of the server.
+  lt-backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.101.0/24
+  lt-edge:
+    ipam:
+      config:
+        - subnet: 172.30.102.0/24
+  # Only so the database can be published on the server's loopback for the tool.
+  lt-dbhost: {}
+
+volumes:
+  lt_db_data:
+  lt_files:
+  lt_caddy_data:
+  lt_caddy_config:
