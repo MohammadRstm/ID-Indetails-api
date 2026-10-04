@@ -14,4 +14,7 @@ public static class RateLimitPolicies
 
     /// <summary>File uploads: per signed-in user.</summary>
     public const string Upload = "upload";
+
+    /// <summary>Bug reports, which send an email each: per signed-in user, per hour.</summary>
+    public const string BugReport = "bug-report";
 }

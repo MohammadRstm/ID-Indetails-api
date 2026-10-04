@@ -30,6 +30,10 @@ public sealed class RateLimitOptions
     [Range(1, 10_000)]
     public int AuthPermitsPerMinute { get; init; } = 10;
 
+    /// <summary>Bug reports, per signed-in user per hour.</summary>
+    [Range(1, 1_000)]
+    public int BugReportPermitsPerHour { get; init; } = 5;
+
     /// <summary>Super-admin setup: requests per IP per hour.</summary>
     [Range(1, 10_000)]
     public int SetupPermitsPerHour { get; init; } = 5;

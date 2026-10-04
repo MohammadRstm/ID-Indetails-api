@@ -88,3 +88,13 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - The boards are the domain overviews and the company overview: `overview-design`, `overview-execution` and `company-overview` (`Constants/BoardKeys.cs`). Any other key is `404`.
 - Only the order is kept (`user_board_layouts.layout` holds `{ "order": [...] }`), as in the prototype: a card takes the width of the slot it lands in. The client drops keys it no longer knows and places new cards at their default spot, so the server only checks the shape: 1 to 30 card keys, each lowercase letters, digits and dashes (40 at most), none twice (`400`).
 - The client saves on every move and deletes the layout when the order matches the default again. Nobody reads or changes anyone else's layout.
+
+## Reporting a bug
+
+| Endpoint | Who | What |
+|---|---|---|
+| `POST /api/bug-reports` | Signed in | `{ title, description, steps, page }`: emails the report to `BugReports:ToAddress` (`204`). Nothing is stored |
+
+- `title` (one line, up to 120 characters) and `description` are required; `description` and `steps` take up to 4000 characters. `page` is the client path it happened on and must be a bare path (`/design/projects/12`): a query or fragment is refused, so a token in a link can't travel with it.
+- The API adds who sent it (name, user id, email, role and domain), the time and the browser (`User-Agent`, one line, at most 300 characters). Every value is HTML-encoded in the email (`Services/Email/Implementation/SupportEmails.cs`). The recipient is configuration and is never sent to the client.
+- Five reports per person per hour (`RateLimiting:BugReportPermitsPerHour`, `429` past it). If the email can't be sent the answer is `503 email_delivery_failed`, and the failure is logged.
