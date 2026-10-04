@@ -62,8 +62,9 @@ jobs:
       || (github.event_name == 'pull_request' && startsWith(github.event.label.name, 'load-test:'))
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    # Per profile: each rehearsal has its own runner, so different profiles run side by side.
     concurrency:
-      group: load-test-runner-${{ github.ref }}
+      group: load-test-runner-${{ github.ref }}-${{ inputs.profile || github.event.label.name }}
       cancel-in-progress: false
     defaults:
       run:
