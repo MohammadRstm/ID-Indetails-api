@@ -1,7 +1,8 @@
 import { check } from 'k6';
 import { SharedArray } from 'k6/data';
 import exec from 'k6/execution';
-import { OUT, ROSTER, RUN_ID } from './lib/config.js';
+import http from 'k6/http';
+import { BASE_URL, GATE_KEY, OUT, ROSTER, RUN_ID } from './lib/config.js';
 import { call, field, get, post, put } from './lib/api.js';
 import { ledger, runMark } from './lib/ledger.js';
 import { newSession, sessionFor } from './lib/session.js';
@@ -198,7 +199,30 @@ const RACES = [
       : post(s, '/api/work-entries', { projectId: f.project, description: `Race log ${runMark}`, startedAt: f.startedAt, endedAt: f.endedAt }, { expect: [201, 422] })),
     afterwards: () => ({}),
   },
-].filter((race) => race.who().length >= 2 && race.who().every((u) => u));
+  {
+    // One person, two tabs refreshing with the same cookie at once: one wins, the other gets 401, and the person
+    // stays signed in (it is a re-sent cookie within seconds, not a stolen one).
+    name: 'refresh_same_cookie',
+    who: () => [of('DesignEmployee')[19]],
+    prepare: () => ({}),
+    act: (s) => {
+      const params = { headers: GATE_KEY ? { 'X-LoadTest-Key': GATE_KEY } : {}, tags: { name: 'POST /api/auth/refresh' } };
+      const responses = http.batch([
+        ['POST', `${BASE_URL}/api/auth/refresh`, null, params],
+        ['POST', `${BASE_URL}/api/auth/refresh`, null, params],
+      ]);
+      const statuses = responses.map((r) => r.status).sort();
+      const winner = responses.find((r) => r.status === 200);
+      const stillIn = winner && http.get(`${BASE_URL}/api/auth/me`, { headers: { ...params.headers, Authorization: `Bearer ${winner.json('accessToken')}` } }).status === 200;
+      check(null, {
+        'refresh_same_cookie: one refresh wins and the other gets 401': () => statuses.join() === '200,401',
+        'refresh_same_cookie: the person is still signed in': () => !!stillIn,
+      }, { kind: 'race' });
+      return winner || responses[0];
+    },
+    afterwards: () => ({}),
+  },
+].filter((race) => race.who().length >= 1 && race.who().every((u) => u));
 
 function clientProject(admin, domain) {
   const projects = field(get(admin, `/api/projects?domain=${domain}&status=active&billingType=client&pageSize=20`), 'items', []);
