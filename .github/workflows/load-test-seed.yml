@@ -23,10 +23,6 @@ on:
   pull_request:
     types: [labeled]
 
-concurrency:
-  group: load-test-seed-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
@@ -34,6 +30,10 @@ jobs:
   seed:
     name: Seed and check
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'load-test-seed'
+    # On the job, not the workflow: another label's event (whose job is skipped) must not cancel a seed under way.
+    concurrency:
+      group: load-test-seed-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 180
     # bash -eo pipefail: a failing seed fails its step even though tee copies its output.
