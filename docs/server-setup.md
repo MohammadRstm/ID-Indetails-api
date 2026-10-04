@@ -85,7 +85,11 @@ chmod 600 .env
 ```
 
 - **Every password and key:** long and random. Generate each with `openssl rand -base64 48`.
-- **`SETUP_SUPER_ADMIN_KEY`:** set it now. You'll empty it again in step 7.
+- **`SETUP_SUPER_ADMIN_KEY`:** set it now, at least 32 characters (the API refuses to start with a shorter one). You'll empty it again in step 7.
+- **`MYSQL_API_USER` and `MYSQL_API_PASSWORD`:** the user the running API connects as, with data rights only; each
+  deployment creates it (or updates its password). Use letters and digits only for this password
+  (`openssl rand -hex 32`). On a server set up before this existed, add both lines before the next deployment, or
+  it stops at the start with "required variable MYSQL_API_USER is missing".
 - **`PUBLIC_DOMAIN`:** the domain from the A record, without `https://`. Set `ACME_EMAIL` to your email.
 - **The `SMTP_*` lines:** your mail provider's details.
 

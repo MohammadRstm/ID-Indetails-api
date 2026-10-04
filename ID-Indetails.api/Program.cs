@@ -24,6 +24,9 @@ if (HostingServiceCollectionExtensions.BehindProxy(app.Configuration))
     app.UseForwardedHeaders();
 }
 
+// Before everything that answers, error pages included.
+app.UseMiddleware<ApiResponseHeadersMiddleware>();
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -50,6 +53,7 @@ app.UseMiddleware<LiveUpdatesMiddleware>();
 app.MapControllers();
 // For the container platform, on the private network: nginx doesn't serve it publicly.
 app.MapHealthChecks(HostingServiceCollectionExtensions.HealthPath).AllowAnonymous().DisableRateLimiting();
+app.MapHealthChecks(HostingServiceCollectionExtensions.PublicHealthPath).AllowAnonymous();
 app.MapHub<LiveHub>(LiveHub.Path, options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();

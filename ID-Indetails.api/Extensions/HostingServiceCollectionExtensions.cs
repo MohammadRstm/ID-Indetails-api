@@ -1,14 +1,20 @@
 using System.Net;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.HealthChecks;
-using Microsoft.AspNetCore.HttpOverrides;
 using IPNetwork = System.Net.IPNetwork;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace ID_Indetails.api.Extensions;
 
 public static class HostingServiceCollectionExtensions
 {
     public const string HealthPath = "/health";
+
+    /// <summary>The health check anyone may call (an uptime monitor): it answers Healthy or Unhealthy, nothing more.</summary>
+    public const string PublicHealthPath = "/api/health";
+
+    public const long MaxRequestBodyBytes = 1024 * 1024;
 
     /// <summary>
     /// The health probe, trust in the proxies in front of the API when there are any (<see cref="ProxyOptions"/>), and,
@@ -17,6 +23,9 @@ public static class HostingServiceCollectionExtensions
     public static IServiceCollection AddHosting(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database");
+
+        // No request needs more than a little JSON; uploads set their own limit on their endpoint.
+        services.Configure<KestrelServerOptions>(options => options.Limits.MaxRequestBodySize = MaxRequestBodyBytes);
 
         var proxy = configuration.GetSection(ProxyOptions.SectionName).Get<ProxyOptions>() ?? new();
         services.Configure<ForwardedHeadersOptions>(options =>

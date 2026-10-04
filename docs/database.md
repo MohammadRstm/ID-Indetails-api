@@ -150,6 +150,12 @@ The `InvoiceReminders` migration adds the reminder settings to `billing_settings
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
+## Who connects
+
+The running API connects as its own user (`MYSQL_API_USER`), granted `SELECT, INSERT, UPDATE, DELETE` on the
+schema and nothing else: it can't create, alter or drop tables. Only the migrations connect as the schema owner
+(`MYSQL_USER`). Each deployment creates the API user, or updates its password, with `deploy/api-db-user.sh`.
+
 ## Migrations
 
 In **cmd**, set the environment once per window (see [local-development.md](local-development.md)):
