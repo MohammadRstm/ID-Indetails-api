@@ -67,7 +67,10 @@ const SUPER_ADMIN_PAGES = [
 
 function dashboard(session, domain) {
   const now = wallNow();
-  get(session, '/api/reports/overview?period=quarter');
+  if (domain === 'design') {
+    // Design's work report; Execution's dashboard has none.
+    get(session, '/api/reports/overview?period=quarter');
+  }
   get(session, `/api/dashboard/${domain}`);
   get(session, `/api/dashboard/${domain}/deadlines`);
   get(session, `/api/clients/overview?domain=${domain}`);

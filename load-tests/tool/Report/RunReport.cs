@@ -86,8 +86,13 @@ public static class RunReport
 
         var baseline = holds[0].Timing!.P95;
         var first = holds.FirstOrDefault(s => s.Timing!.P95 > Math.Max(2 * baseline, 1500) || s.FailedRate > 0.01);
-        return first is null
-            ? $"no significant degradation up to {holds[^1].Step.Users} users (p95 {Ms(holds[^1].Timing!.P95)}, errors {Percent(holds[^1].FailedRate)})"
+        if (first is null)
+        {
+            return $"no significant degradation up to {holds[^1].Step.Users} users (p95 {Ms(holds[^1].Timing!.P95)}, errors {Percent(holds[^1].FailedRate)})";
+        }
+
+        return first == holds[0]
+            ? $"already at the first steady step ({first.Step.Users} users): p95 {Ms(first.Timing!.P95)}, errors {Percent(first.FailedRate)}; look at the errors before the load"
             : $"from about **{first.Step.Users} users**: p95 {Ms(first.Timing!.P95)} against {Ms(baseline)} at {holds[0].Step.Users}, errors {Percent(first.FailedRate)}";
     }
 

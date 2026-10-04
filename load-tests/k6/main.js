@@ -39,6 +39,8 @@ export const options = {
   },
   // The load-test proxy's certificate comes from its own local authority.
   insecureSkipTLSVerify: true,
+  // A browser keeps its refresh cookie between visits; k6 would empty the jar after every session.
+  noCookiesReset: true,
   thresholds: thresholds(),
   summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max', 'count'],
   tags: { run: RUN_ID, profile: profile.name },
