@@ -2,6 +2,8 @@
 
 MySQL 8.4 (see [local-development.md](local-development.md)), accessed through EF Core 9 with the Pomelo provider. The context is `Data/IdIndetailsDbContext.cs`, entities are in `Models/`, and their table mappings are in `Configuration/ModelConfig/`.
 
+EF Core 9 is supported until 10 November 2026, and Pomelo has no release for EF Core 10 yet. Until that changes, the API stays on the newest EF Core 9 patch and references the driver under Pomelo (MySqlConnector) directly, so the driver keeps getting its fixes. Moving to EF Core 10 through Microting's fork of Pomelo (`Microting.EntityFrameworkCore.MySql`) is the planned next step; it keeps the same driver and migration format.
+
 > Any change to entities, configurations, seed data or migrations needs explicit approval first (CLAUDE.md §9). That includes applying a migration.
 
 ## Single company, two domains
