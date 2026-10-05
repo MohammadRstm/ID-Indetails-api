@@ -162,7 +162,7 @@ k6_env=(-e "BASE_URL=$BASE_URL" -e "GATE_KEY=$GATE_KEY" -e "USER_PASSWORD=$USER_
 if [[ "$PROFILE" =~ ^(load|stages|stress|spike|soak|breakpoint|recovery)$ ]]; then
     log "Smoke test before the real one"
     mkdir -p "$OUT/smoke"
-    k6 run --quiet "${k6_env[@]}" -e PROFILE=smoke -e "RUN_ID=$RUN_ID-smoke" -e THINK=0.2 -e "OUT=$OUT/smoke" \
+    k6 run --quiet "${k6_env[@]}" -e PROFILE=smoke -e "RUN_ID=$RUN_ID-smoke" -e "OUT=$OUT/smoke" \
         --console-output "$OUT/smoke-console.log" --log-format raw "$here/k6/main.js" || { echo "The smoke test failed: no load test." >&2; exit 1; }
 fi
 

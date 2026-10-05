@@ -230,20 +230,24 @@ EOF
     echo "Wrote $here/.env with new random secrets."
 }
 
-# The certificates for Mailpit's STARTTLS: an authority made for this environment, which signs one certificate for
-# lt-mail and whose key is then deleted. The API trusts this authority alone.
+# The certificates for Mailpit's STARTTLS: an authority made for this environment signs one certificate for lt-mail
+# and an empty revocation list, and its key is then deleted. The API trusts this authority alone, and checks the
+# list as it checks a real server's (lt-web serves it on the internal network, at the address the certificate names).
 mail_certs() {
     [ ! -f certs/mail.crt ] || return 0
-    mkdir -p certs
+    mkdir -p certs/ca
     openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=LT load-test mail authority"         -keyout certs/ca.key -out certs/ca.crt > /dev/null 2>&1
     openssl req -newkey rsa:2048 -nodes -subj "/CN=lt-mail" -keyout certs/mail.key -out certs/mail.csr > /dev/null 2>&1
-    printf 'subjectAltName=DNS:lt-mail
-basicConstraints=CA:FALSE
-keyUsage=digitalSignature,keyEncipherment
-extendedKeyUsage=serverAuth
-' > certs/mail.ext
+    printf '%s
+' 'subjectAltName=DNS:lt-mail' 'basicConstraints=CA:FALSE' 'keyUsage=digitalSignature,keyEncipherment'         'extendedKeyUsage=serverAuth' 'crlDistributionPoints=URI:http://lt-web:8080/lt-ca.crl' > certs/mail.ext
     openssl x509 -req -in certs/mail.csr -CA certs/ca.crt -CAkey certs/ca.key -CAcreateserial -days 3650         -extfile certs/mail.ext -out certs/mail.crt > /dev/null 2>&1
-    rm -f certs/ca.key certs/ca.srl certs/mail.csr certs/mail.ext
+    touch certs/ca/index.txt && echo 01 > certs/ca/crlnumber
+    printf '%s
+' '[ca]' 'default_ca=lt' '[lt]' 'database=certs/ca/index.txt' 'crlnumber=certs/ca/crlnumber'         'default_md=sha256' 'default_crl_days=3650' > certs/ca/ca.cnf
+    openssl ca -config certs/ca/ca.cnf -gencrl -keyfile certs/ca.key -cert certs/ca.crt -out certs/ca.crl.pem > /dev/null 2>&1
+    openssl crl -in certs/ca.crl.pem -outform DER -out certs/ca.crl
+    rm -rf certs/ca certs/ca.key certs/ca.srl certs/ca.crl.pem certs/mail.csr certs/mail.ext
+    [ -s certs/mail.crt ] && [ -s certs/ca.crl ] || fail "Couldn't make Mailpit's certificate and revocation list (is openssl installed?)."
     # Read by the containers' own users. The key only ever protects mail inside this environment's internal network.
     chmod 644 certs/*
 }

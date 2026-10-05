@@ -121,6 +121,9 @@ services:
     security_opt: [no-new-privileges:true]
     environment:
       API_UPSTREAM: http://lt-api:8080
+    # The mail authority's revocation list, which the API fetches here when it checks Mailpit's certificate.
+    volumes:
+      - ./certs/ca.crl:/usr/share/nginx/html/lt-ca.crl:ro
     networks: [lt-backend, lt-edge]
     depends_on:
       lt-api:
