@@ -1,0 +1,18 @@
+{
+  "name": "recovery",
+  "description": "50 users steady for 20 minutes while the runner restarts the API, the database and the proxy: how long errors last and whether everything comes back.",
+  "think": 1,
+  "steps": [
+    {
+      "users": 50,
+      "ramp": "2m",
+      "hold": "20m"
+    }
+  ],
+  "rampDown": "1m",
+  "thresholds": {
+    "http_req_failed": [
+      "rate<0.2"
+    ]
+  }
+}

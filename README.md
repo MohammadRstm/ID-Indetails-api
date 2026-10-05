@@ -30,4 +30,5 @@ The backend of Hourline, the company's internal management system: an ASP.NET Co
 | PDFs and emailing invoices and statements | [documents.md](docs/documents.md) |
 | Search | [search.md](docs/search.md) |
 | Production: Docker images, CI, the manual deploy and rollback | [deployment.md](docs/deployment.md) |
+| Load and stress testing, in an environment isolated from production | [load-tests/README.md](load-tests/README.md) |
 | Setting up the production server (once) | [server-setup.md](docs/server-setup.md) |

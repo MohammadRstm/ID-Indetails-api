@@ -66,3 +66,6 @@
 # Scripts run on Linux (the deploy script on the server) keep LF line endings.
 ###############################################################################
 *.sh text eol=lf
+
+# The load-test stack is copied to the server as it is in the checkout, so it keeps LF line endings too.
+load-tests/stack/** text eol=lf

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>ID_Indetails.LoadTests.Tool</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Hosts the real API in-process while seeding, as the integration tests do. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+  </ItemGroup>
+
+  <!-- The API's own DbContext, entities, migrations and request types: an API change the tool doesn't match breaks
+       this build instead of a test run. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\ID-Indetails.api\ID-Indetails.api.csproj" />
+  </ItemGroup>
+
+</Project>

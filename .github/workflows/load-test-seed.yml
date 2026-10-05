@@ -1,0 +1,135 @@
+# Seeds the load-test data at full size and checks it, on the runner alone: a throwaway MySQL that lives as long as
+# the job. It never contacts the production server and needs no secrets: the test users' password is made up per run.
+#
+# Runs only when asked, never on a push or an ordinary pull-request update:
+# - by hand: Actions → Load-test seed → Run workflow (once this file is on master);
+# - by adding the label "load-test-seed" to a pull request (remove and add it again to run again).
+#
+# It seeds, checks the counts and data rules, seeds again from scratch and requires the same data both times, and
+# keeps the seeded database, the roster of test users and the logs as the run's artifact. See load-tests/README.md.
+name: Load-test seed
+
+on:
+  workflow_dispatch:
+    inputs:
+      users:
+        description: Test users to seed
+        default: "200"
+        required: true
+      months:
+        description: Months of history
+        default: "3"
+        required: true
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    name: Seed and check
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'load-test-seed'
+    # On the job, not the workflow: another label's event (whose job is skipped) must not cancel a seed under way.
+    concurrency:
+      group: load-test-seed-${{ github.ref }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    # bash -eo pipefail: a failing seed fails its step even though tee copies its output.
+    defaults:
+      run:
+        shell: bash
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      USERS: ${{ inputs.users || '200' }}
+      MONTHS: ${{ inputs.months || '3' }}
+      TOOL: load-tests/tool/bin/Release/net10.0/ID-Indetails.LoadTests.Tool.dll
+      OUT: load-tests/reports
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Check the inputs
+        run: |
+          [[ "$USERS" =~ ^[0-9]{2,4}$ && "$MONTHS" =~ ^([1-9]|1[0-2])$ ]] || { echo "::error::users must be 10-9999 and months 1-12"; exit 1; }
+          mkdir -p "$OUT"
+
+      # Its own hostname, so the tool's guard has something to check, as it checks idi-loadtest-db on the server.
+      - name: Start a throwaway MySQL
+        run: |
+          root=$(openssl rand -hex 24)
+          password=$(openssl rand -hex 16)
+          echo "::add-mask::$root"
+          echo "::add-mask::$password"
+          docker run -d --name lt-db --hostname idi-loadtest-ci -p 127.0.0.1:3306:3306 -e MYSQL_ROOT_PASSWORD="$root" mysql:8.4 \
+            --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --default-time-zone=+00:00
+          for i in $(seq 1 60); do docker exec lt-db mysqladmin ping -h 127.0.0.1 -uroot -p"$root" --silent && break; sleep 2; done
+          {
+            echo "LT_DB_ROOT_PASSWORD=$root"
+            echo "LT_DB_CONNECTION=Server=127.0.0.1;Port=3306;User=root;Password=$root;Database=idi_loadtest;"
+            echo "LT_DB_HOSTNAME=idi-loadtest-ci"
+            echo "LT_INSTANCE_ID=$(cat /proc/sys/kernel/random/uuid)"
+            echo "LT_USER_PASSWORD=$password"
+            # Fixed once, so both seeds cover the same days even if the job runs past midnight in Beirut.
+            echo "ANCHOR=$(TZ=Asia/Beirut date +%F)"
+          } >> "$GITHUB_ENV"
+
+      - name: Build the tool
+        run: dotnet build load-tests/tool -c Release
+
+      - name: Mark the server and migrate
+        run: |
+          dotnet "$TOOL" init
+          dotnet "$TOOL" migrate
+
+      - name: Seed
+        run: dotnet "$TOOL" seed --users "$USERS" --months "$MONTHS" --anchor "$ANCHOR" --roster "$OUT/roster.json" 2>&1 | tee "$OUT/seed-1.log"
+
+      - name: Fingerprint the first seed
+        run: dotnet "$TOOL" fingerprint | tee "$OUT/fingerprint-1.txt"
+
+      # Tables only (no CREATE DATABASE), so it loads into any idi_loadtest. Its users' password was this run's.
+      - name: Snapshot the seeded database
+        run: |
+          docker exec -e MYSQL_PWD="$LT_DB_ROOT_PASSWORD" lt-db mysqldump -uroot --single-transaction --routines --triggers \
+            --set-gtid-purged=OFF --no-tablespaces idi_loadtest | gzip > "$OUT/idi_loadtest.sql.gz"
+          ls -lh "$OUT/idi_loadtest.sql.gz"
+
+      - name: Seed again from scratch
+        run: |
+          dotnet "$TOOL" reset --confirm idi_loadtest
+          dotnet "$TOOL" seed --users "$USERS" --months "$MONTHS" --anchor "$ANCHOR" --roster "$OUT/roster-2.json" 2>&1 | tee "$OUT/seed-2.log"
+
+      - name: The same data both times
+        run: |
+          dotnet "$TOOL" fingerprint > "$OUT/fingerprint-2.txt"
+          if diff "$OUT/fingerprint-1.txt" "$OUT/fingerprint-2.txt"; then
+            echo "Both seeds hold the same data."
+          else
+            echo "::error::The second seed differs from the first (diff above)."
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Load-test seed: $USERS users, $MONTHS months to $ANCHOR"
+            echo '```'
+            grep -hE "^(Seeded|Count|MISMATCH|Holds|BROKEN|SEED FAILED|Email|NOT READY)" "$OUT/seed-1.log" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: load-test-seed-${{ github.run_id }}
+          path: load-tests/reports
+          retention-days: 7

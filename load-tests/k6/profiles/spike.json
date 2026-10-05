@@ -1,0 +1,31 @@
+{
+  "name": "spike",
+  "description": "A quiet 50, a sudden jump to 200 within 15 seconds, then back: how it copes and recovers.",
+  "think": 1,
+  "steps": [
+    {
+      "users": 50,
+      "ramp": "2m",
+      "hold": "5m"
+    },
+    {
+      "users": 200,
+      "ramp": "15s",
+      "hold": "4m"
+    },
+    {
+      "users": 50,
+      "ramp": "15s",
+      "hold": "6m"
+    }
+  ],
+  "rampDown": "1m",
+  "thresholds": {
+    "http_req_failed": [
+      "rate<0.05"
+    ],
+    "http_req_duration": [
+      "p(95)<3000"
+    ]
+  }
+}

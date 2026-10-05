@@ -65,6 +65,9 @@ Follow [server-setup.md](server-setup.md):
 - nightly backups.
 
 Afterwards, protect `master`: require a pull request and the CI checks **Build and tests** and **Docker images**.
+CI doesn't run for changes to documentation or the load-test scripts alone (`paths-ignore` in `ci.yml`), so such a pull
+request never gets those checks and needs an administrator to merge it. (Branch protection on a private repository
+needs GitHub Pro.)
 
 ## Deploying
 

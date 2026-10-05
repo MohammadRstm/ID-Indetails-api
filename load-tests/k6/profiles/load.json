@@ -1,0 +1,24 @@
+{
+  "name": "load",
+  "description": "The expected use: 50 people in the app for half an hour.",
+  "think": 1,
+  "steps": [
+    {
+      "users": 50,
+      "ramp": "5m",
+      "hold": "30m"
+    }
+  ],
+  "rampDown": "1m",
+  "thresholds": {
+    "http_req_failed": [
+      "rate<0.01"
+    ],
+    "http_req_duration": [
+      "p(95)<1500"
+    ],
+    "checks": [
+      "rate>0.99"
+    ]
+  }
+}

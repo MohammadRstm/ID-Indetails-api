@@ -1,0 +1,8 @@
+# Only for the rate-limit test (`lt.sh up --production-rate-limits`): production's per-IP limits (appsettings.json),
+# so the test can check that sign-in and anonymous requests over the limit get 429.
+services:
+  lt-api:
+    environment:
+      RateLimiting__AuthPermitsPerMinute: "10"
+      RateLimiting__AnonymousPermitsPerMinute: "60"
+      RateLimiting__RefreshPermitsPerMinute: "60"

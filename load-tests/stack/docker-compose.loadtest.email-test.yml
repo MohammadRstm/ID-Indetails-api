@@ -1,0 +1,9 @@
+# Only for the dedicated notification and email test (`lt.sh up --email-test`): runs the scheduled checks every few
+# minutes, so scheduled invoices, overdue reminders and the other notifications happen during the test. The mail
+# settings don't change: every email still goes to Mailpit.
+services:
+  lt-api:
+    environment:
+      NotificationScheduler__Enabled: "true"
+      NotificationScheduler__IntervalMinutes: "5"
+      FileStorage__CleanupEnabled: "true"

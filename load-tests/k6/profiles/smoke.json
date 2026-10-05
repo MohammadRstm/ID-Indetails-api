@@ -1,0 +1,24 @@
+{
+  "name": "smoke",
+  "description": "A handful of users for a few minutes: does every journey work end to end? Run it before anything bigger.",
+  "think": 0.3,
+  "steps": [
+    {
+      "users": 5,
+      "ramp": "30s",
+      "hold": "4m"
+    }
+  ],
+  "rampDown": "30s",
+  "thresholds": {
+    "http_req_failed": [
+      "rate<0.01"
+    ],
+    "http_req_duration": [
+      "p(95)<1500"
+    ],
+    "checks": [
+      "rate>0.99"
+    ]
+  }
+}

@@ -2,11 +2,27 @@
 # is the manual Deploy workflow.
 name: CI
 
+# Not for changes CI never looks at: documentation, and the load-test scripts, stack and workflows (their own tool is
+# built and tested here, so changes to it still run CI). A pull request is judged by all its changes together.
 on:
   pull_request:
     branches: [master]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "load-tests/k6/**"
+      - "load-tests/stack/**"
+      - "load-tests/scripts/**"
+      - ".github/workflows/load-test*.yml"
   push:
     branches: [master]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "load-tests/k6/**"
+      - "load-tests/stack/**"
+      - "load-tests/scripts/**"
+      - ".github/workflows/load-test*.yml"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -57,6 +73,9 @@ jobs:
 
       - name: Unit tests
         run: dotnet test ID-Indetails.UnitTests -c Release --no-build
+
+      - name: Load-test tool tests
+        run: dotnet test load-tests/tool-tests -c Release --no-build
 
       - name: Integration tests
         env:
