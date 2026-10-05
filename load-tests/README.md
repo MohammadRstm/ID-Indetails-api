@@ -125,8 +125,8 @@ Several checks stop a command before it changes anything:
 | `spike` | 50 users, a jump to 200 in 15 seconds for 4 minutes, back to 50 | 215 | 50 min |
 | `soak` | 60 users for 3 hours: leaks, growing tables, slow drift | 68 | 3 h 40 min |
 | `breakpoint` | +25 users every 4 minutes up to 400; stops when errors pass 5% or p95 passes 3 s | 425 | up to 90 min |
-| `recovery` | 50 users for 20 minutes while the API is restarted, killed, the database paused 30 s and the proxy restarted | 68 | 45 min |
-| `concurrency` | 12 races: several people act on the same record at the same instant (below) | 215 | 35 min |
+| `recovery` | 50 users for 20 minutes while the API is restarted, killed, the database stopped for 30 s and the proxy restarted | 68 | 45 min |
+| `concurrency` | 13 races: several people act on the same record at the same instant (below) | 215 | 35 min |
 | `rate-limits` | Production's per-address limits restored; checks they answer 429, never worse | 68 | 20 min |
 | `email` | Calls every endpoint that sends email once; Mailpit must catch them all | 68 | 20 min |
 
@@ -138,20 +138,23 @@ Times include seeding (about 4 minutes per 50 users) and are for a GitHub runner
   peak, and `run.sh` seeds that many plus a margin.
 
 **The races** (`concurrency`):
-- one project edited by 12 admins at once;
+- one project edited by every Design admin and super admin at once;
 - ten requirements ticked at once, and one requirement ticked by three people;
 - six payments on one 100-dollar invoice;
-- eight drafts issued at once (numbering);
+- a draft issued by each Design admin at once (numbering);
 - three statements on one project;
 - a material deleted while a statement is made;
 - one person logging the same time in two tabs;
 - one labour week saved three times at once;
 - two permission changes to one person;
 - two exchange rates for the same day;
-- a project completed while five people log work on it.
+- a project completed while five people log work on it;
+- two tabs refreshing one session with the same cookie.
 
 Each must answer only as the rules allow (never a 5xx) and leave the record in a state some order of the requests
-explains. The database verification then checks everything else.
+explains. The database verification then checks everything else. A race answered with a 5xx fails the run even when
+the data stayed right: that is a finding about the app, not the test. The API log has the exception, and
+`collected/monitor/deadlock.txt` the database's account of the last deadlock (which two statements, which locks).
 
 ### A rehearsal on GitHub (no server needed)
 
