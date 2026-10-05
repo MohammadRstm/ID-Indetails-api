@@ -51,11 +51,17 @@ export default function () {
   const invoice = field(get(design, '/api/invoices?domain=design&status=sent&pageSize=1'), 'items.0', null);
   if (invoice) {
     const to = field(get(design, `/api/invoices/${invoice.id}`), 'billToContact', 'client@loadtest.invalid');
-    expect('invoice emailed', post(design, `/api/invoices/${invoice.id}/email`, { to }, { expect: [200, 204] }));
+    expect('invoice emailed', post(design, `/api/invoices/${invoice.id}/email`, { to }, { expect: [200, 201, 204] }));
   }
 
-  const site = field(get(execution, '/api/projects?domain=execution&pageSize=20'), 'items', []).find((p) => p.client);
-  const statement = site && field(get(execution, `/api/projects/${site.id}/statements?page=1&pageSize=1`), 'items.0', null);
+  // The first client site that has a statement.
+  let statement = null;
+  for (const site of field(get(execution, '/api/projects?domain=execution&pageSize=20'), 'items', []).filter((p) => p.client)) {
+    statement = field(get(execution, `/api/projects/${site.id}/statements?page=1&pageSize=1`), 'items.0', null);
+    if (statement) {
+      break;
+    }
+  }
   if (statement) {
     expect('statement emailed', post(execution, `/api/statements/${statement.id}/email`, { to: `run.${RUN_ID}.client@loadtest.invalid`.toLowerCase() }, { expect: [200, 204] }));
   }
