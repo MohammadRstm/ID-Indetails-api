@@ -291,7 +291,10 @@ public static class RunReport
         md.AppendLine();
     }
 
-    /// <summary>For each chaos action: how many requests failed in the two minutes after it, and when the last one did.</summary>
+    /// <summary>
+    /// For each chaos action: how many requests the server failed or dropped (5xx, or no answer) from a minute before
+    /// it to two minutes after, and when the last one was. Refusals (4xx) are the app's normal answers, so not counted.
+    /// </summary>
     private static void Recovery(StringBuilder md, string[] chaos, RunLog console)
     {
         var actions = chaos.Select(l => l.Split(' ', 4)).Where(p => p.Length >= 3 && p[1] == "chaos")
@@ -303,11 +306,12 @@ public static class RunReport
         }
 
         md.AppendLine("## Recovery").AppendLine();
-        md.AppendLine("| When (UTC) | Action | Failed requests in the next 2 min | Last failure after |").AppendLine("|---|---|---|---|");
+        md.AppendLine("| When (UTC) | Action | Server errors and dropped requests (1 min before to 2 min after) | Last one after |").AppendLine("|---|---|---|---|");
+        var serverFailures = console.Errors.Where(e => Number(e, "status") is 0 or >= 500)
+            .Select(e => DateTimeOffset.FromUnixTimeMilliseconds((long)Number(e, "t")).UtcDateTime).ToList();
         foreach (var (at, what) in actions)
         {
-            var failures = console.Errors.Select(e => DateTimeOffset.FromUnixTimeMilliseconds((long)Number(e, "t")).UtcDateTime)
-                .Where(t => t >= at.AddSeconds(-60) && t < at.AddMinutes(2)).ToList();
+            var failures = serverFailures.Where(t => t >= at.AddSeconds(-60) && t < at.AddMinutes(2)).ToList();
             md.AppendLine($"| {at:HH:mm:ss} | {what} | {failures.Count} | {(failures.Count == 0 ? "-" : $"{(failures.Max() - at).TotalSeconds:0} s")} |");
         }
 

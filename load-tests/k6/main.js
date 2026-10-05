@@ -86,7 +86,16 @@ export default async function () {
   startStageClock(profile, exec.scenario.startTime);
   setProfileThink(profile.think || 1);
 
-  const user = userOf(users);
+  // The person is away for a while after each session, also after one that failed (say the server was down): a
+  // browser doesn't retry a failed page in a tight loop.
+  try {
+    await visit(userOf(users));
+  } finally {
+    await pause(10, 60);
+  }
+}
+
+async function visit(user) {
   const session = sessionFor(user);
   if (session.sessions++ > 0) {
     // A later session starts as a page load does: a new access token from the refresh cookie.
@@ -102,7 +111,6 @@ export default async function () {
       live.close();
     }
   }
-  await pause(10, 60);
 }
 
 export function handleSummary(data) {

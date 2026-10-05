@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { BASE_URL, GATE_KEY, USER_PASSWORD } from './config.js';
+import { report } from './errors.js';
 import { currentStage } from './profile.js';
 
 // One signed-in person per virtual user, as one browser. The access token lives in memory; the refresh cookie lives
@@ -39,6 +40,7 @@ export function signIn(session) {
     params('POST /api/auth/login', session),
   );
   if (response.status !== 200) {
+    report(session, 'POST /api/auth/login', response);
     throw new Error(`Sign-in as ${session.user.email} answered ${response.status}.`);
   }
   session.token = response.json('accessToken');
@@ -50,6 +52,10 @@ export function refreshSession(session) {
   if (response.status === 200) {
     session.token = response.json('accessToken');
     return;
+  }
+  // A 401 only says the session has ended; anything else is the server's failure.
+  if (response.status !== 401) {
+    report(session, 'POST /api/auth/refresh', response);
   }
   signIn(session);
 }

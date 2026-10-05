@@ -300,9 +300,16 @@ function reportLabour(session) {
   if (days.length === 0) {
     return;
   }
-  put(session, `/api/projects/${project.id}/labour-weeks/${day(monday)}`, { days, note: runMark });
-  ledger('labour_week.saved', { project: project.id, week: day(monday), user: session.user.userId });
-  get(session, `/api/projects/${project.id}/labour-weeks/${day(monday)}`);
+  // As the page does: the week first, and the form only when the person may change it (a week someone else
+  // reported is theirs). Two people saving a new week at once: the second is refused (403).
+  const week = field(get(session, `/api/projects/${project.id}/labour-weeks/${day(monday)}`), null, null);
+  if (!week || !week.canEdit) {
+    return;
+  }
+  const saved = put(session, `/api/projects/${project.id}/labour-weeks/${day(monday)}`, { days, note: runMark }, { expect: [200, 403] });
+  if (saved.status === 200) {
+    ledger('labour_week.saved', { project: project.id, week: day(monday), user: session.user.userId });
+  }
 }
 
 async function myRequirements(session) {
