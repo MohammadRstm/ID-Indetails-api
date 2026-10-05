@@ -43,6 +43,10 @@ on:
         description: Leave the load-test environment running afterwards
         type: boolean
         default: false
+      reseed:
+        description: Seed afresh instead of reusing this week's cached seed
+        type: boolean
+        default: false
   pull_request:
     types: [labeled]
 
@@ -102,6 +106,25 @@ jobs:
             || { echo "::error::Unknown profile $profile"; exit 1; }
           echo "profile=$profile" >> "$GITHUB_OUTPUT"
 
+      # Seeding is the slow part of a run, so a seed is kept in the Actions cache and reused for a week by runs of the
+      # same size. A new migration or a change to the seeder makes a new one; so does the reseed input.
+      - name: Seed cache key
+        id: seed
+        env:
+          PROFILE: ${{ steps.which.outputs.profile }}
+          USERS: ${{ inputs.users }}
+          MONTHS: ${{ inputs.months || '3' }}
+          CODE: ${{ hashFiles('load-tests/tool/Seeding/**/*.cs', 'ID-Indetails.api/Data/Migrations/*.cs') }}
+        run: echo "prefix=load-test-seed-$(bash load-tests/scripts/seed-users.sh "$PROFILE")u-${MONTHS}m-$(date -u +%G-W%V)-${CODE:0:16}-" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: seed-cache
+        if: inputs.reseed != true
+        with:
+          path: load-tests/reports/seed
+          key: ${{ steps.seed.outputs.prefix }}${{ github.run_id }}
+          restore-keys: ${{ steps.seed.outputs.prefix }}
+
       - name: Build the images under test
         run: |
           docker build --target runtime -t ghcr.io/mohammadrstm/id-indetails-api:rehearsal .
@@ -115,7 +138,15 @@ jobs:
           MONTHS: ${{ inputs.months || '3' }}
           KEEP: "false"
           OUT: ${{ github.workspace }}/load-tests/reports/run
+          SEED_CACHE: ${{ github.workspace }}/load-tests/reports/seed
         run: bash load-tests/scripts/run.sh
+
+      # Only a seed this run made, even when the test itself failed. The password in it never goes into the artifact.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.seed-cache.outputs.cache-matched-key == '' && hashFiles('load-tests/reports/seed/size') != ''
+        with:
+          path: load-tests/reports/seed
+          key: ${{ steps.seed.outputs.prefix }}${{ github.run_id }}
 
       - name: Summary
         if: always()
@@ -160,6 +191,25 @@ jobs:
         with:
           k6-version: ${{ env.K6_VERSION }}
 
+      # Seeding is the slow part of a run, so a seed is kept in the Actions cache and reused for a week by runs of the
+      # same size. A new migration or a change to the seeder makes a new one; so does the reseed input.
+      - name: Seed cache key
+        id: seed
+        env:
+          PROFILE: ${{ inputs.profile }}
+          USERS: ${{ inputs.users }}
+          MONTHS: ${{ inputs.months || '3' }}
+          CODE: ${{ hashFiles('load-tests/tool/Seeding/**/*.cs', 'ID-Indetails.api/Data/Migrations/*.cs') }}
+        run: echo "prefix=load-test-seed-$(bash load-tests/scripts/seed-users.sh "$PROFILE")u-${MONTHS}m-$(date -u +%G-W%V)-${CODE:0:16}-" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: seed-cache
+        if: inputs.reseed != true
+        with:
+          path: load-tests/reports/seed
+          key: ${{ steps.seed.outputs.prefix }}${{ github.run_id }}
+          restore-keys: ${{ steps.seed.outputs.prefix }}
+
       # The server's host key is pinned: an unknown or changed key stops the run.
       - name: Set up SSH
         env:
@@ -191,7 +241,15 @@ jobs:
           CLIENT_TAG: ${{ inputs.client_tag }}
           KEEP: ${{ inputs.keep }}
           OUT: ${{ github.workspace }}/load-tests/reports/run
+          SEED_CACHE: ${{ github.workspace }}/load-tests/reports/seed
         run: bash load-tests/scripts/run.sh
+
+      # Only a seed this run made, even when the test itself failed. The password in it never goes into the artifact.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.seed-cache.outputs.cache-matched-key == '' && hashFiles('load-tests/reports/seed/size') != ''
+        with:
+          path: load-tests/reports/seed
+          key: ${{ steps.seed.outputs.prefix }}${{ github.run_id }}
 
       - name: Log the server out of GHCR
         if: always()

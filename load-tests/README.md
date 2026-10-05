@@ -132,6 +132,17 @@ Several checks stop a command before it changes anything:
 
 Times include seeding (about 4 minutes per 50 users) and are for a GitHub runner.
 
+**Seeds are reused.** Seeding is the slow part, so the workflow keeps each seed in the Actions cache and reuses it for
+the rest of the ISO week in any run that needs the same number of users and months: smoke, load, soak, recovery,
+rate-limits and email share one size (68 users), stages, spike and concurrency another (215). Those runs skip the
+seeding minutes. A new migration or a change to the seeder (`tool/Seeding`) makes a new seed; to force one, run the
+workflow with **reseed** ticked. The cached seed holds its test users' password, so it stays in the cache and never
+goes into a run's artifact.
+
+**Actions minutes.** The repository is private, so every run counts against the account's monthly minutes (2,000 on
+the Free plan, shared with CI): a server run takes about as long as the table says, less the seeding when the seed is
+cached. Check what's left under GitHub → Settings → Billing before a long profile.
+
 - **Sizes and timings** are in `k6/profiles/*.json`: steps, ramps, holds, pass/fail thresholds, and `think` (the pace:
   1 is a person's). Change them there.
 - **Users:** every virtual user is always the same test user. So a profile needs at least as many active users as its
@@ -178,6 +189,7 @@ Once the server is set up ([below](#setting-up-the-server-once)):
      the ones in the load-test `.env`. To test what production runs: `cat /opt/id-indetails/deployed.env` on the
      server.
    - `keep`: leave the environment up afterwards, to look around (then purge it yourself).
+   - `reseed`: seed afresh instead of reusing this week's cached seed.
 3. Approve the run if the `loadtest` environment asks.
 
 Only one server run at a time: a second one waits.
@@ -464,6 +476,7 @@ done or passed, `1` refused, not ready or failed, `2` usage.
 Run on Linux with Docker, .NET 10, k6 2.x and `jq`. Environment:
 - `TARGET` (`runner` or `server`) and `PROFILE`;
 - `USERS`, `MONTHS`, `KEEP`, `OUT`;
+- `SEED_CACHE`: a folder where the seed is reused from when it holds one of the same size, and saved to when made;
 - for the server, `LT_SSH` (`user@host`), `LT_SSH_KEY` (a key file) and, optionally, `API_TAG` and `CLIENT_TAG`.
 
 ### Files

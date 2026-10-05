@@ -9,9 +9,11 @@
 #   USERS          test users to seed (default: what the profile needs, at least 60)
 #   MONTHS         months of seeded history (default 3)
 #   KEEP=true      leave the load-test environment running afterwards (default: removed with its data)
+#   SEED_CACHE     a folder for the seed: reused from there when it holds one of the same size, saved there when made
+#                  (the Load test workflow keeps it in the Actions cache for the week)
 #
-# Steps: check the target → seed on this machine into a throwaway MySQL → copy the snapshot → start the load-test
-# database and load it → start the environment (it checks email isolation) → smoke test → monitoring → k6 → collect
+# Steps: check the target → seed on this machine into a throwaway MySQL, or reuse the cached seed → copy the snapshot
+# → start the load-test database and load it → start the environment (it checks email isolation) → smoke test → monitoring → k6 → collect
 # logs and samples → verify the database → report → clean up. Clean-up runs whatever happens before it.
 set -euo pipefail
 
@@ -30,13 +32,8 @@ mkdir -p "$OUT"
 log() { echo "== $(date -u +%H:%M:%S) $*"; }
 mask() { [ -z "${GITHUB_ACTIONS:-}" ] || echo "::add-mask::$1"; }
 
-# The roster must hold at least as many active people as the profile's virtual users: the seed adds a few for those
-# who leave during the history.
-needed=$(jq '[.steps[].users] | max' "$here/k6/profiles/$PROFILE.json" 2> /dev/null || echo 0)
-[ "$PROFILE" != concurrency ] || needed=200
-[ "$needed" -ge 60 ] || needed=60
-needed=$((needed + needed / 20 + 5))
-USERS=${USERS:-$needed}
+# The roster must hold at least as many active people as the profile's virtual users.
+USERS=$(bash "$here/scripts/seed-users.sh" "$PROFILE")
 
 # ---- The target: lt.sh there, and the tunnel to its database ---------------------------------------------------------
 
@@ -105,29 +102,45 @@ DB_ROOT=$(env_of LT_DB_ROOT_PASSWORD); mask "$DB_ROOT"
 INSTANCE=$(env_of LT_INSTANCE_ID)
 HOST=$(env_of LT_PUBLIC_HOST)
 BASE_URL="https://$HOST:8443"
-USER_PASSWORD=$(openssl rand -hex 16); mask "$USER_PASSWORD"
 
-# ---- Seed on this machine, into a throwaway MySQL ----------------------------------------------------------------
+# ---- The seed: reused from SEED_CACHE when it holds one of this size, otherwise made here in a throwaway MySQL ------
 
-log "Building the tool and seeding $USERS users"
+log "Building the tool"
 dotnet build "$here/tool" -c Release --nologo -v q > /dev/null
-seed_db="lt-seed-$RUN_ID"
-seed_root=$(openssl rand -hex 16); mask "$seed_root"
-docker run -d --name "$seed_db" --hostname idi-loadtest-seed -p 127.0.0.1:13307:3306 -e MYSQL_ROOT_PASSWORD="$seed_root" mysql:8.4 \
-    --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --default-time-zone=+00:00 > /dev/null
-# Over TCP: while it first initialises, MySQL runs a temporary server that answers on its socket only.
-for _ in $(seq 1 90); do docker exec "$seed_db" mysqladmin ping -h 127.0.0.1 -uroot -p"$seed_root" --silent 2> /dev/null && break; sleep 2; done
-seed_tool() {
-    LT_DB_CONNECTION="Server=127.0.0.1;Port=13307;User=root;Password=$seed_root;Database=idi_loadtest;" LT_DB_HOSTNAME=idi-loadtest-seed \
-        LT_INSTANCE_ID=00000000-0000-4000-8000-000000000001 LT_USER_PASSWORD="$USER_PASSWORD" dotnet "$TOOL" "$@"
-}
-seed_tool init > /dev/null
-seed_tool migrate > /dev/null
-seed_tool seed --users "$USERS" --months "$MONTHS" --roster "$OUT/roster.json" > "$OUT/seed.log" 2>&1 || { tail -20 "$OUT/seed.log"; exit 1; }
-grep -E "^(Seeded|BROKEN|MISMATCH)" "$OUT/seed.log" || true
-docker exec -e MYSQL_PWD="$seed_root" "$seed_db" mysqldump -uroot --single-transaction --routines --triggers --set-gtid-purged=OFF \
-    --no-tablespaces idi_loadtest | gzip > "$OUT/snapshot.sql.gz"
-docker rm -f "$seed_db" > /dev/null && seed_db=""
+seed_size="users=$USERS months=$MONTHS"
+if [ -n "${SEED_CACHE:-}" ] && [ "$(cat "$SEED_CACHE/size" 2> /dev/null)" = "$seed_size" ]; then
+    log "Reusing the cached seed ($seed_size); its log is seed.log"
+    cp "$SEED_CACHE/snapshot.sql.gz" "$SEED_CACHE/roster.json" "$SEED_CACHE/seed.log" "$OUT/"
+    USER_PASSWORD=$(cat "$SEED_CACHE/user-password"); mask "$USER_PASSWORD"
+else
+    log "Seeding $USERS users"
+    USER_PASSWORD=$(openssl rand -hex 16); mask "$USER_PASSWORD"
+    seed_db="lt-seed-$RUN_ID"
+    seed_root=$(openssl rand -hex 16); mask "$seed_root"
+    docker run -d --name "$seed_db" --hostname idi-loadtest-seed -p 127.0.0.1:13307:3306 -e MYSQL_ROOT_PASSWORD="$seed_root" mysql:8.4 \
+        --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci --default-time-zone=+00:00 > /dev/null
+    # Over TCP: while it first initialises, MySQL runs a temporary server that answers on its socket only.
+    for _ in $(seq 1 90); do docker exec "$seed_db" mysqladmin ping -h 127.0.0.1 -uroot -p"$seed_root" --silent 2> /dev/null && break; sleep 2; done
+    seed_tool() {
+        LT_DB_CONNECTION="Server=127.0.0.1;Port=13307;User=root;Password=$seed_root;Database=idi_loadtest;" LT_DB_HOSTNAME=idi-loadtest-seed \
+            LT_INSTANCE_ID=00000000-0000-4000-8000-000000000001 LT_USER_PASSWORD="$USER_PASSWORD" dotnet "$TOOL" "$@"
+    }
+    seed_tool init > /dev/null
+    seed_tool migrate > /dev/null
+    seed_tool seed --users "$USERS" --months "$MONTHS" --roster "$OUT/roster.json" > "$OUT/seed.log" 2>&1 || { tail -20 "$OUT/seed.log"; exit 1; }
+    grep -E "^(Seeded|BROKEN|MISMATCH)" "$OUT/seed.log" || true
+    docker exec -e MYSQL_PWD="$seed_root" "$seed_db" mysqldump -uroot --single-transaction --routines --triggers --set-gtid-purged=OFF \
+        --no-tablespaces idi_loadtest | gzip > "$OUT/snapshot.sql.gz"
+    docker rm -f "$seed_db" > /dev/null && seed_db=""
+
+    if [ -n "${SEED_CACHE:-}" ]; then
+        # With the password its test users sign in with; the size goes last, so a half-written seed is never reused.
+        mkdir -p "$SEED_CACHE"
+        cp "$OUT/snapshot.sql.gz" "$OUT/roster.json" "$OUT/seed.log" "$SEED_CACHE/"
+        (umask 077 && echo "$USER_PASSWORD" > "$SEED_CACHE/user-password")
+        echo "$seed_size" > "$SEED_CACHE/size"
+    fi
+fi
 
 # ---- The load-test environment ---------------------------------------------------------------------------------------
 
