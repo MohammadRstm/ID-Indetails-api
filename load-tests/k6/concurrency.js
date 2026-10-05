@@ -6,7 +6,7 @@ import { BASE_URL, GATE_KEY, OUT, ROSTER, RUN_ID } from './lib/config.js';
 import { call, field, get, post, put } from './lib/api.js';
 import { ledger, runMark } from './lib/ledger.js';
 import { newSession, sessionFor } from './lib/session.js';
-import { DAY, HOUR, MINUTE, day, dayStart, mondayOf, utcIso, wallNow } from './lib/time.js';
+import { DAY, MINUTE, day, dayStart, mondayOf, wallNow } from './lib/time.js';
 
 // The race tests: k6 run -e BASE_URL=... concurrency.js (load-tests/README.md).
 //
@@ -22,7 +22,8 @@ const FIRE_AFTER = 20;
 
 /**
  * Each race: who takes part (one user per position), what each does at the moment, which answers are allowed, and
- * what must hold afterwards. `prepare` runs in setup and returns what the race works on.
+ * what must hold afterwards. `prepare` runs in setup and returns what the race works on; `recorded` writes the
+ * ledger lines of an accepted change, as the journeys do, so verify can match the database with them.
  */
 const RACES = [
   {
@@ -48,9 +49,11 @@ const RACES = [
       const project = field(get(admin, '/api/projects?domain=design&status=active&pageSize=1&page=2'), 'items.0.id');
       const requirements = people.map((u) => field(post(admin, `/api/projects/${project}/requirements`,
         { text: `Race tick ${runMark}`, deadline: day(dayStart(wallNow()) + 7 * DAY), assigneeIds: [u.userId] }), 'id'));
+      requirements.forEach((id) => ledger('requirement.created', { id, project, user: admin.user.userId }));
       return { project, requirements };
     },
     act: (s, f, i) => post(s, `/api/projects/${f.project}/requirements/${f.requirements[i]}/done`, null, { expect: [200] }),
+    recorded: (s, f, i) => ledger('requirement.done', { id: f.requirements[i], project: f.project, user: s.user.userId }),
     afterwards: (admin, f) => {
       const list = field(get(admin, `/api/projects/${f.project}/requirements`), null, {});
       const progress = field(get(admin, `/api/projects/${f.project}`), 'progressPct');
@@ -67,9 +70,11 @@ const RACES = [
       const project = field(get(admin, '/api/projects?domain=design&status=active&pageSize=1&page=3'), 'items.0.id');
       const requirement = field(post(admin, `/api/projects/${project}/requirements`,
         { text: `Race shared tick ${runMark}`, assigneeIds: people.map((u) => u.userId) }), 'id');
+      ledger('requirement.created', { id: requirement, project, user: admin.user.userId });
       return { project, requirement };
     },
     act: (s, f) => post(s, `/api/projects/${f.project}/requirements/${f.requirement}/done`, null, { expect: [200, 403, 422] }),
+    recorded: (s, f) => ledger('requirement.done', { id: f.requirement, project: f.project, user: s.user.userId }),
     afterwards: (admin, f) => {
       const list = field(get(admin, `/api/projects/${f.project}/requirements`), null, {});
       const progress = field(get(admin, `/api/projects/${f.project}`), 'progressPct');
@@ -119,7 +124,9 @@ const RACES = [
     who: () => of('ExecutionAdmin').slice(0, 3),
     prepare: (admin) => {
       const project = field(get(admin, '/api/projects?domain=execution&status=active&pageSize=1'), 'items.0.id');
-      post(admin, `/api/projects/${project}/materials`, { items: [1, 2, 3].map((n) => ({ name: `Race material ${n}`, amount: 100 + n, note: runMark })) });
+      const added = field(post(admin, `/api/projects/${project}/materials`,
+        { items: [1, 2, 3].map((n) => ({ name: `Race material ${n}`, amount: 100 + n, note: runMark })) }), null, []);
+      added.forEach((m) => ledger('material.created', { id: m.id, project, user: admin.user.userId }));
       return { project };
     },
     act: (s, f) => post(s, `/api/projects/${f.project}/statements`, { mode: 'detail' }, { expect: [201, 422] }),
@@ -131,23 +138,24 @@ const RACES = [
     prepare: (admin) => {
       const project = field(get(admin, '/api/projects?domain=execution&status=active&pageSize=1&page=2'), 'items.0.id');
       const added = field(post(admin, `/api/projects/${project}/materials`, { items: [{ name: 'Race material', amount: 250, note: runMark }] }), null, []);
+      ledger('material.created', { id: added[0].id, project, user: admin.user.userId });
       return { project, material: added[0].id };
     },
     act: (s, f, i) => (i === 0
       ? post(s, `/api/projects/${f.project}/statements`, { mode: 'detail' }, { expect: [201, 422] })
       : call(s, 'DELETE', `/api/projects/${f.project}/materials/${f.material}`, null, { expect: [204, 422] })),
+    recorded: (s, f, i) => i === 1 && ledger('material.deleted', { id: f.material, user: s.user.userId }),
     afterwards: () => ({}),
   },
   {
     name: 'same_user_two_tabs',
     who: () => [of('DesignEmployee')[13], of('DesignEmployee')[13]],
     prepare: (admin, people) => {
-      const now = wallNow();
-      const start = dayStart(now) + 6 * HOUR;
       const project = field(get(newSession(people[0]), '/api/me/projects'), null, []).filter((p) => p.acceptsWork)[0];
-      return { project: project && project.id, startedAt: utcIso(start), endedAt: utcIso(start + 30 * MINUTE) };
+      return { project: project && project.id, ...pastSlot(30) };
     },
     act: (s, f) => post(s, '/api/work-entries', { projectId: f.project, description: `Race tab ${runMark}`, startedAt: f.startedAt, endedAt: f.endedAt }, { expect: [201, 422] }),
+    recorded: (s, f, i, response) => workEntryLogged(s, f, response),
     afterwards: () => ({}),
   },
   {
@@ -163,8 +171,10 @@ const RACES = [
       for (let d = mondayOf(today); d <= today && d < mondayOf(today) + 6 * DAY; d += DAY) {
         days.push({ date: day(d), workers: 3 + i, dailyPay: 30 });
       }
-      return put(s, `/api/projects/${f.project}/labour-weeks/${f.week}`, { days, note: `Race ${i} ${runMark}` }, { expect: [200, 409, 422] });
+      // The first report makes the week its reporter's; the others may only change their own weeks (403).
+      return put(s, `/api/projects/${f.project}/labour-weeks/${f.week}`, { days, note: `Race ${i} ${runMark}` }, { expect: [200, 403, 409, 422] });
     },
+    recorded: (s, f) => ledger('labour_week.saved', { project: f.project, week: f.week, user: s.user.userId }),
     afterwards: (admin, f) => ({ 'the week holds one report': field(get(admin, `/api/projects/${f.project}/labour-weeks/${f.week}`), 'weekStart', null) !== null }),
   },
   {
@@ -183,20 +193,25 @@ const RACES = [
   {
     name: 'exchange_rate_same_day',
     who: () => of('SuperAdmin').slice(0, 2),
-    prepare: () => ({ on: day(dayStart(wallNow()) + DAY) }),
-    act: (s, f, i) => post(s, '/api/exchange-rates', { currency: 'LBP', ratePerUsd: 89500 + 100 * i, effectiveFrom: f.on }, { expect: [200, 201, 409, 422] }),
-    afterwards: () => ({}),
+    // A rate may start today at the latest, after the currency's latest one: only one of the two can take today.
+    prepare: () => ({ on: day(wallNow()) }),
+    act: (s, f, i) => post(s, '/api/exchange-rates', { currency: 'LBP', ratePerUsd: 89500 + 100 * i, effectiveFrom: f.on }, { expect: [201, 422] }),
+    afterwards: (admin, f) => {
+      const rates = field(get(admin, '/api/exchange-rates'), null, []);
+      return { 'the currency has one rate from that day': rates.filter((r) => r.currency === 'LBP' && r.effectiveFrom === f.on).length === 1 };
+    },
   },
   {
     name: 'complete_while_logging',
     who: () => [of('DesignAdmin').filter((u) => !u.joker)[0], ...of('DesignEmployee').slice(14, 19)],
     prepare: (admin, people) => {
       const project = field(get(admin, '/api/projects?domain=design&status=active&pageSize=1&page=4'), 'items.0.id');
-      return { project, startedAt: utcIso(dayStart(wallNow()) + 5 * HOUR), endedAt: utcIso(dayStart(wallNow()) + 5 * HOUR + 20 * MINUTE) };
+      return { project, ...pastSlot(20) };
     },
     act: (s, f, i) => (i === 0
       ? post(s, `/api/projects/${f.project}/complete`, null, { expect: [200] })
       : post(s, '/api/work-entries', { projectId: f.project, description: `Race log ${runMark}`, startedAt: f.startedAt, endedAt: f.endedAt }, { expect: [201, 422] })),
+    recorded: (s, f, i, response) => i > 0 && workEntryLogged(s, f, response),
     afterwards: () => ({}),
   },
   {
@@ -223,6 +238,16 @@ const RACES = [
     afterwards: () => ({}),
   },
 ].filter((race) => race.who().length >= 1 && race.who().every((u) => u));
+
+/** A slot that ended a quarter of an hour ago, in whole minutes, so it is in the past whenever the race fires. */
+function pastSlot(minutes) {
+  const end = Math.floor((Date.now() - 15 * MINUTE) / MINUTE) * MINUTE;
+  return { startedAt: new Date(end - minutes * MINUTE).toISOString(), endedAt: new Date(end).toISOString(), minutes };
+}
+
+function workEntryLogged(session, f, response) {
+  ledger('work_entry.created', { id: response.json('id'), user: session.user.userId, project: f.project, minutes: f.minutes });
+}
 
 function clientProject(admin, domain) {
   const projects = field(get(admin, `/api/projects?domain=${domain}&status=active&billingType=client&pageSize=20`), 'items', []);
@@ -265,6 +290,9 @@ export async function race(data) {
   await new Promise((resolve) => setTimeout(resolve, Math.max(0, data.fireAt[current.name] - Date.now())));
 
   const response = current.act(session, data.fixtures[current.name], index);
+  if (current.recorded && response.status >= 200 && response.status < 300) {
+    current.recorded(session, data.fixtures[current.name], index, response);
+  }
   let code = '';
   if (response.status >= 400) {
     try {
