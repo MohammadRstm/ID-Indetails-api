@@ -5,7 +5,8 @@
 #
 #   host.csv        cpu %, iowait %, load, memory and swap used, disk and network throughput, open TCP connections
 #   containers.csv  every container's CPU and memory, production's included (they share the server)
-#   mysql.csv       the load-test MySQL: connections, running threads, queries, slow queries, row locks, deadlocks
+#   mysql.csv       the load-test MySQL: connections, running threads, queries, slow queries, row locks, deadlocks,
+#                   and page reads its buffer pool had to take from disk
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -31,12 +32,14 @@ mysql_sample() {
         (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_row_lock_time'),
         (SELECT COUNT FROM information_schema.INNODB_METRICS WHERE NAME = 'lock_deadlocks'),
         (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Aborted_connects'),
-        (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Max_used_connections'))" 2>/dev/null
+        (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Max_used_connections'),
+        (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_reads'),
+        (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_read_requests'))" 2>/dev/null
 }
 
 echo "ts,cpu_pct,iowait_pct,load1,mem_used_mb,mem_total_mb,swap_used_mb,disk_read_kbs,disk_write_kbs,disk_busy_pct,net_rx_kbs,net_tx_kbs,tcp_established" > "$out/host.csv"
 echo "ts,container,cpu_pct,mem_mb" > "$out/containers.csv"
-echo "ts,threads_connected,threads_running,questions,slow_queries,row_lock_waits,row_lock_time_ms,deadlocks,aborted_connects,max_used_connections" > "$out/mysql.csv"
+echo "ts,threads_connected,threads_running,questions,slow_queries,row_lock_waits,row_lock_time_ms,deadlocks,aborted_connects,max_used_connections,pool_disk_reads,pool_read_requests" > "$out/mysql.csv"
 
 read -r cpu_total cpu_idle cpu_wait < <(cpu_counters)
 read -r disk_read disk_write disk_busy < <(disk_counters)

@@ -31,6 +31,9 @@ public static class Samples
         measures.Add(Growth(mysql, run, "slow_queries", "Slow queries (> 0.5 s)", ""));
         measures.Add(Growth(mysql, run, "row_lock_waits", "Row lock waits", ""));
         measures.Add(Growth(mysql, run, "deadlocks", "Deadlocks", ""));
+        // Pages the buffer pool didn't hold: many of these mean the data no longer fits in the database's memory.
+        measures.Add(Growth(mysql, run, "pool_disk_reads", "Database pages read from disk", "/s", perSecond: true));
+        measures.Add(Growth(mysql, run, "pool_read_requests", "Database pages read", "/s", perSecond: true));
 
         foreach (var container in Rows(Path.Combine(folder, "containers.csv")).GroupBy(r => r.GetValueOrDefault("container", "")).OrderBy(g => g.Key))
         {
