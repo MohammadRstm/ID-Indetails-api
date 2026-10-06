@@ -1,6 +1,6 @@
 using System.Globalization;
-using System.Net;
 using ID_Indetails.api.Services.Email.Abstraction;
+using static ID_Indetails.api.Services.Email.Implementation.EmailLayout;
 
 namespace ID_Indetails.api.Services.Email.Implementation;
 
@@ -32,21 +32,16 @@ public static class SupportEmails
             ("Browser", report.UserAgent ?? "not given"),
         };
         var subject = $"{productName} bug report: {report.Title}";
-        var steps = report.Steps is null ? "" : $"<p><strong>Steps</strong></p><p style=\"white-space:pre-wrap\">{Encode(report.Steps)}</p>";
-        var rows = string.Concat(details.Select(d => $"<tr><td style=\"color:#666\">{Encode(d.Label)}</td><td>{Encode(d.Value)}</td></tr>"));
-        var html = $"""
-            <p><strong>{Encode(report.Title)}</strong></p>
-            <p><strong>What happened</strong></p>
-            <p style="white-space:pre-wrap">{Encode(report.Description)}</p>
-            {steps}
-            <table cellpadding="4" style="border-collapse:collapse;font-size:13px">{rows}</table>
-            """;
+        var html = Title(report.Title)
+            + Heading("What happened")
+            + Quote(report.Description)
+            + (report.Steps is null ? "" : Heading("Steps") + Quote(report.Steps))
+            + Heading("Details")
+            + Table(["Detail", "Value"], details.Select(d => new[] { d.Label, d.Value }));
 
         var textSteps = report.Steps is null ? "" : $"Steps:\n{report.Steps}\n\n";
         var text = $"{report.Title}\n\nWhat happened:\n{report.Description}\n\n{textSteps}{string.Join("\n", details.Select(d => $"{d.Label}: {d.Value}"))}\n";
 
-        return new EmailMessage(toAddress, null, subject, html, text);
+        return Compose(toAddress, null, subject, Page(productName, $"Bug report: {report.Title}", html, "Sent from the Report a bug window."), text);
     }
-
-    private static string Encode(string value) => WebUtility.HtmlEncode(value);
 }

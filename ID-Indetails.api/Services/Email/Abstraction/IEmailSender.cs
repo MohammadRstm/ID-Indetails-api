@@ -2,13 +2,17 @@ namespace ID_Indetails.api.Services.Email.Abstraction;
 
 public sealed record EmailAttachment(string FileName, string MimeType, byte[] Content);
 
+/// <summary>An image the HTML shows in place (src="cid:{ContentId}"), carried in the email rather than fetched from the web.</summary>
+public sealed record EmailInlineImage(string ContentId, string MimeType, byte[] Content);
+
 public sealed record EmailMessage(
     string ToAddress,
     string? ToName,
     string Subject,
     string HtmlBody,
     string TextBody,
-    IReadOnlyList<EmailAttachment>? Attachments = null);
+    IReadOnlyList<EmailAttachment>? Attachments = null,
+    IReadOnlyList<EmailInlineImage>? InlineImages = null);
 
 public interface IEmailSender
 {

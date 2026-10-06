@@ -1,10 +1,10 @@
 using System.Globalization;
-using System.Net;
 using ID_Indetails.api.Services.Email.Abstraction;
+using static ID_Indetails.api.Services.Email.Implementation.EmailLayout;
 
 namespace ID_Indetails.api.Services.Email.Implementation;
 
-/// <summary>Content of the account emails. Every user-supplied value is HTML-encoded.</summary>
+/// <summary>Content of the account emails, in the shared frame. Every user-supplied value is HTML-encoded.</summary>
 public static class AccountEmails
 {
     public static EmailMessage Invitation(
@@ -15,29 +15,35 @@ public static class AccountEmails
         string acceptUrl,
         DateTime expiresAtUtc)
     {
-        var expires = expiresAtUtc.ToString("dddd d MMMM yyyy, HH:mm 'UTC'", CultureInfo.InvariantCulture);
-        var subject = $"You're invited to {productName}";
+        var expires = Expiry(expiresAtUtc);
+        var subject = $"You're invited to join {productName}";
+        var invited = $"{inviterName} has invited you to join {productName} as {roleLabel}.";
+        var next = "Accept the invitation to set up your account: you'll confirm your details and choose a password, then you're in.";
+        var once = $"This invitation can be used once and expires on {expires}.";
+        var unexpected = "If you weren't expecting this invitation, you can safely ignore this email.";
 
-        var html = $"""
-            <p>Hello,</p>
-            <p>{Encode(inviterName)} has invited you to join <strong>{Encode(productName)}</strong> as {Encode(roleLabel)}.</p>
-            <p><a href="{Encode(acceptUrl)}">Create your account</a></p>
-            <p>This link works once and expires on {Encode(expires)}.<br>
-            If you weren't expecting this invitation, you can ignore this email.</p>
-            """;
+        var html = Title("You're invited")
+            + Paragraph("Hello,")
+            + Paragraph(invited)
+            + Paragraph(next)
+            + Button(acceptUrl, "Accept invitation")
+            + Note(once)
+            + Note(unexpected);
 
         var text = $"""
             Hello,
 
-            {inviterName} has invited you to join {productName} as {roleLabel}.
+            {invited}
 
-            Create your account: {acceptUrl}
+            {next}
 
-            This link works once and expires on {expires}.
-            If you weren't expecting this invitation, you can ignore this email.
+            Accept the invitation: {acceptUrl}
+
+            {once}
+            {unexpected}
             """;
 
-        return new EmailMessage(toAddress, null, subject, html, text);
+        return Compose(toAddress, null, subject, Page(productName, invited, html, Sent(productName, "you were invited to an account")), text);
     }
 
     public static EmailMessage SuperAdminCredentials(
@@ -48,30 +54,34 @@ public static class AccountEmails
         string loginUrl)
     {
         var subject = $"Your {productName} super admin account";
+        var created = $"A super admin account has been created for you on {productName}.";
+        var how = "Sign in with this email address and the temporary password below:";
+        var change = "You'll be asked to choose your own password when you first sign in.";
+        var delete = "Once you have, please delete this email, since it contains a password.";
 
-        var html = $"""
-            <p>Hello {Encode(firstName)},</p>
-            <p>A super admin account has been created for you on <strong>{Encode(productName)}</strong>.</p>
-            <p>Sign in at <a href="{Encode(loginUrl)}">{Encode(loginUrl)}</a> with this email address and the temporary password:</p>
-            <p style="font-family:monospace;font-size:16px">{Encode(temporaryPassword)}</p>
-            <p>You will be asked to choose your own password when you first sign in.
-            <strong>Once you have, delete this email</strong>, since it contains a password.</p>
-            """;
+        var html = Title("Your account is ready")
+            + Paragraph($"Hello {firstName},")
+            + Paragraph(created)
+            + Paragraph(how)
+            + Code(temporaryPassword)
+            + Button(loginUrl, "Sign in")
+            + Note(change)
+            + Note(delete);
 
         var text = $"""
             Hello {firstName},
 
-            A super admin account has been created for you on {productName}.
+            {created}
 
             Sign in at {loginUrl} with this email address and the temporary password:
 
                 {temporaryPassword}
 
-            You will be asked to choose your own password when you first sign in.
-            Once you have, delete this email, since it contains a password.
+            {change}
+            {delete}
             """;
 
-        return new EmailMessage(toAddress, firstName, subject, html, text);
+        return Compose(toAddress, firstName, subject, Page(productName, created, html, Sent(productName, "an account was created for this address")), text);
     }
 
     public static EmailMessage PasswordReset(
@@ -81,56 +91,59 @@ public static class AccountEmails
         string resetUrl,
         DateTime expiresAtUtc)
     {
-        var expires = expiresAtUtc.ToString("dddd d MMMM yyyy, HH:mm 'UTC'", CultureInfo.InvariantCulture);
-        var greeting = string.IsNullOrWhiteSpace(firstName) ? "Hello," : $"Hello {firstName},";
+        var expires = Expiry(expiresAtUtc);
+        var greeting = Greeting(firstName);
         var subject = $"Reset your {productName} password";
+        var asked = $"We received a request to reset the password for your {productName} account. If it was you, choose a new password below.";
+        var once = $"This link can be used once and expires on {expires}. Choosing a new password signs you out on every device.";
+        var unexpected = "If you didn't ask for this, you can ignore this email: your password stays as it is.";
 
-        var html = $"""
-            <p>{Encode(greeting)}</p>
-            <p>Someone asked to reset the password of your <strong>{Encode(productName)}</strong> account. If it was you, choose a new one:</p>
-            <p><a href="{Encode(resetUrl)}">Choose a new password</a></p>
-            <p>This link works once and expires on {Encode(expires)}. Choosing a new password signs you out everywhere.<br>
-            If you didn't ask for this, you can ignore this email: your password stays as it is.</p>
-            """;
+        var html = Title("Reset your password")
+            + Paragraph(greeting)
+            + Paragraph(asked)
+            + Button(resetUrl, "Choose a new password")
+            + Note(once)
+            + Note(unexpected);
 
         var text = $"""
             {greeting}
 
-            Someone asked to reset the password of your {productName} account. If it was you, choose a new one:
+            {asked}
 
             {resetUrl}
 
-            This link works once and expires on {expires}. Choosing a new password signs you out everywhere.
-            If you didn't ask for this, you can ignore this email: your password stays as it is.
+            {once}
+            {unexpected}
             """;
 
-        return new EmailMessage(toAddress, firstName, subject, html, text);
+        return Compose(toAddress, firstName, subject, Page(productName, asked, html, Sent(productName, "a password reset was requested for this address")), text);
     }
 
     /// <summary>To the new sign-in address: from now on, this is the one to sign in with.</summary>
     public static EmailMessage SignInAddressSet(string productName, string toAddress, string? firstName, string loginUrl)
     {
-        var greeting = string.IsNullOrWhiteSpace(firstName) ? "Hello," : $"Hello {firstName},";
+        var greeting = Greeting(firstName);
         var subject = $"Your {productName} sign-in address has changed";
+        var now = $"From now on, you sign in to {productName} with this email address and your usual password.";
+        var signedOut = "For your security, anywhere you were signed in with your old address has been signed out.";
 
-        var html = $"""
-            <p>{Encode(greeting)}</p>
-            <p>You now sign in to <strong>{Encode(productName)}</strong> with this email address, and your usual password.</p>
-            <p><a href="{Encode(loginUrl)}">Sign in</a></p>
-            <p>Anywhere you were signed in with your old address has been signed out.</p>
-            """;
+        var html = Title("Your sign-in address has changed")
+            + Paragraph(greeting)
+            + Paragraph(now)
+            + Button(loginUrl, "Sign in")
+            + Note(signedOut);
 
         var text = $"""
             {greeting}
 
-            You now sign in to {productName} with this email address, and your usual password.
+            {now}
 
             Sign in: {loginUrl}
 
-            Anywhere you were signed in with your old address has been signed out.
+            {signedOut}
             """;
 
-        return new EmailMessage(toAddress, firstName, subject, html, text);
+        return Compose(toAddress, firstName, subject, Page(productName, now, html, Sent(productName, "this address now signs in to an account")), text);
     }
 
     /// <summary>
@@ -139,25 +152,30 @@ public static class AccountEmails
     /// </summary>
     public static EmailMessage SignInAddressReplaced(string productName, string toAddress, string? firstName)
     {
-        var greeting = string.IsNullOrWhiteSpace(firstName) ? "Hello," : $"Hello {firstName},";
+        var greeting = Greeting(firstName);
         var subject = $"Your {productName} sign-in address has changed";
+        var changed = $"Your {productName} account now signs in with a different email address. This address can no longer be used to sign in.";
+        var unexpected = "If you didn't expect this change, please contact a super admin of your company.";
 
-        var html = $"""
-            <p>{Encode(greeting)}</p>
-            <p>Your <strong>{Encode(productName)}</strong> account now signs in with a different email address. This one no longer signs in.</p>
-            <p>If you didn't expect this, contact a super admin of your company.</p>
-            """;
+        var html = Title("Your sign-in address has changed")
+            + Paragraph(greeting)
+            + Paragraph(changed)
+            + Note(unexpected);
 
         var text = $"""
             {greeting}
 
-            Your {productName} account now signs in with a different email address. This one no longer signs in.
+            {changed}
 
-            If you didn't expect this, contact a super admin of your company.
+            {unexpected}
             """;
 
-        return new EmailMessage(toAddress, firstName, subject, html, text);
+        return Compose(toAddress, firstName, subject, Page(productName, changed, html, Sent(productName, "this address used to sign in to an account")), text);
     }
 
-    private static string Encode(string value) => WebUtility.HtmlEncode(value);
+    private static string Greeting(string? firstName) => string.IsNullOrWhiteSpace(firstName) ? "Hello," : $"Hello {firstName},";
+
+    private static string Expiry(DateTime utc) => utc.ToString("dddd d MMMM yyyy, HH:mm 'UTC'", CultureInfo.InvariantCulture);
+
+    private static string Sent(string productName, string why) => $"{productName} sent you this email because {why}.";
 }
