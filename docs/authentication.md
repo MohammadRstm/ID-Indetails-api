@@ -48,7 +48,7 @@ At first sign-in the account has `mustChangePassword: true`. Every endpoint exce
 
 ## Invitations
 
-1. **Invite.** Someone allowed to invite calls `POST /api/invitations` with `email`, `role`, `domainCode`, and optionally `teamId`, `position` and `pay`. The person's `users` row is created with `status = invited` and no password.
+1. **Invite.** Someone allowed to invite calls `POST /api/invitations` with `email`, `role`, `domainCode`, and optionally `teamId`, `position` and `pay`. `pay` is required for an admin or super admin, as a monthly salary: they are paid a fixed salary and log no hours (see [employees.md](employees.md#pay)). The person's `users` row is created with `status = invited` and no password.
 2. **Email.** They receive a link to `{Frontend:BaseUrl}{Frontend:AcceptInvitationPath}?token=…`. It is valid for 7 days (`Invitations:ExpirationDays`) and works once. If the email can't be sent, nothing is saved.
 3. **Signup page.** The client reads `token` from the URL, shows the details from `POST /api/invitations/validate`, and submits `POST /api/invitations/accept` with the token, first name, last name, optional phone and a password. The account becomes active and the person is signed in.
 
