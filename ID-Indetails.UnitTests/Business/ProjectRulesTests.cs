@@ -41,10 +41,12 @@ public class ProjectRulesTests
     }
 
     [Fact]
-    public void The_owner_is_an_active_person_of_the_domain_or_a_super_admin()
+    public void The_owner_is_an_active_admin_of_the_domain_or_a_super_admin()
     {
-        ProjectRules.CheckOwner(new(RoleCodes.Employee, DomainCodes.Design, UserStatus.Active), DomainCodes.Design).ShouldBeNull();
+        ProjectRules.CheckOwner(new(RoleCodes.Admin, DomainCodes.Design, UserStatus.Active), DomainCodes.Design).ShouldBeNull();
         ProjectRules.CheckOwner(new(RoleCodes.Admin, DomainCodes.Design, UserStatus.Invited), DomainCodes.Design).ShouldBeNull();
+        ProjectRules.CheckOwner(new(RoleCodes.Employee, DomainCodes.Design, UserStatus.Active), DomainCodes.Design)!
+            .Code.ShouldBe(ErrorCodes.OwnerNotAllowed);
         ProjectRules.CheckOwner(new(RoleCodes.SuperAdmin, null, UserStatus.Active), DomainCodes.Execution).ShouldBeNull();
         ProjectRules.CheckOwner(new(RoleCodes.Admin, DomainCodes.Execution, UserStatus.Active), DomainCodes.Design)!
             .Code.ShouldBe(ErrorCodes.OwnerNotAllowed);

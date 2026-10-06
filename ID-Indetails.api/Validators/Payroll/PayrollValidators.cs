@@ -17,6 +17,9 @@ public sealed class SalaryListQueryValidator : AbstractValidator<SalaryListQuery
             .Must(d => d is null || DomainCodes.All.Contains(d))
             .WithMessage($"Domain must be one of: {string.Join(", ", DomainCodes.All)}.");
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
+        RuleFor(x => x.Role)
+            .Must(r => r is null || RoleCodes.All.Contains(r))
+            .WithMessage($"Role must be one of: {string.Join(", ", RoleCodes.All)}.");
         RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
@@ -33,6 +36,9 @@ public sealed class SalaryYearQueryValidator : AbstractValidator<SalaryYearQuery
             .Must(d => d is null || DomainCodes.All.Contains(d))
             .WithMessage($"Domain must be one of: {string.Join(", ", DomainCodes.All)}.");
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
+        RuleFor(x => x.Role)
+            .Must(r => r is null || RoleCodes.All.Contains(r))
+            .WithMessage($"Role must be one of: {string.Join(", ", RoleCodes.All)}.");
     }
 }
 

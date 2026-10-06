@@ -146,7 +146,7 @@ Rules (`Business/Meetings/MeetingRules.cs`):
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/reports/work?from=&to=&projectId=&userId=&clientId=&internal=` | `report:view` | The Reports page for a range of company days (default: this quarter so far; at most three years). `clientId` keeps one client's projects, `internal=true` the projects with no client |
-| `GET /api/reports/overview?period=quarter\|month\|last30` | `report:view` | The Design dashboard for a period and the one before it |
+| `GET /api/reports/overview?period=quarter\|month\|last30\|custom` | `report:view` | The Design dashboard for a period and the one before it. `custom` takes `from` and `to` (at most three years; `to` after today counts to today) and compares with as many days just before |
 
 Callers who can't see Design (an Execution admin holds `report:view` too) get `404`. Money is only included for callers with `financial:view`, and comes from the shared finance calculator.
 

@@ -25,9 +25,9 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
 | `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
 | `GET /api/company/overview/monthly?months=13` or `?year=2026` | `company:view` | Revenue, costs, overhead and super admins' salaries per month: the profit before company expenses, after overhead, and the net profit after both, as the overview's (whole months; the last 1–36 months, or a year's months from January, up to this month in the current year; a future year, or one before 2000, is `400`) |
-| `GET /api/company/salaries?month=YYYY-MM&domain=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary |
+| `GET /api/company/salaries?month=YYYY-MM&domain=&role=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary; `role` (super_admin, admin, employee) narrows it to one role |
 | `GET /api/company/salaries/{userId}?month=YYYY-MM` | `salary:view` | How one person's pay adds up, and where their hours went (`projects`) |
-| `GET /api/company/salaries/export?month=YYYY-MM&domain=&search=` | `salary:view` | The filtered list as CSV, with a total per currency (10 a minute per user) |
+| `GET /api/company/salaries/export?month=YYYY-MM&domain=&role=&search=` | `salary:view` | The filtered list as CSV, with a total per currency (10 a minute per user) |
 | `GET /api/company/project-pay?unit=week\|month\|quarter&date=&projectId=` | `salary:view` | What each Design project paid its people in a period |
 | `GET /api/company/project-pay/export?…` | `salary:view` | The same as CSV (10 a minute per user) |
 | `POST /api/employees/{id}/hour-excuses` | `hours:excuse` | Excuses minutes, days or the whole month, paid or unpaid |
@@ -74,7 +74,7 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 
 **Who is listed:** every person with a pay record who was employed on some day of the month (a period of employment overlapping it, see [employees.md](employees.md#deactivating-and-reactivating)), in the caller's domains. Super admins appear only if they have pay and the caller sees both domains. People who joined after the month, left before it, or were away all of it are left out. The list, the detail, the CSV, the totals and the month-end short-hours alert all follow this. People of the filtered list who had joined by then but have no pay set are named in `withoutPay`, so a missing salary shows.
 
-**The year** (`GET /api/company/salaries/year?year=&domain=&search=`, `salary:view`): what each person is owed in every month of the year up to this month (each month as the list works it out: basis, the salary or rate in force, and the total), and a total per month and currency. This year by default; never a future year (`400 salary_month_in_future`).
+**The year** (`GET /api/company/salaries/year?year=&domain=&role=&search=`, `salary:view`): what each person is owed in every month of the year up to this month (each month as the list works it out: basis, the salary or rate in force, and the total), and a total per month and currency. This year by default; never a future year (`400 salary_month_in_future`).
 
 **Leavers:** a person's final month ends on their last working day (included). Monthly pay is pro-rated to it the way a joining month is (`leftOn` on the row, and `workingDaysPaid` of `workingDays`), and their hours ledger ends there too, so the month counts as closed for them once they have left. Someone taken back later isn't paid, or counted short, for the days they were away between two periods: a month partly away is pro-rated, a month wholly away isn't listed.
 

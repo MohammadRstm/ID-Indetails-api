@@ -99,6 +99,19 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         quarter.Attention.Single(a => a.Kind == AttentionKind.NotLogging).People!.ShouldContain(p => p.Id == idle.User.Id);
 
         await (await Client.GetAsync("/api/reports/overview?period=year", admin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        // days the admin picks, compared with as many days just before them
+        var custom = await (await Client.GetAsync("/api/reports/overview?period=custom&from=2026-09-01&to=2026-09-10", admin.AccessToken))
+            .ReadAsync<OverviewResponse>();
+        custom.Period.ShouldBe(OverviewPeriod.Custom);
+        (custom.From, custom.To).ShouldBe((new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 10)));
+        (custom.PreviousFrom, custom.PreviousTo).ShouldBe((new DateOnly(2026, 8, 22), new DateOnly(2026, 8, 31)));
+        await (await Client.GetAsync("/api/reports/overview?period=custom&from=2026-09-10", admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.GetAsync("/api/reports/overview?period=custom&from=2026-09-10&to=2026-09-01", admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.GetAsync("/api/reports/overview?period=month&from=2026-09-01", admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
     [Fact]

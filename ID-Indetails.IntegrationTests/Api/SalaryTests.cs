@@ -281,6 +281,24 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Salaries_can_be_narrowed_to_one_role()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design, pay: new { basis = "monthly", amount = 1760m, currency = "USD" });
+
+        foreach (var role in RoleCodes.All)
+        {
+            var list = await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?role={role}&pageSize=100", superAdmin.AccessToken));
+            list.Rows.Items.ShouldAllBe(r => r.Role == role);
+            var year = await OkAsync<SalaryYearResponse>(Client.GetAsync($"/api/company/salaries/year?role={role}", superAdmin.AccessToken));
+            year.Rows.ShouldAllBe(r => r.Role == role);
+        }
+
+        await (await Client.GetAsync("/api/company/salaries?role=boss", superAdmin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
     public async Task Salaries_need_salary_view_and_never_show_a_future_month()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

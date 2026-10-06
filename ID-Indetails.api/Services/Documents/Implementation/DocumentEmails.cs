@@ -120,7 +120,7 @@ public static class DocumentEmails
         var html = Paragraph($"Hello {statement.Client.DisplayName},")
             + Paragraph(intro)
             + Facts(("Statement", statement.Number), ("Date", PdfLayout.Date(statement.Date)), ("Project", statement.ProjectTitle), ("Location", statement.ProjectLocation))
-            + Heading("Materials") + table + Totals([.. totals])
+            + Heading("Material type") + table + Totals([.. totals])
             + Heading("Payment summary")
             + Totals(("Received from you so far", M(statement.Received), false), (left.Item1, left.Item2, true))
             + Note("The remaining amount is what is left of everything agreed on this project so far, after the payments above.")
