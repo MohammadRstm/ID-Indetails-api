@@ -60,7 +60,7 @@ See [finance.md](finance.md).
 |---|---|
 | M1 | **Everyone's paid break is labour cost**, hourly and salaried alike (7 required hours are 8 paid hours), on the days Salaries pays it, shared across the day's projects by in-hours minutes. Project pay (decision 22) still leaves breaks out. *(Changed on 29 Sep 2026: it was hourly staff only.)* |
 | M2 | **A client's margin follows the project rule** as a whole: shown once all their projects are done, at least 5% of their revenue is recognised, or 10 hours are logged. *(The prototype showed it whenever there was revenue.)* |
-| M3 | **Revenue in a period follows `Recognition`**: each month counts for the share of it the period covers. *(The prototype counted whole calendar months.)* |
+| M3 | ~~Revenue in a period follows `Recognition`~~. **Replaced:** revenue in a period is the money received in it, counted on the day it arrived (the summaries, the Financials page, the company overview and its monthly chart). Overhead and super admins' salaries still count by the share of each month's calendar days the period covers. |
 | M4 | **Every cost source is returned** on the dashboards and Financials, so the parts add up to the total. *(The prototype's Execution breakdowns left out materials and ground labour.)* |
 | M5 | **The Execution dashboard has no hours cards**: key figures, money cards and projects by status only, as in the prototype. |
 | M6 | **Without `financial:view`, invoice write responses hide what was paid**: no paid, balance or overdue figures, and paid or partly paid reads as sent. |

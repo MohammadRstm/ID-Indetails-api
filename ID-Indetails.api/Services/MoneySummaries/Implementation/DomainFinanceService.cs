@@ -176,7 +176,7 @@ public sealed class DomainFinanceService(
 
         csv.AppendLine();
         Csv.Line(csv, "Period", $"{period.From:yyyy-MM-dd} to {period.To:yyyy-MM-dd}");
-        Csv.Line(csv, "Revenue recognised", Csv.Money(period.Revenue));
+        Csv.Line(csv, "Revenue received", Csv.Money(period.Revenue));
         Csv.Line(csv, "Total cost", Csv.Money(period.Cost.Total));
         Csv.Line(csv, "Net profit", Csv.Money(period.Profit));
         Csv.Line(csv, "Margin %", Pct(period.Margin));

@@ -111,7 +111,8 @@ Rules (`Business/Billing/PaymentRules.cs`):
 | `outstanding` | Left to pay on those invoices |
 | `received` | Every live payment, on account or not |
 | `onAccount` | Live payments not tied to an invoice |
-| `notYetInvoiced` | Revenue (Execution: the agreed amount) minus invoiced, never below zero |
+| `notYetInvoiced` | Revenue (Execution: the agreed amount) minus invoiced and minus what is held on account, never below zero: what still has to be billed or paid |
+| `leftToInvoice` | Revenue minus invoiced, never below zero: what a new invoice can still be for (the project page only) |
 | `owed` | Revenue minus received, never below zero |
 | `paidAhead` | Received beyond the revenue |
 | `issuedCount`, `paymentCount` | How many issued, live invoices and live payments |
