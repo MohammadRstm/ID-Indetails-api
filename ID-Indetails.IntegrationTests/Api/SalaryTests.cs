@@ -135,6 +135,37 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{siteWorker.User.Id}?month=2026-06", superAdmin.AccessToken)))
             .Projects.ShouldBeEmpty();
         list.Totals.ShouldHaveSingleItem().Currency.ShouldBe("USD");
+
+        // a closed month: the salary, earned in full
+        row.MonthlyPay.ShouldBe(1760m);
+        row.EarnedSoFar.ShouldBe(1760m);
+        row.FullMonthEstimate.ShouldBeNull();
+        list.Totals[0].EarnedSoFar.ShouldBe(1760m);
+
+        // this month, still running: earned so far, and the full month as things stand
+        var now = (await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?search={siteWorker.User.Email}", superAdmin.AccessToken)))
+            .Rows.Items.ShouldHaveSingleItem();
+        now.FullMonthEstimate.ShouldBe(1760m);
+        now.EarnedSoFar.ShouldBeLessThanOrEqualTo(1760m);
+    }
+
+    [Fact]
+    public async Task An_hourly_rate_shows_as_a_month_of_its_paid_hours()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
+        (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
+            new { basis = "hourly", amount = 10m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        var row = (await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?month=2026-06&search={person.User.Email}", superAdmin.AccessToken)))
+            .Rows.Items.ShouldHaveSingleItem();
+
+        // June 2026: 22 working days of 8 paid hours at 10; nothing logged, so nothing earned
+        row.MonthlyPay.ShouldBe(1760m);
+        row.Total.ShouldBe(0m);
+        row.EarnedSoFar.ShouldBe(0m);
     }
 
     [Fact]
