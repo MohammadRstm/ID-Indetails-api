@@ -12,7 +12,8 @@ namespace ID_Indetails.api.Business.Auth;
 /// <item>then gains their <see cref="PermissionEffect.Grant"/> overrides and loses their
 /// <see cref="PermissionEffect.Revoke"/> overrides.</item>
 /// </list>
-/// Holding a permission of the other domain opens that domain's data to the user.
+/// Only employees log hours: admins and super admins never hold <see cref="PermissionCatalog.OwnWork"/>, whatever the
+/// overrides say. Holding a permission of the other domain opens that domain's data to the user.
 /// </summary>
 public static class EffectivePermissions
 {
@@ -28,7 +29,10 @@ public static class EffectivePermissions
             ? roleGrants
             : roleGrants.Where(g => g.DomainCode is null || g.DomainCode == userDomain);
 
-        return applicable.Select(g => g.Code).ToHashSet(StringComparer.Ordinal);
+        return applicable
+            .Select(g => g.Code)
+            .Where(code => roleCode == RoleCodes.Employee || !PermissionCatalog.OwnWork.Contains(code))
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <summary>Role defaults with the overrides applied. Overrides for unknown permissions are ignored.</summary>
@@ -68,11 +72,15 @@ public static class EffectivePermissions
         if (roleCode == RoleCodes.SuperAdmin)
         {
             return new UserAccess(
-                userId, roleCode, userDomain, Sorted(catalog.Select(p => p.Code)), IsJoker: false, DomainCodes.All);
+                userId, roleCode, userDomain, Sorted(catalog.Select(p => p.Code).Except(PermissionCatalog.OwnWork)), IsJoker: false, DomainCodes.All);
         }
 
         var defaults = RoleDefaults(roleCode, userDomain, roleGrants);
         var effective = Apply(defaults, overrides, catalog);
+        if (roleCode != RoleCodes.Employee)
+        {
+            effective = effective.Except(PermissionCatalog.OwnWork).ToHashSet(StringComparer.Ordinal);
+        }
 
         return new UserAccess(
             userId,

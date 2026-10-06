@@ -230,8 +230,8 @@ public class OvertimeViewsTests(ApiFactory api) : IClassFixture<ApiFactory>
         saturday.IsWorkingDay.ShouldBeFalse();
         saturday.OvertimeMinutes.ShouldBe(120);
 
-        // Admins log hours without an hours ledger.
-        (await OkAsync<MyScheduleResponse>("/api/me/schedule?date=2026-06-15", designAdmin)).Day.MonthShortMinutes.ShouldBeNull();
+        // Admins log no hours, so they have no schedule to log against.
+        await (await Client.GetAsync("/api/me/schedule?date=2026-06-15", designAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         await (await Client.GetAsync("/api/me/schedule?date=1999-12-31", designer.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.GetAsync("/api/me/schedule?date=2026-06-15", siteWorker.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);

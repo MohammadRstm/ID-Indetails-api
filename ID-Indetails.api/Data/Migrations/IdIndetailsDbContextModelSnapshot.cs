@@ -3013,16 +3013,6 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
-                            PermissionCode = "work_entry:create"
-                        },
-                        new
-                        {
-                            RoleCode = "super_admin",
-                            PermissionCode = "work_entry:view_own"
-                        },
-                        new
-                        {
-                            RoleCode = "super_admin",
                             PermissionCode = "work_entry:view_all"
                         },
                         new
@@ -3269,16 +3259,6 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "admin",
                             PermissionCode = "expense:manage"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "work_entry:create"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "work_entry:view_own"
                         },
                         new
                         {

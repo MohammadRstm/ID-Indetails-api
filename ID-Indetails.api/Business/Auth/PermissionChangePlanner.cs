@@ -11,6 +11,8 @@ namespace ID_Indetails.api.Business.Auth;
 /// <item>When the resulting permissions are exactly the defaults of the other role (admin or
 /// employee) in the user's domain, the user takes that role at once, and the overrides are
 /// cleared because the new role's defaults now describe them.</item>
+/// <item>Logging one's own hours (<see cref="PermissionCatalog.OwnWork"/>) comes with the employee role: an admin is
+/// never given it, and it doesn't count when matching the other role's defaults.</item>
 /// </list>
 /// Super admins are never planned for: they cannot be changed, and nobody is ever moved into
 /// or out of the super admin role automatically.
@@ -44,9 +46,14 @@ public static class PermissionChangePlanner
         var defaults = DefaultsOf(roleCode, userDomain, grantsByRole);
         var effective = new HashSet<string>(
             EffectivePermissions.Apply(defaults, currentOverrides, catalog), StringComparer.Ordinal);
+        var isAdmin = roleCode == RoleCodes.Admin;
+        if (isAdmin)
+        {
+            effective.ExceptWith(PermissionCatalog.OwnWork);
+        }
 
         var applied = new List<Change>();
-        foreach (var change in changes)
+        foreach (var change in changes.Where(c => !(isAdmin && PermissionCatalog.OwnWork.Contains(c.Code))))
         {
             var changed = change.Action switch
             {
@@ -61,23 +68,28 @@ public static class PermissionChangePlanner
             }
         }
 
-        var otherRole = roleCode == RoleCodes.Admin ? RoleCodes.Employee : RoleCodes.Admin;
-        var newRole = effective.SetEquals(DefaultsOf(otherRole, userDomain, grantsByRole)) ? otherRole : roleCode;
-        var newDefaults = newRole == roleCode ? defaults : DefaultsOf(newRole, userDomain, grantsByRole);
+        var otherRole = isAdmin ? RoleCodes.Employee : RoleCodes.Admin;
+        if (WithoutOwnWork(effective).SetEquals(WithoutOwnWork(DefaultsOf(otherRole, userDomain, grantsByRole))))
+        {
+            return new Plan(otherRole, new Dictionary<string, PermissionEffect>(), applied, roleCode);
+        }
 
         var overrides = new Dictionary<string, PermissionEffect>(StringComparer.Ordinal);
-        foreach (var code in effective.Except(newDefaults))
+        foreach (var code in effective.Except(defaults))
         {
             overrides[code] = PermissionEffect.Grant;
         }
 
-        foreach (var code in newDefaults.Except(effective))
+        foreach (var code in defaults.Except(effective))
         {
             overrides[code] = PermissionEffect.Revoke;
         }
 
-        return new Plan(newRole, overrides, applied, newRole == roleCode ? null : roleCode);
+        return new Plan(roleCode, overrides, applied, null);
     }
+
+    private static HashSet<string> WithoutOwnWork(IEnumerable<string> codes)
+        => codes.Except(PermissionCatalog.OwnWork).ToHashSet(StringComparer.Ordinal);
 
     private static IReadOnlySet<string> DefaultsOf(
         string roleCode,

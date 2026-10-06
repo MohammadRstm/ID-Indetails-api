@@ -75,10 +75,11 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
         mine.Single(p => p.Code == PermissionCodes.ClientCreate).Source.ShouldBe(PermissionSource.Granted);
         mine.Where(p => p.Code != PermissionCodes.ClientCreate && p.Code != taken).ShouldAllBe(p => p.Source == PermissionSource.Role);
 
-        // a super admin holds every one, all from the role
+        // a super admin holds every one but logging hours, all from the role
         var catalog = await (await Client.GetAsync("/api/permissions", superAdmin.AccessToken)).ReadAsync<List<PermissionDefinitionResponse>>();
         var all = await (await Client.GetAsync("/api/me/permissions", superAdmin.AccessToken)).ReadAsync<List<MyPermissionResponse>>();
-        all.Count.ShouldBe(catalog.Count);
+        all.Count.ShouldBe(catalog.Count - PermissionCatalog.OwnWork.Count);
+        all.ShouldNotContain(p => PermissionCatalog.OwnWork.Contains(p.Code));
         all.ShouldAllBe(p => p.Source == PermissionSource.Role);
         catalog.ShouldAllBe(p => p.Explanation.Length > 0);
     }
@@ -120,7 +121,7 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var view = await PermissionsOfAsync(superAdmin, otherSuperAdmin.User.Id);
         view.IsLocked.ShouldBeTrue();
-        view.Permissions.Count.ShouldBe(PermissionCatalog.Definitions.Count);
+        view.Permissions.Count.ShouldBe(PermissionCatalog.Definitions.Count - PermissionCatalog.OwnWork.Count);
 
         await ShouldChangeAsync(superAdmin, admin.User.Id, PermissionChangeAction.Grant, PermissionCodes.PermissionManage);
         await (await ChangeAsync(admin, admin.User.Id, PermissionChangeAction.Grant, PermissionCodes.ClientView))
@@ -238,5 +239,7 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
         catalog.Single(p => p.Code == PermissionCodes.PermissionManage).DefaultFor.ShouldBe([RoleCodes.SuperAdmin]);
         catalog.Single(p => p.Code == PermissionCodes.ProjectView).DefaultFor
             .ShouldBe([RoleCodes.SuperAdmin, RoleCodes.Admin, RoleCodes.Employee]);
+        // only employees log hours
+        catalog.Single(p => p.Code == PermissionCodes.WorkEntryCreate).DefaultFor.ShouldBe([RoleCodes.Employee]);
     }
 }

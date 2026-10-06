@@ -192,8 +192,9 @@ public class WorkEntryTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.DeleteAsync($"/api/work-entries/{entry.Id}", designAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
         await (await Work.TryLogAsync(executionEmployee.AccessToken, project.Id, start, 60)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
-        await (await Work.TryLogAsync(designAdmin.AccessToken, site.Id, start, 60)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
-        await (await Work.TryLogAsync(superAdmin.AccessToken, site.Id, start, 60)).ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
+        // admins and super admins log no hours at all
+        await (await Work.TryLogAsync(designAdmin.AccessToken, project.Id, start, 60)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Work.TryLogAsync(superAdmin.AccessToken, project.Id, start, 60)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
     [Fact]

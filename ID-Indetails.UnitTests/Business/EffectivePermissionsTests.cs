@@ -90,13 +90,25 @@ public class EffectivePermissionsTests
             .Permissions.ShouldNotContain("nuke:everything");
 
     [Fact]
-    public void Super_admin_holds_everything_and_overrides_never_apply()
+    public void Super_admin_holds_everything_but_logging_hours_and_overrides_never_apply()
     {
         var access = Resolve(RoleCodes.SuperAdmin, null, new Override("invoice:void", PermissionEffect.Revoke));
 
-        access.Permissions.ShouldBe(Catalog.Select(c => c.Code).Order(StringComparer.Ordinal));
+        access.Permissions.ShouldBe(["invoice:void", "material:create", "project:view"]);
         access.IsJoker.ShouldBeFalse();
         access.VisibleDomains.ShouldBe(DomainCodes.All);
+    }
+
+    [Fact]
+    public void An_admin_never_logs_hours_whatever_their_grants_say()
+    {
+        // The admin is given the employee grants here, as if work_entry:create were still among the admin defaults.
+        var plain = Resolve(RoleCodes.Admin, DomainCodes.Design);
+        var granted = Resolve(RoleCodes.Admin, DomainCodes.Design, new Override("work_entry:create", PermissionEffect.Grant));
+
+        plain.Permissions.ShouldBe(["project:view"]);
+        plain.IsJoker.ShouldBeFalse();
+        granted.Permissions.ShouldNotContain("work_entry:create");
     }
 
     [Fact]

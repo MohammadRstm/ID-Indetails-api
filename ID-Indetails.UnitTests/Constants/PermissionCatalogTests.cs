@@ -49,10 +49,19 @@ public class PermissionCatalogTests
     }
 
     [Fact]
-    public void Super_admin_holds_every_permission()
+    public void Super_admin_holds_every_permission_but_logging_hours()
     {
         GrantsOf(RoleCodes.SuperAdmin)
-            .ShouldBe(PermissionCatalog.Definitions.Select(d => d.Code), ignoreOrder: true);
+            .ShouldBe(PermissionCatalog.Definitions.Select(d => d.Code).Except(PermissionCatalog.OwnWork), ignoreOrder: true);
+    }
+
+    [Fact]
+    public void Only_employees_log_hours()
+    {
+        GrantsOf(RoleCodes.Employee).ShouldContain(PermissionCodes.WorkEntryCreate);
+        GrantsOf(RoleCodes.Employee).ShouldContain(PermissionCodes.WorkEntryViewOwn);
+        GrantsOf(RoleCodes.Admin).ShouldNotContain(c => PermissionCatalog.OwnWork.Contains(c));
+        GrantsOf(RoleCodes.SuperAdmin).ShouldNotContain(c => PermissionCatalog.OwnWork.Contains(c));
     }
 
     [Fact]
