@@ -9,6 +9,7 @@ using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Statements;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
@@ -53,9 +54,8 @@ public sealed class DocumentService(
         InvoiceRules.CheckLive(invoice.IssuedAt is not null, invoice.VoidedAt is not null).ThrowIfDenied();
 
         var to = request.To.Trim();
-        var pdf = await RenderInvoiceAsync(invoice, cancellationToken);
-        var company = await companySettings.GetAsync(cancellationToken);
-        await SendAsync(DocumentEmails.Invoice(to, invoice, company.Name, currentUser.FullName, pdf), "invoice", invoiceId, cancellationToken);
+        var (pdf, issuedOn, head, billing) = await InvoiceDocumentAsync(invoice, cancellationToken);
+        await SendAsync(DocumentEmails.Invoice(to, invoice, issuedOn, head, billing, currentUser.FullName, pdf), "invoice", invoiceId, cancellationToken);
 
         return await invoiceService.RecordDeliveryAsync(
             invoiceId, new RecordDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = to, Note = request.Note }, cancellationToken);
@@ -63,17 +63,15 @@ public sealed class DocumentService(
 
     public async Task EmailInvoiceReminderAsync(InvoiceResponse invoice, string to, CancellationToken cancellationToken = default)
     {
-        var pdf = await RenderInvoiceAsync(invoice, cancellationToken);
-        var company = await companySettings.GetAsync(cancellationToken);
-        await SendAsync(DocumentEmails.InvoiceReminder(to, invoice, company.Name, pdf), "invoice reminder", invoice.Id, cancellationToken);
+        var (pdf, issuedOn, head, billing) = await InvoiceDocumentAsync(invoice, cancellationToken);
+        await SendAsync(DocumentEmails.InvoiceReminder(to, invoice, issuedOn, head, billing, pdf), "invoice reminder", invoice.Id, cancellationToken);
     }
 
     public async Task EmailScheduledInvoiceAsync(InvoiceResponse invoice, string to, CancellationToken cancellationToken = default)
     {
-        var pdf = await RenderInvoiceAsync(invoice, cancellationToken);
-        var company = await companySettings.GetAsync(cancellationToken);
-        var sender = invoice.ScheduledBy?.Name ?? company.Name;
-        await SendAsync(DocumentEmails.Invoice(to, invoice, company.Name, sender, pdf), "invoice", invoice.Id, cancellationToken);
+        var (pdf, issuedOn, head, billing) = await InvoiceDocumentAsync(invoice, cancellationToken);
+        var sender = invoice.ScheduledBy?.Name ?? head.CompanyName;
+        await SendAsync(DocumentEmails.Invoice(to, invoice, issuedOn, head, billing, sender, pdf), "invoice", invoice.Id, cancellationToken);
     }
 
     public async Task<PdfFile> StatementPdfAsync(long statementId, CancellationToken cancellationToken = default)
@@ -84,9 +82,9 @@ public sealed class DocumentService(
         var statement = await statementService.GetAsync(statementId, cancellationToken);
 
         var to = request.To.Trim();
-        var pdf = await RenderStatementAsync(statement, cancellationToken);
-        var company = await companySettings.GetAsync(cancellationToken);
-        await SendAsync(DocumentEmails.Statement(to, statement, company.Name, currentUser.FullName, pdf), "statement", statementId, cancellationToken);
+        var head = await LetterheadAsync(cancellationToken);
+        var pdf = new PdfFile(StatementPdf.Render(statement, head), statement.Number.ToLowerInvariant() + ".pdf");
+        await SendAsync(DocumentEmails.Statement(to, statement, head, currentUser.FullName, pdf), "statement", statementId, cancellationToken);
 
         return await statementService.RecordDeliveryAsync(
             statementId, new RecordDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = to, Note = request.Note }, cancellationToken);
@@ -151,12 +149,17 @@ public sealed class DocumentService(
     }
 
     private async Task<PdfFile> RenderInvoiceAsync(InvoiceResponse invoice, CancellationToken cancellationToken)
+        => (await InvoiceDocumentAsync(invoice, cancellationToken)).Pdf;
+
+    /// <summary>The invoice's PDF, and what its email shows beside it.</summary>
+    private async Task<(PdfFile Pdf, DateOnly? IssuedOn, Letterhead Head, BillingSettings? Billing)> InvoiceDocumentAsync(
+        InvoiceResponse invoice, CancellationToken cancellationToken)
     {
         var head = await LetterheadAsync(cancellationToken);
         var billing = await billingSettings.GetAsync(invoice.Domain, cancellationToken);
         var issuedOn = invoice.IssuedAt is { } at ? clock.ToCompanyDate(at) : (DateOnly?)null;
         var name = invoice.Number is { } number ? number.ToLowerInvariant() : $"invoice-draft-{invoice.Id}";
-        return new PdfFile(InvoicePdf.Render(invoice, issuedOn, head, billing), name + ".pdf");
+        return (new PdfFile(InvoicePdf.Render(invoice, issuedOn, head, billing), name + ".pdf"), issuedOn, head, billing);
     }
 
     private async Task<PdfFile> RenderStatementAsync(StatementResponse statement, CancellationToken cancellationToken)

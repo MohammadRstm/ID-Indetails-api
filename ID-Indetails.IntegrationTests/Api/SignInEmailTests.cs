@@ -37,9 +37,9 @@ public class SignInEmailTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.GetAsync("/api/auth/me", fresh.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         // both addresses are told; the old one isn't told the new one
-        api.Emails.LastTo(newEmail).TextBody.ShouldContain("You now sign in");
+        api.Emails.LastTo(newEmail).TextBody.ShouldContain("From now on, you sign in");
         var toOld = api.Emails.LastTo(oldEmail);
-        toOld.TextBody.ShouldContain("no longer signs in");
+        toOld.TextBody.ShouldContain("can no longer be used to sign in");
         toOld.TextBody.ShouldNotContain(newEmail);
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM activity_events WHERE kind = 'employee_email_changed' AND subject_id = @u AND payload IS NULL",
@@ -93,7 +93,7 @@ public class SignInEmailTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.GetAsync("/api/auth/me", signedIn.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: elsewhere)).ShouldFailWithAsync(401, ErrorCodes.RefreshTokenInvalid);
         await (await Client.PostJsonAsync("/api/auth/login", new { email = newEmail, password })).ShouldSignInAsync();
-        api.Emails.LastTo(oldEmail).TextBody.ShouldContain("no longer signs in");
+        api.Emails.LastTo(oldEmail).TextBody.ShouldContain("can no longer be used to sign in");
 
         // their own only this way, with the password
         await (await ChangeAsync(superAdmin.User.Id, AuthTestSteps.NewEmail(), signedIn.AccessToken))

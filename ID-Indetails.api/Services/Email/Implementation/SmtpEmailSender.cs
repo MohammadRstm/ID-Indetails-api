@@ -19,6 +19,12 @@ public sealed class SmtpEmailSender(IOptions<EmailOptions> options) : IEmailSend
         mime.To.Add(new MailboxAddress(message.ToName ?? string.Empty, message.ToAddress));
         mime.Subject = message.Subject;
         var body = new BodyBuilder { HtmlBody = message.HtmlBody, TextBody = message.TextBody };
+        foreach (var image in message.InlineImages ?? [])
+        {
+            var resource = body.LinkedResources.Add(image.ContentId, image.Content, ContentType.Parse(image.MimeType));
+            resource.ContentId = image.ContentId;
+        }
+
         foreach (var attachment in message.Attachments ?? [])
         {
             body.Attachments.Add(attachment.FileName, attachment.Content, ContentType.Parse(attachment.MimeType));

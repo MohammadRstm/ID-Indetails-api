@@ -47,5 +47,6 @@ Every font resolves to Segoe WP, which ships inside the PDFsharp package (`Servi
 
 - `Services/Documents/Implementation/PdfLayout.cs` holds the page, letterhead, tables, totals, footer, and money and date formats.
 - Each document has its own class: `InvoicePdf`, `StatementPdf`, `ProjectReportPdf`.
-- `DocumentEmails` holds the email wording.
+- `DocumentEmails` builds the emails. An invoice or statement email shows the document itself (the same client-facing fields as the PDF: lines, totals, notes, how to pay) and attaches the PDF to keep or print.
+- Every email, account emails included, is drawn in one frame (`Services/Email/Implementation/EmailLayout.cs`): the logo, a white card and a footer, built from tables with inline styles because mail apps ignore style sheets. The logo (`Assets/email-logo.png`) is built into the assembly and travels in the email as an inline image, so it shows even where pictures from the web are blocked. Each email also has a plain-text version.
 - `DocumentService` loads the data through the invoice, statement and project services, so their visibility and what each caller may see still apply. It then renders the PDF and sends it.
