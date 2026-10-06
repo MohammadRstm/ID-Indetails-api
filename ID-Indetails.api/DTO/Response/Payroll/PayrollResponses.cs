@@ -78,9 +78,22 @@ public sealed record SalaryRowResponse
     public required decimal OvertimePay { get; init; }
 
     public required decimal Total { get; init; }
+
+    /// <summary>The month's pay as a monthly amount: the salary, or an hourly rate × the month's paid hours on their schedule.</summary>
+    public required decimal MonthlyPay { get; init; }
+
+    /// <summary>
+    /// While a salaried month runs, the salary accrued so far plus overtime pay (as My pay shows it); otherwise
+    /// <see cref="Total"/>.
+    /// </summary>
+    public required decimal EarnedSoFar { get; init; }
+
+    /// <summary>While a salaried month runs, what it comes to if things stay as they are; null otherwise.</summary>
+    public decimal? FullMonthEstimate { get; init; }
 }
 
-public sealed record SalaryTotalResponse(string Currency, int People, decimal BasePay, decimal OvertimePay, decimal Deduction, decimal Total);
+/// <param name="EarnedSoFar">The rows' <see cref="SalaryRowResponse.EarnedSoFar"/>: equal to <paramref name="Total"/> once the month has closed.</param>
+public sealed record SalaryTotalResponse(string Currency, int People, decimal BasePay, decimal OvertimePay, decimal Deduction, decimal Total, decimal EarnedSoFar);
 
 /// <param name="ExpectedMinutes">Hours the schedules ask for, of the people under the hours rule; null when nobody listed is.</param>
 public sealed record SalarySummaryResponse(

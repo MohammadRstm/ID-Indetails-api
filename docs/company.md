@@ -78,6 +78,8 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 
 **Leavers:** a person's final month ends on their last working day (included). Monthly pay is pro-rated to it the way a joining month is (`leftOn` on the row, and `workingDaysPaid` of `workingDays`), and their hours ledger ends there too, so the month counts as closed for them once they have left. Someone taken back later isn't paid, or counted short, for the days they were away between two periods: a month partly away is pro-rated, a month wholly away isn't listed.
 
+**Each row** also says the month's pay as a monthly amount (`monthlyPay`: the salary, or an hourly rate × the month's paid hours on their schedule) and, while a salaried month runs, what is earned so far (`earnedSoFar`, as My pay works it out) beside what the month comes to as things stand (`fullMonthEstimate`); once a month has closed, `earnedSoFar` is the total. The totals carry `earnedSoFar` too.
+
 **Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay (`hourlyRate`) is the salary ÷ the paid hours the person's schedule gives that month, so the salary stays fixed whatever the month's length; overtime is paid at the true hourly rate (`standardHourlyRate`): the salary ÷ a standard month's paid hours (weekly paid hours × 52 ÷ 12). See [employees.md](employees.md#pay).
 
 **Overtime** (`Overtime.cs`), day by day, using the person's schedule or the company week in force that day:

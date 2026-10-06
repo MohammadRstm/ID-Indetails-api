@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Employees;
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
@@ -325,9 +326,13 @@ public sealed class SalaryService(
 
     private bool InProgress(DateOnly month) => clock.CompanyToday >= month && clock.CompanyToday < month.AddMonths(1);
 
-    private static SalaryRowResponse ToRow(Computed c)
+    private SalaryRowResponse ToRow(Computed c)
     {
         var (user, r) = (c.User, c.Result);
+        var estimate = MyTime.EstimateOf(r, c.Input, InProgress(c.Input.Month));
+        var monthlyPay = r.Terms.Basis == PayBasis.Monthly
+            ? r.Terms.Amount
+            : Math.Round(r.HourlyRate * PayRules.PaidMinutesInMonth(c.Input.Month, c.Input.Calendar) / 60m, 2, MidpointRounding.AwayFromZero);
         return new SalaryRowResponse
         {
             UserId = user.Id,
@@ -361,6 +366,9 @@ public sealed class SalaryService(
             BasePay = r.BasePay,
             OvertimePay = r.OvertimePay,
             Total = r.Total,
+            MonthlyPay = monthlyPay,
+            EarnedSoFar = estimate.EarnedSoFar,
+            FullMonthEstimate = estimate.FullMonth,
         };
     }
 
@@ -400,6 +408,6 @@ public sealed class SalaryService(
     private static IReadOnlyList<SalaryTotalResponse> Totals(IEnumerable<SalaryRowResponse> rows)
         => rows.GroupBy(r => r.Currency)
             .OrderBy(g => g.Key)
-            .Select(g => new SalaryTotalResponse(g.Key, g.Count(), g.Sum(r => r.BasePay), g.Sum(r => r.OvertimePay), g.Sum(r => r.Deduction), g.Sum(r => r.Total)))
+            .Select(g => new SalaryTotalResponse(g.Key, g.Count(), g.Sum(r => r.BasePay), g.Sum(r => r.OvertimePay), g.Sum(r => r.Deduction), g.Sum(r => r.Total), g.Sum(r => r.EarnedSoFar)))
             .ToList();
 }
