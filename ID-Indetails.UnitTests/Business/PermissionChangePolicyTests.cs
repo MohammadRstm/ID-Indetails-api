@@ -29,6 +29,15 @@ public class PermissionChangePolicyTests
     }
 
     [Fact]
+    public void An_admin_hands_out_logging_hours_with_the_employee_role_without_logging_any_themselves()
+    {
+        PermissionChangePolicy.NotHeld(Delegate, [PermissionCodes.WorkEntryCreate, PermissionCodes.WorkEntryViewOwn, PermissionCodes.ClientView])
+            .ShouldBeEmpty();
+        PermissionChangePolicy.NotHeld(Delegate, [PermissionCodes.WorkEntryCreate, PermissionCodes.InvoiceVoid])
+            .ShouldBe([PermissionCodes.InvoiceVoid]);
+    }
+
+    [Fact]
     public void Nobody_can_change_a_super_admin()
         => Check(SuperAdmin, targetRole: RoleCodes.SuperAdmin, codes: [PermissionCodes.ClientView])!.Code
             .ShouldBe(ErrorCodes.PermissionsLocked);

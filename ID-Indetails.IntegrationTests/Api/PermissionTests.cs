@@ -201,7 +201,7 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        object Invite() => new { email = AuthTestSteps.NewEmail("super"), role = RoleCodes.SuperAdmin };
+        object Invite() => new { email = AuthTestSteps.NewEmail("super"), role = RoleCodes.SuperAdmin, pay = new { basis = "monthly", amount = 4000m, currency = "USD" } };
 
         await (await Client.PostJsonAsync("/api/invitations", Invite(), admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);

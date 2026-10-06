@@ -61,8 +61,10 @@ public static class PermissionChangePolicy
 
     /// <summary>
     /// The codes the actor doesn't hold and so may not hand out, by any route: a permission change, an invitation or a
-    /// role change. Super admins hold everything.
+    /// role change. Super admins hold everything. Logging one's own hours (<see cref="PermissionCatalog.OwnWork"/>) comes
+    /// with the employee role, which admins, who log none, still hand out.
     /// </summary>
     public static IReadOnlyList<string> NotHeld(UserAccess actor, IEnumerable<string> codes)
-        => actor.IsSuperAdmin ? [] : codes.Where(c => !actor.Has(c)).Distinct().Order(StringComparer.Ordinal).ToList();
+        => actor.IsSuperAdmin ? []
+            : codes.Where(c => !actor.Has(c) && !PermissionCatalog.OwnWork.Contains(c)).Distinct().Order(StringComparer.Ordinal).ToList();
 }
