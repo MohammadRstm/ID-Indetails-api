@@ -35,7 +35,7 @@ public sealed class SalaryService(
 
     public async Task<SalariesResponse> ListAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
-        var (month, computed, withoutPay) = await CalculateAsync(query.Month, query.Domain, query.Search, null, cancellationToken);
+        var (month, computed, withoutPay) = await CalculateAsync(query.Month, query.Domain, query.Search, query.Role, null, cancellationToken);
         var rows = computed.Select(c => ToRow(c)).ToList();
         var policy = (await inputs.PoliciesAsync(cancellationToken)).LastOrDefault(p => p.EffectiveFrom <= clock.CompanyToday);
 
@@ -69,8 +69,10 @@ public sealed class SalaryService(
         }
 
         var months = Enumerable.Range(1, 12).Select(m => new DateOnly(year, m, 1)).Where(m => m <= today).ToList();
-        var people = await payroll.PeopleAsync(
-            actor.VisibleDomains, EmployeeRules.CanSee(actor, null), query.Domain, query.Search?.Trim(), months[0], cancellationToken);
+        var people = (await payroll.PeopleAsync(
+                actor.VisibleDomains, EmployeeRules.CanSee(actor, null), query.Domain, query.Search?.Trim(), months[0], cancellationToken))
+            .Where(p => query.Role is null || p.RoleCode == query.Role)
+            .ToList();
         var paid = (await inputs.ForAsync(people, months, cancellationToken))
             .Select(p => (p.User, p.Input.Month, Result: SalaryCalculator.Calculate(p.Input)))
             .Where(p => p.Result is not null)
@@ -107,7 +109,7 @@ public sealed class SalaryService(
 
     public async Task<SalaryDetailResponse> GetAsync(long userId, SalaryMonthQuery query, CancellationToken cancellationToken = default)
     {
-        var (month, computed, _) = await CalculateAsync(query.Month, null, null, userId, cancellationToken);
+        var (month, computed, _) = await CalculateAsync(query.Month, null, null, null, userId, cancellationToken);
         var person = computed.SingleOrDefault() ?? throw new NotFoundException("No salary for this person in that month.");
         var (result, input) = (person.Result, person.Input);
         int MadeUp(Overtime.Split w) => result.Ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
@@ -222,7 +224,7 @@ public sealed class SalaryService(
 
     public async Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
-        var (month, computed, _) = await CalculateAsync(query.Month, query.Domain, query.Search, null, cancellationToken);
+        var (month, computed, _) = await CalculateAsync(query.Month, query.Domain, query.Search, query.Role, null, cancellationToken);
         var rows = computed.Select(c => ToRow(c)).ToList();
         var csv = new StringBuilder();
         var monthText = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
@@ -255,6 +257,7 @@ public sealed class SalaryService(
         string? monthText,
         string? domain,
         string? search,
+        string? role,
         long? onlyUserId,
         CancellationToken cancellationToken)
     {
@@ -271,6 +274,7 @@ public sealed class SalaryService(
         var people = (await payroll.PeopleAsync(
                 actor.VisibleDomains, EmployeeRules.CanSee(actor, null), domain, search?.Trim(), month, cancellationToken))
             .Where(p => onlyUserId is null || p.Id == onlyUserId)
+            .Where(p => role is null || p.RoleCode == role)
             .ToList();
 
         var (computed, withoutPay) = await ComputeAsync(month, people, cancellationToken);

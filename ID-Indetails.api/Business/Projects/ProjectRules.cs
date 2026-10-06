@@ -84,17 +84,18 @@ public static class ProjectRules
                 ErrorCodes.ValidationFailed, "initialPayment", "Only Execution projects take an initial payment when they are created.")
             : null;
 
+    /// <summary>A project is owned by an admin of its business or a super admin, never an employee.</summary>
     /// <param name="owner">Null when no such person exists; answered the same as a disallowed owner so ids can't be probed.</param>
     public static RuleDenial? CheckOwner(Person? owner, string projectDomain)
     {
         var allowed = owner is not null
             && owner.Status != UserStatus.Deactivated
-            && (owner.Role == RoleCodes.SuperAdmin || owner.Domain == projectDomain);
+            && (owner.Role == RoleCodes.SuperAdmin || (owner.Role == RoleCodes.Admin && owner.Domain == projectDomain));
 
         return allowed
             ? null
             : RuleDenial.BusinessRule(
-                ErrorCodes.OwnerNotAllowed, "The owner must be an active person of the project's domain, or a super admin.");
+                ErrorCodes.OwnerNotAllowed, "The owner must be an active admin of the project's business, or a super admin.");
     }
 
     public static RuleDenial? CheckMoneyEditable(bool isLocked)

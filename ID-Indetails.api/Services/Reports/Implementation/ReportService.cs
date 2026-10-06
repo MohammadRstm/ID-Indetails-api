@@ -145,17 +145,21 @@ public sealed class ReportService(
         var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         var today = clock.CompanyToday;
-        var (from, previousFrom, previousTo) = Periods(query.Period, today);
+        // a custom period may end before today, never after it
+        var end = query.Period == OverviewPeriod.Custom ? Min(query.To!.Value, today) : today;
+        var (from, previousFrom, previousTo) = query.Period == OverviewPeriod.Custom
+            ? (query.From!.Value, query.From.Value.AddDays(-(end.DayNumber - query.From.Value.DayNumber + 1)), query.From.Value.AddDays(-1))
+            : Periods(query.Period, today);
         var weekStart = WorkStats.WeekStartOf(today, calendar.FirstDayOfWeek);
         var since = Min(previousFrom, weekStart);
 
         var rows = await entries.RowsAsync(new WorkEntrySearch(From: clock.CompanyDayStartUtc(since)), cancellationToken);
         var worked = rows.Select(r => new WorkStats.Worked(r.Id, r.UserId, r.ProjectId, clock.ToCompanyTime(r.StartedAt), r.Minutes)).ToList();
-        var current = worked.Where(w => w.Day >= from && w.Day <= today).ToList();
+        var current = worked.Where(w => w.Day >= from && w.Day <= end).ToList();
         var previous = worked.Where(w => w.Day >= previousFrom && w.Day <= previousTo).ToList();
         var thisWeek = worked.Where(w => w.Day >= weekStart && w.Day <= today).ToList();
         var overtimeById = await overtime.OvertimeOfAsync(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= from), cancellationToken);
-        var weeks = (int)Math.Ceiling((today.DayNumber - from.DayNumber + 1) / 7.0);
+        var weeks = (int)Math.Ceiling((end.DayNumber - from.DayNumber + 1) / 7.0);
 
         var projects = await reports.DesignProjectsAsync(cancellationToken);
         var titles = projects.ToDictionary(p => p.Id, p => p.Title);
@@ -165,7 +169,7 @@ public sealed class ReportService(
         return new OverviewResponse(
             query.Period,
             from,
-            today,
+            end,
             previousFrom,
             previousTo,
             current.Sum(w => w.Minutes),
@@ -176,7 +180,7 @@ public sealed class ReportService(
             current.Count > 0 ? current.Sum(w => w.Minutes) / current.Count : 0,
             people.Count(p => logging.Contains(p.Id)),
             people.Count,
-            ToWeeks(WorkStats.Weekly(worked, today, weeks, calendar.FirstDayOfWeek)),
+            ToWeeks(WorkStats.Weekly(worked, end, weeks, calendar.FirstDayOfWeek)),
             ToWeeks(WorkStats.Weekly(worked, previousTo, weeks, calendar.FirstDayOfWeek)),
             await AttentionAsync(projects, people, logging, settings, today, cancellationToken),
             ProjectMinutes(current, titles).Take(OverviewProjects).ToList(),

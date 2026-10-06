@@ -1,5 +1,6 @@
 using FluentValidation;
 using ID_Indetails.api.DTO.Request.Reports;
+using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Validators.Reports;
 
@@ -22,6 +23,17 @@ public sealed class OverviewQueryValidator : AbstractValidator<OverviewQuery>
 {
     public OverviewQueryValidator()
     {
-        RuleFor(x => x.Period).IsInEnum().WithMessage("Period must be quarter, month or last30.");
+        RuleFor(x => x.Period).IsInEnum().WithMessage("Period must be quarter, month, last30 or custom.");
+        When(x => x.Period == OverviewPeriod.Custom, () =>
+        {
+            RuleFor(x => x.From).NotNull().WithMessage("Choose the first day of the period.");
+            RuleFor(x => x.To).NotNull().WithMessage("Choose the last day of the period.");
+            RuleFor(x => x.To).Must((q, to) => q.From is null || to is null || to >= q.From)
+                .WithMessage("The period must end on or after the day it starts.");
+            RuleFor(x => x.To).Must((q, to) => q.From is null || to is null || to.Value.DayNumber - q.From.Value.DayNumber < 3 * 366)
+                .WithMessage("A period covers at most three years.");
+        });
+        RuleFor(x => x.From).Null().When(x => x.Period != OverviewPeriod.Custom).WithMessage("Only a custom period takes dates.");
+        RuleFor(x => x.To).Null().When(x => x.Period != OverviewPeriod.Custom).WithMessage("Only a custom period takes dates.");
     }
 }

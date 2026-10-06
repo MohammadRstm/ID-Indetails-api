@@ -13,6 +13,9 @@ public sealed record SalaryListQuery
     /// <summary>Matches name and email.</summary>
     public string? Search { get; init; }
 
+    /// <summary>Only people with this role (super_admin, admin, employee); everyone when empty.</summary>
+    public string? Role { get; init; }
+
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 25;
@@ -28,6 +31,9 @@ public sealed record SalaryYearQuery
 
     /// <summary>Matches name and email.</summary>
     public string? Search { get; init; }
+
+    /// <summary>Only people with this role (super_admin, admin, employee); everyone when empty.</summary>
+    public string? Role { get; init; }
 }
 
 /// <summary>A page of the caller's hours ledger: 12 months, newest first.</summary>

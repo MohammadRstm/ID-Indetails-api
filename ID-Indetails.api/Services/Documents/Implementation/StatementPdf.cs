@@ -20,7 +20,7 @@ public static class StatementPdf
             [new Fact("Project", statement.ProjectTitle, statement.ProjectLocation)],
             [new Fact("Date", PdfLayout.Date(statement.Date))]);
 
-        PdfLayout.AddHeading(section, "Materials");
+        PdfLayout.AddHeading(section, "Material type");
         var split = statement.Mode == StatementMode.Detail && statement.IncludesEarlier;
         if (statement.Mode == StatementMode.Total)
         {

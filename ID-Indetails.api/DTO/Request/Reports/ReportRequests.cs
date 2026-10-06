@@ -23,4 +23,10 @@ public sealed record WorkReportQuery
 public sealed record OverviewQuery
 {
     public OverviewPeriod Period { get; init; } = OverviewPeriod.Quarter;
+
+    /// <summary>The first day of a custom period; only with <see cref="OverviewPeriod.Custom"/>.</summary>
+    public DateOnly? From { get; init; }
+
+    /// <summary>The last day of a custom period, no later than today; only with <see cref="OverviewPeriod.Custom"/>.</summary>
+    public DateOnly? To { get; init; }
 }

@@ -100,8 +100,9 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, secondAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        var (_, _, outsider) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, outsider) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
 
         var updated = await (await Client.PutJsonAsync($"/api/projects/{project.Id}", new
@@ -109,13 +110,16 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             title = "Renamed",
             tint = "#1F6FEB",
             targetDate = "2026-12-31",
-            ownerId = employee.User.Id,
+            ownerId = secondAdmin.User.Id,
         }, admin.AccessToken)).ReadAsync<ProjectResponse>();
         updated.Title.ShouldBe("Renamed");
-        updated.Owner.Id.ShouldBe(employee.User.Id);
+        updated.Owner.Id.ShouldBe(secondAdmin.User.Id);
         updated.TargetDate.ShouldBe(new DateOnly(2026, 12, 31));
 
         await (await Client.PutJsonAsync($"/api/projects/{project.Id}", new { title = "X", ownerId = outsider.User.Id }, admin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.OwnerNotAllowed);
+        // employees work on projects but don't own them
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}", new { title = "X", ownerId = employee.User.Id }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.OwnerNotAllowed);
         // a super admin may own it, but only someone who sees both domains (and so super admins) can pick one
         await (await Client.PutJsonAsync($"/api/projects/{project.Id}", new { title = "X", ownerId = superAdmin.User.Id }, admin.AccessToken))
