@@ -81,6 +81,10 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `hours_short` | From the first of a month, when Design employees finished the month before flagged in the hours ledger. Key `hours-short-YYYY-MM` | Holders of `salary:view` | — | `month`, `count`, `people` (the 5 most short: `id`, `name`, `shortMinutes`) |
 | `project_cost_high` | An active Design client project's cost has passed 85% of its payment (its revenue). Not for Execution, whose payment includes its materials at client price. Once per project: key `project-cost-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` (the cost as a whole percentage of the payment) |
 | `invoice_draft_waiting` | A draft invoice still unissued 3 days after it was created. Key `invoice-draft-{id}` | Holders of `financial:view` in its domain | the invoice | `projectTitle`, `createdOn` |
+| `invoice_sent_automatically` | A scheduled invoice went out on its day ([billing.md](billing.md), "Auto invoice"). Each one, no key | Whoever scheduled it | the invoice | `number`, `to` (null when what was on account paid it, so it wasn't emailed) |
+| `invoice_send_due` | A scheduled invoice with no address to email reached its day, so it isn't issued. Key `invoice-send-due:{id}:{sendOn}` | Whoever scheduled it, to send it themselves | the invoice | `sendOn` |
+| `invoice_send_failed` | A scheduled invoice's email failed; it is tried again on every run. Key `invoice-send-failed:{id}:{sendOn}` | Whoever scheduled it | the invoice | `sendTo` |
+| `invoice_reminder_due` | An overdue invoice is due a reminder, but there is no address to email it to. Key `invoice-reminder-due:{id}` | Holders of `invoice:send` in its domain, to chase it themselves | the invoice | `number` |
 
 The same timer also runs the domains' auto-archive (see [projects.md](projects.md), "Status"). Percentages (`usedPct`, `marginPct`) are money information, so they only go to holders of `financial:view`, and no notification carries an amount (N5).
 

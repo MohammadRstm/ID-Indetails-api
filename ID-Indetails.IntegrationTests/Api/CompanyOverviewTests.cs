@@ -130,6 +130,13 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var half = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-03-01&to=2026-03-16", superAdmin.AccessToken));
         half.SuperAdminSalaries.ShouldBe(1600m);
 
+        // the monthly chart takes them off a whole month at a time, after overhead
+        var year = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2026", superAdmin.AccessToken));
+        var marchMonth = year.Single(m => m.Month == new DateOnly(2026, 3, 1));
+        marchMonth.SuperAdminSalaries.ShouldBe(3100m);
+        marchMonth.NetProfit.ShouldBe(marchMonth.ProfitAfterOverhead - 3100m);
+        year.Single(m => m.Month == new DateOnly(2026, 1, 1)).SuperAdminSalaries.ShouldBe(3100m);
+
         // no project carries it: the businesses' costs don't move
         march.Domains.ShouldAllBe(d => d.Cost == 0m);
     }

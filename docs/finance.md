@@ -40,7 +40,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
   - invoiced counts issued, live invoices; outstanding is what is left to pay on them; drafts are counted apart;
   - received counts every live payment; payments on account count as received but never reduce outstanding;
   - an invoice is **overdue** while it is sent or partly paid and its due date is before today (company time zone);
-  - not yet invoiced = the client projects' revenue − invoiced, never below zero;
+  - not yet invoiced = the client projects' revenue − invoiced − what is held on account, never below zero (the project page also has `leftToInvoice` = revenue − invoiced, what a new invoice can still be for);
   - invoices are converted at the rate of the day they were issued (drafts at today's); one with no rate is left out and listed in `unconvertedInvoices`.
 - **Aging** puts every open invoice's balance in one of: not yet due, 1–30, 31–60, 61–90 and 90+ days past due.
 - **Unconverted costs** are dated like every other cost: the summary and the costs tab list those dated inside the period (every source, materials included), and each month of `monthly` lists its own. The projects totals are all-time, like the rest of that tab.
@@ -55,7 +55,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ## Response notes
 
-- **Summary:** `revenue` (received), `expectedRevenue`, `cost { labour, expenses, materials, groundLabour, total }`, `profit`, `margin`, `unconverted[]`, `unpricedLabourMinutes`, counts of client and internal projects, all-time client revenue and profit and internal cost, `stillToEarn` (client revenue not recognised yet), and `billing` (the position as of today, whatever the period).
+- **Summary:** `revenue` (received), `expectedRevenue`, `cost { labour, expenses, materials, groundLabour, total }`, `profit`, `margin`, `unconverted[]`, `unpricedLabourMinutes`, counts of client and internal projects, all-time client revenue and profit and internal cost, `stillToEarn` (for each client project, its agreed revenue minus what was received, never below zero, summed), and `billing` (the position as of today, whatever the period).
 - **Monthly:** each month's revenue, cost by source, profit and `unconverted[]` (costs of that month with no rate).
 - **Billing:** `position` (value, invoiced, issued count, received, payment count, on account, outstanding, overdue, overdue count, days overdue of the oldest, not yet invoiced, drafts), `aging[]`, `monthly[]` (invoiced by issue month, collected by the month received), `byClient[]` (clients with invoices or drafts, most outstanding first), `byMethod[]`, `openInvoices[]` (soonest due first) and `unconvertedInvoices[]`.
 - **Costs:** labour by person is the 10 people who cost most; the biggest expenses are the 12 largest in USD (unconverted ones last); `unconverted[]` lists the period's costs with no rate, by source and currency.

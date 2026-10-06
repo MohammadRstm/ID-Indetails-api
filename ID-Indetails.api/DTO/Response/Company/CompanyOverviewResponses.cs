@@ -61,8 +61,10 @@ public sealed record CompanyOverviewResponse(
     IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
 /// <summary>One month for both domains together, in USD.</summary>
+/// <param name="SuperAdminSalaries">The super admins' pay for the month, a company cost like overhead.</param>
 /// <param name="ProfitBeforeOverhead">Revenue − project costs.</param>
-/// <param name="ProfitAfterOverhead">After company overhead.</param>
+/// <param name="ProfitAfterOverhead">After company overhead only.</param>
+/// <param name="NetProfit">After company overhead and the super admins' salaries, as the overview's net profit.</param>
 public sealed record CompanyMonthResponse(
     DateOnly Month,
     decimal Revenue,
@@ -71,5 +73,7 @@ public sealed record CompanyMonthResponse(
     decimal Materials,
     decimal GroundLabour,
     decimal Overhead,
+    decimal SuperAdminSalaries,
     decimal ProfitBeforeOverhead,
-    decimal ProfitAfterOverhead);
+    decimal ProfitAfterOverhead,
+    decimal NetProfit);

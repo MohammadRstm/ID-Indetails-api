@@ -21,10 +21,9 @@ using ID_Indetails.api.Services.Payroll.Abstraction;
 namespace ID_Indetails.api.Services.Company.Implementation;
 
 /// <summary>
-/// Company totals from the shared finance calculator: revenue recognised and spread over the months of
-/// each project's costs (<c>Business/Finance/Recognition</c>), costs on their day, and overhead charged by
-/// calendar days and converted at the rate of its month. Super admins' salaries are company costs like overhead:
-/// they log no hours, so no project carries their pay.
+/// Company totals from the shared finance calculator: revenue is the money received, on the day it arrived; costs
+/// count on their day; overhead is charged by calendar days and converted at the rate of its month. Super admins'
+/// salaries are company costs like overhead: they log no hours, so no project carries their pay.
 /// </summary>
 public sealed class CompanyOverviewService(
     ICompanyFinanceRepository company,
@@ -105,7 +104,8 @@ public sealed class CompanyOverviewService(
         }).ToList();
 
         var (overhead, unconverted) = await OverheadAsync(shares.Select(s => (s.Month, s.Calendar)), data.Rates, cancellationToken);
-        var (salaries, unconvertedSalaries) = await SuperAdminSalariesAsync(shares, data.Rates, cancellationToken);
+        var (salariesByMonth, unconvertedSalaries) = await SuperAdminSalariesAsync(shares, data.Rates, cancellationToken);
+        var salaries = PeriodMoney.Round(salariesByMonth.Values.Sum());
         var gross = domains.Sum(d => d.Profit);
 
         return new CompanyOverviewResponse(
@@ -154,6 +154,7 @@ public sealed class CompanyOverviewService(
         var received = (await company.PaymentsAsync(cancellationToken)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();
 
         var costs = data.History.Values.SelectMany(h => h.Costs).ToList();
+        var (salaries, _) = await SuperAdminSalariesAsync(keys.Select(m => new Recognition.MonthShare(m, 1m)).ToList(), data.Rates, cancellationToken);
 
         var result = new List<CompanyMonthResponse>();
         foreach (var month in keys)
@@ -166,8 +167,11 @@ public sealed class CompanyOverviewService(
             var ground = PeriodMoney.Round(cost.GroundLabour);
             var monthRevenue = PeriodMoney.Received(received, month, month.AddMonths(1).AddDays(-1));
             var before = monthRevenue - labour - expenses - materials - ground;
+            var superAdminSalaries = PeriodMoney.Round(salaries.GetValueOrDefault(month));
 
-            result.Add(new CompanyMonthResponse(month, monthRevenue, labour, expenses, materials, ground, overhead, before, before - overhead));
+            result.Add(new CompanyMonthResponse(
+                month, monthRevenue, labour, expenses, materials, ground, overhead, superAdminSalaries,
+                before, before - overhead, before - overhead - superAdminSalaries));
         }
 
         return result;
@@ -218,16 +222,16 @@ public sealed class CompanyOverviewService(
     }
 
     /// <summary>
-    /// The super admins' pay over the period, as Salaries works it out for each month it touches, times the share of the
-    /// month's calendar days the period covers (like overhead), converted at the rate on the first of the month.
+    /// The super admins' pay in each month, as Salaries works it out, times the share of the month's calendar days the
+    /// period covers (like overhead), converted at the rate on the first of the month.
     /// </summary>
-    private async Task<(decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted)> SuperAdminSalariesAsync(
+    private async Task<(IReadOnlyDictionary<DateOnly, decimal> Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted)> SuperAdminSalariesAsync(
         IReadOnlyList<Recognition.MonthShare> shares,
         ExchangeRateTable rates,
         CancellationToken cancellationToken)
     {
         var people = await payroll.PeopleAsync([], includeSuperAdmins: true, domain: null, search: null, shares[0].Month, cancellationToken);
-        var usd = 0m;
+        var usd = new Dictionary<DateOnly, decimal>();
         var unconverted = new Dictionary<string, decimal>();
 
         foreach (var month in await payrollInputs.ForAsync(people, shares.Select(s => s.Month).ToList(), cancellationToken))
@@ -240,7 +244,7 @@ public sealed class CompanyOverviewService(
             var amount = pay.Total * shares.Single(s => s.Month == month.Input.Month).Calendar;
             if (rates.ToUsd(amount, pay.Terms.Currency, month.Input.Month) is { } converted)
             {
-                usd += converted;
+                usd[month.Input.Month] = usd.GetValueOrDefault(month.Input.Month) + converted;
             }
             else
             {
@@ -248,7 +252,7 @@ public sealed class CompanyOverviewService(
             }
         }
 
-        return (PeriodMoney.Round(usd), unconverted.Select(u => new CurrencyTotalResponse(u.Key, PeriodMoney.Round(u.Value))).ToList());
+        return (usd, unconverted.Select(u => new CurrencyTotalResponse(u.Key, PeriodMoney.Round(u.Value))).ToList());
     }
 
     private static IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices(IEnumerable<IssuedInvoiceRow> invoices)

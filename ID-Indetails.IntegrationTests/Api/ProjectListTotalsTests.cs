@@ -60,6 +60,9 @@ public class ProjectListTotalsTests(ApiFactory api) : IClassFixture<ApiFactory>
         csv.ShouldContain("Project,Client,Status,Billing,Revenue,Currency,Hours,Labour cost,Expenses,Materials,Ground labour,Total cost,Profit,Margin %");
         csv.ShouldContain("Studio tooling,Internal,active,Internal,0.00,USD,0.00,0.00,200.00,0.00,0.00,200.00,");
         csv.ShouldContain("Period,2026-01-01 to 2026-06-30");
+        // the period's revenue is the money received in it, and says so
+        csv.ShouldContain("Revenue received,");
+        csv.ShouldNotContain("Revenue recognised");
         await (await Client.GetAsync("/api/finance/design/projects/export", designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 }
