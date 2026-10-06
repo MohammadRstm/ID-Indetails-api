@@ -64,7 +64,6 @@ public sealed record PayResponse(
     PayBasis Basis,
     decimal Amount,
     string Currency,
-    decimal HourlyCostRate,
     string? Note,
     DateTime CreatedAt,
     long? CreatedById);

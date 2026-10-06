@@ -102,7 +102,8 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 - `effectiveFrom` defaults to today in the company time zone and can never be in the future.
 - It must be **after the latest existing change**. The history is only ever added to at the end, so nothing is ever rewritten or silently cancelled. A mistake is corrected with a new, later change.
 - A change dated in the past still re-prices work done since that day, because salaries and labour costs are always calculated from the history.
-- For monthly pay, the internal hourly cost is salary ÷ 173.33 (a 40-hour week; the break is paid). It is stored with the row so past project costs never change.
+- **A salary has no fixed hourly rate.** An hour of it in a month is the salary ÷ the paid hours (break included) the person's schedule gives that month (`PayRules.HourlyRate`): 3,000 a month on Monday–Friday, 9 to 5, is 18.75 an hour in February 2026 (160 paid hours) and 16.30 in July (184). The salary stays the same every month; this rate prices deductions and project labour. Overtime is paid at the **true hourly rate** instead, the same every month: the salary ÷ a standard month's paid hours on their schedule (weekly paid hours × 52 ÷ 12, 173.33 on a 40-hour week; `PayRules.StandardHourlyRate`). `hourly_cost_rate` only holds hourly pay's rate now (0 on new monthly rows).
+- **Admins and super admins are paid a fixed monthly salary** (`PayRules.HasFixedSalary`, by role). Hourly pay is refused for them (`400 fixed_salary_paid_monthly`), on a pay change or an invitation, and inviting one needs their salary (`400 validation_failed` on `pay`). Changing someone paid by the hour into an admin or super admin is refused until they have a monthly salary (`422 fixed_salary_needs_monthly_pay`), on a role change or an automatic one through permissions.
 
 ## Teams
 

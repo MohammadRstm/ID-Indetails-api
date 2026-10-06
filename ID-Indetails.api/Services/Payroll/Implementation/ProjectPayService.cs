@@ -138,7 +138,7 @@ public sealed class ProjectPayService(
         var userIds = users.Keys.ToList();
         periodWork = periodWork.Where(e => users.ContainsKey(e.UserId)).ToList();
         var pay = (await payroll.PayHistoryAsync(userIds, cancellationToken)).ToLookup(p => p.UserId, p =>
-            new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.HourlyCostRate));
+            new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency));
         var personal = (await schedules.SchedulesAsync(userIds, cancellationToken)).ToLookup(s => s.UserId);
         var policies = (await workingTime.GetPoliciesAsync(cancellationToken))
             .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
@@ -167,7 +167,7 @@ public sealed class ProjectPayService(
                     calendar);
                 if (!PayrollInputs.PaidForHours(user))
                 {
-                    // a super admin earns no overtime: all their time is priced as normal hours
+                    // a fixed salary earns no overtime: any time logged before admins stopped logging is priced as normal hours
                     work = work.Select(w => w with { Overtime = 0 }).ToList();
                 }
 
@@ -198,7 +198,7 @@ public sealed class ProjectPayService(
                     e.ProjectId,
                     e.UserId,
                     split.Day,
-                    ProjectPay.Of(split, madeUp, terms, calendar.PolicyOn(split.Day).OvertimeMultiplier),
+                    ProjectPay.Of(split, madeUp, terms, calendar),
                     terms?.Basis,
                     terms?.Basis == PayBasis.Monthly ? terms.Amount : null);
             })

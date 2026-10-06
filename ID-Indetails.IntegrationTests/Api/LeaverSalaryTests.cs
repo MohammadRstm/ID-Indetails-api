@@ -108,13 +108,13 @@ public class LeaverSalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }
 
-    /// <summary>A Design employee who joined on 1 January 2026 with 1,733.30 a month (10 an hour).</summary>
+    /// <summary>A Design employee who joined on 1 January 2026 with 1,760 a month (10 an hour in June).</summary>
     private async Task<AuthResponse> SalariedAsync(AuthResponse superAdmin)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
-                new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+                new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         return person;
     }

@@ -22,14 +22,14 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
             .ToListAsync(cancellationToken);
 
     /// <summary>
-    /// What an hour of each person's time costs a project. A super admin's costs nothing: their salary is a company
+    /// The pay that prices each person's time on projects. A super admin's costs nothing: their salary is a company
     /// cost, counted once on the company overview, and pricing their hours would also give it away.
     /// </summary>
-    public async Task<IReadOnlyList<ProjectFinance.PayRate>> PayRatesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ProjectFinance.PayRecord>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
         => await db.UserPayHistory
             .AsNoTracking()
             .Where(p => userIds.Contains(p.UserId))
-            .Select(p => new ProjectFinance.PayRate(p.UserId, p.EffectiveFrom, p.User.RoleCode == RoleCodes.SuperAdmin ? 0m : p.HourlyCostRate, p.Currency))
+            .Select(p => new ProjectFinance.PayRecord(p.UserId, p.EffectiveFrom, p.Basis, p.User.RoleCode == RoleCodes.SuperAdmin ? 0m : p.Amount, p.Currency))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)

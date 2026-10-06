@@ -223,7 +223,7 @@ public sealed class WorkInsightsService(
             ? await LabourPricer.LoadAsync(financeSources, projectFinance, people.SelectMany(p => rows[p.Id]).ToList(), clock, cancellationToken)
             : null;
         var rates = money
-            ? (await financeSources.PayRatesAsync(people.Select(p => p.Id).ToList(), cancellationToken))
+            ? (await projectFinance.PayRatesAsync(people.Select(p => p.Id).ToList(), cancellationToken))
                 .GroupBy(r => r.UserId)
                 .ToDictionary(g => g.Key, g => ProjectFinance.RateOn(g.OrderBy(r => r.EffectiveFrom).ToList(), today))
             : new Dictionary<long, ProjectFinance.PayRate>();
@@ -301,6 +301,8 @@ public sealed class WorkInsightsService(
             .Take(CostProjects)
             .ToList();
         var cards = await entries.ProjectCardsAsync(byProject.Select(x => x.ProjectId).ToList(), cancellationToken);
+        var rates = await projectFinance.PayRatesAsync([userId], cancellationToken);
+        var rate = rates.Count > 0 ? ProjectFinance.RateOn(rates, clock.CompanyToday) : null;
 
         return new EmployeeLabourCostResponse(
             userId,
@@ -310,7 +312,8 @@ public sealed class WorkInsightsService(
             byProject.Select(x => cards.TryGetValue(x.ProjectId, out var card)
                     ? new ProjectLabourCostResponse(x.ProjectId, card.Title, card.Icon, card.Tint, x.Cost)
                     : new ProjectLabourCostResponse(x.ProjectId, string.Empty, null, null, x.Cost))
-                .ToList());
+                .ToList(),
+            rate is null ? null : new CurrencyAmountResponse(rate.Currency, rate.HourlyCost));
     }
 
     public async Task<IReadOnlyList<TimelineEntryResponse>> TimelineEntriesAsync(

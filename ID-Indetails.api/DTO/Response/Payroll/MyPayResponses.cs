@@ -113,7 +113,11 @@ public sealed record MySalaryResponse
 
     public required string Currency { get; init; }
 
+    /// <summary>What an hour is worth this month (a salary ÷ the month's paid hours): it prices deductions.</summary>
     public required decimal HourlyRate { get; init; }
+
+    /// <summary>The true hourly rate, the same every month (a salary ÷ a standard month's paid hours): overtime is paid at it × the multiplier.</summary>
+    public required decimal StandardHourlyRate { get; init; }
 
     public required decimal OvertimeMultiplier { get; init; }
 

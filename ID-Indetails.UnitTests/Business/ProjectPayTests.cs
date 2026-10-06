@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Payroll;
+using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Enums;
 using Shouldly;
 
@@ -6,7 +7,9 @@ namespace ID_Indetails.UnitTests.Business;
 
 public class ProjectPayTests
 {
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1733.30m, "USD", 10m);
+    // 1,760 a month is 10 an hour in June 2026 (22 days of 8 paid hours); overtime at 1.5x.
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD");
+    private static readonly PersonCalendar Calendar = new([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1.5m)], []);
 
     [Fact]
     public void Periods_follow_the_company_week_start_and_calendar_months_and_quarters()
@@ -24,17 +27,27 @@ public class ProjectPayTests
     {
         var work = new Overtime.Split(1, new DateOnly(2026, 6, 1), Minutes: 600, Overtime: 180);
 
-        var pay = ProjectPay.Of(work, madeUp: 60, Monthly, overtimeMultiplier: 1.5m);
+        var pay = ProjectPay.Of(work, madeUp: 60, Monthly, Calendar);
 
         pay.Normal.ShouldBe(480);
         pay.Overtime.ShouldBe(120);
-        pay.Pay.ShouldBe(80m + 30m); // 8h at 10, 2h at 10 x 1.5
+        pay.HourlyRate.ShouldBe(10m);
+        pay.Pay.ShouldBe(80m + 30.4614m); // 8h at June's 10, 2h at the true rate 10.1538 x 1.5
+    }
+
+    [Fact]
+    public void A_salary_hour_is_priced_at_its_month_rate()
+    {
+        // July 2026 has 184 paid hours: 1,760 / 184.
+        var pay = ProjectPay.Of(new Overtime.Split(1, new DateOnly(2026, 7, 1), 60, 0), 0, Monthly, Calendar);
+
+        pay.HourlyRate.ShouldBe(9.5652m);
     }
 
     [Fact]
     public void Time_of_someone_without_pay_is_counted_but_not_priced()
     {
-        var pay = ProjectPay.Of(new Overtime.Split(1, new DateOnly(2026, 6, 1), 60, 0), 0, null, 1m);
+        var pay = ProjectPay.Of(new Overtime.Split(1, new DateOnly(2026, 6, 1), 60, 0), 0, null, Calendar);
 
         pay.Priced.ShouldBeFalse();
         pay.Pay.ShouldBe(0m);

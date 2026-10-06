@@ -48,7 +48,7 @@ public class MyTimeTests
         days.Select(d => d.Date.Day).ShouldBe([3, 2]);
     }
 
-    /// <summary>1,733.30 a month (10 an hour), worked 9 to 4 on the given days of September, as seen on <paramref name="today"/>.</summary>
+    /// <summary>1,760 a month (10 an hour: September has 176 paid hours), worked 9 to 4 on the given days of September, as seen on <paramref name="today"/>.</summary>
     private static (SalaryCalculator.Result Pay, SalaryCalculator.Input Input) SeptemberPay(DateOnly today, bool ledgerApplies, params int[] worked)
     {
         var input = new SalaryCalculator.Input(
@@ -56,7 +56,7 @@ public class MyTimeTests
             today,
             new DateOnly(2025, 1, 1),
             ledgerApplies,
-            [new SalaryCalculator.PayTerms(new DateOnly(2025, 1, 1), PayBasis.Monthly, 1733.30m, "USD", 10m)],
+            [new SalaryCalculator.PayTerms(new DateOnly(2025, 1, 1), PayBasis.Monthly, 1760m, "USD")],
             Calendar,
             worked.Select((day, i) => Work(i + 1, day, 540, 420)).ToList(),
             []);
@@ -71,7 +71,7 @@ public class MyTimeTests
         var (pay, input) = SeptemberPay(new DateOnly(2026, 9, 15), ledgerApplies: true, 1, 2, 3, 4, 7, 8, 9, 10);
 
         MyTime.EstimateOf(pay, input, inProgress: true)
-            .ShouldBe(new MyTime.Estimate(EarnedSoFar: 787.86m, FullMonth: 1573.30m, WouldLose: 160m));
+            .ShouldBe(new MyTime.Estimate(EarnedSoFar: 800m, FullMonth: 1600m, WouldLose: 160m));
         MyTime.EstimateOf(pay, input, inProgress: false).ShouldBe(new MyTime.Estimate(pay.Total, null, 0));
     }
 
@@ -80,7 +80,7 @@ public class MyTimeTests
     {
         // 10 of September's 22 working days have passed by the 15th; nothing is owed on the 1st.
         var (pay, input) = SeptemberPay(new DateOnly(2026, 9, 15), ledgerApplies: false);
-        MyTime.EstimateOf(pay, input, inProgress: true).ShouldBe(new MyTime.Estimate(EarnedSoFar: 787.86m, FullMonth: 1733.30m, WouldLose: 0));
+        MyTime.EstimateOf(pay, input, inProgress: true).ShouldBe(new MyTime.Estimate(EarnedSoFar: 800m, FullMonth: 1760m, WouldLose: 0));
 
         var (firstDay, firstInput) = SeptemberPay(September, ledgerApplies: false);
         MyTime.EstimateOf(firstDay, firstInput, inProgress: true).EarnedSoFar.ShouldBe(0m);

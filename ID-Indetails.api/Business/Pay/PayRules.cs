@@ -1,4 +1,6 @@
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Payroll;
+using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 
@@ -6,23 +8,61 @@ namespace ID_Indetails.api.Business.Pay;
 
 public static class PayRules
 {
-    /// <summary>Average working hours in a month (40 h × 52 weeks ÷ 12), as used by the prototype.</summary>
-    public const decimal HoursPerMonth = 173.33m;
+    /// <summary>A standard month: 52 weeks ÷ 12.</summary>
+    private const decimal WeeksPerMonth = 52m / 12m;
 
     /// <summary>
-    /// Internal hourly cost used to cost project labour: the rate itself for hourly pay,
-    /// salary ÷ <see cref="HoursPerMonth"/> for monthly pay (4 decimal places).
+    /// What an hour of pay is worth in the month containing <paramref name="day"/>: hourly pay's own rate, or a monthly
+    /// salary ÷ the paid hours (break included) the person's schedule gives that month. The salary is fixed, so a month
+    /// with more working days makes each hour worth less, and a whole working day is always worth that day's share of
+    /// the salary. It prices deductions and project labour; overtime uses <see cref="StandardHourlyRate"/>. 4 decimal places.
     /// </summary>
-    public static decimal HourlyCostRate(PayBasis basis, decimal amount) => basis switch
+    public static decimal HourlyRate(PayBasis basis, decimal amount, DateOnly day, PersonCalendar calendar)
     {
-        PayBasis.Hourly => amount,
-        PayBasis.Monthly => Math.Round(amount / HoursPerMonth, 4, MidpointRounding.AwayFromZero),
-        _ => throw new ArgumentOutOfRangeException(nameof(basis), basis, "Unknown pay basis."),
-    };
+        if (basis == PayBasis.Hourly)
+        {
+            return amount;
+        }
 
-    /// <summary>Super admins are paid a monthly salary: their pay never depends on hours, so it can't be hourly.</summary>
+        var minutes = PaidMinutesInMonth(day, calendar);
+        return minutes > 0 ? Math.Round(amount * 60 / minutes, 4, MidpointRounding.AwayFromZero) : 0;
+    }
+
+    /// <summary>
+    /// The true hourly rate overtime is paid at, whatever the month: hourly pay's own rate, or a monthly salary ÷ the
+    /// paid hours of a standard month on the schedule in force that day (its weekly paid hours × 52 ÷ 12: 173.33 on a
+    /// 40-hour week). So a month with more working days never lowers what an hour of overtime earns. 4 decimal places.
+    /// </summary>
+    public static decimal StandardHourlyRate(PayBasis basis, decimal amount, DateOnly day, PersonCalendar calendar)
+    {
+        if (basis == PayBasis.Hourly)
+        {
+            return amount;
+        }
+
+        var minutes = calendar.PaidMinutesPerWeek(day) * WeeksPerMonth;
+        return minutes > 0 ? Math.Round(amount * 60 / minutes, 4, MidpointRounding.AwayFromZero) : 0;
+    }
+
+    /// <summary>The paid minutes, break included, of every working day in the month containing <paramref name="day"/>.</summary>
+    public static int PaidMinutesInMonth(DateOnly day, PersonCalendar calendar)
+    {
+        var month = new DateOnly(day.Year, day.Month, 1);
+        return HoursLedger.Days(month, month.AddMonths(1)).Sum(d => calendar.HoursOn(d)?.Span ?? 0);
+    }
+
+    /// <summary>Admins and super admins are paid a fixed monthly salary: they log no hours, and hours never change their pay.</summary>
+    public static bool HasFixedSalary(string role) => role != RoleCodes.Employee;
+
+    /// <summary>A fixed salary is monthly, so it can't be hourly.</summary>
     public static RuleDenial? CheckBasis(string role, PayBasis basis)
-        => role == RoleCodes.SuperAdmin && basis == PayBasis.Hourly
-            ? RuleDenial.Invalid(ErrorCodes.SuperAdminPaidMonthly, "basis", "A super admin is paid a monthly salary: their pay doesn't depend on hours.")
+        => HasFixedSalary(role) && basis == PayBasis.Hourly
+            ? RuleDenial.Invalid(ErrorCodes.FixedSalaryPaidMonthly, "basis", "Admins and super admins are paid a monthly salary: their pay doesn't depend on hours.")
+            : null;
+
+    /// <summary>Someone paid by the hour must be given a monthly salary before becoming an admin or super admin.</summary>
+    public static RuleDenial? CheckRoleChange(string newRole, PayBasis? basisInForce)
+        => HasFixedSalary(newRole) && basisInForce == PayBasis.Hourly
+            ? RuleDenial.BusinessRule(ErrorCodes.FixedSalaryNeedsMonthlyPay, "Admins and super admins are paid a monthly salary: set their monthly salary before changing their role.")
             : null;
 }

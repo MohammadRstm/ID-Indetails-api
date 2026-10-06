@@ -1,3 +1,5 @@
+using ID_Indetails.api.Business.WorkingTime;
+
 namespace ID_Indetails.api.Business.Payroll;
 
 public enum ProjectPayUnit
@@ -8,17 +10,19 @@ public enum ProjectPayUnit
 }
 
 /// <summary>
-/// What a Design project paid its people. Each work entry is paid at the person's hourly rate in force
-/// that day (salary ÷ 173.33 for monthly pay): its hours within schedule, plus any overtime that made up
-/// a shortfall, at the plain rate, and the rest of its overtime at the multiplier. Paid breaks and salary
-/// deductions are left out: they aren't worked on any project.
+/// What a Design project paid its people. Each work entry is paid as Salaries pays it: its hours within schedule,
+/// plus any overtime that made up a shortfall, at the person's hourly rate in force that day (a monthly salary's rate
+/// in that month, see <see cref="Pay.PayRules.HourlyRate"/>), and the rest of its overtime at the true hourly rate
+/// (<see cref="Pay.PayRules.StandardHourlyRate"/>) × the multiplier. Paid breaks and salary deductions are left out:
+/// they aren't worked on any project.
 /// </summary>
 public static class ProjectPay
 {
+    /// <param name="HourlyRate">The rate of its hours within schedule.</param>
     /// <param name="Priced">False when the person had no pay record that day (paid 0).</param>
     public sealed record EntryPay(int Normal, int Overtime, decimal HourlyRate, string Currency, decimal Pay, bool Priced);
 
-    public static EntryPay Of(Overtime.Split work, int madeUp, SalaryCalculator.PayTerms? terms, decimal overtimeMultiplier)
+    public static EntryPay Of(Overtime.Split work, int madeUp, SalaryCalculator.PayTerms? terms, PersonCalendar calendar)
     {
         var normal = work.Normal + madeUp;
         var overtime = work.Overtime - madeUp;
@@ -27,8 +31,10 @@ public static class ProjectPay
             return new EntryPay(normal, overtime, 0, "USD", 0, false);
         }
 
-        var pay = normal / 60m * terms.HourlyRate + overtime / 60m * terms.HourlyRate * overtimeMultiplier;
-        return new EntryPay(normal, overtime, terms.HourlyRate, terms.Currency, pay, true);
+        var rate = terms.HourlyRateOn(work.Day, calendar);
+        var overtimeRate = terms.StandardHourlyRateOn(work.Day, calendar) * calendar.PolicyOn(work.Day).OvertimeMultiplier;
+        var pay = normal / 60m * rate + overtime / 60m * overtimeRate;
+        return new EntryPay(normal, overtime, rate, terms.Currency, pay, true);
     }
 
     /// <summary>The week, month or quarter containing <paramref name="day"/>: first day, and the first day after it.</summary>

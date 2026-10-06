@@ -20,9 +20,9 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, ben) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        // 40 an hour on a monthly salary (6,933.20 ÷ 173.33).
+        // 40 an hour on a monthly salary in February 2026 (6,400 ÷ 160 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",
-            new { basis = "monthly", amount = 6933.20m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { basis = "monthly", amount = 6400m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var brand = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);

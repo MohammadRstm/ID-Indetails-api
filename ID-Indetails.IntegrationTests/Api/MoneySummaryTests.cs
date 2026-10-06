@@ -36,9 +36,9 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         await Projects.SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
         (await Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_500m, effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        // 1,733.30 a month is 10 an hour (÷ 173.33).
+        // 1,600 a month is 10 an hour in February 2026 (160 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);

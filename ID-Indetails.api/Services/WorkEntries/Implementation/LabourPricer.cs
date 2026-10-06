@@ -39,7 +39,7 @@ internal sealed class LabourPricer
         IClock clock,
         CancellationToken cancellationToken)
     {
-        var payRates = await sources.PayRatesAsync(rows.Select(r => r.UserId).Distinct().ToList(), cancellationToken);
+        var payRates = await finance.PayRatesAsync(rows.Select(r => r.UserId).Distinct().ToList(), cancellationToken);
         var breaks = await finance.PaidBreaksAsync(
             rows.Select(r => new WorkEntryRow(r.ProjectId, r.UserId, r.StartedAt, r.Minutes)).ToList(), payRates, cancellationToken);
 

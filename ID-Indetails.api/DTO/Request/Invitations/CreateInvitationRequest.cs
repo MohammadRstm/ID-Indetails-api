@@ -17,6 +17,7 @@ public sealed record CreateInvitationRequest
 
     public string? Position { get; init; }
 
+    /// <summary>Required for admins and super admins, who are paid a fixed monthly salary; optional for employees.</summary>
     public InvitationPayRequest? Pay { get; init; }
 }
 

@@ -35,13 +35,16 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         return await response.ReadAsync<T>();
     }
 
-    /// <summary>Someone who joined on 1 January 2026 with 1,733.30 a month (10 an hour).</summary>
+    /// <summary>
+    /// Someone who joined on 1 January 2026 with 1,760 a month: 10 an hour in June (176 paid hours), and a true hourly
+    /// rate of 10.1538 for overtime (1,760 ÷ 173.33).
+    /// </summary>
     private async Task<AuthResponse> SalariedAsync(AuthResponse superAdmin, string domain)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, domain);
         await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
-            new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         return person;
     }
@@ -70,7 +73,8 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         short_.Salary.Flagged.ShouldBeTrue();
         short_.MissedDays.Count.ShouldBe(21);
         short_.DeductionMinutes.ShouldBe(8760 + 20 * 60);
-        short_.Salary.BasePay.ShouldBe(73.30m);
+        short_.Salary.HourlyRate.ShouldBe(10m);
+        short_.Salary.BasePay.ShouldBe(100m); // 1,760 less 166h at 10
         short_.OvertimeWork.ShouldHaveSingleItem().MadeUpMinutes.ShouldBe(60);
         short_.WorkingDays.Count.ShouldBe(22);
         short_.WorkingDays.ShouldAllBe(d => d.RequiredMinutes == 420 && d.Date.DayOfWeek != DayOfWeek.Saturday && d.Date.DayOfWeek != DayOfWeek.Sunday);
@@ -89,7 +93,8 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var list = await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?month=2026-06&search={designer.User.Email}", superAdmin.AccessToken));
         list.Summary.ExpectedMinutes.ShouldBe(22 * 420);
 
-        // Excusing the other days clears the shortfall; the extra hour is then paid as overtime at 1x (the seeded multiplier).
+        // Excusing the other days clears the shortfall; the extra hour is then paid as overtime at the true hourly rate,
+        // 1x (the seeded multiplier).
         var otherDays = Enumerable.Range(2, 29).Select(d => $"2026-06-{d:00}").ToArray();
         var excuse = await OkAsync<HourExcuseResponse>(Client.PostJsonAsync($"/api/employees/{designer.User.Id}/hour-excuses",
             new { month = "2026-06", kind = "days", days = otherDays }, superAdmin.AccessToken));
@@ -101,8 +106,9 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var excused = await OkAsync<SalaryDetailResponse>(Client.GetAsync(url, superAdmin.AccessToken));
         excused.Salary.ShortMinutes.ShouldBe(0);
-        excused.Salary.BasePay.ShouldBe(1733.30m);
-        excused.Salary.OvertimePay.ShouldBe(10m);
+        excused.Salary.BasePay.ShouldBe(1760m);
+        excused.Salary.StandardHourlyRate.ShouldBe(10.1538m);
+        excused.Salary.OvertimePay.ShouldBe(10.15m);
         excused.Excuses.ShouldHaveSingleItem();
         excused.Projects.ShouldHaveSingleItem().OvertimeMinutes.ShouldBe(60);
         excused.Projects[0].MadeUpMinutes.ShouldBe(0);
@@ -124,7 +130,7 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         row.TracksHours.ShouldBeFalse();
         row.ExpectedMinutes.ShouldBeNull();
         list.Summary.ExpectedMinutes.ShouldBeNull();
-        row.Total.ShouldBe(1733.30m);
+        row.Total.ShouldBe(1760m);
         list.InProgress.ShouldBeFalse();
         (await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{siteWorker.User.Id}?month=2026-06", superAdmin.AccessToken)))
             .Projects.ShouldBeEmpty();
@@ -135,25 +141,30 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_super_admin_is_paid_their_salary_whatever_hours_they_log()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null);
+        var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null,
+            new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" });
         await _steps.SetJoinedOnAsync(partner.User.Id, "2026-01-01");
 
-        // a super admin's pay can't depend on hours, at a pay change or an invitation
+        // a fixed salary can't depend on hours, at a pay change or an invitation, and can't be left out of one
         await (await Client.PostJsonAsync($"/api/employees/{partner.User.Id}/pay",
-                new { basis = "hourly", amount = 20m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.SuperAdminPaidMonthly);
+                new { basis = "hourly", amount = 20m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.FixedSalaryPaidMonthly);
         await (await Client.PostJsonAsync("/api/invitations", new
             {
                 email = $"super-{Guid.NewGuid():N}@example.test",
                 role = RoleCodes.SuperAdmin,
                 pay = new { basis = "hourly", amount = 20m, currency = "USD" },
             }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.SuperAdminPaidMonthly);
-        (await Client.PostJsonAsync($"/api/employees/{partner.User.Id}/pay",
-                new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
-            .IsSuccessStatusCode.ShouldBeTrue();
+            .ShouldFailWithAsync(400, ErrorCodes.FixedSalaryPaidMonthly);
+        await (await Client.PostJsonAsync("/api/invitations", new
+            {
+                email = $"admin-{Guid.NewGuid():N}@example.test",
+                role = RoleCodes.Admin,
+                domainCode = DomainCodes.Design,
+            }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
 
-        // Saturday 6 June, a day off: overtime for anyone else
+        // Saturday 6 June, a day off: overtime for anyone else (written straight to the database: super admins can't log hours)
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         await ExecuteAsync(
             "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
@@ -167,7 +178,7 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         row.ExpectedMinutes.ShouldBeNull();
         row.OvertimeMinutes.ShouldBe(0);
         row.OvertimePay.ShouldBe(0m);
-        row.Total.ShouldBe(1733.30m);
+        row.Total.ShouldBe(1760m);
         var detail = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{partner.User.Id}?month=2026-06", superAdmin.AccessToken));
         detail.PaidBreakPay.ShouldBe(0m);
         detail.Projects.ShouldBeEmpty();
@@ -185,7 +196,40 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var detail = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{siteWorker.User.Id}?month=2026-06", superAdmin.AccessToken));
         detail.DeductionMinutes.ShouldBe(480);
         detail.Salary.Deduction.ShouldBe(80m);
-        detail.Salary.Total.ShouldBe(1653.30m);
+        detail.Salary.Total.ShouldBe(1680m);
+    }
+
+    [Fact]
+    public async Task The_year_shows_what_each_person_is_owed_month_by_month()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var siteWorker = await SalariedAsync(superAdmin, DomainCodes.Execution);
+
+        var year = await OkAsync<SalaryYearResponse>(Client.GetAsync($"/api/company/salaries/year?year=2026&search={siteWorker.User.Email}", superAdmin.AccessToken));
+
+        year.Months[0].ShouldBe(new DateOnly(2026, 1, 1));
+        var row = year.Rows.ShouldHaveSingleItem();
+        row.UserId.ShouldBe(siteWorker.User.Id);
+        var june = row.Months.Single(m => m.Month == new DateOnly(2026, 6, 1));
+        june.Basis.ShouldBe(PayBasis.Monthly);
+        june.Amount.ShouldBe(1760m);
+        june.Total.ShouldBe(1760m);
+        year.Totals.Single(t => t.Month == new DateOnly(2026, 6, 1)).Total.ShouldBe(1760m);
+
+        await (await Client.GetAsync("/api/company/salaries/year?year=2099", superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.SalaryMonthInFuture);
+    }
+
+    [Fact]
+    public async Task People_with_no_pay_set_are_listed_apart()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, unpaid) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+
+        var list = await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?search={unpaid.User.Email}", superAdmin.AccessToken));
+
+        list.Rows.Items.ShouldBeEmpty();
+        list.WithoutPay.ShouldHaveSingleItem().UserId.ShouldBe(unpaid.User.Id);
     }
 
     [Fact]
@@ -202,7 +246,7 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         csv.ShouldContain("Month,Employee,Email");
         csv.ShouldContain(siteWorker.User.Email);
         csv.ShouldContain("TOTAL");
-        csv.ShouldContain("1733.30");
+        csv.ShouldContain("1760.00");
     }
 
     [Fact]

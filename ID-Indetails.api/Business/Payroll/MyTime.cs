@@ -101,7 +101,7 @@ public static class MyTime
         {
             var fullMonth = ExpectedFullMonth(input.Month, input.JoinedOn, input.Calendar);
             share = fullMonth > 0 ? Math.Min(1m, (decimal)ledger.Expected / fullMonth) : 1m;
-            wouldLose = Math.Min(pay.BasePay, Round(SalaryCalculator.ShortfallMinutes(ledger, input.Calendar) / 60m * pay.Terms.HourlyRate));
+            wouldLose = Math.Min(pay.BasePay, Round(SalaryCalculator.ShortfallMinutes(ledger, input.Calendar) / 60m * pay.HourlyRate));
         }
         else
         {

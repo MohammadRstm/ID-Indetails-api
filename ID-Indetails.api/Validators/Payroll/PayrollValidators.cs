@@ -23,6 +23,19 @@ public sealed class SalaryListQueryValidator : AbstractValidator<SalaryListQuery
     }
 }
 
+public sealed class SalaryYearQueryValidator : AbstractValidator<SalaryYearQuery>
+{
+    public SalaryYearQueryValidator()
+    {
+        RuleFor(x => x.Year).InclusiveBetween(2000, 2100).When(x => x.Year is not null)
+            .WithMessage("Year must be between 2000 and 2100.");
+        RuleFor(x => x.Domain)
+            .Must(d => d is null || DomainCodes.All.Contains(d))
+            .WithMessage($"Domain must be one of: {string.Join(", ", DomainCodes.All)}.");
+        RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
+    }
+}
+
 public sealed class MyHoursQueryValidator : AbstractValidator<MyHoursQuery>
 {
     /// <summary>A thousand pages is 12,000 months; beyond it the month arithmetic would overflow.</summary>

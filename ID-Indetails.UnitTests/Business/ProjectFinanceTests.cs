@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Enums;
 using Shouldly;
 using static ID_Indetails.api.Business.Finance.ProjectFinance;
@@ -19,6 +20,36 @@ public class ProjectFinanceTests
 
     private static Costs CostOf(decimal labour = 0, decimal expenses = 0, decimal materials = 0, decimal ground = 0)
         => new(labour, expenses, materials, ground, []);
+
+    [Fact]
+    public void A_salary_costs_its_rate_of_each_month_and_hourly_pay_its_own_rate()
+    {
+        // Monday to Friday, 9 to 5: May 2026 has 168 paid hours, June 176, July 184.
+        var calendar = new PersonCalendar([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
+        PayRecord[] history =
+        [
+            new(7, new DateOnly(2026, 7, 10), PayBasis.Hourly, 12m, "USD"),
+            new(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD"),
+        ];
+
+        RatesOf(history, calendar, until: new DateOnly(2026, 8, 20)).ShouldBe(
+        [
+            new PayRate(7, new DateOnly(2026, 5, 15), 10.4762m, "USD"),
+            new PayRate(7, new DateOnly(2026, 6, 1), 10m, "USD"),
+            new PayRate(7, new DateOnly(2026, 7, 1), 9.5652m, "USD"),
+            new PayRate(7, new DateOnly(2026, 7, 10), 12m, "USD"),
+        ]);
+    }
+
+    [Fact]
+    public void A_salary_still_in_force_has_a_rate_for_every_month_up_to_today()
+    {
+        var calendar = new PersonCalendar([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
+
+        RatesOf([new PayRecord(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD")], calendar, until: new DateOnly(2026, 7, 1))
+            .Select(r => r.EffectiveFrom)
+            .ShouldBe([new DateOnly(2026, 5, 15), new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 1)]);
+    }
 
     [Fact]
     public void Amounts_convert_at_the_rate_in_force_on_their_day()

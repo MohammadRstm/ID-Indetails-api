@@ -20,6 +20,11 @@ public sealed class SalariesController(ISalaryService salaries) : ControllerBase
     public Task<SalariesResponse> List([FromQuery] SalaryListQuery query, CancellationToken cancellationToken)
         => salaries.ListAsync(query, cancellationToken);
 
+    /// <summary>A year of salaries, person by person and month by month.</summary>
+    [HttpGet("year")]
+    public Task<SalaryYearResponse> Year([FromQuery] SalaryYearQuery query, CancellationToken cancellationToken)
+        => salaries.YearAsync(query, cancellationToken);
+
     /// <summary>How one person's pay adds up: hours owed, overtime work, excuses and deductions.</summary>
     [HttpGet("{userId:long}")]
     public Task<SalaryDetailResponse> Get(long userId, [FromQuery] SalaryMonthQuery query, CancellationToken cancellationToken)

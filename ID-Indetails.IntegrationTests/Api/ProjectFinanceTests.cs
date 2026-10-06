@@ -58,9 +58,10 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
         (await MoneyAsync(afternoon.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(88.57m);
 
-        // A salaried person's break is paid too: 3,466.60 a month is the same 20 an hour, so the cost doesn't change.
+        // A salaried person's break is paid too: 3,200 a month is the same 20 an hour in February (160 paid hours), so
+        // the cost doesn't change.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 3466.60m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
+            new { basis = "monthly", amount = 3200m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
     }
@@ -71,21 +72,22 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, unpaid) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await EnsureLbpRateAsync(superAdmin.AccessToken);
 
-        // 1,733.30 a month is 10 an hour (÷ 173.33).
+        // 1,600 a month is 10 an hour in February 2026 (20 working days of 8 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
 
         // 6 hours by the designer (08:00-14:00 in Beirut, so a working day with in-hours work: the paid hour of break
-        // is cost too), and 30 minutes by the admin, who has no pay record.
+        // is cost too), and 30 minutes by a colleague with no pay record.
         const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
             "VALUES (@u, @p, 'Drawings', '2026-02-10 06:00:00', @end, UTC_TIMESTAMP(3))";
         await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", project.Id), ("@end", "2026-02-10 12:00:00"));
-        await ExecuteAsync(entrySql, ("@u", admin.User.Id), ("@p", project.Id), ("@end", "2026-02-10 06:30:00"));
+        await ExecuteAsync(entrySql, ("@u", unpaid.User.Id), ("@p", project.Id), ("@end", "2026-02-10 06:30:00"));
 
         await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses", new { label = "Prints", amount = 100m, currency = "USD" }, admin.AccessToken);
         await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses", new { label = "Taxi", amount = 895_000m, currency = "LBP" }, admin.AccessToken);

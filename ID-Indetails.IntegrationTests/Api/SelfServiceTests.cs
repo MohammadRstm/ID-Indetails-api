@@ -61,7 +61,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1733.30m);
+        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
 
         // Every page, however many months have passed since January 2026.
         var first = await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours", me.AccessToken));
@@ -104,7 +104,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1733.30m);
+        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
         var colleague = await JuneMonthAsync(superAdmin, project.Id, "hourly", 12m);
         await AddWorkAsync(colleague, project.Id, new DateTime(2026, 6, 6, 6, 0, 0, DateTimeKind.Utc), minutes: 240);
         await ExecuteAsync("UPDATE projects SET icon = 'pen', tint = '#2F6FEB' WHERE id = @p", ("@p", project.Id));
@@ -141,7 +141,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1733.30m);
+        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
 
         var mine = await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay?month=2026-06", me.AccessToken));
         var admin = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{me.User.Id}?month=2026-06", superAdmin.AccessToken));
@@ -155,14 +155,15 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             p => p.DeductionMinutes.ShouldBe(admin.DeductionMinutes));
 
         // 8,340 minutes short: 19 whole missed days each cost the full paid day (8h), plus 6h of the 20th, and the
-        // unpaid day off costs its full paid day too - 9,960 minutes at 10 an hour.
+        // unpaid day off costs its full paid day too - 9,960 minutes at June's 10 an hour (1,760 ÷ 176 paid hours).
         salary.ShouldSatisfyAllConditions(
             p => p.HourlyRate.ShouldBe(10m),
+            p => p.StandardHourlyRate.ShouldBe(10.1538m),
             p => p.DeductionMinutes.ShouldBe(8340 + 19 * 60 + 480),
             p => p.Deduction.ShouldBe(1660m),
-            p => p.BasePay.ShouldBe(73.30m),
-            p => p.Total.ShouldBe(73.30m),
-            p => p.EarnedSoFar.ShouldBe(73.30m),
+            p => p.BasePay.ShouldBe(100m),
+            p => p.Total.ShouldBe(100m),
+            p => p.EarnedSoFar.ShouldBe(100m),
             p => p.FullMonthEstimate.ShouldBeNull());
         mine.InProgress.ShouldBeFalse();
         mine.JoinedOn.ShouldBe(new DateOnly(2026, 1, 1));
@@ -188,7 +189,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var me = await JuneMonthAsync(superAdmin, project.Id, "hourly", 12m);
-        var salaried = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1733.30m);
+        var salaried = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
 
         var mine = await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay?month=2026-06", me.AccessToken));
         var admin = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{me.User.Id}?month=2026-06", superAdmin.AccessToken));
@@ -203,29 +204,34 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
             p => p.Total.ShouldBe(admin.Salary.Total));
 
         // Each person only ever gets their own figures.
-        (await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay?month=2026-06", salaried.AccessToken))).Salary!.Total.ShouldBe(73.30m);
+        (await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay?month=2026-06", salaried.AccessToken))).Salary!.Total.ShouldBe(100m);
     }
 
     [Fact]
     public async Task Someone_without_a_pay_record_gets_no_salary()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
-        var pay = await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay", admin.AccessToken));
+        var pay = await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay", employee.AccessToken));
 
-        pay.ShouldSatisfyAllConditions(p => p.Salary.ShouldBeNull(), p => p.Ledger.ShouldBeNull());
+        pay.Salary.ShouldBeNull();
     }
 
     [Fact]
-    public async Task Admins_have_no_hours_ledger()
+    public async Task Admins_and_super_admins_log_no_hours_so_have_no_self_service_views()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
 
-        var hours = await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours", admin.AccessToken));
+        foreach (var url in new[] { "/api/me/pay", "/api/me/schedule", "/api/me/hours", "/api/me/overtime", "/api/me/work-entries" })
+        {
+            await (await Client.GetAsync(url, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+            await (await Client.GetAsync(url, superAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        }
 
-        hours.ShouldSatisfyAllConditions(h => h.Applies.ShouldBeFalse(), h => h.Months.ShouldBeEmpty());
+        admin.User.Permissions.ShouldNotContain(PermissionCodes.WorkEntryCreate);
+        superAdmin.User.Permissions.ShouldNotContain(PermissionCodes.WorkEntryCreate);
     }
 
     [Fact]

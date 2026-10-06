@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
@@ -20,8 +21,11 @@ public sealed class PayrollInputs(
     /// <summary>The hours ledger applies to Design employees only.</summary>
     public static bool LedgerApplies(User person) => person.DomainCode == DomainCodes.Design && person.RoleCode == RoleCodes.Employee;
 
-    /// <summary>A super admin's pay is their salary whatever hours they log: their work earns no overtime or paid breaks.</summary>
-    public static bool PaidForHours(User person) => person.RoleCode != RoleCodes.SuperAdmin;
+    /// <summary>
+    /// Admins and super admins are paid their fixed salary: they log no hours, and any logged before that rule earn no
+    /// overtime or paid breaks.
+    /// </summary>
+    public static bool PaidForHours(User person) => !PayRules.HasFixedSalary(person.RoleCode);
 
     public Employment EmploymentOf(User person)
         => person.EmploymentPeriods.Count > 0
@@ -80,7 +84,7 @@ public sealed class PayrollInputs(
         var result = new List<PersonMonth>();
         foreach (var person in people)
         {
-            var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.HourlyCostRate)).ToList();
+            var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency)).ToList();
             var calendar = calendars[person.Id];
             var employment = EmploymentOf(person);
 

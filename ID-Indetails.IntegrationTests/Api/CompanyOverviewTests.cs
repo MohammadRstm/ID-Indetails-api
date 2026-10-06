@@ -42,9 +42,10 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
-        // 1,733.30 a month is 10 an hour; 6 hours in June (09:00-15:00 in Beirut) cost 60, plus 10 for the paid hour of break.
+        // 1,760 a month is 10 an hour in June (176 paid hours); 6 hours in June (09:00-15:00 in Beirut) cost 60, plus
+        // 10 for the paid hour of break.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
         await ExecuteAsync(
@@ -116,11 +117,9 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Super_admins_salaries_come_off_the_company_s_net_profit()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null);
+        var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null,
+            new { basis = "monthly", amount = 3100m, currency = "USD", effectiveFrom = "2026-01-01" });
         await _steps.SetJoinedOnAsync(partner.User.Id, "2026-01-01");
-        (await Client.PostJsonAsync($"/api/employees/{partner.User.Id}/pay",
-                new { basis = "monthly", amount = 3100m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
-            .IsSuccessStatusCode.ShouldBeTrue();
 
         // all of March 2026, then its first 16 of 31 days
         var march = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-03-01&to=2026-03-31", superAdmin.AccessToken));

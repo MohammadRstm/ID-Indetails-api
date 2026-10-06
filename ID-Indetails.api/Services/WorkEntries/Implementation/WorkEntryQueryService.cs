@@ -9,10 +9,10 @@ using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Repositories.Company.Abstraction;
-using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
@@ -30,7 +30,7 @@ public sealed class WorkEntryQueryService(
     ICompanyRepository company,
     IWorkEntryCommentRepository comments,
     IDomainSettingsService domainSettings,
-    IProjectFinanceRepository financeSources,
+    IProjectFinanceService projectFinance,
     IOvertimeService overtime,
     IClock clock) : IWorkEntryQueryService
 {
@@ -92,7 +92,7 @@ public sealed class WorkEntryQueryService(
         var overtimeById = await overtime.OvertimeOfAsync(rows, cancellationToken);
         var withMoney = actor.Has(PermissionCodes.FinancialView);
         var rates = withMoney
-            ? (await financeSources.PayRatesAsync(userIds, cancellationToken))
+            ? (await projectFinance.PayRatesAsync(userIds, cancellationToken))
                 .GroupBy(r => r.UserId)
                 .ToDictionary(g => g.Key, g => (IReadOnlyList<ProjectFinance.PayRate>)g.OrderBy(r => r.EffectiveFrom).ToList())
             : [];

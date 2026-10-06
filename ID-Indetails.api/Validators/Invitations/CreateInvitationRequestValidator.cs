@@ -1,4 +1,5 @@
 using FluentValidation;
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Invitations;
 using ID_Indetails.api.Validators.Common;
@@ -33,6 +34,10 @@ public sealed class CreateInvitationRequestValidator : AbstractValidator<CreateI
 
         RuleFor(x => x.Position)
             .MaximumLength(120).WithMessage("Position must be at most 120 characters.");
+
+        RuleFor(x => x.Pay)
+            .NotNull().When(x => RoleCodes.All.Contains(x.Role) && PayRules.HasFixedSalary(x.Role))
+            .WithMessage("Enter their monthly salary: admins and super admins are paid a fixed salary.");
 
         RuleFor(x => x.Pay!).ChildRules(pay =>
         {
