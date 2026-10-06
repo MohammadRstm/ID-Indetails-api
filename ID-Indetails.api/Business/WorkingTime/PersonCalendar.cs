@@ -33,6 +33,17 @@ public sealed class PersonCalendar
 
     public Policy PolicyOn(DateOnly day) => _policies.LastOrDefault(p => p.EffectiveFrom <= day) ?? _policies[0];
 
+    /// <summary>The paid minutes, break included, of a week on the schedule (or the company week) in force on <paramref name="day"/>.</summary>
+    public int PaidMinutesPerWeek(DateOnly day)
+    {
+        var policy = PolicyOn(day);
+        var schedule = _schedules.LastOrDefault(s => s.EffectiveFrom <= day);
+
+        return schedule is { FollowsDefault: false }
+            ? schedule.Days.Values.Sum(d => d.End - d.Start)
+            : Enumerable.Range(0, 7).Count(weekday => (policy.WorkDays & (1 << weekday)) != 0) * (policy.End - policy.Start);
+    }
+
     /// <returns>The hours worked that day, or null on a day off.</returns>
     public WorkHours? HoursOn(DateOnly day)
     {

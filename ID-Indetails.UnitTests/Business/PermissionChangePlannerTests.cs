@@ -162,6 +162,16 @@ public class PermissionChangePlannerTests
     }
 
     [Fact]
+    public void An_admin_is_never_given_logging_hours()
+    {
+        var plan = Plan(RoleCodes.Admin, [], Grant(PermissionCodes.WorkEntryCreate));
+
+        plan.Role.ShouldBe(RoleCodes.Admin);
+        plan.Overrides.ShouldBeEmpty();
+        plan.Applied.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Super_admins_are_never_planned_for()
         => Should.Throw<InvalidOperationException>(() => Plan(RoleCodes.SuperAdmin, [], Revoke(PermissionCodes.ProjectView)));
 }

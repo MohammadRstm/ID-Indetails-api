@@ -34,7 +34,7 @@ public sealed class SalaryService(
 
     public async Task<SalariesResponse> ListAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
-        var (month, computed) = await CalculateAsync(query.Month, query.Domain, query.Search, null, cancellationToken);
+        var (month, computed, withoutPay) = await CalculateAsync(query.Month, query.Domain, query.Search, null, cancellationToken);
         var rows = computed.Select(c => ToRow(c)).ToList();
         var policy = (await inputs.PoliciesAsync(cancellationToken)).LastOrDefault(p => p.EffectiveFrom <= clock.CompanyToday);
 
@@ -53,12 +53,60 @@ public sealed class SalaryService(
                 rows.Sum(r => r.MadeUpMinutes),
                 rows.Count(r => r.ShortMinutes > 0),
                 rows.Sum(r => r.ShortMinutes ?? 0),
-                rows.Any(r => r.ExpectedMinutes is not null) ? rows.Sum(r => r.ExpectedMinutes ?? 0) : null));
+                rows.Any(r => r.ExpectedMinutes is not null) ? rows.Sum(r => r.ExpectedMinutes ?? 0) : null),
+            withoutPay.Select(u => new PersonWithoutPayResponse(u.Id, NameOf(u), u.RoleCode, u.DomainCode)).ToList());
+    }
+
+    public async Task<SalaryYearResponse> YearAsync(SalaryYearQuery query, CancellationToken cancellationToken = default)
+    {
+        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        var today = clock.CompanyToday;
+        var year = query.Year ?? today.Year;
+        if (year > today.Year)
+        {
+            throw new RequestValidationException(ErrorCodes.SalaryMonthInFuture, "year", "Salaries can't be shown for a future year.");
+        }
+
+        var months = Enumerable.Range(1, 12).Select(m => new DateOnly(year, m, 1)).Where(m => m <= today).ToList();
+        var people = await payroll.PeopleAsync(
+            actor.VisibleDomains, EmployeeRules.CanSee(actor, null), query.Domain, query.Search?.Trim(), months[0], cancellationToken);
+        var paid = (await inputs.ForAsync(people, months, cancellationToken))
+            .Select(p => (p.User, p.Input.Month, Result: SalaryCalculator.Calculate(p.Input)))
+            .Where(p => p.Result is not null)
+            .ToList();
+
+        var rows = paid
+            .GroupBy(p => p.User.Id)
+            .Select(g =>
+            {
+                var user = g.First().User;
+                return new SalaryYearRowResponse(
+                    user.Id,
+                    NameOf(user),
+                    user.Email,
+                    user.RoleCode,
+                    user.DomainCode,
+                    user.Team is null ? null : new TeamSummaryResponse(user.Team.Id, user.Team.Name),
+                    user.PhotoFileId,
+                    user.Position,
+                    g.OrderBy(p => p.Month)
+                        .Select(p => new SalaryYearMonthResponse(p.Month, p.Result!.Terms.Basis, p.Result.Terms.Amount, p.Result.Terms.Currency, p.Result.Total))
+                        .ToList());
+            })
+            .ToList();
+        var totals = paid
+            .GroupBy(p => (p.Month, p.Result!.Terms.Currency))
+            .OrderBy(g => g.Key.Month)
+            .ThenBy(g => g.Key.Currency)
+            .Select(g => new SalaryYearTotalResponse(g.Key.Month, g.Key.Currency, g.Count(), g.Sum(p => p.Result!.Total)))
+            .ToList();
+
+        return new SalaryYearResponse(year, months, rows, totals);
     }
 
     public async Task<SalaryDetailResponse> GetAsync(long userId, SalaryMonthQuery query, CancellationToken cancellationToken = default)
     {
-        var (month, computed) = await CalculateAsync(query.Month, null, null, userId, cancellationToken);
+        var (month, computed, _) = await CalculateAsync(query.Month, null, null, userId, cancellationToken);
         var person = computed.SingleOrDefault() ?? throw new NotFoundException("No salary for this person in that month.");
         var (result, input) = (person.Result, person.Input);
         int MadeUp(Overtime.Split w) => result.Ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
@@ -111,7 +159,7 @@ public sealed class SalaryService(
                 var madeUp = result.Ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
                 var terms = SalaryCalculator.TermsOn(input.PayHistory, w.Day);
                 return (ProjectId: projectOf[w.Id], Work: w, MadeUp: madeUp,
-                    Pay: ProjectPay.Of(w, madeUp, terms, input.Calendar.PolicyOn(w.Day).OvertimeMultiplier));
+                    Pay: ProjectPay.Of(w, madeUp, terms, input.Calendar));
             })
             .ToList();
 
@@ -173,7 +221,7 @@ public sealed class SalaryService(
 
     public async Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
-        var (month, computed) = await CalculateAsync(query.Month, query.Domain, query.Search, null, cancellationToken);
+        var (month, computed, _) = await CalculateAsync(query.Month, query.Domain, query.Search, null, cancellationToken);
         var rows = computed.Select(c => ToRow(c)).ToList();
         var csv = new StringBuilder();
         var monthText = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
@@ -202,7 +250,7 @@ public sealed class SalaryService(
         return ($"salaries-{monthText}{domain}.csv", csv.ToString());
     }
 
-    private async Task<(DateOnly Month, IReadOnlyList<Computed> People)> CalculateAsync(
+    private async Task<(DateOnly Month, IReadOnlyList<Computed> People, IReadOnlyList<User> WithoutPay)> CalculateAsync(
         string? monthText,
         string? domain,
         string? search,
@@ -224,31 +272,55 @@ public sealed class SalaryService(
             .Where(p => onlyUserId is null || p.Id == onlyUserId)
             .ToList();
 
-        return (month, await ComputeAsync(month, people, cancellationToken));
+        var (computed, withoutPay) = await ComputeAsync(month, people, cancellationToken);
+        return (month, computed, withoutPay);
     }
 
     public async Task<IReadOnlyList<ShortPerson>> FlaggedAsync(DateOnly month, CancellationToken cancellationToken = default)
     {
         var people = await payroll.PeopleAsync([DomainCodes.Design], false, DomainCodes.Design, null, month, cancellationToken);
-        return (await ComputeAsync(month, people, cancellationToken))
+        return (await ComputeAsync(month, people, cancellationToken)).Paid
             .Where(c => c.Result.Ledger is { Flagged: true })
             .Select(c => new ShortPerson(c.User.Id, ToRow(c).Name, c.Result.Ledger!.Short))
             .OrderByDescending(p => p.ShortMinutes)
             .ToList();
     }
 
-    private async Task<IReadOnlyList<Computed>> ComputeAsync(DateOnly month, IReadOnlyList<User> people, CancellationToken cancellationToken)
+    /// <returns>The salaries, and the people employed in the month who have no pay set.</returns>
+    private async Task<(IReadOnlyList<Computed> Paid, IReadOnlyList<User> WithoutPay)> ComputeAsync(
+        DateOnly month,
+        IReadOnlyList<User> people,
+        CancellationToken cancellationToken)
     {
         var computed = new List<Computed>();
+        var withoutPay = new List<User>();
         foreach (var personMonth in await inputs.ForAsync(people, [month], cancellationToken))
         {
             if (SalaryCalculator.Calculate(personMonth.Input) is { } result)
             {
                 computed.Add(new Computed(personMonth.User, result, personMonth.Excuses, personMonth.Input));
             }
+            else if (LacksPay(personMonth.Input))
+            {
+                withoutPay.Add(personMonth.User);
+            }
         }
 
-        return computed;
+        return (computed, withoutPay);
+    }
+
+    /// <summary>Joined by the end of the month (or today, while it runs) with no pay in force then.</summary>
+    private bool LacksPay(SalaryCalculator.Input input)
+    {
+        var monthEnd = input.Month.AddMonths(1).AddDays(-1);
+        var day = clock.CompanyToday < monthEnd ? clock.CompanyToday : monthEnd;
+        return input.JoinedOn <= day && SalaryCalculator.TermsOn(input.PayHistory, day) is null;
+    }
+
+    private static string NameOf(User user)
+    {
+        var name = $"{user.FirstName} {user.LastName}".Trim();
+        return name.Length > 0 ? name : user.Email;
     }
 
     private bool InProgress(DateOnly month) => clock.CompanyToday >= month && clock.CompanyToday < month.AddMonths(1);
@@ -256,11 +328,10 @@ public sealed class SalaryService(
     private static SalaryRowResponse ToRow(Computed c)
     {
         var (user, r) = (c.User, c.Result);
-        var name = $"{user.FirstName} {user.LastName}".Trim();
         return new SalaryRowResponse
         {
             UserId = user.Id,
-            Name = name.Length > 0 ? name : user.Email,
+            Name = NameOf(user),
             Email = user.Email,
             Role = user.RoleCode,
             Domain = user.DomainCode,
@@ -268,9 +339,10 @@ public sealed class SalaryService(
             Basis = r.Terms.Basis,
             Amount = r.Terms.Amount,
             Currency = r.Terms.Currency,
-            HourlyRate = r.Terms.HourlyRate,
-            // Design's people log hours; Execution staff and super admins are paid their salary
-            TracksHours = user.DomainCode == DomainCodes.Design,
+            HourlyRate = r.HourlyRate,
+            StandardHourlyRate = r.StandardHourlyRate,
+            // Design's employees log hours; Execution staff, admins and super admins are paid their salary
+            TracksHours = user.DomainCode == DomainCodes.Design && PayrollInputs.PaidForHours(user),
             ExpectedMinutes = r.Ledger?.Expected,
             NormalMinutes = r.NormalMinutes,
             MadeUpMinutes = r.MadeUpMinutes,
@@ -302,7 +374,8 @@ public sealed class SalaryService(
             Basis = pay.Terms.Basis,
             Amount = pay.Terms.Amount,
             Currency = pay.Terms.Currency,
-            HourlyRate = pay.Terms.HourlyRate,
+            HourlyRate = pay.HourlyRate,
+            StandardHourlyRate = pay.StandardHourlyRate,
             OvertimeMultiplier = input.Calendar.PolicyOn(lastDay).OvertimeMultiplier,
             NormalMinutes = pay.NormalMinutes,
             MadeUpMinutes = pay.MadeUpMinutes,

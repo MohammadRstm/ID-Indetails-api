@@ -1,4 +1,6 @@
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Business.Finance;
@@ -39,6 +41,9 @@ public static class ProjectFinance
 
     public sealed record PayRate(long UserId, DateOnly EffectiveFrom, decimal HourlyCost, string Currency);
 
+    /// <summary>A row of someone's pay history.</summary>
+    public sealed record PayRecord(long UserId, DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency);
+
     public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes);
 
     public sealed record Projection(decimal Cost, decimal Profit, decimal? Margin);
@@ -76,7 +81,7 @@ public static class ProjectFinance
 
     /// <summary>
     /// Prices worked time at each person's hourly cost in force that day (their earliest rate for time
-    /// before it). Time of someone with no pay record can't be priced and is counted separately.
+    /// before it; see <see cref="RatesOf"/>). Time of someone with no pay record can't be priced and is counted separately.
     /// </summary>
     public static (IReadOnlyList<CostItem> Items, int UnpricedMinutes) PriceLabour(
         IEnumerable<WorkedTime> worked,
@@ -118,6 +123,31 @@ public static class ProjectFinance
             .Where(i => rates.ToUsd(i.Amount, i.Currency, i.Day) is null)
             .Select(i => new DatedUnconverted(i.Source, i.Currency.ToUpperInvariant(), i.Amount, i.Day))
             .ToList();
+
+    /// <summary>
+    /// One person's pay history as hourly costs over time: hourly pay at its rate, and a monthly salary at its rate in each
+    /// month (<see cref="PayRules.HourlyRate"/>), one rate a month up to <paramref name="until"/>. Ordered by date.
+    /// </summary>
+    public static IReadOnlyList<PayRate> RatesOf(IEnumerable<PayRecord> history, PersonCalendar calendar, DateOnly until)
+    {
+        var ordered = history.OrderBy(p => p.EffectiveFrom).ToList();
+        var rates = new List<PayRate>();
+
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var pay = ordered[i];
+            var end = i + 1 < ordered.Count ? ordered[i + 1].EffectiveFrom : until.AddDays(1);
+            var from = pay.EffectiveFrom;
+            do
+            {
+                rates.Add(new PayRate(pay.UserId, from, PayRules.HourlyRate(pay.Basis, pay.Amount, from, calendar), pay.Currency));
+                from = new DateOnly(from.Year, from.Month, 1).AddMonths(1);
+            }
+            while (pay.Basis == PayBasis.Monthly && from < end);
+        }
+
+        return rates;
+    }
 
     /// <summary>The rate in force on the day, from a person's history ordered by date; their earliest rate for days before it.</summary>
     public static PayRate RateOn(IReadOnlyList<PayRate> history, DateOnly day)

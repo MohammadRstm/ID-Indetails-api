@@ -21,9 +21,9 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, ben) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        // 30 an hour on a monthly salary (5,199.90 ÷ 173.33).
+        // 30 an hour on a monthly salary in February 2026 (4,800 ÷ 160 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",
-            new { basis = "monthly", amount = 5199.90m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { basis = "monthly", amount = 4800m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
             new { changes = new[] { new { code = PermissionCodes.WorkEntryViewAll, action = "grant", reason = "Team lead" } } },
@@ -97,8 +97,9 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        // Paid by the hour, so today's rate is the same whatever month the test runs in.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1733.30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { basis = "hourly", amount = 10m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 

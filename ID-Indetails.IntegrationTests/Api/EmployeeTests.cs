@@ -225,7 +225,7 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
         var first = await Client.PostJsonAsync(url,
             new { basis = "monthly", amount = 1000, currency = "usd", effectiveFrom = today.AddMonths(-3) }, designAdmin.AccessToken);
         ((int)first.StatusCode).ShouldBe(201, await first.Content.ReadAsStringAsync());
-        (await first.ReadAsync<PayResponse>()).HourlyCostRate.ShouldBe(5.7693m);
+        (await first.ReadAsync<PayResponse>()).Amount.ShouldBe(1000m);
 
         await (await Client.PostJsonAsync(url, new { basis = "monthly", amount = 1200, effectiveFrom = today.AddMonths(-4) }, designAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.PayChangeNotAfterLatest);

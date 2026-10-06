@@ -18,9 +18,10 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
-        // 30 an hour on a monthly salary (5,199.90 ÷ 173.33).
+        // 30 an hour, paid by the hour: one of her hours lands in this quarter, whatever month the test runs in, and a
+        // salary's hourly rate would change with that month.
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",
-            new { basis = "monthly", amount = 5199.90m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { basis = "hourly", amount = 30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var brand = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         var web = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);

@@ -52,9 +52,10 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
         jwt.GetClaim(AuthClaimTypes.Position).Value.ShouldBe("Design Director");
 
         (await _steps.ScalarAsync<string>("SELECT status FROM users WHERE email = @e", ("@e", email))).ShouldBe("active");
+        // a salary has no fixed hourly rate: it is worked out month by month
         (await _steps.ScalarAsync<decimal>(
-            "SELECT p.hourly_cost_rate FROM user_pay_history p JOIN users u ON u.id = p.user_id WHERE u.email = @e",
-            ("@e", email))).ShouldBe(17.3080m);
+            "SELECT p.amount FROM user_pay_history p JOIN users u ON u.id = p.user_id WHERE u.email = @e AND p.basis = 'monthly'",
+            ("@e", email))).ShouldBe(3000m);
 
         // The link works once.
         await (await Client.PostJsonAsync("/api/invitations/validate", new { token }))
@@ -84,7 +85,8 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
 
         await (await Client.PostJsonAsync("/api/invitations",
-                new { email = AuthTestSteps.NewEmail(), role = "super_admin" }, designAdmin.AccessToken))
+                new { email = AuthTestSteps.NewEmail(), role = "super_admin", pay = new { basis = "monthly", amount = 2000, currency = "usd" } },
+                designAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
 
         // No domain given: the admin's own domain is used.

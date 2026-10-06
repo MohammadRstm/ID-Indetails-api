@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Enums;
 
@@ -5,11 +6,13 @@ namespace ID_Indetails.api.Business.Payroll;
 
 /// <summary>
 /// What someone is owed for a month. Terms are the pay in force at the end of the month (or today,
-/// while it is in progress); an hour of monthly pay is salary ÷ 173.33.
+/// while it is in progress). An hour of monthly pay is the salary ÷ the month's paid hours (<see cref="PayRules.HourlyRate"/>),
+/// which keeps the salary fixed; overtime is paid at the true hourly rate of a standard month instead
+/// (<see cref="PayRules.StandardHourlyRate"/>), whatever the month.
 /// <list type="bullet">
-/// <item><b>Monthly:</b> the salary, pro-rated on the person's own working days if they joined, left or came back
+/// <item><b>Monthly:</b> the salary, pro-rated on the paid hours of the days they were employed if they joined, left or came back
 /// mid-month (days away between two periods of employment aren't paid), plus overtime at the multiplier. In a closed month the hours ledger's shortfall is deducted at the
-/// hourly rate, and each missed working day also loses its paid break, so it costs the full paid day.
+/// month's hourly rate, and each missed working day also loses its paid break, so it costs the full paid day.
 /// Unpaid excuses are deducted the same way (an unpaid day off costs the full paid day).</item>
 /// <item><b>Hourly:</b> logged hours at the rate in force that day, overtime that made up a shortfall at the
 /// plain rate, the rest at the multiplier, plus the paid break of each working day they worked.</item>
@@ -17,7 +20,12 @@ namespace ID_Indetails.api.Business.Payroll;
 /// </summary>
 public static class SalaryCalculator
 {
-    public sealed record PayTerms(DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency, decimal HourlyRate);
+    public sealed record PayTerms(DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency)
+    {
+        public decimal HourlyRateOn(DateOnly day, PersonCalendar calendar) => PayRules.HourlyRate(Basis, Amount, day, calendar);
+
+        public decimal StandardHourlyRateOn(DateOnly day, PersonCalendar calendar) => PayRules.StandardHourlyRate(Basis, Amount, day, calendar);
+    }
 
     public sealed record Excuse(ExcuseKind Kind, int? Minutes, IReadOnlyList<DateOnly> Days, bool IsPaid);
 
@@ -33,8 +41,12 @@ public static class SalaryCalculator
         DateOnly? LeftOn = null,
         IReadOnlyList<Employment.Gap>? Gaps = null);
 
+    /// <param name="HourlyRate">What an hour of <paramref name="Terms"/> is worth this month: it prices deductions.</param>
+    /// <param name="StandardHourlyRate">The true hourly rate of <paramref name="Terms"/>: overtime is paid at it × the multiplier.</param>
     public sealed record Result(
         PayTerms Terms,
+        decimal HourlyRate,
+        decimal StandardHourlyRate,
         HoursLedger.Result? Ledger,
         IReadOnlyList<Overtime.Split> Work,
         int NormalMinutes,
@@ -69,12 +81,18 @@ public static class SalaryCalculator
             return null;
         }
 
+        var rate = terms.HourlyRateOn(input.Month, input.Calendar);
         var work = Overtime.Of(input.Work, input.Calendar);
         var ledger = input.LedgerApplies ? LedgerOf(input, work) : null;
         int MadeUp(Overtime.Split w) => ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
+        decimal OvertimePay(Overtime.Split w, PayTerms t)
+            => (w.Overtime - MadeUp(w)) / 60m * t.StandardHourlyRateOn(w.Day, input.Calendar) * input.Calendar.PolicyOn(w.Day).OvertimeMultiplier;
 
-        var monthDays = HoursLedger.Days(input.Month, next).Where(d => input.Calendar.HoursOn(d) is not null).ToList();
-        var paidDays = monthDays.Count(Employed);
+        var monthDays = HoursLedger.Days(input.Month, next)
+            .Select(d => (Day: d, Hours: input.Calendar.HoursOn(d)))
+            .Where(d => d.Hours is not null)
+            .ToList();
+        var paidDays = monthDays.Count(d => Employed(d.Day));
         var proRated = input.JoinedOn > input.Month
             || lastDay < next.AddDays(-1)
             || (input.Gaps ?? []).Any(g => g.From < next && g.To >= input.Month);
@@ -84,18 +102,20 @@ public static class SalaryCalculator
 
         if (terms.Basis == PayBasis.Monthly)
         {
-            basePay = proRated && monthDays.Count > 0 ? terms.Amount * paidDays / monthDays.Count : terms.Amount;
-            overtimePay = work.Sum(w => (w.Overtime - MadeUp(w)) / 60m * terms.HourlyRate * input.Calendar.PolicyOn(w.Day).OvertimeMultiplier);
+            var monthMinutes = monthDays.Sum(d => d.Hours!.Span);
+            var employedMinutes = monthDays.Where(d => Employed(d.Day)).Sum(d => d.Hours!.Span);
+            basePay = proRated && monthMinutes > 0 ? terms.Amount * employedMinutes / monthMinutes : terms.Amount;
+            overtimePay = work.Sum(w => OvertimePay(w, terms));
 
             deductionMinutes = (ledger is { Flagged: true } ? ShortfallMinutes(ledger, input.Calendar) : 0) + UnpaidMinutes(input, next);
             deduction = input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth && !e.IsPaid)
                 ? basePay
-                : Math.Min(basePay, deductionMinutes / 60m * terms.HourlyRate);
+                : Math.Min(basePay, deductionMinutes / 60m * rate);
             basePay -= deduction;
         }
         else
         {
-            decimal RateOn(DateOnly day) => TermsOn(input.PayHistory, day)?.HourlyRate ?? terms.HourlyRate;
+            decimal RateOn(DateOnly day) => (TermsOn(input.PayHistory, day) ?? terms).HourlyRateOn(day, input.Calendar);
 
             var breakDays = work.Where(w => w.Normal > 0)
                 .Select(w => w.Day)
@@ -107,11 +127,13 @@ public static class SalaryCalculator
             paidBreakPay = breakDays.Sum(d => d.Hours!.PaidBreak / 60m * RateOn(d.Day));
 
             basePay = work.Sum(w => (w.Normal + MadeUp(w)) / 60m * RateOn(w.Day)) + paidBreakPay;
-            overtimePay = work.Sum(w => (w.Overtime - MadeUp(w)) / 60m * RateOn(w.Day) * input.Calendar.PolicyOn(w.Day).OvertimeMultiplier);
+            overtimePay = work.Sum(w => OvertimePay(w, TermsOn(input.PayHistory, w.Day) ?? terms));
         }
 
         return new Result(
             terms,
+            rate,
+            terms.StandardHourlyRateOn(termsDay, input.Calendar),
             ledger,
             work,
             work.Sum(w => w.Normal),

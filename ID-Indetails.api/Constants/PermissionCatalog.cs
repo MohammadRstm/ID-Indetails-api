@@ -86,6 +86,9 @@ public static class PermissionCatalog
         P.OverheadCategoryManage, P.SessionManage, P.EmployeeChangeEmail,
     ];
 
+    /// <summary>Logging one's own hours: employees only. Admins and super admins are paid a fixed salary and log no hours.</summary>
+    public static readonly IReadOnlyList<string> OwnWork = [P.WorkEntryCreate, P.WorkEntryViewOwn];
+
     private static readonly string[] EmployeeGrants =
     [
         P.ProjectView,
@@ -102,10 +105,10 @@ public static class PermissionCatalog
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> Grants =
         new Dictionary<string, IReadOnlyList<string>>
         {
-            // Everything, in both domains and at company level.
-            [RoleCodes.SuperAdmin] = Definitions.Select(d => d.Code).ToList(),
-            // Everything inside their own domain, nothing at company level.
-            [RoleCodes.Admin] = Definitions.Select(d => d.Code).Except(CompanyOnly).ToList(),
+            // Everything, in both domains and at company level, except logging their own hours.
+            [RoleCodes.SuperAdmin] = Definitions.Select(d => d.Code).Except(OwnWork).ToList(),
+            // Everything inside their own domain, nothing at company level, and no hours of their own.
+            [RoleCodes.Admin] = Definitions.Select(d => d.Code).Except(CompanyOnly).Except(OwnWork).ToList(),
             // Their own work only; never money.
             [RoleCodes.Employee] = EmployeeGrants,
         };

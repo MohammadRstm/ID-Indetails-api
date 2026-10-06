@@ -9,7 +9,7 @@ public interface IProjectFinanceRepository
 
     Task<IReadOnlyList<WorkEntryRow>> WorkEntriesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<ProjectFinance.PayRate>> PayRatesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ProjectFinance.PayRecord>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 

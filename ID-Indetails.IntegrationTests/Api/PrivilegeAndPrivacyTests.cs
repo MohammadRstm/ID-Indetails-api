@@ -35,7 +35,8 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
 
         // an employee may bring in employees, never an admin (their own second mailbox, say)
         ((int)(await InviteAsync(recruiter, RoleCodes.Employee)).StatusCode).ShouldBe(201);
-        await (await InviteAsync(recruiter, RoleCodes.Admin)).ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
+        await (await InviteAsync(recruiter, RoleCodes.Admin, new { basis = "monthly", amount = 2000m, currency = "USD" }))
+            .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
         await (await Client.PutJsonAsync($"/api/employees/{colleague.User.Id}/role", new { role = RoleCodes.Admin }, recruiter.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.PermissionChangeNotAllowed);
     }
@@ -111,7 +112,9 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         await ChangeAsync(superAdmin, admin.User.Id, "grant", PermissionCodes.SalaryView);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         await Work.LogAsync(designer.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 60, "Plans");
-        await Work.LogAsync(superAdmin.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(6), 60, "Review");
+        // Super admins log no hours any more; one logged before that rule is written straight to the database.
+        var earlier = WorkEntryTestSteps.HoursAgo(6);
+        await Work.InsertAsync(superAdmin.User.Id, project.Id, earlier.ToString("yyyy-MM-dd HH:mm:ss"), earlier.AddHours(1).ToString("yyyy-MM-dd HH:mm:ss"));
 
         var pay = await Client.GetAsync("/api/company/project-pay", admin.AccessToken);
         ((int)pay.StatusCode).ShouldBe(200, await pay.Content.ReadAsStringAsync());

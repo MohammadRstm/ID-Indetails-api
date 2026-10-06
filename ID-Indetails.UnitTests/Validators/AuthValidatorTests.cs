@@ -61,6 +61,22 @@ public class AuthValidatorTests
     }
 
     [Fact]
+    public void Inviting_an_admin_or_super_admin_needs_their_salary()
+    {
+        var validator = new CreateInvitationRequestValidator();
+        var salary = new InvitationPayRequest { Basis = PayBasis.Monthly, Amount = 2500, Currency = "USD" };
+
+        validator.Validate(new CreateInvitationRequest { Email = "a@b.co", Role = "admin", DomainCode = "design" })
+            .Errors.ShouldContain(e => e.PropertyName == "Pay");
+        validator.Validate(new CreateInvitationRequest { Email = "a@b.co", Role = "super_admin" })
+            .Errors.ShouldContain(e => e.PropertyName == "Pay");
+        validator.Validate(new CreateInvitationRequest { Email = "a@b.co", Role = "admin", DomainCode = "design", Pay = salary })
+            .IsValid.ShouldBeTrue();
+        validator.Validate(new CreateInvitationRequest { Email = "a@b.co", Role = "employee", DomainCode = "design" })
+            .IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
     public void Invitation_pay_must_be_positive_with_a_three_letter_currency()
     {
         var validator = new CreateInvitationRequestValidator();

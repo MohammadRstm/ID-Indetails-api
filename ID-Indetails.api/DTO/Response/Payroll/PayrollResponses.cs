@@ -30,9 +30,13 @@ public sealed record SalaryRowResponse
 
     public required string Currency { get; init; }
 
+    /// <summary>What an hour is worth this month (a salary ÷ the month's paid hours): it prices deductions.</summary>
     public required decimal HourlyRate { get; init; }
 
-    /// <summary>False for Execution staff, who don't log hours.</summary>
+    /// <summary>The true hourly rate, the same every month (a salary ÷ a standard month's paid hours): overtime is paid at it × the multiplier.</summary>
+    public required decimal StandardHourlyRate { get; init; }
+
+    /// <summary>False for Execution staff, admins and super admins, who don't log hours.</summary>
     public required bool TracksHours { get; init; }
 
     public int? ExpectedMinutes { get; init; }
@@ -89,15 +93,49 @@ public sealed record SalarySummaryResponse(
     int ShortMinutes,
     int? ExpectedMinutes);
 
+/// <summary>Someone employed in the month with no pay set, so they have no salary to list.</summary>
+public sealed record PersonWithoutPayResponse(long UserId, string Name, string Role, string? Domain);
+
 /// <param name="Month">First day of the month.</param>
 /// <param name="Totals">One line per currency; currencies are never added together.</param>
+/// <param name="WithoutPay">People of the filtered list left out because no pay is set for them.</param>
 public sealed record SalariesResponse(
     DateOnly Month,
     bool InProgress,
     decimal OvertimeMultiplier,
     PagedResponse<SalaryRowResponse> Rows,
     IReadOnlyList<SalaryTotalResponse> Totals,
-    SalarySummaryResponse Summary);
+    SalarySummaryResponse Summary,
+    IReadOnlyList<PersonWithoutPayResponse> WithoutPay);
+
+/// <summary>What someone is owed for one month of the year.</summary>
+/// <param name="Amount">The monthly salary or hourly rate in force, in <paramref name="Currency"/>.</param>
+/// <param name="Total">What they are owed that month, as Salaries works it out.</param>
+public sealed record SalaryYearMonthResponse(DateOnly Month, PayBasis Basis, decimal Amount, string Currency, decimal Total);
+
+/// <param name="Months">Only the months they have a salary for.</param>
+public sealed record SalaryYearRowResponse(
+    long UserId,
+    string Name,
+    string Email,
+    string Role,
+    string? Domain,
+    TeamSummaryResponse? Team,
+    long? PhotoFileId,
+    string? Position,
+    IReadOnlyList<SalaryYearMonthResponse> Months);
+
+/// <summary>One month's total in one currency.</summary>
+public sealed record SalaryYearTotalResponse(DateOnly Month, string Currency, int People, decimal Total);
+
+/// <summary>A year of salaries, person by person and month by month, up to this month.</summary>
+/// <param name="Months">The first day of each month shown, oldest first.</param>
+/// <param name="Totals">Per month and currency; currencies are never added together.</param>
+public sealed record SalaryYearResponse(
+    int Year,
+    IReadOnlyList<DateOnly> Months,
+    IReadOnlyList<SalaryYearRowResponse> Rows,
+    IReadOnlyList<SalaryYearTotalResponse> Totals);
 
 public sealed record OvertimeWorkResponse(long WorkEntryId, DateOnly Day, int Minutes, int OvertimeMinutes, int MadeUpMinutes);
 

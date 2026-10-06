@@ -22,8 +22,9 @@ public class UserPayHistory
     public string Currency { get; set; } = "USD";
 
     /// <summary>
-    /// Internal hourly cost used for project labour. Derived for monthly pay
-    /// (salary / 173.33) and frozen here so past project costs never change.
+    /// Hourly pay's rate (the <see cref="Amount"/>). Not used for monthly pay, whose hourly rate depends on the month and
+    /// is worked out from the schedule (<c>PayRules.HourlyRate</c>): 0 on monthly rows, or salary ÷ 173.33 on rows made
+    /// before that rule.
     /// </summary>
     public decimal HourlyCostRate { get; set; }
 

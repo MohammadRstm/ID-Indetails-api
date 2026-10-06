@@ -20,7 +20,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 10 | **A missed working day deducts the full paid day.** In a closed month, each whole working day with no in-hours work and no excuse deducts required hours plus the break (8h on a 9–5 day) from salaried pay. Any other shortfall deducts the missing hours. | Payroll calculation |
 | 11 | **Made-up overtime** comes from all of the month's overtime, in date order (as in the prototype). | Payroll calculation |
 | 12 | **Salaries are always calculated.** No month-close snapshot for now. | Payroll calculation |
-| 13 | **Mid-month joiners are pro-rated on their own working days** (personal schedule, otherwise the company week), not a fixed Monday–Friday. Everyone's hourly equivalent stays salary ÷ 173.33. | Payroll calculation |
+| 13 | **Mid-month joiners are pro-rated on their own working days** (personal schedule, otherwise the company week), not a fixed Monday–Friday, by the paid hours of those days. A salary's hourly rate is worked out each month: the salary ÷ that month's paid hours, so the salary stays fixed (6 Oct 2026: no special rule for the 31st). Overtime is paid at the true hourly rate of a standard month (weekly paid hours × 52 ÷ 12), whatever the month. | Payroll calculation |
 | 14 | **The hours ledger** applies to Design employees only, from the month they joined. Admins and Execution staff have none. | Payroll calculation |
 | 15 | **The Salaries page lists everyone with a pay record**, admins included. Super admins appear only if they have pay. | API |
 | 16 | **Company overhead:** amount changes are dated (past months keep their cost), totals are kept per currency, and "cancel" ends a line at the end of the current month. It can be resumed only before that date passes; after that, a new line is added. | API |
@@ -28,7 +28,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 18 | **No separate delivery date** for now: materials are dated by when they were added, labour by its day. *(Was open question 6.)* | Schema unchanged |
 | 19 | **Unpaid excuses** are deducted from salaried pay: unpaid minutes at the hourly rate, an unpaid day off as the full paid day, an unpaid whole month as the whole salary. | Payroll calculation |
 | 20 | **Hourly staff** are paid for what they log; excuses only clear their shortfall and never add pay. | Payroll calculation |
-| 21 | **Admins who log hours** are paid overtime like employees, without an hours ledger. | Payroll calculation |
+| 21 | **Admins and super admins are paid a fixed monthly salary** and log no hours (6 Oct 2026): no overtime, no hours ledger; a salary is required when inviting them. Admins' salaries aren't a cost anywhere (only super admins' come off the company's net profit). | Payroll calculation |
 | 22 | **Project pay leaves paid breaks out.** A break isn't worked on any project, so project pay covers logged hours and overtime only, and differs from Salaries for hourly staff by exactly their paid breaks. It needs `salary:view`. | Project pay report |
 | 23 | **Leavers stay in past months** (29 Sep 2026). `users.deactivated_at` records when an account was deactivated (cleared on reactivation; backfilled from the latest `employee_deactivated` event). Salaries (list, detail, CSV, totals), the month-end alert and project pay include everyone active at any point in the month, with the final month pro-rated to the leaving day like a joining month, and the hours ledger ending there. | Schema (`UserDeactivatedAt` migration); payroll calculation |
 | 24 | **Employment is dated periods** (30 Sep 2026, open questions 4 and 5). Leaving ends a period on the last working day the admin gives (today by default, never reaching back into a closed month), which is paid. Being taken back starts a new period, and the days away between two periods are neither paid nor expected. When the time away began earlier in the same month, the admin says whether it is paid: if so, the period simply continues and the days away are excused as paid. | Schema (`EmploymentPeriods` migration); API; payroll calculation |
@@ -40,7 +40,7 @@ Taken when the Design work API was built (see [design.md](design.md)).
 | # | Rule |
 |---|---|
 | D1 | **The timer runs in the client.** Stopping it logs an ordinary entry; nothing is stored while it runs. |
-| D2 | **Nobody edits someone else's entries**, admins included. Whoever holds `work_entry:create` logs their own work (Design admins included, by the role defaults). |
+| D2 | **Nobody edits someone else's entries**, admins included. Whoever holds `work_entry:create` logs their own work: Design employees only (admins and super admins log no hours since 6 Oct 2026). |
 | D3 | **Entry rules are enforced on the server.** An entry is locked once past the edit window (counted from when it was logged) or while its project no longer accepts work. 5 minutes to 16 hours, in whole minutes. With future entries allowed, any end time is accepted. |
 | D4 | **A work entry can carry one photo or video** (`attachmentFileId`), an upload of its author's, readable by whoever may read the entry (30 Sep 2026, with file uploads; see [files.md](files.md)). |
 | D5 | **Comments can't be edited or deleted.** Posting a comment to the team group chat is refused until messaging exists. |

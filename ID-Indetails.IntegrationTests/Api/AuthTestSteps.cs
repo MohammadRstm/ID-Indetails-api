@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Teams;
 using MySqlConnector;
@@ -55,12 +56,16 @@ public sealed class AuthTestSteps(ApiFactory api)
         return await response.ReadAsync<TeamResponse>();
     }
 
-    /// <summary>Invites someone as <paramref name="inviter"/> and completes their signup.</summary>
+    /// <summary>
+    /// Invites someone as <paramref name="inviter"/> and completes their signup. Admins and super admins must be
+    /// invited with a salary: without <paramref name="pay"/> they get 2,000 USD a month from today.
+    /// </summary>
     public async Task<(string Email, string Password, AuthResponse Auth)> InviteAndAcceptAsync(
-        AuthResponse inviter, string role, string? domain)
+        AuthResponse inviter, string role, string? domain, object? pay = null)
     {
         var email = NewEmail(role);
-        var invite = await Client.PostJsonAsync("/api/invitations", new { email, role, domainCode = domain }, inviter.AccessToken);
+        pay ??= role == RoleCodes.Employee ? null : new { basis = "monthly", amount = 2000m, currency = "USD" };
+        var invite = await Client.PostJsonAsync("/api/invitations", new { email, role, domainCode = domain, pay }, inviter.AccessToken);
         ((int)invite.StatusCode).ShouldBe(201, await invite.Content.ReadAsStringAsync());
 
         const string password = "invited-user-passphrase";

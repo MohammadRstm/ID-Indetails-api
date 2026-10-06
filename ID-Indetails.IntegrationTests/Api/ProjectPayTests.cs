@@ -44,7 +44,7 @@ public class ProjectPayTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Each_project_pays_its_hours_at_each_persons_rate_without_breaks()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var salaried = await PaidDesignerAsync(superAdmin, "monthly", 1733.30m); // 10 an hour
+        var salaried = await PaidDesignerAsync(superAdmin, "monthly", 1760m); // 10 an hour in June (176 paid hours)
         var hourly = await PaidDesignerAsync(superAdmin, "hourly", 20m);
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 
@@ -63,7 +63,7 @@ public class ProjectPayTests(ApiFactory api) : IClassFixture<ApiFactory>
         group.ProjectId.ShouldBe(project.Id);
         group.People.Single(p => p.UserId == salaried.User.Id).ShouldSatisfyAllConditions(
             p => p.Pay.ShouldBe(80m),
-            p => p.MonthlySalary.ShouldBe(1733.30m));
+            p => p.MonthlySalary.ShouldBe(1760m));
         group.People.Single(p => p.UserId == hourly.User.Id).ShouldSatisfyAllConditions(
             p => p.Pay.ShouldBe(160m),
             p => p.MonthlySalary.ShouldBeNull());

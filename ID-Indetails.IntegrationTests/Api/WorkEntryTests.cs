@@ -189,11 +189,14 @@ public class WorkEntryTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var body = new { projectId = project.Id, description = "Mine now", startedAt = start, endedAt = start.AddHours(1) };
         await (await Client.PutJsonAsync($"/api/work-entries/{entry.Id}", body, colleague.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
-        await (await Client.DeleteAsync($"/api/work-entries/{entry.Id}", designAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.DeleteAsync($"/api/work-entries/{entry.Id}", colleague.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        // an admin logs no hours, so can't change anyone's entries either
+        await (await Client.DeleteAsync($"/api/work-entries/{entry.Id}", designAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         await (await Work.TryLogAsync(executionEmployee.AccessToken, project.Id, start, 60)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
-        await (await Work.TryLogAsync(designAdmin.AccessToken, site.Id, start, 60)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
-        await (await Work.TryLogAsync(superAdmin.AccessToken, site.Id, start, 60)).ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
+        // admins and super admins log no hours at all
+        await (await Work.TryLogAsync(designAdmin.AccessToken, project.Id, start, 60)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Work.TryLogAsync(superAdmin.AccessToken, project.Id, start, 60)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
     [Fact]

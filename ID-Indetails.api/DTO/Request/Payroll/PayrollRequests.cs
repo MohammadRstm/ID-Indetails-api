@@ -18,6 +18,18 @@ public sealed record SalaryListQuery
     public int PageSize { get; init; } = 25;
 }
 
+/// <summary>A year of salaries, month by month.</summary>
+public sealed record SalaryYearQuery
+{
+    /// <summary>This year when empty. Never a future year.</summary>
+    public int? Year { get; init; }
+
+    public string? Domain { get; init; }
+
+    /// <summary>Matches name and email.</summary>
+    public string? Search { get; init; }
+}
+
 /// <summary>A page of the caller's hours ledger: 12 months, newest first.</summary>
 public sealed record MyHoursQuery
 {

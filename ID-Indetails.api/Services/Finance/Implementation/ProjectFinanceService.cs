@@ -1,15 +1,14 @@
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Projects;
-using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
-using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using Cost = ID_Indetails.api.Business.Finance.ProjectFinance.CostItem;
 
 namespace ID_Indetails.api.Services.Finance.Implementation;
@@ -17,8 +16,7 @@ namespace ID_Indetails.api.Services.Finance.Implementation;
 public sealed class ProjectFinanceService(
     IProjectFinanceRepository sources,
     IPayrollRepository payroll,
-    IScheduleRepository schedules,
-    ICompanyRepository company,
+    IPayrollInputs payrollInputs,
     IClock clock) : IProjectFinanceService
 {
     private sealed record Loaded(
@@ -63,7 +61,7 @@ public sealed class ProjectFinanceService(
     {
         var ids = projects.Select(p => p.Id).ToList();
         var entries = await sources.WorkEntriesAsync(ids, cancellationToken);
-        var payRates = await sources.PayRatesAsync(entries.Select(e => e.UserId).Distinct().ToList(), cancellationToken);
+        var payRates = await PayRatesAsync(entries.Select(e => e.UserId).Distinct().ToList(), cancellationToken);
 
         return new Loaded(
             new ExchangeRateTable(await sources.ExchangeRatesAsync(cancellationToken)),
@@ -97,8 +95,8 @@ public sealed class ProjectFinanceService(
         long[] ids = [project.Id];
         var rates = new ExchangeRateTable(await sources.ExchangeRatesAsync(cancellationToken));
         var entries = await sources.WorkEntriesAsync(ids, cancellationToken);
-        var payRates = await sources.PayRatesAsync(entries.Select(e => e.UserId).Distinct().ToList(), cancellationToken);
-        var breaks = (await PaidBreaksAsync(entries, payRates, cancellationToken)).Where(b => b.ProjectId == project.Id).Select(b => b.Cost);
+        var payRates = await PayRatesAsync(entries.Select(e => e.UserId).Distinct().ToList(), cancellationToken);
+        var breaks =(await PaidBreaksAsync(entries, payRates, cancellationToken)).Where(b => b.ProjectId == project.Id).Select(b => b.Cost);
         var (items, _) = CostItems(
             entries,
             payRates,
@@ -118,6 +116,20 @@ public sealed class ProjectFinanceService(
             weekStart);
     }
 
+    public async Task<IReadOnlyList<ProjectFinance.PayRate>> PayRatesAsync(
+        IReadOnlyCollection<long> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var history = (await sources.PayHistoryAsync(userIds, cancellationToken)).ToLookup(p => p.UserId);
+        if (history.Count == 0)
+        {
+            return [];
+        }
+
+        var calendars = await payrollInputs.CalendarsAsync(history.Select(g => g.Key).ToList(), cancellationToken);
+        return history.SelectMany(g => ProjectFinance.RatesOf(g, calendars[g.Key], clock.CompanyToday)).ToList();
+    }
+
     public async Task<IReadOnlyList<BreakCost>> PaidBreaksAsync(
         IReadOnlyCollection<WorkEntryRow> work,
         IReadOnlyList<ProjectFinance.PayRate> payRates,
@@ -134,17 +146,13 @@ public sealed class ProjectFinanceService(
         var workedDays = theirs.Select(e => (e.UserId, Day: clock.ToCompanyDate(e.StartedAt))).ToHashSet();
         var allWork = (await payroll.WorkAsync(userIds, theirs.Min(e => e.StartedAt).AddDays(-1), theirs.Max(e => e.StartedAt).AddDays(1), cancellationToken))
             .ToLookup(e => e.UserId);
-        var personal = (await schedules.SchedulesAsync(userIds, cancellationToken)).ToLookup(s => s.UserId);
-        var policies = (await company.GetPoliciesAsync(cancellationToken))
-            .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
-            .ToList();
+        var calendars = await payrollInputs.CalendarsAsync(userIds, cancellationToken);
         var rates = payRates.ToLookup(r => r.UserId);
 
         var costs = new List<BreakCost>();
         foreach (var userId in userIds)
         {
-            var calendar = new PersonCalendar(policies, personal[userId].Select(s => new PersonCalendar.Schedule(
-                s.EffectiveFrom, s.FollowsDefault, s.Days.ToDictionary(d => (int)d.Weekday, d => ((int)d.StartMinute, (int)d.EndMinute)))));
+            var calendar = calendars[userId];
             var days = allWork[userId]
                 .Select(e => (Entry: e, Local: clock.ToCompanyTime(e.StartedAt)))
                 .Select(x => new PaidBreaks.Work(x.Entry.Id, x.Entry.ProjectId, DateOnly.FromDateTime(x.Local), (int)x.Local.TimeOfDay.TotalMinutes, x.Entry.Minutes))

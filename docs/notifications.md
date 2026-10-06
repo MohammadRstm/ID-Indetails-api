@@ -73,7 +73,7 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 
 | Kind | When | Sent to | Subject | Payload |
 |---|---|---|---|---|
-| `weekly_summary` | From the first day of the week (the company's week start), for the week before, while Design's `weeklySummary` is on. Key `weekly-summary-{weekStart}` | Each Design admin and employee holding `work_entry:create`, zero hours included | — | `weekStart`, `minutes`, `entries`, `projects` |
+| `weekly_summary` | From the first day of the week (the company's week start), for the week before, while Design's `weeklySummary` is on. Key `weekly-summary-{weekStart}` | Each Design employee holding `work_entry:create` (admins log no hours), zero hours included | — | `weekStart`, `minutes`, `entries`, `projects` |
 | `project_idle` | An active Design project with no work for 7 days (counted from its start date when it has none), while Design's `notifyIdle` is on. Again after each new quiet stretch: key `project-idle-{projectId}-{quietSince}` | Its owner and holders of `project:change_status` | the project | `projectTitle`, `days`, `lastWorkOn` |
 | `requirement_due_soon` | The day before an open requirement of an active project is due. Key `requirement-due-{id}-{deadline}` | Its assignees | the requirement | `projectTitle`, `text`, `deadline` |
 | `requirement_overdue` | Once its deadline has passed, for deadlines up to 7 days ago (older ones are left alone, so turning this on doesn't flood anyone). Key `requirement-overdue-{id}-{deadline}` | Its assignees and holders of `requirement:manage` | the requirement | `projectTitle`, `text`, `deadline` |

@@ -19,8 +19,8 @@ public class LeavingPayTests
     // Monday to Friday, 9 to 5, a paid 60-minute break (7h required, 8h paid).
     private static readonly PersonCalendar Calendar = new([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
 
-    // 1,733.30 a month is 10 an hour.
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1733.30m, "USD", 10m);
+    // 1,760 a month is 10 an hour in June (176 paid hours).
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD");
 
     private static SalaryCalculator.Result? Pay(DateOnly month, DateOnly today, IEnumerable<int> workedDays, DateOnly? leftOn = null)
         => SalaryCalculator.Calculate(new SalaryCalculator.Input(
@@ -43,7 +43,7 @@ public class LeavingPayTests
             p => p.ProRated.ShouldBeTrue(),
             p => p.WorkingDays.ShouldBe(22),
             p => p.WorkingDaysPaid.ShouldBe(11),
-            p => p.BasePay.ShouldBe(866.65m),
+            p => p.BasePay.ShouldBe(880m),
             p => p.Deduction.ShouldBe(0m));
         pay.Ledger!.ShouldSatisfyAllConditions(
             l => l.Expected.ShouldBe(11 * 420),
@@ -58,7 +58,7 @@ public class LeavingPayTests
 
         pay.Ledger!.MissedDays.ShouldBe([LeftOn]);
         pay.DeductionMinutes.ShouldBe(480);
-        pay.BasePay.ShouldBe(866.65m - 80m);
+        pay.BasePay.ShouldBe(880m - 80m);
     }
 
     [Fact]

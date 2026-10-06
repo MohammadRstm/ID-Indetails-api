@@ -19,9 +19,9 @@ public class PayrollTests
 
     private static Work At(long id, int day, int startHour, int hours) => new(id, new DateOnly(2026, 6, day), startHour * 60, hours * 60);
 
-    // 1,733.30 a month is 10 an hour; 20 an hour for the hourly terms.
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1733.30m, "USD", 10m);
-    private static readonly SalaryCalculator.PayTerms Hourly = new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD", 20m);
+    // 1,760 a month is 10 an hour in June (22 days of 8 paid hours); 20 an hour for the hourly terms.
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD");
+    private static readonly SalaryCalculator.PayTerms Hourly = new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD");
 
     private static SalaryCalculator.Result Pay(
         SalaryCalculator.PayTerms terms,
@@ -86,9 +86,10 @@ public class PayrollTests
         result.WorkingDays.ShouldBe(22);
         result.WorkingDaysPaid.ShouldBe(2);
 
-        // 1,733.30 x 2/22 = 157.57, less 6h short at 10 (the missed day was partly made up, so no break is lost).
+        // 1,760 x 2/22 = 160, less 6h short at 10 (the missed day was partly made up, so no break is lost).
+        result.HourlyRate.ShouldBe(10m);
         result.DeductionMinutes.ShouldBe(360);
-        result.BasePay.ShouldBe(97.57m);
+        result.BasePay.ShouldBe(100m);
     }
 
     [Fact]
@@ -99,8 +100,27 @@ public class PayrollTests
 
         result.Ledger!.Short.ShouldBe(420);
         result.DeductionMinutes.ShouldBe(480);
-        result.Deduction.ShouldBe(78.79m); // capped at the pro-rated salary of one day (1,733.30 / 22)
+        result.Deduction.ShouldBe(80m); // 8h at 10: exactly the day's share of the salary (1,760 / 22)
         result.BasePay.ShouldBe(0m);
+    }
+
+    [Fact]
+    public void A_salary_is_the_same_every_month_but_its_hours_are_worth_what_the_month_gives()
+    {
+        // July 2026 has 23 working days (184 paid hours), February 20 (160).
+        var july = SalaryCalculator.Calculate(new SalaryCalculator.Input(
+            new(2026, 7, 1), new(2026, 8, 10), new(2026, 1, 1), true, [Monthly], Calendar(), [], []))!;
+        var february = SalaryCalculator.Calculate(new SalaryCalculator.Input(
+            new(2026, 2, 1), new(2026, 8, 10), new(2026, 1, 1), false, [Monthly], Calendar(), [], []))!;
+
+        july.HourlyRate.ShouldBe(9.5652m);     // 1,760 / 184
+        february.HourlyRate.ShouldBe(11m);     // 1,760 / 160
+        february.BasePay.ShouldBe(1760m);
+
+        // Every working day of July missed: 23 full paid days, which is the whole salary.
+        july.DeductionMinutes.ShouldBe(184 * 60);
+        july.Deduction.ShouldBe(1760m);
+        july.BasePay.ShouldBe(0m);
     }
 
     [Fact]
@@ -135,8 +155,10 @@ public class PayrollTests
     {
         var result = Pay(Monthly, new(2026, 1, 1), [At(1, 6, 10, 2)], ledger: false);
 
-        result.BasePay.ShouldBe(1733.30m);
-        result.OvertimePay.ShouldBe(30m); // 2h on a Saturday at 10 x 1.5
+        // Overtime is paid at the true hourly rate, whatever the month: 1,760 / 173.33 = 10.1538, not June's 10.
+        result.BasePay.ShouldBe(1760m);
+        result.StandardHourlyRate.ShouldBe(10.1538m);
+        result.OvertimePay.ShouldBe(30.46m); // 2h on a Saturday at 10.1538 x 1.5
     }
 
     [Fact]

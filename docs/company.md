@@ -72,11 +72,13 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 Always calculated from the records, never stored (`Business/Payroll/`). The month defaults to this one and can't be in the future.
 
-**Who is listed:** every person with a pay record who was employed on some day of the month (a period of employment overlapping it, see [employees.md](employees.md#deactivating-and-reactivating)), in the caller's domains. Super admins appear only if they have pay and the caller sees both domains. People who joined after the month, left before it, or were away all of it are left out. The list, the detail, the CSV, the totals and the month-end short-hours alert all follow this.
+**Who is listed:** every person with a pay record who was employed on some day of the month (a period of employment overlapping it, see [employees.md](employees.md#deactivating-and-reactivating)), in the caller's domains. Super admins appear only if they have pay and the caller sees both domains. People who joined after the month, left before it, or were away all of it are left out. The list, the detail, the CSV, the totals and the month-end short-hours alert all follow this. People of the filtered list who had joined by then but have no pay set are named in `withoutPay`, so a missing salary shows.
+
+**The year** (`GET /api/company/salaries/year?year=&domain=&search=`, `salary:view`): what each person is owed in every month of the year up to this month (each month as the list works it out: basis, the salary or rate in force, and the total), and a total per month and currency. This year by default; never a future year (`400 salary_month_in_future`).
 
 **Leavers:** a person's final month ends on their last working day (included). Monthly pay is pro-rated to it the way a joining month is (`leftOn` on the row, and `workingDaysPaid` of `workingDays`), and their hours ledger ends there too, so the month counts as closed for them once they have left. Someone taken back later isn't paid, or counted short, for the days they were away between two periods: a month partly away is pro-rated, a month wholly away isn't listed.
 
-**Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay is salary ÷ 173.33.
+**Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay (`hourlyRate`) is the salary ÷ the paid hours the person's schedule gives that month, so the salary stays fixed whatever the month's length; overtime is paid at the true hourly rate (`standardHourlyRate`): the salary ÷ a standard month's paid hours (weekly paid hours × 52 ÷ 12). See [employees.md](employees.md#pay).
 
 **Overtime** (`Overtime.cs`), day by day, using the person's schedule or the company week in force that day:
 - all time on a day off;
@@ -90,12 +92,12 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 - A closed month still short is *flagged*; the month in progress is *behind*.
 
 **Pay** (`SalaryCalculator.cs`):
-- **Monthly:** the salary, pro-rated on the person's own working days if they joined or left mid-month, plus overtime at the multiplier in force that day.
-  - In a closed, flagged month the shortfall is deducted at the hourly rate. Whole missed days still owed also lose their paid break, so each costs the full paid day (8h on a 9–5 day); a partly made-up remainder costs only its hours. Example: 21 missed days with one hour made up is 20 whole days (8h each) plus 6h.
+- **Monthly:** the salary, pro-rated on the paid hours of the person's own working days if they joined or left mid-month, plus overtime at the true hourly rate × the multiplier in force that day.
+  - In a closed, flagged month the shortfall is deducted at the month's hourly rate, so a whole missed day costs exactly its share of the salary. Whole missed days still owed also lose their paid break, so each costs the full paid day (8h on a 9–5 day); a partly made-up remainder costs only its hours. Example: 21 missed days with one hour made up is 20 whole days (8h each) plus 6h.
   - Unpaid excuses are deducted too: unpaid minutes at the hourly rate, each unpaid day off as the full paid day, an unpaid whole month as the whole salary. The deduction never exceeds the salary.
 - **Hourly:** hours within schedule and made-up hours at the rate in force each day, plus the paid break of each working day they worked, plus overtime at the rate × multiplier. Excuses don't change their pay (they are paid for what they log).
-- Admins who log hours are paid overtime the same way, without an hours ledger. Execution staff don't log hours: they are paid their salary.
-- **Super admins** are paid a monthly salary, set like anyone else's (an hourly pay is refused, `400 super_admin_paid_monthly`, on a pay change or an invitation). Their pay never depends on hours: they needn't log any, and any they do earn no overtime or paid breaks (and count as normal hours on Project pay). It is pro-rated on their working days in a month they join or leave, and unpaid excuses are deducted, as for anyone on a salary. Their rows say hours aren't tracked (`tracksHours` is true for Design's people only).
+- Execution staff don't log hours: they are paid their salary.
+- **Admins and super admins** are paid a fixed monthly salary, required when they are invited (an hourly pay is refused, `400 fixed_salary_paid_monthly`, on a pay change or an invitation). They log no hours, so their pay never depends on hours: any logged before that rule earn no overtime or paid breaks (and count as normal hours on Project pay). It is pro-rated on their working days in a month they join or leave, and unpaid excuses are deducted, as for anyone on a salary. Their rows say hours aren't tracked (`tracksHours` is true for Design employees only). Admins' salaries are no cost anywhere; super admins' come off the company's net profit (below).
 - Totals are per currency and never converted.
 
 **Excuses:** `kind` is `minutes` (with `minutes`), `days` (with days of that month) or `whole_month`; `isPaid` defaults to true; the note defaults by kind. Never for a future month (`400 excuse_month_in_future`). Removing one is a soft delete.
@@ -121,7 +123,7 @@ Always calculated, from the shared finance calculator (`Business/Finance/`), in 
 What each Design project paid its people in a week, month or quarter (`Business/Payroll/ProjectPay.cs`).
 
 - **Period:** the week (following the company's week start), month or quarter containing `date` (today by default). Never a future period (`400 project_pay_period_in_future`).
-- **Each work entry** is paid at the person's hourly rate in force that day (salary ÷ 173.33 for monthly pay): its hours within schedule, plus any overtime that made up a shortfall in the month, at the plain rate, and the rest of its overtime at the multiplier.
+- **Each work entry** is paid as Salaries pays it: its hours within schedule, plus any overtime that made up a shortfall in the month, at the person's hourly rate that day (a salary's rate of that month), and the rest of its overtime at the true hourly rate × the multiplier.
 - **Left out:** paid breaks and salary deductions. They aren't worked on any project, so project pay differs from Salaries for hourly staff by exactly their paid breaks. Project cost is different: it counts everyone's paid break as labour ([projects.md](projects.md)).
 - Overtime and made-up hours are worked out from the person's whole day and month, whichever projects they worked on. A leaver's hours ledger ends on the day they left, as in Salaries.
 - Grouped by project, then person and currency; projects are ordered by USD pay. Someone with no pay record is listed with `priced: false` and paid 0.

@@ -4,8 +4,8 @@ namespace ID_Indetails.LoadTests.Tool.Seeding;
 
 /// <summary>
 /// Design time logging. Each working evening every designer logs their day on the projects they're on: a few blocks
-/// with gaps and usually a lunch break, sometimes a long day, now and then a day off sick. Design admins log some of
-/// their own work too. Admins then comment on a few of the day's entries.
+/// with gaps and usually a lunch break, sometimes a long day, now and then a day off sick. Admins log no hours (they
+/// are paid a fixed salary); they comment on a few of the day's entries.
 /// </summary>
 public sealed class DesignWork(World world, ApiClient api, SimulatedClock clock)
 {
@@ -23,21 +23,16 @@ public sealed class DesignWork(World world, ApiClient api, SimulatedClock clock)
         // Late enough that the longest day (to 19:30) has ended: the API refuses work that ends in the future.
         clock.MoveTo(day, 19, 45);
         _today.Clear();
-        foreach (var person in world.Working(day, p => p.Domain == "design"))
+        foreach (var person in world.Working(day, p => p.Domain == "design" && p.IsEmployee))
         {
             if (person.PartTime && day.DayOfWeek is not (DayOfWeek.Monday or DayOfWeek.Wednesday or DayOfWeek.Friday))
             {
                 continue;
             }
 
-            if (person.IsEmployee && Random.Chance(0.02))
+            if (Random.Chance(0.02))
             {
                 world.Absences.Add((person, day));
-                continue;
-            }
-
-            if (person.IsAdmin && !Random.Chance(0.4))
-            {
                 continue;
             }
 
@@ -57,7 +52,6 @@ public sealed class DesignWork(World world, ApiClient api, SimulatedClock clock)
 
         var minute = 9 * 60 + 5 * Random.Next(0, 6);
         var end = person.PartTime ? 13 * 60
-            : person.IsAdmin ? minute + 60 * Random.Next(2, 5)
             : Random.Chance(0.06) ? 19 * 60 + 30
             : 17 * 60 + 15 * Random.Next(-2, 3);
         var hadLunch = person.PartTime || !Random.Chance(0.7);

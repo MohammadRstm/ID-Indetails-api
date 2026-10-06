@@ -16,6 +16,12 @@ public interface IProjectFinanceService
     Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// What an hour of each person's time costs, over time (see <c>ProjectFinance.RatesOf</c>): a monthly salary's rate
+    /// month by month, from their schedule.
+    /// </summary>
+    Task<IReadOnlyList<ProjectFinance.PayRate>> PayRatesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The paid breaks of everyone with a pay record on the days of the given work, as labour cost per project and day
     /// (see <c>Business/Finance/PaidBreaks</c>). Loads their other work of those days, since a break is shared across
     /// all the day's projects; the result can therefore include projects outside <paramref name="work"/>.
