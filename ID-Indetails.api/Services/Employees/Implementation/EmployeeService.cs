@@ -298,6 +298,12 @@ public sealed class EmployeeService(
             user.TeamId = null;
         }
 
+        // a promotion or demotion may come with a new job title; without one, the old title stays
+        if (request.Position is not null)
+        {
+            user.Position = Clean(request.Position);
+        }
+
         user.UpdatedAt = clock.UtcNow;
 
         // A manual role change always hands the person over to the new role's defaults.
