@@ -3,10 +3,17 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using FluentValidation;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Proton;
 using ID_Indetails.api.Configuration.Options;
+using ID_Indetails.api.Constants;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Models;
+using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Safety;
+using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Proton.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
@@ -34,17 +41,28 @@ public sealed record ProtonToolResult(
     string Content,
     IReadOnlyList<ProtonRef> Refs,
     DayRange? Period,
-    int ElapsedMs);
+    int ElapsedMs)
+{
+    /// <summary>Set when an action tool proposed a change: it now waits for the user's confirmation.</summary>
+    public ProtonPendingAction? Pending { get; init; }
+}
+
+/// <summary>Which conversation, model and prompt the tools are used for: recorded with every proposed action.</summary>
+public sealed record ProtonOrigin(Guid ConversationId, string Model, string PromptVersion);
 
 /// <summary>
 /// The shared tool layer every Proton interface uses. It offers a caller only the tools whose endpoints they may call,
-/// and runs each call read-only, inside the existing services and their authorization, with a time limit.
+/// and runs each call read-only, inside the existing services and their authorization, with a time limit. An action
+/// tool's proposal is stored here as a pending action; it runs only through <see cref="ProtonToolSession.ExecuteAsync"/>,
+/// which only the user's confirmation reaches.
 /// </summary>
 public sealed class ProtonToolbox(
     IEnumerable<IProtonTool> tools,
     IAuthorizationService authorization,
     IPermissionService permissions,
     ICompanySettingsService companySettings,
+    IProtonActionRepository actions,
+    IUnitOfWork unitOfWork,
     IClock clock,
     IServiceProvider services,
     IOptions<ProtonOptions> options,
@@ -56,7 +74,7 @@ public sealed class ProtonToolbox(
 
     private readonly ILogger _log = loggers.CreateLogger(LogCategory);
 
-    public async Task<ProtonToolSession> OpenAsync(ClaimsPrincipal caller, long userId, CancellationToken cancellationToken)
+    public async Task<ProtonToolSession> OpenAsync(ClaimsPrincipal caller, long userId, ProtonOrigin origin, CancellationToken cancellationToken)
     {
         var settings = await companySettings.GetAsync(cancellationToken);
         var context = new ProtonToolContext(
@@ -76,16 +94,15 @@ public sealed class ProtonToolbox(
             }
         }
 
-        return new ProtonToolSession(this, context, available);
+        return new ProtonToolSession(this, context, access, origin, available);
     }
 
-    internal async Task<ProtonToolResult> RunAsync(
-        ProtonToolContext context, IReadOnlyList<IProtonTool> available, string name, JsonElement input, CancellationToken cancellationToken)
+    internal async Task<ProtonToolResult> RunAsync(ProtonToolSession session, string name, JsonElement input, CancellationToken cancellationToken)
     {
         var watch = Stopwatch.StartNew();
-        var tool = available.FirstOrDefault(t => t.Name == name);
+        var tool = session.Tools.FirstOrDefault(t => t.Name == name);
         ProtonToolResult result;
-        if (tool is null || !await context.CanCallAsync(tool.Endpoint))
+        if (tool is null || !await session.Context.CanCallAsync(tool.Endpoint))
         {
             result = Fail(name, input, ProtonToolStatus.Forbidden, "This tool isn't available to this user.", watch);
         }
@@ -95,11 +112,11 @@ public sealed class ProtonToolbox(
             timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.ToolTimeoutSeconds));
             try
             {
-                var output = await ProtonReadOnly.RunAsync(() => tool.RunAsync(input, context, timeout.Token));
-                var content = JsonSerializer.Serialize(new { status = "ok", data = output.Data }, ProtonJson.Options);
-                result = content.Length > MaxContentLength
-                    ? Fail(name, input, ProtonToolStatus.Invalid, "The result is too large. Ask for fewer rows or a shorter period.", watch)
-                    : new ProtonToolResult(name, input, ProtonToolStatus.Ok, content, output.Refs, output.Period, Elapsed(watch));
+                // Action tools only propose here: they run inside the same read-only guard as every read.
+                var output = await ProtonReadOnly.RunAsync(() => tool.RunAsync(input, session.Context, timeout.Token));
+                result = output.Proposal is { } proposal && tool is IProtonActionTool action
+                    ? await ProposeAsync(session, action, input, proposal, output, watch, cancellationToken)
+                    : Ok(name, input, new { status = "ok", data = output.Data }, output, watch);
             }
             catch (ProtonToolInputException exception)
             {
@@ -139,6 +156,77 @@ public sealed class ProtonToolbox(
         return result;
     }
 
+    /// <summary>
+    /// Stores a proposal as the conversation's one pending action (any earlier one is superseded, so a changed request
+    /// always needs a new confirmation) and tells the model nothing has changed yet.
+    /// </summary>
+    private async Task<ProtonToolResult> ProposeAsync(
+        ProtonToolSession session, IProtonActionTool tool, JsonElement input, ProtonProposal proposal, ProtonToolOutput output,
+        Stopwatch watch, CancellationToken cancellationToken)
+    {
+        var now = clock.UtcNow;
+        var pending = new ProtonAction
+        {
+            PublicId = Guid.NewGuid(),
+            UserId = session.Access.UserId,
+            Role = session.Access.Role,
+            DomainCode = session.Access.Domain,
+            ConversationId = session.Origin.ConversationId,
+            Tool = tool.Name,
+            Risk = tool.Risk,
+            Arguments = proposal.Arguments,
+            Preview = JsonSerializer.Serialize(proposal.Preview, ProtonJson.Options),
+            TargetType = proposal.Target?.Type.ToString().ToLowerInvariant(),
+            TargetId = proposal.Target?.Id,
+            Status = ProtonActionStatus.Pending,
+            CreatedAt = now,
+            ExpiresAt = now.AddMinutes(options.Value.ActionMinutes),
+            Model = session.Origin.Model,
+            PromptVersion = session.Origin.PromptVersion,
+        };
+        actions.Add(pending);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await actions.SupersedeAsync(pending.ConversationId, pending.PublicId, now, cancellationToken);
+        _log.LogInformation("Proton proposed {Tool} as action {ActionId}.", tool.Name, pending.PublicId);
+
+        var model = new
+        {
+            status = "proposed",
+            action_id = pending.PublicId,
+            proposal = proposal.Preview,
+            expires_at = pending.ExpiresAt,
+            note = "Nothing has changed. The user now sees a card with exactly this and must press Confirm on it. " +
+                   "Tell them what will happen and that it needs their confirmation; never say it is done.",
+        };
+        return Ok(tool.Name, input, model, output, watch) with
+        {
+            Pending = new ProtonPendingAction(pending.PublicId, tool.Name, tool.Risk, proposal.Preview, pending.ExpiresAt),
+        };
+    }
+
+    /// <summary>
+    /// Runs a confirmed action: only if the user still passes the write endpoint's policies now, and outside the
+    /// read-only guard. The tool re-validates its stored request and calls the existing service.
+    /// </summary>
+    internal async Task<ProtonActionDone> ExecuteAsync(ProtonToolSession session, string name, string arguments, CancellationToken cancellationToken)
+    {
+        var tool = session.Tools.OfType<IProtonActionTool>().FirstOrDefault(t => t.Name == name);
+        if (tool is null || !await session.Context.CanCallAsync(tool.Endpoint))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "You're no longer allowed to do this.");
+        }
+
+        return await tool.ExecuteAsync(arguments, session.Context, cancellationToken);
+    }
+
+    private static ProtonToolResult Ok(string tool, JsonElement input, object content, ProtonToolOutput output, Stopwatch watch)
+    {
+        var json = JsonSerializer.Serialize(content, ProtonJson.Options);
+        return json.Length > MaxContentLength
+            ? Fail(tool, input, ProtonToolStatus.Invalid, "The result is too large. Ask for fewer rows or a shorter period.", watch)
+            : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch));
+    }
+
     private static ProtonToolResult Fail(string tool, JsonElement input, ProtonToolStatus status, string message, Stopwatch watch)
         => new(tool, input, status,
             JsonSerializer.Serialize(new { status, message }, ProtonJson.Options),
@@ -147,13 +235,24 @@ public sealed class ProtonToolbox(
     private static int Elapsed(Stopwatch watch) => (int)watch.ElapsedMilliseconds;
 }
 
-/// <summary>The tools one caller may use during one question.</summary>
-public sealed class ProtonToolSession(ProtonToolbox toolbox, ProtonToolContext context, IReadOnlyList<IProtonTool> tools)
+/// <summary>The tools one caller may use, for one question or one confirmation.</summary>
+public sealed class ProtonToolSession(
+    ProtonToolbox toolbox, ProtonToolContext context, UserAccess access, ProtonOrigin origin, IReadOnlyList<IProtonTool> tools)
 {
     public IReadOnlyList<IProtonTool> Tools => tools;
 
+    internal ProtonToolContext Context => context;
+
+    internal UserAccess Access => access;
+
+    internal ProtonOrigin Origin => origin;
+
     public Task<ProtonToolResult> RunAsync(string name, JsonElement input, CancellationToken cancellationToken)
-        => toolbox.RunAsync(context, tools, name, input, cancellationToken);
+        => toolbox.RunAsync(this, name, input, cancellationToken);
+
+    /// <summary>For the confirmation flow only (<see cref="ProtonActionService"/>); no model ever reaches it.</summary>
+    internal Task<ProtonActionDone> ExecuteAsync(string name, string arguments, CancellationToken cancellationToken)
+        => toolbox.ExecuteAsync(this, name, arguments, cancellationToken);
 }
 
 /// <summary>Tool inputs for logs: ids, numbers, dates and enum values as they are; other text only as its length.</summary>

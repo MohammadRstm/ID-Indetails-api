@@ -4,6 +4,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Extensions;
+using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -48,8 +49,38 @@ public class ProtonToolCatalogTests
             .ShouldBe([AuthorizationPolicies.PermissionPrefix + PermissionCodes.FinancialView]);
         // …all of an action's attributes, which must all pass…
         ProtonEndpoint.Of<ActivityController>(nameof(ActivityController.Today)).Policies.Count.ShouldBe(2);
-        // …and refuses to stand in for anything that writes.
+        // …and keeps reads and writes apart: a read tool can't stand in for anything that writes, nor an action for a read.
         Should.Throw<InvalidOperationException>(() => ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Create)));
+        Should.Throw<InvalidOperationException>(() => ProtonEndpoint.OfWrite<ProjectsController>(nameof(ProjectsController.Get)));
+    }
+
+    /// <summary>Only action tools touch write endpoints, and only the approved low/medium-risk ones, never money or deletion.</summary>
+    [Fact]
+    public void Only_action_tools_stand_in_for_write_endpoints_and_none_moves_money_or_deletes()
+    {
+        foreach (var tool in Tools)
+        {
+            tool.Endpoint.Writes.ShouldBe(tool is IProtonActionTool, tool.Name);
+            (tool is IProtonActionTool).ShouldBe(tool.Name.StartsWith("propose_"), tool.Name);
+        }
+
+        string[] money =
+        [
+            PermissionCodes.FinancialView, PermissionCodes.InvoiceCreate, PermissionCodes.InvoiceSend, PermissionCodes.InvoiceVoid,
+            PermissionCodes.PaymentRecord, PermissionCodes.PaymentVoid, PermissionCodes.ExpenseManage, PermissionCodes.EmployeePayManage,
+            PermissionCodes.ProjectPricingManage, PermissionCodes.BillingSettingsManage, PermissionCodes.ExchangeRateManage,
+        ];
+        var actions = Tools.OfType<IProtonActionTool>().ToList();
+        actions.Select(a => a.Name).ShouldBe(
+        [
+            "propose_add_requirement", "propose_update_requirement", "propose_set_requirement_done",
+            "propose_change_project_status", "propose_update_project", "propose_create_project",
+        ], ignoreOrder: true);
+        foreach (var action in actions)
+        {
+            action.Endpoint.Name.ShouldNotContain("Delete", Case.Insensitive, action.Name);
+            action.Endpoint.Policies.ShouldAllBe(p => !money.Any(m => p.Contains(m)), action.Name);
+        }
     }
 
     [Fact]

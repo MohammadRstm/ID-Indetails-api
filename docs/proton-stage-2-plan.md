@@ -1,6 +1,6 @@
 # Proton — Stage 2 plan: controlled actions
 
-Status: **design, awaiting approval** of the decisions in the last section. Builds on Stage 1
+Status: **approved and implemented** (7 Oct 2026: the `proton_actions` table and all four action groups). Builds on Stage 1
 ([proton.md](proton.md)); nothing in Stage 1 is redesigned. Paths are relative to `ID-Indetails.api/`.
 
 The rule: **Proton never changes data itself.** The model can only *propose* an action. The user confirms that exact

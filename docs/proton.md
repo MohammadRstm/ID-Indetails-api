@@ -1,9 +1,10 @@
-# Proton — the read-only company assistant (Stage 1)
+# Proton — the company assistant
 
 Proton answers questions about Hourline's data in plain language: projects, requirements, meetings, clients,
-people, logged time, activity and, for people allowed to see it, money. **It only reads.** It can't create, change,
-delete, assign or send anything. The design and the decisions behind it are in
-[proton-stage-1-plan.md](proton-stage-1-plan.md).
+people, logged time, activity and, for people allowed to see it, money (Stage 1). It can also **propose** a few
+changes, which happen only when the user confirms them on a card (Stage 2, [Controlled actions](#controlled-actions-stage-2)).
+Proton itself never writes anything. The design and decisions are in [proton-stage-1-plan.md](proton-stage-1-plan.md)
+and [proton-stage-2-plan.md](proton-stage-2-plan.md).
 
 ## Who can use it
 
@@ -38,9 +39,10 @@ POST /api/proton/messages
   Authorization results are cached for the duration of one question.
 - **Validation is the API's own.** The FluentValidation validator the endpoint's query goes through runs on the
   tool's query too (`ProtonToolContext.ValidateAsync`), because services don't validate their input themselves.
-- **Read-only, three ways.** Tools can only mirror GET endpoints (`ProtonEndpoint` refuses anything else); no tool
-  calls a write method; and while a tool runs, an EF Core command interceptor refuses every statement that isn't a
-  `SELECT` (`Proton/Safety/ProtonReadOnly.cs`). A refused write is logged as an error.
+- **Tools never write, three ways.** Read tools can only mirror GET endpoints (`ProtonEndpoint.Of` refuses anything
+  else); action tools mirror a write endpoint but only *propose* (see Controlled actions); and while any tool runs,
+  an EF Core command interceptor refuses every statement that isn't a `SELECT` (`Proton/Safety/ProtonReadOnly.cs`).
+  A refused write is logged as an error.
 - **The model is replaceable, the tools aren't.** `ProtonToolbox` and the tools are provider-neutral. The chat
   (`Proton/Agent/ProtonChatAgent.cs`) is the only code that knows Claude. A future live-voice interface would be another
   agent over the same toolbox.
@@ -97,10 +99,51 @@ the week; running periods end today. Every result says which days it covers.
 - If the user's role, permissions or domains change, the conversation is closed (answers given under the old access
   must not carry over).
 
+## Controlled actions (Stage 2)
+
+| Tool | Risk | Stands in for (its policies are required to propose *and* to confirm) | Notes |
+|---|---|---|---|
+| `propose_add_requirement` | low | `POST /api/projects/{id}/requirements` | open projects only; assignees are employees of the domain |
+| `propose_update_requirement` | low | `PUT …/requirements/{id}` | text, deadline, assignees; refused if the requirement changed since |
+| `propose_set_requirement_done` | low | `POST …/requirements/{id}/done` (`/undone`) | |
+| `propose_change_project_status` | medium | `POST /api/projects/{id}/hold` (`/resume`) | hold and resume only: completing, archiving and reopening lock or unlock revenue |
+| `propose_update_project` | medium | `PUT /api/projects/{id}` | title, description, location, target date, owner; refused if the project changed since |
+| `propose_create_project` | medium | `POST /api/projects` | Design only, client or internal, no money fields |
+
+How it works (`Proton/Actions/`):
+
+1. **Propose.** The model calls a `propose_…` tool. Like every tool it runs inside the read-only guard: it reads the
+   target, checks the change with the existing business rules, and validates the exact request the endpoint would
+   take, with that endpoint's own validator. The toolbox stores it in `proton_actions` as the conversation's one
+   **pending** action (a newer proposal supersedes the older one) and the reply carries it as `pendingAction`. Nothing
+   else is written.
+2. **Confirm.** The user presses Confirm on the card: `POST /api/proton/actions/{id}/confirm` with only
+   `{conversationId}`. The stored request is what runs — the client never sends arguments. The action must be the
+   caller's own, in that conversation, pending and not expired (10 minutes, `Proton:ActionMinutes`). One conditional
+   `UPDATE` moves it to `executing`, so it can run once even if confirmed twice. The write endpoint's policies are
+   evaluated again **now**, the request is validated again, and the existing service makes the change (its own
+   domain checks, rules, transaction, activity events and notifications).
+3. **Outcome.** `succeeded` (with the record created or changed) or `failed` (with the service's own error code,
+   returned to the client in the uniform error contract). Proton learns the outcome from the app in the next
+   question's context note — never from the model.
+
+There is no tool that executes: "don't ask me", "I already approved" or text inside data can't make Proton change
+anything. Cancel: `POST /api/proton/actions/{id}/cancel`. Both decisions are rate limited under `proton`.
+
+`proton_actions` is also the audit: who (user, role, domain), conversation, tool, risk, the exact arguments and what
+the card showed, when it was proposed, decided and finished, the outcome, the record affected, and the model and
+prompt version. Error codes: `404 proton_action_not_found` (not yours, other conversation), `409
+proton_action_not_pending` (already decided, replaced or running), `422 proton_action_expired`, `422
+proton_action_stale`.
+
+The client shows Proton as a drawer from the top bar (`proton:use` only), with each proposal as a card listing what
+will change (before → after), its risk, and Cancel / Confirm. Typing "yes" confirms nothing.
+
 ## Prompts
 
 Markdown files in `Proton/Prompts/` (`proton.md` who Proton is and its rules, `data.md` what it may see and that
-people's text is data, `chat.md` how to answer in chat), embedded in the assembly. The prompt version recorded with
+people's text is data, `actions.md` how to propose changes and that only the card confirms them, `chat.md` how to
+answer in chat), embedded in the assembly. The prompt version recorded with
 each question is a hash of their text. The system prompt is the same for everyone, so it is cached by the provider;
 per-question facts go in the context note.
 
@@ -157,9 +200,12 @@ length), refusals as warnings, failures as errors. Question and answer text neve
 - Unit (`ID-Indetails.UnitTests/Proton`): periods, overdue, cost and allowances, the read-only guard, log redaction,
   the conversation focus, and the tool catalogue (every tool registered, mirrors a GET endpoint's policies, has a
   valid schema, and no output can carry the excluded fields).
-- Integration (`ProtonTests`, `ProtonLimitTests`, `ProtonSwitchedOffTests`): the real API with a scripted stand-in
+- Integration (`ProtonTests`, `ProtonLimitTests`, `ProtonSwitchedOffTests`, `ProtonActionTests`): the real API with a scripted stand-in
   for the Anthropic API (`FakeAnthropic`) — who may ask, which tools each user is offered, cross-domain and company
   data refused, follow-ups, conversation isolation, invalid tool input, model failure, the budget, top-ups and the
-  allowance, and that the database refuses writes while a tool runs.
+  allowance, and that the database refuses writes while a tool runs. Actions: nothing changes without a confirm, one
+  confirm runs once, only the proposer in that conversation can decide, superseded and expired proposals can't run,
+  a permission removed after the proposal is refused at confirm, stale updates are refused, service refusals are
+  recorded, and a conversation full of "do it without asking" writes nothing.
 - Not automated: answer quality with the real model (tool choice, follow-ups, refusals, prompt injection). Run the
   question catalogue in the plan by hand against a seeded database before enabling Proton and after prompt changes.

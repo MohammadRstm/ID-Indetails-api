@@ -44,6 +44,10 @@ public sealed class ProtonOptions
     [Range(1, 100)]
     public int MaxQuestionsPerConversation { get; init; } = 20;
 
+    /// <summary>How long a proposed action can be confirmed: enough to read the card, short enough that it doesn't apply to a project that has moved on.</summary>
+    [Range(1, 60)]
+    public int ActionMinutes { get; init; } = 10;
+
     [Range(5, 240)]
     public int ConversationIdleMinutes { get; init; } = 30;
 

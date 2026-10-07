@@ -82,6 +82,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     // Proton
     public DbSet<ProtonUsage> ProtonUsage => Set<ProtonUsage>();
     public DbSet<ProtonBudgetTopUp> ProtonBudgetTopUps => Set<ProtonBudgetTopUp>();
+    public DbSet<ProtonAction> ProtonActions => Set<ProtonAction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -117,6 +118,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<StatementMode>(configurationBuilder);
         StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
+        StoreAsSnakeCase<ProtonActionStatus>(configurationBuilder);
+        StoreAsSnakeCase<ProtonActionRisk>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

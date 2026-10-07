@@ -25,6 +25,34 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
 
     public int Questions { get; set; }
 
+    private readonly Queue<string> _actionNotes = new();
+
+    /// <summary>
+    /// What became of the actions the user confirmed or cancelled since the last question, as the confirmation flow
+    /// recorded it (never the model): told to the model with the next question, then dropped.
+    /// </summary>
+    public void NoteAction(string note)
+    {
+        lock (_actionNotes)
+        {
+            _actionNotes.Enqueue(note);
+            while (_actionNotes.Count > 5)
+            {
+                _actionNotes.Dequeue();
+            }
+        }
+    }
+
+    public IReadOnlyList<string> TakeActionNotes()
+    {
+        lock (_actionNotes)
+        {
+            var notes = _actionNotes.ToList();
+            _actionNotes.Clear();
+            return notes;
+        }
+    }
+
     /// <summary>One question at a time per conversation.</summary>
     public bool TryBegin() => Interlocked.CompareExchange(ref _busy, 1, 0) == 0;
 

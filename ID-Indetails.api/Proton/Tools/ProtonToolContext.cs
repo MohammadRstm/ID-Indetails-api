@@ -62,6 +62,19 @@ public sealed class ProtonToolContext(
         }
     }
 
+    /// <summary>The same, for a request known only at run time — as the MVC validation filter finds its validator.</summary>
+    public async Task ValidateAsync(object request, CancellationToken cancellationToken)
+    {
+        if (services.GetService(typeof(IValidator<>).MakeGenericType(request.GetType())) is IValidator validator)
+        {
+            var result = await validator.ValidateAsync(new ValidationContext<object>(request), cancellationToken);
+            if (!result.IsValid)
+            {
+                throw new ValidationException(result.Errors);
+            }
+        }
+    }
+
     public DayRange Period(ProtonPeriod? period, DateOnly? from, DateOnly? to, ProtonPeriod fallback, int maxDays = 366)
     {
         var (range, denial) = ProtonPeriods.Resolve(period ?? fallback, from, to, today, firstDayOfWeek, maxDays);

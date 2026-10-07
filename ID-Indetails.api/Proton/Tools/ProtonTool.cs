@@ -60,6 +60,9 @@ public abstract class ProtonTool<TInput> : IProtonTool where TInput : class
 /// <summary>What a tool found: the data the model reads, and the records it is about (for links and follow-ups).</summary>
 public sealed record ProtonToolOutput(object Data, IReadOnlyList<ProtonRef> Refs, DayRange? Period = null)
 {
+    /// <summary>Set only by action tools: the change they propose, which the user must confirm before anything happens.</summary>
+    public Actions.ProtonProposal? Proposal { get; init; }
+
     public static ProtonToolOutput Of(object data, params ProtonRef[] refs) => new(data, refs);
 }
 

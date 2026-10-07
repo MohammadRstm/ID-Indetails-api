@@ -148,4 +148,8 @@ public static class ErrorCodes
     public const string ProtonBudgetUsed = "proton_budget_used";
     public const string ProtonBusy = "proton_busy";
     public const string ProtonConversationEnded = "proton_conversation_ended";
+    public const string ProtonActionNotFound = "proton_action_not_found";
+    public const string ProtonActionNotPending = "proton_action_not_pending";
+    public const string ProtonActionExpired = "proton_action_expired";
+    public const string ProtonActionStale = "proton_action_stale";
 }

@@ -26,3 +26,11 @@ public sealed class TopUpProtonBudgetRequestValidator : AbstractValidator<TopUpP
         RuleFor(x => x.Note).MaximumLength(200);
     }
 }
+
+public sealed class DecideProtonActionRequestValidator : AbstractValidator<DecideProtonActionRequest>
+{
+    public DecideProtonActionRequestValidator()
+    {
+        RuleFor(x => x.ConversationId).NotEmpty().WithMessage("Which conversation is this from?");
+    }
+}

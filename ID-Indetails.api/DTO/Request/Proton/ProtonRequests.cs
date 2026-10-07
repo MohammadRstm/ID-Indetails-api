@@ -15,3 +15,9 @@ public sealed record TopUpProtonBudgetRequest
 
     public string? Note { get; init; }
 }
+
+/// <summary>Confirming or cancelling a proposed action: only its id (in the route) and the conversation it belongs to.</summary>
+public sealed record DecideProtonActionRequest
+{
+    public Guid ConversationId { get; init; }
+}

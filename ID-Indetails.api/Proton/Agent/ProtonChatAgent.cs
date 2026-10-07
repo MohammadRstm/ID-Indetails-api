@@ -73,7 +73,9 @@ public sealed class ProtonChatAgent(
                 turn.Answer,
                 turn.RefsIn(turn.Answer),
                 turn.Outcome == ProtonOutcome.Limited,
-                await usage.MineAsync(userId, CancellationToken.None));
+                await usage.MineAsync(userId, CancellationToken.None),
+                // One proposal at a time: a later one in the same answer has already replaced earlier ones.
+                turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending);
         }
         finally
         {
@@ -114,14 +116,15 @@ public sealed class ProtonChatAgent(
         var turn = new ProtonTurn(settings.Model);
         try
         {
-            var tools = await toolbox.OpenAsync(caller, access.UserId, cancellationToken);
+            var tools = await toolbox.OpenAsync(
+                caller, access.UserId, new ProtonOrigin(conversation.Id, settings.Model, ProtonPrompts.ChatVersion), cancellationToken);
             var definitions = tools.Tools.Select(Define).ToList();
             turn.Messages.Add(new MessageParam
             {
                 Role = Role.User,
                 Content = new List<ContentBlockParam>
                 {
-                    new TextBlockParam { Text = ContextNote(caller, access, conversation.Focus) },
+                    new TextBlockParam { Text = ContextNote(caller, access, conversation) },
                     new TextBlockParam { Text = text },
                 },
             });
@@ -273,16 +276,18 @@ public sealed class ProtonChatAgent(
     /// is asking and what they can see, and what the conversation is about. Sent with the question rather than in the
     /// system prompt, so the prompt stays the same for everyone and is cached.
     /// </summary>
-    private string ContextNote(ClaimsPrincipal caller, UserAccess access, ConversationFocus focus)
+    private string ContextNote(ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation)
     {
         var name = $"{caller.FindFirst(AuthClaimTypes.FirstName)?.Value} {caller.FindFirst(AuthClaimTypes.LastName)?.Value}".Trim();
         var today = clock.CompanyToday;
-        return $"""
+        var actions = conversation.TakeActionNotes();
+        var note = $"""
             [Context from Hourline — not written by the user]
             Today: {today.ToString("dddd d MMMM yyyy", CultureInfo.InvariantCulture)} (company time zone).
             Asking: {(name.Length > 0 ? name : "a user")}, {access.Role.Replace('_', ' ')}, who can see: {string.Join(", ", access.VisibleDomains)}.
-            Conversation focus: {focus.Describe()}.
+            Conversation focus: {conversation.Focus.Describe()}.
             """;
+        return actions.Count == 0 ? note : note + "\nSince the last message (from the confirmation buttons): " + string.Join(" ", actions);
     }
 
     /// <summary>What a conversation's answers depended on: if any of it changes, the conversation ends.</summary>

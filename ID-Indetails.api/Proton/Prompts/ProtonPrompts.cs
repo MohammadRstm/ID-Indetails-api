@@ -9,8 +9,8 @@ namespace ID_Indetails.api.Proton.Prompts;
 /// </summary>
 public static class ProtonPrompts
 {
-    /// <summary>For the text chat: who Proton is, what it may see, and how to answer in writing.</summary>
-    public static string Chat { get; } = string.Join("\n\n", Read("proton.md"), Read("data.md"), Read("chat.md"));
+    /// <summary>For the text chat: who Proton is, what it may see, how it proposes changes, and how to answer in writing.</summary>
+    public static string Chat { get; } = string.Join("\n\n", Read("proton.md"), Read("data.md"), Read("actions.md"), Read("chat.md"));
 
     public static string ChatVersion { get; } = Version(Chat);
 

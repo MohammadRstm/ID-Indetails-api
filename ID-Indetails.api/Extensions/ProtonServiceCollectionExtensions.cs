@@ -1,5 +1,6 @@
 using Anthropic;
 using ID_Indetails.api.Configuration.Options;
+using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Conversation;
 using ID_Indetails.api.Proton.Tools;
@@ -34,10 +35,12 @@ public static class ProtonServiceCollectionExtensions
         });
 
         services.AddScoped<IProtonUsageRepository, ProtonUsageRepository>();
+        services.AddScoped<IProtonActionRepository, ProtonActionRepository>();
         services.AddScoped<ProtonUsageService>();
         services.AddSingleton<ProtonConversationStore>();
         services.AddScoped<ProtonToolbox>();
         services.AddScoped<ProtonChatAgent>();
+        services.AddScoped<ProtonActionService>();
 
         // Read-only tools, shared by every Proton interface.
         services.AddScoped<IProtonTool, FindTool>();
@@ -64,6 +67,14 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ListInvoicesTool>();
         services.AddScoped<IProtonTool, ListPaymentsTool>();
         services.AddScoped<IProtonTool, GetCompanyOverviewTool>();
+
+        // Action tools: they only propose; the user's confirmation carries a proposal out (ProtonActionService).
+        services.AddScoped<IProtonTool, ProposeAddRequirementTool>();
+        services.AddScoped<IProtonTool, ProposeUpdateRequirementTool>();
+        services.AddScoped<IProtonTool, ProposeSetRequirementDoneTool>();
+        services.AddScoped<IProtonTool, ProposeChangeProjectStatusTool>();
+        services.AddScoped<IProtonTool, ProposeUpdateProjectTool>();
+        services.AddScoped<IProtonTool, ProposeCreateProjectTool>();
 
         return services;
     }
