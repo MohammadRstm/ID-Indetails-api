@@ -71,6 +71,22 @@ public class PermissionCatalogTests
     }
 
     [Fact]
+    public void Admin_sees_no_money_and_invites_no_one()
+    {
+        GrantsOf(RoleCodes.Admin).ShouldBe(
+        [
+            PermissionCodes.ProjectView, PermissionCodes.ProjectCreate, PermissionCodes.ProjectEdit, PermissionCodes.ProjectChangeStatus,
+            PermissionCodes.RequirementView, PermissionCodes.RequirementManage, PermissionCodes.RequirementCompleteOwn,
+            PermissionCodes.MeetingManage, PermissionCodes.MeetingCreate,
+            PermissionCodes.WorkEntryViewAll, PermissionCodes.WorkEntryComment,
+            PermissionCodes.MaterialCreate, PermissionCodes.MaterialManage, PermissionCodes.LabourReportCreate, PermissionCodes.LabourReportManage,
+            PermissionCodes.ClientView, PermissionCodes.ClientCreate, PermissionCodes.ClientManage,
+            PermissionCodes.EmployeeView, PermissionCodes.EmployeeManage, PermissionCodes.TeamManage,
+            PermissionCodes.ActivityView, PermissionCodes.ReportView, PermissionCodes.DomainSettingsManage, PermissionCodes.ProtonUse,
+        ], ignoreOrder: true);
+    }
+
+    [Fact]
     public void Employee_never_sees_money_or_manages_anything()
     {
         var employee = GrantsOf(RoleCodes.Employee);

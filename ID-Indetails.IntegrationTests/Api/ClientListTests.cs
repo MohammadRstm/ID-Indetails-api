@@ -36,7 +36,7 @@ public class ClientListTests(ApiFactory api) : IClassFixture<ApiFactory>
         var first = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         var a = first.Client!.Id;
         var second = await (await Client.PostJsonAsync("/api/projects",
-            new { title = "Second job", domainCode = DomainCodes.Design, clientId = a, revenue = 1000m }, admin.AccessToken)).ReadAsync<ProjectResponse>();
+            new { title = "Second job", domainCode = DomainCodes.Design, clientId = a }, admin.AccessToken)).ReadAsync<ProjectResponse>();
         var held = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         var b = held.Client!.Id;
         var c = (await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design)).Id;
@@ -91,7 +91,7 @@ public class ClientMoneyListTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Money_sorts_and_the_owing_filter_need_financial_view()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await Projects.SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
         var big = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);

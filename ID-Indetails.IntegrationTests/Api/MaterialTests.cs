@@ -16,7 +16,7 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Site_staff_record_materials_and_see_costs_but_not_client_prices()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
 

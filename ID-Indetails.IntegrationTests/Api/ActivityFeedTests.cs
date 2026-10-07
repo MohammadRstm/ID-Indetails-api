@@ -21,7 +21,7 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 7000);
         var entry = await Work.LogAsync(employee.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 45, "Poster layout");
@@ -59,7 +59,7 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_markup_change_keeps_the_exact_markup_in_its_payload_for_money_viewers_only()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
         (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.125m }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
@@ -134,7 +134,7 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
         added.Client.Name.ShouldBe(organisation);
 
         var created = await Client.PostJsonAsync("/api/projects",
-            new { title = "Project " + Guid.NewGuid().ToString("N")[..8], domainCode = DomainCodes.Design, clientId = client.Id, revenue = 5000m }, admin.AccessToken);
+            new { title = "Project " + Guid.NewGuid().ToString("N")[..8], domainCode = DomainCodes.Design, clientId = client.Id }, admin.AccessToken);
         var project = await created.ReadAsync<ProjectResponse>();
         await Work.LogAsync(employee.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 45, "Moodboard");
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut")));

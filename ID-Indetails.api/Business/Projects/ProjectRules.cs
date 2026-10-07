@@ -43,12 +43,6 @@ public static class ProjectRules
                 return RuleDenial.Invalid(
                     ErrorCodes.ValidationFailed, "revenue", "Execution revenue is calculated from the project fee and materials.");
             }
-
-            if (setup.ProjectFee is null || setup.MaterialMarkup is null)
-            {
-                return RuleDenial.Invalid(
-                    ErrorCodes.ValidationFailed, "projectFee", "Execution projects need a project fee and a material markup.");
-            }
         }
         else if (setup.ProjectFee is not null || setup.MaterialMarkup is not null)
         {

@@ -17,7 +17,7 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, ben) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         // 40 an hour on a monthly salary in February 2026 (6,400 ÷ 160 paid hours).

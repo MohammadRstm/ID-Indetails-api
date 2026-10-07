@@ -60,13 +60,13 @@ public sealed record CreateProjectRequest
 
     public DateOnly? TargetDate { get; init; }
 
-    /// <summary>Design client work only. Execution revenue is calculated from the fee and materials.</summary>
+    /// <summary>Design client work only, and needs <c>financial:view</c>. Execution revenue is calculated from the fee and materials.</summary>
     public decimal? Revenue { get; init; }
 
-    /// <summary>Execution only, and required there.</summary>
+    /// <summary>Execution only, and needs <c>project:pricing_manage</c>. Left out, the site starts with no fee.</summary>
     public decimal? ProjectFee { get; init; }
 
-    /// <summary>Execution only, and required there. A fraction: 0.10 is 10%, at most 5 (500%).</summary>
+    /// <summary>Execution only, and needs <c>project:pricing_manage</c>. A fraction: 0.10 is 10%, at most 5 (500%). Left out, it is 0.</summary>
     public decimal? MaterialMarkup { get; init; }
 
     /// <summary>Execution only: the client's initial payment, recorded on account. Needs <c>payment:record</c>.</summary>

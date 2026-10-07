@@ -15,9 +15,9 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_profile_shows_what_someones_work_cost_this_quarter_all_time_and_by_project()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, executionAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         // 30 an hour, paid by the hour: one of her hours lands in this quarter, whatever month the test runs in, and a
         // salary's hourly rate would change with that month.
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",

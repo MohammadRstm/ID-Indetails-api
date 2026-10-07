@@ -62,6 +62,7 @@ public sealed class ProjectsController(
     /// <summary>Design: client work or internal, the client and the revenue.</summary>
     [HttpPut("{projectId:long}/billing")]
     [HasPermission(PermissionCodes.ProjectEdit)]
+    [HasPermission(PermissionCodes.FinancialView)]
     public Task<ProjectResponse> UpdateBilling(long projectId, UpdateProjectBillingRequest request, CancellationToken cancellationToken)
         => projectService.UpdateBillingAsync(projectId, request, cancellationToken);
 

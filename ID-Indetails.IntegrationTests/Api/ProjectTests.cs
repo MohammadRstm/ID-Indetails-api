@@ -16,7 +16,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Admin_creates_design_client_and_internal_projects()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
 
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 12_500.50m);
         project.Domain.ShouldBe(DomainCodes.Design);
@@ -46,7 +46,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Execution_projects_are_client_work_with_a_fee_and_markup_and_a_calculated_revenue()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
 
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
         site.Money!.ProjectFee.ShouldBe(1000m);
@@ -87,8 +87,6 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
         await (await Client.PostJsonAsync("/api/projects", new { title = "Internal site", billingType = "internal", projectFee = 1, materialMarkup = 0 }, admin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
-        await (await Client.PostJsonAsync("/api/projects", new { title = "No fee", clientId = client.Id }, admin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.PostJsonAsync("/api/projects", new { title = "Markup", clientId = client.Id, projectFee = 1, materialMarkup = 6 }, admin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.PutJsonAsync($"/api/projects/{site.Id}/billing", new { billingType = "client", clientId = client.Id, revenue = 5 }, admin.AccessToken))
@@ -99,7 +97,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Details_owner_and_design_billing_can_be_changed()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, secondAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, outsider) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
@@ -152,7 +150,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var created = await Client.PostJsonAsync("/api/projects", new
         {
-            title = "Apartment fit-out", domainCode = DomainCodes.Execution, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m,
+            title = "Apartment fit-out", domainCode = DomainCodes.Execution, clientId = client.Id,
             location = "  Achrafieh, Beirut  ",
         }, admin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
@@ -197,7 +195,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, executionAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var design = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
 
@@ -221,5 +219,42 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.PutJsonAsync($"/api/projects/{design.Id}/pricing", new { projectFee = 1, materialMarkup = 0 }, executionAdmin.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task A_design_admin_runs_client_projects_without_seeing_or_setting_their_money()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design);
+
+        var created = await Client.PostJsonAsync("/api/projects", new { title = "Villa", clientId = client.Id }, admin.AccessToken);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        var project = await created.ReadAsync<ProjectResponse>();
+        (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money.ShouldBeNull();
+
+        await (await Client.PostJsonAsync("/api/projects", new { title = "Priced", clientId = client.Id, revenue = 5000m }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/billing", new { billingType = "client", clientId = client.Id, revenue = 5000m }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.GetAsync("/api/finance/design/summary", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+    }
+
+    [Fact]
+    public async Task An_execution_admin_creates_a_site_without_its_pricing_and_cannot_set_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
+
+        var created = await Client.PostJsonAsync("/api/projects", new { title = "Lobby", clientId = client.Id }, admin.AccessToken);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        var site = await (await Client.GetAsync($"/api/projects/{(await created.ReadAsync<ProjectResponse>()).Id}", superAdmin.AccessToken))
+            .ReadAsync<ProjectResponse>();
+        site.Money!.ProjectFee.ShouldBe(0m);
+        site.Money.MaterialMarkup.ShouldBe(0m);
+
+        await (await Client.PostJsonAsync("/api/projects", new { title = "Priced", clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 }

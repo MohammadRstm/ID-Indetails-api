@@ -170,9 +170,14 @@ public sealed class ProjectService(
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
             domain, request.BillingType, request.ClientId, request.Revenue, request.ProjectFee, request.MaterialMarkup)));
         Throw(ProjectRules.CheckInitialPayment(domain, request.InitialPayment is not null));
-        if (domain == DomainCodes.Execution && !actor.Has(PermissionCodes.ProjectPricingManage))
+        if (request.Revenue is not null && !actor.Has(PermissionCodes.FinancialView))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "A site's fee and material markup are set when it is created, which needs the permission to manage pricing.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment needs the permission to see project money.");
+        }
+
+        if ((request.ProjectFee is not null || request.MaterialMarkup is not null) && !actor.Has(PermissionCodes.ProjectPricingManage))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting a site's fee and material markup needs the permission to manage pricing.");
         }
 
         if (request.InitialPayment is not null && !actor.Has(PermissionCodes.PaymentRecord))
@@ -213,8 +218,9 @@ public sealed class ProjectService(
             StartDate = clock.CompanyToday,
             TargetDate = request.TargetDate,
             Revenue = request.Revenue ?? 0,
-            ProjectFee = request.ProjectFee,
-            MaterialMarkup = request.MaterialMarkup,
+            // A site created without its pricing starts at no fee and no markup until someone with pricing sets them.
+            ProjectFee = domain == DomainCodes.Execution ? request.ProjectFee ?? 0 : null,
+            MaterialMarkup = domain == DomainCodes.Execution ? request.MaterialMarkup ?? 0 : null,
             CreatedAt = now,
             CreatedById = actor.UserId,
         };
@@ -310,7 +316,8 @@ public sealed class ProjectService(
         UpdateProjectBillingRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        // Replaces the revenue, so only someone who can see it may send it.
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await VisibleProjectForUpdateAsync(actor, projectId, cancellationToken);
 

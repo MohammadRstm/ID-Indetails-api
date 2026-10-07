@@ -24,7 +24,7 @@ public class WorkEntryExportTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",

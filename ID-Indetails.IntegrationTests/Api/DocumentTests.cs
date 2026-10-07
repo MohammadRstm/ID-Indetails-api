@@ -26,7 +26,7 @@ public class DocumentTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task An_invoice_downloads_as_a_pdf_and_is_emailed_with_it_once_issued()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Design);
@@ -69,7 +69,7 @@ public class DocumentTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_statement_downloads_as_a_pdf_and_is_emailed_with_it()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
         var added = await Client.PostJsonAsync($"/api/projects/{project.Id}/materials",
             new { items = new[] { new { name = "Cement", quantity = 40m, unit = "bag", unitCost = 7.5m } } }, admin.AccessToken);
@@ -97,7 +97,7 @@ public class DocumentTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var work = new WorkEntryTestSteps(_steps);
         await work.SetDesignSettingsAsync(superAdmin.AccessToken);
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Design);

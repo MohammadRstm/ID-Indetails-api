@@ -15,9 +15,9 @@ public class ProjectCostTimelineTests(ApiFactory api) : IClassFixture<ApiFactory
     public async Task A_project_s_cost_and_payments_add_up_week_by_week()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, siteAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         // 1,600 a month is 10 an hour in February 2026 (160 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))

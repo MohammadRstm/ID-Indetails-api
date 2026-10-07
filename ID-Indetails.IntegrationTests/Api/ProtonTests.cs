@@ -133,7 +133,7 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
 
         var offered = api.Anthropic.ToolsOffered(0);
         offered.ShouldContain("list_work_entries");
-        offered.ShouldContain("get_domain_finance");
+        offered.ShouldNotContain("get_domain_finance");   // financial:view is the super admin's too
         offered.ShouldNotContain("get_company_overview"); // company:view is the super admin's
         offered.ShouldNotContain("get_site_summary");     // an Execution-only tool for a Design admin
 

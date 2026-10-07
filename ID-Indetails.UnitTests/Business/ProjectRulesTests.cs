@@ -28,8 +28,8 @@ public class ProjectRulesTests
     {
         ProjectRules.CheckSetup(Design(BillingType.Client, 1, fee: 100))!.Field.ShouldBe("projectFee");
         ProjectRules.CheckSetup(Execution(BillingType.Client, 1)).ShouldBeNull();
-        ProjectRules.CheckSetup(Execution(BillingType.Client, 1, fee: null))!.Field.ShouldBe("projectFee");
-        ProjectRules.CheckSetup(Execution(BillingType.Client, 1, markup: null))!.Field.ShouldBe("projectFee");
+        // a site may be created without its pricing, for someone with pricing to set later
+        ProjectRules.CheckSetup(Execution(BillingType.Client, 1, fee: null, markup: null)).ShouldBeNull();
     }
 
     [Fact]

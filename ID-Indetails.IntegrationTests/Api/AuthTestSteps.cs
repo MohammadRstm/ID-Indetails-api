@@ -80,6 +80,31 @@ public sealed class AuthTestSteps(ApiFactory api)
         return (email, password, auth);
     }
 
+    /// <summary>Money and hiring: by default only super admins hold these.</summary>
+    public static readonly string[] MoneyPermissions =
+    [
+        PermissionCodes.FinancialView, PermissionCodes.InvoiceCreate, PermissionCodes.InvoiceSend, PermissionCodes.InvoiceVoid,
+        PermissionCodes.PaymentRecord, PermissionCodes.PaymentVoid, PermissionCodes.BillingSettingsManage, PermissionCodes.ExpenseManage,
+        PermissionCodes.ProjectPricingManage, PermissionCodes.StatementCreate, PermissionCodes.StatementSend,
+        PermissionCodes.EmployeeInvite, PermissionCodes.EmployeePayManage,
+    ];
+
+    /// <summary>
+    /// An admin of <paramref name="domain"/> whom the super admin has also granted the <see cref="MoneyPermissions"/> of that
+    /// domain. The other domain's ones are left out: holding one would open that domain to them.
+    /// </summary>
+    public async Task<(string Email, string Password, AuthResponse Auth)> MoneyAdminAsync(AuthResponse superAdmin, string domain)
+    {
+        var admin = await InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, domain);
+        var codes = PermissionCatalog.Definitions
+            .Where(d => MoneyPermissions.Contains(d.Code) && (d.DomainCode is null || d.DomainCode == domain))
+            .Select(d => d.Code);
+        var granted = await Client.PutJsonAsync($"/api/users/{admin.Auth.User.Id}/permissions",
+            new { changes = codes.Select(code => new { code, action = "grant", reason = "Handles the money" }) }, superAdmin.AccessToken);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+        return admin;
+    }
+
     /// <summary>Puts someone in a team directly, without the fields the employee edit needs.</summary>
     public Task PutInTeamAsync(long userId, long teamId)
         => ExecuteAsync("UPDATE users SET team_id = @t WHERE id = @u", ("@t", teamId), ("@u", userId));

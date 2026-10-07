@@ -50,7 +50,7 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         var (_, _, demoted) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         // meeting:create comes with the employee role too
         await ChangeAsync(superAdmin, limited.User.Id, "revoke", PermissionCodes.MeetingCreate);
-        await ChangeAsync(superAdmin, demoted.User.Id, "revoke", PermissionCodes.FinancialView);
+        await ChangeAsync(superAdmin, demoted.User.Id, "revoke", PermissionCodes.ClientManage);
 
         await (await Client.PutJsonAsync($"/api/employees/{limited.User.Id}/role", new { role = RoleCodes.Employee }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.PermissionChangeNotAllowed);
@@ -66,7 +66,9 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        await ChangeAsync(superAdmin, admin.User.Id, "revoke", PermissionCodes.EmployeePayManage);
+        // a plain admin invites no one
+        await (await InviteAsync(admin, RoleCodes.Employee)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await ChangeAsync(superAdmin, admin.User.Id, "grant", PermissionCodes.EmployeeInvite);
 
         await (await InviteAsync(admin, RoleCodes.Employee, new { basis = "hourly", amount = 10m, currency = "USD" }))
             .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
@@ -91,7 +93,7 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
     public async Task Super_admins_their_hours_and_their_pay_stay_with_people_who_see_both_domains_and_salaries()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
 
         await (await Client.GetAsync($"/api/employees/{superAdmin.User.Id}/work-summary", admin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
@@ -145,7 +147,6 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await ChangeAsync(superAdmin, employee.User.Id, "grant", PermissionCodes.ClientView);
         var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
-        await ChangeAsync(superAdmin, siteAdmin.User.Id, "revoke", PermissionCodes.ProjectPricingManage);
 
         await (await Client.GetAsync("/api/projects?sort=hours", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync("/api/clients?sort=hours", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
