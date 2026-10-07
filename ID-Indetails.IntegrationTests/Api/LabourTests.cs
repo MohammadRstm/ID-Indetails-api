@@ -15,7 +15,7 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Site_staff_report_a_week_from_the_defaults_and_admins_are_told()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
         await SetDefaultsAsync(project.Id, admin.AccessToken, workers: 11, dailyPay: 45m);

@@ -47,10 +47,10 @@ public class PermissionChangePlannerTests
     [Fact]
     public void Revoking_a_default_permission_stores_a_revoke_override()
     {
-        var plan = Plan(RoleCodes.Admin, [], Revoke(PermissionCodes.InvoiceVoid));
+        var plan = Plan(RoleCodes.Admin, [], Revoke(PermissionCodes.ClientManage));
 
         plan.Role.ShouldBe(RoleCodes.Admin);
-        plan.Overrides.ShouldBe(new Dictionary<string, PermissionEffect> { [PermissionCodes.InvoiceVoid] = PermissionEffect.Revoke });
+        plan.Overrides.ShouldBe(new Dictionary<string, PermissionEffect> { [PermissionCodes.ClientManage] = PermissionEffect.Revoke });
     }
 
     [Fact]
@@ -67,8 +67,8 @@ public class PermissionChangePlannerTests
     {
         var plan = Plan(
             RoleCodes.Admin,
-            [new Override(PermissionCodes.InvoiceVoid, PermissionEffect.Revoke)],
-            Grant(PermissionCodes.InvoiceVoid));
+            [new Override(PermissionCodes.ClientManage, PermissionEffect.Revoke)],
+            Grant(PermissionCodes.ClientManage));
 
         plan.Overrides.ShouldBeEmpty();
         plan.Applied.Count.ShouldBe(1);
@@ -79,11 +79,11 @@ public class PermissionChangePlannerTests
     {
         var current = new[]
         {
-            new Override(PermissionCodes.InvoiceVoid, PermissionEffect.Revoke),
+            new Override(PermissionCodes.ClientManage, PermissionEffect.Revoke),
             new Override(PermissionCodes.SalaryView, PermissionEffect.Grant),
         };
 
-        var plan = Plan(RoleCodes.Admin, current, Reset(PermissionCodes.InvoiceVoid), Reset(PermissionCodes.SalaryView));
+        var plan = Plan(RoleCodes.Admin, current, Reset(PermissionCodes.ClientManage), Reset(PermissionCodes.SalaryView));
 
         plan.Overrides.ShouldBeEmpty();
         plan.Applied.Count.ShouldBe(2);

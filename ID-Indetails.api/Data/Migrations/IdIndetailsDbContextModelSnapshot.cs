@@ -3532,21 +3532,6 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "admin",
-                            PermissionCode = "project:pricing_manage"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "statement:create"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "statement:send"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
                             PermissionCode = "requirement:view"
                         },
                         new
@@ -3568,11 +3553,6 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "admin",
                             PermissionCode = "meeting:create"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "expense:manage"
                         },
                         new
                         {
@@ -3622,57 +3602,12 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "admin",
-                            PermissionCode = "financial:view"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "invoice:create"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "invoice:send"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "invoice:void"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "payment:record"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "payment:void"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "billing_settings:manage"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
                             PermissionCode = "employee:view"
                         },
                         new
                         {
                             RoleCode = "admin",
                             PermissionCode = "employee:manage"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "employee:invite"
-                        },
-                        new
-                        {
-                            RoleCode = "admin",
-                            PermissionCode = "employee:pay_manage"
                         },
                         new
                         {

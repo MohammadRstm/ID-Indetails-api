@@ -30,7 +30,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Design_money_adds_up_across_currencies_billing_and_clients()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
         await Projects.SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
@@ -195,7 +195,7 @@ public class MoneySummaryAccessTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, executionAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 
@@ -213,10 +213,7 @@ public class MoneySummaryAccessTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync("/api/dashboard/design", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.GetAsync("/api/dashboard/design", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
-        // Without financial:view the money fields are left out entirely, not zeroed.
-        (await Client.PutJsonAsync($"/api/users/{designAdmin.User.Id}/permissions",
-            new { changes = new[] { new { code = PermissionCodes.FinancialView, action = "revoke", reason = "Test" } } },
-            superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        // A plain admin has no financial:view: the money fields are left out entirely, not zeroed.
         await (await Client.GetAsync("/api/finance/design/summary", designAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         foreach (var url in new[] { "/api/projects", "/api/clients" })
         {

@@ -1,4 +1,5 @@
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Statements;
@@ -24,13 +25,22 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
         return await response.ReadAsync<ClientResponse>();
     }
 
-    /// <summary>A Design client project with the given revenue, or an Execution site with a fee of 1000 and a 10% markup.</summary>
+    /// <summary>
+    /// A Design client project with the given revenue, or an Execution site with a fee of 1000 and a 10% markup. A caller
+    /// who may not set that money (a plain admin) gets the project without it: no revenue, or no fee and no markup.
+    /// </summary>
     public async Task<ProjectResponse> CreateProjectAsync(string accessToken, string domain, decimal revenue = 5000)
     {
         var client = await CreateClientAsync(accessToken, domain);
+        var me = await (await Client.GetAsync("/api/auth/me", accessToken)).ReadAsync<CurrentUserResponse>();
+        var title = (domain == DomainCodes.Execution ? "Site " : "Project ") + Guid.NewGuid().ToString("N")[..8];
         object body = domain == DomainCodes.Execution
-            ? new { title = "Site " + Guid.NewGuid().ToString("N")[..8], domainCode = domain, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m }
-            : new { title = "Project " + Guid.NewGuid().ToString("N")[..8], domainCode = domain, clientId = client.Id, revenue };
+            ? me.Permissions.Contains(PermissionCodes.ProjectPricingManage)
+                ? new { title, domainCode = domain, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m }
+                : new { title, domainCode = domain, clientId = client.Id }
+            : me.Permissions.Contains(PermissionCodes.FinancialView)
+                ? new { title, domainCode = domain, clientId = client.Id, revenue }
+                : new { title, domainCode = domain, clientId = client.Id };
 
         var response = await Client.PostJsonAsync("/api/projects", body, accessToken);
         ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());

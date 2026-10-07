@@ -13,7 +13,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 | `GET /api/projects/{id}/cost-timeline` | `financial:view` | Its cost and payments week by week, from its start to this week (or the week it was finalised), in USD: each week's hours, labour cost (paid breaks included) and total cost, and the cost and payments to date. Weeks start on the company's week start. For the payment-vs-cost and weekly labour charts and the project report. Either domain; Execution sites also have `/site-money/timeline` |
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner |
-| `PUT /api/projects/{id}/billing` | `project:edit` | Design only: client work or internal, the client and the revenue |
+| `PUT /api/projects/{id}/billing` | `project:edit` and `financial:view` (it replaces the revenue) | Design only: client work or internal, the client and the revenue |
 | `PUT /api/projects/{id}/pricing` | `project:pricing_manage` | Execution only: the project fee and the default material markup |
 | `POST /api/projects/{id}/hold`, `/resume`, `/complete`, `/archive`, `/reopen` | `project:change_status` | Status changes (below) |
 
@@ -28,8 +28,8 @@ Employees hold `project:view`, so they see every project of their domain in any 
 ## Creating a project
 
 - The start date is today (company time zone). The owner defaults to the caller.
-- **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No fee or markup.
-- **Execution:** always client work, with a `clientId`, a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). `revenue` is never sent; it is calculated. An optional `initialPayment` (`amount`, `currency`, `fxRate`, `receivedOn`, `method`, `reference`, `note`) is recorded on account as the project's initial payment in the same transaction. It needs `payment:record`, and Design projects don't take one (`400`). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
+- **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No fee or markup. Sending a `revenue` needs `financial:view` (`403`): admins create the project and a super admin sets its customer payment later.
+- **Execution:** always client work, with a `clientId`, and optionally a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). Sending either needs `project:pricing_manage` (`403`); left out, the site starts with a fee of 0 and no markup until someone with pricing sets them. `revenue` is never sent; it is calculated. An optional `initialPayment` (`amount`, `currency`, `fxRate`, `receivedOn`, `method`, `reference`, `note`) is recorded on account as the project's initial payment in the same transaction. It needs `payment:record`, and Design projects don't take one (`400`). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
 - The client must belong to the project's domain (`400`) and not be archived (`422 client_archived`).
 - **Owner:** an admin of the project's domain who isn't deactivated, or a super admin; never an employee (`422 owner_not_allowed`). The rule applies when a project is created and when its owner changes.
 

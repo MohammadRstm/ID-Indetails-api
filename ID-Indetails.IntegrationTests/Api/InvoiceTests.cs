@@ -37,7 +37,7 @@ public class InvoiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_draft_is_edited_issued_with_the_next_number_delivered_and_voided()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Design);
 
@@ -141,7 +141,7 @@ public class InvoiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, executionAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var draft = await DraftAsync(project.Id, superAdmin.AccessToken, 100m);
 
@@ -163,7 +163,7 @@ public class InvoiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, sender) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         (await Client.PutJsonAsync($"/api/users/{sender.User.Id}/permissions",
-            new { changes = new[] { new { code = PermissionCodes.FinancialView, action = "revoke", reason = "Sends invoices only" } } },
+            new { changes = new[] { new { code = PermissionCodes.InvoiceSend, action = "grant", reason = "Sends invoices only" } } },
             superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await Projects.SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);

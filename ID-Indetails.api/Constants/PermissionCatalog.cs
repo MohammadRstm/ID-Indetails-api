@@ -91,6 +91,17 @@ public static class PermissionCatalog
         P.ProtonBudgetManage,
     ];
 
+    /// <summary>
+    /// Money and hiring are the super admins' alone: admins see no revenue, cost, profit, invoices, payments, pricing,
+    /// statements or pay, and invite no one.
+    /// </summary>
+    private static readonly string[] SuperAdminOnly =
+    [
+        P.FinancialView, P.InvoiceCreate, P.InvoiceSend, P.InvoiceVoid, P.PaymentRecord, P.PaymentVoid,
+        P.BillingSettingsManage, P.ExpenseManage, P.ProjectPricingManage, P.StatementCreate, P.StatementSend,
+        P.EmployeeInvite, P.EmployeePayManage,
+    ];
+
     /// <summary>Logging one's own hours: employees only. Admins and super admins are paid a fixed salary and log no hours.</summary>
     public static readonly IReadOnlyList<string> OwnWork = [P.WorkEntryCreate, P.WorkEntryViewOwn];
 
@@ -112,8 +123,8 @@ public static class PermissionCatalog
         {
             // Everything, in both domains and at company level, except logging their own hours.
             [RoleCodes.SuperAdmin] = Definitions.Select(d => d.Code).Except(OwnWork).ToList(),
-            // Everything inside their own domain, nothing at company level, and no hours of their own.
-            [RoleCodes.Admin] = Definitions.Select(d => d.Code).Except(CompanyOnly).Except(OwnWork).ToList(),
+            // Their own domain's work, without its money or hiring; nothing at company level, and no hours of their own.
+            [RoleCodes.Admin] = Definitions.Select(d => d.Code).Except(CompanyOnly).Except(SuperAdminOnly).Except(OwnWork).ToList(),
             // Their own work only; never money.
             [RoleCodes.Employee] = EmployeeGrants,
         };

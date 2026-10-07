@@ -45,7 +45,7 @@ public class SearchTests(ApiFactory api) : IClassFixture<ApiFactory>
             contacts = new[] { new { kind = "email", value = AuthTestSteps.NewEmail("client") } },
         }, admin.AccessToken);
         var project = await CreatedAsync<ProjectResponse>("/api/projects",
-            new { title = $"{word} rebrand", domainCode = DomainCodes.Design, clientId = client.Id, revenue = 1000m }, admin.AccessToken);
+            new { title = $"{word} rebrand", domainCode = DomainCodes.Design, clientId = client.Id }, admin.AccessToken);
         var siteClient = await Projects.CreateClientAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var site = await CreatedAsync<ProjectResponse>("/api/projects",
             new { title = $"{word} villa", domainCode = DomainCodes.Execution, clientId = siteClient.Id, projectFee = 1000m, materialMarkup = 0.1m },

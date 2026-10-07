@@ -22,7 +22,7 @@ public class ProjectListTotalsTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Totals_add_up_the_money_of_every_project_the_filters_match_whatever_the_page()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var client = await new ProjectTestSteps(_steps).CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
         var created = await Client.PostJsonAsync("/api/projects", new { title = "Studio tooling", billingType = "internal" }, admin.AccessToken);

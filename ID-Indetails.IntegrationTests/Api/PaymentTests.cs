@@ -45,7 +45,7 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Concurrent_payments_never_overpay_an_invoice()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Design);
 
         // Applying a payment on account races recording a new one: only one of them fits. Each round has its own project,
@@ -70,7 +70,7 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Payments_need_no_invoice_and_settle_issued_invoices_up_to_their_balance()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
 
         // Nothing invoiced or sent yet: the payment is simply held on account.
@@ -212,7 +212,7 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Execution_sites_take_one_initial_payment_when_created()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
 
         var created = await Client.PostJsonAsync("/api/projects", new
@@ -254,7 +254,7 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, executionAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var payment = await RecordAsync(project.Id, superAdmin.AccessToken, new { amount = 10m, currency = "USD" });
 

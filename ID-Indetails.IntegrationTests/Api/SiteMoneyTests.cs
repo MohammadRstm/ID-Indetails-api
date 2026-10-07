@@ -17,7 +17,7 @@ public class SiteMoneyTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         await Client.PostJsonAsync($"/api/projects/{site.Id}/payments", new { amount = 2000m, currency = "USD" }, superAdmin.AccessToken);
         await Client.PostJsonAsync($"/api/projects/{site.Id}/materials", new { items = new[] { new { name = "Cement", amount = 200m } } }, superAdmin.AccessToken);

@@ -52,7 +52,7 @@ public class ExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Admin_adds_and_removes_expenses_with_totals_per_currency()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
 
         var created = await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
@@ -105,7 +105,7 @@ public class ExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, executionAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 
         await (await Client.GetAsync($"/api/projects/{project.Id}/expenses", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);

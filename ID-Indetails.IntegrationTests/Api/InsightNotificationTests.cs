@@ -53,7 +53,7 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
     public async Task A_cost_warning_goes_once_to_whoever_sees_the_money_when_cost_passes_85_percent_of_the_payment()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         // 1,600 a month is 10 an hour in February 2026 (160 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
@@ -81,7 +81,7 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
     public async Task A_draft_invoice_still_unissued_after_three_days_is_flagged_once()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         async Task<InvoiceResponse> DraftAsync() => await OkAsync<InvoiceResponse>(Client.PostJsonAsync($"/api/projects/{project.Id}/invoices",
@@ -108,7 +108,7 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
     public async Task Closing_a_client_project_tells_whoever_sees_the_money_its_margin()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 1000m);
         var tooling = await OkAsync<ProjectResponse>(Client.PostJsonAsync("/api/projects",

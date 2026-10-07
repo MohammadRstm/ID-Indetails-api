@@ -21,10 +21,14 @@ public class BillingSettingsTests(ApiFactory api) : IClassFixture<ApiFactory>
     };
 
     [Fact]
-    public async Task Admin_sets_up_and_changes_their_domain_billing_settings()
+    public async Task An_admin_granted_the_money_sets_up_and_changes_their_domain_billing_settings()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, plainAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
+
+        await (await Client.PutJsonAsync("/api/billing-settings/design", Settings("HL"), plainAdmin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         await (await Client.GetAsync("/api/billing-settings/design", admin.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.BillingSettingsMissing);
@@ -70,7 +74,7 @@ public class BillingSettingsTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Other_domains_read_as_not_found_and_employees_are_refused()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
         await (await Client.PutJsonAsync("/api/billing-settings/execution", Settings("EX"), designAdmin.AccessToken))

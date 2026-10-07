@@ -70,7 +70,7 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Design_cost_is_labour_at_the_day_rate_plus_expenses_converted_to_usd()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, unpaid) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await EnsureLbpRateAsync(superAdmin.AccessToken);
@@ -111,7 +111,7 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Execution_money_converts_materials_and_refuses_to_finalise_with_unconvertible_ones()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         await EnsureLbpRateAsync(superAdmin.AccessToken);
 
         // Fee 1,000 and a 10% markup.

@@ -31,7 +31,7 @@ public class SharedFeatureTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Execution_sites_use_requirements_expenses_and_project_edits_like_design()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
@@ -65,7 +65,7 @@ public class SharedFeatureTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Execution_invoices_take_payments_on_account_and_void_like_design()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Execution);
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
 

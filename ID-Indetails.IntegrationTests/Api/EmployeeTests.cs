@@ -220,7 +220,7 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Pay_changes_only_add_to_the_end_of_the_history()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var url = $"/api/employees/{employee.User.Id}/pay";
         var today = DateOnly.FromDateTime(DateTime.UtcNow);

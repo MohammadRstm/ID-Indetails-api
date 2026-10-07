@@ -20,7 +20,7 @@ public class StatementTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_statement_shows_the_chosen_materials_and_freezes_their_prices()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
         var materials = await AddMaterialsAsync(project.Id, admin.AccessToken,
             new { name = "Cement", quantity = 40m, unit = "bag", unitCost = 7.5m },
@@ -156,13 +156,13 @@ public class StatementTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Other_domains_never_see_statements_and_design_projects_have_none()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var design = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         await AddMaterialsAsync(site.Id, superAdmin.AccessToken, new { name = "Gravel", amount = 50m });
         var statement = await PostAsync<StatementResponse>($"/api/projects/{site.Id}/statements", new { mode = "detail" }, superAdmin.AccessToken, 201);
 
-        // Design admins hold financial:view, so they get past the permission check and must meet a 404.
+        // A design admin granted the money gets past the permission check and must meet a 404.
         await (await Client.GetAsync($"/api/statements/{statement.Id}", designAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.GetAsync($"/api/projects/{site.Id}/statements", designAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.GetAsync($"/api/projects/{design.Id}/statements", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);

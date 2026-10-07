@@ -144,7 +144,7 @@ public class ScheduledNotificationTests(ApiFactory api) : IClassFixture<ApiFacto
     public async Task An_overdue_invoice_is_flagged_once_to_whoever_sees_the_money()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await Projects.SetUpBillingAsync(admin.AccessToken, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);

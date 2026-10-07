@@ -39,7 +39,7 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Completing_finalises_and_reopening_undoes_it()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         await AddRequirementsAsync(project.Id, admin.User.Id, open: 3, done: 1);
 
@@ -97,7 +97,7 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Finalising_an_execution_site_freezes_its_agreed_amount()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
 
         var completed = await ChangeAsync(site.Id, "complete", admin.AccessToken);

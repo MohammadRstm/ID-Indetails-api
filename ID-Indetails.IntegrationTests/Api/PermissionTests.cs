@@ -89,11 +89,11 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var invite = new { email = AuthTestSteps.NewEmail(), role = RoleCodes.Employee };
+        var client = new { name = "Client", label = "Client", domainCode = DomainCodes.Design, contacts = new[] { new { kind = "email", value = AuthTestSteps.NewEmail("client") } } };
 
-        await ShouldChangeAsync(superAdmin, admin.User.Id, PermissionChangeAction.Revoke, PermissionCodes.EmployeeInvite);
+        await ShouldChangeAsync(superAdmin, admin.User.Id, PermissionChangeAction.Revoke, PermissionCodes.ClientCreate);
 
-        await (await Client.PostJsonAsync("/api/invitations", invite, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PostJsonAsync("/api/clients", client, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
     [Fact]
@@ -200,7 +200,7 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Inviting_a_super_admin_needs_its_own_permission_and_every_permission_a_super_admin_holds()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         object Invite() => new { email = AuthTestSteps.NewEmail("super"), role = RoleCodes.SuperAdmin, pay = new { basis = "monthly", amount = 4000m, currency = "USD" } };
 
         await (await Client.PostJsonAsync("/api/invitations", Invite(), admin.AccessToken))
@@ -239,6 +239,12 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
         catalog.Single(p => p.Code == PermissionCodes.PermissionManage).DefaultFor.ShouldBe([RoleCodes.SuperAdmin]);
         catalog.Single(p => p.Code == PermissionCodes.ProjectView).DefaultFor
             .ShouldBe([RoleCodes.SuperAdmin, RoleCodes.Admin, RoleCodes.Employee]);
+        // money and hiring are the super admins' alone
+        foreach (var code in AuthTestSteps.MoneyPermissions)
+        {
+            catalog.Single(p => p.Code == code).DefaultFor.ShouldBe([RoleCodes.SuperAdmin]);
+        }
+
         // only employees log hours
         catalog.Single(p => p.Code == PermissionCodes.WorkEntryCreate).DefaultFor.ShouldBe([RoleCodes.Employee]);
     }

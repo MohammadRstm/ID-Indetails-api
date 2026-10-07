@@ -14,7 +14,7 @@ The catalogue is seeded into `permissions` and `role_permissions`. Role defaults
 | Role | Defaults |
 |---|---|
 | Super admin | Every permission, in both domains and at company level, except logging their own hours |
-| Admin | Everything except the company permissions (`company:view`, `overhead:manage`, `salary:view`, `company_settings:manage`, `working_time:manage`, `schedule:manage`, `hours:excuse`, `employee:invite_super_admin`, `permission:manage`, `exchange_rate:manage`, `overhead_category:manage`, `session:manage`, `employee:change_email`, `proton_budget:manage`) and logging their own hours |
+| Admin | Everything except the company permissions (`company:view`, `overhead:manage`, `salary:view`, `company_settings:manage`, `working_time:manage`, `schedule:manage`, `hours:excuse`, `employee:invite_super_admin`, `permission:manage`, `exchange_rate:manage`, `overhead_category:manage`, `session:manage`, `employee:change_email`, `proton_budget:manage`), money and hiring (`financial:view`, `invoice:create`, `invoice:send`, `invoice:void`, `payment:record`, `payment:void`, `billing_settings:manage`, `expense:manage`, `project:pricing_manage`, `statement:create`, `statement:send`, `employee:invite`, `employee:pay_manage`), and logging their own hours. They run their domain's projects, clients, requirements, materials, labour and people without seeing any money; a super admin can grant any of these to one admin by hand |
 | Employee | `project:view`, `requirement:view`, `requirement:complete_own`, `meeting:create`, `work_entry:create`, `work_entry:view_own`, `material:create`, `labour_report:create` |
 
 A permission limited to a domain (for example `material:create` for Execution) is only part of a role's defaults for people of that domain.

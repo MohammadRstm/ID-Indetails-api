@@ -75,10 +75,10 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Admin_can_only_invite_admins_and_employees_into_their_own_domain()
+    public async Task An_admin_allowed_to_invite_can_only_invite_admins_and_employees_into_their_own_domain()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, "admin", "design");
+        var (_, _, designAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
 
         await (await Client.PostJsonAsync("/api/invitations",
                 new { email = AuthTestSteps.NewEmail(), role = "employee", domainCode = "execution" }, designAdmin.AccessToken))
@@ -114,7 +114,7 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Admin_cannot_resend_to_someone_in_the_other_domain()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, "admin", "design");
+        var (_, _, designAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
 
         var invited = await (await Client.PostJsonAsync("/api/invitations",
                 new { email = AuthTestSteps.NewEmail(), role = "employee", domainCode = "execution" }, superAdmin.AccessToken))
