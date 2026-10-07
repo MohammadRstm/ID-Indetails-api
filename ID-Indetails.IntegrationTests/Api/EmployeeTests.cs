@@ -149,8 +149,11 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { changes = new[] { new { code = PermissionCodes.SalaryView, action = "grant" } } }, superAdmin.AccessToken));
         joker.IsJoker.ShouldBeTrue();
 
-        var promoted = await OkAsync<EmployeeResponse>(Client.PutJsonAsync($"/api/employees/{id}/role", new { role = RoleCodes.Admin }, designAdmin.AccessToken));
+        // a promotion may come with a new job title
+        var promoted = await OkAsync<EmployeeResponse>(Client.PutJsonAsync($"/api/employees/{id}/role",
+            new { role = RoleCodes.Admin, position = " Studio lead " }, designAdmin.AccessToken));
         promoted.Role.ShouldBe(RoleCodes.Admin);
+        promoted.Position.ShouldBe("Studio lead");
         promoted.Domain.ShouldBe(DomainCodes.Design);
         promoted.IsJoker.ShouldBeFalse();
         (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM user_permission_overrides WHERE user_id = @id", ("@id", id))).ShouldBe(0);

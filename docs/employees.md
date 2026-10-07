@@ -84,6 +84,7 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 - Making someone a super admin removes their domain and team.
 - A super admin becoming an admin or employee needs `domainCode` (a domain the caller can see).
 - Making or unmaking a super admin needs `employee:invite_super_admin`.
+- `position` optionally gives them a new job title with it (an empty one clears it); without it, the title stays. Pay is changed separately, from a date (see Pay below).
 - **Personal permission changes are cleared**, so the new role's defaults take over. This is the manual counterpart of the automatic role changes described in [authorization.md](authorization.md).
 
 ## Moving to the other domain

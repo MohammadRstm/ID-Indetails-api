@@ -43,6 +43,7 @@ public sealed class ChangeRoleRequestValidator : AbstractValidator<ChangeRoleReq
     {
         RuleFor(x => x.Role).ValidRole();
         RuleFor(x => x.DomainCode).ValidDomain().When(x => x.DomainCode is not null);
+        RuleFor(x => x.Position).MaximumLength(120).WithMessage("Position must be at most 120 characters.");
     }
 }
 
