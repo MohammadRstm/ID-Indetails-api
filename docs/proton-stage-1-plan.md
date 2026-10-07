@@ -783,7 +783,7 @@ monthly amount plus a `proton_budget_top_ups` table (also approved). Still open,
 
 ## R. Existing problems found, not fixed by Proton
 
-For whoever fixes them separately. Proton works around A and B and avoids C; none of them was changed.
+For whoever fixes them separately. **A and C have since been fixed on master (PR #88)**; B was left as it is. Proton still re-checks each endpoint's policies and runs its validator, so it works either way.
 
 ### A. Permission checks that live only on controller attributes
 

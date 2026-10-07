@@ -192,8 +192,7 @@ public sealed record InvoiceRow(
 public sealed record InvoiceList(int Total, int Shown, IReadOnlyList<InvoiceRow> Invoices);
 
 /// <summary>
-/// Invoices, as GET /api/invoices returns them. The balance is passed on for USD invoices only: for other currencies
-/// the list's balance subtracts USD payments from a non-USD total (a known issue outside Proton).
+/// Invoices, as GET /api/invoices returns them. Paid is in USD; the balance is in the invoice's own currency.
 /// </summary>
 public sealed class ListInvoicesTool(IInvoiceService invoices) : ProtonTool<InvoicesInput>
 {
@@ -222,7 +221,7 @@ public sealed class ListInvoicesTool(IInvoiceService invoices) : ProtonTool<Invo
             new ProtonNamed(i.Project.Id, i.Project.Title),
             new ProtonNamed(i.Client.Id, i.Client.DisplayName),
             i.Status, i.IsOverdue, i.Currency, i.Total, i.Paid,
-            i.Currency == "USD" ? i.Balance : null,
+            i.Balance,
             i.IssuedAt, i.DueOn, i.SendOn)).ToList();
         return new ProtonToolOutput(
             new InvoiceList(page.TotalCount, rows.Count, rows),

@@ -69,7 +69,7 @@ POST /api/proton/messages
 | `get_domain_finance` | `GET /api/finance/{domain}/summary` | |
 | `get_finance_projects` | `GET /api/finance/{domain}/projects` | ranked by revenue, cost, profit, margin or hours (all time) |
 | `get_money_attention` | `GET /api/finance/{domain}/attention` | |
-| `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | invoice balance only for USD invoices (see the plan, issue C) |
+| `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | paid in USD, balance in the invoice's currency |
 | `get_company_overview` | `GET /api/company/overview` | without admin salaries and net profit |
 
 **Never available to Proton**, for anyone: salaries and pay, hourly rates and per-person labour cost, admin salaries
