@@ -1,4 +1,5 @@
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Proton.Safety;
 using Microsoft.EntityFrameworkCore;
 
 namespace ID_Indetails.api.Extensions;
@@ -27,7 +28,8 @@ public static class DatabaseServiceCollectionExtensions
 
         services.AddDbContext<IdIndetailsDbContext>(options => options
             .UseMySql(connectionString, MySqlServerVersion)
-            .UseSnakeCaseNamingConvention());
+            .UseSnakeCaseNamingConvention()
+            .AddInterceptors(ProtonReadOnly.Interceptor));
 
         return services;
     }

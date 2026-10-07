@@ -81,5 +81,9 @@ public static class PermissionExplanations
         [PermissionCodes.WorkingTimeManage] = "Set the company's working week, daily break and overtime rate.",
         [PermissionCodes.ScheduleManage] = "Set people's personal work schedules, when they differ from the company's working week.",
         [PermissionCodes.HoursExcuse] = "Excuse hours or days off in people's hours balance, so they don't count as missing.",
+
+        // Proton
+        [PermissionCodes.ProtonUse] = "Ask Proton questions about the company. It only reads, and only what this person could see in Hourline themselves.",
+        [PermissionCodes.ProtonBudgetManage] = "See what Proton costs and who uses it, and top up its monthly budget.",
     };
 }

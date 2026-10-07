@@ -149,6 +149,10 @@ public static class AuthServiceCollectionExtensions
                 "bug-report:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.BugReportPermitsPerHour, Window = TimeSpan.FromHours(1) }));
 
+            options.AddPolicy(RateLimitPolicies.Proton, context => RateLimitPartition.GetFixedWindowLimiter(
+                "proton:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => PerMinute(limits.ProtonPermitsPerMinute)));
+
             options.AddPolicy(RateLimitPolicies.Setup, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.SetupPermitsPerHour, Window = TimeSpan.FromHours(1) }));

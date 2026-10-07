@@ -2253,6 +2253,16 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "hours:excuse",
                             Description = "Excuse hours and days off in the hours ledger"
+                        },
+                        new
+                        {
+                            Code = "proton:use",
+                            Description = "Ask Proton, the read-only company assistant"
+                        },
+                        new
+                        {
+                            Code = "proton_budget:manage",
+                            Description = "See Proton's costs and usage, and top up its monthly budget"
                         });
                 });
 
@@ -2808,6 +2818,300 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonAction", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Arguments")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("arguments");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("decided_at");
+
+                    b.Property<string>("DomainCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("domain_code");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("error_message");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("finished_at");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("model");
+
+                    b.Property<string>("Preview")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("preview");
+
+                    b.Property<string>("PromptVersion")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("prompt_version");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("public_id");
+
+                    b.Property<long?>("ResultId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("result_id");
+
+                    b.Property<string>("ResultType")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("result_type");
+
+                    b.Property<string>("Risk")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("risk");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<long?>("TargetId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("target_id");
+
+                    b.Property<string>("TargetType")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("target_type");
+
+                    b.Property<string>("Tool")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("tool");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proton_actions");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_proton_actions_public_id");
+
+                    b.HasIndex("ConversationId", "Status")
+                        .HasDatabaseName("ix_proton_actions_conversation_id_status");
+
+                    b.HasIndex("TargetType", "TargetId")
+                        .HasDatabaseName("ix_proton_actions_target_type_target_id");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_proton_actions_user_id_created_at");
+
+                    b.ToTable("proton_actions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_proton_actions_risk", "`risk` IN ('low', 'medium')");
+
+                            t.HasCheckConstraint("ck_proton_actions_status", "`status` IN ('pending', 'executing', 'succeeded', 'failed', 'cancelled', 'superseded', 'expired')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonBudgetTopUp", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("added_at");
+
+                    b.Property<long>("AddedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("added_by_id");
+
+                    b.Property<decimal>("AmountUsd")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasColumnName("amount_usd");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date")
+                        .HasColumnName("month");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("note");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proton_budget_top_ups");
+
+                    b.HasIndex("AddedById")
+                        .HasDatabaseName("ix_proton_budget_top_ups_added_by_id");
+
+                    b.HasIndex("Month")
+                        .HasDatabaseName("ix_proton_budget_top_ups_month");
+
+                    b.ToTable("proton_budget_top_ups", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_proton_budget_top_ups_amount_positive", "`amount_usd` > 0");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonUsage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Answer")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("answer");
+
+                    b.Property<int>("CacheReadTokens")
+                        .HasColumnType("int")
+                        .HasColumnName("cache_read_tokens");
+
+                    b.Property<int>("CacheWriteTokens")
+                        .HasColumnType("int")
+                        .HasColumnName("cache_write_tokens");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<decimal>("CostUsd")
+                        .HasPrecision(12, 6)
+                        .HasColumnType("decimal(12,6)")
+                        .HasColumnName("cost_usd");
+
+                    b.Property<int>("InputTokens")
+                        .HasColumnType("int")
+                        .HasColumnName("input_tokens");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("model");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("outcome");
+
+                    b.Property<int>("OutputTokens")
+                        .HasColumnType("int")
+                        .HasColumnName("output_tokens");
+
+                    b.Property<string>("PromptVersion")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("prompt_version");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("question");
+
+                    b.Property<int>("RoundTrips")
+                        .HasColumnType("int")
+                        .HasColumnName("round_trips");
+
+                    b.Property<int>("ToolCalls")
+                        .HasColumnType("int")
+                        .HasColumnName("tool_calls");
+
+                    b.Property<string>("Tools")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("tools");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proton_usage");
+
+                    b.HasIndex("OccurredAt")
+                        .HasDatabaseName("ix_proton_usage_occurred_at");
+
+                    b.HasIndex("UserId", "OccurredAt")
+                        .HasDatabaseName("ix_proton_usage_user_id_occurred_at");
+
+                    b.ToTable("proton_usage", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_proton_usage_outcome", "`outcome` IN ('answered', 'refused', 'limited', 'failed')");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.RefreshToken", b =>
                 {
                     b.Property<long>("Id")
@@ -3197,6 +3501,16 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            RoleCode = "super_admin",
+                            PermissionCode = "proton:use"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "proton_budget:manage"
+                        },
+                        new
+                        {
                             RoleCode = "admin",
                             PermissionCode = "project:view"
                         },
@@ -3379,6 +3693,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "admin",
                             PermissionCode = "domain_settings:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
+                            PermissionCode = "proton:use"
                         },
                         new
                         {
@@ -4905,6 +5224,42 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_project_requirements_projects_project_id");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonAction", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_proton_actions_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonBudgetTopUp", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "AddedBy")
+                        .WithMany()
+                        .HasForeignKey("AddedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_proton_budget_top_ups_users_added_by_id");
+
+                    b.Navigation("AddedBy");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonUsage", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_proton_usage_users_user_id");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.RefreshToken", b =>

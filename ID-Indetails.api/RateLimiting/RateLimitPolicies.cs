@@ -26,4 +26,7 @@ public static class RateLimitPolicies
 
     /// <summary>Bug reports, which send an email each: per signed-in user, per hour.</summary>
     public const string BugReport = "bug-report";
+
+    /// <summary>Questions to Proton, which call a paid model: per signed-in user.</summary>
+    public const string Proton = "proton";
 }

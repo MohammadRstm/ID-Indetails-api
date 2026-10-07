@@ -76,6 +76,10 @@ public static class PermissionCatalog
         new(P.WorkingTimeManage, "Set the company working week, break and overtime multiplier"),
         new(P.ScheduleManage, "Set personal work schedules"),
         new(P.HoursExcuse, "Excuse hours and days off in the hours ledger"),
+
+        // Admins and super admins only: employees don't get Proton yet.
+        new(P.ProtonUse, "Ask Proton, the read-only company assistant"),
+        new(P.ProtonBudgetManage, "See Proton's costs and usage, and top up its monthly budget"),
     ];
 
     private static readonly string[] CompanyOnly =
@@ -84,6 +88,7 @@ public static class PermissionCatalog
         P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse,
         P.EmployeeInviteSuperAdmin, P.PermissionManage, P.ExchangeRateManage,
         P.OverheadCategoryManage, P.SessionManage, P.EmployeeChangeEmail,
+        P.ProtonBudgetManage,
     ];
 
     /// <summary>Logging one's own hours: employees only. Admins and super admins are paid a fixed salary and log no hours.</summary>
