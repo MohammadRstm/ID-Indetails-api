@@ -3,8 +3,10 @@
 Proton answers questions about Hourline's data in plain language: projects, requirements, meetings, clients,
 people, logged time, activity and, for people allowed to see it, money (Stage 1). It can also **propose** a few
 changes, which happen only when the user confirms them on a card (Stage 2, [Controlled actions](#controlled-actions-stage-2)).
-Proton itself never writes anything. The design and decisions are in [proton-stage-1-plan.md](proton-stage-1-plan.md)
-and [proton-stage-2-plan.md](proton-stage-2-plan.md).
+It also **analyses**: compares periods, summarises the company, says what changed and what may need attention, with
+every number calculated in code (Stage 3, [Analysis](#analysis-stage-3)). Proton itself never writes anything. The
+design and decisions are in [proton-stage-1-plan.md](proton-stage-1-plan.md),
+[proton-stage-2-plan.md](proton-stage-2-plan.md) and [proton-stage-3-plan.md](proton-stage-3-plan.md).
 
 ## Who can use it
 
@@ -83,9 +85,98 @@ permissions — including work-entry descriptions and contact details.
 before today (company time zone), and it is active or on hold. A project without a target date is never overdue.
 
 **Periods** (`Business/Proton/ProtonPeriods.cs`): tools take `today`, `yesterday`, `this_week`, `last_week`,
-`this_month`, `last_month`, `this_quarter`, `last_quarter`, `this_year`, `last_year`, `last_7_days`, `last_30_days`,
-`last_90_days` or `custom` with from/to. They become company-time-zone days in code, with the company's first day of
+`this_month`, `last_month`, `this_quarter`, `last_quarter`, `this_year`, `last_year`, `last7_days`, `last30_days`,
+`last90_days` or `custom` with from/to. They become company-time-zone days in code, with the company's first day of
 the week; running periods end today. Every result says which days it covers.
+
+## Analysis (Stage 3)
+
+Six analytical tools answer comparative and broad questions ("how is Villa Mounir doing compared with last month?",
+"what changed this week?", "what should I look at?"). Every number in their results is calculated in code from the
+existing services; the model only reads and explains them. Design and decisions:
+[proton-stage-3-plan.md](proton-stage-3-plan.md).
+
+| Tool | Reads through | Permission (from the endpoint) | Heavy |
+|---|---|---|---|
+| `compare_work` | `IReportService.WorkTotalsAsync` | `report:view` (`GET /api/reports/work`); Design only | |
+| `compare_money` | `IDomainFinanceService.ProjectPeriodsAsync` | `financial:view` (`GET /api/finance/{domain}/summary`) | yes |
+| `review_project` | the project, its work totals, requirements, period and all-time money, attention rules | `project:view`; each part needs its own endpoint's permission | yes |
+| `get_company_summary` | projects, work totals, deadlines, period money, activity counts, overhead, attention | `project:view`; each block needs its own endpoint's permission | yes |
+| `summarize_changes` | `IActivityFeedService.CountsAsync` and the feed, with `from`/`to` | `activity:view` (`GET /api/activity`) | |
+| `get_attention` | projects, money attention, deadlines, the Design overview | `project:view`; each signal source needs its own | yes |
+
+**What every analytical result carries**
+- `basis`:
+  - the exact days, and the days they were compared with;
+  - whether the period is still running (`partial`);
+  - how the comparison was chosen, and the scope;
+  - the rules behind any judgement;
+  - `omitted`: what was left out because the user may not see it, or because the data doesn't exist (Execution logs
+    no hours).
+
+  The chat reply turns each basis into a **source** (`sources` on `POST /api/proton/messages`), shown under the
+  answer as "Based on …".
+- Figures as `{current, previous, diff, pct}`. `pct` is null when there was nothing before, never ∞ or 100%.
+- Shares of the total and of the change; the biggest increases and decreases.
+
+**Comparisons** (`ProtonPeriods.Compare`):
+- **Running period** (this week, month, quarter, year): compared with the same number of days at the start of the
+  previous one (1–7 Oct against 1–7 Sep), never past that period's end. The Design dashboard compares month to date
+  with the whole last month instead.
+- **Finished week, month, quarter or year**: compared with the whole one before.
+- **A day, last-N-days or custom days**: compared with as many days just before.
+- Also available: `same_period_last_year`, `custom` and `none`.
+
+**Judgements need a rule** (`Business/Proton/ProtonSignals.cs`, thresholds in `Proton:Insights`):
+
+| Flag / signal | Rule |
+|---|---|
+| notable change (hours) | ±30% or more **and** at least 10 h; from nothing, the 10 h alone |
+| notable change (money) | ±30% or more **and** at least 1,000 USD |
+| unusual (weekly hours) | last full week 1.5× or more, or 0.5× or less, of the 4 weeks before (each with work), and 10 h from it |
+| target soon | active project, target date within 14 days |
+| overdue | `ProjectOverdue` (target date passed, active or on hold) |
+| idle, close-out | the Design report's own rules: no work for 7 days; 90% progress |
+| cost high, overdue invoice, finished but owed, no payment | `MoneyAttention` (cost past 85% of the payment, …) |
+| overdue requirements, not logging | the dashboard's deadlines; Design employees with no work this week |
+
+**Ranking.** `get_attention` lists each project once with all its signals, ranked by its most pressing signal:
+
+1. overdue invoice
+2. finished but owed
+3. overdue project
+4. overdue requirements
+5. cost high
+6. no payment
+7. target soon
+8. unusual or notable change
+9. idle
+10. close-out
+11. on hold
+12. not logging
+
+It is on demand only: nothing is sent to anyone.
+
+**Never per person in money.** Period money is per domain, per cost source and per project. Pay events are left out
+of change counts.
+
+**Per-question cache.** `ProtonAnalysisService` keeps each domain's projects, period money, money attention and work
+totals for the rest of one question (one request, one user). Nothing is cached across requests, because back-dated
+entries and new payments would make it stale.
+
+**Limits.**
+- At most `MaxHeavyToolCallsPerQuestion` (4) heavy analyses per question; the next is refused with a note to answer
+  with what Proton has.
+- A conversation whose last model request passed `MaxConversationInputTokens` (80,000) input tokens takes no more
+  questions (`404 proton_conversation_ended`).
+
+**Answer rules** (`analysis.md`):
+- Facts, calculations, interpretation ("Based on this data, …") and recommendation ("You may want to …") are kept
+  apart.
+- No arithmetic by the model.
+- "Notable" or "unusual" only when a rule fired.
+- "Why" answers name measurable contributors and say what the data can't establish.
+- Recorded hours aren't a measure of anyone's work: no judgement of people, and no employment advice.
 
 ## Conversations and follow-ups
 
@@ -94,10 +185,12 @@ the week; running periods end today. Every result says which days it covers.
   never sends history back.
 - The message list is exactly what was sent to the model, append-only. A failed question adds nothing to it.
 - A **focus** (`ConversationFocus`) is updated from tool results, not guessed from text: the current project, client,
-  people and period. It is sent with each question in a short context note, with today's date and who is asking, so
+  people and period, and from analytical results what the period was compared with and the last analysis. It is sent with each question in a short context note, with today's date and who is asking, so
   "it", "they" and "the month before" resolve reliably.
 - If the user's role, permissions or domains change, the conversation is closed (answers given under the old access
   must not carry over).
+- A conversation whose last model request passed `Proton:MaxConversationInputTokens` input tokens ends: every question
+  re-sends the earlier ones with their tool results.
 
 ## Controlled actions (Stage 2)
 
@@ -142,7 +235,8 @@ will change (before → after), its risk, and Cancel / Confirm. Typing "yes" con
 ## Prompts
 
 Markdown files in `Proton/Prompts/` (`proton.md` who Proton is and its rules, `data.md` what it may see and that
-people's text is data, `actions.md` how to propose changes and that only the card confirms them, `chat.md` how to
+people's text is data, `analysis.md` how to present comparisons, judgements, "why" answers and anything about people, `actions.md` how to
+propose changes and that only the card confirms them, `chat.md` how to
 answer in chat), embedded in the assembly. The prompt version recorded with
 each question is a hash of their text. The system prompt is the same for everyone, so it is cached by the provider;
 per-question facts go in the context note.
@@ -162,10 +256,10 @@ per-question facts go in the context note.
 
 | Endpoint | Permission | |
 |---|---|---|
-| `POST /api/proton/messages` | `proton:use` | `{conversationId?, text}` → `{conversationId, reply, refs, limited, usage}`; rate policy `proton` |
+| `POST /api/proton/messages` | `proton:use` | `{conversationId?, text}` → `{conversationId, reply, refs, limited, usage, sources, pendingAction}`; rate policy `proton` |
 | `DELETE /api/proton/conversations/{id}` | `proton:use` | ends a conversation |
 | `GET /api/proton/usage` | `proton:use` | the caller's question allowance and whether Proton is available |
-| `GET /api/proton/budget` | `proton_budget:manage` | this month's budget, top-ups, estimated spend and usage per person |
+| `GET /api/proton/budget` | `proton_budget:manage` | this month's budget, top-ups, estimated spend, and spending by person, domain, tool (calls, average time) and day, with the 10 most expensive conversations |
 | `POST /api/proton/budget/top-ups` | `proton_budget:manage` | `{amountUsd, note?}` (up to 10,000 USD) → the budget |
 
 Errors use the uniform contract: `503 proton_unavailable` (switched off, or the model failed), `422 proton_budget_used`,
@@ -184,6 +278,9 @@ Errors use the uniform contract: `503 proton_unavailable` (switched off, or the 
 | `ModelTimeoutSeconds`, `ToolTimeoutSeconds`, `QuestionTimeoutSeconds` | 40, 20, 55 | the question stays under nginx's 60-second read timeout |
 | `MaxQuestionsPerConversation`, `ConversationIdleMinutes` | 20, 30 | |
 | `MonthlyBudgetUsd`, `MonthlyQuestionsPerUser` | 50, 300 | |
+| `MaxHeavyToolCallsPerQuestion` | 4 | analyses that load every project's money; the next one is refused |
+| `MaxConversationInputTokens` | 80000 | a conversation past it takes no more questions |
+| `Insights` | 30%, 10 h, 1,000 USD, 1.5×, 0.5×, 4 periods, 14 days | `NotablePct`, `NotableHours`, `NotableUsd`, `UnusualHigh`, `UnusualLow`, `BaselinePeriods`, `TargetSoonDays` |
 | `Prices` | Sonnet 5.5 list prices | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion` |
 
 `RateLimiting:ProtonPermitsPerMinute` (default 10) limits questions per person per minute.
@@ -207,5 +304,19 @@ length), refusals as warnings, failures as errors. Question and answer text neve
   confirm runs once, only the proposer in that conversation can decide, superseded and expired proposals can't run,
   a permission removed after the proposal is refused at confirm, stale updates are refused, service refusals are
   recorded, and a conversation full of "do it without asking" writes nothing.
-- Not automated: answer quality with the real model (tool choice, follow-ups, refusals, prompt injection). Run the
-  question catalogue in the plan by hand against a seeded database before enabling Proton and after prompt changes.
+- Analysis, unit (`ProtonTrendsTests`, `ProtonUsageBreakdownTests`): comparison periods across month lengths, 29 February
+  and the week start; changes, shares and contributors; baselines; every threshold at and below its value; signal
+  ranking and deduplication; the budget breakdown.
+- Analysis, integration (`ProtonAnalysisTests`): `compare_work` and `compare_money` match the work report and the
+  Financials summary for the same days; a Design admin without `financial:view` gets no money and is told so; the
+  super admin's summary covers both domains and the company; attention ranks each project once with its facts;
+  change counts leave pay out; the activity date filter; the heavy-analysis limit; the conversation-size limit; and the
+  comparison carried into a follow-up.
+- Real model, opt-in (`ProtonEvalTests`): 21 golden questions against a seeded company, checked in code (tools used,
+  every quoted number found in a tool result, size words only after a rule fired, "why" answers say what the data
+  can't establish, nothing judges a person, no money for a user without `financial:view`). Runs only with
+  `PROTON_EVAL_API_KEY` set (optional `PROTON_EVAL_MODEL`), costs about 2–4 USD, never in CI; the answers are written
+  to the test output for review. Run it before enabling Proton and after prompt changes:
+  `PROTON_EVAL_API_KEY=... dotnet test ID-Indetails.IntegrationTests --filter ProtonEvalTests --logger "console;verbosity=detailed"`.
+- Not automated: prompt injection and refusals with the real model. Try the question catalogue in the Stage 1 plan by
+  hand too.

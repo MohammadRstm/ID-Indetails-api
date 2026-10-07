@@ -1,6 +1,6 @@
 # Proton — Stage 3 plan: company intelligence
 
-Status: **plan, awaiting approval**. Nothing in this document is implemented yet.
+Status: **approved and implemented** (see [proton.md](proton.md#analysis-stage-3)). All decisions in section N were approved as proposed.
 
 Stage 1 lets Proton read authorized data, and Stage 2 lets it propose changes the user confirms.
 Stage 3 makes it answer *analytical* questions, such as "how is Villa Mounir doing compared with last month?",
@@ -336,3 +336,17 @@ and omissions, taken from `basis` (never raw data or internal names). The panel 
 - machine learning;
 - voice;
 - changes to Stage 1 or Stage 2 behaviour.
+
+## Implementation notes (where the build differs from this plan)
+
+- **Weekly hours signals:** they compare the last *full* week with the week before, and the baseline is the four
+  weeks before that. This comes from the project list's 8-week figures, so no extra queries are needed. Cost signals
+  compare the last 30 days with the 30 before.
+- **Per-question cache:** it lives inside `ProtonAnalysisService` (scoped to the request) rather than a separate
+  `ProtonQuestionCache` class.
+- **Company summary:**
+  - no overtime figure;
+  - company overhead is this month and last, per currency, from the existing overhead endpoint;
+  - "completed in the period" comes from the activity history.
+- **Evaluation:** an opt-in test suite (`ProtonEvalTests`) that runs when an API key is set. No key was configured
+  when Stage 3 was built, so it has not been run yet.
