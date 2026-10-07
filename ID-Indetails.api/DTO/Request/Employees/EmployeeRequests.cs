@@ -47,6 +47,9 @@ public sealed record ChangeRoleRequest
 
     /// <summary>Only when a super admin becomes an admin or employee: the domain they join.</summary>
     public string? DomainCode { get; init; }
+
+    /// <summary>Their position (job title) in the new role; null leaves it as it is, an empty one clears it.</summary>
+    public string? Position { get; init; }
 }
 
 public sealed record MoveEmployeeRequest
