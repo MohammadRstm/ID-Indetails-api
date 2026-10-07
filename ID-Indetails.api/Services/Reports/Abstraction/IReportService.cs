@@ -7,5 +7,8 @@ public interface IReportService
 {
     Task<WorkReportResponse> WorkReportAsync(WorkReportQuery query, CancellationToken cancellationToken = default);
 
+    /// <summary>The work report's totals by project, person and client, without its charts, quarters or money: for comparing periods.</summary>
+    Task<WorkTotalsResponse> WorkTotalsAsync(WorkReportQuery query, CancellationToken cancellationToken = default);
+
     Task<OverviewResponse> OverviewAsync(OverviewQuery query, CancellationToken cancellationToken = default);
 }

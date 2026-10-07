@@ -8,5 +8,8 @@ public interface IActivityFeedService
 {
     Task<PagedResponse<ActivityItemResponse>> ListAsync(ActivityListQuery query, CancellationToken cancellationToken = default);
 
+    /// <summary>How many events of each kind the same query matches, paging aside, most first.</summary>
+    Task<IReadOnlyList<ActivityKindCountResponse>> CountsAsync(ActivityListQuery query, CancellationToken cancellationToken = default);
+
     Task<ActivityTodayResponse> TodayAsync(CancellationToken cancellationToken = default);
 }

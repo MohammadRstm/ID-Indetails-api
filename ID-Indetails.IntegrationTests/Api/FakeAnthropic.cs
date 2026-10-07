@@ -49,18 +49,19 @@ public sealed class FakeAnthropic : HttpMessageHandler
     public static string ToolUse(string name, object input, string id = "toolu_1")
         => Message("tool_use", new { type = "tool_use", id, name, input });
 
-    public static string Text(string text) => Message("end_turn", new { type = "text", text });
+    /// <param name="inputTokens">What the request "cost" in input tokens, to test limits on a conversation's size.</param>
+    public static string Text(string text, int inputTokens = 1200) => Message("end_turn", new { type = "text", text }, inputTokens);
 
-    private static string Message(string stopReason, params object[] content) => JsonSerializer.Serialize(new
+    private static string Message(string stopReason, object content, int inputTokens = 1200) => JsonSerializer.Serialize(new
     {
         id = "msg_" + Guid.NewGuid().ToString("N")[..12],
         type = "message",
         role = "assistant",
         model = "claude-sonnet-5-5",
-        content,
+        content = new[] { content },
         stop_reason = stopReason,
         stop_sequence = (string?)null,
-        usage = new { input_tokens = 1200, output_tokens = 80, cache_creation_input_tokens = 0, cache_read_input_tokens = 400 },
+        usage = new { input_tokens = inputTokens, output_tokens = 80, cache_creation_input_tokens = 0, cache_read_input_tokens = 400 },
     });
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

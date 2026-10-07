@@ -32,3 +32,6 @@ public sealed record LoggedHourResponse(int Hour, int Minutes);
 /// <summary>Today in Design (company time zone): the work that started today.</summary>
 /// <param name="ByLoggedHour">Minutes by the hour of the day they were logged, for hours with any.</param>
 public sealed record ActivityTodayResponse(DateOnly Date, int Minutes, int Entries, int People, IReadOnlyList<LoggedHourResponse> ByLoggedHour);
+
+/// <summary>How many events of one kind matched a feed query.</summary>
+public sealed record ActivityKindCountResponse(string Kind, ActivityGroup Group, int Count);

@@ -68,12 +68,14 @@ public sealed class ProtonChatAgent(
 
             conversation.Messages.AddRange(turn.Messages);
             conversation.Questions++;
+            conversation.LastInputTokens = turn.LastInputTokens;
             return new ProtonReplyResponse(
                 conversation.Id,
                 turn.Answer,
                 turn.RefsIn(turn.Answer),
                 turn.Outcome == ProtonOutcome.Limited,
                 await usage.MineAsync(userId, CancellationToken.None),
+                turn.Sources(),
                 // One proposal at a time: a later one in the same answer has already replaced earlier ones.
                 turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending);
         }
@@ -104,6 +106,11 @@ public sealed class ProtonChatAgent(
         if (conversation.Questions >= options.Value.MaxQuestionsPerConversation)
         {
             throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "This conversation is full. Start a new one.");
+        }
+
+        if (conversation.LastInputTokens > options.Value.MaxConversationInputTokens)
+        {
+            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "This conversation has grown long. Start a new one to keep answers quick.");
         }
 
         return conversation;
@@ -308,6 +315,9 @@ internal sealed class ProtonTurn(string model)
 
     public int RoundTrips { get; private set; }
 
+    /// <summary>Input tokens of the last model call, cached ones included.</summary>
+    public int LastInputTokens { get; private set; }
+
     public ProtonOutcome Outcome { get; private set; } = ProtonOutcome.Failed;
 
     public string Answer { get; private set; } = string.Empty;
@@ -316,6 +326,7 @@ internal sealed class ProtonTurn(string model)
     {
         RoundTrips++;
         var u = response.Usage;
+        LastInputTokens = (int)(u.InputTokens + (u.CacheReadInputTokens ?? 0) + (u.CacheCreationInputTokens ?? 0));
         _tokens = _tokens.Add(new ProtonTokens(
             (int)u.InputTokens, (int)u.OutputTokens, (int)(u.CacheReadInputTokens ?? 0), (int)(u.CacheCreationInputTokens ?? 0)));
     }
@@ -332,6 +343,27 @@ internal sealed class ProtonTurn(string model)
     {
         Outcome = ProtonOutcome.Failed;
         Answer = $"[failed: {reason}]";
+    }
+
+    /// <summary>The analyses the answer rests on, once each, for "Based on" under it.</summary>
+    public IReadOnlyList<ProtonSourceResponse> Sources()
+        => ToolCalls
+            .Where(t => t.Status == ProtonToolStatus.Ok && t.Basis is not null)
+            .Select(t => t.Basis!)
+            .Select(b => new ProtonSourceResponse(
+                b.Label, b.Period is { } p ? Days(p) : null, b.ComparedWith is { } c ? Days(c) : null, b.Partial, b.Scope, b.Omitted))
+            .DistinctBy(s => (s.Label, s.Period, s.ComparedWith))
+            .ToList();
+
+    /// <summary>Days in words: "7 Oct 2026", "1–7 Oct 2026", "28 Sep – 4 Oct 2026", "28 Dec 2025 – 3 Jan 2026".</summary>
+    public static string Days(DayRange range)
+    {
+        var (from, to) = (range.From, range.To);
+        string Day(DateOnly d, string format) => d.ToString(format, CultureInfo.InvariantCulture);
+        return from == to ? Day(to, "d MMM yyyy")
+            : from.Year != to.Year ? $"{Day(from, "d MMM yyyy")} – {Day(to, "d MMM yyyy")}"
+            : from.Month != to.Month ? $"{Day(from, "d MMM")} – {Day(to, "d MMM yyyy")}"
+            : $"{from.Day}–{Day(to, "d MMM yyyy")}";
     }
 
     /// <summary>The records the tools returned that the answer actually names, for the client to link.</summary>

@@ -4,6 +4,7 @@ namespace ID_Indetails.api.Repositories.Activity.Abstraction;
 /// Events of <paramref name="Domains"/>, plus company-level events (no domain) when <paramref name="WithCompany"/>.
 /// <paramref name="Kinds"/> keeps only those kinds; <paramref name="ExcludedKinds"/> leaves those out.
 /// <paramref name="ClientId"/> matches the event's client or its project's client.
+/// <paramref name="FromUtc"/> and <paramref name="ToUtc"/> bound when it happened, the end excluded.
 /// </summary>
 public sealed record ActivityFeedSearch(
     IReadOnlyList<string> Domains,
@@ -16,7 +17,9 @@ public sealed record ActivityFeedSearch(
     long? ActorId,
     int Page,
     int PageSize,
-    bool InternalOnly = false);
+    bool InternalOnly = false,
+    DateTime? FromUtc = null,
+    DateTime? ToUtc = null);
 
 public sealed record FeedEvent(
     long Id,
@@ -40,4 +43,7 @@ public interface IActivityFeedRepository
 {
     /// <summary>Newest first. Not tracked.</summary>
     Task<(IReadOnlyList<FeedEvent> Items, int TotalCount)> SearchAsync(ActivityFeedSearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>How many events of each kind match, paging aside.</summary>
+    Task<IReadOnlyList<(string Kind, int Count)>> CountByKindAsync(ActivityFeedSearch search, CancellationToken cancellationToken = default);
 }

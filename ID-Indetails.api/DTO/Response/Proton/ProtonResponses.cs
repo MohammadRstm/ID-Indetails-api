@@ -5,12 +5,14 @@ namespace ID_Indetails.api.DTO.Response.Proton;
 /// <param name="Refs">The projects, clients and people the reply mentions, for the client to link.</param>
 /// <param name="Limited">Proton hit a limit (tool calls, model calls or length) and answered with what it had.</param>
 /// <param name="PendingAction">A change Proton proposed in this answer: shown as a card the user confirms or cancels.</param>
+/// <param name="Sources">What the analytical figures in the reply rest on, shown under it as "Based on".</param>
 public sealed record ProtonReplyResponse(
     Guid ConversationId,
     string Reply,
     IReadOnlyList<ProtonRef> Refs,
     bool Limited,
     ProtonUsageResponse Usage,
+    IReadOnlyList<ProtonSourceResponse> Sources,
     ID_Indetails.api.Proton.Actions.ProtonPendingAction? PendingAction = null);
 
 /// <summary>
@@ -43,7 +45,28 @@ public sealed record ProtonBudgetResponse(
     int UsedPct,
     int Questions,
     IReadOnlyList<ProtonTopUpResponse> TopUps,
-    IReadOnlyList<ProtonUserUsageResponse> ByUser);
+    IReadOnlyList<ProtonUserUsageResponse> ByUser,
+    IReadOnlyList<ProtonDomainUsageResponse> ByDomain,
+    IReadOnlyList<ProtonToolUsageResponse> ByTool,
+    IReadOnlyList<ProtonDayUsageResponse> ByDay,
+    IReadOnlyList<ProtonConversationUsageResponse> TopConversations);
+
+/// <param name="Domain">The people's domain as it is now; null for company-wide roles.</param>
+public sealed record ProtonDomainUsageResponse(string? Domain, int Questions, decimal CostUsd);
+
+/// <param name="QuestionCostUsd">What the questions that used the tool cost in all; a tool's own share can't be told apart.</param>
+public sealed record ProtonToolUsageResponse(string Tool, int Calls, int AverageMs, int Questions, decimal QuestionCostUsd);
+
+public sealed record ProtonDayUsageResponse(DateOnly Day, int Questions, decimal CostUsd);
+
+public sealed record ProtonConversationUsageResponse(Guid ConversationId, long UserId, string Name, int Questions, int ToolCalls, decimal CostUsd);
 
 /// <summary>What became of a confirmed or cancelled action. A failure is an error response instead, with the service's own code.</summary>
 public sealed record ProtonActionOutcomeResponse(Guid ActionId, ID_Indetails.api.Enums.ProtonActionStatus Status, string Message, IReadOnlyList<ProtonRef> Refs);
+
+/// <summary>One analysis behind a reply: what was looked at, over which days, and what it left out. No data, no internals.</summary>
+/// <param name="Period">The days, in words ("1–7 Oct 2026").</param>
+/// <param name="ComparedWith">The days compared with, in words, when there was a comparison.</param>
+/// <param name="Partial">The period is still running, so its figures are "so far".</param>
+/// <param name="Omitted">What the analysis left out: what the user can't see, or data the system doesn't hold.</param>
+public sealed record ProtonSourceResponse(string Label, string? Period, string? ComparedWith, bool Partial, string? Scope, IReadOnlyList<string> Omitted);

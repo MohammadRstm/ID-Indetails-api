@@ -45,6 +45,8 @@ public sealed record ProtonToolResult(
 {
     /// <summary>Set when an action tool proposed a change: it now waits for the user's confirmation.</summary>
     public ProtonPendingAction? Pending { get; init; }
+
+    public ProtonBasis? Basis { get; init; }
 }
 
 /// <summary>Which conversation, model and prompt the tools are used for: recorded with every proposed action.</summary>
@@ -77,14 +79,15 @@ public sealed class ProtonToolbox(
     public async Task<ProtonToolSession> OpenAsync(ClaimsPrincipal caller, long userId, ProtonOrigin origin, CancellationToken cancellationToken)
     {
         var settings = await companySettings.GetAsync(cancellationToken);
+        var access = await permissions.GetAccessAsync(userId, cancellationToken);
         var context = new ProtonToolContext(
             caller,
+            access,
             authorization,
             services,
             clock.CompanyToday,
             settings.WeekStart == 0 ? DayOfWeek.Sunday : DayOfWeek.Monday);
 
-        var access = await permissions.GetAccessAsync(userId, cancellationToken);
         var available = new List<IProtonTool>();
         foreach (var tool in tools)
         {
@@ -106,17 +109,27 @@ public sealed class ProtonToolbox(
         {
             result = Fail(name, input, ProtonToolStatus.Forbidden, "This tool isn't available to this user.", watch);
         }
+        else if (tool.Heavy && session.HeavyCalls >= options.Value.MaxHeavyToolCallsPerQuestion)
+        {
+            result = Fail(name, input, ProtonToolStatus.Refused,
+                $"This question has had its {options.Value.MaxHeavyToolCallsPerQuestion} larger analyses. Answer with what you have, and say what you couldn't check.", watch);
+        }
         else
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.ToolTimeoutSeconds));
+            if (tool.Heavy)
+            {
+                session.HeavyCalls++;
+            }
+
             try
             {
                 // Action tools only propose here: they run inside the same read-only guard as every read.
                 var output = await ProtonReadOnly.RunAsync(() => tool.RunAsync(input, session.Context, timeout.Token));
                 result = output.Proposal is { } proposal && tool is IProtonActionTool action
                     ? await ProposeAsync(session, action, input, proposal, output, watch, cancellationToken)
-                    : Ok(name, input, new { status = "ok", data = output.Data }, output, watch);
+                    : Ok(name, input, new { status = "ok", basis = output.Basis, data = output.Data }, output, watch);
             }
             catch (ProtonToolInputException exception)
             {
@@ -224,7 +237,7 @@ public sealed class ProtonToolbox(
         var json = JsonSerializer.Serialize(content, ProtonJson.Options);
         return json.Length > MaxContentLength
             ? Fail(tool, input, ProtonToolStatus.Invalid, "The result is too large. Ask for fewer rows or a shorter period.", watch)
-            : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch));
+            : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch)) { Basis = output.Basis };
     }
 
     private static ProtonToolResult Fail(string tool, JsonElement input, ProtonToolStatus status, string message, Stopwatch watch)
@@ -246,6 +259,9 @@ public sealed class ProtonToolSession(
     internal UserAccess Access => access;
 
     internal ProtonOrigin Origin => origin;
+
+    /// <summary>Heavy tool calls so far: a session serves one question.</summary>
+    internal int HeavyCalls { get; set; }
 
     public Task<ProtonToolResult> RunAsync(string name, JsonElement input, CancellationToken cancellationToken)
         => toolbox.RunAsync(this, name, input, cancellationToken);

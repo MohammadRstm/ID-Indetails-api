@@ -33,6 +33,13 @@ public sealed class ProtonUsageRepository(IdIndetailsDbContext db) : IProtonUsag
         return rows.Select(t => new ProtonTopUpRow(t.Id, t.AmountUsd, t.Note, PersonName.Of(t.FirstName, t.LastName, t.Email), t.AddedAt)).ToList();
     }
 
+    public async Task<IReadOnlyList<ProtonTurnRow>> TurnsAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
+        => await db.ProtonUsage.AsNoTracking()
+            .Where(u => u.OccurredAt >= fromUtc && u.OccurredAt < toUtc)
+            .OrderBy(u => u.OccurredAt)
+            .Select(u => new ProtonTurnRow(u.UserId, u.User.DomainCode, u.ConversationId, u.OccurredAt, u.CostUsd, u.Tools))
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<ProtonUserUsage>> ByUserAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
     {
         var rows = await db.ProtonUsage.AsNoTracking()

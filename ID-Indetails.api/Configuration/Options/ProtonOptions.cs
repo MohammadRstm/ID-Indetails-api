@@ -59,7 +59,48 @@ public sealed class ProtonOptions
     [Range(1, 100_000)]
     public int MonthlyQuestionsPerUser { get; init; } = 300;
 
+    /// <summary>Analytical tools that load every project's money or all of a period's work: at most this many per question.</summary>
+    [Range(1, 20)]
+    public int MaxHeavyToolCallsPerQuestion { get; init; } = 4;
+
+    /// <summary>
+    /// A conversation whose last request sent more input tokens than this (cached or not) takes no more questions:
+    /// every question re-sends the earlier ones with their tool results, so long analytical threads get expensive.
+    /// </summary>
+    [Range(10_000, 1_000_000)]
+    public int MaxConversationInputTokens { get; init; } = 80_000;
+
     public ProtonPrices Prices { get; init; } = new();
+
+    public ProtonInsightOptions Insights { get; init; } = new();
+}
+
+/// <summary>
+/// When a measured change may be called notable or unusual (docs/proton.md, "Analysis"). Without one of these rules
+/// firing, Proton reports the change and makes no judgement about its size.
+/// </summary>
+public sealed class ProtonInsightOptions
+{
+    [Range(1, 1_000)]
+    public int NotablePct { get; init; } = 30;
+
+    [Range(0, 10_000)]
+    public decimal NotableHours { get; init; } = 10m;
+
+    [Range(0, 10_000_000)]
+    public decimal NotableUsd { get; init; } = 1_000m;
+
+    [Range(1, 100)]
+    public decimal UnusualHigh { get; init; } = 1.5m;
+
+    [Range(0, 1)]
+    public decimal UnusualLow { get; init; } = 0.5m;
+
+    [Range(2, 12)]
+    public int BaselinePeriods { get; init; } = 4;
+
+    [Range(1, 365)]
+    public int TargetSoonDays { get; init; } = 14;
 }
 
 /// <summary>USD per million tokens of <see cref="ProtonOptions.Model"/>, used to estimate cost.</summary>

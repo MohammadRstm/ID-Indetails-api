@@ -13,6 +13,27 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
         ActivityFeedSearch search,
         CancellationToken cancellationToken = default)
     {
+        var query = Filter(search);
+        var total = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderByDescending(e => e.OccurredAt)
+            .ThenByDescending(e => e.Id)
+            .Skip((search.Page - 1) * search.PageSize)
+            .Take(search.PageSize)
+            .ToListAsync(cancellationToken);
+        return (await ToFeedAsync(rows, cancellationToken), total);
+    }
+
+    public async Task<IReadOnlyList<(string Kind, int Count)>> CountByKindAsync(ActivityFeedSearch search, CancellationToken cancellationToken = default)
+        => (await Filter(search)
+                .GroupBy(e => e.Kind)
+                .Select(g => new { Kind = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken))
+            .Select(k => (k.Kind, k.Count))
+            .ToList();
+
+    private IQueryable<ActivityEvent> Filter(ActivityFeedSearch search)
+    {
         var domains = search.Domains.ToList();
         var query = db.ActivityEvents.AsNoTracking()
             .Where(e => (e.DomainCode != null && domains.Contains(e.DomainCode)) || (search.WithCompany && e.DomainCode == null));
@@ -56,13 +77,21 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
             query = query.Where(e => e.ActorId == actorId);
         }
 
-        var total = await query.CountAsync(cancellationToken);
-        var rows = await query
-            .OrderByDescending(e => e.OccurredAt)
-            .ThenByDescending(e => e.Id)
-            .Skip((search.Page - 1) * search.PageSize)
-            .Take(search.PageSize)
-            .ToListAsync(cancellationToken);
+        if (search.FromUtc is { } fromUtc)
+        {
+            query = query.Where(e => e.OccurredAt >= fromUtc);
+        }
+
+        if (search.ToUtc is { } toUtc)
+        {
+            query = query.Where(e => e.OccurredAt < toUtc);
+        }
+
+        return query;
+    }
+
+    private async Task<IReadOnlyList<FeedEvent>> ToFeedAsync(List<ActivityEvent> rows, CancellationToken cancellationToken)
+    {
 
         var actorIds = rows.Where(e => e.ActorId != null).Select(e => e.ActorId!.Value).Distinct().ToList();
         var projectIds = rows.Where(e => e.ProjectId != null).Select(e => e.ProjectId!.Value).Distinct().ToList();
@@ -107,7 +136,7 @@ public sealed class ActivityFeedRepository(IdIndetailsDbContext db) : IActivityF
                 e.IsDemo);
         }).ToList();
 
-        return (items, total);
+        return items;
     }
 
     private const string ClientSubject = "client";

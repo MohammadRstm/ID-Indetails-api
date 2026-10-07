@@ -25,6 +25,9 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
 
     public int Questions { get; set; }
 
+    /// <summary>Input tokens of the last model request (cached or not): the cost of carrying this conversation on.</summary>
+    public int LastInputTokens { get; set; }
+
     private readonly Queue<string> _actionNotes = new();
 
     /// <summary>
@@ -74,6 +77,12 @@ public sealed class ConversationFocus
 
     public DayRange? Period { get; private set; }
 
+    /// <summary>What the last analysis compared <see cref="Period"/> with.</summary>
+    public DayRange? ComparedWith { get; private set; }
+
+    /// <summary>What the last analysis looked at ("Hours compared", "Design money compared").</summary>
+    public string? Analysis { get; private set; }
+
     public string? Topic { get; private set; }
 
     /// <summary>Takes in a successful tool call. A call about exactly one record of a kind makes that record the focus.</summary>
@@ -86,6 +95,11 @@ public sealed class ConversationFocus
 
         Topic = result.Tool;
         Period = result.Period ?? Period;
+        if (result.Basis is { } basis)
+        {
+            ComparedWith = basis.ComparedWith;
+            Analysis = basis.Label;
+        }
 
         var projects = result.Refs.Where(r => r.Type == ProtonRefType.Project).Distinct().ToList();
         if (projects.Count == 1)
@@ -127,6 +141,16 @@ public sealed class ConversationFocus
         if (Period is { } period)
         {
             parts.Add($"period {period.From:yyyy-MM-dd} to {period.To:yyyy-MM-dd}");
+        }
+
+        if (ComparedWith is { } compared)
+        {
+            parts.Add($"compared with {compared.From:yyyy-MM-dd} to {compared.To:yyyy-MM-dd}");
+        }
+
+        if (Analysis is { } analysis)
+        {
+            parts.Add($"last analysis: {analysis}");
         }
 
         if (Topic is { } topic)

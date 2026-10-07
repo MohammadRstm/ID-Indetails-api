@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ID_Indetails.api.Business.Proton;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
@@ -22,6 +23,8 @@ public sealed class ProtonUsageService(
     IClock clock,
     IOptions<ProtonOptions> options)
 {
+    private const int TopConversations = 10;
+
     public bool IsSwitchedOn => options.Value.Enabled && !string.IsNullOrWhiteSpace(options.Value.ApiKey);
 
     public ProtonTokenPrices Prices => new(
@@ -82,6 +85,10 @@ public sealed class ProtonUsageService(
         var position = await BudgetPositionAsync(month, cancellationToken);
         var topUps = await usage.TopUpsAsync(month, cancellationToken);
         var byUser = await usage.ByUserAsync(from, to, cancellationToken);
+        var turns = (await usage.TurnsAsync(from, to, cancellationToken))
+            .Select(t => new ProtonUsageTurn(t.UserId, t.Domain, t.ConversationId, clock.ToCompanyDate(t.OccurredAt), t.CostUsd, ToolCallsOf(t.Tools)))
+            .ToList();
+        var names = byUser.ToDictionary(u => u.UserId, u => u.Name);
         return new ProtonBudgetResponse(
             month,
             options.Value.Model,
@@ -93,7 +100,16 @@ public sealed class ProtonUsageService(
             position.UsedPct,
             byUser.Sum(u => u.Questions),
             topUps.Select(t => new ProtonTopUpResponse(t.Id, t.AmountUsd, t.Note, t.AddedBy, t.AddedAt)).ToList(),
-            byUser.Select(u => new ProtonUserUsageResponse(u.UserId, u.Name, u.Questions, Math.Round(u.CostUsd, 4), u.Tokens)).ToList());
+            byUser.Select(u => new ProtonUserUsageResponse(u.UserId, u.Name, u.Questions, Math.Round(u.CostUsd, 4), u.Tokens)).ToList(),
+            ProtonUsageBreakdown.ByDomain(turns).Select(d => new ProtonDomainUsageResponse(d.Domain, d.Questions, Math.Round(d.CostUsd, 4))).ToList(),
+            ProtonUsageBreakdown.ByTool(turns)
+                .Select(t => new ProtonToolUsageResponse(t.Tool, t.Calls, t.TotalMs / t.Calls, t.Questions, Math.Round(t.QuestionCostUsd, 4)))
+                .ToList(),
+            ProtonUsageBreakdown.ByDay(turns).Select(d => new ProtonDayUsageResponse(d.Day, d.Questions, Math.Round(d.CostUsd, 4))).ToList(),
+            ProtonUsageBreakdown.MostExpensiveConversations(turns, TopConversations)
+                .Select(c => new ProtonConversationUsageResponse(
+                    c.ConversationId, c.UserId, names.GetValueOrDefault(c.UserId, "Unknown"), c.Questions, c.ToolCalls, Math.Round(c.CostUsd, 4)))
+                .ToList());
     }
 
     /// <summary>Adds to this month's budget. Top-ups are kept, never edited, so the month's budget can be explained.</summary>
@@ -118,6 +134,15 @@ public sealed class ProtonUsageService(
             options.Value.MonthlyBudgetUsd,
             await usage.TopUpTotalAsync(month, cancellationToken),
             await usage.SpentAsync(from, to, cancellationToken));
+    }
+
+    /// <summary>The tool calls of a recorded turn (see ProtonTurn.Record): name and duration only.</summary>
+    private static IReadOnlyList<ProtonToolCallUsage> ToolCallsOf(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.EnumerateArray()
+            .Select(c => new ProtonToolCallUsage(c.GetProperty("tool").GetString() ?? "", c.TryGetProperty("ms", out var ms) ? ms.GetInt32() : 0))
+            .ToList();
     }
 
     private DateOnly Month() => ProtonUsageRules.MonthOf(clock.CompanyToday);
