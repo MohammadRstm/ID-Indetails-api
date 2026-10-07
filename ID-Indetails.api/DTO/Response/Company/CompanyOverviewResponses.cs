@@ -36,10 +36,10 @@ public sealed record DomainOverviewResponse(
 
 /// <param name="Overhead">Company expenses charged to the period (by calendar days), in USD.</param>
 /// <param name="UnconvertedOverhead">Overhead with no exchange rate for its month, left out of <see cref="Overhead"/>.</param>
-/// <param name="SuperAdminSalaries">The super admins' pay for the period (by calendar days, like overhead), in USD: they log no
-/// hours, so no project carries it.</param>
-/// <param name="UnconvertedSuperAdminSalaries">Their pay in a currency with no rate for its month, left out of <see cref="SuperAdminSalaries"/>.</param>
-/// <param name="NetProfit">Both domains' profit less company overhead and the super admins' salaries.</param>
+/// <param name="AdminSalaries">The admins' and super admins' fixed salaries for the period (by calendar days, like overhead), in
+/// USD: they log no hours, so no project carries their pay.</param>
+/// <param name="UnconvertedAdminSalaries">Their pay in a currency with no rate for its month, left out of <see cref="AdminSalaries"/>.</param>
+/// <param name="NetProfit">Both domains' profit less company overhead and the admins' and super admins' salaries.</param>
 /// <param name="UnconvertedInvoices">Both domains' invoices with no exchange rate on their issue day.</param>
 public sealed record CompanyOverviewResponse(
     DateOnly From,
@@ -50,8 +50,8 @@ public sealed record CompanyOverviewResponse(
     decimal GrossProfit,
     decimal Overhead,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedOverhead,
-    decimal SuperAdminSalaries,
-    IReadOnlyList<CurrencyTotalResponse> UnconvertedSuperAdminSalaries,
+    decimal AdminSalaries,
+    IReadOnlyList<CurrencyTotalResponse> UnconvertedAdminSalaries,
     decimal NetProfit,
     decimal Invoiced,
     decimal Collected,
@@ -61,10 +61,10 @@ public sealed record CompanyOverviewResponse(
     IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
 /// <summary>One month for both domains together, in USD.</summary>
-/// <param name="SuperAdminSalaries">The super admins' pay for the month, a company cost like overhead.</param>
+/// <param name="AdminSalaries">The admins' and super admins' pay for the month, a company cost like overhead.</param>
 /// <param name="ProfitBeforeOverhead">Revenue − project costs.</param>
 /// <param name="ProfitAfterOverhead">After company overhead only.</param>
-/// <param name="NetProfit">After company overhead and the super admins' salaries, as the overview's net profit.</param>
+/// <param name="NetProfit">After company overhead and the admins' and super admins' salaries, as the overview's net profit.</param>
 public sealed record CompanyMonthResponse(
     DateOnly Month,
     decimal Revenue,
@@ -73,7 +73,7 @@ public sealed record CompanyMonthResponse(
     decimal Materials,
     decimal GroundLabour,
     decimal Overhead,
-    decimal SuperAdminSalaries,
+    decimal AdminSalaries,
     decimal ProfitBeforeOverhead,
     decimal ProfitAfterOverhead,
     decimal NetProfit);

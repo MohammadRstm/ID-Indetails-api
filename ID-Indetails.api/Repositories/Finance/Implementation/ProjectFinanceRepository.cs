@@ -29,7 +29,9 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
         => await db.UserPayHistory
             .AsNoTracking()
             .Where(p => userIds.Contains(p.UserId))
-            .Select(p => new ProjectFinance.PayRecord(p.UserId, p.EffectiveFrom, p.Basis, p.User.RoleCode == RoleCodes.SuperAdmin ? 0m : p.Amount, p.Currency))
+            // admins and super admins are paid a fixed salary, a company cost (the company overview's net profit): any hours
+            // they logged cost their projects nothing, so their pay is never counted twice
+            .Select(p => new ProjectFinance.PayRecord(p.UserId, p.EffectiveFrom, p.Basis, p.User.RoleCode != RoleCodes.Employee ? 0m : p.Amount, p.Currency))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)

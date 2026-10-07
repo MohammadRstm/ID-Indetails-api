@@ -81,7 +81,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         design.ProjectsWithActivity.ShouldBe(1);
         design.Loggers.ShouldBe(1);
         june.Domains.Single(d => d.Domain == DomainCodes.Execution).Revenue.ShouldBe(0m);
-        june.NetProfit.ShouldBe(3930m - june.Overhead - june.SuperAdminSalaries);
+        june.NetProfit.ShouldBe(3930m - june.Overhead - june.AdminSalaries);
         design.UnconvertedCosts.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "EUR", 50m)]);
         design.Invoiced.ShouldBe(0m);
         design.UnconvertedInvoices.ShouldBe([new UnconvertedInvoicesResponse("EUR", 3000m, 1)]);
@@ -114,27 +114,31 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Super_admins_salaries_come_off_the_company_s_net_profit()
+    public async Task Admins_and_super_admins_salaries_come_off_the_company_s_net_profit()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null,
-            new { basis = "monthly", amount = 3100m, currency = "USD", effectiveFrom = "2026-01-01" });
+            new { basis = "monthly", amount = 1100m, currency = "USD", effectiveFrom = "2026-01-01" });
         await _steps.SetJoinedOnAsync(partner.User.Id, "2026-01-01");
+        // an admin's fixed salary is a company cost too: admins log no hours either
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design,
+            new { basis = "monthly", amount = 2000m, currency = "USD", effectiveFrom = "2026-01-01" });
+        await _steps.SetJoinedOnAsync(admin.User.Id, "2026-01-01");
 
         // all of March 2026, then its first 16 of 31 days
         var march = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-03-01&to=2026-03-31", superAdmin.AccessToken));
-        march.SuperAdminSalaries.ShouldBe(3100m);
-        march.UnconvertedSuperAdminSalaries.ShouldBeEmpty();
+        march.AdminSalaries.ShouldBe(3100m);
+        march.UnconvertedAdminSalaries.ShouldBeEmpty();
         march.NetProfit.ShouldBe(march.GrossProfit - march.Overhead - 3100m);
         var half = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-03-01&to=2026-03-16", superAdmin.AccessToken));
-        half.SuperAdminSalaries.ShouldBe(1600m);
+        half.AdminSalaries.ShouldBe(1600m);
 
         // the monthly chart takes them off a whole month at a time, after overhead
         var year = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2026", superAdmin.AccessToken));
         var marchMonth = year.Single(m => m.Month == new DateOnly(2026, 3, 1));
-        marchMonth.SuperAdminSalaries.ShouldBe(3100m);
+        marchMonth.AdminSalaries.ShouldBe(3100m);
         marchMonth.NetProfit.ShouldBe(marchMonth.ProfitAfterOverhead - 3100m);
-        year.Single(m => m.Month == new DateOnly(2026, 1, 1)).SuperAdminSalaries.ShouldBe(3100m);
+        year.Single(m => m.Month == new DateOnly(2026, 1, 1)).AdminSalaries.ShouldBe(3100m);
 
         // no project carries it: the businesses' costs don't move
         march.Domains.ShouldAllBe(d => d.Cost == 0m);
@@ -153,7 +157,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         // This month to date: its elapsed share of 3,000 (at least 1 day's worth) is charged.
         overview.Overhead.ShouldBeGreaterThan(0m);
         overview.Overhead.ShouldBeLessThanOrEqualTo(3000m);
-        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead - overview.SuperAdminSalaries);
+        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead - overview.AdminSalaries);
 
         var months = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?months=1", superAdmin.AccessToken));
         months.ShouldHaveSingleItem().Overhead.ShouldBeGreaterThanOrEqualTo(3000m);
