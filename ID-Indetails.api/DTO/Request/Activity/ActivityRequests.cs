@@ -21,6 +21,12 @@ public sealed record ActivityListQuery
     /// <summary>Who did it.</summary>
     public long? UserId { get; init; }
 
+    /// <summary>Only events on or after this company day.</summary>
+    public DateOnly? From { get; init; }
+
+    /// <summary>Only events on or before this company day.</summary>
+    public DateOnly? To { get; init; }
+
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 40;

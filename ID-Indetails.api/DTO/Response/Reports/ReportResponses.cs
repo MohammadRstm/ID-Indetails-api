@@ -122,3 +122,17 @@ public sealed record OverviewResponse(
     int PeopleCount,
     int ProjectCount,
     int ThisWeekMinutes);
+
+public sealed record ProjectTotalResponse(long ProjectId, string Title, ProjectStatus Status, int Minutes, int Entries, int People);
+
+public sealed record PersonTotalResponse(long UserId, string Name, int Minutes, int Entries, int Projects);
+
+/// <summary>Design work over a range of company days, both inclusive, added up; biggest first.</summary>
+public sealed record WorkTotalsResponse(
+    DateOnly From,
+    DateOnly To,
+    int TotalMinutes,
+    int EntryCount,
+    IReadOnlyList<ProjectTotalResponse> ByProject,
+    IReadOnlyList<PersonTotalResponse> ByPerson,
+    IReadOnlyList<ReportClientResponse> ByClient);

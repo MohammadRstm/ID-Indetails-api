@@ -51,22 +51,9 @@ public sealed class ReportService(
 
     public async Task<WorkReportResponse> WorkReportAsync(WorkReportQuery query, CancellationToken cancellationToken = default)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ReportView);
-        var actor = await DesignViewerAsync(cancellationToken);
+        var (actor, from, to, views) = await WorkOfAsync(query, cancellationToken);
         var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var today = clock.CompanyToday;
-        var from = query.From ?? WorkStats.QuarterStartOf(today);
-        var to = query.To ?? today;
-
-        var views = await entries.ListAsync(
-            new WorkEntrySearch(
-                query.UserId,
-                query.ProjectId,
-                query.ClientId,
-                clock.CompanyDayStartUtc(from),
-                clock.CompanyDayStartUtc(to.AddDays(1)),
-                InternalOnly: query.Internal),
-            cancellationToken);
         var worked = views.Select(ToWorked).ToList();
         var total = views.Sum(e => e.Minutes);
         var overtimeById = await overtime.OvertimeOfAsync(views, cancellationToken);
@@ -128,17 +115,66 @@ public sealed class ReportService(
             weekly.Where(w => w.Minutes > 0).MaxBy(w => w.Minutes) is { } busiest ? new WeekTotalResponse(busiest.WeekStart, busiest.Minutes, busiest.Entries) : null,
             ToWeeks(weekly),
             byProject,
-            views
-                .GroupBy(e => e.ClientId)
-                .Select(g => new ReportClientResponse(g.Key, g.First().ClientName, g.Sum(e => e.Minutes)))
-                .OrderByDescending(c => c.Minutes)
-                .ToList(),
+            ByClient(views),
             byPerson,
             matrix,
             await CompletedAsync(projects.Values, from, to, cancellationToken),
             await QuarterlyAsync(today, cancellationToken),
             actor.Has(PermissionCodes.FinancialView) ? await MoneyAsync(views, projects, byProject, from, to, cancellationToken) : null);
     }
+
+    public async Task<WorkTotalsResponse> WorkTotalsAsync(WorkReportQuery query, CancellationToken cancellationToken = default)
+    {
+        var (_, from, to, views) = await WorkOfAsync(query, cancellationToken);
+        return new WorkTotalsResponse(
+            from,
+            to,
+            views.Sum(e => e.Minutes),
+            views.Count,
+            views
+                .GroupBy(e => e.ProjectId)
+                .Select(g => new ProjectTotalResponse(
+                    g.Key, g.First().ProjectTitle, g.First().ProjectStatus, g.Sum(e => e.Minutes), g.Count(), g.Select(e => e.UserId).Distinct().Count()))
+                .OrderByDescending(p => p.Minutes)
+                .ToList(),
+            views
+                .GroupBy(e => e.UserId)
+                .Select(g => new PersonTotalResponse(
+                    g.Key, g.First().UserName, g.Sum(e => e.Minutes), g.Count(), g.Select(e => e.ProjectId).Distinct().Count()))
+                .OrderByDescending(p => p.Minutes)
+                .ToList(),
+            ByClient(views));
+    }
+
+    /// <summary>The Design work a report covers, once the caller may see reports and Design.</summary>
+    private async Task<(UserAccess Actor, DateOnly From, DateOnly To, IReadOnlyList<WorkEntryView> Views)> WorkOfAsync(
+        WorkReportQuery query,
+        CancellationToken cancellationToken)
+    {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ReportView);
+        var actor = await DesignViewerAsync(cancellationToken);
+        var today = clock.CompanyToday;
+        var from = query.From ?? WorkStats.QuarterStartOf(today);
+        var to = query.To ?? today;
+
+        var views = await entries.ListAsync(
+            new WorkEntrySearch(
+                query.UserId,
+                query.ProjectId,
+                query.ClientId,
+                clock.CompanyDayStartUtc(from),
+                clock.CompanyDayStartUtc(to.AddDays(1)),
+                InternalOnly: query.Internal),
+            cancellationToken);
+        return (actor, from, to, views);
+    }
+
+    private static IReadOnlyList<ReportClientResponse> ByClient(IEnumerable<WorkEntryView> views)
+        => views
+            .GroupBy(e => e.ClientId)
+            .Select(g => new ReportClientResponse(g.Key, g.First().ClientName, g.Sum(e => e.Minutes)))
+            .OrderByDescending(c => c.Minutes)
+            .ToList();
 
     public async Task<OverviewResponse> OverviewAsync(OverviewQuery query, CancellationToken cancellationToken = default)
     {

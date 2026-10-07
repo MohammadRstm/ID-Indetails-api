@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Activity;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Activity;
 using ID_Indetails.api.DTO.Response.Activity;
@@ -36,40 +37,13 @@ public sealed class ActivityFeedService(
     public async Task<PagedResponse<ActivityItemResponse>> ListAsync(ActivityListQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
-        var withCompany = actor.Has(PermissionCodes.CompanyView) && query.Domain is null;
-        var domains = query.Domain is { } domain ? actor.VisibleDomains.Where(d => d == domain).ToList() : actor.VisibleDomains;
-        var seesWork = actor.Has(PermissionCodes.WorkEntryViewAll);
         var seesMoney = actor.Has(PermissionCodes.FinancialView);
-        if (query.Group == ActivityGroup.Company && !withCompany)
+        if (SearchOf(actor, query) is not { } search)
         {
             return new PagedResponse<ActivityItemResponse>([], query.Page, query.PageSize, 0);
         }
 
-        var hidden = new List<string>(seesWork ? [] : ActivityGroups.KindsOf(ActivityGroup.Work));
-        if (!actor.Has(PermissionCodes.SalaryView))
-        {
-            hidden.AddRange([ActivityEventKinds.HoursExcused, ActivityEventKinds.HoursExcuseRemoved]);
-        }
-
-        if (!actor.Has(PermissionCodes.CompanyView))
-        {
-            hidden.Add(ActivityEventKinds.ScheduleChanged);
-        }
-
-        var (items, total) = await feed.SearchAsync(
-            new ActivityFeedSearch(
-                domains,
-                withCompany,
-                query.Group is { } group and not ActivityGroup.Company ? ActivityGroups.KindsOf(group) : null,
-                hidden,
-                query.Group == ActivityGroup.Company,
-                query.ProjectId,
-                query.ClientId,
-                query.UserId,
-                query.Page,
-                query.PageSize,
-                query.Internal),
-            cancellationToken);
+        var (items, total) = await feed.SearchAsync(search, cancellationToken);
 
         var workIds = items.Where(e => e.SubjectType == "work_entry" && e.SubjectId is not null).Select(e => e.SubjectId!.Value).Distinct().ToList();
         var work = workIds.Count > 0 ? (await entries.ViewsByIdAsync(workIds, cancellationToken)).ToDictionary(e => e.Id) : [];
@@ -100,6 +74,57 @@ public sealed class ActivityFeedService(
             query.Page,
             query.PageSize,
             total);
+    }
+
+    public async Task<IReadOnlyList<ActivityKindCountResponse>> CountsAsync(ActivityListQuery query, CancellationToken cancellationToken = default)
+    {
+        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        if (SearchOf(actor, query) is not { } search)
+        {
+            return [];
+        }
+
+        return (await feed.CountByKindAsync(search, cancellationToken))
+            .Select(k => new ActivityKindCountResponse(k.Kind, ActivityGroups.GroupOf(k.Kind, null), k.Count))
+            .OrderByDescending(k => k.Count)
+            .ThenBy(k => k.Kind, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>What the caller may see of the feed under these filters; null when that is nothing.</summary>
+    private ActivityFeedSearch? SearchOf(UserAccess actor, ActivityListQuery query)
+    {
+        var withCompany = actor.Has(PermissionCodes.CompanyView) && query.Domain is null;
+        if (query.Group == ActivityGroup.Company && !withCompany)
+        {
+            return null;
+        }
+
+        var hidden = new List<string>(actor.Has(PermissionCodes.WorkEntryViewAll) ? [] : ActivityGroups.KindsOf(ActivityGroup.Work));
+        if (!actor.Has(PermissionCodes.SalaryView))
+        {
+            hidden.AddRange([ActivityEventKinds.HoursExcused, ActivityEventKinds.HoursExcuseRemoved]);
+        }
+
+        if (!actor.Has(PermissionCodes.CompanyView))
+        {
+            hidden.Add(ActivityEventKinds.ScheduleChanged);
+        }
+
+        return new ActivityFeedSearch(
+            query.Domain is { } domain ? actor.VisibleDomains.Where(d => d == domain).ToList() : actor.VisibleDomains,
+            withCompany,
+            query.Group is { } group and not ActivityGroup.Company ? ActivityGroups.KindsOf(group) : null,
+            hidden,
+            query.Group == ActivityGroup.Company,
+            query.ProjectId,
+            query.ClientId,
+            query.UserId,
+            query.Page,
+            query.PageSize,
+            query.Internal,
+            query.From is { } from ? clock.CompanyDayStartUtc(from) : null,
+            query.To is { } to ? clock.CompanyDayStartUtc(to.AddDays(1)) : null);
     }
 
     public async Task<ActivityTodayResponse> TodayAsync(CancellationToken cancellationToken = default)

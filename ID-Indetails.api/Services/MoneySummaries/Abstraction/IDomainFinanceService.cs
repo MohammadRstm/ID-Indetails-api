@@ -22,4 +22,13 @@ public interface IDomainFinanceService
     Task<FinanceCostsResponse> CostsAsync(string domain, FinancePeriodQuery query, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<MoneyAttentionResponse>> AttentionAsync(string domain, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The summary's period money (received, cost by source, profit) for several periods at once, for the domain and
+    /// for each of its projects, from one load: for comparing periods. Periods end today at the latest.
+    /// </summary>
+    Task<FinanceProjectPeriodsResponse> ProjectPeriodsAsync(
+        string domain,
+        IReadOnlyList<FinancePeriodQuery> periods,
+        CancellationToken cancellationToken = default);
 }

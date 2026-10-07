@@ -387,6 +387,51 @@ public sealed class DomainFinanceService(
             .ToList();
     }
 
+    public async Task<FinanceProjectPeriodsResponse> ProjectPeriodsAsync(
+        string domain,
+        IReadOnlyList<FinancePeriodQuery> periods,
+        CancellationToken cancellationToken = default)
+    {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
+        await CheckDomainAsync(domain, cancellationToken);
+        var ranges = periods.Select(Period).ToList();
+        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
+        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        var agreed = await AgreedAsync(projects, cancellationToken);
+        var payments = rollup.Payments.ToLookup(p => p.ProjectId);
+
+        // the same figures as SummaryAsync, per project: payments on the day they arrived, costs dated in the period
+        FinanceProjectPeriodMoneyResponse MoneyOf(Project project, DateOnly from, DateOnly to)
+        {
+            var received = PeriodMoney.Received(payments[project.Id].Select(p => (p.ReceivedOn, p.AmountUsd)), from, to);
+            var cost = PeriodMoney.Costs(rollup.Costs(project.Id), from, to);
+            return new FinanceProjectPeriodMoneyResponse(
+                from, to, received, PeriodCost(cost), received - Rounded(cost.Total), PeriodMoney.Unconverted(rollup.Unconverted(project.Id), from, to).Count > 0);
+        }
+
+        var received = ReceivedOn(projects, rollup);
+        var costs = projects.SelectMany(p => rollup.Costs(p.Id)).ToList();
+        var unconverted = projects.SelectMany(p => rollup.Unconverted(p.Id)).ToList();
+        return new FinanceProjectPeriodsResponse(
+            domain,
+            ranges
+                .Select(r =>
+                {
+                    var revenue = PeriodMoney.Received(received, r.From, r.To);
+                    var cost = PeriodMoney.Costs(costs, r.From, r.To);
+                    var profit = revenue - Rounded(cost.Total);
+                    return new FinanceDomainPeriodResponse(
+                        r.From, r.To, revenue, ExpectedRevenue.In(agreed, r.From, r.To), PeriodCost(cost), profit, PeriodMoney.Margin(profit, revenue),
+                        UnconvertedOf(PeriodMoney.Unconverted(unconverted, r.From, r.To)));
+                })
+                .ToList(),
+            projects
+                .OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
+                .Select(p => new FinanceProjectPeriodResponse(
+                    p.Id, p.Title, p.Status, p.BillingType, ranges.Select(r => MoneyOf(p, r.From, r.To)).ToList()))
+                .ToList());
+    }
+
     /// <summary>Money is shown per domain; a domain the caller can't see is not found.</summary>
     private async Task CheckDomainAsync(string domain, CancellationToken cancellationToken)
     {

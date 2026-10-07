@@ -240,3 +240,33 @@ public sealed record ProjectListTotalsResponse(
     decimal InternalCost,
     bool HasUnconverted,
     string Currency);
+
+/// <summary>A domain's money over one period, as <see cref="FinanceSummaryResponse"/> counts it.</summary>
+/// <param name="Received">Payments received in the period, each on the day it arrived.</param>
+/// <param name="Unconverted">Costs of the period with no exchange rate on their day, in their own currency.</param>
+public sealed record FinanceDomainPeriodResponse(
+    DateOnly From,
+    DateOnly To,
+    decimal Received,
+    decimal ExpectedRevenue,
+    PeriodCostResponse Cost,
+    decimal Profit,
+    decimal? Margin,
+    IReadOnlyList<UnconvertedCostResponse> Unconverted);
+
+/// <param name="HasUnconverted">A cost of the period is left out of these USD figures for want of an exchange rate.</param>
+public sealed record FinanceProjectPeriodMoneyResponse(DateOnly From, DateOnly To, decimal Received, PeriodCostResponse Cost, decimal Profit, bool HasUnconverted);
+
+/// <param name="Periods">In the order the periods were asked for.</param>
+public sealed record FinanceProjectPeriodResponse(
+    long ProjectId,
+    string Title,
+    ProjectStatus Status,
+    BillingType BillingType,
+    IReadOnlyList<FinanceProjectPeriodMoneyResponse> Periods);
+
+/// <summary>A domain's money over several periods, in total and project by project (A to Z), in the order asked for.</summary>
+public sealed record FinanceProjectPeriodsResponse(
+    string Domain,
+    IReadOnlyList<FinanceDomainPeriodResponse> Totals,
+    IReadOnlyList<FinanceProjectPeriodResponse> Projects);
