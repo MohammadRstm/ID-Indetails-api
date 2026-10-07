@@ -73,4 +73,8 @@ public static class PermissionCodes
     public const string WorkingTimeManage = "working_time:manage";
     public const string ScheduleManage = "schedule:manage";
     public const string HoursExcuse = "hours:excuse";
+
+    // Proton, the company assistant
+    public const string ProtonUse = "proton:use";
+    public const string ProtonBudgetManage = "proton_budget:manage";
 }

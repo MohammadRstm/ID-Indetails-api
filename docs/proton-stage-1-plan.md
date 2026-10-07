@@ -1,7 +1,33 @@
 # Proton — Stage 1 plan (read-only company assistant)
 
-Status: **plan only, nothing implemented.** Every decision marked *(approval)* waits for sign-off
-(see the last section). Paths are relative to `ID-Indetails.api/` unless stated otherwise.
+Status: **approved and implemented (Stage 1).** The decisions taken on 7 Oct 2026 are in
+[section 0](#0-approved-decisions-7-oct-2026) and override anything below that disagrees; how the result works is in
+[proton.md](proton.md). The existing problems found along the way, for a separate fix, are in
+[section R](#r-existing-problems-found-not-fixed-by-proton). Paths are relative to `ID-Indetails.api/` unless stated
+otherwise.
+
+## 0. Approved decisions (7 Oct 2026)
+
+| Topic | Decision |
+|---|---|
+| Provider | Anthropic API through the official `Anthropic` NuGet package (the only new dependency). |
+| Model | `claude-sonnet-5-5` for the chat (configurable; Sonnet 5 may be evaluated). Reliability, correct tool use and cost over raw capability. |
+| Interfaces | Claude = text chat (Stage 1). GPT-Live-1 = future live voice, browser and phone. Both use the **same** tool layer; only the chat is built now. |
+| Authorization | Whatever the user can access through Hourline's API, Proton can access through the matching tool — never more. Tools are in-process clients of the existing services under the endpoint's own authorization policies; no HTTP hops, no second permission system. |
+| Proton permission | `proton:use`: super admins and admins, not employees. |
+| Budget permission | `proton_budget:manage` (resource:action form, as every code in the catalogue): super admins only. Cost and budget figures only with it; everyone with `proton:use` sees their own allowance. |
+| Usage storage | `proton_usage` (one row per question, with its transcript) and `proton_budget_top_ups` (refills) — one migration. |
+| Sensitive data | The existing permissions decide. Never in Proton: passwords and secrets, bank details, salaries and pay, per-person hourly cost, admin salaries. Work-entry descriptions and contact details follow normal permissions. |
+| Overdue | Has a target date, the date is before today, status active or hold. No target date → never overdue. |
+| Folder | `ID-Indetails.api/Proton/` for the agent, tools, prompts, conversation, safety and usage; controller, DTOs, validators, options, entities and repository in their usual layer folders. |
+| Conversations | Server memory, may be lost on restart; whole answers, no streaming. Transcripts stored (question, answer, tool calls — not tool results). |
+| Existing problems | Documented in section R, **not** fixed in Proton. |
+
+Changes from the plan below, made while implementing: the employee-only tools (`get_my_work`,
+`get_my_requirements`) were dropped because employees don't get Proton; contact details are passed on (decision
+above); net profit is left out of the company overview with admin salaries, since gross profit − overhead − net
+profit would give the salaries away; the question timeout is 55 s, under nginx's 60 s read timeout, rather than a
+new proxy setting.
 
 Stage 1 in one sentence: *Proton understands a signed-in user's question, reads authorized company
 data through a fixed set of read-only business tools that call the existing services, and answers —
@@ -739,27 +765,85 @@ table readable by super admins only.
 
 ---
 
-## Q. Questions / decisions requiring approval
+## Q. Decisions
 
-1. **Provider and dependency** — add the official `Anthropic` NuGet package and send
-   tool-selected, redacted company data to Anthropic's API. OK from a business/privacy standpoint?
-2. **Model** — `claude-opus-5-5` (≈$0.03–0.06/question) or `claude-sonnet-5-5` (≈half)?
-3. **Database** — create the `proton_usage` table (and migration) for usage/budget tracking. Without
-   it the monthly budget can't survive restarts.
-4. **Who can use Proton** — new permission `proton:use` (permission catalog/seed change, which is
-   also a DB change) vs. a config role allow-list. Should employees get it in Stage 1?
-5. **Sensitive-data scope** — confirm the exclusions in A.6, specifically: salaries/pay (even for
-   super admins and the user's own pay), per-person labour cost, `AdminSalaries` in the company
-   overview, Execution daily pay, employee email/phone, client contacts and client notes.
-   Work-entry descriptions are *included* (needed for "what did X work on") — OK?
-6. **"Overdue project" rule** — proposed: `TargetDate < company today` and status Active or Hold.
-   Agree, or leave overdue out of Stage 1?
-7. **Folder structure** — new `ID-Indetails.api/Proton/` feature folder as in H.
-8. **Transport & memory** — non-streaming JSON replies and in-memory conversations (lost on
-   restart) for Stage 1; streaming and persistent history later.
-9. **Budget numbers** — monthly budget (USD), per-user daily message cap, who sees usage figures
-   (proposed: super admins only).
-10. **Transcripts** — keep none (metadata only, proposed), or store transcripts for quality review
-    with a retention period?
-11. **Existing issues found** (A.7) — fix separately, leave as is, or fold into Proton work? In
-    particular the service-level permission gaps and the invoice balance currency mismatch.
+All the questions this section asked were answered on 7 Oct 2026 (section 0); the budget is stored as a configured
+monthly amount plus a `proton_budget_top_ups` table (also approved). Still open, none blocking Stage 1:
+
+1. **Transcript retention.** `proton_usage` keeps questions and answers indefinitely; no purge exists yet. Decide a
+   retention period (e.g. 180 days) and whether super admins should be able to read transcripts in the app (today:
+   database only).
+2. **The numbers.** `Proton:MonthlyBudgetUsd` (50) and `Proton:MonthlyQuestionsPerUser` (300) are placeholders.
+3. **Real-model evaluation.** Answer quality with the real model has not been measured (it costs money). Run the
+   catalogue in section C against a seeded database before switching Proton on in production.
+4. **Refusal fallbacks.** Claude's server-side fallback on a safety refusal needs the beta Messages endpoint; Stage 1
+   uses the stable endpoint and answers "I can't help with that one" on a refusal. Enable the fallback if refusals turn
+   up in practice.
+5. **The chat panel** in the client repository (phase P11) is not built yet.
+
+## R. Existing problems found, not fixed by Proton
+
+For whoever fixes them separately. Proton works around A and B and avoids C; none of them was changed.
+
+### A. Permission checks that live only on controller attributes
+
+Many endpoints declare their main permission only as an attribute on the controller or action
+(`[HasPermission(PermissionCodes.FinancialView)]` and the like). The service behind it checks domain visibility and
+some secondary permissions, but **not that main permission**. Confirmed examples:
+
+| Service method | Checked only by the controller |
+|---|---|
+| `ProjectService.TotalsAsync` | `financial:view` — returns revenue, cost and profit and checks nothing at all |
+| `CompanyOverviewService.GetAsync` / `MonthlyAsync` / `YearAsync` | `company:view` — no check, and it covers every domain |
+| `DomainFinanceService.*` | `financial:view` (the service only checks the domain is visible) |
+| `WorkEntryQueryService.ListAsync` / `ExportAsync` | `work_entry:view_all` — and it accepts any `UserId` filter |
+| `WorkInsightsService.*`, `MyWorkService.SummaryForPersonAsync` | `work_entry:view_all` / `financial:view` |
+| `ReportService.*`, `DashboardService.*` | `report:view` |
+| `EmployeeService.ListAsync` / `GetAsync`, `GetPayHistoryAsync` | `employee:view`, `employee:pay_manage` |
+| `SalaryService.*`, `ProjectPayService.*`, `MyTimeService.HoursForPersonAsync` | `salary:view` |
+| `PaymentService.*`, `ExpenseService.ListAsync`, `SiteMoneyService` | `financial:view` |
+
+**Why it matters.** Authorization then holds only as long as every caller is an MVC action carrying the right
+attribute. Any other caller — a background job, a SignalR hub method, a new controller where the attribute is
+forgotten, a service calling another service, or an assistant like Proton — gets the data with no check. For example,
+a hub method calling `CompanyOverviewService.GetAsync` would hand the company's profit and the admins' salaries to any
+signed-in user, and a new endpoint reusing `ProjectService.TotalsAsync` without the attribute would expose every
+project's money. Nothing fails closed: the default is "allowed". It also splits the rules for one feature across two
+layers, so reading the service doesn't tell you who may call it.
+
+**Fix direction.** Have each service check the permission it relies on (`access.Has(...)` → `ForbiddenException`),
+as `SearchService` already does, keeping the attributes as the first gate. Proton meanwhile re-evaluates the
+endpoint's own policies before each tool runs (`ProtonEndpoint`, `ProtonToolContext.CanCallAsync`).
+
+### B. Validation runs only in the MVC filter
+
+FluentValidation runs in `Middlewares/ValidationFilter.cs`, an MVC action filter, on the action's arguments. Services
+trust their input. So caps such as page size ≤ 100 (`EmployeeListQueryValidator.MaxPageSize`, reused by the project,
+client and activity validators), report and timeline ranges (3 years, 366 days), search length (100), `To >= From`
+and enum checks exist only for HTTP requests.
+
+**Why Proton can't assume it.** Calling `IProjectService.ListAsync(new ProjectListQuery { PageSize = 100_000 })` from
+code skips the validator: the service would page 100,000 rows. Some services also pass `int.MaxValue` page sizes
+themselves (`ProjectService.TotalsAsync`, money-sorted client lists). Any in-process caller has to validate on its
+own. Proton runs the endpoint's validator on every query it builds (`ProtonToolContext.ValidateAsync`) and adds its
+own row and period limits.
+
+**Fix direction.** Either validate inside the services that take query objects, or make clear in each service
+signature that the input is trusted and add a shared helper callers must use.
+
+### C. Invoice balance subtracts USD payments from the invoice's own currency
+
+In `Services/Billing/Implementation/InvoiceService.cs` (`Summary`, around line 598), the list and detail compute
+`Balance = Total − Paid`, where `Total` is in the **invoice's currency** and `Paid` is the sum of the payments'
+`AmountUsd` (**always USD**, each payment converted at its own rate). Status (`Partial`/`Paid`) and `IsOverdue` follow
+from the same comparison (`InvoiceRules`).
+
+**Why only USD invoices are right.** For a USD invoice both sides are dollars. For an LBP invoice of 89,500,000 LBP
+paid in full, `Paid` is about 1,000 (USD), so the balance shows ≈ 89,499,000 "LBP" outstanding and the invoice never
+becomes paid. The money summaries don't have the problem: `MoneyRollupService` converts the invoice total to USD at
+its issue-day rate before comparing (`Business/Billing/ProjectBilling.cs`). Today every invoice is in USD in practice
+(`Project.RevenueCurrency` is never set to anything else), which is why it hasn't shown.
+
+**Fix direction.** Compare in one currency: convert the invoice total to USD at the issue-day rate (as the rollup
+does), or convert the payments into the invoice's currency. Proton meanwhile passes the balance on only for USD
+invoices (`ListInvoicesTool`).

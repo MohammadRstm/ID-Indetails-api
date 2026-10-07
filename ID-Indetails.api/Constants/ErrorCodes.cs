@@ -141,4 +141,11 @@ public static class ErrorCodes
     public const string SalaryMonthInFuture = "salary_month_in_future";
     public const string ExcuseMonthInFuture = "excuse_month_in_future";
     public const string ProjectPayPeriodInFuture = "project_pay_period_in_future";
+
+    // Proton
+    public const string ProtonUnavailable = "proton_unavailable";
+    public const string ProtonAllowanceUsed = "proton_allowance_used";
+    public const string ProtonBudgetUsed = "proton_budget_used";
+    public const string ProtonBusy = "proton_busy";
+    public const string ProtonConversationEnded = "proton_conversation_ended";
 }

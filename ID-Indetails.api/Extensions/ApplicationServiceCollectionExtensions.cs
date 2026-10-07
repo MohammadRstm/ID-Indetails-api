@@ -269,6 +269,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IBugReportService, BugReportService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
+        services.AddProton();
+
         return services;
     }
 }

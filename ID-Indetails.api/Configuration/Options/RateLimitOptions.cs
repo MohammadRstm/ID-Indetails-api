@@ -45,6 +45,10 @@ public sealed class RateLimitOptions
     [Range(1, 1_000)]
     public int BugReportPermitsPerHour { get; init; } = 5;
 
+    /// <summary>Questions to Proton, per signed-in user per minute. Each one costs model calls.</summary>
+    [Range(1, 10_000)]
+    public int ProtonPermitsPerMinute { get; init; } = 10;
+
     /// <summary>Super-admin setup: requests per IP per hour.</summary>
     [Range(1, 10_000)]
     public int SetupPermitsPerHour { get; init; } = 5;

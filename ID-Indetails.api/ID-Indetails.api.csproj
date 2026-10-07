@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.53.0" />
     <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
@@ -31,6 +32,8 @@
   <ItemGroup>
     <!-- the logo at the top of every email, built into the assembly so no deployment has to copy it -->
     <EmbeddedResource Include="Assets\email-logo.png" LogicalName="email-logo.png" />
+    <!-- Proton's prompts: Markdown kept apart from the code, read by Proton/Prompts/ProtonPrompts.cs -->
+    <EmbeddedResource Include="Proton\Prompts\*.md" LogicalName="ID_Indetails.api.Proton.Prompts.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

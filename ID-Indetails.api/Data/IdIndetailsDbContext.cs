@@ -79,6 +79,10 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<StoredFile> Files => Set<StoredFile>();
     public DbSet<UserBoardLayout> UserBoardLayouts => Set<UserBoardLayout>();
 
+    // Proton
+    public DbSet<ProtonUsage> ProtonUsage => Set<ProtonUsage>();
+    public DbSet<ProtonBudgetTopUp> ProtonBudgetTopUps => Set<ProtonBudgetTopUp>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdIndetailsDbContext).Assembly);
@@ -112,6 +116,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<ExcuseKind>(configurationBuilder);
         StoreAsSnakeCase<StatementMode>(configurationBuilder);
         StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
+        StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)
