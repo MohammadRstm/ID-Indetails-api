@@ -90,6 +90,7 @@ The check runs only when someone's permissions are changed, never on ordinary re
 - Both also require a signed-in user who has replaced any generated password.
 - `PermissionHandler` loads the user's access **by user id from the database**, never from the role in the token. A grant, revoke or automatic role change applies on the user's very next request; the role claim in an older token is informational only.
 - For finer rules (which domain, which record), services call `IPermissionService.GetAccessAsync(currentUser.Id)` and use `UserAccess.Has(...)` and `UserAccess.CanSee(domain)`. Records in a domain the caller can't see must read as not found.
+- **Services check the endpoint's permission too.** A service that reads money, pay, people, reports or everyone's work calls `actor.Require(...)` (`Business/Auth/AccessChecks.cs`) with the permission its endpoint's attribute asks for: `403 forbidden`, as the attribute answers. The attribute stays the first gate; the service's check stops a caller that isn't that endpoint (a job, a hub, another service, a new endpoint missing the attribute). A method reached from two endpoints takes either one's permission (the employee profile also answers `employee:change_email`, which returns it after a change).
 
 ## Caching
 

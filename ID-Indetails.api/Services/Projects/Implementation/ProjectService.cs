@@ -95,7 +95,7 @@ public sealed class ProjectService(
 
     public async Task<ProjectListTotalsResponse> TotalsAsync(ProjectListQuery query, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
         var period = OpenPeriodOf(query.Year, query.Quarter);
         IReadOnlyList<Project> matching = period is { } future && future.From > clock.CompanyToday
             ? []

@@ -36,7 +36,7 @@ public sealed class WorkEntryQueryService(
 {
     public async Task<PagedResponse<WorkEntryResponse>> ListAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
     {
-        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        var actor = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         return await PageAsync(
             actor,
             new WorkEntrySearch(query.UserId, query.ProjectId, query.ClientId, DayStart(query.From), DayEnd(query.To), query.Search, query.Page, query.PageSize),
@@ -79,7 +79,7 @@ public sealed class WorkEntryQueryService(
 
     public async Task<WorkEntryExport> ExportAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
     {
-        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        var actor = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         var rows = actor.CanSee(DomainCodes.Design)
             ? await entries.ListAsync(
                 new WorkEntrySearch(query.UserId, query.ProjectId, query.ClientId, DayStart(query.From), DayEnd(query.To), query.Search),

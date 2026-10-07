@@ -48,7 +48,7 @@ public sealed class MyWorkService(
 
     public async Task<WorkSummaryResponse> SummaryForPersonAsync(long userId, WorkSummaryQuery query, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         var person = (await entries.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
         if (person is null || !EmployeeRules.CanSee(actor, person.DomainCode))
         {

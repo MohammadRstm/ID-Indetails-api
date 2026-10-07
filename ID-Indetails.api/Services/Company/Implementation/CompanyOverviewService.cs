@@ -1,3 +1,5 @@
+using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Company;
 using ID_Indetails.api.Business.Finance;
@@ -14,6 +16,7 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
+using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
@@ -23,8 +26,9 @@ namespace ID_Indetails.api.Services.Company.Implementation;
 
 /// <summary>
 /// Company totals from the shared finance calculator: revenue is the money received, on the day it arrived; costs
-/// count on their day; overhead is charged by calendar days and converted at the rate of its month. Super admins'
-/// salaries are company costs like overhead: they log no hours, so no project carries their pay.
+/// count on their day; overhead is charged by calendar days and converted at the rate of its month. Admins' and super
+/// admins' salaries are company costs like overhead: they log no hours, so no project carries their pay. Every figure
+/// needs company:view, checked here as well as on the endpoint.
 /// </summary>
 public sealed class CompanyOverviewService(
     ICompanyFinanceRepository company,
@@ -33,6 +37,8 @@ public sealed class CompanyOverviewService(
     IOverheadRepository overheads,
     IPayrollRepository payroll,
     IPayrollInputs payrollInputs,
+    ICurrentUser currentUser,
+    IPermissionService permissions,
     IClock clock) : ICompanyOverviewService
 {
     public const int MinYear = 2000;
@@ -46,6 +52,7 @@ public sealed class CompanyOverviewService(
 
     public async Task<CompanyOverviewResponse> GetAsync(DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.CompanyView);
         var today = clock.CompanyToday;
         var end = to is { } t && t < today ? t : today;
         var start = from is { } f && f > EarliestDay ? f : from is null ? Recognition.MonthOf(end) : EarliestDay;
@@ -150,6 +157,7 @@ public sealed class CompanyOverviewService(
 
     private async Task<IReadOnlyList<CompanyMonthResponse>> MonthsAsync(IReadOnlyList<DateOnly> keys, CancellationToken cancellationToken)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.CompanyView);
         var data = await LoadAsync(cancellationToken);
 
         var received = (await company.PaymentsAsync(cancellationToken)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();

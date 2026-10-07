@@ -1,4 +1,5 @@
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Labour;
 using ID_Indetails.api.Constants;
@@ -25,7 +26,7 @@ public sealed class SiteMoneyService(
 {
     public async Task<SiteMoneyTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default)
     {
-        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        var actor = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         var project = await projects.GetAsync(projectId, cancellationToken);
         if (project is null || !actor.CanSee(project.DomainCode))
         {

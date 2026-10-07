@@ -88,4 +88,16 @@ public class InvoiceRulesTests
         validator.Validate(new SaveInvoiceRequest { Lines = [new() { Description = " ", Amount = 0 }] }).Errors.Count.ShouldBe(2);
         validator.Validate(new SaveInvoiceRequest { Lines = [new() { Description = "Fee", Amount = 10m }], TermsDays = 400 }).IsValid.ShouldBeFalse();
     }
+
+    [Fact]
+    public void An_invoices_balance_compares_payments_in_usd_and_stays_in_its_own_currency()
+    {
+        // 89,500,000 LBP at 89,500 a dollar is $1,000; payments are summed in USD
+        InvoiceRules.BalanceIn(89_500_000m, 1000m, 1000m).ShouldBe(0m);
+        InvoiceRules.BalanceIn(89_500_000m, 1000m, 400m).ShouldBe(53_700_000m);
+        InvoiceRules.Status(isVoided: false, isIssued: true, total: 1000m, paid: 1000m).ShouldBe(InvoiceStatus.Paid);
+        // a dollar invoice is as before
+        InvoiceRules.BalanceIn(1200m, 1200m, 200m).ShouldBe(1000m);
+        InvoiceRules.BalanceIn(1200m, 1200m, 1500m).ShouldBe(0m);
+    }
 }

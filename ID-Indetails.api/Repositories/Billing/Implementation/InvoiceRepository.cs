@@ -22,6 +22,14 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
                 i.Project,
                 i.Client,
                 Paid = i.Payments.Where(p => p.VoidedAt == null).Sum(p => (decimal?)p.AmountUsd) ?? 0,
+                // payments are summed in USD, so the total is compared in USD too: at the rate in force on its issue day
+                TotalUsd = i.Currency == PaymentRules.BaseCurrency
+                    ? (decimal?)i.Total
+                    : i.Total / db.ExchangeRates
+                        .Where(x => x.Currency == i.Currency && i.IssuedAt != null && x.EffectiveFrom <= DateOnly.FromDateTime(i.IssuedAt.Value))
+                        .OrderByDescending(x => x.EffectiveFrom)
+                        .Select(x => (decimal?)x.RatePerUsd)
+                        .FirstOrDefault(),
             });
 
         if (search.ProjectId is { } projectId)
@@ -44,8 +52,8 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
         {
             InvoiceStatus.Void => query.Where(r => r.Invoice.VoidedAt != null),
             InvoiceStatus.Draft => query.Where(r => r.Invoice.VoidedAt == null && r.Invoice.IssuedAt == null),
-            InvoiceStatus.Paid => open.Where(r => r.Paid >= r.Invoice.Total),
-            InvoiceStatus.Partial => open.Where(r => r.Paid > 0 && r.Paid < r.Invoice.Total),
+            InvoiceStatus.Paid => open.Where(r => r.Paid >= (r.TotalUsd ?? r.Invoice.Total)),
+            InvoiceStatus.Partial => open.Where(r => r.Paid > 0 && r.Paid < (r.TotalUsd ?? r.Invoice.Total)),
             InvoiceStatus.Sent => open.Where(r => r.Paid == 0 && r.Invoice.Total > 0),
             _ => query,
         };
@@ -56,7 +64,7 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
             var todayNoon = search.Today.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
             query = query.Where(r => r.Invoice.VoidedAt == null
                 && r.Invoice.IssuedAt != null
-                && r.Paid < r.Invoice.Total
+                && r.Paid < (r.TotalUsd ?? r.Invoice.Total)
                 && r.Invoice.DueAt < todayNoon);
         }
 
@@ -68,7 +76,7 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
             .Take(search.PageSize)
             .ToListAsync(cancellationToken);
 
-        return (rows.Select(r => Row(r.Invoice, r.Project, r.Client, r.Paid)).ToList(), total);
+        return (rows.Select(r => Row(r.Invoice, r.Project, r.Client, r.Paid, r.TotalUsd)).ToList(), total);
     }
 
     public async Task<InvoiceRow?> GetAsync(long id, CancellationToken cancellationToken = default)
@@ -84,6 +92,13 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
                 Lines = i.Lines.OrderBy(l => l.Position).ToList(),
                 Deliveries = i.Deliveries.OrderBy(d => d.SentAt).ToList(),
                 Paid = i.Payments.Where(p => p.VoidedAt == null).Sum(p => (decimal?)p.AmountUsd) ?? 0,
+                TotalUsd = i.Currency == PaymentRules.BaseCurrency
+                    ? (decimal?)i.Total
+                    : i.Total / db.ExchangeRates
+                        .Where(x => x.Currency == i.Currency && i.IssuedAt != null && x.EffectiveFrom <= DateOnly.FromDateTime(i.IssuedAt.Value))
+                        .OrderByDescending(x => x.EffectiveFrom)
+                        .Select(x => (decimal?)x.RatePerUsd)
+                        .FirstOrDefault(),
             })
             .SingleOrDefaultAsync(cancellationToken);
 
@@ -94,7 +109,7 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
 
         row.Invoice.Lines = row.Lines;
         row.Invoice.Deliveries = row.Deliveries;
-        return Row(row.Invoice, row.Project, row.Client, row.Paid);
+        return Row(row.Invoice, row.Project, row.Client, row.Paid, row.TotalUsd);
     }
 
     public async Task<IReadOnlyList<long>> ScheduledDueAsync(DateOnly dueBy, CancellationToken cancellationToken = default)
@@ -151,10 +166,10 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
 
     public void Remove(Invoice invoice) => db.Invoices.Remove(invoice);
 
-    private static InvoiceRow Row(Invoice invoice, Project project, Client client, decimal paid)
+    private static InvoiceRow Row(Invoice invoice, Project project, Client client, decimal paid, decimal? totalUsd)
     {
         invoice.Project = project;
         invoice.Client = client;
-        return new InvoiceRow(invoice, paid);
+        return new InvoiceRow(invoice, paid, totalUsd is { } usd ? Math.Round(usd, 2, MidpointRounding.AwayFromZero) : null);
     }
 }
