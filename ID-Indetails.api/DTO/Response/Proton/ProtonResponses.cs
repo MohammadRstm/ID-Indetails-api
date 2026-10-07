@@ -45,7 +45,21 @@ public sealed record ProtonBudgetResponse(
     int UsedPct,
     int Questions,
     IReadOnlyList<ProtonTopUpResponse> TopUps,
-    IReadOnlyList<ProtonUserUsageResponse> ByUser);
+    IReadOnlyList<ProtonUserUsageResponse> ByUser,
+    IReadOnlyList<ProtonDomainUsageResponse> ByDomain,
+    IReadOnlyList<ProtonToolUsageResponse> ByTool,
+    IReadOnlyList<ProtonDayUsageResponse> ByDay,
+    IReadOnlyList<ProtonConversationUsageResponse> TopConversations);
+
+/// <param name="Domain">The people's domain as it is now; null for company-wide roles.</param>
+public sealed record ProtonDomainUsageResponse(string? Domain, int Questions, decimal CostUsd);
+
+/// <param name="QuestionCostUsd">What the questions that used the tool cost in all; a tool's own share can't be told apart.</param>
+public sealed record ProtonToolUsageResponse(string Tool, int Calls, int AverageMs, int Questions, decimal QuestionCostUsd);
+
+public sealed record ProtonDayUsageResponse(DateOnly Day, int Questions, decimal CostUsd);
+
+public sealed record ProtonConversationUsageResponse(Guid ConversationId, long UserId, string Name, int Questions, int ToolCalls, decimal CostUsd);
 
 /// <summary>What became of a confirmed or cancelled action. A failure is an error response instead, with the service's own code.</summary>
 public sealed record ProtonActionOutcomeResponse(Guid ActionId, ID_Indetails.api.Enums.ProtonActionStatus Status, string Message, IReadOnlyList<ProtonRef> Refs);
