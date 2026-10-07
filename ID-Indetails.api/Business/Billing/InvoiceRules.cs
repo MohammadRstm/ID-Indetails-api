@@ -40,6 +40,16 @@ public static class InvoiceRules
 
     public static decimal Balance(decimal total, decimal paid) => Math.Max(0, total - paid);
 
+    /// <summary>
+    /// What is left to pay in the invoice's own currency. Payments are summed in USD, so the comparison is in USD (the
+    /// total at its issue day's rate); the rest goes back into the invoice's currency at that same rate.
+    /// </summary>
+    public static decimal BalanceIn(decimal total, decimal totalUsd, decimal paidUsd)
+    {
+        var leftUsd = Balance(totalUsd, paidUsd);
+        return total == totalUsd || totalUsd == 0 ? leftUsd : Math.Round(leftUsd * total / totalUsd, 2, MidpointRounding.AwayFromZero);
+    }
+
     /// <summary>Sent or part-paid, with a due date before today.</summary>
     public static bool IsOverdue(InvoiceStatus status, DateOnly? dueOn, DateOnly today)
         => status is InvoiceStatus.Sent or InvoiceStatus.Partial && dueOn is { } due && due < today;

@@ -581,7 +581,9 @@ public sealed class InvoiceService(
     private InvoiceSummaryResponse Summary(InvoiceRow row, bool seesMoney)
     {
         var i = row.Invoice;
-        var status = InvoiceRules.Status(i.VoidedAt is not null, i.IssuedAt is not null, i.Total, row.Paid);
+        // paid is in USD; so is the total compared with it (without a rate for its issue day, the total as it stands)
+        var totalUsd = row.TotalUsd ?? i.Total;
+        var status = InvoiceRules.Status(i.VoidedAt is not null, i.IssuedAt is not null, totalUsd, row.Paid);
         var shownStatus = seesMoney || status is not (InvoiceStatus.Partial or InvoiceStatus.Paid) ? status : InvoiceStatus.Sent;
         var dueOn = i.DueAt is { } due ? DateOnly.FromDateTime(due) : (DateOnly?)null;
         return new InvoiceSummaryResponse
@@ -596,7 +598,7 @@ public sealed class InvoiceService(
             Currency = i.Currency,
             Total = i.Total,
             Paid = seesMoney ? row.Paid : null,
-            Balance = seesMoney ? InvoiceRules.Balance(i.Total, row.Paid) : null,
+            Balance = seesMoney ? InvoiceRules.BalanceIn(i.Total, totalUsd, row.Paid) : null,
             IssuedAt = i.IssuedAt,
             DueOn = dueOn,
             CreatedAt = i.CreatedAt,

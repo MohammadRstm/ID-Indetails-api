@@ -51,6 +51,7 @@ public sealed class ReportService(
 
     public async Task<WorkReportResponse> WorkReportAsync(WorkReportQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ReportView);
         var actor = await DesignViewerAsync(cancellationToken);
         var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var today = clock.CompanyToday;
@@ -141,6 +142,7 @@ public sealed class ReportService(
 
     public async Task<OverviewResponse> OverviewAsync(OverviewQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ReportView);
         await DesignViewerAsync(cancellationToken);
         var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);

@@ -66,7 +66,7 @@ public sealed class WorkInsightsService(
 
     public async Task<ProjectWorkResponse> ProjectWorkAsync(long projectId, ProjectWorkQuery query, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         var project = await DesignProjectAsync(actor, projectId, cancellationToken);
         var calendar = await CalendarAsync(cancellationToken);
         var today = clock.CompanyToday;
@@ -125,7 +125,7 @@ public sealed class WorkInsightsService(
         ProjectWorkQuery query,
         CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         await DesignProjectAsync(actor, projectId, cancellationToken);
         var calendar = await CalendarAsync(cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
@@ -154,7 +154,7 @@ public sealed class WorkInsightsService(
 
     public async Task<ProjectTimelineResponse> TimelineAsync(long projectId, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         var project = await DesignProjectAsync(actor, projectId, cancellationToken);
         var end = project.CompletedAt is { } completedAt ? clock.ToCompanyDate(completedAt) : clock.CompanyToday;
 
@@ -198,7 +198,7 @@ public sealed class WorkInsightsService(
 
     public async Task<IReadOnlyList<PersonWorkResponse>> PeopleAsync(PeopleWorkQuery query, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         if (!actor.CanSee(DomainCodes.Design))
         {
             return [];
@@ -279,7 +279,7 @@ public sealed class WorkInsightsService(
 
     public async Task<EmployeeLabourCostResponse> PersonCostAsync(long userId, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
         var person = (await entries.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
         if (person is null || !EmployeeRules.CanSee(actor, person.DomainCode))
         {
@@ -321,7 +321,7 @@ public sealed class WorkInsightsService(
         TimelineEntriesQuery query,
         CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         await DesignProjectAsync(actor, projectId, cancellationToken);
 
         var views = await entries.ListAsync(
@@ -339,7 +339,7 @@ public sealed class WorkInsightsService(
 
     public async Task<ProjectCostTimelineResponse> CostTimelineAsync(long projectId, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
         var project = await projects.GetAsync(projectId, cancellationToken);
         if (project is null || !actor.CanSee(project.DomainCode))
         {

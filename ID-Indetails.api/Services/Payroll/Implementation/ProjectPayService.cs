@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Payroll;
@@ -40,6 +41,7 @@ public sealed class ProjectPayService(
 
     public async Task<ProjectPayResponse> GetAsync(ProjectPayQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
         var (from, until, projects, priced, users) = await CalculateAsync(query, cancellationToken);
 
         var groups = priced
@@ -81,6 +83,7 @@ public sealed class ProjectPayService(
 
     public async Task<(string FileName, string Csv)> ExportAsync(ProjectPayQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
         var report = await GetAsync(query, cancellationToken);
         var period = query.Unit.ToString().ToLowerInvariant();
         var from = report.From.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

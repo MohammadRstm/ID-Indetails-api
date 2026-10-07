@@ -99,13 +99,17 @@ public sealed class MyTimeService(
         => await HoursOfAsync(await MeAsync(cancellationToken), query, cancellationToken);
 
     public async Task<MyHoursResponse> HoursForPersonAsync(long userId, MyHoursQuery query, CancellationToken cancellationToken = default)
-        => await HoursOfAsync((await PersonAsync(userId, cancellationToken)).Person, query, cancellationToken);
+    {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
+        return await HoursOfAsync((await PersonAsync(userId, cancellationToken)).Person, query, cancellationToken);
+    }
 
     public async Task<MyOvertimeResponse> OvertimeAsync(SalaryMonthQuery query, CancellationToken cancellationToken = default)
         => await OvertimeOfAsync(await MeAsync(cancellationToken), query, withLedger: true, cancellationToken);
 
     public async Task<MyOvertimeResponse> OvertimeForPersonAsync(long userId, SalaryMonthQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
         var (person, actor) = await PersonAsync(userId, cancellationToken);
 
         // Which overtime made up missing hours is pay information, as in the prototype where only super admins see it.

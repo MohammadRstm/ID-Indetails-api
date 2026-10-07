@@ -53,7 +53,7 @@ public sealed class EmployeeService(
         EmployeeListQuery query,
         CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.EmployeeView);
         var (rows, total) = await employees.SearchAsync(
             new EmployeeSearch(
                 actor.VisibleDomains,
@@ -72,7 +72,7 @@ public sealed class EmployeeService(
 
     public async Task<EmployeeResponse> GetAsync(long userId, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.EmployeeView, PermissionCodes.EmployeeChangeEmail);
         return await DescribeAsync(actor, userId, cancellationToken);
     }
 
@@ -347,7 +347,7 @@ public sealed class EmployeeService(
 
     public async Task<IReadOnlyList<PayResponse>> GetPayHistoryAsync(long userId, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.EmployeePayManage);
         var row = await employees.GetAsync(userId, cancellationToken);
         if (row is null || !EmployeeRules.CanSee(actor, row.Domain))
         {

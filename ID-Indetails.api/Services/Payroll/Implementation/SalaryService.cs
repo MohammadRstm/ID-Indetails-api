@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
@@ -35,6 +36,7 @@ public sealed class SalaryService(
 
     public async Task<SalariesResponse> ListAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
         var (month, computed, withoutPay) = await CalculateAsync(query.Month, query.Domain, query.Search, query.Role, null, cancellationToken);
         var rows = computed.Select(c => ToRow(c)).ToList();
         var policy = (await inputs.PoliciesAsync(cancellationToken)).LastOrDefault(p => p.EffectiveFrom <= clock.CompanyToday);
@@ -60,7 +62,7 @@ public sealed class SalaryService(
 
     public async Task<SalaryYearResponse> YearAsync(SalaryYearQuery query, CancellationToken cancellationToken = default)
     {
-        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        var actor = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
         var today = clock.CompanyToday;
         var year = query.Year ?? today.Year;
         if (year > today.Year)
@@ -109,6 +111,7 @@ public sealed class SalaryService(
 
     public async Task<SalaryDetailResponse> GetAsync(long userId, SalaryMonthQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
         var (month, computed, _) = await CalculateAsync(query.Month, null, null, null, userId, cancellationToken);
         var person = computed.SingleOrDefault() ?? throw new NotFoundException("No salary for this person in that month.");
         var (result, input) = (person.Result, person.Input);
@@ -224,6 +227,7 @@ public sealed class SalaryService(
 
     public async Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
         var (month, computed, _) = await CalculateAsync(query.Month, query.Domain, query.Search, query.Role, null, cancellationToken);
         var rows = computed.Select(c => ToRow(c)).ToList();
         var csv = new StringBuilder();

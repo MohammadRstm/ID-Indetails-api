@@ -29,7 +29,7 @@ public sealed class ExpenseService(
 {
     public async Task<ExpenseListResponse> ListAsync(long projectId, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.ExpenseManage, PermissionCodes.FinancialView);
         var project = await projects.GetAsync(projectId, cancellationToken);
         EnsureVisible(actor, project);
 

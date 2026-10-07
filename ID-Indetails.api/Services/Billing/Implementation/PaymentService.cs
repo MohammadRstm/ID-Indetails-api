@@ -38,7 +38,7 @@ public sealed class PaymentService(
 
     public async Task<PagedResponse<PaymentResponse>> ListAsync(PaymentListQuery query, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
         var (items, total) = await payments.SearchAsync(
             new PaymentSearch(
                 actor.VisibleDomains, query.ProjectId, query.ClientId, query.InvoiceId, query.IncludeVoided == true,
@@ -50,7 +50,7 @@ public sealed class PaymentService(
 
     public async Task<PaymentResponse> GetAsync(long paymentId, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
         return await DescribeAsync(actor, paymentId, cancellationToken);
     }
 
@@ -189,7 +189,11 @@ public sealed class PaymentService(
         var invoice = await invoices.GetForProjectForUpdateAsync(projectId, invoiceId, cancellationToken)
             ?? throw new RequestValidationException(ErrorCodes.ValidationFailed, "invoiceId", "This project has no such invoice.");
 
-        var balance = InvoiceRules.Balance(invoice.Total, await invoices.PaidForUpdateAsync(invoice.Id, cancellationToken));
+        // the payment is in USD, so the invoice's balance is too: its total at the rate in force on its issue day
+        var totalUsd = invoice.Currency == PaymentRules.BaseCurrency || invoice.IssuedAt is not { } issuedAt
+            ? invoice.Total
+            : PaymentRules.ToUsd(invoice.Total, await RateAsync(invoice.Currency, null, clock.ToCompanyDate(issuedAt), cancellationToken));
+        var balance = InvoiceRules.Balance(totalUsd, await invoices.PaidForUpdateAsync(invoice.Id, cancellationToken));
         Throw(PaymentRules.CheckInvoice(
             projectId, invoice.ProjectId, invoice.IssuedAt is not null, invoice.VoidedAt is not null, balance, amountUsd));
         return invoice;
