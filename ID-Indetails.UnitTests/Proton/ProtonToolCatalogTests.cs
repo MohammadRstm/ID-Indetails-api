@@ -109,6 +109,8 @@ public class ProtonToolCatalogTests
         }
 
         Tools.Single(t => t.Name == "find").InputSchema["required"]!.AsArray().Select(r => r!.ToString()).ShouldBe(["text"]);
+        // descriptions name period values exactly as the schema spells them
+        Tools.Single(t => t.Name == "summarize_changes").InputSchema.ToJsonString().ShouldContain("\"last7_days\"");
     }
 
     /// <summary>Pay, rates, admin salaries (and the net profit that reveals them), bank details and secrets never reach the model.</summary>

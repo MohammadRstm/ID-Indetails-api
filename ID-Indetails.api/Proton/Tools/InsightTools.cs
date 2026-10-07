@@ -416,7 +416,7 @@ public sealed class GetCompanySummaryTool(
 
 public sealed record SummarizeChangesInput
 {
-    [Description("Default last_7_days.")]
+    [Description("Default last7_days.")]
     public ProtonPeriod? Period { get; init; }
 
     public DateOnly? From { get; init; }

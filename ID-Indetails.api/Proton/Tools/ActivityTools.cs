@@ -26,7 +26,7 @@ public sealed record RecentActivityInput
     [Description("work, money, billing, projects, people or company.")]
     public ActivityGroup? Group { get; init; }
 
-    [Description("Default last_7_days.")]
+    [Description("Default last7_days.")]
     public ProtonPeriod? Period { get; init; }
 
     public DateOnly? From { get; init; }
