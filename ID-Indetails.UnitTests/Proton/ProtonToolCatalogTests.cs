@@ -6,7 +6,9 @@ using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Extensions;
 using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Configuration.Options;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Moq;
 using Shouldly;
 
@@ -83,6 +85,19 @@ public class ProtonToolCatalogTests
         }
     }
 
+    /// <summary>The analytical tools are reads like the rest; the ones loading every project's money count against the per-question limit.</summary>
+    [Fact]
+    public void The_analytical_tools_only_read_and_the_heavy_ones_are_marked()
+    {
+        string[] analytical = ["compare_work", "compare_money", "review_project", "get_company_summary", "summarize_changes", "get_attention"];
+        var tools = Tools.Where(t => analytical.Contains(t.Name)).ToList();
+
+        tools.Select(t => t.Name).ShouldBe(analytical, ignoreOrder: true);
+        tools.ShouldAllBe(t => !t.Endpoint.Writes);
+        Tools.Where(t => t.Heavy).Select(t => t.Name)
+            .ShouldBe(["compare_money", "review_project", "get_company_summary", "get_attention"], ignoreOrder: true);
+    }
+
     [Fact]
     public void Every_input_schema_is_an_object_the_model_can_fill()
     {
@@ -145,12 +160,18 @@ public class ProtonToolCatalogTests
     }
 
     /// <summary>A tool with mocked services: enough to read its name, endpoint and schema.</summary>
-    private static IProtonTool Create(Type type)
+    private static IProtonTool Create(Type type) => (IProtonTool)Build(type);
+
+    /// <summary>Mocks for interfaces; Proton's own sealed services (the analysis service) built from mocks in turn.</summary>
+    private static object Build(Type type)
     {
         var constructor = type.GetConstructors().Single();
-        var arguments = constructor.GetParameters()
-            .Select(p => ((Mock)Activator.CreateInstance(typeof(Mock<>).MakeGenericType(p.ParameterType))!).Object)
-            .ToArray();
-        return (IProtonTool)constructor.Invoke(arguments);
+        var arguments = constructor.GetParameters().Select(p => Argument(p.ParameterType)).ToArray();
+        return constructor.Invoke(arguments);
     }
+
+    private static object Argument(Type type)
+        => type == typeof(IOptions<ProtonOptions>) ? Options.Create(new ProtonOptions())
+            : type.IsSealed ? Build(type)
+            : ((Mock)Activator.CreateInstance(typeof(Mock<>).MakeGenericType(type))!).Object;
 }

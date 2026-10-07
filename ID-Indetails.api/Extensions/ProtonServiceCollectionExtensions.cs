@@ -1,6 +1,7 @@
 using Anthropic;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Proton.Actions;
+using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Conversation;
 using ID_Indetails.api.Proton.Tools;
@@ -67,6 +68,15 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ListInvoicesTool>();
         services.AddScoped<IProtonTool, ListPaymentsTool>();
         services.AddScoped<IProtonTool, GetCompanyOverviewTool>();
+
+        // Analytical tools: comparisons and signals calculated in code over the existing services, read-only like the rest.
+        services.AddScoped<ProtonAnalysisService>();
+        services.AddScoped<IProtonTool, CompareWorkTool>();
+        services.AddScoped<IProtonTool, CompareMoneyTool>();
+        services.AddScoped<IProtonTool, ReviewProjectTool>();
+        services.AddScoped<IProtonTool, GetCompanySummaryTool>();
+        services.AddScoped<IProtonTool, SummarizeChangesTool>();
+        services.AddScoped<IProtonTool, GetAttentionTool>();
 
         // Action tools: they only propose; the user's confirmation carries a proposal out (ProtonActionService).
         services.AddScoped<IProtonTool, ProposeAddRequirementTool>();

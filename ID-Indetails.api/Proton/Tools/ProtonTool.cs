@@ -21,6 +21,9 @@ public interface IProtonTool
     /// <summary>Set for tools whose data only one domain has (Design hours): offered only to people who see it.</summary>
     string? OnlyInDomain { get; }
 
+    /// <summary>Loads every project's money or a domain's whole picture: only a few such calls are allowed per question.</summary>
+    bool Heavy => false;
+
     JsonObject InputSchema { get; }
 
     Task<ProtonToolOutput> RunAsync(JsonElement input, ProtonToolContext context, CancellationToken cancellationToken);
@@ -36,6 +39,8 @@ public abstract class ProtonTool<TInput> : IProtonTool where TInput : class
     public abstract ProtonEndpoint Endpoint { get; }
 
     public virtual string? OnlyInDomain => null;
+
+    public virtual bool Heavy => false;
 
     public JsonObject InputSchema => ProtonJson.SchemaOf(typeof(TInput));
 
@@ -63,6 +68,9 @@ public sealed record ProtonToolOutput(object Data, IReadOnlyList<ProtonRef> Refs
     /// <summary>Set only by action tools: the change they propose, which the user must confirm before anything happens.</summary>
     public Actions.ProtonProposal? Proposal { get; init; }
 
+    /// <summary>Set by analytical tools: what the figures rest on, shown under the answer.</summary>
+    public ProtonBasis? Basis { get; init; }
+
     public static ProtonToolOutput Of(object data, params ProtonRef[] refs) => new(data, refs);
 }
 
@@ -78,3 +86,22 @@ public sealed record ProtonRef(ProtonRefType Type, long Id, string Name, string?
 
 /// <summary>The model sent input the tool can't use. The message is shown to the model so it can correct itself.</summary>
 public sealed class ProtonToolInputException(string message) : Exception(message);
+
+/// <summary>
+/// What an analytical result rests on, for the model to state and the user to see ("Based on …"): the exact days,
+/// what they were compared with, the scope, the rules that judged anything, and what was left out and why.
+/// </summary>
+/// <param name="Label">What was analysed, in words ("Hours compared").</param>
+/// <param name="Partial">The period is still running: its figures are "so far".</param>
+/// <param name="Comparison">How <paramref name="ComparedWith"/> was chosen, in words.</param>
+/// <param name="Rules">The rules behind any judgement in the result (notable, unusual, idle…).</param>
+/// <param name="Omitted">What the result leaves out: what the user can't see, or data that doesn't exist.</param>
+public sealed record ProtonBasis(
+    string Label,
+    DayRange? Period,
+    DayRange? ComparedWith,
+    bool Partial,
+    string? Comparison,
+    string? Scope,
+    IReadOnlyList<string> Rules,
+    IReadOnlyList<string> Omitted);

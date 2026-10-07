@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FluentValidation;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Proton;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Exceptions.Base;
@@ -13,12 +14,16 @@ namespace ID_Indetails.api.Proton.Tools;
 /// </summary>
 public sealed class ProtonToolContext(
     ClaimsPrincipal caller,
+    UserAccess access,
     IAuthorizationService authorization,
     IServiceProvider services,
     DateOnly today,
     DayOfWeek firstDayOfWeek)
 {
     private readonly Dictionary<string, bool> _policies = new(StringComparer.Ordinal);
+
+    /// <summary>The caller's role, permissions and visible domains, for choosing what to read; the endpoints still decide.</summary>
+    public UserAccess Access => access;
 
     public DateOnly Today => today;
 
@@ -79,5 +84,15 @@ public sealed class ProtonToolContext(
     {
         var (range, denial) = ProtonPeriods.Resolve(period ?? fallback, from, to, today, firstDayOfWeek, maxDays);
         return range ?? throw new ProtonToolInputException(denial!.Message);
+    }
+
+    /// <summary>A period and the one it is compared with (<see cref="ProtonPeriods.Compare"/>), the previous one by default.</summary>
+    public ProtonPeriodPair Compare(
+        ProtonPeriod? period, DateOnly? from, DateOnly? to, ProtonPeriod fallback,
+        ProtonComparison? comparison, DateOnly? compareFrom, DateOnly? compareTo)
+    {
+        var current = Period(period, from, to, fallback);
+        var (pair, denial) = ProtonPeriods.Compare(period ?? fallback, current, comparison ?? ProtonComparison.Previous, compareFrom, compareTo);
+        return pair ?? throw new ProtonToolInputException(denial!.Message);
     }
 }
