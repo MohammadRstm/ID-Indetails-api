@@ -1,4 +1,5 @@
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Requirements;
 using ID_Indetails.api.Constants;
@@ -28,6 +29,7 @@ public sealed class DashboardService(
 
     public async Task<DashboardResponse> GetAsync(string domain, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ReportView);
         await CheckDomainAsync(domain, cancellationToken);
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var clients = await summaries.DomainClientsAsync(domain, cancellationToken);
@@ -48,6 +50,7 @@ public sealed class DashboardService(
 
     public async Task<UpcomingDeadlinesResponse> DeadlinesAsync(string domain, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ReportView);
         await CheckDomainAsync(domain, cancellationToken);
         var today = clock.CompanyToday;
         var due = await requirements.OpenDueByAsync(domain, today.AddDays(DeadlineDays), cancellationToken);

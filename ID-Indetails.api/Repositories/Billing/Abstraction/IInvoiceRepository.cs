@@ -14,8 +14,11 @@ public sealed record InvoiceSearch(
     int Page,
     int PageSize);
 
-/// <summary>An invoice (with project and client loaded) and what its live payments add up to.</summary>
-public sealed record InvoiceRow(Invoice Invoice, decimal Paid);
+/// <summary>
+/// An invoice (with project and client loaded), what its live payments add up to (in USD), and its total in USD: at the
+/// rate in force on its issue day, or null for a draft, or when no rate was in force.
+/// </summary>
+public sealed record InvoiceRow(Invoice Invoice, decimal Paid, decimal? TotalUsd);
 
 public interface IInvoiceRepository
 {

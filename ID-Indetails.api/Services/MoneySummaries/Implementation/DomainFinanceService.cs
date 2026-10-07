@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Finance;
@@ -45,6 +46,7 @@ public sealed class DomainFinanceService(
 
     public async Task<FinanceSummaryResponse> SummaryAsync(string domain, FinancePeriodQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         await CheckDomainAsync(domain, cancellationToken);
         var (from, to) = Period(query);
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
@@ -85,6 +87,7 @@ public sealed class DomainFinanceService(
 
     public async Task<IReadOnlyList<FinanceMonthResponse>> MonthlyAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         await CheckDomainAsync(domain, cancellationToken);
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var rollup = await rollups.LoadAsync(projects, cancellationToken);
@@ -147,6 +150,7 @@ public sealed class DomainFinanceService(
         FinancePeriodQuery query,
         CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         var projects = await ProjectsAsync(domain, cancellationToken);
         var period = await SummaryAsync(domain, query, cancellationToken);
         static string Pct(decimal? margin) => margin is { } m ? (m * 100).ToString("0.0", CultureInfo.InvariantCulture) : string.Empty;
@@ -186,6 +190,7 @@ public sealed class DomainFinanceService(
 
     public async Task<FinanceProjectsResponse> ProjectsAsync(string domain, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         await CheckDomainAsync(domain, cancellationToken);
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var rollup = await rollups.LoadAsync(projects, cancellationToken);
@@ -230,6 +235,7 @@ public sealed class DomainFinanceService(
 
     public async Task<FinanceBillingResponse> BillingAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         await CheckDomainAsync(domain, cancellationToken);
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
         var rollup = await rollups.LoadAsync(projects, cancellationToken);
@@ -283,6 +289,7 @@ public sealed class DomainFinanceService(
 
     public async Task<IReadOnlyList<FinanceClientResponse>> ClientsAsync(string domain, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         await CheckDomainAsync(domain, cancellationToken);
         var clients = await summaries.DomainClientsAsync(domain, cancellationToken);
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
@@ -299,6 +306,7 @@ public sealed class DomainFinanceService(
 
     public async Task<FinanceCostsResponse> CostsAsync(string domain, FinancePeriodQuery query, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         await CheckDomainAsync(domain, cancellationToken);
         var (from, to) = Period(query);
         var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
@@ -349,6 +357,7 @@ public sealed class DomainFinanceService(
 
     public async Task<IReadOnlyList<MoneyAttentionResponse>> AttentionAsync(string domain, CancellationToken cancellationToken = default)
     {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
         await CheckDomainAsync(domain, cancellationToken);
         var projects = (await summaries.DomainProjectsAsync(domain, cancellationToken)).OrderBy(p => p.StartDate).ThenBy(p => p.Id).ToList();
         var byId = projects.ToDictionary(p => p.Id);
