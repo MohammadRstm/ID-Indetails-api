@@ -15,6 +15,12 @@ public interface IProtonActionTool : IProtonTool
 {
     ProtonActionRisk Risk { get; }
 
+    /// <summary>
+    /// For a tool standing in for several endpoints whose policies differ (issue or void an invoice): each of them.
+    /// The one a proposal goes through is required on propose and again on confirm, on top of <see cref="IProtonTool.Endpoint"/>.
+    /// </summary>
+    IReadOnlyList<ProtonEndpoint> StepEndpoints => [];
+
     Task<ProtonActionDone> ExecuteAsync(string arguments, ProtonToolContext context, CancellationToken cancellationToken);
 }
 
@@ -84,9 +90,15 @@ public abstract class ProtonActionTool<TInput, TArgs> : ProtonTool<TInput>, IPro
 
     protected abstract Task<ProtonActionDone> ExecuteAsync(TArgs args, ProtonToolContext context, CancellationToken cancellationToken);
 
+    public virtual IReadOnlyList<ProtonEndpoint> StepEndpoints => [];
+
+    /// <summary>The step endpoint this change goes through, for a tool with <see cref="StepEndpoints"/>.</summary>
+    protected virtual ProtonEndpoint? StepOf(TArgs args) => null;
+
     protected sealed override async Task<ProtonToolOutput> RunAsync(TInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var (args, preview, target) = await ProposeAsync(input, context, cancellationToken);
+        await RequireStepAsync(args, context);
         await ValidateAsync(args, context, cancellationToken);
         if ((input.OpenAfter ?? OpensByDefault) && OpensLabel(args, target) is { } opens)
         {
@@ -116,8 +128,24 @@ public abstract class ProtonActionTool<TInput, TArgs> : ProtonTool<TInput>, IPro
     {
         var args = JsonSerializer.Deserialize<TArgs>(arguments, ProtonJson.Options)
             ?? throw new InvalidOperationException($"{Name}: stored arguments are empty.");
+        await RequireStepAsync(args, context);
         await ValidateAsync(args, context, cancellationToken);
         return await ExecuteAsync(args, context, cancellationToken);
+    }
+
+    private async Task RequireStepAsync(TArgs args, ProtonToolContext context)
+    {
+        if (StepOf(args) is not { } step)
+        {
+            return;
+        }
+
+        if (!StepEndpoints.Contains(step))
+        {
+            throw new InvalidOperationException($"{Name}: {step.Name} is not one of its step endpoints.");
+        }
+
+        await context.RequireAsync(step);
     }
 
     private async Task ValidateAsync(TArgs args, ProtonToolContext context, CancellationToken cancellationToken)

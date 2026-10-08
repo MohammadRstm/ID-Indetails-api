@@ -84,9 +84,10 @@ public class ProtonToolCatalogTests
         foreach (var action in actions)
         {
             var family = ProtonCoverage.FamilyOf(action.Name);
+            // deleting a cost or a material is a money change: off with the Money family
             if (action.Endpoint.Name.Contains("Delete", StringComparison.OrdinalIgnoreCase) && action.Endpoint.Name != "WorkEntries.Delete")
             {
-                family.ShouldBe(ProtonFamily.Deletes, action.Name);
+                family.ShouldBeOneOf(ProtonFamily.Deletes, ProtonFamily.Money);
             }
 
             if (action.Endpoint.Policies.Any(p => money.Any(m => p.Contains(m))))
