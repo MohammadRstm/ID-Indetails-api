@@ -279,17 +279,22 @@ public sealed class ProtonToolSession(
         => toolbox.ExecuteAsync(this, name, arguments, cancellationToken);
 }
 
-/// <summary>Tool inputs for logs: ids, numbers, dates and enum values as they are; other text only as its length.</summary>
+/// <summary>
+/// Tool inputs for logs and the usage record: ids, numbers, dates and enum values as they are; other text only as its
+/// length, so a question's names, notes and messages are never kept through its tool calls.
+/// </summary>
 public static class ProtonInputSummary
 {
-    public static string Of(JsonElement input)
+    public static string Of(JsonElement input) => Summarize(input).ToJsonString();
+
+    public static JsonObject Summarize(JsonElement input)
     {
+        var summary = new JsonObject();
         if (input.ValueKind != JsonValueKind.Object)
         {
-            return "{}";
+            return summary;
         }
 
-        var summary = new JsonObject();
         foreach (var property in input.EnumerateObject())
         {
             summary[property.Name] = property.Value.ValueKind switch
@@ -302,7 +307,7 @@ public static class ProtonInputSummary
             };
         }
 
-        return summary.ToJsonString();
+        return summary;
     }
 
     private static bool IsCode(string value)

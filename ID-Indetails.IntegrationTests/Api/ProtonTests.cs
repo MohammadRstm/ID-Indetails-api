@@ -96,6 +96,64 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
     }
 
     [Fact]
+    public async Task The_usage_record_keeps_tool_inputs_as_a_summary_never_their_free_text()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("find", new { text = "Villa of Mr Haddad near the old souk", types = new[] { "project" } }),
+            FakeAnthropic.Text("I couldn't find it."));
+
+        await OkAsync(AskAsync(superAdmin, "Find the villa of Mr Haddad near the old souk"));
+
+        await using var scope = api.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdIndetailsDbContext>();
+        var tools = (await db.ProtonUsage.Where(u => u.UserId == superAdmin.User.Id).OrderByDescending(u => u.Id).FirstAsync()).Tools;
+        tools.ShouldNotContain("Haddad");
+        var input = System.Text.Json.Nodes.JsonNode.Parse(tools)!.AsArray().Single()!["input"]!;
+        input["text"]!.GetValue<string>().ShouldBe("text(36)");
+        input["types"]!.GetValue<string>().ShouldBe("list(1)");
+    }
+
+    [Fact]
+    public async Task Every_block_of_a_response_goes_back_to_the_model_unchanged_and_an_unknown_one_fails_the_question()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        api.Anthropic.Reply(
+            FakeAnthropic.Blocks("tool_use",
+                new { type = "thinking", thinking = "Find the right tool.", signature = "sig-1" },
+                new { type = "server_tool_use", id = "srvtoolu_1", name = "tool_search_tool_bm25", input = new { query = "projects" } },
+                new
+                {
+                    type = "tool_search_tool_result", tool_use_id = "srvtoolu_1",
+                    content = new { type = "tool_search_tool_search_result", tool_references = new[] { new { type = "tool_reference", tool_name = "list_projects" } } },
+                },
+                new { type = "tool_use", id = "toolu_9", name = "list_projects", input = new { status = "active" } }),
+            FakeAnthropic.Text("Here they are."));
+
+        await OkAsync(AskAsync(superAdmin, "Which projects are active?"));
+
+        var echoed = api.Anthropic.Requests[1]["messages"]!.AsArray()[^2]!;
+        echoed["role"]!.GetValue<string>().ShouldBe("assistant");
+        var blocks = echoed["content"]!.AsArray();
+        blocks.Select(b => b!["type"]!.GetValue<string>()).ShouldBe(["thinking", "server_tool_use", "tool_search_tool_result", "tool_use"]);
+        blocks[0]!["signature"]!.GetValue<string>().ShouldBe("sig-1");
+        blocks[1]!["id"]!.GetValue<string>().ShouldBe("srvtoolu_1");
+        blocks[1]!["input"]!["query"]!.GetValue<string>().ShouldBe("projects");
+        blocks[2]!["tool_use_id"]!.GetValue<string>().ShouldBe("srvtoolu_1");
+        blocks[2]!["content"]!["tool_references"]![0]!["tool_name"]!.GetValue<string>().ShouldBe("list_projects");
+        blocks[3]!["id"]!.GetValue<string>().ShouldBe("toolu_9");
+
+        // A kind Proton can't send back would break the conversation: the question fails instead of dropping it.
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.Blocks("end_turn",
+            new { type = "container_upload", file_id = "file_1" },
+            new { type = "text", text = "Done." }));
+        await (await AskAsync(superAdmin, "Anything else?")).ShouldFailWithAsync(503, ErrorCodes.ProtonUnavailable);
+    }
+
+    [Fact]
     public async Task A_follow_up_continues_the_conversation_with_what_it_is_about()
     {
         api.Anthropic.Reset();

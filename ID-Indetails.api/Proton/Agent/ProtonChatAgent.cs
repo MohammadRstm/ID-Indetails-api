@@ -213,7 +213,7 @@ public sealed class ProtonChatAgent(
                 }, cancellationToken);
                 turn.Count(response);
 
-                var (assistant, toolUses) = Echo(response);
+                var (assistant, toolUses) = ProtonEcho.Of(response);
                 turn.Messages.Add(new MessageParam { Role = Role.Assistant, Content = assistant });
 
                 if (response.StopReason == StopReason.ToolUse && toolUses.Count > 0 && !lastTrip)
@@ -278,35 +278,6 @@ public sealed class ProtonChatAgent(
         }
 
         return results;
-    }
-
-    /// <summary>The response as the next request must repeat it: every block, thinking included and unchanged.</summary>
-    private static (List<ContentBlockParam> Assistant, List<ToolUseBlock> ToolUses) Echo(Message response)
-    {
-        var assistant = new List<ContentBlockParam>();
-        var toolUses = new List<ToolUseBlock>();
-        foreach (var block in response.Content)
-        {
-            if (block.TryPickThinking(out var thinking))
-            {
-                assistant.Add(new ThinkingBlockParam { Thinking = thinking.Thinking, Signature = thinking.Signature });
-            }
-            else if (block.TryPickRedactedThinking(out var redacted))
-            {
-                assistant.Add(new RedactedThinkingBlockParam { Data = redacted.Data });
-            }
-            else if (block.TryPickText(out var text))
-            {
-                assistant.Add(new TextBlockParam { Text = text.Text });
-            }
-            else if (block.TryPickToolUse(out var toolUse))
-            {
-                assistant.Add(new ToolUseBlockParam { ID = toolUse.ID, Name = toolUse.Name, Input = toolUse.Input });
-                toolUses.Add(toolUse);
-            }
-        }
-
-        return (assistant, toolUses);
     }
 
     private static string Answer(Message response)
@@ -456,6 +427,6 @@ internal sealed class ProtonTurn(string model)
         CostUsd = ProtonUsageRules.CostOf(_tokens, prices),
         Question = question,
         Answer = ProtonText.Cut(Answer, MaxAnswerLength),
-        Tools = JsonSerializer.Serialize(ToolCalls.Select(t => new { tool = t.Tool, input = t.Input, status = t.Status.ToString(), ms = t.ElapsedMs }), ProtonJson.Options),
+        Tools = JsonSerializer.Serialize(ToolCalls.Select(t => new { tool = t.Tool, input = ProtonInputSummary.Summarize(t.Input), status = t.Status.ToString(), ms = t.ElapsedMs }), ProtonJson.Options),
     };
 }
