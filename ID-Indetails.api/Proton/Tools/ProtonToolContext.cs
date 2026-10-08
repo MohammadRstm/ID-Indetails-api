@@ -29,6 +29,24 @@ public sealed class ProtonToolContext(
 
     public DayOfWeek FirstDayOfWeek => firstDayOfWeek;
 
+    private readonly Dictionary<(ProtonRefType, long), ProtonRef> _known = [];
+
+    /// <summary>
+    /// The records tools have returned to this user in this conversation: the only ones Proton may offer as choices,
+    /// so an option is always something the user's own access already found.
+    /// </summary>
+    public IReadOnlyCollection<ProtonRef> Known => _known.Values;
+
+    public void Remember(IEnumerable<ProtonRef> refs)
+    {
+        foreach (var record in refs)
+        {
+            _known[(record.Type, record.Id)] = record;
+        }
+    }
+
+    public ProtonRef? KnownRecord(ProtonRefType type, long id) => _known.GetValueOrDefault((type, id));
+
     /// <summary>Whether the caller passes every authorization policy of <paramref name="endpoint"/>.</summary>
     public async Task<bool> CanCallAsync(ProtonEndpoint endpoint)
     {

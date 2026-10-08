@@ -16,6 +16,7 @@ using ProtonUsage = ID_Indetails.api.Models.ProtonUsage;
 using ID_Indetails.api.Proton.Conversation;
 using ID_Indetails.api.Proton.Prompts;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -34,12 +35,11 @@ public sealed class ProtonChatAgent(
     ProtonConversationStore conversations,
     ProtonUsageService usage,
     IPermissionService permissions,
+    ProtonRecords records,
     IClock clock,
     IOptions<ProtonOptions> options,
     ILoggerFactory loggers)
 {
-
-
     private readonly ILogger _log = loggers.CreateLogger(ProtonToolbox.LogCategory);
 
     public async Task<ProtonReplyResponse> AskAsync(
@@ -58,9 +58,15 @@ public sealed class ProtonChatAgent(
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.QuestionTimeoutSeconds));
-            var turn = await RunTurnAsync(caller, access, conversation, request.Text, timeout.Token);
+            var tools = await toolbox.OpenAsync(
+                caller, userId, new ProtonOrigin(conversation.Id, options.Value.Model, ProtonPrompts.ChatVersion), timeout.Token);
+            tools.Context.Remember(conversation.Known.Values);
+            // A pick from the buttons becomes a question written by Hourline, once it is known to be one of the options.
+            var text = request.Choice is { } choice ? await ChosenAsync(choice, conversation, tools.Context, timeout.Token) : request.Text;
+            var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, timeout.Token) : null;
+            var turn = await RunTurnAsync(caller, access, conversation, tools, text, page, timeout.Token);
 
-            await usage.RecordAsync(turn.Record(userId, conversation.Id, request.Text, clock.UtcNow, usage.Prices), CancellationToken.None);
+            await usage.RecordAsync(turn.Record(userId, conversation.Id, text, clock.UtcNow, usage.Prices), CancellationToken.None);
             if (turn.Outcome == ProtonOutcome.Failed)
             {
                 throw new ServiceUnavailableException(ErrorCodes.ProtonUnavailable, "Proton couldn't answer right now. Please try again.");
@@ -69,6 +75,18 @@ public sealed class ProtonChatAgent(
             conversation.Messages.AddRange(turn.Messages);
             conversation.Questions++;
             conversation.LastInputTokens = turn.LastInputTokens;
+            foreach (var known in tools.Context.Known)
+            {
+                conversation.Known[(known.Type, known.Id)] = known;
+            }
+
+            var ok = turn.ToolCalls.Where(t => t.Status == ProtonToolStatus.Ok).ToList();
+            var choices = ok.LastOrDefault(t => t.Choices is not null)?.Choices ?? [];
+            if (choices.Count > 0 || request.Choice is not null)
+            {
+                conversation.OfferedChoices = choices;
+            }
+
             return new ProtonReplyResponse(
                 conversation.Id,
                 turn.Answer,
@@ -76,6 +94,8 @@ public sealed class ProtonChatAgent(
                 turn.Outcome == ProtonOutcome.Limited,
                 await usage.MineAsync(userId, CancellationToken.None),
                 turn.Sources(),
+                ProtonUiRules.Pick(ok.Select(t => t.UiCommand).OfType<ProtonUiCommand>()),
+                choices,
                 // One proposal at a time: a later one in the same answer has already replaced earlier ones.
                 turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending);
         }
@@ -116,22 +136,62 @@ public sealed class ProtonChatAgent(
         return conversation;
     }
 
+    /// <summary>
+    /// The option the user picked, as a question Hourline writes for them: it must be one of the last offered options and
+    /// still visible to the user now. Anything else is refused, so the client can't make Proton act on a record it chose.
+    /// </summary>
+    private async Task<string> ChosenAsync(
+        ProtonChoiceRequest choice, ProtonConversation conversation, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var offered = conversation.OfferedChoices.Any(c => c.Type == choice.Type && c.Id == choice.Id);
+        var record = offered ? await records.FindAsync(choice.Type, choice.Id, context, cancellationToken) : null;
+        if (record is null)
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That option is no longer available. Ask again.");
+        }
+
+        conversation.OfferedChoices = [];
+        return $"[The user picked this from the options you offered] {Describe(record)}.";
+    }
+
+    /// <summary>
+    /// Where the user is, for the context note: the page, and the record on it only when this user may see it, so an
+    /// id typed into the address bar never becomes a name. Context only: it is neither data nor permission.
+    /// </summary>
+    private async Task<string> PageNoteAsync(ProtonPageContext page, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var where = page.Page is { } known ? $"the {Words(known)} page" : "a page";
+        var note = $"{where} in {(page.Area == "company" ? "the company area" : page.Area)}";
+        if (page.EntityType is { } type && page.EntityId is { } id
+            && await records.FindAsync(type, id, context, cancellationToken) is { } record)
+        {
+            note += $", looking at {Describe(record)}" + (page.Section is { } section and not ProtonProjectSection.Overview ? $" ({Words(section)} tab)" : "");
+        }
+
+        return note;
+    }
+
+    private static string Describe(ProtonRef record)
+        => $"{record.Type.ToString().ToLowerInvariant()} #{record.Id} \"{record.Name}\"" + (record.Domain is { } d ? $" ({d})" : "");
+
+    private static string Words<T>(T value) where T : struct, Enum
+        => string.Concat(value.ToString().Select((c, i) => i > 0 && char.IsUpper(c) ? $" {char.ToLowerInvariant(c)}" : char.ToLowerInvariant(c).ToString()));
+
     private async Task<ProtonTurn> RunTurnAsync(
-        ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, string text, CancellationToken cancellationToken)
+        ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, ProtonToolSession tools, string text, string? page,
+        CancellationToken cancellationToken)
     {
         var settings = options.Value;
         var turn = new ProtonTurn(settings.Model);
         try
         {
-            var tools = await toolbox.OpenAsync(
-                caller, access.UserId, new ProtonOrigin(conversation.Id, settings.Model, ProtonPrompts.ChatVersion), cancellationToken);
             var definitions = tools.Tools.Select(Define).ToList();
             turn.Messages.Add(new MessageParam
             {
                 Role = Role.User,
                 Content = new List<ContentBlockParam>
                 {
-                    new TextBlockParam { Text = ContextNote(caller, access, conversation) },
+                    new TextBlockParam { Text = ContextNote(caller, access, conversation, page) },
                     new TextBlockParam { Text = text },
                 },
             });
@@ -283,7 +343,7 @@ public sealed class ProtonChatAgent(
     /// is asking and what they can see, and what the conversation is about. Sent with the question rather than in the
     /// system prompt, so the prompt stays the same for everyone and is cached.
     /// </summary>
-    private string ContextNote(ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation)
+    private string ContextNote(ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, string? page)
     {
         var name = $"{caller.FindFirst(AuthClaimTypes.FirstName)?.Value} {caller.FindFirst(AuthClaimTypes.LastName)?.Value}".Trim();
         var today = clock.CompanyToday;
@@ -294,6 +354,11 @@ public sealed class ProtonChatAgent(
             Asking: {(name.Length > 0 ? name : "a user")}, {access.Role.Replace('_', ' ')}, who can see: {string.Join(", ", access.VisibleDomains)}.
             Conversation focus: {conversation.Focus.Describe()}.
             """;
+        if (page is not null)
+        {
+            note += $"\nWhere the user is in the app (where they are, not data): {page}.";
+        }
+
         return actions.Count == 0 ? note : note + "\nSince the last message (from the confirmation buttons): " + string.Join(" ", actions);
     }
 

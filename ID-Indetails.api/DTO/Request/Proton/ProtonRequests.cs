@@ -1,3 +1,6 @@
+using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Proton.Ui;
+
 namespace ID_Indetails.api.DTO.Request.Proton;
 
 public sealed record AskProtonRequest
@@ -5,7 +8,37 @@ public sealed record AskProtonRequest
     /// <summary>Leave out to start a new conversation; the reply says which one it is.</summary>
     public Guid? ConversationId { get; init; }
 
+    /// <summary>The question. Not needed when <see cref="Choice"/> answers the buttons of the last reply.</summary>
     public string Text { get; init; } = string.Empty;
+
+    /// <summary>Where the user is in the app, so "it" and "this project" make sense. Never trusted as data or access.</summary>
+    public ProtonPageContext? Page { get; init; }
+
+    /// <summary>The option the user picked from the buttons of the last reply; checked against what was offered.</summary>
+    public ProtonChoiceRequest? Choice { get; init; }
+}
+
+/// <summary>The page the user is on, by meaning. <see cref="EntityId"/> comes with <see cref="EntityType"/>.</summary>
+public sealed record ProtonPageContext
+{
+    /// <summary>design, execution or company.</summary>
+    public string Area { get; init; } = string.Empty;
+
+    public ProtonPage? Page { get; init; }
+
+    public ProtonRefType? EntityType { get; init; }
+
+    public long? EntityId { get; init; }
+
+    /// <summary>The project tab, on a project page.</summary>
+    public ProtonProjectSection? Section { get; init; }
+}
+
+public sealed record ProtonChoiceRequest
+{
+    public ProtonRefType Type { get; init; }
+
+    public long Id { get; init; }
 }
 
 public sealed record TopUpProtonBudgetRequest

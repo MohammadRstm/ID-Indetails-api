@@ -5,6 +5,7 @@ using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Conversation;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
 using ID_Indetails.api.Repositories.Proton.Abstraction;
 using ID_Indetails.api.Repositories.Proton.Implementation;
@@ -77,6 +78,13 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetCompanySummaryTool>();
         services.AddScoped<IProtonTool, SummarizeChangesTool>();
         services.AddScoped<IProtonTool, GetAttentionTool>();
+
+        // UI tools: they read nothing new, they ask the app to open a page or record the user may already open.
+        services.AddScoped<ProtonRecords>();
+        services.AddScoped<IProtonTool, OpenRecordTool>();
+        services.AddScoped<IProtonTool, OpenPageTool>();
+        services.AddScoped<IProtonTool, OfferChoicesTool>();
+        services.AddScoped<IProtonTool, RefreshPageTool>();
 
         // Action tools: they only propose; the user's confirmation carries a proposal out (ProtonActionService).
         services.AddScoped<IProtonTool, ProposeAddRequirementTool>();

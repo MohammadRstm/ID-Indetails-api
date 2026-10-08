@@ -8,6 +8,7 @@ using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
@@ -23,7 +24,7 @@ public enum ProtonStatusChange
 
 public sealed record ProjectStatusArgs(long ProjectId, ProjectStatusRules.Action Action);
 
-public sealed record ChangeProjectStatusInput
+public sealed record ChangeProjectStatusInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
@@ -68,14 +69,14 @@ public sealed class ProposeChangeProjectStatusTool(IProjectService projects, IPr
     {
         var project = await statuses.ChangeAsync(args.ProjectId, args.Action, cancellationToken);
         return new ProtonActionDone($"{project.Title} is now {ProjectText.Status(project.Status).ToLowerInvariant()}.",
-            "project", project.Id, [ProjectText.Ref(project)]);
+            "project", project.Id, [ProjectText.Ref(project)], ProtonUiCommand.Open(ProjectText.Ref(project)));
     }
 }
 
 /// <param name="Before">The details when proposed: if someone changed them since, the update is refused, not applied over theirs.</param>
 public sealed record UpdateProjectArgs(long ProjectId, UpdateProjectRequest Request, UpdateProjectRequest Before);
 
-public sealed record UpdateProjectInput
+public sealed record UpdateProjectInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
@@ -154,7 +155,7 @@ public sealed class ProposeUpdateProjectTool(IProjectService projects, IEmployee
         }
 
         var project = await projects.UpdateAsync(args.ProjectId, args.Request, cancellationToken);
-        return new ProtonActionDone($"Updated {project.Title}.", "project", project.Id, [ProjectText.Ref(project)]);
+        return new ProtonActionDone($"Updated {project.Title}.", "project", project.Id, [ProjectText.Ref(project)], ProtonUiCommand.Open(ProjectText.Ref(project)));
     }
 
     private static void Add(List<ProtonChange> changes, string label, string? before, string? after)
@@ -168,7 +169,7 @@ public sealed class ProposeUpdateProjectTool(IProjectService projects, IEmployee
 
 public sealed record CreateProjectArgs(CreateProjectRequest Request);
 
-public sealed record CreateProjectInput
+public sealed record CreateProjectInput : ProtonActionInput
 {
     public required string Title { get; init; }
 
@@ -204,6 +205,10 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
     public override string? OnlyInDomain => DomainCodes.Design;
+
+    protected override bool OpensByDefault => true;
+
+    protected override string OpensLabel(CreateProjectArgs args, ProtonRef? target) => "the new project";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<ProjectsController>(nameof(ProjectsController.Create));
 
@@ -284,7 +289,7 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
     protected override async Task<ProtonActionDone> ExecuteAsync(CreateProjectArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var project = await projects.CreateAsync(args.Request, cancellationToken);
-        return new ProtonActionDone($"Created the project {project.Title}.", "project", project.Id, [ProjectText.Ref(project)]);
+        return new ProtonActionDone($"Created the project {project.Title}.", "project", project.Id, [ProjectText.Ref(project)], ProtonUiCommand.Open(ProjectText.Ref(project)));
     }
 }
 

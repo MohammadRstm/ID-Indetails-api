@@ -6,6 +6,8 @@ namespace ID_Indetails.api.DTO.Response.Proton;
 /// <param name="Limited">Proton hit a limit (tool calls, model calls or length) and answered with what it had.</param>
 /// <param name="PendingAction">A change Proton proposed in this answer: shown as a card the user confirms or cancels.</param>
 /// <param name="Sources">What the analytical figures in the reply rest on, shown under it as "Based on".</param>
+/// <param name="UiCommands">What the app opens or refreshes once the reply is shown: at most one page, or a refresh.</param>
+/// <param name="Choices">Options to pick from with a click instead of typing; the pick is checked against these.</param>
 public sealed record ProtonReplyResponse(
     Guid ConversationId,
     string Reply,
@@ -13,6 +15,8 @@ public sealed record ProtonReplyResponse(
     bool Limited,
     ProtonUsageResponse Usage,
     IReadOnlyList<ProtonSourceResponse> Sources,
+    IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonUiCommand> UiCommands,
+    IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonChoice> Choices,
     ID_Indetails.api.Proton.Actions.ProtonPendingAction? PendingAction = null);
 
 /// <summary>
@@ -62,7 +66,13 @@ public sealed record ProtonDayUsageResponse(DateOnly Day, int Questions, decimal
 public sealed record ProtonConversationUsageResponse(Guid ConversationId, long UserId, string Name, int Questions, int ToolCalls, decimal CostUsd);
 
 /// <summary>What became of a confirmed or cancelled action. A failure is an error response instead, with the service's own code.</summary>
-public sealed record ProtonActionOutcomeResponse(Guid ActionId, ID_Indetails.api.Enums.ProtonActionStatus Status, string Message, IReadOnlyList<ProtonRef> Refs);
+/// <param name="UiCommands">What the app opens now: the result, after a successful change whose card said it would.</param>
+public sealed record ProtonActionOutcomeResponse(
+    Guid ActionId,
+    ID_Indetails.api.Enums.ProtonActionStatus Status,
+    string Message,
+    IReadOnlyList<ProtonRef> Refs,
+    IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonUiCommand> UiCommands);
 
 /// <summary>One analysis behind a reply: what was looked at, over which days, and what it left out. No data, no internals.</summary>
 /// <param name="Period">The days, in words ("1–7 Oct 2026").</param>

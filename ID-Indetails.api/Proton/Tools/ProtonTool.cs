@@ -71,6 +71,12 @@ public sealed record ProtonToolOutput(object Data, IReadOnlyList<ProtonRef> Refs
     /// <summary>Set by analytical tools: what the figures rest on, shown under the answer.</summary>
     public ProtonBasis? Basis { get; init; }
 
+    /// <summary>Set by UI tools: what the app should open or refresh once the answer is shown.</summary>
+    public Ui.ProtonUiCommand? UiCommand { get; init; }
+
+    /// <summary>Set by offer_choices: the options the user can pick from instead of typing.</summary>
+    public IReadOnlyList<Ui.ProtonChoice>? Choices { get; init; }
+
     public static ProtonToolOutput Of(object data, params ProtonRef[] refs) => new(data, refs);
 }
 

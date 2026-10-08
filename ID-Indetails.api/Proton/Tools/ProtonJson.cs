@@ -59,6 +59,9 @@ public static class ProtonJson
             },
         };
 
-        return (JsonObject)Options.GetJsonSchemaAsNode(inputType, exporter);
+        var schema = (JsonObject)Options.GetJsonSchemaAsNode(inputType, exporter);
+        // an input with no fields (refresh_page) still needs an object schema the model can fill
+        schema["properties"] ??= new JsonObject();
+        return schema;
     }
 }
