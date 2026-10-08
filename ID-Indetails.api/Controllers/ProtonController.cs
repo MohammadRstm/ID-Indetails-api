@@ -4,6 +4,7 @@ using ID_Indetails.api.DTO.Request.Proton;
 using ID_Indetails.api.DTO.Response.Proton;
 using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Agent;
+using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Usage;
 using ID_Indetails.api.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,7 @@ public sealed class ProtonController(
     ProtonChatAgent agent,
     ProtonActionService actions,
     ProtonUsageService usage,
+    ProtonBriefingService briefing,
     ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost("messages")]
@@ -51,6 +53,16 @@ public sealed class ProtonController(
         agent.Forget(currentUser.Id, conversationId);
         return NoContent();
     }
+
+    /// <summary>
+    /// The few things most worth a look, for Proton's greeting: what get_attention would find for the caller, read the
+    /// same way. No model call, so it uses no question.
+    /// </summary>
+    [HttpGet("briefing")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    [EnableRateLimiting(RateLimitPolicies.Proton)]
+    public Task<ProtonBriefingResponse> Briefing(CancellationToken cancellationToken)
+        => briefing.BriefAsync(User, currentUser.Id, cancellationToken);
 
     /// <summary>The caller's question allowance this month. Never money.</summary>
     [HttpGet("usage")]

@@ -78,6 +78,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetCompanySummaryTool>();
         services.AddScoped<IProtonTool, SummarizeChangesTool>();
         services.AddScoped<IProtonTool, GetAttentionTool>();
+        services.AddScoped<ProtonBriefingService>();
 
         // UI tools: they read nothing new, they ask the app to open a page or record the user may already open.
         services.AddScoped<ProtonRecords>();

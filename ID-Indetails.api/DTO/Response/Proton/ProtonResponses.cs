@@ -86,3 +86,11 @@ public sealed record ProtonActionOutcomeResponse(
 /// <param name="Partial">The period is still running, so its figures are "so far".</param>
 /// <param name="Omitted">What the analysis left out: what the user can't see, or data the system doesn't hold.</param>
 public sealed record ProtonSourceResponse(string Label, string? Period, string? ComparedWith, bool Partial, string? Scope, IReadOnlyList<string> Omitted);
+
+/// <summary>What may need the user's attention, for Proton's greeting: the same rules as get_attention, with no model call.</summary>
+/// <param name="More">How many more items there are beyond these.</param>
+public sealed record ProtonBriefingResponse(IReadOnlyList<ProtonBriefingItem> Items, int More);
+
+/// <param name="Project">The project the item is about; null for one about a whole business (<paramref name="Domain"/>).</param>
+/// <param name="Facts">What was measured, in words, most pressing first.</param>
+public sealed record ProtonBriefingItem(ProtonRef? Project, string? Domain, IReadOnlyList<string> Facts);

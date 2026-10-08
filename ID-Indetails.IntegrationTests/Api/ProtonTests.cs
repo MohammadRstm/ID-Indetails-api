@@ -352,5 +352,6 @@ public class ProtonSwitchedOffTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(503, ErrorCodes.ProtonUnavailable);
         var usage = await (await _steps.Client.GetAsync("/api/proton/usage", superAdmin.AccessToken)).ReadAsync<ProtonUsageResponse>();
         usage.Available.ShouldBeFalse();
+        await (await _steps.Client.GetAsync("/api/proton/briefing", superAdmin.AccessToken)).ShouldFailWithAsync(503, ErrorCodes.ProtonUnavailable);
     }
 }
