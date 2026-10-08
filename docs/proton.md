@@ -15,10 +15,13 @@ Proton itself never writes anything. The design and decisions are in [proton-sta
 
 | Permission | Default | Lets someone |
 |---|---|---|
-| `proton:use` | super admins and admins | ask Proton, end their conversations, see their own question allowance |
+| `proton:use` | everyone (employees since Stage 5, Phase 8) | ask Proton, end their conversations, see their own question allowance |
 | `proton_budget:manage` | super admins | see Proton's estimated cost and usage per person, and top up the monthly budget |
 
-Employees don't get Proton in Stage 1. Both are ordinary permissions (`Constants/PermissionCatalog.cs`): they can be
+Employees got Proton in Stage 5, Phase 8 (decision 26; a seed migration, `EmployeesUseProton`, that also rewords the
+permission): it reads only what they may see, opens their own pages (`my_work`, `my_pay`, `my_profile`), and proposes
+changes to their own work. The plan asks for two weeks of measured cost before that migration is applied in
+production. Both are ordinary permissions (`Constants/PermissionCatalog.cs`): they can be
 granted or revoked per person like any other, and `proton_budget:manage` is a company permission.
 
 ## How a question is answered
@@ -388,9 +391,11 @@ submits or sends anything itself.
 | `propose_update_meeting` | low | `PUT /api/meetings/{id}` | moves, resizes or renames; the meeting rules (your own unless you manage meetings, open projects) are checked when proposing |
 | `propose_create_team`, `propose_rename_team` | low | `POST /api/teams`, `PUT /api/teams/{id}` | a name already used in the domain is refused |
 | `propose_update_my_profile` | low | `PUT /api/me/profile` | the user's own name and phone only (`ProtonEndpoint.OfRuleBasedWrite`: `proton:use` is its policy) |
+| `propose_log_work` | low | `POST /api/work-entries` | the user's own work: a day and HH:mm times in company time (an end before the start is past midnight); the card says how much is overtime, from the log form's own preview |
+| `propose_update_my_work`, `propose_delete_my_work` | low | `PUT`, `DELETE /api/work-entries/{id}` | the user's own entries while still editable; anyone else's reads as not found; a deleted one is restored from My work |
 | `propose_comment_work_entry` | low | `POST /api/work-entries/{id}/comments` | on the entry only; the author is notified. Posting to their team chat is a message (Stage 5, Phase 7) |
 
-Reads added for these: `list_teams` (`GET /api/teams`, rule-based) and `get_work_entry` (with its comments, no
+Reads added for these: `list_my_work` (the user's own entries, `GET /api/me/work-entries`), `list_teams` (`GET /api/teams`, rule-based) and `get_work_entry` (with its comments, no
 attachment). Dashboard card orders stay with the person (they drag the cards).
 
 How it works (`Proton/Actions/`):

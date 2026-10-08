@@ -13,6 +13,7 @@ public enum ProtonForm
     ReportBug,
     Invite,
     Message,
+    LogWork,
 }
 
 public sealed record ClientFill
@@ -92,6 +93,22 @@ public sealed record InviteFill
     public long? TeamId { get; init; }
 }
 
+/// <summary>The user's own work, as the log form takes it: the time is worked out (and its overtime shown) by the form.</summary>
+public sealed record LogWorkFill
+{
+    [Description("The project: an id from find, list_my_work or another tool.")]
+    public long? ProjectId { get; init; }
+
+    public DateOnly? Day { get; init; }
+
+    [Description("Minutes after midnight, company time: 9:30 is 570.")]
+    public int? StartMinute { get; init; }
+
+    public int? EndMinute { get; init; }
+
+    public string? Description { get; init; }
+}
+
 public sealed record MessageFill
 {
     [Description("The message, in the user's voice, from what the user said: they read it and press Send themselves.")]
@@ -112,7 +129,8 @@ public sealed record ProtonFormFill(
     EditProjectFill? EditProject = null,
     ReportBugFill? ReportBug = null,
     InviteFill? Invite = null,
-    MessageFill? Message = null);
+    MessageFill? Message = null,
+    LogWorkFill? LogWork = null);
 
 /// <summary>The shape rules of a fill, before the app sees it: field-level messages go back to the model to correct.</summary>
 public static partial class ProtonFormRules
@@ -184,6 +202,14 @@ public static partial class ProtonFormRules
                 break;
             case ProtonForm.Message when fill.Message is { } msg:
                 Text("body", msg.Body, MessageLength);
+                break;
+            case ProtonForm.LogWork when fill.LogWork is { } w:
+                Text("description", w.Description, TextLength);
+                if (w.StartMinute is < 0 or > 1439 || w.EndMinute is < 0 or > 1439)
+                {
+                    problems.Add("start_minute and end_minute: minutes after midnight, 0 to 1439.");
+                }
+
                 break;
             default:
                 problems.Add($"Give the values for the {fill.Form} form, and only those.");

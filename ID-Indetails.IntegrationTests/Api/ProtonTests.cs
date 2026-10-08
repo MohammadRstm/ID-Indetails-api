@@ -28,12 +28,16 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
     }
 
     [Fact]
-    public async Task Admins_and_super_admins_may_ask_employees_may_not_and_only_super_admins_see_money()
+    public async Task Everyone_with_proton_use_may_ask_and_only_super_admins_see_money()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
+        // employees have Proton since decision 26; without proton:use nobody does
+        (await Client.GetAsync("/api/proton/usage", employee.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await Client.PutJsonAsync($"/api/users/{employee.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.ProtonUse, action = "revoke", reason = "test" } } }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await AskAsync(employee, "What projects are active?")).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync("/api/proton/usage", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 

@@ -127,10 +127,10 @@ public static class ProtonCoverage
         Planned("Clients.Delete", T2, ProtonFamily.Deletes),
         ReadOnly("Clients.Check", "the duplicate warning when proposing a client"),
         // own work: employees only, once they get Proton (decision 26); the delete has a restore, so it stays standard
-        Planned("WorkEntries.Create", T1, ProtonFamily.Core),
-        Planned("WorkEntries.Update", T1, ProtonFamily.Core),
-        Planned("WorkEntries.Delete", T1, ProtonFamily.Core),
-        Planned("WorkEntries.Restore", T1, ProtonFamily.Core),
+        Action("WorkEntries.Create", "propose_log_work"),
+        Action("WorkEntries.Update", "propose_update_my_work"),
+        Action("WorkEntries.Delete", "propose_delete_my_work"),
+        Open("WorkEntries.Restore", "a deleted entry is restored from My work, where the person sees what they deleted"),
         Action("WorkEntries.AddComment", "propose_comment_work_entry"),
         Open("BoardLayouts.Save", "the person drags their own board's cards into place"),
         // resets the person's own board layout to the default: a preference, not a record
