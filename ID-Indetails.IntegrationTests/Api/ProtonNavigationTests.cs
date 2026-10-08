@@ -206,6 +206,63 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
             .ShouldFailWithAsync(422, ErrorCodes.ProtonChoiceInvalid);
     }
 
+    [Fact]
+    public async Task A_surface_opens_only_for_what_the_user_could_open_and_saves_nothing()
+    {
+        var (superAdmin, designAdmin) = await PeopleAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("open_surface", new { surface = "edit_project", id = project.Id }),
+            FakeAnthropic.Text("Opening its details."),
+            FakeAnthropic.ToolUse("open_surface", new { surface = "edit_project", id = site.Id }),
+            FakeAnthropic.ToolUse("open_surface", new { surface = "project_report", id = project.Id }),
+            FakeAnthropic.ToolUse("open_surface", new { surface = "new_project" }),
+            FakeAnthropic.Text("Opening the form."));
+
+        var edit = await AskAsync(designAdmin, new { text = $"Let me edit {project.Title}" });
+        edit.UiCommands.ShouldBe([new ProtonUiCommand(ProtonUiCommandType.OpenSurface, $"the project's details form for {project.Title}", project.Id,
+            DomainCodes.Design, Surface: ProtonSurface.EditProject)]);
+
+        var created = await AskAsync(designAdmin, new { conversationId = edit.ConversationId, text = "Something else" });
+        Result(3)["status"]!.GetValue<string>().ShouldBe("not_found");   // another business's site
+        Result(4)["status"]!.GetValue<string>().ShouldBe("forbidden");   // the report needs financial:view
+        created.UiCommands.ShouldHaveSingleItem().ShouldBe(new ProtonUiCommand(ProtonUiCommandType.OpenSurface, "the new project form", null,
+            DomainCodes.Design, Surface: ProtonSurface.NewProject));
+    }
+
+    [Fact]
+    public async Task What_emails_someone_or_mutes_the_chat_needs_the_users_own_words()
+    {
+        var (superAdmin, _) = await PeopleAsync();
+        var alpha = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var beta = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("find", new { text = alpha.Title }),
+            FakeAnthropic.ToolUse("find", new { text = beta.Title }),
+            FakeAnthropic.ToolUse("offer_choices", new { question = "Which?", options = new[] { new { type = "project", id = alpha.Id }, new { type = "project", id = beta.Id } } }),
+            FakeAnthropic.Text("Which one?"),
+            // a click: neither the invite form nor muting may follow from it
+            FakeAnthropic.ToolUse("open_surface", new { surface = "invite_person" }),
+            FakeAnthropic.ToolUse("set_preference", new { sounds = false }),
+            FakeAnthropic.ToolUse("set_preference", new { theme = "dark" }),
+            FakeAnthropic.Text("Done."),
+            // typed: both are fine
+            FakeAnthropic.ToolUse("open_surface", new { surface = "invite_person" }),
+            FakeAnthropic.ToolUse("set_preference", new { sounds = false }),
+            FakeAnthropic.Text("Opened, and sounds are off."));
+
+        var offered = await AskAsync(superAdmin, new { text = "Which project?" });
+        var picked = await AskAsync(superAdmin, new { conversationId = offered.ConversationId, choice = new { type = "project", id = alpha.Id } });
+        Result(5)["status"]!.GetValue<string>().ShouldBe("invalid");
+        Result(6)["status"]!.GetValue<string>().ShouldBe("invalid");
+        Result(7)["status"]!.GetValue<string>().ShouldBe("ok");
+        picked.UiCommands.ShouldBe([new ProtonUiCommand(ProtonUiCommandType.SetPreference, "dark mode", Theme: ProtonTheme.Dark)]);
+
+        var typed = await AskAsync(superAdmin, new { conversationId = offered.ConversationId, text = "Invite someone and turn the sounds off" });
+        typed.UiCommands.Select(c => c.Surface ?? (object?)c.Sounds).ShouldBe([ProtonSurface.InvitePerson, false]);
+    }
+
     private async Task<ProtonActionOutcomeResponse> ConfirmAsync(AuthResponse who, ProtonReplyResponse reply)
     {
         var response = await Client.PostJsonAsync($"/api/proton/actions/{reply.PendingAction!.Id}/confirm", new { conversationId = reply.ConversationId }, who.AccessToken);

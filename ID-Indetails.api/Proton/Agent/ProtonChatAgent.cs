@@ -282,6 +282,11 @@ public sealed class ProtonChatAgent(
             note += $", looking at {Describe(record)}" + (page.Section is { } section and not ProtonProjectSection.Overview ? $" ({Words(section)} tab)" : "");
         }
 
+        if (page.Surface is { } surface)
+        {
+            note += $", with {ProtonSurfaces.All[surface].Label} open";
+        }
+
         return note;
     }
 

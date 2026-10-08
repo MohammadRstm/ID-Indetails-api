@@ -24,6 +24,39 @@ public class ProtonUiTests
         ProtonUiRules.Pick([]).ShouldBeEmpty();
     }
 
+    /// <summary>A surface brings its own page, then the preferences follow; a refresh only when nothing else moves.</summary>
+    [Fact]
+    public void A_reply_runs_one_place_then_its_preferences_in_order()
+    {
+        var page = ProtonUiCommand.Open(Villa);
+        var form = new ProtonUiCommand(ProtonUiCommandType.OpenSurface, "the project's details form", 12, "design", Surface: ProtonSurface.EditProject);
+        var light = new ProtonUiCommand(ProtonUiCommandType.SetPreference, "light mode", Theme: ProtonTheme.Light);
+        var dark = new ProtonUiCommand(ProtonUiCommandType.SetPreference, "dark mode", Theme: ProtonTheme.Dark);
+        var quiet = new ProtonUiCommand(ProtonUiCommandType.SetPreference, "message sounds off", Sounds: false);
+
+        ProtonUiRules.Pick([quiet, form, light, page, dark]).ShouldBe([form, dark, quiet]);
+        ProtonUiRules.Pick([ProtonUiCommand.Refresh, light]).ShouldBe([light]);
+        dark.Navigates.ShouldBeFalse();
+        form.Navigates.ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// Every surface is described, and none of them is a one-click confirm: completing, voiding, deleting,
+    /// deactivating, granting access or topping up are proposed on a card, never opened.
+    /// </summary>
+    [Fact]
+    public void Every_surface_has_its_rules_and_none_is_a_confirm_dialog()
+    {
+        ProtonSurfaces.All.Keys.ShouldBe(Enum.GetValues<ProtonSurface>(), ignoreOrder: true);
+        string[] confirms = ["Complete", "Void", "Delete", "Deactivate", "Discard", "TopUp", "Permission", "Role", "Move", "Session"];
+        Enum.GetNames<ProtonSurface>().ShouldAllBe(name => !confirms.Any(name.Contains));
+
+        // what emails someone needs the user's own words: the invite and the bug report
+        ProtonSurfaces.All.Where(s => s.Value.EmailsSomeone).Select(s => s.Key)
+            .ShouldBe([ProtonSurface.InvitePerson, ProtonSurface.ReportBug], ignoreOrder: true);
+        ProtonSurfaces.All.Values.Where(s => s.Endpoint is not null).ShouldAllBe(s => s.Endpoint!.Policies.Count > 0);
+    }
+
     [Fact]
     public void Opening_a_record_carries_its_id_domain_and_tab_but_never_an_address()
     {

@@ -41,6 +41,7 @@ public sealed class ProtonPageContextValidator : AbstractValidator<ProtonPageCon
         RuleFor(x => x.Area).Must(a => AskProtonRequestValidator.Areas.Contains(a)).WithMessage("Unknown area.");
         RuleFor(x => x.Page).IsInEnum();
         RuleFor(x => x.Section).IsInEnum();
+        RuleFor(x => x.Surface).IsInEnum();
         RuleFor(x => x.EntityType).IsInEnum().NotNull().When(x => x.EntityId is not null).WithMessage("A record needs its kind.");
         RuleFor(x => x.EntityId).NotNull().GreaterThan(0).When(x => x.EntityType is not null).WithMessage("A record needs its id.");
     }
