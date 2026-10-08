@@ -84,6 +84,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ProtonBudgetTopUp> ProtonBudgetTopUps => Set<ProtonBudgetTopUp>();
     public DbSet<ProtonAction> ProtonActions => Set<ProtonAction>();
 
+    public DbSet<ProtonMemory> ProtonMemories => Set<ProtonMemory>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(IdIndetailsDbContext).Assembly);

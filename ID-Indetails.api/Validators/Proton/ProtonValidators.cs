@@ -59,6 +59,17 @@ public sealed class TopUpProtonBudgetRequestValidator : AbstractValidator<TopUpP
     }
 }
 
+public sealed class SaveProtonMemoryRequestValidator : AbstractValidator<SaveProtonMemoryRequest>
+{
+    public SaveProtonMemoryRequestValidator()
+    {
+        RuleFor(x => x.ConversationId).NotEmpty().WithMessage("Which conversation is this from?");
+        RuleFor(x => x.Text).NotEmpty().WithMessage("What should I remember?")
+            .MaximumLength(Business.Proton.ProtonMemoryRules.MaxLength)
+            .WithMessage($"A memory is at most {Business.Proton.ProtonMemoryRules.MaxLength} characters.");
+    }
+}
+
 public sealed class DecideProtonActionRequestValidator : AbstractValidator<DecideProtonActionRequest>
 {
     public DecideProtonActionRequestValidator()

@@ -38,6 +38,8 @@ public static class ProtonServiceCollectionExtensions
 
         services.AddScoped<IProtonUsageRepository, ProtonUsageRepository>();
         services.AddScoped<IProtonActionRepository, ProtonActionRepository>();
+        services.AddScoped<IProtonMemoryRepository, ProtonMemoryRepository>();
+        services.AddScoped<Proton.Memory.ProtonMemoryService>();
         services.AddScoped<ProtonUsageService>();
         services.AddSingleton<ProtonConversationStore>();
         services.AddScoped<ProtonToolbox>();

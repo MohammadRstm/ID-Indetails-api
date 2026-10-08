@@ -41,6 +41,7 @@ public sealed class ProtonChatAgent(
     ProtonRecords records,
     IProtonActionRepository actions,
     ICompanySettingsService companySettings,
+    Memory.ProtonMemoryService memories,
     IClock clock,
     IOptions<ProtonOptions> options,
     IOptions<EmailOptions> email,
@@ -108,7 +109,7 @@ public sealed class ProtonChatAgent(
             tools.Context.TypedText = string.Join("\n", typed);
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, cancellationToken) : null;
             var company = (await companySettings.BrandingAsync(cancellationToken)).Name;
-            var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion);
+            var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion, await memories.NoteAsync(userId, cancellationToken));
             return new ProtonQuestion(caller, userId, access, conversation, tools, request, text, notes, rolledOver);
         }
         catch
@@ -516,6 +517,11 @@ public sealed class ProtonChatAgent(
             note += $"\nWhere the user is in the app (where they are, not data): {page}.";
         }
 
+        if (notes.Memories is { } remembered)
+        {
+            note += $"\n{remembered}";
+        }
+
         if (conversation.Recap is { } recap)
         {
             note += $"\n{recap}";
@@ -535,7 +541,8 @@ public sealed class ProtonChatAgent(
 /// <param name="Page">Where the user is, already checked against what they may see.</param>
 /// <param name="Company">The company's name from its branding, when set.</param>
 /// <param name="Suggested">The question is one of Proton's suggested replies, tapped rather than typed.</param>
-internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false);
+/// <param name="Memories">What the user asked Proton to remember, framed as their preferences.</param>
+internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false, string? Memories = null);
 
 /// <summary>One question's progress: the messages it adds, the tools it ran, the tokens it used and how it ended.</summary>
 internal sealed class ProtonTurn(string model)
