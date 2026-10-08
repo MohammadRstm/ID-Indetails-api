@@ -20,6 +20,7 @@ namespace ID_Indetails.api.Controllers;
 [Route("api/proton")]
 public sealed class ProtonController(
     ProtonChatAgent agent,
+    ProtonStreamingService streaming,
     ProtonActionService actions,
     ProtonUsageService usage,
     ProtonBriefingService briefing,
@@ -30,6 +31,17 @@ public sealed class ProtonController(
     [EnableRateLimiting(RateLimitPolicies.Proton)]
     public Task<ProtonReplyResponse> Ask(AskProtonRequest request, CancellationToken cancellationToken)
         => agent.AskAsync(User, currentUser.Id, request, cancellationToken);
+
+    /// <summary>
+    /// The same question, answered live as Server-Sent Events (status, delta, then done or error). A refusal before the
+    /// answer starts is an ordinary error response.
+    /// </summary>
+    [HttpPost("messages/stream")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    [EnableRateLimiting(RateLimitPolicies.Proton)]
+    [Produces("text/event-stream")]
+    public Task Stream(AskProtonRequest request, CancellationToken cancellationToken)
+        => streaming.StreamAsync(HttpContext, currentUser.Id, request, cancellationToken);
 
     /// <summary>
     /// Carries out a change Proton proposed, once. Only the proposer, in its conversation, before it expires — and only
