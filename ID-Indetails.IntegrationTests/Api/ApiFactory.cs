@@ -1,3 +1,4 @@
+using ID_Indetails.api.Proton.Safety;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.IntegrationTests.Data;
@@ -69,6 +70,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton<IEmailSender>(Emails);
             services.RemoveAll<ILivePublisher>();
             services.AddSingleton<ILivePublisher>(Live);
+            // the email sender was replaced above: wrap it again, as the API wraps the real one
+            services.AddProtonSideEffectGuards();
         });
     }
 

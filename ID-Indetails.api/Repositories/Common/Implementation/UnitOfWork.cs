@@ -9,6 +9,10 @@ public sealed class UnitOfWork(IdIndetailsDbContext db) : IUnitOfWork
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
         => db.SaveChangesAsync(cancellationToken);
 
+    public bool HasChanges => db.ChangeTracker.HasChanges();
+
+    public void DiscardChanges() => db.ChangeTracker.Clear();
+
     public async Task<IUnitOfWorkTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
         => new Transaction(await db.Database.BeginTransactionAsync(cancellationToken));
 

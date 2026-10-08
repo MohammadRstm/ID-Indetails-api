@@ -130,7 +130,7 @@ public sealed class ProtonToolbox(
             try
             {
                 // Action tools only propose here: they run inside the same read-only guard as every read.
-                var output = await ProtonReadOnly.RunAsync(() => tool.RunAsync(input, session.Context, timeout.Token));
+                var output = await RunGuardedAsync(tool, input, session.Context, timeout.Token);
                 result = output.Proposal is { } proposal && tool is IProtonActionTool action
                     ? await ProposeAsync(session, action, input, proposal, output, watch, cancellationToken)
                     : Ok(name, input, new { status = "ok", basis = output.Basis, data = output.Data }, output, watch);
@@ -175,6 +175,31 @@ public sealed class ProtonToolbox(
         _log.Log(level, "Proton tool {Tool} {Status} in {ElapsedMs} ms with {Input}.",
             name, result.Status, result.ElapsedMs, ProtonInputSummary.Of(input));
         return result;
+    }
+
+    /// <summary>
+    /// The tool inside the read-only guard. A change it staged without saving would be written by the next save in the
+    /// request (the proposal row, the usage record), so it is dropped and the call refused, as a database write is.
+    /// </summary>
+    private async Task<ProtonToolOutput> RunGuardedAsync(IProtonTool tool, JsonElement input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var stagedBefore = unitOfWork.HasChanges;
+        var leaked = false;
+        ProtonToolOutput? output = null;
+        try
+        {
+            output = await ProtonReadOnly.RunAsync(() => tool.RunAsync(input, context, cancellationToken));
+        }
+        finally
+        {
+            if (!stagedBefore && unitOfWork.HasChanges)
+            {
+                unitOfWork.DiscardChanges();
+                leaked = true;
+            }
+        }
+
+        return leaked ? throw new ProtonWriteRefusedException("Proton tools are read-only: a change staged during a lookup was dropped.") : output!;
     }
 
     /// <summary>

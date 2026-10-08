@@ -16,6 +16,18 @@ public static class ProtonReadOnly
 
     public static bool IsActive => Active.Value;
 
+    /// <summary>
+    /// For anything outside the database that a tool must not do either (send an email, write a file, notify someone,
+    /// signal a client): refused while a tool runs, so a read can never reach anyone (see ProtonSideEffectGuards).
+    /// </summary>
+    public static void ThrowIfActive(string what)
+    {
+        if (IsActive)
+        {
+            throw new ProtonWriteRefusedException($"Proton tools are read-only: {what} was refused.");
+        }
+    }
+
     /// <summary>Runs <paramref name="action"/> with writes refused, and lets them through again afterwards.</summary>
     public static async Task<T> RunAsync<T>(Func<Task<T>> action)
     {
@@ -99,5 +111,5 @@ public static class ProtonReadOnly
 }
 
 /// <summary>A Proton tool tried to change data. Always a bug in the tool or the service it called.</summary>
-public sealed class ProtonWriteRefusedException()
-    : InvalidOperationException("Proton tools are read-only: a database write was refused.");
+public sealed class ProtonWriteRefusedException(string message = "Proton tools are read-only: a database write was refused.")
+    : InvalidOperationException(message);
