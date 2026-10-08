@@ -18,7 +18,7 @@ public sealed class ProtonUsageRepository(IdIndetailsDbContext db) : IProtonUsag
             .SumAsync(u => (decimal?)u.CostUsd, cancellationToken) ?? 0m;
 
     public Task<int> QuestionsAsync(long userId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
-        => db.ProtonUsage.CountAsync(u => u.UserId == userId && u.OccurredAt >= fromUtc && u.OccurredAt < toUtc, cancellationToken);
+        => db.ProtonUsage.CountAsync(u => u.UserId == userId && u.OccurredAt >= fromUtc && u.OccurredAt < toUtc && u.ToolCalls > 0, cancellationToken);
 
     public async Task<decimal> TopUpTotalAsync(DateOnly month, CancellationToken cancellationToken = default)
         => await db.ProtonBudgetTopUps.Where(t => t.Month == month).SumAsync(t => (decimal?)t.AmountUsd, cancellationToken) ?? 0m;

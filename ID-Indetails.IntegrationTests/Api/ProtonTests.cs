@@ -290,18 +290,25 @@ public class ProtonLimitTests(ProtonLimitsApiFactory api) : IClassFixture<Proton
         budget.BudgetUsd.ShouldBe(5m);
         budget.TopUps.ShouldHaveSingleItem().Note.ShouldBe("October");
 
-        api.Anthropic.Reply(FakeAnthropic.Text("Hello."), FakeAnthropic.Text("Hello again."));
+        async Task<ProtonUsageResponse> Usage() => await (await Client.GetAsync("/api/proton/usage", admin.AccessToken)).ReadAsync<ProtonUsageResponse>();
+        api.Anthropic.Reply(
+            FakeAnthropic.Text("Hello! What can I look up for you?"),
+            FakeAnthropic.ToolUse("list_projects", new { }), FakeAnthropic.Text("There are no projects yet."),
+            FakeAnthropic.ToolUse("list_projects", new { }), FakeAnthropic.Text("Still none."));
+        // small talk answered without a tool doesn't use one of the month's questions; it still costs the budget
+        (await Ask()).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await Usage()).QuestionsUsed.ShouldBe(0);
         (await Ask()).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await Ask()).StatusCode.ShouldBe(HttpStatusCode.OK);
         await (await Ask()).ShouldFailWithAsync(422, ErrorCodes.ProtonAllowanceUsed);
 
-        var usage = await (await Client.GetAsync("/api/proton/usage", admin.AccessToken)).ReadAsync<ProtonUsageResponse>();
+        var usage = await Usage();
         usage.QuestionsUsed.ShouldBe(2);
         usage.QuestionsRemaining.ShouldBe(0);
         usage.Available.ShouldBeFalse();
 
         var spent = await (await Client.GetAsync("/api/proton/budget", superAdmin.AccessToken)).ReadAsync<ProtonBudgetResponse>();
-        spent.Questions.ShouldBe(2);
+        spent.Questions.ShouldBe(3);
         spent.SpentUsd.ShouldBeGreaterThan(0m);
         spent.ByUser.ShouldHaveSingleItem().UserId.ShouldBe(admin.User.Id);
     }

@@ -22,6 +22,8 @@ public interface IProtonUsageRepository
     /// <summary>Estimated cost of every question between the two instants (UTC, end exclusive).</summary>
     Task<decimal> SpentAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default);
 
+    /// <summary>The questions that count toward the monthly allowance: those Proton used a tool for. Small talk answered
+    /// without one costs the budget but not the allowance.</summary>
     Task<int> QuestionsAsync(long userId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default);
 
     Task<decimal> TopUpTotalAsync(DateOnly month, CancellationToken cancellationToken = default);
