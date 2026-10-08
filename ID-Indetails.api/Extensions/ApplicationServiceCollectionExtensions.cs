@@ -277,6 +277,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<PushChannel>();
         services.AddSingleton<PushThrottle>();
         services.AddSingleton<PushReceipts>();
+        services.AddSingleton<ReminderLog>();
+        services.AddScoped<IPushReminders, PushReminders>();
         services.AddScoped<IPushQueue, PushQueue>();
         services.AddScoped<IPushDelivery, PushDelivery>();
         services.AddHttpClient<IPushProvider, ExpoPushProvider>(client => client.Timeout = TimeSpan.FromSeconds(20))

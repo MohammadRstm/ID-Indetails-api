@@ -41,6 +41,7 @@ namespace ID_Indetails.api.Services.Notifications.Implementation;
 /// sees the domain's money.</item>
 /// <item>Draft invoices: once per draft still unissued 3 days after it was created, to whoever sees the domain's money.</item>
 /// <item>Auto-archive: see <see cref="IProjectAutoArchive"/>.</item>
+/// <item>Log-your-hours and labour-week reminders, pushes only: see <see cref="IPushReminders"/>.</item>
 /// </list>
 /// </summary>
 public sealed class ScheduledNotifications(
@@ -57,6 +58,7 @@ public sealed class ScheduledNotifications(
     IProjectAutoArchive autoArchive,
     IInvoiceScheduleService invoiceSchedule,
     IInvoiceReminderService invoiceReminders,
+    IPushReminders reminders,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IPushQueue pushes,
@@ -82,6 +84,8 @@ public sealed class ScheduledNotifications(
             ScheduledCheck.AutoArchive => autoArchive.RunAsync(cancellationToken),
             ScheduledCheck.ScheduledInvoices => invoiceSchedule.RunAsync(cancellationToken),
             ScheduledCheck.InvoiceReminders => invoiceReminders.RunAsync(cancellationToken),
+            ScheduledCheck.LogReminders => reminders.LogHoursAsync(cancellationToken),
+            ScheduledCheck.LabourWeekReminders => reminders.LabourWeeksAsync(cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(check)),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
