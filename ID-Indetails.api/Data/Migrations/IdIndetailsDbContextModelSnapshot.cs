@@ -2590,6 +2590,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("client_price");
 
+                    b.Property<Guid?>("ClientRef")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("client_ref");
+
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -2652,11 +2656,12 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasKey("Id")
                         .HasName("pk_project_materials");
 
-                    b.HasIndex("AddedById")
-                        .HasDatabaseName("ix_project_materials_added_by_id");
-
                     b.HasIndex("ProjectId")
                         .HasDatabaseName("ix_project_materials_project_id");
+
+                    b.HasIndex("AddedById", "ClientRef")
+                        .IsUnique()
+                        .HasDatabaseName("ix_project_materials_added_by_id_client_ref");
 
                     b.ToTable("project_materials", null, t =>
                         {
