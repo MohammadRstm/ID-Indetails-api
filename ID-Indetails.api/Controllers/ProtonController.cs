@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace ID_Indetails.api.Controllers;
 
 /// <summary>
-/// Proton, the company assistant. Its answers only ever contain what the asker could see in Hourline themselves, and
+/// Proton, the company assistant. Its answers only ever contain what the asker could see in the app themselves, and
 /// it changes nothing unless the asker confirms a proposal: every tool runs under the authorization of its endpoint.
 /// </summary>
 [ApiController]

@@ -68,13 +68,14 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
         reply.Refs.ShouldContain(r => r.Type == ProtonRefType.Project && r.Id == project.Id);
         reply.Usage.QuestionsUsed.ShouldBe(1);
 
-        // First call: the static prompt, the tools this super admin may use, and the question after Hourline's context note.
+        // First call: the static prompt with the app's name, the tools this super admin may use, and the question after the app's context note.
         var first = api.Anthropic.Requests[0];
-        first["system"]!.ToJsonString().ShouldContain("You are Proton");
+        first["system"]!.ToJsonString().ShouldContain("You are Proton, the AI assistant inside ID InDetails");
+        first["system"]!.ToJsonString().ShouldNotContain("{product}");
         api.Anthropic.ToolsOffered(0).ShouldContain("list_projects");
         api.Anthropic.ToolsOffered(0).ShouldContain("get_company_overview");
         var question = first["messages"]!.AsArray().Last()!.ToJsonString();
-        question.ShouldContain("Context from Hourline");
+        question.ShouldContain("Context from the app");
         question.ShouldContain("Which projects are active?");
 
         // Second call: the project list, read through the projects service.

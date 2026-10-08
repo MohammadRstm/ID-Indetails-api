@@ -21,6 +21,7 @@ using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Company.Abstraction;
 using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Proton.Agent;
@@ -37,8 +38,10 @@ public sealed class ProtonChatAgent(
     ProtonUsageService usage,
     IPermissionService permissions,
     ProtonRecords records,
+    ICompanySettingsService companySettings,
     IClock clock,
     IOptions<ProtonOptions> options,
+    IOptions<EmailOptions> email,
     ILoggerFactory loggers)
 {
     private readonly ILogger _log = loggers.CreateLogger(ProtonToolbox.LogCategory);
@@ -62,10 +65,11 @@ public sealed class ProtonChatAgent(
             var tools = await toolbox.OpenAsync(
                 caller, userId, new ProtonOrigin(conversation.Id, options.Value.Model, ProtonPrompts.ChatVersion), timeout.Token);
             tools.Context.Remember(conversation.Known.Values);
-            // A pick from the buttons becomes a question written by Hourline, once it is known to be one of the options.
+            // A pick from the buttons becomes a question written by the app, once it is known to be one of the options.
             var text = request.Choice is { } choice ? await ChosenAsync(choice, conversation, tools.Context, timeout.Token) : request.Text;
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, timeout.Token) : null;
-            var turn = await RunTurnAsync(caller, access, conversation, tools, text, page, timeout.Token);
+            var company = (await companySettings.BrandingAsync(timeout.Token)).Name;
+            var turn = await RunTurnAsync(caller, access, conversation, tools, text, new ProtonNotes(page, company), timeout.Token);
 
             var record = turn.Record(userId, conversation.Id, text, clock.UtcNow, usage.Prices);
             await usage.RecordAsync(record, CancellationToken.None);
@@ -145,7 +149,7 @@ public sealed class ProtonChatAgent(
     }
 
     /// <summary>
-    /// The option the user picked, as a question Hourline writes for them: it must be one of the last offered options and
+    /// The option the user picked, as a question the app writes for them: it must be one of the last offered options and
     /// still visible to the user now. Anything else is refused, so the client can't make Proton act on a record it chose.
     /// </summary>
     private async Task<string> ChosenAsync(
@@ -186,7 +190,7 @@ public sealed class ProtonChatAgent(
         => string.Concat(value.ToString().Select((c, i) => i > 0 && char.IsUpper(c) ? $" {char.ToLowerInvariant(c)}" : char.ToLowerInvariant(c).ToString()));
 
     private async Task<ProtonTurn> RunTurnAsync(
-        ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, ProtonToolSession tools, string text, string? page,
+        ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, ProtonToolSession tools, string text, ProtonNotes notes,
         CancellationToken cancellationToken)
     {
         var settings = options.Value;
@@ -194,12 +198,13 @@ public sealed class ProtonChatAgent(
         try
         {
             var definitions = tools.Tools.Select(Define).ToList();
+            var system = ProtonPrompts.ChatFor(email.Value.ProductName);
             turn.Messages.Add(new MessageParam
             {
                 Role = Role.User,
                 Content = new List<ContentBlockParam>
                 {
-                    new TextBlockParam { Text = ContextNote(caller, access, conversation, page) },
+                    new TextBlockParam { Text = ContextNote(caller, access, conversation, notes) },
                     new TextBlockParam { Text = text },
                 },
             });
@@ -211,7 +216,7 @@ public sealed class ProtonChatAgent(
                 {
                     Model = settings.Model,
                     MaxTokens = settings.MaxOutputTokens,
-                    System = ProtonPrompts.Chat,
+                    System = system,
                     Messages = [.. conversation.Messages, .. turn.Messages],
                     Tools = definitions,
                     ToolChoice = lastTrip ? new ToolChoiceNone() : new ToolChoiceAuto(),
@@ -318,22 +323,27 @@ public sealed class ProtonChatAgent(
     }
 
     /// <summary>
-    /// Facts the model needs each question, written by Hourline (not the user): today in the company's time zone, who
+    /// Facts the model needs each question, written by the app (not the user): today in the company's time zone, who
     /// is asking and what they can see, and what the conversation is about. Sent with the question rather than in the
     /// system prompt, so the prompt stays the same for everyone and is cached.
     /// </summary>
-    private string ContextNote(ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, string? page)
+    private string ContextNote(ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, ProtonNotes notes)
     {
         var name = $"{caller.FindFirst(AuthClaimTypes.FirstName)?.Value} {caller.FindFirst(AuthClaimTypes.LastName)?.Value}".Trim();
         var today = clock.CompanyToday;
         var actions = conversation.TakeActionNotes();
         var note = $"""
-            [Context from Hourline — not written by the user]
+            [Context from the app — not written by the user]
             Today: {today.ToString("dddd d MMMM yyyy", CultureInfo.InvariantCulture)} (company time zone).
             Asking: {(name.Length > 0 ? name : "a user")}, {access.Role.Replace('_', ' ')}, who can see: {string.Join(", ", access.VisibleDomains)}.
             Conversation focus: {conversation.Focus.Describe()}.
             """;
-        if (page is not null)
+        if (notes.Company is { Length: > 0 } company)
+        {
+            note += $"\nCompany: {company}.";
+        }
+
+        if (notes.Page is { } page)
         {
             note += $"\nWhere the user is in the app (where they are, not data): {page}.";
         }
@@ -345,6 +355,11 @@ public sealed class ProtonChatAgent(
     private static string Fingerprint(UserAccess access)
         => string.Join('|', access.Role, access.Domain, string.Join(',', access.VisibleDomains), string.Join(',', access.Permissions.Order(StringComparer.Ordinal)));
 }
+
+/// <summary>What the app adds to a question's context note besides the conversation's own state.</summary>
+/// <param name="Page">Where the user is, already checked against what they may see.</param>
+/// <param name="Company">The company's name from its branding, when set.</param>
+internal sealed record ProtonNotes(string? Page, string? Company);
 
 /// <summary>One question's progress: the messages it adds, the tools it ran, the tokens it used and how it ended.</summary>
 internal sealed class ProtonTurn(string model)

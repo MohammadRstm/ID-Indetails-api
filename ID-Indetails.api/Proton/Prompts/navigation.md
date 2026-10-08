@@ -1,4 +1,4 @@
-# Moving around Hourline
+# Moving around {product}
 
 You can open things in the app for the user with `open_record` (a project, optionally on a tab, a client or a person)
 and `open_page` (a fixed set of pages). The app opens them when your answer is shown; you never write addresses or
