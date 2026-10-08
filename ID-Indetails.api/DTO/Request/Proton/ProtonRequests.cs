@@ -8,7 +8,7 @@ public sealed record AskProtonRequest
     /// <summary>Leave out to start a new conversation; the reply says which one it is.</summary>
     public Guid? ConversationId { get; init; }
 
-    /// <summary>The question. Not needed when <see cref="Choice"/> answers the buttons of the last reply.</summary>
+    /// <summary>The question. Not needed when a button of the last reply answers it (<see cref="Choice"/>, <see cref="Reply"/> or <see cref="Suggestion"/>).</summary>
     public string Text { get; init; } = string.Empty;
 
     /// <summary>Where the user is in the app, so "it" and "this project" make sense. Never trusted as data or access.</summary>
@@ -16,6 +16,12 @@ public sealed record AskProtonRequest
 
     /// <summary>The option the user picked from the buttons of the last reply; checked against what was offered.</summary>
     public ProtonChoiceRequest? Choice { get; init; }
+
+    /// <summary>The quick reply the user clicked; checked against what was offered.</summary>
+    public ProtonQuickReply? Reply { get; init; }
+
+    /// <summary>The place in the list of the suggested reply the user tapped; the server takes its text from what it offered.</summary>
+    public int? Suggestion { get; init; }
 }
 
 /// <summary>The page the user is on, by meaning. <see cref="EntityId"/> comes with <see cref="EntityType"/>.</summary>

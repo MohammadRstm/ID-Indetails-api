@@ -111,7 +111,11 @@ public sealed class ProtonActionService(
     });
 
     private void Note(long userId, ProtonAction action, string note)
-        => conversations.Find(userId, action.ConversationId)?.NoteAction(note);
+    {
+        var conversation = conversations.Find(userId, action.ConversationId);
+        conversation?.NoteAction(note);
+        conversation?.Decided(action.PublicId);
+    }
 
     private static ProtonPreview? Preview(ProtonAction action)
         => System.Text.Json.JsonSerializer.Deserialize<ProtonPreview>(action.Preview, ProtonJson.Options);

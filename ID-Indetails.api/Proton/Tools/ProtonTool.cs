@@ -77,6 +77,12 @@ public sealed record ProtonToolOutput(object Data, IReadOnlyList<ProtonRef> Refs
     /// <summary>Set by offer_choices: the options the user can pick from instead of typing.</summary>
     public IReadOnlyList<Ui.ProtonChoice>? Choices { get; init; }
 
+    /// <summary>Set by offer_choices: answers to Proton's question, in the app's words.</summary>
+    public IReadOnlyList<Ui.ProtonQuickReplyOption>? QuickReplies { get; init; }
+
+    /// <summary>Set by suggest_replies: what the user might say next, sent back by its place in the list, never as text.</summary>
+    public IReadOnlyList<string>? Suggestions { get; init; }
+
     public static ProtonToolOutput Of(object data, params ProtonRef[] refs) => new(data, refs);
 }
 

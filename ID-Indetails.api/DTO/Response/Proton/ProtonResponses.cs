@@ -8,6 +8,8 @@ namespace ID_Indetails.api.DTO.Response.Proton;
 /// <param name="Sources">What the analytical figures in the reply rest on, shown under it as "Based on".</param>
 /// <param name="UiCommands">What the app opens or refreshes once the reply is shown: at most one page, or a refresh.</param>
 /// <param name="Choices">Options to pick from with a click instead of typing; the pick is checked against these.</param>
+/// <param name="QuickReplies">Answers to Proton's question as buttons, in the app's words; a click is checked against these.</param>
+/// <param name="Suggestions">Replies the user might send next, as buttons; a tap sends only its place in this list.</param>
 /// <param name="RolledOver">The chat had grown too long, so Proton carried on from a short recap of it.</param>
 public sealed record ProtonReplyResponse(
     Guid ConversationId,
@@ -18,6 +20,8 @@ public sealed record ProtonReplyResponse(
     IReadOnlyList<ProtonSourceResponse> Sources,
     IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonUiCommand> UiCommands,
     IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonChoice> Choices,
+    IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonQuickReplyOption> QuickReplies,
+    IReadOnlyList<string> Suggestions,
     ID_Indetails.api.Proton.Actions.ProtonPendingAction? PendingAction = null,
     bool RolledOver = false);
 

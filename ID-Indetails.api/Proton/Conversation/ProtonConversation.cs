@@ -34,6 +34,45 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
     /// <summary>The options of the last reply that offered any; a pick must be one of them.</summary>
     public IReadOnlyList<Ui.ProtonChoice> OfferedChoices { get; set; } = [];
 
+    /// <summary>The quick replies offered with them; a click must be one of these.</summary>
+    public IReadOnlyList<Ui.ProtonQuickReply> OfferedReplies { get; set; } = [];
+
+    /// <summary>The last reply's suggested replies: a tap names one by its place, and the text is taken from here.</summary>
+    public IReadOnlyList<string> OfferedSuggestions { get; set; } = [];
+
+    // a confirmation can arrive while a question is being answered
+    private readonly Lock _pendingLock = new();
+    private (Guid Id, DateTime ExpiresAt)? _pending;
+
+    /// <summary>The newest proposal is waiting for its Confirm (until the user decides or it expires).</summary>
+    public bool HasPendingAction(DateTime now)
+    {
+        lock (_pendingLock)
+        {
+            return _pending is { } pending && pending.ExpiresAt > now;
+        }
+    }
+
+    public void Proposed(Guid actionId, DateTime expiresAt)
+    {
+        lock (_pendingLock)
+        {
+            _pending = (actionId, expiresAt);
+        }
+    }
+
+    /// <summary>The user confirmed or cancelled a proposal: if it was the waiting one, nothing waits any more.</summary>
+    public void Decided(Guid actionId)
+    {
+        lock (_pendingLock)
+        {
+            if (_pending?.Id == actionId)
+            {
+                _pending = null;
+            }
+        }
+    }
+
     private const int RecapExchanges = 3;
     private const int RecapTextLength = 400;
 

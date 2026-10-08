@@ -51,6 +51,10 @@ public sealed record ProtonToolResult(
     public Ui.ProtonUiCommand? UiCommand { get; init; }
 
     public IReadOnlyList<Ui.ProtonChoice>? Choices { get; init; }
+
+    public IReadOnlyList<Ui.ProtonQuickReplyOption>? QuickReplies { get; init; }
+
+    public IReadOnlyList<string>? Suggestions { get; init; }
 }
 
 /// <summary>Which conversation, model and prompt the tools are used for: recorded with every proposed action.</summary>
@@ -240,6 +244,7 @@ public sealed class ProtonToolbox(
         actions.Add(pending);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await actions.SupersedeAsync(pending.ConversationId, pending.PublicId, now, cancellationToken);
+        session.Context.ActionPending = true;
         _log.LogInformation("Proton proposed {Tool} as action {ActionId}.", tool.Name, pending.PublicId);
 
         var model = new
@@ -277,7 +282,10 @@ public sealed class ProtonToolbox(
         var json = JsonSerializer.Serialize(content, ProtonJson.Options);
         return json.Length > MaxContentLength
             ? Fail(tool, input, ProtonToolStatus.Invalid, "The result is too large. Ask for fewer rows or a shorter period.", watch)
-            : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch)) { Basis = output.Basis, UiCommand = output.UiCommand, Choices = output.Choices };
+            : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch))
+            {
+                Basis = output.Basis, UiCommand = output.UiCommand, Choices = output.Choices, QuickReplies = output.QuickReplies, Suggestions = output.Suggestions,
+            };
     }
 
     private static ProtonToolResult Fail(string tool, JsonElement input, ProtonToolStatus status, string message, Stopwatch watch)

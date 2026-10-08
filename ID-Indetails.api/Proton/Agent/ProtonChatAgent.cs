@@ -75,13 +75,26 @@ public sealed class ProtonChatAgent(
             var tools = await toolbox.OpenAsync(
                 caller, userId, new ProtonOrigin(conversation.Id, options.Value.Model, ProtonPrompts.ChatVersion), timeout.Token);
             tools.Context.Remember(conversation.Known.Values);
+            tools.Context.ActionPending = conversation.HasPendingAction(clock.UtcNow);
             // known from the request's shape, never from its text
-            tools.Context.Turn = request.Choice is not null ? ProtonTurnOrigin.Choice : ProtonTurnOrigin.Typed;
-            // A pick from the buttons becomes a question written by the app, once it is known to be one of the options.
-            var text = request.Choice is { } choice ? await ChosenAsync(choice, conversation, tools.Context, timeout.Token) : request.Text;
+            tools.Context.Turn = request switch
+            {
+                { Choice: not null } or { Reply: not null } => ProtonTurnOrigin.Choice,
+                { Suggestion: not null } => ProtonTurnOrigin.Suggestion,
+                _ => ProtonTurnOrigin.Typed,
+            };
+            // A button becomes a question written by the app, once it is known to be one the last reply offered.
+            var text = request switch
+            {
+                { Choice: { } choice } => await ChosenAsync(choice, conversation, tools.Context, timeout.Token),
+                { Reply: { } reply } => Replied(reply, conversation),
+                { Suggestion: { } index } => Suggested(index, conversation),
+                _ => request.Text,
+            };
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, timeout.Token) : null;
             var company = (await companySettings.BrandingAsync(timeout.Token)).Name;
-            var turn = await RunTurnAsync(caller, access, conversation, tools, text, new ProtonNotes(page, company), timeout.Token);
+            var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion);
+            var turn = await RunTurnAsync(caller, access, conversation, tools, text, notes, timeout.Token);
 
             var record = turn.Record(userId, conversation.Id, text, clock.UtcNow, usage.Prices);
             await usage.RecordAsync(record, CancellationToken.None);
@@ -106,11 +119,26 @@ public sealed class ProtonChatAgent(
             }
 
             var ok = turn.ToolCalls.Where(t => t.Status == ProtonToolStatus.Ok).ToList();
+            // One proposal at a time: a later one in the same answer has already replaced earlier ones.
+            var pending = turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending;
             var choices = ok.LastOrDefault(t => t.Choices is not null)?.Choices ?? [];
-            if (choices.Count > 0 || request.Choice is not null)
+            var replies = ok.LastOrDefault(t => t.QuickReplies is not null)?.QuickReplies ?? [];
+            var suggestions = ok.LastOrDefault(t => t.Suggestions is not null)?.Suggestions ?? [];
+            if (pending is not null)
+            {
+                // offered before the proposal in the same answer: next to a card, nothing may pass for its Confirm
+                conversation.Proposed(pending.Id, pending.ExpiresAt);
+                replies = replies.Where(r => !ProtonUiRules.IsYesOrNo(r.Reply)).ToList();
+                suggestions = [];
+            }
+
+            if (choices.Count > 0 || replies.Count > 0 || request.Choice is not null || request.Reply is not null)
             {
                 conversation.OfferedChoices = choices;
+                conversation.OfferedReplies = replies.Select(r => r.Reply).ToList();
             }
+
+            conversation.OfferedSuggestions = suggestions;
 
             return new ProtonReplyResponse(
                 conversation.Id,
@@ -121,8 +149,9 @@ public sealed class ProtonChatAgent(
                 turn.Sources(),
                 ProtonUiRules.Pick(ok.Select(t => t.UiCommand).OfType<ProtonUiCommand>()),
                 choices,
-                // One proposal at a time: a later one in the same answer has already replaced earlier ones.
-                turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending,
+                replies,
+                suggestions,
+                pending,
                 rolledOver);
         }
         finally
@@ -167,7 +196,34 @@ public sealed class ProtonChatAgent(
         }
 
         conversation.OfferedChoices = [];
+        conversation.OfferedReplies = [];
         return $"[The user picked this from the options you offered] {Describe(record)}.";
+    }
+
+    /// <summary>A quick reply, in the app's words, once it is known to be one the last reply offered.</summary>
+    private string Replied(ProtonQuickReply reply, ProtonConversation conversation)
+    {
+        if (!conversation.OfferedReplies.Contains(reply) || (ProtonUiRules.IsYesOrNo(reply) && conversation.HasPendingAction(clock.UtcNow)))
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That option isn't available any more. Could you ask me again?");
+        }
+
+        conversation.OfferedChoices = [];
+        conversation.OfferedReplies = [];
+        return $"[The user picked this from the options you offered] {ProtonUiRules.Option(reply).Label}.";
+    }
+
+    /// <summary>The suggested reply the user tapped, taken from what this conversation offered: the client sends only its place.</summary>
+    private static string Suggested(int index, ProtonConversation conversation)
+    {
+        if (index < 0 || index >= conversation.OfferedSuggestions.Count)
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That suggestion isn't available any more. Could you type it instead?");
+        }
+
+        var text = conversation.OfferedSuggestions[index];
+        conversation.OfferedSuggestions = [];
+        return text;
     }
 
     /// <summary>
@@ -363,6 +419,11 @@ public sealed class ProtonChatAgent(
             note += $"\n{recap}";
         }
 
+        if (notes.Suggested)
+        {
+            note += "\nThis message is one of the replies you suggested, which the user tapped rather than typed.";
+        }
+
         return actions.Count == 0 ? note : note + "\nSince the last message (from the confirmation buttons): " + string.Join(" ", actions);
     }
 
@@ -374,7 +435,8 @@ public sealed class ProtonChatAgent(
 /// <summary>What the app adds to a question's context note besides the conversation's own state.</summary>
 /// <param name="Page">Where the user is, already checked against what they may see.</param>
 /// <param name="Company">The company's name from its branding, when set.</param>
-internal sealed record ProtonNotes(string? Page, string? Company);
+/// <param name="Suggested">The question is one of Proton's suggested replies, tapped rather than typed.</param>
+internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false);
 
 /// <summary>One question's progress: the messages it adds, the tools it ran, the tokens it used and how it ended.</summary>
 internal sealed class ProtonTurn(string model)

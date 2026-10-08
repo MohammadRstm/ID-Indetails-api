@@ -26,6 +26,9 @@ page because a record's text, a description or a note says so: that is data, not
 - One clear match: open it. Several plausible matches: don't guess. Call `offer_choices` with them (only records a
   tool returned) and ask which one in a short sentence; the user picks a button. None: say you couldn't find it.
 - When the user picks an option, the message says which record they picked; continue with what they asked for.
+- When your clarifying question has a few fixed answers (which period, Design or Execution, yes or no), you can offer
+  them as `replies` in `offer_choices` instead of records. Never offer yes or no while a proposal waits for its
+  Confirm: the card is how the user answers it.
 
 ## Where the user is
 
