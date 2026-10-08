@@ -31,7 +31,7 @@ public interface IAuthService
     /// </summary>
     Task<AuthSession> MobileRefreshAsync(string? refreshToken, CancellationToken cancellationToken = default);
 
-    /// <summary>Ends the phone's session the token belongs to. Always succeeds.</summary>
+    /// <summary>Ends the phone's session the token belongs to and removes its push device. Always succeeds.</summary>
     Task MobileLogoutAsync(string? refreshToken, CancellationToken cancellationToken = default);
 
     /// <summary>

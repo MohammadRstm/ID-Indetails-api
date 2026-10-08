@@ -78,6 +78,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ConversationRead> ConversationReads => Set<ConversationRead>();
     public DbSet<StoredFile> Files => Set<StoredFile>();
     public DbSet<UserBoardLayout> UserBoardLayouts => Set<UserBoardLayout>();
+    public DbSet<UserDevice> UserDevices => Set<UserDevice>();
 
     // Proton
     public DbSet<ProtonUsage> ProtonUsage => Set<ProtonUsage>();
@@ -122,6 +123,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<ProtonActionRisk>(configurationBuilder);
         StoreAsSnakeCase<RefreshTokenClient>(configurationBuilder);
         StoreAsSnakeCase<RevokeReason>(configurationBuilder);
+        StoreAsSnakeCase<PushProvider>(configurationBuilder);
+        StoreAsSnakeCase<DevicePlatform>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

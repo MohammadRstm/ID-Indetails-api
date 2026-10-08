@@ -9,6 +9,7 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Push.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Common.Implementation;
@@ -20,6 +21,7 @@ public sealed class AuthService(
     IUserRepository users,
     IRefreshTokenRepository refreshTokens,
     IPasswordResetRepository resets,
+    IUserDeviceRepository devices,
     IPermissionService permissions,
     IUnitOfWork unitOfWork,
     IPasswordService passwords,
@@ -175,7 +177,10 @@ public sealed class AuthService(
         var token = await refreshTokens.GetByHashAsync(SecureTokens.Hash(refreshToken), cancellationToken);
         if (token is { Client: RefreshTokenClient.Mobile, SessionId: { } sessionId })
         {
+            await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
             await refreshTokens.RevokeSessionAsync(sessionId, clock.UtcNow, RevokeReason.SignedOut, cancellationToken);
+            await devices.DeleteSessionAsync(sessionId, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
     }
 

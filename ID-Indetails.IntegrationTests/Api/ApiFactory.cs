@@ -62,6 +62,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("NotificationScheduler:Enabled", "false");
         builder.UseSetting("FileStorage:RootPath", FilesRoot);
         builder.UseSetting("FileStorage:CleanupEnabled", "false");
+        builder.UseSetting("Push:DeviceCleanupEnabled", "false");
 
         builder.ConfigureTestServices(services =>
         {

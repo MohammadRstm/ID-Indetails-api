@@ -60,6 +60,10 @@ public sealed class RefreshTokenRepository(IdIndetailsDbContext db) : IRefreshTo
                 .SetProperty(t => t.RevokedAt, revokedAt)
                 .SetProperty(t => t.RevokeReason, RevokeReason.Revoked), cancellationToken);
 
+    public Task<bool> IsSessionLiveAsync(long userId, Guid sessionId, DateTime now, CancellationToken cancellationToken = default)
+        => db.RefreshTokens.AnyAsync(
+            t => t.UserId == userId && t.SessionId == sessionId && t.RevokedAt == null && t.ExpiresAt > now, cancellationToken);
+
     public Task RevokeSessionAsync(Guid sessionId, DateTime revokedAt, RevokeReason reason, CancellationToken cancellationToken = default)
         => db.RefreshTokens
             .Where(t => t.SessionId == sessionId && t.RevokedAt == null)

@@ -3977,6 +3977,77 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("user_board_layouts", (string)null);
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.UserDevice", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("app_version");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("platform");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("PushToken")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("push_token");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("session_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_devices");
+
+                    b.HasIndex("PushToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_devices_push_token");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_user_devices_session_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_devices_user_id");
+
+                    b.ToTable("user_devices", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_user_devices_platform", "`platform` IN ('ios', 'android')");
+
+                            t.HasCheckConstraint("ck_user_devices_provider", "`provider` IN ('expo')");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.UserInvitation", b =>
                 {
                     b.Property<long>("Id")
@@ -5351,6 +5422,18 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_user_board_layouts_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.UserDevice", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_devices_users_user_id");
 
                     b.Navigation("User");
                 });

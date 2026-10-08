@@ -28,6 +28,9 @@ public interface IRefreshTokenRepository
     /// <summary>Signs the user out everywhere: every active token becomes <see cref="RevokeReason.Revoked"/>.</summary>
     Task RevokeAllActiveForUserAsync(long userId, DateTime revokedAt, CancellationToken cancellationToken = default);
 
+    /// <summary>Whether the person's session still has a valid refresh token.</summary>
+    Task<bool> IsSessionLiveAsync(long userId, Guid sessionId, DateTime now, CancellationToken cancellationToken = default);
+
     /// <summary>Ends one session: its active tokens stop working.</summary>
     Task RevokeSessionAsync(Guid sessionId, DateTime revokedAt, RevokeReason reason, CancellationToken cancellationToken = default);
 }
