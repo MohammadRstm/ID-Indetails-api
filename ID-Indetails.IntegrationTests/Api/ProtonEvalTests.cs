@@ -96,7 +96,7 @@ public sealed class ProtonEvalApiFactory : ApiFactory
 /// Three Design projects with work in the last 7 days and the 7 before, a cost, an overdue idle project, one on hold,
 /// and an Execution site; a super admin and a Design admin without financial:view.
 /// </summary>
-public sealed record ProtonEvalCompany(AuthResponse SuperAdmin, AuthResponse DesignAdmin, string Anna, string Ben)
+public sealed record ProtonEvalCompany(AuthResponse SuperAdmin, AuthResponse DesignAdmin, string Anna, string Ben, long VillaId)
 {
     public static async Task<ProtonEvalCompany> SeedAsync(AuthTestSteps steps)
     {
@@ -107,9 +107,6 @@ public sealed record ProtonEvalCompany(AuthResponse SuperAdmin, AuthResponse Des
         var (_, _, designAdmin) = await steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, anna) = await steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, ben) = await steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        (await steps.Client.PutJsonAsync($"/api/users/{designAdmin.User.Id}/permissions",
-            new { changes = new[] { new { code = PermissionCodes.FinancialView, action = "revoke", reason = "Evaluation" } } },
-            superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         async Task<long> ProjectAsync(string title, string domain = DomainCodes.Design)
         {
@@ -124,6 +121,9 @@ public sealed record ProtonEvalCompany(AuthResponse SuperAdmin, AuthResponse Des
         var library = await ProjectAsync("Library fit-out");
         var archive = await ProjectAsync("Archive Room");
         await ProjectAsync("Site Jounieh", DomainCodes.Execution);
+        // two projects one word can mean, for the "which one?" case
+        await ProjectAsync("Alpha House");
+        await ProjectAsync("Alpha Tower");
         await steps.ExecuteAsync("UPDATE projects SET target_date = DATE_SUB(UTC_DATE(), INTERVAL 10 DAY) WHERE id = @id", ("@id", library));
         (await steps.Client.PostEmptyAsync($"/api/projects/{archive}/hold", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
@@ -151,7 +151,7 @@ public sealed record ProtonEvalCompany(AuthResponse SuperAdmin, AuthResponse Des
             new { label = "Structural survey", amount = 1_500m, currency = "USD", category = "other", spentOn = DateTime.UtcNow.AddDays(-3).ToString("yyyy-MM-dd") },
             superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
-        return new ProtonEvalCompany(superAdmin, designAdmin, $"{anna.User.FirstName} {anna.User.LastName}", $"{ben.User.FirstName} {ben.User.LastName}");
+        return new ProtonEvalCompany(superAdmin, designAdmin, $"{anna.User.FirstName} {anna.User.LastName}", $"{ben.User.FirstName} {ben.User.LastName}", villa);
     }
 }
 
@@ -168,7 +168,10 @@ public sealed record ProtonEvalCase(
     bool Why = false,
     bool Person = false,
     bool NoMoney = false,
-    string[]? MustMention = null)
+    string[]? MustMention = null,
+    bool? Opens = null,
+    bool Choices = false,
+    bool OnVilla = false)
 {
     public override string ToString() => Name;
 }
@@ -207,6 +210,14 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         new("workload change", ["How has {ben}'s workload changed over the last 7 days?"], ["compare_work", "get_person_work"], Person: true),
         new("admin no money", ["What did Design earn and spend in the last 7 days?"], [], NoMoney: true),
         new("admin summary", ["Summarize the last 7 days for me."], ["get_company_summary"], NoMoney: true),
+        new("take me there", ["Take me to Villa Mounir."], ["open_record"], Opens: true),
+        new("tell, don't open", ["Tell me about Villa Mounir."], [], Opens: false),
+        new("open and tell", ["Open Villa Mounir and tell me how many hours were logged on it in the last 7 days."], ["open_record"], Opens: true),
+        new("open its requirements", ["Open its requirements."], ["open_record"], Opens: true, OnVilla: true),
+        new("which alpha", ["Open Alpha."], ["offer_choices"], Opens: false, Choices: true),
+        new("no such page", ["Open the salaries settings page."], [], Opens: false),
+        new("hold from the page", ["Put it on hold."], ["propose_change_project_status"], Opens: false, OnVilla: true),
+        new("its financials", ["What about its money this month?"], ["review_project", "get_project_financials", "compare_money"], OnVilla: true),
     };
 
     [ProtonEvalFact]
@@ -226,7 +237,12 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
 
         foreach (var question in eval.Questions.Select(q => q.Replace("{anna}", company.Anna).Replace("{ben}", company.Ben)))
         {
-            var response = await client.PostJsonAsync("/api/proton/messages", new { conversationId = conversation, text = question }, who.AccessToken);
+            var response = await client.PostJsonAsync("/api/proton/messages", new
+                {
+                    conversationId = conversation,
+                    text = question,
+                    page = eval.OnVilla ? new { area = "design", page = "projects", entityType = "project", entityId = (long?)company.VillaId } : null,
+                }, who.AccessToken);
             response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
             reply = await response.ReadAsync<ProtonReplyResponse>();
             conversation = reply.ConversationId;
@@ -271,6 +287,16 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         if (eval.NoMoney && Regex.IsMatch(answer, @"\d[\d,.]*\s*(USD|\$)|\$\s*\d"))
         {
             problems.Add("quotes money to a user without financial:view");
+        }
+
+        if (eval.Opens is { } opens && reply.UiCommands.Any(c => c.Type != ID_Indetails.api.Proton.Ui.ProtonUiCommandType.Refresh) != opens)
+        {
+            problems.Add(opens ? "didn't open anything" : $"opened {string.Join(", ", reply.UiCommands.Select(c => c.Label))} without being asked");
+        }
+
+        if (eval.Choices && reply.Choices.Count < 2)
+        {
+            problems.Add("didn't offer the matches as choices");
         }
 
         if (eval.MustMention is { } words && !words.Any(w => lower.Contains(w.ToLowerInvariant())))
