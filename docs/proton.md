@@ -281,6 +281,36 @@ Phase 1 of [proton-stage-5-plan.md](proton-stage-5-plan.md) (E1–E3, G6).
 - **Nothing beside a card passes for a Confirm.** While a proposal is pending, Proton offers no yes/no buttons and no
   suggested replies, and a yes/no click is refused.
 
+## Live answers (Stage 5, Phase 3)
+
+`POST /api/proton/messages/stream` takes the same request as `/api/proton/messages`, with `proton:use` and the
+`proton` rate policy, and answers as Server-Sent Events. The JSON endpoint is unchanged.
+
+- **Before the first byte**, every check runs: switched on, allowance and budget, the conversation (ended, someone
+  else's, access changed, busy), validation, and a button that wasn't offered. A refusal is an ordinary error response
+  with its own status code.
+- **Then** `200 text/event-stream` with `Cache-Control: no-cache` and `X-Accel-Buffering: no`:
+  - `status` `{text}`: a fixed phrase per tool (`Proton/Agent/IProtonListener.cs`), never the tool's input or data.
+  - `delta` `{trip, text}`: the answer as the model writes it. `trip` is the model call: a later call's text replaces
+    an earlier one's (text written before a tool call is often superseded).
+  - `done`: the same `ProtonReplyResponse` the JSON endpoint gives.
+  - `error`: the uniform `{type, code, message, errors, traceId}`, from the same mapping as the exception handler
+    (`Middlewares/ApiErrorMapping.cs`).
+  - `: ping` every 10 s, so no proxy read timeout is reached while tools run.
+- **Time**: `StreamQuestionTimeoutSeconds` (120) for the whole question; the JSON endpoint keeps 55 s.
+- **Stop or a dropped connection**: the question is still recorded with its tokens (outcome `failed`), adds nothing to
+  the conversation, and any change it proposed is closed as `superseded`, so no card waits for a Confirm that can't
+  come. The same applies to any question that fails.
+- **How**: the agent prepares a question (all checks), then answers it. With a listener, each model call is streamed
+  (`Messages.CreateStreaming`) and put back together (`ProtonStreamedMessage`) for the same tool loop and echo.
+- **Caching**: the system prompt carries an explicit cache breakpoint (it caches the tools and the prompt for
+  everyone), and the request's automatic breakpoint caches the conversation so far.
+- **Proxies**: nginx passes events on at once because of `X-Accel-Buffering: no` (and `gzip` is already off on
+  `/api/`). Caddy's `encode` is left as it is until the staging stack shows whether it buffers `text/event-stream`
+  (decision 17c).
+- **Client**: `protonStream.ts` reads the stream with fetch (the same token, one refresh on a 401). The chat shows the
+  status line and the text as it arrives, and a Stop button while an answer is running.
+
 ## Conversations and follow-ups
 
 - Kept **in server memory** (`ProtonConversationStore`), keyed by user and conversation id: nobody else can continue
@@ -350,9 +380,9 @@ on. It replaces the top-bar button. It is mounted once, in `LiveRoute`, never on
   thinking, talking, happy (a confirmed change went through), proposing (a card waits), listening (the person is
   typing), idle. The mood sets the shape, the eyes and the accessible name ("Proton, thinking"). After 8 s the chat
   says "Still looking…".
-- **Talking**: the blob inflates with a talk level that dips on spaces and punctuation, for
-  `clamp(chars × 28, 900, 4200)` ms (`blob/talkPlan.ts`). The newest reply is revealed in that time (a mask wipe,
-  full text in the DOM; a click shows it all). Screen readers hear a reply once it is in.
+- **Talking** (Phase 3): the blob talks while the answer's text streams in, and a moment after. It is a little louder
+  for bigger pieces of text. The status line and the answer show as they arrive (see [Live answers](#live-answers-stage-5-phase-3)).
+  Screen readers hear a reply once it is in.
 - **Drawing** (`blob/blobShape.ts`, `blob/useBlobMotion.ts`): radii joined by a closed Catmull-Rom curve. A
   requestAnimationFrame loop redraws the outline only while thinking, working or talking (at most about 30 frames a
   second while talking), pauses when the tab is hidden, and never runs under reduced motion or "Calm animations".
@@ -394,6 +424,7 @@ per-question facts go in the context note.
 
 | Endpoint | Permission | |
 |---|---|---|
+| `POST /api/proton/messages/stream` | `proton:use` | the same, as Server-Sent Events (see [Live answers](#live-answers-stage-5-phase-3)); rate policy `proton` |
 | `POST /api/proton/messages` | `proton:use` | `{conversationId?, text, page?, choice? \| reply? \| suggestion?}` → `{conversationId, reply, refs, limited, usage, sources, uiCommands, choices, quickReplies, suggestions, pendingAction, rolledOver}`; rate policy `proton` |
 | `GET /api/proton/briefing` | `proton:use` | `{items: [{project?, domain?, facts}], more}`: what get_attention finds first, with no model call; rate policy `proton` |
 | `DELETE /api/proton/conversations/{id}` | `proton:use` | ends a conversation |
@@ -415,6 +446,7 @@ Errors use the uniform contract: `503 proton_unavailable` (switched off, or the 
 | `Effort` | `low` | `low` … `max` |
 | `MaxOutputTokens`, `MaxRoundTrips`, `MaxToolCallsPerQuestion` | 8000, 8, 12 | per question; at the limit the model must answer with what it has |
 | `ModelTimeoutSeconds`, `ToolTimeoutSeconds`, `QuestionTimeoutSeconds` | 40, 20, 55 | the question stays under nginx's 60-second read timeout |
+| `StreamQuestionTimeoutSeconds` | 120 | the whole question on the streaming endpoint; its pings keep proxies from timing out, and a streamed model call may run this long |
 | `MaxQuestionsPerConversation`, `ConversationIdleMinutes` | 20, 30 | a conversation at the question limit rolls over |
 | `MonthlyBudgetUsd`, `MonthlyQuestionsPerUser` | 50, 300 | |
 | `MaxHeavyToolCallsPerQuestion` | 4 | analyses that load every project's money; the next one is refused |
