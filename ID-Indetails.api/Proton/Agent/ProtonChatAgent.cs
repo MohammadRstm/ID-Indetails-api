@@ -75,6 +75,8 @@ public sealed class ProtonChatAgent(
             var tools = await toolbox.OpenAsync(
                 caller, userId, new ProtonOrigin(conversation.Id, options.Value.Model, ProtonPrompts.ChatVersion), timeout.Token);
             tools.Context.Remember(conversation.Known.Values);
+            // known from the request's shape, never from its text
+            tools.Context.Turn = request.Choice is not null ? ProtonTurnOrigin.Choice : ProtonTurnOrigin.Typed;
             // A pick from the buttons becomes a question written by the app, once it is known to be one of the options.
             var text = request.Choice is { } choice ? await ChosenAsync(choice, conversation, tools.Context, timeout.Token) : request.Text;
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, timeout.Token) : null;

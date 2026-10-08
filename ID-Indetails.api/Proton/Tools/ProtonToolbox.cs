@@ -113,6 +113,13 @@ public sealed class ProtonToolbox(
         {
             result = Fail(name, input, ProtonToolStatus.Forbidden, "This tool isn't available to this user.", watch);
         }
+        else if (tool is IProtonActionTool && session.Context.Turn != ProtonTurnOrigin.Typed && ProtonCoverage.NeedsTypedTurn(name))
+        {
+            // A click or a suggested reply can't start a send, a delete, a money or an access change: text in the data
+            // could have steered the option, so the user asks for it in their own words.
+            result = Fail(name, input, ProtonToolStatus.Refused,
+                "This kind of change needs the user to ask for it in their own words. Ask them to type what they want.", watch);
+        }
         else if (tool.Heavy && session.HeavyCalls >= options.Value.MaxHeavyToolCallsPerQuestion)
         {
             result = Fail(name, input, ProtonToolStatus.Refused,

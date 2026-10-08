@@ -2,7 +2,9 @@ using System.Text.Json.Nodes;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
@@ -54,6 +56,40 @@ public class ProtonGuardTests(ProtonProbeApiFactory api) : IClassFixture<ProtonP
         (await db.ProtonActions.CountAsync(a => a.UserId == superAdmin.User.Id)).ShouldBe(1);
     }
 
+    /// <summary>
+    /// A send, delete, money or access change can't start from a click: the options could have been steered by text in
+    /// the data. The same request typed by the user is proposed as usual (and still needs its Confirm).
+    /// </summary>
+    [Fact]
+    public async Task A_picked_option_cannot_start_a_gated_change_but_the_user_typing_it_can()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var projects = new ProjectTestSteps(_steps);
+        var alpha = await projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var beta = await projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        Task<HttpResponseMessage> Ask(object body) => _steps.Client.PostJsonAsync("/api/proton/messages", body, superAdmin.AccessToken);
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("find", new { text = alpha.Title }),
+            FakeAnthropic.ToolUse("find", new { text = beta.Title }),
+            FakeAnthropic.ToolUse("offer_choices", new { question = "Which one?", options = new[] { new { type = "project", id = alpha.Id }, new { type = "project", id = beta.Id } } }),
+            FakeAnthropic.Text("Which one?"),
+            FakeAnthropic.ToolUse("propose_probe_change", new { }),
+            FakeAnthropic.Text("I can't do that from a click."),
+            FakeAnthropic.ToolUse("propose_probe_change", new { }),
+            FakeAnthropic.Text("Confirm it on the card."));
+
+        var offered = await (await Ask(new { text = "Which project?" })).ReadAsync<ID_Indetails.api.DTO.Response.Proton.ProtonReplyResponse>();
+        var picked = await Ask(new { conversationId = offered.ConversationId, choice = new { type = "project", id = beta.Id } });
+        picked.IsSuccessStatusCode.ShouldBeTrue(await picked.Content.ReadAsStringAsync());
+        Result(5)["status"]!.GetValue<string>().ShouldBe("refused");
+        Result(5)["message"]!.GetValue<string>().ShouldContain("in their own words");
+
+        var typed = await Ask(new { conversationId = offered.ConversationId, text = "Make the probe change" });
+        typed.IsSuccessStatusCode.ShouldBeTrue(await typed.Content.ReadAsStringAsync());
+        Result(7)["status"]!.GetValue<string>().ShouldBe("proposed");
+    }
+
     [Fact]
     public async Task Outside_a_tool_the_guards_change_nothing()
     {
@@ -76,6 +112,7 @@ public sealed class ProtonProbeApiFactory : ProtonApiFactory
             services.AddScoped<IProtonTool, ProbeTools.SendEmail>();
             services.AddScoped<IProtonTool, ProbeTools.Notify>();
             services.AddScoped<IProtonTool, ProbeTools.StageChange>();
+            services.AddScoped<IProtonTool, ProbeTools.GatedChange>();
         });
     }
 }
@@ -126,5 +163,31 @@ public static class ProbeTools
             db.Teams.Add(new Team { DomainCode = DomainCodes.Design, Name = TeamName, CreatedAt = DateTime.UtcNow });
             return Task.FromResult(ProtonToolOutput.Of("staged"));
         }
+    }
+
+    public sealed record GatedInput : ProtonActionInput;
+
+    public sealed record GatedArgs(string Note);
+
+    /// <summary>An action with no coverage entry, so it is held to the strictest rule: only a typed turn may propose it.</summary>
+    public sealed class GatedChange : ProtonActionTool<GatedInput, GatedArgs>
+    {
+        public override string Name => "propose_probe_change";
+
+        public override string Description => "A test probe for an action only a typed turn may propose.";
+
+        public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
+
+        public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<TeamsController>(nameof(TeamsController.Delete));
+
+        protected override Task<(GatedArgs Args, ProtonPreview Preview, ProtonRef? Target)> ProposeAsync(
+            GatedInput input, ProtonToolContext context, CancellationToken cancellationToken)
+            => Task.FromResult<(GatedArgs, ProtonPreview, ProtonRef?)>(
+                (new GatedArgs("probe"), new ProtonPreview("Probe change", [new ProtonChange("Probe", null, "yes")]), null));
+
+        protected override object? RequestOf(GatedArgs args) => null;
+
+        protected override Task<ProtonActionDone> ExecuteAsync(GatedArgs args, ProtonToolContext context, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("The probe is never confirmed.");
     }
 }

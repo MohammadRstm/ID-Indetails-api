@@ -193,7 +193,7 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         reply.Choices.Select(c => c.Id).ShouldBe([alpha.Id, beta.Id]);
         reply.Choices[0].ShouldBe(new ProtonChoice(ProtonRefType.Project, alpha.Id, alpha.Title, "Project · Design", DomainCodes.Design));
 
-        // A made-up pick is refused; a real one becomes a question written by Hourline.
+        // A made-up pick is refused; a real one becomes a question written by the app.
         await (await PostAsync(superAdmin, new { conversationId = reply.ConversationId, choice = new { type = "project", id = other.Id } }))
             .ShouldFailWithAsync(422, ErrorCodes.ProtonChoiceInvalid);
         api.Anthropic.Reply(FakeAnthropic.ToolUse("open_record", new { type = "project", id = beta.Id }), FakeAnthropic.Text($"Opening {beta.Title}."));
