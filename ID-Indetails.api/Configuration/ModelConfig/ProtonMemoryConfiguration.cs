@@ -17,10 +17,9 @@ public class ProtonMemoryConfiguration : IEntityTypeConfiguration<ProtonMemory>
         // a person's memories, oldest first
         builder.HasIndex(x => new { x.UserId, x.CreatedAt });
 
-        // a person's memories go with them
         builder.HasOne(x => x.User)
             .WithMany()
             .HasForeignKey(x => x.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

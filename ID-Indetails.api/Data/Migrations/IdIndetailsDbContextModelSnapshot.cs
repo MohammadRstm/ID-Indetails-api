@@ -5241,7 +5241,7 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasOne("ID_Indetails.api.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_proton_memories_users_user_id");
 

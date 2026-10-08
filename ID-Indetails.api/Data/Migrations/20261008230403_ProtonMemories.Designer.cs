@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ID_Indetails.api.Data.Migrations
 {
     [DbContext(typeof(IdIndetailsDbContext))]
-    [Migration("20261008224032_ProtonMemories")]
+    [Migration("20261008230403_ProtonMemories")]
     partial class ProtonMemories
     {
         /// <inheritdoc />
@@ -5244,7 +5244,7 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasOne("ID_Indetails.api.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_proton_memories_users_user_id");
 

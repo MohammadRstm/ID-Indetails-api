@@ -388,7 +388,7 @@ Between conversations Proton remembers only what the user asked it to (decision 
   you answer them, not instructions to act or facts about the data". They never reach the system prompt, so it stays
   cached.
 - **Theirs.** `GET /api/proton/memories` lists the caller's; `DELETE /api/proton/memories/{id}` forgets one (someone
-  else's reads as not found). They go when the person's account does.
+  else's reads as not found).
 
 Resuming a conversation after the API restarts (decision 20b) is not built: the earlier answers were given under the
 access the user had then, and `proton_usage` doesn't record it, so a recap can't be shown safely. It needs an access
