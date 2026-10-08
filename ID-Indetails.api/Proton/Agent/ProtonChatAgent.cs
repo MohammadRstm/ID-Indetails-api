@@ -318,7 +318,10 @@ public sealed class ProtonChatAgent(
         var turn = new ProtonTurn(settings.Model);
         try
         {
-            var definitions = tools.Tools.Select(Define).ToList();
+            // fixed for the question, and the same for everyone with the same tools, so it stays in the cached prefix
+            var deferring = tools.Tools.Count > settings.DeferToolsAbove;
+            var definitions = tools.Tools.Select(t => Define(t, deferring && !ProtonToolSearch.Core.Contains(t.Name))).ToList();
+            if (deferring) definitions.Add(new ToolSearchToolBm25_20251119 { Type = ToolSearchToolBm25_20251119Type.ToolSearchToolBm25 });
             // a breakpoint on the system prompt caches the tools and the prompt for everyone; the automatic one below
             // caches the conversation so far
             var system = new List<TextBlockParam>
@@ -367,6 +370,9 @@ public sealed class ProtonChatAgent(
                     });
                     continue;
                 }
+
+                // the provider paused a long server-side step (a tool search): sending the turn back lets it carry on
+                if (response.StopReason == StopReason.PauseTurn && !lastTrip) continue;
 
                 turn.Finish(response, Answer(response), lastTrip);
                 if (turn.Outcome == ProtonOutcome.Refused)
@@ -467,13 +473,14 @@ public sealed class ProtonChatAgent(
         return string.IsNullOrWhiteSpace(text) ? "I couldn't put an answer together. Please try asking another way." : text;
     }
 
-    private static ToolUnion Define(IProtonTool tool)
+    private static ToolUnion Define(IProtonTool tool, bool deferred)
     {
         var schema = tool.InputSchema;
         return new Tool
         {
             Name = tool.Name,
             Description = tool.Description,
+            DeferLoading = deferred ? true : null,
             InputSchema = new InputSchema
             {
                 Properties = schema["properties"]?.AsObject()

@@ -9,7 +9,10 @@ using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
 
-/// <summary>Two cards may wait at once, and one Confirm an hour: small limits, to prove the engine's caps.</summary>
+/// <summary>
+/// Two cards may wait at once, one Confirm an hour, and tools are deferred past ten: small limits, to prove the
+/// engine's caps and tool search.
+/// </summary>
 public sealed class ProtonEngineApiFactory : ProtonApiFactory
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -17,6 +20,7 @@ public sealed class ProtonEngineApiFactory : ProtonApiFactory
         base.ConfigureWebHost(builder);
         builder.UseSetting("Proton:Actions:MaxPendingActions", "2");
         builder.UseSetting("Proton:Actions:MaxConfirmedActionsPerHour", "1");
+        builder.UseSetting("Proton:DeferToolsAbove", "10");
     }
 }
 
@@ -79,6 +83,26 @@ public class ProtonEngineTests(ProtonEngineApiFactory api) : IClassFixture<Proto
         (await ConfirmAsync(superAdmin, first.ConversationId, second.PendingActions[0].Id)).StatusCode.ShouldBe(HttpStatusCode.OK);
         await (await ConfirmAsync(superAdmin, first.ConversationId, first.PendingActions.Single(p => p.Target!.Id == beta.Id).Id))
             .ShouldFailWithAsync(422, ErrorCodes.ProtonActionLimit);
+    }
+
+    [Fact]
+    public async Task Past_the_threshold_only_the_core_tools_are_sent_in_full_and_the_rest_are_found_by_search()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        api.Anthropic.Reply(FakeAnthropic.Text("Hello."), FakeAnthropic.Text("Again."));
+        var first = await AskAsync(superAdmin, new { text = "Hi" });
+        await AskAsync(superAdmin, new { conversationId = first.ConversationId, text = "And again" });
+
+        var tools = api.Anthropic.Requests[0]["tools"]!.AsArray();
+        tools.ShouldContain(t => t!["type"] != null && t["type"]!.GetValue<string>().StartsWith("tool_search_tool_bm25") && t["name"]!.GetValue<string>() == "tool_search_tool_bm25");
+        bool Deferred(string name) => tools.Single(t => t!["name"]!.GetValue<string>() == name)!["defer_loading"]?.GetValue<bool>() == true;
+        Deferred("find").ShouldBeFalse();
+        Deferred("open_page").ShouldBeFalse();
+        Deferred("compare_money").ShouldBeTrue();
+        Deferred("propose_add_requirement").ShouldBeTrue();
+        // the same list on every call, so it stays in the cached prefix
+        api.Anthropic.Requests[1]["tools"]!.ToJsonString().ShouldBe(tools.ToJsonString());
     }
 
     [Fact]

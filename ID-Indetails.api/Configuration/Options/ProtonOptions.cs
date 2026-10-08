@@ -66,6 +66,13 @@ public sealed class ProtonOptions
     [Range(1, 100_000)]
     public int MonthlyQuestionsPerUser { get; init; } = 300;
 
+    /// <summary>
+    /// Past this many tools for a person, all but the core set are deferred and found through tool search, so the
+    /// model keeps choosing well as the list grows.
+    /// </summary>
+    [Range(10, 500)]
+    public int DeferToolsAbove { get; init; } = 55;
+
     /// <summary>Analytical tools that load every project's money or all of a period's work: at most this many per question.</summary>
     [Range(1, 20)]
     public int MaxHeavyToolCallsPerQuestion { get; init; } = 4;

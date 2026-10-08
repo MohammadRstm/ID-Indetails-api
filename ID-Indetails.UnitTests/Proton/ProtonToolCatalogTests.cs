@@ -5,6 +5,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Extensions;
 using ID_Indetails.api.Proton.Actions;
+using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -30,6 +31,13 @@ public class ProtonToolCatalogTests
         Tools.Select(t => t.Name).ShouldBeUnique();
         Tools.ShouldAllBe(t => Regex.IsMatch(t.Name, "^[a-z][a-z_]{2,40}$"));
         Tools.ShouldAllBe(t => t.Description.Length > 20);
+    }
+
+    [Fact]
+    public void The_core_set_kept_out_of_tool_search_is_made_of_real_reads_and_moves()
+    {
+        ProtonToolSearch.Core.ShouldBeSubsetOf(Tools.Select(t => t.Name));
+        Tools.Where(t => ProtonToolSearch.Core.Contains(t.Name)).ShouldAllBe(t => !(t is IProtonActionTool));
     }
 
     [Fact]
