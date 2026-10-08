@@ -64,5 +64,6 @@ public sealed class DecideProtonActionRequestValidator : AbstractValidator<Decid
     public DecideProtonActionRequestValidator()
     {
         RuleFor(x => x.ConversationId).NotEmpty().WithMessage("Which conversation is this from?");
+        RuleFor(x => x.Typed).MaximumLength(200);
     }
 }

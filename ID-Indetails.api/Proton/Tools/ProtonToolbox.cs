@@ -124,6 +124,12 @@ public sealed class ProtonToolbox(
             result = Fail(name, input, ProtonToolStatus.Refused,
                 "This kind of change needs the user to ask for it in their own words. Ask them to type what they want.", watch);
         }
+        else if (tool is IProtonActionTool && (ProtonCoverage.FamilyOf(name) is not { } family || !options.Value.Actions.IsOn(family)))
+        {
+            // the tool stays on the list (so the prompt cache holds) and says so
+            result = Fail(name, input, ProtonToolStatus.Refused,
+                "This kind of change isn't switched on for Proton yet: the user does it in the app. Offer to open the place for them.", watch);
+        }
         else if (tool.Heavy && session.HeavyCalls >= options.Value.MaxHeavyToolCallsPerQuestion)
         {
             result = Fail(name, input, ProtonToolStatus.Refused,
@@ -214,14 +220,22 @@ public sealed class ProtonToolbox(
     }
 
     /// <summary>
-    /// Stores a proposal as the conversation's one pending action (any earlier one is superseded, so a changed request
-    /// always needs a new confirmation) and tells the model nothing has changed yet.
+    /// Stores a proposal as a pending action, up to the cap per conversation. An earlier card for the same tool and
+    /// target is superseded, so a changed request always needs a new confirmation; other cards stay. Tells the model
+    /// nothing has changed yet.
     /// </summary>
     private async Task<ProtonToolResult> ProposeAsync(
         ProtonToolSession session, IProtonActionTool tool, JsonElement input, ProtonProposal proposal, ProtonToolOutput output,
         Stopwatch watch, CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
+        var targetType = proposal.Target?.Type.ToString().ToLowerInvariant();
+        if (await actions.CountPendingAsync(session.Origin.ConversationId, tool.Name, targetType, proposal.Target?.Id, now, cancellationToken) >= options.Value.Actions.MaxPendingActions)
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonTooManyPending,
+                $"{options.Value.Actions.MaxPendingActions} changes are already waiting for the user's Confirm: ask them to confirm or cancel one first.");
+        }
+
         var pending = new ProtonAction
         {
             PublicId = Guid.NewGuid(),
@@ -231,9 +245,9 @@ public sealed class ProtonToolbox(
             ConversationId = session.Origin.ConversationId,
             Tool = tool.Name,
             Risk = tool.Risk,
-            Arguments = proposal.Arguments,
+            Arguments = JsonSerializer.Serialize(new ProtonCall(FingerprintOf(session.Access), JsonSerializer.Deserialize<JsonElement>(proposal.Arguments)), ProtonJson.Options),
             Preview = JsonSerializer.Serialize(proposal.Preview, ProtonJson.Options),
-            TargetType = proposal.Target?.Type.ToString().ToLowerInvariant(),
+            TargetType = targetType,
             TargetId = proposal.Target?.Id,
             Status = ProtonActionStatus.Pending,
             CreatedAt = now,
@@ -243,7 +257,7 @@ public sealed class ProtonToolbox(
         };
         actions.Add(pending);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        await actions.SupersedeAsync(pending.ConversationId, pending.PublicId, now, cancellationToken);
+        await actions.SupersedeAsync(pending.ConversationId, pending.Tool, pending.TargetType, pending.TargetId, pending.PublicId, now, cancellationToken);
         session.Context.ActionPending = true;
         _log.LogInformation("Proton proposed {Tool} as action {ActionId}.", tool.Name, pending.PublicId);
 
@@ -258,7 +272,7 @@ public sealed class ProtonToolbox(
         };
         return Ok(tool.Name, input, model, output, watch) with
         {
-            Pending = new ProtonPendingAction(pending.PublicId, tool.Name, tool.Risk, proposal.Preview, pending.ExpiresAt),
+            Pending = new ProtonPendingAction(pending.PublicId, tool.Name, tool.Risk, proposal.Preview, pending.ExpiresAt, proposal.Target),
         };
     }
 
@@ -276,6 +290,10 @@ public sealed class ProtonToolbox(
 
         return await tool.ExecuteAsync(arguments, session.Context, cancellationToken);
     }
+
+    /// <summary>What answers and proposals depend on: if any of it changes, a conversation ends and its cards can't be confirmed.</summary>
+    public static string FingerprintOf(UserAccess access)
+        => string.Join('|', access.Role, access.Domain, string.Join(',', access.VisibleDomains), string.Join(',', access.Permissions.Order(StringComparer.Ordinal)));
 
     private static ProtonToolResult Ok(string tool, JsonElement input, object content, ProtonToolOutput output, Stopwatch watch)
     {

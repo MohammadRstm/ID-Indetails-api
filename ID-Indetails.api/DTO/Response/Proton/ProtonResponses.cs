@@ -4,7 +4,8 @@ namespace ID_Indetails.api.DTO.Response.Proton;
 
 /// <param name="Refs">The projects, clients and people the reply mentions, for the client to link.</param>
 /// <param name="Limited">Proton hit a limit (tool calls, model calls or length) and answered with what it had.</param>
-/// <param name="PendingAction">A change Proton proposed in this answer: shown as a card the user confirms or cancels.</param>
+/// <param name="PendingActions">The changes Proton proposed in this answer, each a card the user confirms or cancels.</param>
+/// <param name="PendingAction">The last of them (kept for one release; read <paramref name="PendingActions"/>).</param>
 /// <param name="Sources">What the analytical figures in the reply rest on, shown under it as "Based on".</param>
 /// <param name="UiCommands">What the app opens or refreshes once the reply is shown: at most one page, or a refresh.</param>
 /// <param name="Choices">Options to pick from with a click instead of typing; the pick is checked against these.</param>
@@ -22,6 +23,7 @@ public sealed record ProtonReplyResponse(
     IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonChoice> Choices,
     IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonQuickReplyOption> QuickReplies,
     IReadOnlyList<string> Suggestions,
+    IReadOnlyList<ID_Indetails.api.Proton.Actions.ProtonPendingAction> PendingActions,
     ID_Indetails.api.Proton.Actions.ProtonPendingAction? PendingAction = null,
     bool RolledOver = false);
 
@@ -94,3 +96,18 @@ public sealed record ProtonBriefingResponse(IReadOnlyList<ProtonBriefingItem> It
 /// <param name="Project">The project the item is about; null for one about a whole business (<paramref name="Domain"/>).</param>
 /// <param name="Facts">What was measured, in words, most pressing first.</param>
 public sealed record ProtonBriefingItem(ProtonRef? Project, string? Domain, IReadOnlyList<string> Facts);
+
+/// <summary>One change Proton proposed, and what became of it: the record of what Proton did, as the user confirmed it.</summary>
+/// <param name="Who">Who it was proposed to (in the list for those who manage Proton); null in a person's own list.</param>
+/// <param name="ErrorMessage">Why a confirmed change failed, as the service said.</param>
+public sealed record ProtonActionSummaryResponse(
+    Guid Id,
+    string Tool,
+    string Title,
+    ID_Indetails.api.Enums.ProtonActionStatus Status,
+    DateTime CreatedAt,
+    DateTime? DecidedAt,
+    string? ResultType,
+    long? ResultId,
+    string? ErrorMessage,
+    string? Who);

@@ -85,7 +85,17 @@ public static class ProtonCoverage
     /// a new action is held back until it is classified.
     /// </summary>
     public static bool NeedsTypedTurn(string tool)
-        => Entries.FirstOrDefault(e => e.Tool == tool)?.Family is not (ProtonFamily.Core or ProtonFamily.Lifecycle);
+        => FamilyOf(tool) is not (ProtonFamily.Core or ProtonFamily.Lifecycle);
+
+    /// <summary>The family a built action belongs to; null for a tool with no entry, which no switch turns on.</summary>
+    public static ProtonFamily? FamilyOf(string tool) => Entries.FirstOrDefault(e => e.Tool == tool)?.Family;
+
+    /// <summary>
+    /// How strongly a built action is confirmed: the strongest of its endpoints. This, not anything stored with the
+    /// proposal, is what the confirmation enforces. A tool with no entry is strong.
+    /// </summary>
+    public static ProtonTier TierOf(string tool)
+        => Entries.Where(e => e.Tool == tool).Select(e => e.Tier ?? ProtonTier.Strong).DefaultIfEmpty(ProtonTier.Strong).Max();
 
     private const ProtonTier T1 = ProtonTier.Standard;
     private const ProtonTier T2 = ProtonTier.Strong;

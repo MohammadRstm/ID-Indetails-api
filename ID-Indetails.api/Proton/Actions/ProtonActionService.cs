@@ -10,7 +10,10 @@ using ID_Indetails.api.Proton.Conversation;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Repositories.Proton.Abstraction;
+using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Configuration.Options;
+using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Proton.Actions;
 
@@ -23,7 +26,9 @@ public sealed class ProtonActionService(
     IProtonActionRepository actions,
     ProtonToolbox toolbox,
     ProtonConversationStore conversations,
+    IPermissionService permissions,
     IClock clock,
+    IOptions<ProtonOptions> options,
     ILoggerFactory loggers)
 {
     private readonly ILogger _log = loggers.CreateLogger(ProtonToolbox.LogCategory);
@@ -39,6 +44,33 @@ public sealed class ProtonActionService(
             throw new BusinessRuleException(ErrorCodes.ProtonActionExpired, "This proposal has expired. Ask me again if you still want it.");
         }
 
+        var settings = options.Value.Actions;
+        if (ProtonCoverage.FamilyOf(action.Tool) is not { } family || !settings.IsOn(family))
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonActionsOff, "This kind of change is switched off for Proton now. You can make it in the app.");
+        }
+
+        if (await actions.CountConfirmedSinceAsync(userId, now.AddHours(-1), cancellationToken) >= settings.MaxConfirmedActionsPerHour)
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonActionLimit,
+                $"You've confirmed {settings.MaxConfirmedActionsPerHour} of my changes in the last hour. Try again a bit later, or make it in the app.");
+        }
+
+        // the typed phrase is the one the server stored with the proposal, never one the client sends along
+        if (Preview(action) is { Confirm: ProtonConfirm.Typed, Phrase: { } phrase }
+            && !string.Equals(request.Typed?.Trim(), phrase.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonPhraseMismatch, $"Type “{phrase}” exactly to confirm.");
+        }
+
+        // proposed under other permissions: the card was made for access the user no longer has
+        var call = CallOf(action);
+        if (call is null || call.Fingerprint != ProtonToolbox.FingerprintOf(await permissions.GetAccessAsync(userId, cancellationToken)))
+        {
+            await actions.CloseAsync(actionId, ProtonActionStatus.Superseded, now, cancellationToken);
+            throw new ConflictException(ErrorCodes.ProtonActionNotPending, "Your access changed since I proposed this. Ask me again.");
+        }
+
         // From here on it can never run twice: only one request moves it out of pending.
         if (!await actions.TryClaimAsync(actionId, userId, now, cancellationToken))
         {
@@ -50,7 +82,7 @@ public sealed class ProtonActionService(
         {
             var session = await toolbox.OpenAsync(caller, userId,
                 new ProtonOrigin(action.ConversationId, action.Model, action.PromptVersion), cancellationToken);
-            done = await session.ExecuteAsync(action.Tool, action.Arguments, cancellationToken);
+            done = await session.ExecuteAsync(action.Tool, call.Args.GetRawText(), cancellationToken);
         }
         catch (Exception exception)
         {
@@ -88,6 +120,23 @@ public sealed class ProtonActionService(
         return new ProtonActionOutcomeResponse(actionId, ProtonActionStatus.Cancelled, "Cancelled. Nothing was changed.", [], []);
     }
 
+    private const int Listed = 50;
+
+    /// <summary>The caller's own proposals, newest first: restored cards and the panel read their status here.</summary>
+    public async Task<IReadOnlyList<ProtonActionSummaryResponse>> MineAsync(long userId, CancellationToken cancellationToken)
+        => (await actions.MineAsync(userId, Listed, cancellationToken)).Select(a => Summary(a, null)).ToList();
+
+    /// <summary>Everyone's proposals, for those who manage Proton: what it proposed, to whom, and what was confirmed.</summary>
+    public async Task<IReadOnlyList<ProtonActionSummaryResponse>> AllAsync(CancellationToken cancellationToken)
+        => (await actions.AllAsync(Listed, cancellationToken)).Select(r => Summary(r.Action, r.Who)).ToList();
+
+    private ProtonActionSummaryResponse Summary(ProtonAction a, string? who)
+    {
+        // a pending proposal past its time reads as expired, as a confirmation would find it
+        var status = a.Status == ProtonActionStatus.Pending && a.ExpiresAt <= clock.UtcNow ? ProtonActionStatus.Expired : a.Status;
+        return new ProtonActionSummaryResponse(a.PublicId, a.Tool, Title(a), status, a.CreatedAt, a.DecidedAt, a.ResultType, a.ResultId, a.ErrorMessage, who);
+    }
+
     /// <summary>The caller's own action in that conversation, still pending. Anyone else's reads as not found.</summary>
     private async Task<ProtonAction> PendingOfAsync(long userId, Guid actionId, Guid conversationId, CancellationToken cancellationToken)
     {
@@ -115,6 +164,18 @@ public sealed class ProtonActionService(
         var conversation = conversations.Find(userId, action.ConversationId);
         conversation?.NoteAction(note);
         conversation?.Decided(action.PublicId);
+    }
+
+    private static ProtonCall? CallOf(ProtonAction action)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<ProtonCall>(action.Arguments, ProtonJson.Options) is { Fingerprint: { Length: > 0 } } call ? call : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 
     private static ProtonPreview? Preview(ProtonAction action)

@@ -13,12 +13,37 @@ public sealed class ProtonActionRepository(IdIndetailsDbContext db) : IProtonAct
     public Task<ProtonAction?> FindAsync(Guid publicId, CancellationToken cancellationToken = default)
         => db.ProtonActions.AsNoTracking().SingleOrDefaultAsync(a => a.PublicId == publicId, cancellationToken);
 
-    public Task SupersedeAsync(Guid conversationId, Guid exceptPublicId, DateTime at, CancellationToken cancellationToken = default)
+    public Task SupersedeAsync(
+        Guid conversationId, string tool, string? targetType, long? targetId, Guid exceptPublicId, DateTime at, CancellationToken cancellationToken = default)
         => db.ProtonActions
-            .Where(a => a.ConversationId == conversationId && a.Status == ProtonActionStatus.Pending && a.PublicId != exceptPublicId)
+            .Where(a => a.ConversationId == conversationId && a.Status == ProtonActionStatus.Pending && a.PublicId != exceptPublicId
+                && a.Tool == tool && a.TargetType == targetType && a.TargetId == targetId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(a => a.Status, ProtonActionStatus.Superseded)
                 .SetProperty(a => a.DecidedAt, at), cancellationToken);
+
+    public Task<int> CountPendingAsync(
+        Guid conversationId, string tool, string? targetType, long? targetId, DateTime at, CancellationToken cancellationToken = default)
+        => db.ProtonActions.CountAsync(a => a.ConversationId == conversationId && a.Status == ProtonActionStatus.Pending && a.ExpiresAt > at
+            && !(a.Tool == tool && a.TargetType == targetType && a.TargetId == targetId), cancellationToken);
+
+    // proposed within the last confirmations' reach ((UserId, CreatedAt) index), confirmed since
+    public Task<int> CountConfirmedSinceAsync(long userId, DateTime since, CancellationToken cancellationToken = default)
+        => db.ProtonActions.CountAsync(a => a.UserId == userId && a.CreatedAt >= since.AddHours(-1) && a.DecidedAt >= since
+            && (a.Status == ProtonActionStatus.Executing || a.Status == ProtonActionStatus.Succeeded || a.Status == ProtonActionStatus.Failed), cancellationToken);
+
+    public async Task<IReadOnlyList<ProtonAction>> MineAsync(long userId, int take, CancellationToken cancellationToken = default)
+        => await db.ProtonActions.AsNoTracking().Where(a => a.UserId == userId).OrderByDescending(a => a.CreatedAt).Take(take).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<(ProtonAction Action, string Who)>> AllAsync(int take, CancellationToken cancellationToken = default)
+    {
+        var rows = await db.ProtonActions.AsNoTracking()
+            .Join(db.Users, a => a.UserId, u => u.Id, (a, u) => new { Action = a, u.FirstName, u.LastName, u.Email })
+            .OrderByDescending(r => r.Action.CreatedAt)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+        return rows.Select(r => (r.Action, $"{r.FirstName} {r.LastName}".Trim() is { Length: > 0 } name ? name : r.Email)).ToList();
+    }
 
     public async Task<bool> TryClaimAsync(Guid publicId, long userId, DateTime at, CancellationToken cancellationToken = default)
         => await db.ProtonActions

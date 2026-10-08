@@ -58,10 +58,10 @@ public class ProtonGuardTests(ProtonProbeApiFactory api) : IClassFixture<ProtonP
 
     /// <summary>
     /// A send, delete, money or access change can't start from a click: the options could have been steered by text in
-    /// the data. The same request typed by the user is proposed as usual (and still needs its Confirm).
+    /// the data. Typed, it gets past that check, to the next: an action no family covers is never switched on.
     /// </summary>
     [Fact]
-    public async Task A_picked_option_cannot_start_a_gated_change_but_the_user_typing_it_can()
+    public async Task A_picked_option_cannot_start_a_gated_change_and_an_unclassified_one_is_never_on()
     {
         api.Anthropic.Reset();
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
@@ -87,7 +87,8 @@ public class ProtonGuardTests(ProtonProbeApiFactory api) : IClassFixture<ProtonP
 
         var typed = await Ask(new { conversationId = offered.ConversationId, text = "Make the probe change" });
         typed.IsSuccessStatusCode.ShouldBeTrue(await typed.Content.ReadAsStringAsync());
-        Result(7)["status"]!.GetValue<string>().ShouldBe("proposed");
+        Result(7)["status"]!.GetValue<string>().ShouldBe("refused");
+        Result(7)["message"]!.GetValue<string>().ShouldContain("switched on");
     }
 
     [Fact]

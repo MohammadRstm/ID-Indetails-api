@@ -62,4 +62,7 @@ public sealed record TopUpProtonBudgetRequest
 public sealed record DecideProtonActionRequest
 {
     public Guid ConversationId { get; init; }
+
+    /// <summary>For a card that asks for it: the phrase the user typed. Checked against the one stored with the proposal.</summary>
+    public string? Typed { get; init; }
 }

@@ -386,9 +386,9 @@ How it works (`Proton/Actions/`):
 
 1. **Propose.** The model calls a `propose_…` tool. Like every tool it runs inside the read-only guard: it reads the
    target, checks the change with the existing business rules, and validates the exact request the endpoint would
-   take, with that endpoint's own validator. The toolbox stores it in `proton_actions` as the conversation's one
-   **pending** action (a newer proposal supersedes the older one) and the reply carries it as `pendingAction`. Nothing
-   else is written.
+   take, with that endpoint's own validator. The toolbox stores it in `proton_actions` as a **pending** action and
+   the reply carries it in `pendingActions` (`pendingAction` is the last one). Nothing else is written. See
+   [The action engine](#the-action-engine-stage-5-phase-6) for how several cards wait at once.
 2. **Confirm.** The user presses Confirm on the card: `POST /api/proton/actions/{id}/confirm` with only
    `{conversationId}`. The stored request is what runs — the client never sends arguments. The action must be the
    caller's own, in that conversation, pending and not expired (10 minutes, `Proton:ActionMinutes`). One conditional
@@ -410,6 +410,32 @@ proton_action_stale`.
 
 The client shows each proposal as a card in Proton's chat, listing what will change (before → after), its risk, and
 Cancel / Confirm. Typing "yes" confirms nothing.
+
+## The action engine (Stage 5, Phase 6)
+
+Every `propose_…` tool goes through the same rules (`ProtonToolbox.ProposeAsync`, `ProtonActionService`):
+
+- **Families, switched on one by one.** Each write endpoint's family comes from the coverage registry
+  (`ProtonCoverage.FamilyOf`). `Proton:Actions` switches them: `Core` is on; `Lifecycle`, `Deletes`, `Access`,
+  `CompanyRules`, `PayRules`, `Money` and `Messaging` are off until an admin turns them on. A tool of a family that
+  is off is refused when proposing, and a card waiting when it was switched off is refused at Confirm
+  (`422 proton_actions_off`). An action the registry doesn't know is never on. `Proton:Actions:Enabled=false` stops
+  every proposal.
+- **Several cards.** Up to `MaxPendingActions` (3) wait per conversation. A new proposal for the same tool and the same
+  target replaces that card (the old one becomes `superseded`); other cards stay. Over the cap the tool is refused and
+  Proton asks the user to decide one first.
+- **Strength of the Confirm.** The registry gives each action a tier. A strong action is a two-step card (Review, then
+  Confirm). A card can ask for a typed phrase (`confirm: "typed"`, `phrase`): Confirm sends `{conversationId, typed}`
+  and the server compares it with the phrase it stored with the proposal (`422 proton_phrase_mismatch`). The card also
+  shows the area (the target's domain), whether the change can be undone, and its reach when it touches many people.
+- **Made for the access the user had.** The proposal stores a fingerprint of the user's role, domain and permissions.
+  If they changed before Confirm, the card is closed as `superseded` unrun (`409 proton_action_not_pending`).
+- **Caps.** At most `MaxConfirmedActionsPerHour` (30) confirmed per person per hour (`422 proton_action_limit`).
+- **Gated turns.** Families other than Core and Lifecycle can only be proposed on a turn the user typed, never from a
+  tapped choice or suggestion.
+- **History.** `GET /api/proton/actions` lists the caller's last 50 proposals and what became of them (a pending card
+  past its time reads `expired`): restored cards read their status here. `GET /api/proton/actions/all`
+  (`proton_budget:manage`) lists everyone's, with who proposed them.
 
 ## The blob (client, Stage 5 Phase 2)
 
@@ -469,12 +495,15 @@ per-question facts go in the context note.
 | Endpoint | Permission | |
 |---|---|---|
 | `POST /api/proton/messages/stream` | `proton:use` | the same, as Server-Sent Events (see [Live answers](#live-answers-stage-5-phase-3)); rate policy `proton` |
-| `POST /api/proton/messages` | `proton:use` | `{conversationId?, text, page?, choice? \| reply? \| suggestion?}` → `{conversationId, reply, refs, limited, usage, sources, uiCommands, choices, quickReplies, suggestions, pendingAction, rolledOver}`; rate policy `proton` |
+| `POST /api/proton/messages` | `proton:use` | `{conversationId?, text, page?, choice? \| reply? \| suggestion?}` → `{conversationId, reply, refs, limited, usage, sources, uiCommands, choices, quickReplies, suggestions, pendingActions, pendingAction, rolledOver}`; rate policy `proton` |
 | `GET /api/proton/briefing` | `proton:use` | `{items: [{project?, domain?, facts}], more}`: what get_attention finds first, with no model call; rate policy `proton` |
 | `DELETE /api/proton/conversations/{id}` | `proton:use` | ends a conversation |
 | `GET /api/proton/usage` | `proton:use` | the caller's question allowance and whether Proton is available |
 | `GET /api/proton/budget` | `proton_budget:manage` | this month's budget, top-ups, estimated spend, and spending by person, domain, tool (calls, average time) and day, with the 10 most expensive conversations |
 | `POST /api/proton/budget/top-ups` | `proton_budget:manage` | `{amountUsd, note?}` (up to 10,000 USD) → the budget |
+| `POST /api/proton/actions/{id}/confirm`, `…/cancel` | `proton:use` | `{conversationId, typed?}` → the outcome; rate policy `proton` |
+| `GET /api/proton/actions` | `proton:use` | the caller's last 50 proposals with their status |
+| `GET /api/proton/actions/all` | `proton_budget:manage` | everyone's last 50 proposals, with who proposed them |
 
 Errors use the uniform contract: `503 proton_unavailable` (switched off, or the model failed), `422 proton_budget_used`,
 `422 proton_allowance_used`, `409 proton_busy` (a question is still being answered in that conversation),
@@ -496,6 +525,7 @@ Errors use the uniform contract: `503 proton_unavailable` (switched off, or the 
 | `MaxHeavyToolCallsPerQuestion` | 4 | analyses that load every project's money; the next one is refused |
 | `MaxConversationInputTokens` | 80000 | a conversation past it rolls over |
 | `Insights` | 30%, 10 h, 1,000 USD, 1.5×, 0.5×, 4 periods, 14 days | `NotablePct`, `NotableHours`, `NotableUsd`, `UnusualHigh`, `UnusualLow`, `BaselinePeriods`, `TargetSoonDays` |
+| `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
 | `Prices` | Sonnet 5.5 list prices | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion` |
 
 `RateLimiting:ProtonPermitsPerMinute` (default 10) limits questions per person per minute.
