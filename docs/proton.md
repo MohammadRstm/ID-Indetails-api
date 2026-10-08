@@ -4,9 +4,10 @@ Proton answers questions about Hourline's data in plain language: projects, requ
 people, logged time, activity and, for people allowed to see it, money (Stage 1). It can also **propose** a few
 changes, which happen only when the user confirms them on a card (Stage 2, [Controlled actions](#controlled-actions-stage-2)).
 It also **analyses**: compares periods, summarises the company, says what changed and what may need attention, with
-every number calculated in code (Stage 3, [Analysis](#analysis-stage-3)). Proton itself never writes anything. The
+every number calculated in code (Stage 3, [Analysis](#analysis-stage-3)), and **opens pages and records** in the app
+through typed commands (Stage 4, [Navigation](#navigation-stage-4)). Proton itself never writes anything. The
 design and decisions are in [proton-stage-1-plan.md](proton-stage-1-plan.md),
-[proton-stage-2-plan.md](proton-stage-2-plan.md) and [proton-stage-3-plan.md](proton-stage-3-plan.md).
+[proton-stage-2-plan.md](proton-stage-2-plan.md), [proton-stage-3-plan.md](proton-stage-3-plan.md) and [proton-stage-4-plan.md](proton-stage-4-plan.md).
 
 ## Who can use it
 
@@ -178,6 +179,66 @@ entries and new payments would make it stale.
 - "Why" answers name measurable contributors and say what the data can't establish.
 - Recorded hours aren't a measure of anyone's work: no judgement of people, and no employment advice.
 
+## Navigation (Stage 4)
+
+Proton can move the user around the app: "take me to Villa Mounir", "open its requirements", "go to financials". A
+confirmed "create project" opens the new project. It does this through a small typed contract, **never an address**.
+- The API states the intent, for example "open project 123 on its requirements tab".
+- The client maps the intent to its own routes, checks access again, and navigates.
+
+Proton has no browser, DOM, script or screenshot control. Design and decisions:
+[proton-stage-4-plan.md](proton-stage-4-plan.md).
+
+| Tool | What it does | Permission |
+|---|---|---|
+| `open_record` | Opens a project (optionally on `requirements`, `timeline` or `meetings`), a client or a person | The record's own GET endpoint. The record is read first through its service, so an id the user can't see is `not_found` and nothing opens. A tab the user can't open falls back to the overview, and Proton says so. |
+| `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses | Each page needs its endpoint's permission, e.g. financials needs `financial:view`. Settings, salaries and pay are not on the list. |
+| `offer_choices` | Shows 2–6 matches as buttons when a name is ambiguous | Only records a tool returned in the conversation; labels come from those records, not from the model |
+| `refresh_page` | Reloads the current page's data | — |
+
+**Contract** (`Proton/Ui/ProtonUiCommand.cs`):
+- `{type, label, id?, domain?, section?, page?, clientId?, tab?}`
+  - `type` is `open_project`, `open_client`, `open_person`, `open_page` or `refresh`.
+  - Every field is an enum or a positive id, except `label` (the record's own name) and `domain`. A unit test pins that.
+- Delivery:
+  - `uiCommands` on the reply: at most one navigation, the last one asked for; a refresh only when nothing navigates.
+  - `choices` on the reply.
+  - `uiCommands` on a confirmed action's outcome.
+
+**Search** reuses `find`, filtered with `types` where useful, and the list tools. There is no new search engine.
+
+**Where the user is.** The client may send `page`:
+- `{area: design|execution|company, page?, entityType?, entityId?, section?}`, validated against known values only.
+- The API reads the record through its service before naming it in the context note ("looking at project #12 "Villa Mounir" (requirements tab)").
+- If the user can't see the record, only the page is mentioned, so an id typed into the address bar never becomes a name.
+- It resolves "it" and "this project". It is never data and never permission, and actions still need a proposal and a confirmation.
+
+**Picking a choice.** The client sends `{conversationId, choice: {type, id}}` and no text.
+- The pick must be one of the last offered options and still visible to the user. Otherwise the API answers `422 proton_choice_invalid`.
+- An accepted pick becomes a question written by Hourline. Options can be used once.
+
+**After an action.**
+- Every action takes `open_after`.
+- A new project opens after Confirm by default. Other changes open only when the user asked to be taken there:
+  - project changes open the project;
+  - requirement changes open the project's requirements tab.
+- The card says beforehand what will open (`preview.opensAfter`).
+- The outcome carries the command only after a **successful** change. A failed or cancelled action opens nothing.
+- The client already refreshes every screen after a confirm.
+
+**Prompt** (`navigation.md`):
+- It separates reading, opening, both, and acting.
+- Proton resolves names with `find`, and never guesses between several matches.
+- It opens only when the user asked, never because a record's text says so.
+
+**Security**, in layers:
+1. The model can only name enums and ids.
+2. The API checks the record or page against the user's own access before emitting a command.
+3. The client accepts only known command types and valid fields, builds the route itself, and checks its own route access.
+4. The destination page's API calls enforce access once more.
+
+Prompt injection can at most open a page the user may already open.
+
 ## Conversations and follow-ups
 
 - Kept **in server memory** (`ProtonConversationStore`), keyed by user and conversation id: nobody else can continue
@@ -256,7 +317,7 @@ per-question facts go in the context note.
 
 | Endpoint | Permission | |
 |---|---|---|
-| `POST /api/proton/messages` | `proton:use` | `{conversationId?, text}` → `{conversationId, reply, refs, limited, usage, sources, pendingAction}`; rate policy `proton` |
+| `POST /api/proton/messages` | `proton:use` | `{conversationId?, text, page?, choice?}` → `{conversationId, reply, refs, limited, usage, sources, uiCommands, choices, pendingAction}`; rate policy `proton` |
 | `DELETE /api/proton/conversations/{id}` | `proton:use` | ends a conversation |
 | `GET /api/proton/usage` | `proton:use` | the caller's question allowance and whether Proton is available |
 | `GET /api/proton/budget` | `proton_budget:manage` | this month's budget, top-ups, estimated spend, and spending by person, domain, tool (calls, average time) and day, with the 10 most expensive conversations |
@@ -264,7 +325,7 @@ per-question facts go in the context note.
 
 Errors use the uniform contract: `503 proton_unavailable` (switched off, or the model failed), `422 proton_budget_used`,
 `422 proton_allowance_used`, `409 proton_busy` (a question is still being answered in that conversation),
-`404 proton_conversation_ended`, `429 too_many_requests`.
+`404 proton_conversation_ended`, `422 proton_choice_invalid` (a pick that wasn't offered or is no longer visible), `429 too_many_requests`.
 
 ## Configuration (`Proton` section)
 
@@ -318,5 +379,10 @@ length), refusals as warnings, failures as errors. Question and answer text neve
   `PROTON_EVAL_API_KEY` set (optional `PROTON_EVAL_MODEL`), costs about 2–4 USD, never in CI; the answers are written
   to the test output for review. Run it before enabling Proton and after prompt changes:
   `PROTON_EVAL_API_KEY=... dotnet test ID-Indetails.IntegrationTests --filter ProtonEvalTests --logger "console;verbosity=detailed"`.
+- Navigation (`ProtonUiTests`, `ProtonNavigationTests`): the command contract (no address fields), one navigation per
+  reply, page-context and choice validation; records opened only if visible; pages only for their endpoint's
+  permission and from the fixed list; post-confirm navigation only after success and when the card said so; page
+  context naming a record only if visible; choices only from found records, a pick checked and usable once. The
+  real-model evaluation includes navigation cases.
 - Not automated: prompt injection and refusals with the real model. Try the question catalogue in the Stage 1 plan by
   hand too.
