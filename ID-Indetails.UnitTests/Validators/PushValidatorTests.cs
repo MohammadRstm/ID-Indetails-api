@@ -1,5 +1,7 @@
+using ID_Indetails.api.DTO.Request.Notifications;
 using ID_Indetails.api.DTO.Request.Push;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Validators.Notifications;
 using ID_Indetails.api.Validators.Push;
 using Shouldly;
 
@@ -34,4 +36,26 @@ public class PushValidatorTests
 
         errors.ShouldBe(["Platform", "AppVersion"], ignoreOrder: true);
     }
+
+    [Fact]
+    public void Quiet_hours_are_both_set_or_both_empty_minutes_of_the_day_that_differ()
+    {
+        var validator = new SaveNotificationSettingsRequestValidator();
+        bool Valid(int? from, int? to) => validator.Validate(new SaveNotificationSettingsRequest { QuietFromMinute = from, QuietToMinute = to }).IsValid;
+
+        Valid(1320, 420).ShouldBeTrue();
+        Valid(null, null).ShouldBeTrue();
+        Valid(0, 1439).ShouldBeTrue();
+        Valid(1320, null).ShouldBeFalse();
+        Valid(null, 420).ShouldBeFalse();
+        Valid(-1, 420).ShouldBeFalse();
+        Valid(1320, 1440).ShouldBeFalse();
+        Valid(600, 600).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Each_category_is_muted_once()
+        => new SaveNotificationSettingsRequestValidator()
+            .Validate(new SaveNotificationSettingsRequest { MutedCategories = [NotificationCategory.Money, NotificationCategory.Money] })
+            .Errors.Select(e => e.PropertyName).ShouldBe(["MutedCategories"]);
 }

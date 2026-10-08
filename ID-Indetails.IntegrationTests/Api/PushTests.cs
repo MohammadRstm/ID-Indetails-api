@@ -16,16 +16,25 @@ public class PushTests(PushApiFactory api) : IClassFixture<PushApiFactory>
 
     private static readonly TimeZoneInfo Beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
 
-    private static bool QuietNow()
-        => QuietHours.Contains(QuietHours.DefaultFromMinute, QuietHours.DefaultToMinute, TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut)));
+    private static int MinuteNow()
+    {
+        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Beirut);
+        return now.Hour * 60 + now.Minute;
+    }
 
-    /// <summary>Signs in on a phone and registers it; returns the session and the push token.</summary>
-    private async Task<(MobileAuthResponse Phone, string Token)> PhoneAsync(string email, string password)
+    /// <summary>
+    /// Signs in on a phone and registers it, with no quiet hours unless asked, so a test doesn't depend on the time of
+    /// day; returns the session and the push token.
+    /// </summary>
+    private async Task<(MobileAuthResponse Phone, string Token)> PhoneAsync(string email, string password, object? settings = null)
     {
         var phone = await (await Client.PostJsonAsync("/api/mobile/auth/login", new { email, password })).ReadAsync<MobileAuthResponse>();
         var token = $"ExponentPushToken[{Guid.NewGuid():N}]";
         var registered = await Client.PutJsonAsync("/api/me/devices", new { pushToken = token, platform = "android" }, phone.AccessToken);
         registered.IsSuccessStatusCode.ShouldBeTrue(await registered.Content.ReadAsStringAsync());
+        var saved = await Client.PutJsonAsync("/api/me/notification-settings",
+            settings ?? new { quietFromMinute = (int?)null, quietToMinute = (int?)null, mutedCategories = Array.Empty<string>() }, phone.AccessToken);
+        saved.IsSuccessStatusCode.ShouldBeTrue(await saved.Content.ReadAsStringAsync());
         return (phone, token);
     }
 
@@ -57,8 +66,34 @@ public class PushTests(PushApiFactory api) : IClassFixture<PushApiFactory>
         push.Data.NotificationId.ShouldNotBeNull();
         push.Data.Target.ShouldBe(new PushTarget { Type = PushTarget.Project, Id = project.Id, Domain = DomainCodes.Design });
         push.Badge.ShouldBeGreaterThanOrEqualTo(1);
-        push.ChannelId.ShouldBe(QuietNow() ? PushCategories.QuietChannel : "projects");
-        push.Sound.ShouldBe(!QuietNow());
+        push.ChannelId.ShouldBe("projects");
+        push.Sound.ShouldBeTrue();
+        push.Quiet.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task During_quiet_hours_a_push_arrives_silently_and_a_muted_category_not_at_all()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (email, password, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        // quiet from an hour ago to an hour from now, across midnight when it has to
+        var (_, token) = await PhoneAsync(email, password, new
+        {
+            quietFromMinute = (MinuteNow() + 1380) % 1440,
+            quietToMinute = (MinuteNow() + 60) % 1440,
+            mutedCategories = new[] { "people" },
+        });
+
+        await DeliverAsync(
+            new NotificationPushJob(person.User.Id, await NotifyAsync(person.User.Id, NotificationKinds.PermissionsChanged), false),
+            new NotificationPushJob(person.User.Id, await NotifyAsync(person.User.Id, NotificationKinds.WeeklySummary), false));
+
+        var push = api.Push.SentTo(token).ShouldHaveSingleItem();
+        push.Data.Kind.ShouldBe(NotificationKinds.WeeklySummary);
+        push.ChannelId.ShouldBe(PushCategories.QuietChannel);
+        push.Sound.ShouldBeFalse();
+        push.Quiet.ShouldBeTrue();
+        push.Body.ShouldNotBeNull();
     }
 
     [Fact]

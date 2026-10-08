@@ -192,6 +192,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<INotificationSettingsRepository, NotificationSettingsRepository>();
         services.AddScoped<IDomainSettingsRepository, DomainSettingsRepository>();
         services.AddScoped<IWorkEntryRepository, WorkEntryRepository>();
         services.AddScoped<IWorkEntryCommentRepository, WorkEntryCommentRepository>();
@@ -262,6 +263,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IActivityFeedService, ActivityFeedService>();
         services.AddScoped<INotificationSender, NotificationSender>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
         services.AddScoped<IProjectNotifier, ProjectNotifier>();
         services.AddScoped<IScheduledNotifications, ScheduledNotifications>();
         services.AddHostedService<NotificationScheduler>();

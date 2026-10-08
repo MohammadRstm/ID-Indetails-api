@@ -10,6 +10,7 @@ using ID_Indetails.api.Repositories.Push.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Messaging.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Push.Abstraction;
 
 namespace ID_Indetails.api.Services.Push.Implementation;
@@ -18,7 +19,8 @@ namespace ID_Indetails.api.Services.Push.Implementation;
 /// Everything is decided at send time, not when the push was queued: only phones whose session still has a valid
 /// refresh token receive anything, a deactivated person gets nothing, and a notification goes out only while its
 /// reader may still read it (the same check as the in-app list: <see cref="NotificationAccess"/> and the domains they
-/// see). During quiet hours a push is delivered silently on the <c>quiet</c> channel.
+/// see), unless the person muted its category. During their quiet hours a push is delivered silently on the
+/// <c>quiet</c> channel.
 /// </summary>
 public sealed class PushDelivery(
     IUserDeviceRepository devices,
@@ -26,6 +28,7 @@ public sealed class PushDelivery(
     INotificationRepository notifications,
     IMessagingRepository messaging,
     IMessagingService messages,
+    INotificationSettingsService settings,
     IPushProvider provider,
     PushThrottle throttle,
     PushReceipts receipts,
@@ -44,7 +47,7 @@ public sealed class PushDelivery(
         var now = clock.UtcNow;
         var phones = (await devices.ListLiveForUsersAsync(jobs.Select(j => j.RecipientId).Distinct().ToList(), now, cancellationToken))
             .ToLookup(d => d.UserId);
-        var quiet = QuietHours.Contains(QuietHours.DefaultFromMinute, QuietHours.DefaultToMinute, TimeOnly.FromDateTime(clock.ToCompanyTime(now)));
+        var companyTime = TimeOnly.FromDateTime(clock.ToCompanyTime(now));
 
         var outgoing = new List<(UserDevice Phone, PushMessage Message)>();
         foreach (var forPerson in jobs.GroupBy(j => j.RecipientId))
@@ -62,10 +65,12 @@ public sealed class PushDelivery(
                 continue;
             }
 
+            var preferences = await settings.PreferencesOfAsync(forPerson.Key, cancellationToken);
+            var quiet = preferences.QuietAt(companyTime);
             int? badge = null;
             foreach (var job in forPerson)
             {
-                if (await RenderAsync(job, access, cancellationToken) is not { } push)
+                if (await RenderAsync(job, access, cancellationToken) is not { } push || preferences.Mutes(push.Data.Kind))
                 {
                     continue;
                 }

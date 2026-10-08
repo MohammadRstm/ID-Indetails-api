@@ -4107,6 +4107,59 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("user_invitations", (string)null);
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.UserNotificationMute", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("MutedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("muted_at");
+
+                    b.HasKey("UserId", "Category")
+                        .HasName("pk_user_notification_mutes");
+
+                    b.ToTable("user_notification_mutes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_user_notification_mutes_category", "`category` IN ('work', 'requirements', 'projects', 'meetings', 'sites', 'money', 'people', 'messages')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.UserNotificationSettings", b =>
+                {
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<short?>("QuietFromMin")
+                        .HasColumnType("smallint")
+                        .HasColumnName("quiet_from_min");
+
+                    b.Property<short?>("QuietToMin")
+                        .HasColumnType("smallint")
+                        .HasColumnName("quiet_to_min");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_user_notification_settings");
+
+                    b.ToTable("user_notification_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_user_notification_settings_quiet", "(`quiet_from_min` IS NULL AND `quiet_to_min` IS NULL) OR (`quiet_from_min` BETWEEN 0 AND 1439 AND `quiet_to_min` BETWEEN 0 AND 1439)");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.UserPayHistory", b =>
                 {
                     b.Property<long>("Id")
@@ -5452,6 +5505,30 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_user_invitations_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.UserNotificationMute", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_notification_mutes_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.UserNotificationSettings", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithOne()
+                        .HasForeignKey("ID_Indetails.api.Models.UserNotificationSettings", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_notification_settings_users_user_id");
 
                     b.Navigation("User");
                 });

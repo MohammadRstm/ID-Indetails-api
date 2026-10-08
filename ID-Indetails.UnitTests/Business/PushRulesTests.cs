@@ -116,4 +116,18 @@ public class PushRulesTests
         PushTarget.Chat(4, 20).ShouldBe(new PushTarget { Type = PushTarget.Conversation, TeamId = 4 });
         PushTarget.Chat(null, 20).ShouldBe(new PushTarget { Type = PushTarget.Conversation, UserId = 20 });
     }
+
+    [Fact]
+    public void Preferences_mute_whole_categories_but_never_the_log_reminder()
+    {
+        var preferences = new PushPreferences(null, null, new HashSet<NotificationCategory> { NotificationCategory.Money, NotificationCategory.Messages });
+
+        preferences.Mutes(NotificationKinds.PaymentRecorded).ShouldBeTrue();
+        preferences.Mutes(PushKinds.Message).ShouldBeTrue();
+        preferences.Mutes(NotificationKinds.RequirementAssigned).ShouldBeFalse();
+        preferences.Mutes(PushKinds.LogReminder).ShouldBeFalse();
+        preferences.QuietAt(new TimeOnly(23, 0)).ShouldBeFalse();
+        PushPreferences.Default.QuietAt(new TimeOnly(23, 0)).ShouldBeTrue();
+        PushPreferences.Default.Muted.ShouldBeEmpty();
+    }
 }
