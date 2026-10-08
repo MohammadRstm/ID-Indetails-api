@@ -6,6 +6,7 @@ using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
+using ID_Indetails.api.Services.Teams.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Proton.Tools;
@@ -207,4 +208,21 @@ public sealed class ListPeopleActivityTool(IWorkInsightsService insights, IClock
             new PeopleActivity(matching.Count, rows.Count, rows),
             rows.Select(r => new ProtonRef(ProtonRefType.Person, r.Id, r.Name, DomainCodes.Design)).ToList());
     }
+}
+
+public sealed record NoTeamsInput;
+
+public sealed record TeamRow(long Id, string Name, string Domain, int Members);
+
+/// <summary>The teams (departments) of the user's domains, as GET /api/teams returns them.</summary>
+public sealed class ListTeamsTool(ITeamService teams) : ProtonTool<NoTeamsInput>
+{
+    public override string Name => "list_teams";
+
+    public override string Description => "The teams (departments) of each business the user can see, with how many people are in each.";
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBased<TeamsController>(nameof(TeamsController.List));
+
+    protected override async Task<ProtonToolOutput> RunAsync(NoTeamsInput input, ProtonToolContext context, CancellationToken cancellationToken)
+        => ProtonToolOutput.Of((await teams.ListAsync(cancellationToken)).Select(t => new TeamRow(t.Id, t.Name, t.Domain, t.MemberCount)).ToList());
 }

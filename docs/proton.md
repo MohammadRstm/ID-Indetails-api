@@ -381,6 +381,17 @@ submits or sends anything itself.
 | `propose_change_project_status` | medium | `POST /api/projects/{id}/hold` (`/resume`) | hold and resume only: completing, archiving and reopening lock or unlock revenue |
 | `propose_update_project` | medium | `PUT /api/projects/{id}` | title, description, location, target date, owner; refused if the project changed since |
 | `propose_create_project` | medium | `POST /api/projects` | Design only, client or internal, no money fields |
+| `propose_create_client` | low | `POST /api/clients` | the contacts the user gave; a shared name is a warning on the card, another client's contact is refused; opens the new client |
+| `propose_update_client` | low | `PUT /api/clients/{id}` | details, plus contacts added or removed (the rest kept); refused if the client changed since |
+| `propose_set_client_archived` | low | `POST /api/clients/{id}/archive` (`/restore`) | |
+| `propose_schedule_meeting` | low | `POST /api/projects/{id}/meetings` | a day and an HH:mm start in the company's time zone (`IClock.FromCompanyTime`); no invitation is emailed |
+| `propose_update_meeting` | low | `PUT /api/meetings/{id}` | moves, resizes or renames; the meeting rules (your own unless you manage meetings, open projects) are checked when proposing |
+| `propose_create_team`, `propose_rename_team` | low | `POST /api/teams`, `PUT /api/teams/{id}` | a name already used in the domain is refused |
+| `propose_update_my_profile` | low | `PUT /api/me/profile` | the user's own name and phone only (`ProtonEndpoint.OfSelf`: `proton:use` is its policy) |
+| `propose_comment_work_entry` | low | `POST /api/work-entries/{id}/comments` | on the entry only; the author is notified. Posting to their team chat is a message (Stage 5, Phase 7) |
+
+Reads added for these: `list_teams` (`GET /api/teams`, rule-based) and `get_work_entry` (with its comments, no
+attachment). Dashboard card orders stay with the person (they drag the cards).
 
 How it works (`Proton/Actions/`):
 
