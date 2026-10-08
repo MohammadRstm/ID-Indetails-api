@@ -82,7 +82,7 @@ public sealed class ProtonActionService(
         {
             var session = await toolbox.OpenAsync(caller, userId,
                 new ProtonOrigin(action.ConversationId, action.Model, action.PromptVersion), cancellationToken);
-            done = await session.ExecuteAsync(action.Tool, call.Args.GetRawText(), cancellationToken);
+            done = await session.ExecuteAsync(action.Id, action.Tool, call.Args.GetRawText(), cancellationToken);
         }
         catch (Exception exception)
         {

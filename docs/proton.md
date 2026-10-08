@@ -387,7 +387,7 @@ submits or sends anything itself.
 | `propose_schedule_meeting` | low | `POST /api/projects/{id}/meetings` | a day and an HH:mm start in the company's time zone (`IClock.FromCompanyTime`); no invitation is emailed |
 | `propose_update_meeting` | low | `PUT /api/meetings/{id}` | moves, resizes or renames; the meeting rules (your own unless you manage meetings, open projects) are checked when proposing |
 | `propose_create_team`, `propose_rename_team` | low | `POST /api/teams`, `PUT /api/teams/{id}` | a name already used in the domain is refused |
-| `propose_update_my_profile` | low | `PUT /api/me/profile` | the user's own name and phone only (`ProtonEndpoint.OfSelf`: `proton:use` is its policy) |
+| `propose_update_my_profile` | low | `PUT /api/me/profile` | the user's own name and phone only (`ProtonEndpoint.OfRuleBasedWrite`: `proton:use` is its policy) |
 | `propose_comment_work_entry` | low | `POST /api/work-entries/{id}/comments` | on the entry only; the author is notified. Posting to their team chat is a message (Stage 5, Phase 7) |
 
 Reads added for these: `list_teams` (`GET /api/teams`, rule-based) and `get_work_entry` (with its comments, no
@@ -447,6 +447,46 @@ Every `propose_…` tool goes through the same rules (`ProtonToolbox.ProposeAsyn
 - **History.** `GET /api/proton/actions` lists the caller's last 50 proposals and what became of them (a pending card
   past its time reads `expired`): restored cards read their status here. `GET /api/proton/actions/all`
   (`proton_budget:manage`) lists everyone's, with who proposed them.
+
+## Strong actions (Stage 5, Phase 7)
+
+Each in a family that is off until switched on in `Proton:Actions` (see [The action engine](#the-action-engine-stage-5-phase-6)),
+and confirmed strongly: a second step at least, and a typed phrase the server stored where the table says.
+
+| Tool | Family | Stands in for | Confirm |
+|---|---|---|---|
+| `propose_project_lifecycle` | Lifecycle | `POST /api/projects/{id}/complete`, `/archive`, `/reopen` | the project's name typed; the card says the revenue locks (or unlocks) and how many open requirements get ticked |
+| `propose_update_employee` | Access | `PUT /api/employees/{id}` | two steps; name, phone, position and team only (never role, domain, sign-in email or pay) |
+| `propose_deactivate_employee` | Access | `POST /api/employees/{id}/deactivate` | the person's name typed; never oneself |
+| `propose_reactivate_employee` | Access | `POST /api/employees/{id}/reactivate` | two steps; when they left earlier this month the tool asks Proton to ask the user whether the time away is paid, and the card shows the answer. Someone who never signed up shows as invited again |
+| `propose_end_sessions` | Access | `POST /api/employees/{id}/sessions/end` (`/restore`) | two steps; never one's own |
+| `propose_delete_team` | Deletes | `DELETE /api/teams/{id}` | the team's name typed; an empty team only (a team whose chat has messages is refused by the app) |
+| `propose_company_settings` | CompanyRules | `PUT /api/company/settings` | two steps; the company's name typed for a new week start or default currency. The card says how many people it affects |
+| `propose_domain_settings` | CompanyRules | `PUT /api/domain-settings/{domain}` | two steps; the domain's name typed to hold or release logging. The card says how many people it affects |
+| `propose_send_message` | Messaging | `POST /api/messages/direct/{id}`, `/teams/{id}` | see below |
+| `propose_comment_work_entry` with `send_to_group` | Core, held to Messaging | `POST /api/work-entries/{id}/comments` | the team's name typed; needs Messaging switched on and a typed question |
+
+Reads for them: `get_company_settings` and `get_domain_settings` (both rule-based: everyone may read them). Each
+spec re-reads its target at Confirm and refuses a stale change (`422 proton_action_stale`).
+
+## Messages sent as the user (Stage 5, Phase 7)
+
+`propose_send_message` (prompt: `Proton/Prompts/messages.md`) sends one message, as the user, to one person or one
+team chat, through the messaging service and its rules (reach, active recipient, membership, mentions):
+
+- **Only to someone the user named.** The recipient must be a contact or a team chat the user is in, and a word of
+  their name must appear in what the user typed in this conversation. A name that only appeared in the data is
+  refused. As a Messaging action it is also refused on a turn the user didn't type.
+- **Exactly what the card shows.** The body is stored with the proposal and sent byte for byte. No attachments, no
+  `@all`, at most 10 mentions, team chats only.
+- **Strong.** Two steps for a direct message; the recipient's name typed for a team chat with mentions or more than ten
+  people, and for any message with figures in it (an amount, a percentage, a large number), with a warning to check
+  the recipient may see them.
+- **A few a day.** `MaxMessagesPerDay` (20) per person per company day, counted from `proton_actions`
+  (`422 proton_action_limit`).
+- **Marked.** The message carries the confirmed action (`messages.proton_action_id`) and reads `viaProton: true`; the
+  chat shows it ([messaging.md](messaging.md)). A comment shared to a team chat is not marked yet: its card in the chat
+  already shows who wrote it.
 
 ## The blob (client, Stage 5 Phase 2)
 

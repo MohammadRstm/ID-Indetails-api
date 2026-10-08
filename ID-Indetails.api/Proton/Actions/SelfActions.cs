@@ -37,7 +37,7 @@ public sealed class ProposeUpdateMyProfileTool(IAuthService auth, IEmployeeServi
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
 
-    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfSelf<ProfileController>(nameof(ProfileController.UpdateProfile));
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBasedWrite<ProfileController>(nameof(ProfileController.UpdateProfile));
 
     protected override async Task<(UpdateMyProfileArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         UpdateMyProfileInput input, ProtonToolContext context, CancellationToken cancellationToken)

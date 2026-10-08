@@ -53,6 +53,9 @@ public sealed class ProtonToolContext(
     /// <summary>A proposal is waiting for the user's Confirm: no yes/no or suggested replies then, so none can pass for one.</summary>
     public bool ActionPending { get; set; }
 
+    /// <summary>While a confirmed action runs: its row, so what it writes can say it came through Proton (a message).</summary>
+    public long? ConfirmedActionId { get; set; }
+
     private readonly Dictionary<(ProtonRefType, long), ProtonRef> _known = [];
 
     /// <summary>

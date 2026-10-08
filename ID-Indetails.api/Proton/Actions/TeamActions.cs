@@ -115,3 +115,51 @@ internal static class TeamText
     public static async Task<TeamResponse> FindAsync(ITeamService teams, long teamId, CancellationToken cancellationToken)
         => (await teams.ListAsync(cancellationToken)).FirstOrDefault(t => t.Id == teamId) ?? throw new NotFoundException("Team not found.");
 }
+
+public sealed record DeleteTeamArgs(long TeamId);
+
+public sealed record DeleteTeamInput : ProtonActionInput
+{
+    [Description("From list_teams.")]
+    public required long TeamId { get; init; }
+}
+
+/// <summary>
+/// Deletes an empty team, through DELETE /api/teams/{id} once confirmed. It can't be undone, so the user types the
+/// team's name to confirm.
+/// </summary>
+public sealed class ProposeDeleteTeamTool(ITeamService teams) : ProtonActionTool<DeleteTeamInput, DeleteTeamArgs>
+{
+    public override string Name => "propose_delete_team";
+
+    public override string Description =>
+        "Propose deleting a team nobody is in (move its people out first, from their profiles). It can't be undone; the " +
+        "user confirms by typing the team's name.";
+
+    public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<TeamsController>(nameof(TeamsController.Delete));
+
+    protected override async Task<(DeleteTeamArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
+        DeleteTeamInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var team = await TeamText.FindAsync(teams, input.TeamId, cancellationToken);
+        if (team.MemberCount > 0)
+        {
+            throw new ProtonToolInputException($"{team.Name} still has {team.MemberCount} member(s): they move to another team from their profiles first.");
+        }
+
+        return (new DeleteTeamArgs(team.Id),
+            new ProtonPreview($"Delete the team {team.Name}", [new ProtonChange("Team", team.Name, "deleted")],
+                "A team whose chat has messages is kept: the app refuses to delete it.", Confirm: ProtonConfirm.Typed, Phrase: team.Name, Irreversible: true),
+            TeamText.Ref(team));
+    }
+
+    protected override object? RequestOf(DeleteTeamArgs args) => null;
+
+    protected override async Task<ProtonActionDone> ExecuteAsync(DeleteTeamArgs args, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        await teams.DeleteAsync(args.TeamId, cancellationToken);
+        return new ProtonActionDone("Deleted the team.", "team", args.TeamId, []);
+    }
+}
