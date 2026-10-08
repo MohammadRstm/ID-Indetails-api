@@ -188,6 +188,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
                     m.RefEntryId,
                     m.RefCommentId,
                     m.CreatedAt,
+                    ViaProton = m.ProtonActionId != null,
                     Mentions = m.Mentions.Select(x => new { x.UserId, x.User.FirstName, x.User.LastName, x.User.Email }).ToList(),
                     Attachments = m.Attachments
                         .OrderBy(a => a.FileId)
@@ -205,6 +206,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
                 m.RefCommentId,
                 m.Mentions.Select(x => new MessagePerson(x.UserId, PersonName.Of(x.FirstName, x.LastName, x.Email))).OrderBy(x => x.Name).ToList(),
                 m.Attachments,
-                m.CreatedAt))
+                m.CreatedAt,
+                m.ViaProton))
             .ToList();
 }

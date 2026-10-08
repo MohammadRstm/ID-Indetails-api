@@ -18,6 +18,9 @@ public class Message
 
     public long? RefCommentId { get; set; }
 
+    /// <summary>The confirmed Proton action that sent it as the sender, so the chat can say so. Null for everything typed.</summary>
+    public long? ProtonActionId { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public Conversation Conversation { get; set; } = null!;

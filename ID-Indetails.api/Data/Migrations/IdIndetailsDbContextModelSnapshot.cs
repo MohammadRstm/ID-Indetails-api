@@ -1390,6 +1390,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(32)")
                         .HasColumnName("kind");
 
+                    b.Property<long?>("ProtonActionId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("proton_action_id");
+
                     b.Property<long?>("RefCommentId")
                         .HasColumnType("bigint")
                         .HasColumnName("ref_comment_id");
@@ -1404,6 +1408,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_messages");
+
+                    b.HasIndex("ProtonActionId")
+                        .HasDatabaseName("ix_messages_proton_action_id");
 
                     b.HasIndex("RefCommentId")
                         .HasDatabaseName("ix_messages_ref_comment_id");
@@ -4831,6 +4838,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_messages_conversations_conversation_id");
+
+                    b.HasOne("ID_Indetails.api.Models.ProtonAction", null)
+                        .WithMany()
+                        .HasForeignKey("ProtonActionId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_messages_proton_actions_proton_action_id");
 
                     b.HasOne("ID_Indetails.api.Models.WorkEntryComment", null)
                         .WithMany()

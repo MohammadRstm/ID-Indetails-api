@@ -43,7 +43,8 @@ public sealed record MessageResponse(
     IReadOnlyList<ChatPersonResponse> Mentions,
     IReadOnlyList<FileResponse> Attachments,
     TaskCommentResponse? TaskComment,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool ViaProton = false);
 
 /// <summary>Oldest first. <paramref name="HasMore"/> says older messages exist.</summary>
 public sealed record MessagePageResponse(IReadOnlyList<MessageResponse> Items, bool HasMore);

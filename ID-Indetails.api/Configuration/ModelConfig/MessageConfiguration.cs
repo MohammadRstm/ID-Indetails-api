@@ -38,5 +38,11 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
             .WithMany()
             .HasForeignKey(x => x.RefCommentId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // the message stays when old Proton actions are cleared out; it just no longer says it came through Proton
+        builder.HasOne<ProtonAction>()
+            .WithMany()
+            .HasForeignKey(x => x.ProtonActionId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

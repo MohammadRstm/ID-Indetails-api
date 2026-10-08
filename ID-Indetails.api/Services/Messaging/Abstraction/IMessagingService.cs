@@ -20,12 +20,18 @@ public interface IMessagingService
 
     Task<MessageResponse> SendToTeamAsync(long teamId, SendMessageRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>The same, sent by a confirmed Proton action: the message says it came through Proton.</summary>
+    Task<MessageResponse> SendToTeamAsync(long teamId, SendMessageRequest request, long? protonActionId, CancellationToken cancellationToken);
+
     /// <summary>Marks the chat read up to its latest message and returns the new badge.</summary>
     Task<MessagesBadgeResponse> MarkTeamReadAsync(long teamId, CancellationToken cancellationToken = default);
 
     Task<MessagePageResponse> DirectMessagesAsync(long userId, MessagePageQuery query, CancellationToken cancellationToken = default);
 
     Task<MessageResponse> SendDirectAsync(long userId, SendMessageRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>The same, sent by a confirmed Proton action: the message says it came through Proton.</summary>
+    Task<MessageResponse> SendDirectAsync(long userId, SendMessageRequest request, long? protonActionId, CancellationToken cancellationToken);
 
     /// <inheritdoc cref="MarkTeamReadAsync"/>
     Task<MessagesBadgeResponse> MarkDirectReadAsync(long userId, CancellationToken cancellationToken = default);

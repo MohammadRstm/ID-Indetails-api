@@ -98,7 +98,10 @@ public sealed class MessagingService(
         return await PageAsync(await messaging.TeamConversationAsync(team.Id, cancellationToken), query, cancellationToken);
     }
 
-    public async Task<MessageResponse> SendToTeamAsync(long teamId, SendMessageRequest request, CancellationToken cancellationToken = default)
+    public Task<MessageResponse> SendToTeamAsync(long teamId, SendMessageRequest request, CancellationToken cancellationToken = default)
+        => SendToTeamAsync(teamId, request, null, cancellationToken);
+
+    public async Task<MessageResponse> SendToTeamAsync(long teamId, SendMessageRequest request, long? protonActionId, CancellationToken cancellationToken)
     {
         var me = await ViewerAsync(cancellationToken);
         var team = await TeamChatAsync(me, teamId, cancellationToken);
@@ -109,7 +112,7 @@ public sealed class MessagingService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var conversation = await TeamConversationForWriteAsync(team, cancellationToken);
         var message = await PostAsync(
-            conversation, me.Id, request.Body, MessageKinds.Text, mentionIds, request.AttachmentIds, null, null, cancellationToken);
+            conversation, me.Id, request.Body, MessageKinds.Text, mentionIds, request.AttachmentIds, null, null, cancellationToken, protonActionId);
         await transaction.CommitAsync(cancellationToken);
         TeamChanged(team, memberIds);
 
@@ -132,7 +135,10 @@ public sealed class MessagingService(
         return await PageAsync(await messaging.DirectConversationAsync(me.Id, other.Id, cancellationToken), query, cancellationToken);
     }
 
-    public async Task<MessageResponse> SendDirectAsync(long userId, SendMessageRequest request, CancellationToken cancellationToken = default)
+    public Task<MessageResponse> SendDirectAsync(long userId, SendMessageRequest request, CancellationToken cancellationToken = default)
+        => SendDirectAsync(userId, request, null, cancellationToken);
+
+    public async Task<MessageResponse> SendDirectAsync(long userId, SendMessageRequest request, long? protonActionId, CancellationToken cancellationToken)
     {
         var me = await ViewerAsync(cancellationToken);
         var other = await ReachableAsync(me, userId, cancellationToken);
@@ -153,7 +159,7 @@ public sealed class MessagingService(
             messaging.Add(conversation);
         }
 
-        var message = await PostAsync(conversation, me.Id, request.Body, MessageKinds.Text, [], request.AttachmentIds, null, null, cancellationToken);
+        var message = await PostAsync(conversation, me.Id, request.Body, MessageKinds.Text, [], request.AttachmentIds, null, null, cancellationToken, protonActionId);
         await transaction.CommitAsync(cancellationToken);
         live.ChatChanged(other.Id, new LiveChat(null, me.Id));
         live.ChatChanged(me.Id, new LiveChat(null, other.Id));
@@ -280,7 +286,8 @@ public sealed class MessagingService(
         IReadOnlyCollection<long> attachmentIds,
         long? entryId,
         long? commentId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long? protonActionId = null)
     {
         var attachments = new List<MessageAttachment>();
         foreach (var fileId in attachmentIds)
@@ -296,6 +303,7 @@ public sealed class MessagingService(
             Kind = kind,
             RefEntryId = entryId,
             RefCommentId = commentId,
+            ProtonActionId = protonActionId,
             CreatedAt = clock.UtcNow,
             Mentions = mentionIds.Select(id => new MessageMention { UserId = id }).ToList(),
             Attachments = attachments,
@@ -347,7 +355,8 @@ public sealed class MessagingService(
                 m.Mentions.Select(p => new ChatPersonResponse(p.Id, p.Name)).ToList(),
                 m.Attachments.Select(FileMapper.ToResponse).ToList(),
                 m.RefEntryId is { } entryId && shared.TryGetValue(entryId, out var e) ? TaskCard(m, e, viewer!) : null,
-                m.CreatedAt))
+                m.CreatedAt,
+                m.ViaProton))
             .ToList();
     }
 
