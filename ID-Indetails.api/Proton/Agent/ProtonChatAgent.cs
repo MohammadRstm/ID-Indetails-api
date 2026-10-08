@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
@@ -66,7 +67,14 @@ public sealed class ProtonChatAgent(
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, timeout.Token) : null;
             var turn = await RunTurnAsync(caller, access, conversation, tools, text, page, timeout.Token);
 
-            await usage.RecordAsync(turn.Record(userId, conversation.Id, text, clock.UtcNow, usage.Prices), CancellationToken.None);
+            var record = turn.Record(userId, conversation.Id, text, clock.UtcNow, usage.Prices);
+            await usage.RecordAsync(record, CancellationToken.None);
+            // what a question costs in time and money, to measure before Proton grows (no question or answer text)
+            _log.LogInformation(
+                "Proton question {Outcome} in {WallMs} ms (first model reply after {FirstReplyMs} ms): {RoundTrips} model calls, " +
+                "{ToolCalls} tool calls taking {ToolMs} ms, {InputTokens} input and {OutputTokens} output tokens, about {CostUsd} USD.",
+                record.Outcome, turn.ElapsedMs, turn.FirstReplyMs, record.RoundTrips, record.ToolCalls, turn.ToolCalls.Sum(t => t.ElapsedMs),
+                record.InputTokens + record.CacheReadTokens + record.CacheWriteTokens, record.OutputTokens, record.CostUsd);
             if (turn.Outcome == ProtonOutcome.Failed)
             {
                 throw new ServiceUnavailableException(ErrorCodes.ProtonUnavailable, "Proton couldn't answer right now. Please try again.");
@@ -343,6 +351,8 @@ internal sealed class ProtonTurn(string model)
 {
     private const int MaxAnswerLength = 8_000;
 
+    private readonly Stopwatch _watch = Stopwatch.StartNew();
+
     private ProtonTokens _tokens = ProtonTokens.None;
 
     public List<MessageParam> Messages { get; } = [];
@@ -350,6 +360,11 @@ internal sealed class ProtonTurn(string model)
     public List<ProtonToolResult> ToolCalls { get; } = [];
 
     public int RoundTrips { get; private set; }
+
+    /// <summary>Milliseconds from the question to the first model reply; null if none came.</summary>
+    public long? FirstReplyMs { get; private set; }
+
+    public long ElapsedMs => _watch.ElapsedMilliseconds;
 
     /// <summary>Input tokens of the last model call, cached ones included.</summary>
     public int LastInputTokens { get; private set; }
@@ -361,6 +376,7 @@ internal sealed class ProtonTurn(string model)
     public void Count(Message response)
     {
         RoundTrips++;
+        FirstReplyMs ??= _watch.ElapsedMilliseconds;
         var u = response.Usage;
         LastInputTokens = (int)(u.InputTokens + (u.CacheReadInputTokens ?? 0) + (u.CacheCreationInputTokens ?? 0));
         _tokens = _tokens.Add(new ProtonTokens(
