@@ -296,6 +296,35 @@ Phase 1 of [proton-stage-5-plan.md](proton-stage-5-plan.md) (E1–E3, G6).
 - **Nothing beside a card passes for a Confirm.** While a proposal is pending, Proton offers no yes/no buttons and no
   suggested replies, and a yes/no click is refused.
 
+## Forms and message drafts (Stage 5, Phase 5)
+
+Proton can fill a form for the person to check and save, and draft a message for them to send. It never saves,
+submits or sends anything itself.
+
+- **`fill_form {form, id?, <form>: values}`** (`Proton/Ui/ProtonForms.cs`): one typed record per form (decision 11b,
+  no loose dictionary). The forms are `client`, `meeting`, `new_project` (no money: revenue, fee, markup and pay don't
+  exist in it), `edit_project`, `report_bug`, `invite` (address, position and team, never role or pay) and `message`.
+  - Shape problems go back to the model field by field (lengths, email format, times).
+  - It needs the endpoint the form saves through, and any record it names must be visible to the user.
+  - `report_bug`, `invite` and `message` fill only on a typed turn. An invitation's email only when the user typed that
+    address in this conversation (the conversation keeps the typed questions).
+  - A draft goes only to one of the user's contacts or a team chat they are in.
+  - The command `fill_form` runs after the surface that opens the form (`Pick`: place, fill, preferences).
+- **Client** (`formFill.ts`): a form that can be filled registers an adapter while it is open (`useProtonForm`);
+  a fill that arrives before the form opens waits up to 10 s. Adapters fill **empty** fields only (`fillEmpty`); the edit
+  form replaces values the user asked to change and shows what they were (`fillChange`). A note lists what was filled.
+  In a filled form, **Enter does nothing until the person touches it**; the form's own Save is how it is saved.
+  Pilots: `ClientModal`, `MeetingModal`, `CreateProjectModal`, `EditProjectModal`, `ReportBugModal`, `InviteModal`.
+- **Drafts**: a message fill opens the chat and puts the draft in its composer (a store keyed by chat, never the URL).
+  Enter doesn't send a Proton draft until the person changes it; they press Send.
+- **Messaging reads** (D1), as the user, through an explicit allow-list of endpoints without a permission of their own
+  (`ProtonEndpoint.OfRuleBased`: `Messages.Contacts`, `Messages.Conversations`, `Notifications.List`, each needing
+  `proton:use`): `find_recipient` (contacts and the user's team chats, with role, position, team and business),
+  `get_my_inbox` (who, unread, mention, when; **never message bodies**), `get_my_notifications`. A new `team` ref type
+  names a team chat the user is in; `open_surface message_team` opens it. The page context reports an open chat by id.
+- Later forms in the plan (company details, report options, overhead line, material rows) and sending (Phase 7) build
+  on the same pieces.
+
 ## Live answers (Stage 5, Phase 3)
 
 `POST /api/proton/messages/stream` takes the same request as `/api/proton/messages`, with `proton:use` and the

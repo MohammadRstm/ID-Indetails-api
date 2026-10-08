@@ -91,6 +91,8 @@ public enum ProtonRefType
     Project,
     Client,
     Person,
+    /// <summary>A team chat the user is in (find_recipient, the inbox): its id is the team's.</summary>
+    Team,
 }
 
 /// <summary>A record an answer is about. The client turns these into links; the model never writes URLs.</summary>

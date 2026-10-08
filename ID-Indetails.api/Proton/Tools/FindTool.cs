@@ -61,7 +61,8 @@ public sealed class FindTool(IProjectService projects, IClientService clients, I
             throw new ProtonToolInputException("Give a name to look for.");
         }
 
-        var types = input.Types is { Count: > 0 } ? input.Types.Distinct() : Enum.GetValues<ProtonRefType>();
+        // teams are found among the user's own chats, by find_recipient
+        var types = (input.Types is { Count: > 0 } ? input.Types.Distinct() : Enum.GetValues<ProtonRefType>()).Where(t => t != ProtonRefType.Team);
         var matches = new List<FoundRecord>();
         var notAllowed = new List<ProtonRefType>();
         foreach (var type in types)
