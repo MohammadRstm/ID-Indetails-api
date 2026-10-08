@@ -72,6 +72,7 @@ public sealed record ProtonUiCommand(
 
     public static ProtonUiCommand Refresh { get; } = new(ProtonUiCommandType.Refresh, "this page");
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool Navigates => Type != ProtonUiCommandType.Refresh;
 }
 
