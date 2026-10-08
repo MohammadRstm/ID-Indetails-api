@@ -6,6 +6,7 @@ using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -22,6 +23,7 @@ public sealed class WorkLogNotifier(
     IWorkEntryRepository entries,
     INotificationRepository notifications,
     ILiveUpdates live,
+    IPushQueue pushes,
     IClock clock) : IWorkLogNotifier
 {
     public const int LongEntryMinutes = 180;
@@ -66,12 +68,13 @@ public sealed class WorkLogNotifier(
         await entries.LockDomainAsync(DomainCodes.Design, cancellationToken);
         live.NotificationsChanged(recipients);
         var digestKey = $"work-digest-{clock.CompanyToday:yyyy-MM-dd}";
+        var changed = new List<Notification>();
         foreach (var recipientId in recipients)
         {
             var digest = await notifications.GetDigestForUpdateAsync(recipientId, digestKey, cancellationToken);
             if (digest is null)
             {
-                notifications.Add(new Notification
+                var created = new Notification
                 {
                     RecipientId = recipientId,
                     Kind = NotificationKinds.WorkDigest,
@@ -81,7 +84,9 @@ public sealed class WorkLogNotifier(
                     Count = 1,
                     Payload = JsonSerializer.Serialize(new DigestPayload(minutes, authorName, projectTitle), JsonSerializerOptions.Web),
                     CreatedAt = clock.UtcNow,
-                });
+                };
+                notifications.Add(created);
+                changed.Add(created);
                 continue;
             }
 
@@ -92,7 +97,10 @@ public sealed class WorkLogNotifier(
             digest.Payload = JsonSerializer.Serialize(new DigestPayload((sofar?.Minutes ?? 0) + minutes, authorName, projectTitle), JsonSerializerOptions.Web);
             digest.CreatedAt = clock.UtcNow;
             digest.ReadAt = null;
+            changed.Add(digest);
         }
+
+        pushes.Notifications(changed, digest: true);
     }
 
     private async Task<IReadOnlyList<long>> RecipientsAsync(long authorId, CancellationToken cancellationToken)

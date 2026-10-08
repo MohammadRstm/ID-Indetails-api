@@ -1,3 +1,4 @@
+using System.Net;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Hubs;
 using ID_Indetails.api.Jobs;
@@ -273,6 +274,15 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();
         services.AddScoped<IDeviceService, DeviceService>();
         services.AddHostedService<DeviceCleanupJob>();
+        services.AddSingleton<PushChannel>();
+        services.AddSingleton<PushThrottle>();
+        services.AddSingleton<PushReceipts>();
+        services.AddScoped<IPushQueue, PushQueue>();
+        services.AddScoped<IPushDelivery, PushDelivery>();
+        services.AddHttpClient<IPushProvider, ExpoPushProvider>(client => client.Timeout = TimeSpan.FromSeconds(20))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        services.AddHostedService<PushDispatcher>();
+        services.AddHostedService<PushReceiptsJob>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IBugReportService, BugReportService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();

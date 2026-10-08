@@ -17,6 +17,7 @@ using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.Reports.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
@@ -58,6 +59,7 @@ public sealed class ScheduledNotifications(
     IInvoiceReminderService invoiceReminders,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
+    IPushQueue pushes,
     IClock clock) : IScheduledNotifications
 {
     public const int OverdueLookbackDays = 7;
@@ -84,6 +86,7 @@ public sealed class ScheduledNotifications(
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await live.FlushAsync(cancellationToken);
+        await pushes.FlushAsync(cancellationToken);
     }
 
     private async Task WeeklySummaryAsync(DateOnly today, CancellationToken cancellationToken)

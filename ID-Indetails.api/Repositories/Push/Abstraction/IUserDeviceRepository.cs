@@ -34,6 +34,12 @@ public interface IUserDeviceRepository
     /// <summary>The person's live devices, newest first. Not tracked.</summary>
     Task<IReadOnlyList<UserDevice>> ListLiveForUserAsync(long userId, DateTime now, CancellationToken cancellationToken = default);
 
+    /// <summary>The live devices of these people. Not tracked.</summary>
+    Task<IReadOnlyList<UserDevice>> ListLiveForUsersAsync(IReadOnlyCollection<long> userIds, DateTime now, CancellationToken cancellationToken = default);
+
+    /// <summary>For a token the push service no longer accepts.</summary>
+    Task DeleteByTokenAsync(string pushToken, CancellationToken cancellationToken = default);
+
     Task DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     Task DeleteSessionOfUserAsync(long userId, Guid sessionId, CancellationToken cancellationToken = default);

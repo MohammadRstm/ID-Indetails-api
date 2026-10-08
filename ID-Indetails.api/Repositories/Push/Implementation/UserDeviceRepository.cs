@@ -47,6 +47,15 @@ public sealed class UserDeviceRepository(IdIndetailsDbContext db) : IUserDeviceR
             .ThenByDescending(d => d.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<UserDevice>> ListLiveForUsersAsync(
+        IReadOnlyCollection<long> userIds,
+        DateTime now,
+        CancellationToken cancellationToken = default)
+        => await Live(now).AsNoTracking().Where(d => userIds.Contains(d.UserId)).ToListAsync(cancellationToken);
+
+    public Task DeleteByTokenAsync(string pushToken, CancellationToken cancellationToken = default)
+        => db.UserDevices.Where(d => d.PushToken == pushToken).ExecuteDeleteAsync(cancellationToken);
+
     public Task DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
         => db.UserDevices.Where(d => d.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
 
