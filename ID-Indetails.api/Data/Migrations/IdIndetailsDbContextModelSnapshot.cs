@@ -3121,6 +3121,12 @@ namespace ID_Indetails.api.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("Client")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("client");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
@@ -3135,10 +3141,19 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("replaced_by_id");
 
+                    b.Property<string>("RevokeReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("revoke_reason");
+
                     b.Property<DateTime?>("RevokedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
                         .HasColumnName("revoked_at");
+
+                    b.Property<Guid?>("SessionId")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("session_id");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -3156,6 +3171,9 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("ReplacedById")
                         .HasDatabaseName("ix_refresh_tokens_replaced_by_id");
 
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_refresh_tokens_session_id");
+
                     b.HasIndex("TokenHash")
                         .IsUnique()
                         .HasDatabaseName("ix_refresh_tokens_token_hash");
@@ -3163,7 +3181,12 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_refresh_tokens_user_id");
 
-                    b.ToTable("refresh_tokens", (string)null);
+                    b.ToTable("refresh_tokens", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_refresh_tokens_client", "`client` IN ('web', 'mobile')");
+
+                            t.HasCheckConstraint("ck_refresh_tokens_revoke_reason", "`revoke_reason` IN ('rotated', 'superseded', 'signed_out', 'revoked')");
+                        });
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.RequirementAssignee", b =>

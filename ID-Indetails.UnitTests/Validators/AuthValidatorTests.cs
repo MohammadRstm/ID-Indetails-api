@@ -31,6 +31,16 @@ public class AuthValidatorTests
     }
 
     [Fact]
+    public void A_phone_refresh_token_is_only_limited_in_size()
+    {
+        var validator = new MobileRefreshTokenRequestValidator();
+
+        validator.Validate(new MobileRefreshTokenRequest { RefreshToken = "" }).IsValid.ShouldBeTrue();
+        validator.Validate(new MobileRefreshTokenRequest { RefreshToken = new string('a', 43) }).IsValid.ShouldBeTrue();
+        validator.Validate(new MobileRefreshTokenRequest { RefreshToken = new string('a', 201) }).IsValid.ShouldBeFalse();
+    }
+
+    [Fact]
     public void Forgot_password_needs_a_valid_email()
     {
         var validator = new ForgotPasswordRequestValidator();

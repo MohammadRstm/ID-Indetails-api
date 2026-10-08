@@ -120,6 +120,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
         StoreAsSnakeCase<ProtonActionStatus>(configurationBuilder);
         StoreAsSnakeCase<ProtonActionRisk>(configurationBuilder);
+        StoreAsSnakeCase<RefreshTokenClient>(configurationBuilder);
+        StoreAsSnakeCase<RevokeReason>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)
