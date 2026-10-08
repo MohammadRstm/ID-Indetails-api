@@ -334,8 +334,39 @@ prompt version. Error codes: `404 proton_action_not_found` (not yours, other con
 proton_action_not_pending` (already decided, replaced or running), `422 proton_action_expired`, `422
 proton_action_stale`.
 
-The client shows Proton as a drawer from the top bar (`proton:use` only), with each proposal as a card listing what
-will change (before → after), its risk, and Cancel / Confirm. Typing "yes" confirms nothing.
+The client shows each proposal as a card in Proton's chat, listing what will change (before → after), its risk, and
+Cancel / Confirm. Typing "yes" confirms nothing.
+
+## The blob (client, Stage 5 Phase 2)
+
+Proton appears as a soft, furry blob on every signed-in screen of people with `proton:use`, when Proton is switched
+on. It replaces the top-bar button. It is mounted once, in `LiveRoute`, never on the sign-in pages or
+`/change-password` (client repo, `src/domains/shared/proton/ProtonHost.tsx`; the files below are beside it).
+
+- **State** lives outside any page (`protonStore.ts`), and the asking runs in the host (`useProtonConversation.ts`).
+  A reply that arrives after the panel closed, or after the person moved on, still lands: the blob shows an unseen
+  count and, for a few seconds, the start of the reply.
+- **Moods** (`blob/protonMood.ts`): asleep (budget or allowance used up), error, working (a question past 3 s),
+  thinking, talking, happy (a confirmed change went through), proposing (a card waits), listening (the person is
+  typing), idle. The mood sets the shape, the eyes and the accessible name ("Proton, thinking"). After 8 s the chat
+  says "Still looking…".
+- **Talking**: the blob inflates with a talk level that dips on spaces and punctuation, for
+  `clamp(chars × 28, 900, 4200)` ms (`blob/talkPlan.ts`). The newest reply is revealed in that time (a mask wipe,
+  full text in the DOM; a click shows it all). Screen readers hear a reply once it is in.
+- **Drawing** (`blob/blobShape.ts`, `blob/useBlobMotion.ts`): radii joined by a closed Catmull-Rom curve. A
+  requestAnimationFrame loop redraws the outline only while thinking, working or talking (at most about 30 frames a
+  second while talking), pauses when the tab is hidden, and never runs under reduced motion or "Calm animations".
+  Only a static glow layer is blurred. No new dependencies.
+- **Moving** (`blob/useBlobDrag.ts`, `blob/blobPosition.ts`): drag with mouse, finger or pen (6 / 8 px before it is a
+  drag); it snaps to the nearer edge. Arrow keys, Home and End move it too, and the panel's menu has "Move to the
+  left/right", "Calm animations" and "Tuck Proton away". Its side, height and those choices are kept in
+  `localStorage`. It moves off the focused field, a dialog's buttons and the message composer.
+- **Panel**: a speech bubble beside the blob on wide screens (`min(400px, 100vw − 32px)`), a bottom sheet on phones
+  (88% of the visible height, from the VisualViewport API; it folds to its header after Proton opens a page). It is a
+  labelled dialog that doesn't take the page away (`aria-modal="false"`), above dialogs at z-index 108.
+- **Dialogs** (decision 35): Escape in Proton closes only Proton, and `Modal` and `Drawer` ignore keys pressed in the
+  Proton layer (`[data-proton-layer]`). While Proton is open, a dialog renders `aria-modal="false"`.
+- **Command palette**: "Ask Proton" opens it.
 
 ## Prompts
 
