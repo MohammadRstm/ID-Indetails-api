@@ -221,6 +221,30 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
         await (await AskAsync(admin, "Still there?", mine.ConversationId)).ShouldFailWithAsync(404, ErrorCodes.ProtonConversationEnded);
     }
 
+    /// <summary>Unlike a chat that grows too long, one whose answers were given under other permissions isn't recapped.</summary>
+    [Fact]
+    public async Task A_change_of_access_ends_the_chat_and_nothing_of_it_carries_over()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        api.Anthropic.Reply(FakeAnthropic.Text("Hello."), FakeAnthropic.Text("I'm here."));
+        var first = await OkAsync(AskAsync(admin, "Hi, I'm looking into the Tower Seven figures"));
+
+        var granted = await Client.PutJsonAsync($"/api/users/{admin.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.FinancialView, action = "grant", reason = "Handles the money" } } }, superAdmin.AccessToken);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+
+        var ended = await (await AskAsync(admin, "Still there?", first.ConversationId)).ShouldFailWithAsync(404, ErrorCodes.ProtonConversationEnded);
+        ended.Message.ShouldContain("access changed");
+
+        var fresh = await OkAsync(AskAsync(admin, "Still there?"));
+        fresh.ConversationId.ShouldNotBe(first.ConversationId);
+        var sent = api.Anthropic.Requests[1]["messages"]!.ToJsonString();
+        sent.ShouldNotContain("Tower Seven");
+        sent.ShouldNotContain("recap");
+    }
+
     [Fact]
     public async Task Bad_tool_input_goes_back_to_the_model_and_a_question_needs_text()
     {

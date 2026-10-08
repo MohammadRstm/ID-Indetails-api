@@ -34,6 +34,42 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
     /// <summary>The options of the last reply that offered any; a pick must be one of them.</summary>
     public IReadOnlyList<Ui.ProtonChoice> OfferedChoices { get; set; } = [];
 
+    private const int RecapExchanges = 3;
+    private const int RecapTextLength = 400;
+
+    private readonly Queue<(string Question, string Answer)> _exchanges = new();
+
+    /// <summary>
+    /// What the app tells the model about the chat before a rollover, until a question after it is answered. Written
+    /// by the app from the last questions and answers; null when there was no rollover.
+    /// </summary>
+    public string? Recap { get; private set; }
+
+    /// <summary>The last few questions and answers, as they were shown: what a rollover's recap is made of.</summary>
+    public void RememberExchange(string question, string answer)
+    {
+        Recap = null;
+        _exchanges.Enqueue((ProtonText.Cut(question, RecapTextLength)!, ProtonText.Cut(answer, RecapTextLength)!));
+        while (_exchanges.Count > RecapExchanges)
+        {
+            _exchanges.Dequeue();
+        }
+    }
+
+    /// <summary>
+    /// Starts the chat afresh under the same id when it is too long to carry on: the messages go, and the next question
+    /// gets a recap instead. What the tools found (focus, known records, offered options) stays, and so do pending
+    /// proposals and their notes, which belong to this id.
+    /// </summary>
+    public void RollOver()
+    {
+        Messages.Clear();
+        Questions = 0;
+        LastInputTokens = 0;
+        Recap = _exchanges.Count == 0 ? null : "Earlier in this chat (a recap by the app; the earlier messages are no longer available): "
+            + string.Join(" ", _exchanges.Select(e => $"The user asked: \"{e.Question}\" You answered: \"{e.Answer}\""));
+    }
+
     private readonly Queue<string> _actionNotes = new();
 
     /// <summary>

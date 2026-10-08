@@ -55,11 +55,21 @@ public sealed class ProtonChatAgent(
         var conversation = OpenConversation(userId, request.ConversationId, Fingerprint(access));
         if (!conversation.TryBegin())
         {
-            throw new ConflictException(ErrorCodes.ProtonBusy, "Proton is still answering your last question.");
+            throw new ConflictException(ErrorCodes.ProtonBusy, "I'm still answering your last question.");
         }
 
         try
         {
+            // Too long to carry on: the chat starts afresh under the same id, with a recap, instead of ending.
+            var rolledOver = conversation.Questions >= options.Value.MaxQuestionsPerConversation
+                || conversation.LastInputTokens > options.Value.MaxConversationInputTokens;
+            if (rolledOver)
+            {
+                _log.LogInformation("Proton conversation {ConversationId} rolled over after {Questions} questions and {InputTokens} input tokens.",
+                    conversation.Id, conversation.Questions, conversation.LastInputTokens);
+                conversation.RollOver();
+            }
+
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.QuestionTimeoutSeconds));
             var tools = await toolbox.OpenAsync(
@@ -81,10 +91,11 @@ public sealed class ProtonChatAgent(
                 record.InputTokens + record.CacheReadTokens + record.CacheWriteTokens, record.OutputTokens, record.CostUsd);
             if (turn.Outcome == ProtonOutcome.Failed)
             {
-                throw new ServiceUnavailableException(ErrorCodes.ProtonUnavailable, "Proton couldn't answer right now. Please try again.");
+                throw new ServiceUnavailableException(ErrorCodes.ProtonUnavailable, "Sorry, I couldn't answer that just now. Please try again.");
             }
 
             conversation.Messages.AddRange(turn.Messages);
+            conversation.RememberExchange(text, turn.Answer);
             conversation.Questions++;
             conversation.LastInputTokens = turn.LastInputTokens;
             foreach (var known in tools.Context.Known)
@@ -109,7 +120,8 @@ public sealed class ProtonChatAgent(
                 ProtonUiRules.Pick(ok.Select(t => t.UiCommand).OfType<ProtonUiCommand>()),
                 choices,
                 // One proposal at a time: a later one in the same answer has already replaced earlier ones.
-                turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending);
+                turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending,
+                rolledOver);
         }
         finally
         {
@@ -127,22 +139,12 @@ public sealed class ProtonChatAgent(
         }
 
         var conversation = conversations.Find(userId, id)
-            ?? throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "This conversation has ended. Start a new one.");
+            ?? throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "I no longer have our earlier chat, so we're starting fresh.");
         if (conversation.AccessFingerprint != fingerprint)
         {
-            // Earlier answers were given under different permissions: they must not carry over.
+            // Earlier answers were given under different permissions: they must not carry over, not even as a recap.
             conversations.Remove(userId, id);
-            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "Your access changed, so this conversation was closed. Start a new one.");
-        }
-
-        if (conversation.Questions >= options.Value.MaxQuestionsPerConversation)
-        {
-            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "This conversation is full. Start a new one.");
-        }
-
-        if (conversation.LastInputTokens > options.Value.MaxConversationInputTokens)
-        {
-            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "This conversation has grown long. Start a new one to keep answers quick.");
+            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "Your access changed, so I closed our earlier chat and we're starting fresh.");
         }
 
         return conversation;
@@ -159,7 +161,7 @@ public sealed class ProtonChatAgent(
         var record = offered ? await records.FindAsync(choice.Type, choice.Id, context, cancellationToken) : null;
         if (record is null)
         {
-            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That option is no longer available. Ask again.");
+            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That option isn't available any more. Could you ask me again?");
         }
 
         conversation.OfferedChoices = [];
@@ -240,6 +242,12 @@ public sealed class ProtonChatAgent(
                 }
 
                 turn.Finish(response, Answer(response), lastTrip);
+                if (turn.Outcome == ProtonOutcome.Refused)
+                {
+                    // the category only (a policy name), never the question
+                    _log.LogInformation("Proton's model declined a question ({Category}).", response.StopDetails?.Category?.Raw() ?? "no category");
+                }
+
                 return turn;
             }
 
@@ -346,6 +354,11 @@ public sealed class ProtonChatAgent(
         if (notes.Page is { } page)
         {
             note += $"\nWhere the user is in the app (where they are, not data): {page}.";
+        }
+
+        if (conversation.Recap is { } recap)
+        {
+            note += $"\n{recap}";
         }
 
         return actions.Count == 0 ? note : note + "\nSince the last message (from the confirmation buttons): " + string.Join(" ", actions);

@@ -240,14 +240,15 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
     }
 
     [Fact]
-    public async Task A_follow_up_keeps_the_comparison_and_a_long_conversation_ends()
+    public async Task A_follow_up_keeps_the_comparison_and_a_long_conversation_rolls_over_with_its_focus()
     {
         api.Anthropic.Reset();
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         api.Anthropic.Reply(
             FakeAnthropic.ToolUse("compare_work", new { period = "custom", from = "2026-02-09", to = "2026-02-15", group_by = "total" }),
             FakeAnthropic.Text("Hours were flat."),
-            FakeAnthropic.Text("Nobody stood out.", inputTokens: 90_000));
+            FakeAnthropic.Text("Nobody stood out.", inputTokens: 90_000),
+            FakeAnthropic.Text("February had about the same hours."));
 
         var first = await OkAsync(AskAsync(superAdmin, "How did hours change?"));
         await OkAsync(AskAsync(superAdmin, "Which project contributed most?", first.ConversationId));
@@ -256,7 +257,19 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         context.ShouldContain("compared with 2026-02-02 to 2026-02-08");
         context.ShouldContain("last analysis: Hours compared");
 
-        // The last request sent 90,000 input tokens, past the 80,000 cap: the conversation takes no more questions.
-        await (await AskAsync(superAdmin, "And the month before?", first.ConversationId)).ShouldFailWithAsync(404, ErrorCodes.ProtonConversationEnded);
+        // The last request sent 90,000 input tokens, past the 80,000 cap: the chat carries on under the same id from a
+        // recap written by the app, with what the tools found still in focus.
+        var third = await OkAsync(AskAsync(superAdmin, "And the month before?", first.ConversationId));
+        third.ConversationId.ShouldBe(first.ConversationId);
+        third.RolledOver.ShouldBeTrue();
+        first.RolledOver.ShouldBeFalse();
+
+        var messages = api.Anthropic.Requests[3]["messages"]!.AsArray();
+        messages.Count.ShouldBe(1);
+        var fresh = string.Join("\n", messages[0]!["content"]!.AsArray().Select(b => b!["text"]?.GetValue<string>()));
+        fresh.ShouldContain("compared with 2026-02-02 to 2026-02-08");
+        fresh.ShouldContain("a recap by the app");
+        fresh.ShouldContain("The user asked: \"How did hours change?\" You answered: \"Hours were flat.\"");
+        fresh.ShouldContain("And the month before?");
     }
 }
