@@ -339,6 +339,9 @@ public sealed class ProtonChatAgent(
                 },
             });
 
+            // the answer written before a call that only adds buttons (options, suggested replies) is the answer itself:
+            // what comes after such a call is only a closing line, so the two are kept together
+            var answered = "";
             for (var trip = 1; trip <= settings.MaxRoundTrips; trip++)
             {
                 var lastTrip = trip == settings.MaxRoundTrips || turn.ToolCalls.Count >= settings.MaxToolCallsPerQuestion;
@@ -364,6 +367,11 @@ public sealed class ProtonChatAgent(
 
                 if (response.StopReason == StopReason.ToolUse && toolUses.Count > 0 && !lastTrip)
                 {
+                    if (toolUses.All(t => ButtonTools.Contains(t.Name)))
+                    {
+                        answered = Join(answered, TextOf(response));
+                    }
+
                     turn.Messages.Add(new MessageParam
                     {
                         Role = Role.User,
@@ -375,7 +383,7 @@ public sealed class ProtonChatAgent(
                 // the provider paused a long server-side step (a tool search): sending the turn back lets it carry on
                 if (response.StopReason == StopReason.PauseTurn && !lastTrip) continue;
 
-                turn.Finish(response, Answer(response), lastTrip);
+                turn.Finish(response, Answer(response, answered), lastTrip);
                 if (turn.Outcome == ProtonOutcome.Refused)
                 {
                     // the category only (a policy name), never the question
@@ -461,18 +469,26 @@ public sealed class ProtonChatAgent(
         return message.ToMessage();
     }
 
-    private static string Answer(Message response)
+    /// <summary>Tools that only add buttons under the answer: the text before them is part of the answer.</summary>
+    private static readonly IReadOnlySet<string> ButtonTools = new HashSet<string>(StringComparer.Ordinal) { "suggest_replies", "offer_choices" };
+
+    private static string Answer(Message response, string answered)
     {
         if (response.StopReason == StopReason.Refusal)
         {
             return "I can't help with that one.";
         }
 
-        var text = string.Join("\n\n", response.Content
-            .Select(b => b.TryPickText(out var t) ? t.Text.Trim() : null)
-            .Where(t => !string.IsNullOrEmpty(t)));
+        var text = Join(answered, TextOf(response));
         return string.IsNullOrWhiteSpace(text) ? "I couldn't put an answer together. Please try asking another way." : text;
     }
+
+    private static string TextOf(Message response) => string.Join("\n\n", response.Content
+        .Select(b => b.TryPickText(out var t) ? t.Text.Trim() : null)
+        .Where(t => !string.IsNullOrEmpty(t)));
+
+    private static string Join(string first, string next)
+        => first.Length == 0 ? next : next.Length == 0 ? first : $"{first}\n\n{next}";
 
     private static ToolUnion Define(IProtonTool tool, bool deferred)
     {

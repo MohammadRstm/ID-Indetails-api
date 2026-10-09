@@ -200,7 +200,7 @@ public sealed record RepliesOffered(string Question, IReadOnlyList<ProtonQuickRe
 /// </summary>
 public sealed class OfferChoicesTool : ProtonTool<OfferChoicesInput>
 {
-    private const string Shown = "The user sees these as buttons under your answer.";
+    private const string Shown = ProtonButtons.Shown;
 
     public override string Name => "offer_choices";
 
@@ -308,7 +308,7 @@ public sealed class SuggestRepliesTool : ProtonTool<SuggestRepliesInput>
                 $"Suggest 1 to {ProtonUiRules.MaxSuggestions} replies of at most {ProtonUiRules.MaxSuggestionLength} characters each, on one line.");
         }
 
-        return Task.FromResult(new ProtonToolOutput(new RepliesSuggested(replies, "The user sees these as buttons under your answer."), [])
+        return Task.FromResult(new ProtonToolOutput(new RepliesSuggested(replies, ProtonButtons.Shown), [])
         {
             Suggestions = replies,
         });
@@ -619,4 +619,15 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
         ProtonForm.LogWork => "log work",
         _ => form.ToString().ToLowerInvariant(),
     };
+}
+
+internal static class ProtonButtons
+{
+    /// <summary>
+    /// What the model is told once it has added buttons. It sometimes writes its answer only in its thinking and then
+    /// calls a button tool, believing the user has read it: they haven't, so it is told to write the answer now.
+    /// </summary>
+    public const string Shown =
+        "The user sees these as buttons under your answer. They have seen nothing else yet, and never see tool results: " +
+        "if you haven't written your answer in your reply text, write all of it now (not \"above\").";
 }
