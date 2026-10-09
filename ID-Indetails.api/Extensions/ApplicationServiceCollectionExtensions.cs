@@ -1,3 +1,4 @@
+using System.Net;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Hubs;
 using ID_Indetails.api.Jobs;
@@ -38,6 +39,8 @@ using ID_Indetails.api.Repositories.Invitations.Implementation;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Implementation;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
+using ID_Indetails.api.Repositories.Push.Abstraction;
+using ID_Indetails.api.Repositories.Push.Implementation;
 using ID_Indetails.api.Repositories.Projects.Implementation;
 using ID_Indetails.api.Repositories.Reports.Abstraction;
 using ID_Indetails.api.Repositories.Reports.Implementation;
@@ -98,6 +101,8 @@ using ID_Indetails.api.Services.MoneySummaries.Implementation;
 using ID_Indetails.api.Services.Permissions.Abstraction;
 using ID_Indetails.api.Services.Permissions.Implementation;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.Push.Abstraction;
+using ID_Indetails.api.Services.Push.Implementation;
 using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Reports.Abstraction;
 using ID_Indetails.api.Services.Reports.Implementation;
@@ -147,6 +152,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        services.AddOptions<PushOptions>().BindConfiguration(PushOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
 
         services.AddMemoryCache();
         services.AddSignalR();
@@ -186,6 +192,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IInvoiceRepository, InvoiceRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<INotificationSettingsRepository, NotificationSettingsRepository>();
         services.AddScoped<IDomainSettingsRepository, DomainSettingsRepository>();
         services.AddScoped<IWorkEntryRepository, WorkEntryRepository>();
         services.AddScoped<IWorkEntryCommentRepository, WorkEntryCommentRepository>();
@@ -197,6 +204,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IStatementRepository, StatementRepository>();
         services.AddScoped<ISiteRecordsRepository, SiteRecordsRepository>();
         services.AddScoped<IBoardLayoutRepository, BoardLayoutRepository>();
+        services.AddScoped<IUserDeviceRepository, UserDeviceRepository>();
 
         // Services
         services.AddSingleton<IPasswordService, PasswordService>();
@@ -255,6 +263,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IActivityFeedService, ActivityFeedService>();
         services.AddScoped<INotificationSender, NotificationSender>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<INotificationSettingsService, NotificationSettingsService>();
         services.AddScoped<IProjectNotifier, ProjectNotifier>();
         services.AddScoped<IScheduledNotifications, ScheduledNotifications>();
         services.AddHostedService<NotificationScheduler>();
@@ -265,6 +274,19 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();
+        services.AddScoped<IDeviceService, DeviceService>();
+        services.AddHostedService<DeviceCleanupJob>();
+        services.AddSingleton<PushChannel>();
+        services.AddSingleton<PushThrottle>();
+        services.AddSingleton<PushReceipts>();
+        services.AddSingleton<ReminderLog>();
+        services.AddScoped<IPushReminders, PushReminders>();
+        services.AddScoped<IPushQueue, PushQueue>();
+        services.AddScoped<IPushDelivery, PushDelivery>();
+        services.AddHttpClient<IPushProvider, ExpoPushProvider>(client => client.Timeout = TimeSpan.FromSeconds(20))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        services.AddHostedService<PushDispatcher>();
+        services.AddHostedService<PushReceiptsJob>();
         services.AddScoped<ISearchService, SearchService>();
         services.AddScoped<IBugReportService, BugReportService>();
         services.AddSingleton<IEmailSender, SmtpEmailSender>();

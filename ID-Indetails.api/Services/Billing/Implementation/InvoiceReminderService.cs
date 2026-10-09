@@ -3,6 +3,7 @@ using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Documents.Abstraction;
+using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 
 namespace ID_Indetails.api.Services.Billing.Implementation;
@@ -68,6 +69,7 @@ public sealed class InvoiceReminderService(
             var documents = services.GetRequiredService<IDocumentService>();
             await services.GetRequiredService<IInvoiceService>().SendReminderAsync(invoiceId, dueBy, documents.EmailInvoiceReminderAsync, cancellationToken);
             await services.GetRequiredService<ILiveUpdates>().FlushAsync(cancellationToken);
+            await services.GetRequiredService<IPushQueue>().FlushAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

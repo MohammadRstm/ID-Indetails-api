@@ -45,6 +45,9 @@ public sealed record LabourWeekResponse
 
     /// <summary>Whether the caller may submit or change this week now.</summary>
     public bool CanEdit { get; init; }
+
+    /// <summary>Opaque: "0" while the week isn't reported, otherwise a value that changes whenever the week changes.</summary>
+    public string Version { get; init; } = "0";
 }
 
 public sealed record LabourDefaultResponse(

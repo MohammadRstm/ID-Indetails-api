@@ -87,4 +87,15 @@ public class AccessTokenServiceTests
         jwt.TryGetClaim(AuthClaimTypes.Position, out _).ShouldBeFalse();
         jwt.GetClaim(AuthClaimTypes.MustChangePassword).Value.ShouldBe("true");
     }
+
+    [Fact]
+    public void Only_the_phone_app_s_tokens_carry_its_session_id()
+    {
+        var sessionId = Guid.NewGuid();
+
+        new JsonWebToken(CreateService().Create(DesignAdmin, sessionId).Token)
+            .GetClaim(AuthClaimTypes.SessionId).Value.ShouldBe(sessionId.ToString());
+        new JsonWebToken(CreateService().Create(DesignAdmin).Token)
+            .TryGetClaim(AuthClaimTypes.SessionId, out _).ShouldBeFalse();
+    }
 }
