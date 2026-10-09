@@ -342,6 +342,7 @@ public sealed class ProtonChatAgent(
             // the answer written before a call that only adds buttons (options, suggested replies) is the answer itself:
             // what comes after such a call is only a closing line, so the two are kept together
             var answered = "";
+            var askedToAnswer = false;
             for (var trip = 1; trip <= settings.MaxRoundTrips; trip++)
             {
                 var lastTrip = trip == settings.MaxRoundTrips || turn.ToolCalls.Count >= settings.MaxToolCallsPerQuestion;
@@ -367,16 +368,30 @@ public sealed class ProtonChatAgent(
 
                 if (response.StopReason == StopReason.ToolUse && toolUses.Count > 0 && !lastTrip)
                 {
-                    if (toolUses.All(t => ButtonTools.Contains(t.Name)))
+                    // Suggested replies with no answer written yet, after or alongside a lookup: the model drafted the
+                    // answer in its thinking, which the user never sees, and would go on to say it is "above". They are
+                    // refused once (the lookups still run), so it writes the answer first.
+                    var written = TextOf(response);
+                    var early = !askedToAnswer && answered.Length == 0 && written.Length == 0
+                        && toolUses.Any(t => t.Name == SuggestReplies)
+                        && (turn.ToolCalls.Any(t => !ButtonTools.Contains(t.Tool)) || toolUses.Any(t => !ButtonTools.Contains(t.Name)));
+                    if (early)
                     {
-                        answered = Join(answered, TextOf(response));
+                        askedToAnswer = true;
+                    }
+                    else if (toolUses.All(t => ButtonTools.Contains(t.Name)))
+                    {
+                        answered = Join(answered, written);
                     }
 
-                    turn.Messages.Add(new MessageParam
+                    var run = early ? toolUses.Where(t => t.Name != SuggestReplies).ToList() : toolUses;
+                    var results = run.Count > 0 ? await RunToolsAsync(tools, run, turn, conversation.Focus, listener, cancellationToken) : [];
+                    if (early)
                     {
-                        Role = Role.User,
-                        Content = await RunToolsAsync(tools, toolUses, turn, conversation.Focus, listener, cancellationToken),
-                    });
+                        results.AddRange(AnswerFirst(toolUses.Where(t => t.Name == SuggestReplies).ToList()));
+                    }
+
+                    turn.Messages.Add(new MessageParam { Role = Role.User, Content = results });
                     continue;
                 }
 
@@ -482,6 +497,17 @@ public sealed class ProtonChatAgent(
         var text = Join(answered, TextOf(response));
         return string.IsNullOrWhiteSpace(text) ? "I couldn't put an answer together. Please try asking another way." : text;
     }
+
+    private const string SuggestReplies = "suggest_replies";
+
+    private static List<ContentBlockParam> AnswerFirst(IReadOnlyList<ToolUseBlock> toolUses)
+        => toolUses.Select(t => (ContentBlockParam)new ToolResultBlockParam
+        {
+            ToolUseID = t.ID,
+            Content = "Not added yet: the user has seen nothing of your answer. They never see your thinking or what a tool " +
+                      "returned. Write your whole answer as text now, then add the suggested replies again with it.",
+            IsError = true,
+        }).ToList();
 
     private static string TextOf(Message response) => string.Join("\n\n", response.Content
         .Select(b => b.TryPickText(out var t) ? t.Text.Trim() : null)
