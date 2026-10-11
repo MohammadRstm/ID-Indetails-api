@@ -35,10 +35,27 @@ public sealed class ProtonUsageRepository(IdIndetailsDbContext db) : IProtonUsag
 
     public async Task<IReadOnlyList<ProtonTurnRow>> TurnsAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
         => await db.ProtonUsage.AsNoTracking()
-            .Where(u => u.OccurredAt >= fromUtc && u.OccurredAt < toUtc)
+            .Where(u => u.OccurredAt >= fromUtc && u.OccurredAt < toUtc && u.VoiceSeconds == null)
             .OrderBy(u => u.OccurredAt)
             .Select(u => new ProtonTurnRow(u.UserId, u.User.DomainCode, u.ConversationId, u.OccurredAt, u.CostUsd, u.Tools))
             .ToListAsync(cancellationToken);
+
+    public async Task<ProtonVoiceTotals> VoiceAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
+    {
+        var sessions = db.ProtonUsage.AsNoTracking()
+            .Where(u => u.OccurredAt >= fromUtc && u.OccurredAt < toUtc && u.VoiceSeconds != null);
+        var totals = await sessions
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Sessions = g.Count(),
+                Seconds = g.Sum(u => u.VoiceSeconds ?? 0),
+                Cost = g.Sum(u => u.CostUsd),
+                Estimated = g.Count(u => u.Outcome == Enums.ProtonOutcome.Failed),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+        return totals is null ? new ProtonVoiceTotals(0, 0, 0m, 0) : new ProtonVoiceTotals(totals.Sessions, totals.Seconds, totals.Cost, totals.Estimated);
+    }
 
     public async Task<IReadOnlyList<ProtonUserUsage>> ByUserAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
     {
@@ -48,7 +65,7 @@ public sealed class ProtonUsageRepository(IdIndetailsDbContext db) : IProtonUsag
             .Select(g => new
             {
                 UserId = g.Key,
-                Questions = g.Count(),
+                Questions = g.Count(u => u.VoiceSeconds == null),
                 Cost = g.Sum(u => u.CostUsd),
                 Tokens = g.Sum(u => u.InputTokens + u.OutputTokens + u.CacheReadTokens + u.CacheWriteTokens),
             })

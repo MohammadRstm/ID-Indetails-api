@@ -7,6 +7,7 @@ using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Memory;
 using ID_Indetails.api.Proton.Usage;
+using ID_Indetails.api.Proton.Voice;
 using ID_Indetails.api.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -26,6 +27,7 @@ public sealed class ProtonController(
     ProtonUsageService usage,
     ProtonBriefingService briefing,
     ProtonMemoryService memories,
+    ProtonVoiceService voice,
     ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost("messages")]
@@ -44,6 +46,25 @@ public sealed class ProtonController(
     [Produces("text/event-stream")]
     public Task Stream(AskProtonRequest request, CancellationToken cancellationToken)
         => streaming.StreamAsync(HttpContext, currentUser.Id, request, cancellationToken);
+
+    /// <summary>
+    /// Starts a voice conversation: the server asks the provider for a session with the browser's WebRTC offer and
+    /// returns its answer. The questions in it are then asked on the streaming endpoint, like typed ones.
+    /// </summary>
+    [HttpPost("voice/sessions")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    [EnableRateLimiting(RateLimitPolicies.Proton)]
+    public Task<ProtonVoiceSessionResponse> StartVoice(StartProtonVoiceRequest request, CancellationToken cancellationToken)
+        => voice.StartAsync(User, currentUser.Id, request, cancellationToken);
+
+    /// <summary>Ends the person's voice conversation: the server closes it with the provider. Ending one that already ended is fine.</summary>
+    [HttpPost("voice/sessions/{sessionId}/end")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    public IActionResult EndVoice(string sessionId)
+    {
+        voice.End(currentUser.Id, sessionId);
+        return NoContent();
+    }
 
     /// <summary>
     /// Carries out a change Proton proposed, once. Only the proposer, in its conversation, before it expires — and only

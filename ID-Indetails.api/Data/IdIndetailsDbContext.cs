@@ -120,6 +120,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<StatementMode>(configurationBuilder);
         StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
+        StoreAsSnakeCase<ProtonChannel>(configurationBuilder);
         StoreAsSnakeCase<ProtonActionStatus>(configurationBuilder);
         StoreAsSnakeCase<ProtonActionRisk>(configurationBuilder);
     }

@@ -120,9 +120,11 @@ public sealed class ProtonToolbox(
         else if (tool is IProtonActionTool && session.Context.Turn != ProtonTurnOrigin.Typed && ProtonCoverage.NeedsTypedTurn(name))
         {
             // A click or a suggested reply can't start a send, a delete, a money or an access change: text in the data
-            // could have steered the option, so the user asks for it in their own words.
-            result = Fail(name, input, ProtonToolStatus.Refused,
-                "This kind of change needs the user to ask for it in their own words. Ask them to type what they want.", watch);
+            // could have steered the option, so the user asks for it in their own words. Nor can speech: a transcript
+            // can mishear an amount, a name or an address.
+            result = Fail(name, input, ProtonToolStatus.Refused, session.Context.Turn == ProtonTurnOrigin.Spoken
+                ? "This kind of change can't be asked for by voice. Ask the user to type what they want in the chat."
+                : "This kind of change needs the user to ask for it in their own words. Ask them to type what they want.", watch);
         }
         else if (tool is IProtonActionTool && (ProtonCoverage.FamilyOf(name) is not { } family || !options.Value.Actions.IsOn(family)))
         {

@@ -97,6 +97,9 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
     /// </summary>
     public string? Recap { get; private set; }
 
+    /// <summary>The last few questions and answers, shortened: what a recap or a new voice session starts from.</summary>
+    public IReadOnlyList<(string Question, string Answer)> Exchanges => [.. _exchanges];
+
     /// <summary>The last few questions and answers, as they were shown: what a rollover's recap is made of.</summary>
     public void RememberExchange(string question, string answer)
     {

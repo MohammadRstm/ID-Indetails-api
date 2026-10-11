@@ -89,6 +89,45 @@ public sealed class ProtonOptions
     public ProtonInsightOptions Insights { get; init; } = new();
 
     public ProtonActionOptions Actions { get; init; } = new();
+
+    public ProtonVoiceOptions Voice { get; init; } = new();
+}
+
+/// <summary>
+/// Talking to Proton through OpenAI's GPT-Live: the live model listens and speaks, and hands every question to the
+/// same Proton agent as the text chat. Off unless <see cref="Enabled"/> is set and a key is configured; the key comes
+/// from user secrets locally and the <c>Proton__Voice__ApiKey</c> environment variable in production.
+/// </summary>
+public sealed class ProtonVoiceOptions
+{
+    public bool Enabled { get; init; }
+
+    public string ApiKey { get; init; } = string.Empty;
+
+    [Required]
+    public string Model { get; init; } = "gpt-live-1";
+
+    /// <summary>One of the live model's voices; it can't change during a session.</summary>
+    [Required]
+    public string Voice { get; init; } = "marin";
+
+    /// <summary>The provider's API, sessions are created under it and the server's watch attaches to it.</summary>
+    [Required]
+    public string BaseUrl { get; init; } = "https://api.openai.com/v1/";
+
+    /// <summary>The provider's price per minute of voice, billed per second, to estimate cost.</summary>
+    [Range(0, 100)]
+    public decimal PricePerMinuteUsd { get; init; } = 0.05m;
+
+    /// <summary>A session is closed by the server after this long, whatever the browser does.</summary>
+    [Range(1, 60)]
+    public int MaxSessionMinutes { get; init; } = 10;
+
+    /// <summary>How long a closing session may take to report its final usage before the server gives up on it.</summary>
+    [Range(1, 120)]
+    public int CloseWaitSeconds { get; init; } = 15;
+
+    public bool IsOn => Enabled && !string.IsNullOrWhiteSpace(ApiKey);
 }
 
 /// <summary>

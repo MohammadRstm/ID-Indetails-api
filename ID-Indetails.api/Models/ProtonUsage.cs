@@ -22,6 +22,12 @@ public class ProtonUsage
 
     public ProtonOutcome Outcome { get; set; }
 
+    /// <summary>Typed or spoken. A spoken question is a row of its own model; the voice session around it is another row.</summary>
+    public ProtonChannel Channel { get; set; } = ProtonChannel.Text;
+
+    /// <summary>Only on a voice session's row: how long it ran, as the provider reported it (or as estimated, see Outcome).</summary>
+    public int? VoiceSeconds { get; set; }
+
     public int RoundTrips { get; set; }
 
     public int ToolCalls { get; set; }

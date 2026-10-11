@@ -29,8 +29,8 @@ namespace ID_Indetails.api.Proton.Agent;
 
 /// <summary>
 /// The text chat with Proton on Claude: one question in, one answer out. The model chooses the tools; the toolbox
-/// decides whether the user may use them and runs them read-only through the existing services. Only the chat lives
-/// here — a live-voice interface would be another agent over the same <see cref="ProtonToolbox"/>.
+/// decides whether the user may use them and runs them read-only through the existing services. A voice session asks
+/// its questions here too (<see cref="AskProtonRequest.Voice"/>): the live model only listens and speaks.
 /// </summary>
 public sealed class ProtonChatAgent(
     IAnthropicClient anthropic,
@@ -42,6 +42,7 @@ public sealed class ProtonChatAgent(
     IProtonActionRepository actions,
     ICompanySettingsService companySettings,
     Memory.ProtonMemoryService memories,
+    Voice.ProtonVoiceSessions voiceSessions,
     IClock clock,
     IOptions<ProtonOptions> options,
     IOptions<EmailOptions> email,
@@ -68,7 +69,7 @@ public sealed class ProtonChatAgent(
         await usage.EnsureCanAskAsync(userId, cancellationToken);
 
         var access = await permissions.GetAccessAsync(userId, cancellationToken);
-        var conversation = OpenConversation(userId, request.ConversationId, ProtonToolbox.FingerprintOf(access));
+        var conversation = conversations.Open(userId, request.ConversationId, ProtonToolbox.FingerprintOf(access));
         if (!conversation.TryBegin())
         {
             throw new ConflictException(ErrorCodes.ProtonBusy, "I'm still answering your last question.");
@@ -95,8 +96,14 @@ public sealed class ProtonChatAgent(
             {
                 { Choice: not null } or { Reply: not null } => ProtonTurnOrigin.Choice,
                 { Suggestion: not null } => ProtonTurnOrigin.Suggestion,
+                { Voice: not null } => ProtonTurnOrigin.Spoken,
                 _ => ProtonTurnOrigin.Typed,
             };
+            if (request.Voice is { } spoken)
+            {
+                ClaimSpoken(userId, spoken, conversation);
+            }
+
             // A button becomes a question written by the app, once it is known to be one the last reply offered.
             var text = request switch
             {
@@ -109,7 +116,8 @@ public sealed class ProtonChatAgent(
             tools.Context.TypedText = string.Join("\n", typed);
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, cancellationToken) : null;
             var company = (await companySettings.BrandingAsync(cancellationToken)).Name;
-            var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion, await memories.NoteAsync(userId, cancellationToken));
+            var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion, await memories.NoteAsync(userId, cancellationToken),
+                tools.Context.Turn == ProtonTurnOrigin.Spoken);
             return new ProtonQuestion(caller, userId, access, conversation, tools, request, text, notes, rolledOver);
         }
         catch
@@ -133,7 +141,8 @@ public sealed class ProtonChatAgent(
             await DropProposalsAsync(turn);
         }
 
-        var record = turn.Record(question.UserId, conversation.Id, text, clock.UtcNow, usage.Prices);
+        var channel = tools.Context.Turn == ProtonTurnOrigin.Spoken ? ProtonChannel.Voice : ProtonChannel.Text;
+        var record = turn.Record(question.UserId, conversation.Id, text, clock.UtcNow, usage.Prices, channel);
         await usage.RecordAsync(record, CancellationToken.None);
         // what a question costs in time and money, to measure before Proton grows (no question or answer text)
         _log.LogInformation(
@@ -219,23 +228,22 @@ public sealed class ProtonChatAgent(
 
     public void Forget(long userId, Guid conversationId) => conversations.Remove(userId, conversationId);
 
-    private ProtonConversation OpenConversation(long userId, Guid? conversationId, string fingerprint)
+    /// <summary>
+    /// A spoken question belongs to the person's running voice session, in this conversation, and is asked once: a
+    /// request delivered twice (a retry, a reconnect) is refused rather than answered again.
+    /// </summary>
+    private void ClaimSpoken(long userId, ProtonVoiceTurnRequest spoken, ProtonConversation conversation)
     {
-        if (conversationId is not { } id)
+        var session = voiceSessions.Find(userId, spoken.SessionId);
+        if (session is null || session.ConversationId != conversation.Id)
         {
-            return conversations.Start(userId, fingerprint);
+            throw new NotFoundException(ErrorCodes.ProtonVoiceUnavailable, "That voice conversation has ended. Start it again, or type your question.");
         }
 
-        var conversation = conversations.Find(userId, id)
-            ?? throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "I no longer have our earlier chat, so we're starting fresh.");
-        if (conversation.AccessFingerprint != fingerprint)
+        if (!session.Claim(spoken.DelegationId))
         {
-            // Earlier answers were given under different permissions: they must not carry over, not even as a recap.
-            conversations.Remove(userId, id);
-            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "Your access changed, so I closed our earlier chat and we're starting fresh.");
+            throw new ConflictException(ErrorCodes.ProtonVoiceRepeated, "I've already got that question.");
         }
-
-        return conversation;
     }
 
     /// <summary>
@@ -574,6 +582,14 @@ public sealed class ProtonChatAgent(
             note += "\nThis message is one of the replies you suggested, which the user tapped rather than typed.";
         }
 
+        if (notes.Spoken)
+        {
+            note += "\nThe user said this aloud in a voice conversation: it is a transcript and may have misheard words. Your answer is "
+                + "read aloud to them and also shown in the chat, so keep it to a few short sentences, name at most three items "
+                + "(the rest are on screen), and ask when a name or number is unclear. A card you prepare appears on their screen "
+                + "for them to confirm.";
+        }
+
         return actions.Count == 0 ? note : note + "\nSince the last message (from the confirmation buttons): " + string.Join(" ", actions);
     }
 
@@ -584,7 +600,8 @@ public sealed class ProtonChatAgent(
 /// <param name="Company">The company's name from its branding, when set.</param>
 /// <param name="Suggested">The question is one of Proton's suggested replies, tapped rather than typed.</param>
 /// <param name="Memories">What the user asked Proton to remember, framed as their preferences.</param>
-internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false, string? Memories = null);
+/// <param name="Spoken">The question was said aloud in a voice session.</param>
+internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false, string? Memories = null, bool Spoken = false);
 
 /// <summary>One question's progress: the messages it adds, the tools it ran, the tokens it used and how it ended.</summary>
 internal sealed class ProtonTurn(string model)
@@ -666,7 +683,7 @@ internal sealed class ProtonTurn(string model)
             .Take(12)
             .ToList();
 
-    public ProtonUsage Record(long userId, Guid conversationId, string question, DateTime at, ProtonTokenPrices prices) => new()
+    public ProtonUsage Record(long userId, Guid conversationId, string question, DateTime at, ProtonTokenPrices prices, ProtonChannel channel) => new()
     {
         UserId = userId,
         ConversationId = conversationId,
@@ -674,6 +691,7 @@ internal sealed class ProtonTurn(string model)
         Model = model,
         PromptVersion = ProtonPrompts.ChatVersion,
         Outcome = Outcome,
+        Channel = channel,
         RoundTrips = RoundTrips,
         ToolCalls = ToolCalls.Count,
         InputTokens = _tokens.Input,

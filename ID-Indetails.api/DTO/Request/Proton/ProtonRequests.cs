@@ -22,6 +22,28 @@ public sealed record AskProtonRequest
 
     /// <summary>The place in the list of the suggested reply the user tapped; the server takes its text from what it offered.</summary>
     public int? Suggestion { get; init; }
+
+    /// <summary>
+    /// A question the user said in a voice session: <see cref="Text"/> is what the voice model heard. It is answered
+    /// like a typed one, except that speech can't start the gated kinds of change, and it is asked only once.
+    /// </summary>
+    public ProtonVoiceTurnRequest? Voice { get; init; }
+}
+
+/// <summary>Which voice session a spoken question came from, and the provider's id for that request.</summary>
+public sealed record ProtonVoiceTurnRequest
+{
+    public string SessionId { get; init; } = string.Empty;
+
+    public string DelegationId { get; init; } = string.Empty;
+}
+
+/// <summary>Starting a voice session: the browser's WebRTC offer, and the conversation to carry on (or none for a new one).</summary>
+public sealed record StartProtonVoiceRequest
+{
+    public Guid? ConversationId { get; init; }
+
+    public string Sdp { get; init; } = string.Empty;
 }
 
 /// <summary>The page the user is on, by meaning. <see cref="EntityId"/> comes with <see cref="EntityType"/>.</summary>

@@ -9,8 +9,9 @@ using Microsoft.AspNetCore.Authorization;
 namespace ID_Indetails.api.Proton.Tools;
 
 /// <summary>
-/// Who wrote the question, as the server knows it: the user typed it, picked one of the options, or tapped a reply
-/// Proton suggested. Only a typed turn may start the gated kinds of change (see ProtonCoverage.NeedsTypedTurn).
+/// Who wrote the question, as the server knows it: the user typed it, picked one of the options, tapped a reply
+/// Proton suggested, or said it in a voice session. Only a typed turn may start the gated kinds of change (see
+/// ProtonCoverage.NeedsTypedTurn): a transcript can mishear an amount or an address.
 /// </summary>
 public enum ProtonTurnOrigin
 {
@@ -19,6 +20,7 @@ public enum ProtonTurnOrigin
     Choice,
     Suggestion,
     Typed,
+    Spoken,
 }
 
 /// <summary>

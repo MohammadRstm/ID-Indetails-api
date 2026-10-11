@@ -40,14 +40,17 @@ public sealed class ProtonUsageService(
         var questions = ProtonUsageRules.Questions(
             options.Value.MonthlyQuestionsPerUser, await usage.QuestionsAsync(userId, from, to, cancellationToken));
         var budget = await BudgetPositionAsync(month, cancellationToken);
+        var available = IsSwitchedOn && !questions.IsExhausted && !budget.IsExhausted;
         return new ProtonUsageResponse(
             month,
-            IsSwitchedOn && !questions.IsExhausted && !budget.IsExhausted,
+            available,
             (int)questions.Limit,
             (int)questions.Used,
             (int)questions.Remaining,
             questions.UsedPct,
-            budget.IsExhausted);
+            budget.IsExhausted,
+            available && options.Value.Voice.IsOn,
+            options.Value.Voice.IsOn ? options.Value.Voice.MaxSessionMinutes : 0);
     }
 
     /// <summary>Refuses the question when Proton is off, the person's allowance is used up, or the company's budget is.</summary>
@@ -72,6 +75,10 @@ public sealed class ProtonUsageService(
         return mine;
     }
 
+    /// <summary>What is left of this month's budget, in USD: what a running voice session may still spend.</summary>
+    public async Task<decimal> BudgetRemainingAsync(CancellationToken cancellationToken = default)
+        => (await BudgetPositionAsync(Month(), cancellationToken)).Remaining;
+
     public async Task RecordAsync(ProtonUsage turn, CancellationToken cancellationToken = default)
     {
         usage.Add(turn);
@@ -89,6 +96,7 @@ public sealed class ProtonUsageService(
             .Select(t => new ProtonUsageTurn(t.UserId, t.Domain, t.ConversationId, clock.ToCompanyDate(t.OccurredAt), t.CostUsd, ToolCallsOf(t.Tools)))
             .ToList();
         var names = byUser.ToDictionary(u => u.UserId, u => u.Name);
+        var voice = await usage.VoiceAsync(from, to, cancellationToken);
         return new ProtonBudgetResponse(
             month,
             options.Value.Model,
@@ -109,7 +117,9 @@ public sealed class ProtonUsageService(
             ProtonUsageBreakdown.MostExpensiveConversations(turns, TopConversations)
                 .Select(c => new ProtonConversationUsageResponse(
                     c.ConversationId, c.UserId, names.GetValueOrDefault(c.UserId, "Unknown"), c.Questions, c.ToolCalls, Math.Round(c.CostUsd, 4)))
-                .ToList());
+                .ToList(),
+            new ProtonVoiceUsageResponse(
+                options.Value.Voice.Model, voice.Sessions, Math.Round(voice.Seconds / 60m, 1), Math.Round(voice.CostUsd, 4), voice.Estimated));
     }
 
     /// <summary>Adds to this month's budget. Top-ups are kept, never edited, so the month's budget can be explained.</summary>
