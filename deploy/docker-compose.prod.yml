@@ -81,6 +81,8 @@ services:
       Proton__Enabled: ${PROTON_ENABLED:-false}
       Proton__ApiKey: ${PROTON_API_KEY:-}
       Proton__MonthlyBudgetUsd: ${PROTON_MONTHLY_BUDGET_USD:-50}
+      Proton__Voice__Enabled: ${PROTON_VOICE_ENABLED:-false}
+      Proton__Voice__ApiKey: ${PROTON_VOICE_API_KEY:-}
       # The client's nginx, and the TLS proxy before it, are trusted for the visitor's address and scheme.
       Proxy__KnownNetworks__0: 172.30.0.0/24
     volumes:
