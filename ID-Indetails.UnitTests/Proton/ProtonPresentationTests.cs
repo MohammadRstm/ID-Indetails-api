@@ -99,6 +99,8 @@ public class ProtonPresentationTests
         Show(ByPerson(3), ProtonPresentForm.Bar, ["hours", "entries"]).Refusal!.ShouldContain("different units");
         Show(ByPerson(3), ProtonPresentForm.Bar, ["person"]).Refusal!.ShouldContain("There is no number column \"person\"");
         Show(ByPerson(3), ProtonPresentForm.Bar, ["cost"]).Refusal!.ShouldContain("Its number columns are: hours, entries.");
+        // a column named as the model was shown it, unit and all, is the same column
+        Show(ByPerson(3), ProtonPresentForm.Bar, ["Hours (hours)"]).Block!.Chart!.Series.Single().Key.ShouldBe("hours");
     }
 
     [Fact]

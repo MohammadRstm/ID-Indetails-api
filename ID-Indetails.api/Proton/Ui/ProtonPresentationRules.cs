@@ -77,7 +77,7 @@ public static class ProtonPresentationRules
             var picked = new List<int>();
             foreach (var key in keys.Distinct())
             {
-                var at = data.Columns.ToList().FindIndex(c => c.Key == key);
+                var at = data.Columns.ToList().FindIndex(c => c.Key == KeyOf(key));
                 if (at <= 0 || (form != ProtonPresentForm.Table && !data.Columns[at].IsNumber))
                 {
                     problem = $"There is no {(form == ProtonPresentForm.Table ? "" : "number ")}column \"{key}\". "
@@ -272,6 +272,14 @@ public static class ProtonPresentationRules
         return series.Select(s => s.Unit).Distinct().Count() > 1
             ? "These figures are in different units, so one chart would mislead: show them in separate charts, as=kpis or as=table."
             : null;
+    }
+
+    /// <summary>A column as the model names it: its key, in any case, or as the descriptor shows it ("hours (hours)").</summary>
+    private static string KeyOf(string named)
+    {
+        var key = named.Trim().ToLowerInvariant();
+        var unit = key.IndexOf(" (", StringComparison.Ordinal);
+        return unit > 0 ? key[..unit] : key;
     }
 
     private static IEnumerable<ProtonDataRow> Sorted(ProtonDataset data, int column, ProtonPresentSort sort) => sort switch
