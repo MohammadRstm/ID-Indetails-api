@@ -3023,6 +3023,39 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonMemory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)")
+                        .HasColumnName("text");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proton_memories");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_proton_memories_user_id_created_at");
+
+                    b.ToTable("proton_memories", (string)null);
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProtonUsage", b =>
                 {
                     b.Property<long>("Id")
@@ -5353,6 +5386,18 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_proton_budget_top_ups_users_added_by_id");
 
                     b.Navigation("AddedBy");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonMemory", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_proton_memories_users_user_id");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ProtonUsage", b =>

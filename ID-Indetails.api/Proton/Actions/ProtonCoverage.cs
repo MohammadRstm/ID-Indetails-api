@@ -237,6 +237,8 @@ public static class ProtonCoverage
         Own("Proton.Stream"),
         Own("Proton.Confirm"),
         Own("Proton.Cancel"),
+        Own("Proton.Remember"),
+        Own("Proton.Forget"),
         Own("Proton.EndConversation"),
         Never("Proton.TopUp", "an assistant raising its own spending limit is a conflict of interest"),
     ];

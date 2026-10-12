@@ -41,6 +41,7 @@ public sealed class ProtonChatAgent(
     ProtonRecords records,
     IProtonActionRepository actions,
     ICompanySettingsService companySettings,
+    Memory.ProtonMemoryService memories,
     IClock clock,
     IOptions<ProtonOptions> options,
     IOptions<EmailOptions> email,
@@ -108,7 +109,7 @@ public sealed class ProtonChatAgent(
             tools.Context.TypedText = string.Join("\n", typed);
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, cancellationToken) : null;
             var company = (await companySettings.BrandingAsync(cancellationToken)).Name;
-            var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion);
+            var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion, await memories.NoteAsync(userId, cancellationToken));
             return new ProtonQuestion(caller, userId, access, conversation, tools, request, text, notes, rolledOver);
         }
         catch
@@ -338,6 +339,10 @@ public sealed class ProtonChatAgent(
                 },
             });
 
+            // the answer written before a call that only adds buttons (options, suggested replies) is the answer itself:
+            // what comes after such a call is only a closing line, so the two are kept together
+            var answered = "";
+            var askedToAnswer = false;
             for (var trip = 1; trip <= settings.MaxRoundTrips; trip++)
             {
                 var lastTrip = trip == settings.MaxRoundTrips || turn.ToolCalls.Count >= settings.MaxToolCallsPerQuestion;
@@ -363,18 +368,37 @@ public sealed class ProtonChatAgent(
 
                 if (response.StopReason == StopReason.ToolUse && toolUses.Count > 0 && !lastTrip)
                 {
-                    turn.Messages.Add(new MessageParam
+                    // Suggested replies with no answer written yet, after or alongside a lookup: the model drafted the
+                    // answer in its thinking, which the user never sees, and would go on to say it is "above". They are
+                    // refused once (the lookups still run), so it writes the answer first.
+                    var written = TextOf(response);
+                    var early = !askedToAnswer && answered.Length == 0 && written.Length == 0
+                        && toolUses.Any(t => t.Name == SuggestReplies)
+                        && (turn.ToolCalls.Any(t => !ButtonTools.Contains(t.Tool)) || toolUses.Any(t => !ButtonTools.Contains(t.Name)));
+                    if (early)
                     {
-                        Role = Role.User,
-                        Content = await RunToolsAsync(tools, toolUses, turn, conversation.Focus, listener, cancellationToken),
-                    });
+                        askedToAnswer = true;
+                    }
+                    else if (toolUses.All(t => ButtonTools.Contains(t.Name)))
+                    {
+                        answered = Join(answered, written);
+                    }
+
+                    var run = early ? toolUses.Where(t => t.Name != SuggestReplies).ToList() : toolUses;
+                    var results = run.Count > 0 ? await RunToolsAsync(tools, run, turn, conversation.Focus, listener, cancellationToken) : [];
+                    if (early)
+                    {
+                        results.AddRange(AnswerFirst(toolUses.Where(t => t.Name == SuggestReplies).ToList()));
+                    }
+
+                    turn.Messages.Add(new MessageParam { Role = Role.User, Content = results });
                     continue;
                 }
 
                 // the provider paused a long server-side step (a tool search): sending the turn back lets it carry on
                 if (response.StopReason == StopReason.PauseTurn && !lastTrip) continue;
 
-                turn.Finish(response, Answer(response), lastTrip);
+                turn.Finish(response, Answer(response, answered), lastTrip);
                 if (turn.Outcome == ProtonOutcome.Refused)
                 {
                     // the category only (a policy name), never the question
@@ -460,18 +484,37 @@ public sealed class ProtonChatAgent(
         return message.ToMessage();
     }
 
-    private static string Answer(Message response)
+    /// <summary>Tools that only add buttons under the answer: the text before them is part of the answer.</summary>
+    private static readonly IReadOnlySet<string> ButtonTools = new HashSet<string>(StringComparer.Ordinal) { "suggest_replies", "offer_choices" };
+
+    private static string Answer(Message response, string answered)
     {
         if (response.StopReason == StopReason.Refusal)
         {
             return "I can't help with that one.";
         }
 
-        var text = string.Join("\n\n", response.Content
-            .Select(b => b.TryPickText(out var t) ? t.Text.Trim() : null)
-            .Where(t => !string.IsNullOrEmpty(t)));
+        var text = Join(answered, TextOf(response));
         return string.IsNullOrWhiteSpace(text) ? "I couldn't put an answer together. Please try asking another way." : text;
     }
+
+    private const string SuggestReplies = "suggest_replies";
+
+    private static List<ContentBlockParam> AnswerFirst(IReadOnlyList<ToolUseBlock> toolUses)
+        => toolUses.Select(t => (ContentBlockParam)new ToolResultBlockParam
+        {
+            ToolUseID = t.ID,
+            Content = "Not added yet: the user has seen nothing of your answer. They never see your thinking or what a tool " +
+                      "returned. Write your whole answer as text now, then add the suggested replies again with it.",
+            IsError = true,
+        }).ToList();
+
+    private static string TextOf(Message response) => string.Join("\n\n", response.Content
+        .Select(b => b.TryPickText(out var t) ? t.Text.Trim() : null)
+        .Where(t => !string.IsNullOrEmpty(t)));
+
+    private static string Join(string first, string next)
+        => first.Length == 0 ? next : next.Length == 0 ? first : $"{first}\n\n{next}";
 
     private static ToolUnion Define(IProtonTool tool, bool deferred)
     {
@@ -516,6 +559,11 @@ public sealed class ProtonChatAgent(
             note += $"\nWhere the user is in the app (where they are, not data): {page}.";
         }
 
+        if (notes.Memories is { } remembered)
+        {
+            note += $"\n{remembered}";
+        }
+
         if (conversation.Recap is { } recap)
         {
             note += $"\n{recap}";
@@ -535,7 +583,8 @@ public sealed class ProtonChatAgent(
 /// <param name="Page">Where the user is, already checked against what they may see.</param>
 /// <param name="Company">The company's name from its branding, when set.</param>
 /// <param name="Suggested">The question is one of Proton's suggested replies, tapped rather than typed.</param>
-internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false);
+/// <param name="Memories">What the user asked Proton to remember, framed as their preferences.</param>
+internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false, string? Memories = null);
 
 /// <summary>One question's progress: the messages it adds, the tools it ran, the tokens it used and how it ended.</summary>
 internal sealed class ProtonTurn(string model)

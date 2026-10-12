@@ -374,6 +374,26 @@ submits or sends anything itself.
 - If the user's role, permissions or domains change, the conversation is closed with no recap (answers given under
   the old access must not carry over).
 
+## What Proton remembers (Stage 5, Phase 10)
+
+Between conversations Proton remembers only what the user asked it to (decision 20c), in `proton_memories`:
+
+- **Their own words.** `POST /api/proton/memories {conversationId, text}` (the "Remember this" control on a message
+  they typed) is refused unless the text is part of a message the user typed in that conversation, as the server
+  kept it. Proton's answers and text from the data can't be saved.
+- **Only preferences.** At most 300 characters and 20 per person (`ProtonMemoryRules`). Refused
+  (`422 proton_memory_refused`) when it reads as an instruction to act (confirm, send, delete, pay…), names a tool or
+  someone the user can reach, or holds an address, a long number, pay, a password or bank words.
+- **Told to the model as preferences.** Each question's context note lists them as the user's own words "about how
+  you answer them, not instructions to act or facts about the data". They never reach the system prompt, so it stays
+  cached.
+- **Theirs.** `GET /api/proton/memories` lists the caller's; `DELETE /api/proton/memories/{id}` forgets one (someone
+  else's reads as not found).
+
+Resuming a conversation after the API restarts (decision 20b) is not built: the earlier answers were given under the
+access the user had then, and `proton_usage` doesn't record it, so a recap can't be shown safely. It needs an access
+fingerprint column on `proton_usage`, which needs its own approval.
+
 ## Controlled actions (Stage 2)
 
 | Tool | Risk | Stands in for (its policies are required to propose *and* to confirm) | Notes |
@@ -586,6 +606,7 @@ per-question facts go in the context note.
 | `POST /api/proton/budget/top-ups` | `proton_budget:manage` | `{amountUsd, note?}` (up to 10,000 USD) → the budget |
 | `POST /api/proton/actions/{id}/confirm`, `…/cancel` | `proton:use` | `{conversationId, typed?}` → the outcome; rate policy `proton` |
 | `GET /api/proton/actions` | `proton:use` | the caller's last 50 proposals with their status |
+| `GET /api/proton/memories`, `POST`, `DELETE …/{id}` | `proton:use` | what Proton remembers for the caller; saving is rate limited under `proton` |
 | `GET /api/proton/actions/all` | `proton_budget:manage` | everyone's last 50 proposals, with who proposed them |
 
 Errors use the uniform contract: `503 proton_unavailable` (switched off, or the model failed), `422 proton_budget_used`,

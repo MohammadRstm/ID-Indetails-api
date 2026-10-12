@@ -58,6 +58,14 @@ public sealed record TopUpProtonBudgetRequest
     public string? Note { get; init; }
 }
 
+/// <summary>Something to remember: words the user typed in that conversation, checked against what the server kept of it.</summary>
+public sealed record SaveProtonMemoryRequest
+{
+    public Guid ConversationId { get; init; }
+
+    public string Text { get; init; } = string.Empty;
+}
+
 /// <summary>Confirming or cancelling a proposed action: only its id (in the route) and the conversation it belongs to.</summary>
 public sealed record DecideProtonActionRequest
 {

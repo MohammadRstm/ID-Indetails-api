@@ -5,6 +5,7 @@ using ID_Indetails.api.DTO.Response.Proton;
 using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Analysis;
+using ID_Indetails.api.Proton.Memory;
 using ID_Indetails.api.Proton.Usage;
 using ID_Indetails.api.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
@@ -24,6 +25,7 @@ public sealed class ProtonController(
     ProtonActionService actions,
     ProtonUsageService usage,
     ProtonBriefingService briefing,
+    ProtonMemoryService memories,
     ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost("messages")]
@@ -69,6 +71,27 @@ public sealed class ProtonController(
     [HasPermission(PermissionCodes.ProtonBudgetManage)]
     public Task<IReadOnlyList<ProtonActionSummaryResponse>> AllActions(CancellationToken cancellationToken)
         => actions.AllAsync(cancellationToken);
+
+    /// <summary>What Proton remembers for the caller between conversations, in their words.</summary>
+    [HttpGet("memories")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    public Task<IReadOnlyList<ProtonMemoryResponse>> Memories(CancellationToken cancellationToken)
+        => memories.MineAsync(currentUser.Id, cancellationToken);
+
+    /// <summary>Remembers something the caller typed in that conversation ("Remember this"): a preference, at most 20.</summary>
+    [HttpPost("memories")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    [EnableRateLimiting(RateLimitPolicies.Proton)]
+    public async Task<ActionResult<ProtonMemoryResponse>> Remember(SaveProtonMemoryRequest request, CancellationToken cancellationToken)
+        => StatusCode(StatusCodes.Status201Created, await memories.SaveAsync(currentUser.Id, request, cancellationToken));
+
+    [HttpDelete("memories/{id:long}")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    public async Task<IActionResult> Forget(long id, CancellationToken cancellationToken)
+    {
+        await memories.ForgetAsync(currentUser.Id, id, cancellationToken);
+        return NoContent();
+    }
 
     [HttpDelete("conversations/{conversationId:guid}")]
     [HasPermission(PermissionCodes.ProtonUse)]

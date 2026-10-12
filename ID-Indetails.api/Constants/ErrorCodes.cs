@@ -158,4 +158,7 @@ public static class ErrorCodes
     public const string ProtonTooManyPending = "proton_too_many_pending";
     public const string ProtonActionLimit = "proton_action_limit";
     public const string ProtonPhraseMismatch = "proton_phrase_mismatch";
+
+    /// <summary>Not something Proton may remember: not the person's own words, a full list, or not a preference.</summary>
+    public const string ProtonMemoryRefused = "proton_memory_refused";
 }

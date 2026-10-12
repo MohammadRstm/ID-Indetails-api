@@ -100,6 +100,9 @@ public sealed record ProtonBriefingItem(ProtonRef? Project, string? Domain, IRea
 /// <summary>One change Proton proposed, and what became of it: the record of what Proton did, as the user confirmed it.</summary>
 /// <param name="Who">Who it was proposed to (in the list for those who manage Proton); null in a person's own list.</param>
 /// <param name="ErrorMessage">Why a confirmed change failed, as the service said.</param>
+/// <summary>Something Proton remembers for the person, in their words.</summary>
+public sealed record ProtonMemoryResponse(long Id, string Text, DateTime CreatedAt);
+
 public sealed record ProtonActionSummaryResponse(
     Guid Id,
     string Tool,

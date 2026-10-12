@@ -39,6 +39,44 @@ public class ProtonRepliesTests(ProtonApiFactory api) : IClassFixture<ProtonApiF
         return superAdmin;
     }
 
+    /// <summary>Regression: the answer written before the buttons were added was dropped, leaving only a closing line.</summary>
+    [Fact]
+    public async Task The_answer_written_before_adding_buttons_is_kept_with_the_closing_line()
+    {
+        var superAdmin = await SuperAdminAsync();
+        api.Anthropic.Reply(
+            FakeAnthropic.Blocks("tool_use",
+                new { type = "text", text = "Library fit-out is 12 days late and had no work this week." },
+                new { type = "tool_use", id = "toolu_1", name = "suggest_replies", input = new { replies = new[] { "Open it" } } }),
+            FakeAnthropic.Text("Want me to open it?"));
+
+        var reply = await AskAsync(superAdmin, new { text = "Anything I should look at?" });
+        reply.Reply.ShouldBe("Library fit-out is 12 days late and had no work this week.\n\nWant me to open it?");
+        reply.Suggestions.ShouldBe(["Open it"]);
+    }
+
+    /// <summary>
+    /// Regression: after a lookup the model added buttons without writing anything, then said its answer was "above".
+    /// The buttons are refused once, so the answer gets written.
+    /// </summary>
+    [Fact]
+    public async Task Buttons_after_a_lookup_wait_for_the_answer_to_be_written()
+    {
+        var superAdmin = await SuperAdminAsync();
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("list_projects", new { }),
+            FakeAnthropic.ToolUse("suggest_replies", new { replies = new[] { "Open it" } }, id: "toolu_2"),
+            FakeAnthropic.Blocks("tool_use",
+                new { type = "text", text = "Two projects are active: Villa and Cafe." },
+                new { type = "tool_use", id = "toolu_3", name = "suggest_replies", input = new { replies = new[] { "Open it" } } }),
+            FakeAnthropic.Text("Want me to open one?"));
+
+        var reply = await AskAsync(superAdmin, new { text = "Which projects are active?" });
+        api.Anthropic.ToolResults(2).Single()["content"]!.GetValue<string>().ShouldContain("Write your whole answer");
+        reply.Reply.ShouldBe("Two projects are active: Villa and Cafe.\n\nWant me to open one?");
+        reply.Suggestions.ShouldBe(["Open it"]);
+    }
+
     [Fact]
     public async Task A_suggested_reply_is_sent_by_its_place_and_its_text_comes_from_the_server()
     {
@@ -105,7 +143,9 @@ public class ProtonRepliesTests(ProtonApiFactory api) : IClassFixture<ProtonApiF
         api.Anthropic.Reply(
             FakeAnthropic.ToolUse("propose_add_requirement", new { project_id = project.Id, text = "Check the hours" }),
             FakeAnthropic.ToolUse("offer_choices", new { question = "OK?", replies = new[] { "yes", "no" } }),
-            FakeAnthropic.ToolUse("suggest_replies", new { replies = new[] { "Yes, do it" } }),
+            FakeAnthropic.Blocks("tool_use",
+                new { type = "text", text = "I've prepared the card." },
+                new { type = "tool_use", id = "toolu_1", name = "suggest_replies", input = new { replies = new[] { "Yes, do it" } } }),
             FakeAnthropic.Text("Confirm it on the card."),
             // the next question, with the card still waiting
             FakeAnthropic.ToolUse("suggest_replies", new { replies = new[] { "Go ahead" } }),
