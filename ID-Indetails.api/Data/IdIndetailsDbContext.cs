@@ -78,6 +78,9 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ConversationRead> ConversationReads => Set<ConversationRead>();
     public DbSet<StoredFile> Files => Set<StoredFile>();
     public DbSet<UserBoardLayout> UserBoardLayouts => Set<UserBoardLayout>();
+    public DbSet<UserDevice> UserDevices => Set<UserDevice>();
+    public DbSet<UserNotificationSettings> UserNotificationSettings => Set<UserNotificationSettings>();
+    public DbSet<UserNotificationMute> UserNotificationMutes => Set<UserNotificationMute>();
 
     // Proton
     public DbSet<ProtonUsage> ProtonUsage => Set<ProtonUsage>();
@@ -120,6 +123,11 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
         StoreAsSnakeCase<ProtonActionStatus>(configurationBuilder);
         StoreAsSnakeCase<ProtonActionRisk>(configurationBuilder);
+        StoreAsSnakeCase<RefreshTokenClient>(configurationBuilder);
+        StoreAsSnakeCase<RevokeReason>(configurationBuilder);
+        StoreAsSnakeCase<PushProvider>(configurationBuilder);
+        StoreAsSnakeCase<DevicePlatform>(configurationBuilder);
+        StoreAsSnakeCase<NotificationCategory>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

@@ -89,3 +89,66 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 The same timer also runs the domains' auto-archive (see [projects.md](projects.md), "Status"). Percentages (`usedPct`, `marginPct`) are money information, so they only go to holders of `financial:view`, and no notification carries an amount (N5).
 
 A new deadline gets a new key, so moving a requirement's deadline warns again. Paying an invoice stops it being overdue; one that becomes overdue again later isn't flagged twice.
+
+## Pushes
+
+The phone app gets pushes for every notification and every chat message, and two reminders of its own. The bell and the in-app list are unchanged.
+
+### How a push goes out
+
+1. **Staged.** `NotificationSender` (all three send methods), the work digest of `WorkLogNotifier`, and `MessagingService` (team, direct and task-comment messages) stage pushes in `IPushQueue`, next to the live signals.
+2. **Queued once committed.** `LiveUpdatesMiddleware` hands a request's pushes to an in-process queue only once it has succeeded; a failed request queues none. The scheduled checks and the invoice jobs queue theirs after their work.
+3. **Checked again and sent.** `Jobs/PushDispatcher` decides everything at send time (`Services/Push/Implementation/PushDelivery`):
+   - only phones whose session still has a valid refresh token receive anything (devices are tied to the phone app's session, see [me.md](me.md#my-devices));
+   - a deactivated person gets nothing;
+   - a notification goes out only while its reader may still read it: the same check as the list (the domains they see and `NotificationAccess`), so someone who lost `financial:view` gets no money pushes. One already read isn't pushed;
+   - a muted category sends nothing; during quiet hours the push arrives silently.
+4. **Provider.** `ExpoPushProvider` sends through Expo's push service, 100 messages a request. It is the only part that knows Expo. Every 15 minutes `Jobs/PushReceiptsJob` checks the receipts, and a device Expo reports as `DeviceNotRegistered` (at sending or in its receipt) is deleted.
+
+Queued pushes live in memory: one queued when the API stops is lost, but the notification row and the in-app list are not. One API instance, as for the live connection.
+
+### What a push carries
+
+| Part | Content |
+|---|---|
+| Title and body | Short text written by the server (`Business/Push/PushText.cs`). Other kinds may name the project and who acted ("Rana assigned you a requirement on Villa Haddad"). Messages show the sender and the first 100 characters |
+| Money kinds | A fixed neutral text, never a client's name, an amount, a margin, a cost or pay, nor the project's title: "Payment recorded. Open ID InDetails to see it.", "An invoice needs your attention.", "An invoice couldn't be sent automatically.", "Billing update. Open ID InDetails to see it.", "A project's money needs a look.", "A new client was added.", "Pay and hours update." |
+| `data` | Ids only: `{ forUserId, kind, notificationId?, target }`. `kind` is a notification kind, `message`, `log_reminder` or `labour_week_reminder`. `target` is the screen to open (`Business/Push/PushTarget.cs`): a project (with `section`), a requirement, a work entry, a chat (`teamId` or the sender's `userId`), a labour week, a person, a client, an invoice, a payment, a statement, or a page (`notifications`, `work`, ...) |
+| `badge` | Unread notifications (as the bell counts them) plus unread messages |
+| `channelId` | The Android channel: the category below, `reminders` for the log reminder, `quiet` during quiet hours |
+
+A rolling digest (`work_digest`, `requirements_added`) pushes in full at most once an hour per person; the updates in between only refresh the badge (no text, no sound).
+
+### Categories, mutes and quiet hours
+
+| Category | Kinds |
+|---|---|
+| `work` | `work_logged`, `work_digest`, `entry_comment`, `weekly_summary`, `hours_excused`, `schedule_changed` |
+| `requirements` | `requirement_assigned`, `requirements_added`, `requirement_done`, `requirement_due_soon`, `requirement_overdue` |
+| `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
+| `meetings` | `meeting_scheduled` |
+| `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
+| `money` | the `invoice_*` kinds, `payment_recorded`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
+| `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |
+| `messages` | `message` (mentions and direct messages included) |
+
+`log_reminder` has no category, so it can't be muted. Each person chooses their own quiet hours and muted categories ([me.md](me.md#my-notification-settings)); until they do, quiet hours are 22:00 to 07:00 in the company's time zone and nothing is muted. A push during quiet hours is still delivered, without sound, on the `quiet` channel (passive on iOS); nothing waits on the server.
+
+### Reminders
+
+Push only: no notification row, so the website's bell is unchanged. The notification scheduler checks them every hour; each goes to a person at most once a day, remembered in memory (a restart can repeat one).
+
+| Kind | When | To |
+|---|---|---|
+| `log_reminder` | In the last hour of the person's working day (their own schedule or the company week), when what they logged within their hours is less than the day requires. Not on a day off or an excused day. While Design's `logReminder` is on | Design people who log hours (`work_entry:create`) |
+| `labour_week_reminder` | Saturday from 15:00 company time, one per site whose current week isn't reported | Execution people with `labour_report:create`, for each active site they added a material or submitted a week on in the last 4 weeks |
+
+The timing rules are in `Business/Push/ReminderRules.cs`.
+
+### Configuration
+
+| Setting | Default | Notes |
+|---|---|---|
+| `Push:Enabled` | `false` | Nothing is queued or sent while off. `PUSH_ENABLED` in the server's `.env` |
+| `Push:Expo:AccessToken` | empty | **Secret.** Expo's access token ("enhanced push security"). User secrets locally, `EXPO_ACCESS_TOKEN` in the server's `.env`. Without it, pushes are sent unauthenticated |
+| `Push:DeviceCleanupEnabled` | `true` | The daily removal of devices whose session ended. Integration tests switch it off |

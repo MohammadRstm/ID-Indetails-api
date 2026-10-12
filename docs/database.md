@@ -61,6 +61,7 @@ An Execution project has a fixed **project fee** and a default **material markup
 - **Personal schedules** (`user_schedules` with their `user_schedule_days`) override the company days and hours for one person from a date onward. A weekday with no row is a day off, and a row with `follows_default` returns the person to the company week.
 - **Excuses** (`hour_excuses`) cover minutes, specific days or a whole month in a person's hours ledger. They are paid unless `is_paid` is false.
 | Activity, messaging, files | `activity_events`, `notifications`, `conversations`, `messages`, `message_mentions`, `message_attachments`, `conversation_reads`, `files`, `user_board_layouts` |
+| Phone app | `user_devices`, `user_notification_settings`, `user_notification_mutes` |
 
 ## Accounts and sign-in
 
@@ -94,6 +95,9 @@ Who may invite whom is decided by permissions (`employee:invite`, `employee:invi
 - Payment amounts, exchange rates and USD amounts are positive.
 - A conversation is either a DM between two distinct users (stored low id first, one row per pair) or a team group chat (one per team).
 - A notification digest key is unique per recipient.
+- A refresh token is the website's or the phone app's, and its revoke reason is one of the four known.
+- A push token belongs to one device; quiet hours are both set or both empty, each a minute of the day; a category is muted once per person.
+- A material's client reference is unique per person who added it.
 - `company_settings` has exactly one possible row.
 
 ## Derived, never stored
@@ -149,6 +153,13 @@ The `DropProjectMembers` migration drops `project_members` and `disciplines`. No
 The `InvoiceSchedule` migration adds three nullable columns to `invoices` for Auto invoice ([billing.md](billing.md#auto-invoice)): `send_on` (indexed, for the hourly run), `send_to` and `scheduled_by_id` (a user), and a check that only a draft has a `send_on` (2 Oct 2026).
 
 The `InvoiceReminders` migration adds the reminder settings to `billing_settings` (`reminders_enabled`, off, and `reminder_first_after_days`, `reminder_every_days`, `reminder_max`, which existing rows get as 1, 7 and 3, with a range check), and `is_reminder` to `invoice_deliveries` ([billing.md](billing.md#reminders-of-overdue-invoices)) (2 Oct 2026).
+
+The phone app's migrations (8 Oct 2026), all additive:
+
+- `MobileSessions` adds `client` (`web` or `mobile`; existing rows become `web`), `session_id` (indexed) and `revoke_reason` to `refresh_tokens` ([authentication.md](authentication.md#mobile-sessions)). Existing rows keep no session and no reason.
+- `UserDevices` adds `user_devices`: a phone's push token (unique), its provider (`expo`), platform (`ios` or `android`), app version and the session it belongs to ([me.md](me.md#my-devices)).
+- `NotificationSettings` adds `user_notification_settings` (one row per person, quiet hours in minutes after midnight, company time) and `user_notification_mutes` (one row per person and muted category). No row means the defaults ([me.md](me.md#my-notification-settings)).
+- `MaterialClientRef` adds `project_materials.client_ref` with a unique index on (`added_by_id`, `client_ref`), so a batch the phone sends twice adds each material once ([execution.md](execution.md#materials)). Existing rows stay `NULL`, which the index allows any number of.
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 

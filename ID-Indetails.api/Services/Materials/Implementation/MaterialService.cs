@@ -91,37 +91,53 @@ public sealed class MaterialService(
         }
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
-        var project = await OpenProjectAsync(actor, projectId, cancellationToken);
-        var markup = project.MaterialMarkup ?? 0;
+        var project = await LockedProjectAsync(actor, projectId, cancellationToken);
+        var existing = await AlreadyAddedAsync(actor.UserId, project.Id, request.Items, cancellationToken);
+        var fresh = request.Items.Where(i => i.ClientRef is not { } clientRef || !existing.ContainsKey(clientRef)).ToList();
 
-        var added = request.Items.Select(item =>
+        // A batch sent again whose materials were all added already changes nothing, the site's lock included.
+        var added = new List<ProjectMaterial>();
+        if (fresh.Count > 0)
         {
-            var entry = MaterialRules.Normalise(new MaterialRules.Entry(item.Quantity, item.UnitCost, item.Amount));
-            var material = new ProjectMaterial
+            Throw(SiteRules.CheckOpen(project.DomainCode, project.Status, project.RevenueLockedAt is not null));
+            var markup = project.MaterialMarkup ?? 0;
+            foreach (var item in fresh)
             {
-                ProjectId = project.Id,
-                Currency = project.RevenueCurrency,
-                ClientPrice = MaterialRules.ManualPrice(item.ClientPrice, Cost(entry), markup),
-                AddedAt = clock.UtcNow,
-                AddedById = actor.UserId,
-            };
-            Apply(material, item, entry);
-            materials.Add(material);
-            return material;
-        }).ToList();
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+                var entry = MaterialRules.Normalise(new MaterialRules.Entry(item.Quantity, item.UnitCost, item.Amount));
+                var material = new ProjectMaterial
+                {
+                    ProjectId = project.Id,
+                    Currency = project.RevenueCurrency,
+                    ClientPrice = MaterialRules.ManualPrice(item.ClientPrice, Cost(entry), markup),
+                    AddedAt = clock.UtcNow,
+                    AddedById = actor.UserId,
+                    ClientRef = item.ClientRef,
+                };
+                Apply(material, item, entry);
+                materials.Add(material);
+                added.Add(material);
+            }
 
-        foreach (var material in added)
-        {
-            activity.Add(MaterialEvent(project, material, ActivityEventKinds.MaterialAdded, actor.UserId, Cost(material)));
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            foreach (var material in added)
+            {
+                activity.Add(MaterialEvent(project, material, ActivityEventKinds.MaterialAdded, actor.UserId, Cost(material)));
+            }
+
+            await NotifyAddedAsync(project, added.Count, actor.UserId, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        await NotifyAddedAsync(project, added.Count, actor.UserId, cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        var rows = await materials.GetRowsAsync(added.Select(m => m.Id).ToList(), cancellationToken);
-        return rows.Select(r => ToResponse(r, project, actor, open: true)).ToList();
+        // In request order: each item's new material, or the one an earlier send of it already added.
+        var newOnes = new Queue<ProjectMaterial>(added);
+        var ids = request.Items
+            .Select(i => i.ClientRef is { } clientRef && existing.TryGetValue(clientRef, out var earlier) ? earlier.Id : newOnes.Dequeue().Id)
+            .ToList();
+        var rows = await materials.GetRowsAsync(ids, cancellationToken);
+        var open = IsOpen(project);
+        return rows.Select(r => ToResponse(r, project, actor, open)).ToList();
     }
 
     public async Task<MaterialResponse> UpdateAsync(
@@ -204,14 +220,43 @@ public sealed class MaterialService(
     /// <summary>Locks the project row, so a change can't slip in while it is being finalised.</summary>
     private async Task<Project> OpenProjectAsync(UserAccess actor, long projectId, CancellationToken cancellationToken)
     {
-        var project = await projects.GetForUpdateAsync(projectId, cancellationToken);
-        if (project is null || !actor.CanSee(project.DomainCode))
-        {
-            throw new NotFoundException(ProjectNotFound);
-        }
-
+        var project = await LockedProjectAsync(actor, projectId, cancellationToken);
         Throw(SiteRules.CheckOpen(project.DomainCode, project.Status, project.RevenueLockedAt is not null));
         return project;
+    }
+
+    /// <summary>The project, locked, if the caller can see it. Two sends of the same batch wait for each other here.</summary>
+    private async Task<Project> LockedProjectAsync(UserAccess actor, long projectId, CancellationToken cancellationToken)
+    {
+        var project = await projects.GetForUpdateAsync(projectId, cancellationToken);
+        return project is not null && actor.CanSee(project.DomainCode) ? project : throw new NotFoundException(ProjectNotFound);
+    }
+
+    /// <summary>
+    /// What the caller already added with the items' client refs, by ref. A ref already used on another site is refused:
+    /// it can't be the same material.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, ProjectMaterial>> AlreadyAddedAsync(
+        long actorId,
+        long projectId,
+        IReadOnlyList<NewMaterialRequest> items,
+        CancellationToken cancellationToken)
+    {
+        var refs = items.Where(i => i.ClientRef is not null).Select(i => i.ClientRef!.Value).ToList();
+        if (refs.Count == 0)
+        {
+            return new Dictionary<Guid, ProjectMaterial>();
+        }
+
+        var found = await materials.ByClientRefsAsync(actorId, refs, cancellationToken);
+        if (found.FirstOrDefault(m => m.ProjectId != projectId) is { } elsewhere)
+        {
+            var index = items.ToList().FindIndex(i => i.ClientRef == elsewhere.ClientRef);
+            throw new RequestValidationException(
+                ErrorCodes.ValidationFailed, $"items[{index}].clientRef", "This client reference was already used for a material on another site.");
+        }
+
+        return found.ToDictionary(m => m.ClientRef!.Value);
     }
 
     private async Task<ProjectMaterial> ChangeableMaterialAsync(UserAccess actor, long projectId, long materialId, CancellationToken cancellationToken)

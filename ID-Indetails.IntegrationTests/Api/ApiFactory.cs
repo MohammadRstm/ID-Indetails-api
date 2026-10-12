@@ -1,5 +1,6 @@
 using ID_Indetails.api.Proton.Safety;
 using ID_Indetails.api.Services.Email.Abstraction;
+using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.IntegrationTests.Data;
 using Microsoft.AspNetCore.Hosting;
@@ -25,6 +26,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public CapturingLivePublisher Live { get; } = new();
 
+    /// <summary>Pushes are never sent to Expo from tests; they land here when <see cref="PushEnabled"/>.</summary>
+    public CapturingPushProvider Push { get; } = new();
+
     /// <summary>Uploads of this API, deleted with it.</summary>
     public string FilesRoot { get; } = Path.Combine(Path.GetTempPath(), $"idi_test_files_{Guid.NewGuid():N}");
 
@@ -35,6 +39,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     /// <summary>Per signed-in user requests per minute. High by default so tests don't trip it.</summary>
     protected virtual int UserPermitsPerMinute => 100_000;
+
+    /// <summary>Off by default, so the other tests don't queue pushes.</summary>
+    protected virtual bool PushEnabled => false;
 
     public Task InitializeAsync() => _database.InitializeAsync();
 
@@ -63,6 +70,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("NotificationScheduler:Enabled", "false");
         builder.UseSetting("FileStorage:RootPath", FilesRoot);
         builder.UseSetting("FileStorage:CleanupEnabled", "false");
+        builder.UseSetting("Push:DeviceCleanupEnabled", "false");
+        builder.UseSetting("Push:Enabled", PushEnabled ? "true" : "false");
 
         builder.ConfigureTestServices(services =>
         {
@@ -70,6 +79,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton<IEmailSender>(Emails);
             services.RemoveAll<ILivePublisher>();
             services.AddSingleton<ILivePublisher>(Live);
+            services.RemoveAll<IPushProvider>();
+            services.AddSingleton<IPushProvider>(Push);
             // the email sender was replaced above: wrap it again, as the API wraps the real one
             services.AddProtonSideEffectGuards();
         });
@@ -88,6 +99,12 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 public sealed class RateLimitedApiFactory : ApiFactory
 {
     protected override int AuthPermitsPerMinute => 3;
+}
+
+/// <summary>Same API with pushes on, sent to <see cref="ApiFactory.Push"/>.</summary>
+public sealed class PushApiFactory : ApiFactory
+{
+    protected override bool PushEnabled => true;
 }
 
 /// <summary>Same API with a tight per-user limit, to prove every signed-in endpoint is limited.</summary>
