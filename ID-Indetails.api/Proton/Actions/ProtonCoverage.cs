@@ -231,6 +231,15 @@ public static class ProtonCoverage
         Never("Auth.ChangePassword", "takes passwords"),
         Never("Auth.ChangeEmail", "changes the person's own sign-in address"),
         Never("Setup.CreateSuperAdmin", "takes the setup key"),
+        // the phone app: its sign-in, its device for pushes, and the person's push settings
+        Never("MobileAuth.Login", "takes a password"),
+        Never("MobileAuth.Refresh", "rotates the phone app's sign-in token"),
+        Never("MobileAuth.Logout", "ends a phone's session"),
+        Never("MobileAuth.ChangePassword", "takes passwords"),
+        Never("Devices.Register", "the phone app registers its own device for pushes"),
+        Never("Devices.DeleteCurrent", "the phone app stops its own pushes"),
+        Never("Devices.Delete", "takes a phone off the person's account: done by the person"),
+        Never("NotificationSettings.Save", "the person's quiet hours and muted pushes: set by the person"),
 
         // Proton itself
         Own("Proton.Ask"),
