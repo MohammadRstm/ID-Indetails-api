@@ -4,6 +4,7 @@ using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Documents.Abstraction;
+using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 
 namespace ID_Indetails.api.Services.Billing.Implementation;
@@ -68,6 +69,7 @@ public sealed class InvoiceScheduleService(
             var documents = services.GetRequiredService<IDocumentService>();
             await services.GetRequiredService<IInvoiceService>().SendScheduledAsync(invoiceId, documents.EmailScheduledInvoiceAsync, cancellationToken);
             await services.GetRequiredService<ILiveUpdates>().FlushAsync(cancellationToken);
+            await services.GetRequiredService<IPushQueue>().FlushAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -75,6 +77,7 @@ public sealed class InvoiceScheduleService(
             await using var scope = scopes.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<IInvoiceService>().ScheduledSendFailedAsync(invoiceId, cancellationToken);
             await scope.ServiceProvider.GetRequiredService<ILiveUpdates>().FlushAsync(cancellationToken);
+            await scope.ServiceProvider.GetRequiredService<IPushQueue>().FlushAsync(cancellationToken);
         }
     }
 }

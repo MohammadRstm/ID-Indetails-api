@@ -48,5 +48,8 @@ public class ProjectMaterialConfiguration : IEntityTypeConfiguration<ProjectMate
             .WithMany()
             .HasForeignKey(x => x.AddedById)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // MySQL allows any number of NULLs in a unique index, so the website's materials (no ref) are unaffected.
+        builder.HasIndex(x => new { x.AddedById, x.ClientRef }).IsUnique();
     }
 }

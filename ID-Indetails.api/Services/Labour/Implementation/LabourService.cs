@@ -83,6 +83,26 @@ public sealed class LabourService(
 
         var week = await labour.GetWeekForUpdateAsync(projectId, weekStart, cancellationToken);
         var isNew = week is null;
+        if (week is not null)
+        {
+            Throw(SiteRules.CheckCanChange(week.SubmittedById == actor.UserId, actor.Has(PermissionCodes.LabourReportManage)));
+        }
+
+        var stored = week?.Days.Select(d => new LabourRules.Day(d.WorkDate, d.Workers, d.DailyPay)).ToList() ?? [];
+        switch (LabourResubmission.Decide(
+            week is not null,
+            LabourResubmission.SameReport(stored, week?.Note, days, request.Note),
+            LabourResubmission.VersionOf(week?.SubmittedAt, week?.UpdatedAt),
+            request.ExpectedVersion))
+        {
+            case LabourSubmission.Unchanged:
+                // sent again (an offline retry, or the same save twice): nothing to record or tell anyone
+                await transaction.CommitAsync(cancellationToken);
+                return await DescribeWeekAsync(actor, project, weekStart, cancellationToken);
+            case LabourSubmission.Conflict:
+                throw new ConflictException(ErrorCodes.LabourWeekChanged, "Someone changed this week since you loaded it.");
+        }
+
         decimal? previousTotal = null;
         if (week is null)
         {
@@ -91,9 +111,8 @@ public sealed class LabourService(
         }
         else
         {
-            Throw(SiteRules.CheckCanChange(week.SubmittedById == actor.UserId, actor.Has(PermissionCodes.LabourReportManage)));
             previousTotal = Total(week);
-            week.UpdatedAt = clock.UtcNow;
+            week.UpdatedAt = LabourResubmission.ChangedAt(week.UpdatedAt ?? week.SubmittedAt, clock.UtcNow);
         }
 
         ReplaceDays(week, days);
@@ -226,6 +245,7 @@ public sealed class LabourService(
                 Total = days.Sum(d => d.Cost),
                 Currency = Currency,
                 CanEdit = open,
+                Version = LabourResubmission.UnreportedVersion,
             };
         }
 
@@ -244,6 +264,7 @@ public sealed class LabourService(
             SubmittedAt = week.SubmittedAt,
             UpdatedAt = week.UpdatedAt,
             CanEdit = open && SiteRules.CanChange(week.SubmittedById == actor.UserId, actor.Has(PermissionCodes.LabourReportManage)),
+            Version = LabourResubmission.VersionOf(week.SubmittedAt, week.UpdatedAt),
         };
     }
 
