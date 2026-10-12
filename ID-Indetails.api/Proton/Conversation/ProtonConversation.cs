@@ -28,6 +28,12 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
     /// <summary>Input tokens of the last model request (cached or not): the cost of carrying this conversation on.</summary>
     public int LastInputTokens { get; set; }
 
+    /// <summary>The records tools have returned in this conversation: the only ones Proton may offer as choices.</summary>
+    public Dictionary<(ProtonRefType Type, long Id), ProtonRef> Known { get; } = [];
+
+    /// <summary>The options of the last reply that offered any; a pick must be one of them.</summary>
+    public IReadOnlyList<Ui.ProtonChoice> OfferedChoices { get; set; } = [];
+
     private readonly Queue<string> _actionNotes = new();
 
     /// <summary>

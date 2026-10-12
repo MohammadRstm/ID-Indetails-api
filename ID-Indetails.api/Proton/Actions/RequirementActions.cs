@@ -7,6 +7,7 @@ using ID_Indetails.api.DTO.Response.Requirements;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Requirements.Abstraction;
@@ -18,7 +19,7 @@ public sealed record RequirementArgs(long ProjectId, long? RequirementId, SaveRe
 
 public sealed record RequirementDoneArgs(long ProjectId, long RequirementId, bool Done);
 
-public sealed record AddRequirementInput
+public sealed record AddRequirementInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
@@ -41,6 +42,8 @@ public sealed class ProposeAddRequirementTool(IProjectService projects, IEmploye
         "Propose adding a requirement (task) to a project. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
+
+    protected override string? OpensLabel(RequirementArgs args, ProtonRef? target) => RequirementText.OpensLabel(target);
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<RequirementsController>(nameof(RequirementsController.Create));
 
@@ -66,11 +69,11 @@ public sealed class ProposeAddRequirementTool(IProjectService projects, IEmploye
     protected override async Task<ProtonActionDone> ExecuteAsync(RequirementArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var created = await requirements.CreateAsync(args.ProjectId, args.Request, cancellationToken);
-        return new ProtonActionDone($"Added the requirement \"{ProtonText.Cut(created.Text, 80)}\".", "requirement", created.Id, []);
+        return await RequirementText.DoneAsync(projects, args.ProjectId, $"Added the requirement \"{ProtonText.Cut(created.Text, 80)}\".", created.Id, cancellationToken);
     }
 }
 
-public sealed record UpdateRequirementInput
+public sealed record UpdateRequirementInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
@@ -90,7 +93,7 @@ public sealed record UpdateRequirementInput
 }
 
 /// <summary>Edits a requirement, through PUT /api/projects/{id}/requirements/{requirementId} once confirmed.</summary>
-public sealed class ProposeUpdateRequirementTool(IEmployeeService employees, IRequirementService requirements)
+public sealed class ProposeUpdateRequirementTool(IProjectService projects, IEmployeeService employees, IRequirementService requirements)
     : ProtonActionTool<UpdateRequirementInput, RequirementArgs>
 {
     public override string Name => "propose_update_requirement";
@@ -100,6 +103,8 @@ public sealed class ProposeUpdateRequirementTool(IEmployeeService employees, IRe
         "Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
+
+    protected override string? OpensLabel(RequirementArgs args, ProtonRef? target) => RequirementText.OpensLabel(target);
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<RequirementsController>(nameof(RequirementsController.Update));
 
@@ -140,7 +145,7 @@ public sealed class ProposeUpdateRequirementTool(IEmployeeService employees, IRe
         }
 
         return (new RequirementArgs(input.ProjectId, current.Id, after, before),
-            new ProtonPreview($"Change the requirement \"{ProtonText.Cut(current.Text, 60)}\"", changes), null);
+            new ProtonPreview($"Change the requirement \"{ProtonText.Cut(current.Text, 60)}\"", changes), await RequirementText.ProjectAsync(projects, input.ProjectId, cancellationToken));
     }
 
     protected override object RequestOf(RequirementArgs args) => args.Request;
@@ -154,11 +159,11 @@ public sealed class ProposeUpdateRequirementTool(IEmployeeService employees, IRe
         }
 
         var updated = await requirements.UpdateAsync(args.ProjectId, current.Id, args.Request, cancellationToken);
-        return new ProtonActionDone($"Updated the requirement \"{ProtonText.Cut(updated.Text, 80)}\".", "requirement", updated.Id, []);
+        return await RequirementText.DoneAsync(projects, args.ProjectId, $"Updated the requirement \"{ProtonText.Cut(updated.Text, 80)}\".", updated.Id, cancellationToken);
     }
 }
 
-public sealed record SetRequirementDoneInput
+public sealed record SetRequirementDoneInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
@@ -169,7 +174,7 @@ public sealed record SetRequirementDoneInput
 }
 
 /// <summary>Ticks or unticks a requirement, through POST …/requirements/{id}/done or /undone once confirmed.</summary>
-public sealed class ProposeSetRequirementDoneTool(IRequirementService requirements)
+public sealed class ProposeSetRequirementDoneTool(IProjectService projects, IRequirementService requirements)
     : ProtonActionTool<SetRequirementDoneInput, RequirementDoneArgs>
 {
     public override string Name => "propose_set_requirement_done";
@@ -178,6 +183,8 @@ public sealed class ProposeSetRequirementDoneTool(IRequirementService requiremen
         "Propose ticking a requirement as done, or reopening a done one. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
+
+    protected override string? OpensLabel(RequirementDoneArgs args, ProtonRef? target) => RequirementText.OpensLabel(target);
 
     // Done and Undone share their policies.
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<RequirementsController>(nameof(RequirementsController.Done));
@@ -198,7 +205,7 @@ public sealed class ProposeSetRequirementDoneTool(IRequirementService requiremen
                     new ProtonChange("Requirement", null, ProtonText.Cut(current.Text, 200)!),
                     new ProtonChange("State", current.IsDone ? "Done" : "Open", input.Done ? "Done" : "Open"),
                 ]),
-            null);
+            await RequirementText.ProjectAsync(projects, input.ProjectId, cancellationToken));
     }
 
     protected override object? RequestOf(RequirementDoneArgs args) => null;
@@ -206,15 +213,28 @@ public sealed class ProposeSetRequirementDoneTool(IRequirementService requiremen
     protected override async Task<ProtonActionDone> ExecuteAsync(RequirementDoneArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var result = await requirements.SetDoneAsync(args.ProjectId, args.RequirementId, args.Done, cancellationToken);
-        return new ProtonActionDone(
-            result.IsDone ? $"Marked \"{ProtonText.Cut(result.Text, 80)}\" done." : $"Reopened \"{ProtonText.Cut(result.Text, 80)}\".",
-            "requirement", result.Id, []);
+        return await RequirementText.DoneAsync(
+            projects, args.ProjectId, result.IsDone ? $"Marked \"{ProtonText.Cut(result.Text, 80)}\" done." : $"Reopened \"{ProtonText.Cut(result.Text, 80)}\".", result.Id, cancellationToken);
     }
 }
 
 /// <summary>Shared wording and lookups of the requirement actions.</summary>
 internal static class RequirementText
 {
+    /// <summary>The project a requirement belongs to, as a record (read with the user's access).</summary>
+    public static async Task<ProtonRef> ProjectAsync(IProjectService projects, long projectId, CancellationToken cancellationToken)
+        => ProjectText.Ref(await projects.GetAsync(projectId, cancellationToken));
+
+    /// <summary>A requirement change done: it lives on its project's requirements tab.</summary>
+    public static async Task<ProtonActionDone> DoneAsync(
+        IProjectService projects, long projectId, string message, long requirementId, CancellationToken cancellationToken)
+    {
+        var project = await ProjectAsync(projects, projectId, cancellationToken);
+        return new ProtonActionDone(message, "requirement", requirementId, [project], ProtonUiCommand.Open(project, ProtonProjectSection.Requirements));
+    }
+
+    public static string? OpensLabel(ProtonRef? project) => project is null ? null : $"{project.Name}: requirements";
+
     public static async Task<RequirementResponse> FindAsync(
         IRequirementService requirements, long projectId, long requirementId, CancellationToken cancellationToken)
         => (await requirements.ListAsync(projectId, cancellationToken)).Items.FirstOrDefault(r => r.Id == requirementId)

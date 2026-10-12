@@ -8,6 +8,7 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Proton.Conversation;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Repositories.Proton.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 
@@ -69,7 +70,9 @@ public sealed class ProtonActionService(
         await actions.FinishAsync(actionId, ProtonActionStatus.Succeeded, done.ResultType, done.ResultId, null, null, clock.UtcNow, CancellationToken.None);
         Note(userId, action, $"The user confirmed \"{Title(action)}\" and it was done: {done.Message}");
         _log.LogInformation("Proton action {ActionId} ({Tool}) succeeded on {ResultType} {ResultId}.", actionId, action.Tool, done.ResultType, done.ResultId);
-        return new ProtonActionOutcomeResponse(actionId, ProtonActionStatus.Succeeded, done.Message, done.Refs);
+        // Navigate only when the card the user confirmed said what would open.
+        IReadOnlyList<ProtonUiCommand> opens = Preview(action)?.OpensAfter is not null && done.Opens is { } command ? [command] : [];
+        return new ProtonActionOutcomeResponse(actionId, ProtonActionStatus.Succeeded, done.Message, done.Refs, opens);
     }
 
     public async Task<ProtonActionOutcomeResponse> CancelAsync(
@@ -82,7 +85,7 @@ public sealed class ProtonActionService(
         }
 
         Note(userId, action, $"The user cancelled \"{Title(action)}\". Nothing was changed.");
-        return new ProtonActionOutcomeResponse(actionId, ProtonActionStatus.Cancelled, "Cancelled. Nothing was changed.", []);
+        return new ProtonActionOutcomeResponse(actionId, ProtonActionStatus.Cancelled, "Cancelled. Nothing was changed.", [], []);
     }
 
     /// <summary>The caller's own action in that conversation, still pending. Anyone else's reads as not found.</summary>
@@ -110,8 +113,10 @@ public sealed class ProtonActionService(
     private void Note(long userId, ProtonAction action, string note)
         => conversations.Find(userId, action.ConversationId)?.NoteAction(note);
 
-    private static string Title(ProtonAction action)
-        => System.Text.Json.JsonSerializer.Deserialize<ProtonPreview>(action.Preview, ProtonJson.Options)?.Title ?? action.Tool;
+    private static ProtonPreview? Preview(ProtonAction action)
+        => System.Text.Json.JsonSerializer.Deserialize<ProtonPreview>(action.Preview, ProtonJson.Options);
+
+    private static string Title(ProtonAction action) => Preview(action)?.Title ?? action.Tool;
 
     private static string Short(string message) => message.Length <= 500 ? message : message[..500];
 }

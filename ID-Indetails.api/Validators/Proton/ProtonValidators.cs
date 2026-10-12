@@ -1,4 +1,5 @@
 using FluentValidation;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Proton;
 using ID_Indetails.api.Validators.Common;
 
@@ -8,10 +9,32 @@ public sealed class AskProtonRequestValidator : AbstractValidator<AskProtonReque
 {
     public const int MaxTextLength = 2_000;
 
+    /// <summary>The areas a page context can name: the two businesses and the company area.</summary>
+    public static readonly IReadOnlyList<string> Areas = [DomainCodes.Design, DomainCodes.Execution, "company"];
+
     public AskProtonRequestValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().WithMessage("Ask a question.")
+        RuleFor(x => x.Text).NotEmpty().When(x => x.Choice is null).WithMessage("Ask a question.")
             .MaximumLength(MaxTextLength).WithMessage($"A question can be at most {MaxTextLength} characters.");
+        RuleFor(x => x.Page!).SetValidator(new ProtonPageContextValidator()).When(x => x.Page is not null);
+        When(x => x.Choice is not null, () =>
+        {
+            RuleFor(x => x.Choice!.Type).IsInEnum().WithMessage("Pick one of the options.");
+            RuleFor(x => x.Choice!.Id).GreaterThan(0).WithMessage("Pick one of the options.");
+        });
+    }
+}
+
+/// <summary>A page is described by known values only: an area, a page, and a record only together with its kind.</summary>
+public sealed class ProtonPageContextValidator : AbstractValidator<ProtonPageContext>
+{
+    public ProtonPageContextValidator()
+    {
+        RuleFor(x => x.Area).Must(a => AskProtonRequestValidator.Areas.Contains(a)).WithMessage("Unknown area.");
+        RuleFor(x => x.Page).IsInEnum();
+        RuleFor(x => x.Section).IsInEnum();
+        RuleFor(x => x.EntityType).IsInEnum().NotNull().When(x => x.EntityId is not null).WithMessage("A record needs its kind.");
+        RuleFor(x => x.EntityId).NotNull().GreaterThan(0).When(x => x.EntityType is not null).WithMessage("A record needs its id.");
     }
 }
 

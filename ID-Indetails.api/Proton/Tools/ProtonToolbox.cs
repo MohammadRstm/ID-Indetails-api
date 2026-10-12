@@ -47,6 +47,10 @@ public sealed record ProtonToolResult(
     public ProtonPendingAction? Pending { get; init; }
 
     public ProtonBasis? Basis { get; init; }
+
+    public Ui.ProtonUiCommand? UiCommand { get; init; }
+
+    public IReadOnlyList<Ui.ProtonChoice>? Choices { get; init; }
 }
 
 /// <summary>Which conversation, model and prompt the tools are used for: recorded with every proposed action.</summary>
@@ -130,6 +134,10 @@ public sealed class ProtonToolbox(
                 result = output.Proposal is { } proposal && tool is IProtonActionTool action
                     ? await ProposeAsync(session, action, input, proposal, output, watch, cancellationToken)
                     : Ok(name, input, new { status = "ok", basis = output.Basis, data = output.Data }, output, watch);
+                if (result.Status == ProtonToolStatus.Ok)
+                {
+                    session.Context.Remember(output.Refs);
+                }
             }
             catch (ProtonToolInputException exception)
             {
@@ -237,7 +245,7 @@ public sealed class ProtonToolbox(
         var json = JsonSerializer.Serialize(content, ProtonJson.Options);
         return json.Length > MaxContentLength
             ? Fail(tool, input, ProtonToolStatus.Invalid, "The result is too large. Ask for fewer rows or a shorter period.", watch)
-            : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch)) { Basis = output.Basis };
+            : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch)) { Basis = output.Basis, UiCommand = output.UiCommand, Choices = output.Choices };
     }
 
     private static ProtonToolResult Fail(string tool, JsonElement input, ProtonToolStatus status, string message, Stopwatch watch)

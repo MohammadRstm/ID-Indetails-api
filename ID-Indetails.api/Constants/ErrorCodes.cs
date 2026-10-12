@@ -153,4 +153,5 @@ public static class ErrorCodes
     public const string ProtonActionNotPending = "proton_action_not_pending";
     public const string ProtonActionExpired = "proton_action_expired";
     public const string ProtonActionStale = "proton_action_stale";
+    public const string ProtonChoiceInvalid = "proton_choice_invalid";
 }
