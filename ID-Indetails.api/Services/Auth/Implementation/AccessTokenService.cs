@@ -12,14 +12,14 @@ namespace ID_Indetails.api.Services.Auth.Implementation;
 
 /// <summary>
 /// Builds the access token: user id, email, first and last name, role, domain, team, position
-/// and the must-change-password flag, signed with HMAC-SHA256.
+/// and the must-change-password flag, signed with HMAC-SHA256. Tokens for the phone app also carry its session id.
 /// </summary>
 public sealed class AccessTokenService(IOptions<JwtOptions> options, IClock clock) : IAccessTokenService
 {
     private readonly JwtOptions _options = options.Value;
     private readonly JsonWebTokenHandler _handler = new();
 
-    public (string Token, DateTime ExpiresAt) Create(User user)
+    public (string Token, DateTime ExpiresAt) Create(User user, Guid? mobileSessionId = null)
     {
         var now = clock.UtcNow;
         var expiresAt = now.AddMinutes(_options.AccessTokenMinutes);
@@ -39,6 +39,7 @@ public sealed class AccessTokenService(IOptions<JwtOptions> options, IClock cloc
         if (user.DomainCode is not null) claims[AuthClaimTypes.Domain] = user.DomainCode;
         if (user.Team is not null) claims[AuthClaimTypes.Team] = user.Team.Name;
         if (!string.IsNullOrEmpty(user.Position)) claims[AuthClaimTypes.Position] = user.Position;
+        if (mobileSessionId is { } sessionId) claims[AuthClaimTypes.SessionId] = sessionId.ToString();
 
         var token = _handler.CreateToken(new SecurityTokenDescriptor
         {
