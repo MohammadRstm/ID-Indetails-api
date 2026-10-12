@@ -1,4 +1,6 @@
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Labour.Abstraction;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +38,33 @@ public sealed class LabourRepository(IdIndetailsDbContext db) : ILabourRepositor
         => db.ProjectLabourDefaults.SingleOrDefaultAsync(d => d.ProjectId == projectId && d.EffectiveFrom == effectiveFrom, cancellationToken);
 
     public void AddDefault(ProjectLabourDefault labourDefault) => db.ProjectLabourDefaults.Add(labourDefault);
+
+    public async Task<IReadOnlyList<SiteToReport>> UnreportedSitesAsync(
+        IReadOnlyCollection<long> reporterIds,
+        DateTime since,
+        DateOnly weekStart,
+        CancellationToken cancellationToken = default)
+    {
+        var unreported = db.Projects.Where(p => p.DomainCode == DomainCodes.Execution
+            && p.Status == ProjectStatus.Active
+            && !db.LabourWeeks.Any(w => w.ProjectId == p.Id && w.WeekStart == weekStart));
+
+        var byMaterials = await db.ProjectMaterials
+            .Where(m => m.DeletedAt == null && m.AddedAt >= since && reporterIds.Contains(m.AddedById))
+            .Join(unreported, m => m.ProjectId, p => p.Id, (m, p) => new { UserId = m.AddedById, ProjectId = p.Id, p.Title })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var byWeeks = await db.LabourWeeks
+            .Where(w => w.SubmittedAt >= since && reporterIds.Contains(w.SubmittedById))
+            .Join(unreported, w => w.ProjectId, p => p.Id, (w, p) => new { UserId = w.SubmittedById, ProjectId = p.Id, p.Title })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return byMaterials.Concat(byWeeks)
+            .DistinctBy(s => (s.UserId, s.ProjectId))
+            .Select(s => new SiteToReport(s.UserId, s.ProjectId, s.Title))
+            .ToList();
+    }
 
     private async Task<IReadOnlyList<LabourWeekRecord>> WeeksAsync(IQueryable<LabourWeek> weeks, CancellationToken cancellationToken)
     {

@@ -12,11 +12,13 @@ public enum ScheduledCheck
     AutoArchive,
     ScheduledInvoices,
     InvoiceReminders,
+    LogReminders,
+    LabourWeekReminders,
 }
 
 /// <summary>
-/// The notifications nobody's action sends, and the domains' auto-archiving. Each notification is keyed, so a check
-/// can run as often as it likes and still sends each notification once.
+/// The notifications nobody's action sends, the domains' auto-archiving and the push-only reminders. Each notification
+/// is keyed, so a check can run as often as it likes and still sends each notification once.
 /// </summary>
 public interface IScheduledNotifications
 {

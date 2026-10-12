@@ -7,6 +7,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Notifications.Implementation;
+using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using Moq;
 using Shouldly;
@@ -26,6 +27,7 @@ public class NotificationSenderTests
     private readonly List<Notification> _staged = [];
     private readonly Mock<INotificationRepository> _repository = new();
     private readonly Mock<ILiveUpdates> _live = new();
+    private readonly Mock<IPushQueue> _pushes = new();
 
     private NotificationSender CreateSender()
     {
@@ -44,7 +46,7 @@ public class NotificationSenderTests
         var clock = new Mock<IClock>();
         clock.SetupGet(c => c.UtcNow).Returns(Now);
 
-        return new NotificationSender(_repository.Object, new Mock<IUserRepository>().Object, permissions.Object, _live.Object, clock.Object);
+        return new NotificationSender(_repository.Object, new Mock<IUserRepository>().Object, permissions.Object, _live.Object, _pushes.Object, clock.Object);
     }
 
     [Fact]
@@ -58,6 +60,7 @@ public class NotificationSenderTests
 
         _staged.Select(n => n.RecipientId).ShouldBe([DesignEmployee, SuperAdmin]);
         _live.Verify(l => l.NotificationsChanged(It.Is<IEnumerable<long>>(ids => ids.SequenceEqual(new[] { DesignEmployee, SuperAdmin }))));
+        _pushes.Verify(p => p.Notifications(It.Is<IEnumerable<Notification>>(rows => rows.SequenceEqual(_staged)), false));
         _staged.ShouldAllBe(n => n.Kind == NotificationKinds.RequirementAssigned
             && n.ActorId == Actor && n.ProjectId == 10 && n.SubjectType == "requirement" && n.SubjectId == 20
             && n.Payload == """{"text":"Stairs"}""" && n.CreatedAt == Now);
@@ -89,6 +92,8 @@ public class NotificationSenderTests
             n => n.RecipientId.ShouldBe(SuperAdmin),
             n => n.DigestKey.ShouldBe("key"),
             n => n.Count.ShouldBe(1));
+        // both the bumped digest and the new one push, as digests
+        _pushes.Verify(p => p.Notifications(It.Is<IEnumerable<Notification>>(rows => rows.SequenceEqual(new[] { existing, _staged[0] })), true));
     }
 
     [Fact]
