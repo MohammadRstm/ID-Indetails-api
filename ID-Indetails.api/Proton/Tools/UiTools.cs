@@ -83,9 +83,12 @@ public sealed record OpenPageInput
 /// <summary>Opens one of a fixed set of pages, if the user may open it: each page needs what its own endpoint needs.</summary>
 public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInput>
 {
-    /// <summary>The endpoint behind each page, whose permission the page needs, and whether it is Design only.</summary>
-    private static readonly IReadOnlyDictionary<ProtonPage, (ProtonEndpoint Endpoint, bool DesignOnly, bool Company, string Label)> Pages =
-        new Dictionary<ProtonPage, (ProtonEndpoint, bool, bool, string)>
+    /// <summary>
+    /// The endpoint behind each page, whose permission the page needs (none for pages every signed-in person has, where
+    /// the app's own route access still decides), and whether it is Design only or in the company area.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<ProtonPage, (ProtonEndpoint? Endpoint, bool DesignOnly, bool Company, string Label)> Pages =
+        new Dictionary<ProtonPage, (ProtonEndpoint?, bool, bool, string)>
         {
             [ProtonPage.Dashboard] = (ProtonEndpoint.Of<DashboardController>(nameof(DashboardController.Get)), false, false, "the dashboard"),
             [ProtonPage.Projects] = (ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List)), false, false, "projects"),
@@ -97,21 +100,38 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
             [ProtonPage.Reports] = (ProtonEndpoint.Of<ReportsController>(nameof(ReportsController.Work)), true, false, "reports"),
             [ProtonPage.CompanyOverview] = (ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get)), false, true, "the company overview"),
             [ProtonPage.CompanyExpenses] = (ProtonEndpoint.Of<OverheadController>(nameof(OverheadController.Get)), false, true, "company expenses"),
+            [ProtonPage.Settings] = (null, false, false, "settings"),
+            [ProtonPage.Notifications] = (null, false, false, "notifications"),
+            [ProtonPage.Messages] = (null, false, false, "messages"),
+            [ProtonPage.Help] = (null, false, false, "help"),
+            // the figures on these never reach Proton: it only opens them
+            [ProtonPage.Schedules] = (ProtonEndpoint.Of<SchedulesController>(nameof(SchedulesController.List)), false, true, "schedules"),
+            [ProtonPage.Salaries] = (ProtonEndpoint.Of<SalariesController>(nameof(SalariesController.List)), false, true, "salaries"),
+            [ProtonPage.ProjectPay] = (ProtonEndpoint.Of<ProjectPayController>(nameof(ProjectPayController.Get)), false, true, "project pay"),
+            [ProtonPage.ProtonBudget] = (ProtonEndpoint.Of<ProtonController>(nameof(ProtonController.Budget)), false, true, "Proton's budget"),
+            [ProtonPage.CompanySettings] = (null, false, true, "company settings"),
+            [ProtonPage.CompanyProfile] = (null, false, true, "your profile"),
+            [ProtonPage.Launcher] = (null, false, true, "the start page"),
         };
 
     public override string Name => "open_page";
 
     public override string Description =>
         "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people, financials " +
-        "(optionally a tab), meetings, activity, reports, company overview or company expenses. Only these pages exist " +
-        "for Proton; it can't open settings, salaries or any address.";
+        "(optionally a tab), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
+        "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
+        "start page. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
 
     protected override async Task<ProtonToolOutput> RunAsync(OpenPageInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var (endpoint, designOnly, company, label) = Pages[input.Page];
-        await context.RequireAsync(endpoint);
+        if (endpoint is not null)
+        {
+            await context.RequireAsync(endpoint);
+        }
+
 
         string? domain = null;
         if (!company)
@@ -141,7 +161,7 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
     }
 
     /// <summary>The user's own business when they can see it, otherwise the first one they can.</summary>
-    private static string? HomeDomain(ProtonToolContext context)
+    internal static string? HomeDomain(ProtonToolContext context)
         => context.Access.Domain is { } home && context.Access.VisibleDomains.Contains(home) ? home : context.Access.VisibleDomains.FirstOrDefault();
 }
 
@@ -306,4 +326,128 @@ public sealed class RefreshPageTool : ProtonTool<RefreshInput>
         {
             UiCommand = ProtonUiCommand.Refresh,
         });
+}
+
+public sealed record OpenSurfaceInput
+{
+    public required ProtonSurface Surface { get; init; }
+
+    [Description("The record it is for, from find or another tool: a project for edit_project, project_report, " +
+                 "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment and new_statement; " +
+                 "a client for edit_client; a person for message_person. Leave out for the others.")]
+    public long? Id { get; init; }
+
+    [Description("Which business, for surfaces not tied to a record (new project, new client, invite, new meeting, settings). " +
+                 "Leave out for the user's own.")]
+    public ProtonDomain? Domain { get; init; }
+
+    [Description("settings_section only.")]
+    public ProtonSettingsSection? Section { get; init; }
+
+    [Description("company_overview_tab only.")]
+    public ProtonCompanyTab? Tab { get; init; }
+}
+
+/// <summary>
+/// Opens a form, dialog or drawer for the user, on its own page: only one they could open themselves (the endpoint
+/// it saves through, a record they can see), never a one-click confirm. Opening fills and saves nothing; anything that
+/// emails someone opens only when the user asked in their own words.
+/// </summary>
+public sealed class OpenSurfaceTool(ProtonRecords records) : ProtonTool<OpenSurfaceInput>
+{
+    public override string Name => "open_surface";
+
+    public override string Description =>
+        "Open a form, dialog or tab for the user (\"open the new project form\", \"let me edit Acme's details\", \"take me " +
+        "to the finance settings\", \"I want to message Sara\"). It only opens it: the user fills it in and saves it themselves. " +
+        "Use the record's id from find when the surface is for one. Changes you can propose go on a card instead.";
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
+
+    protected override async Task<ProtonToolOutput> RunAsync(OpenSurfaceInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var spec = ProtonSurfaces.All[input.Surface];
+        if (spec.Endpoint is { } endpoint)
+        {
+            await context.RequireAsync(endpoint);
+        }
+
+        if (spec.EmailsSomeone && context.Turn != ProtonTurnOrigin.Typed)
+        {
+            throw new ProtonToolInputException("This form emails someone, so it opens only when the user asks for it in their own words.");
+        }
+
+        ProtonRef? record = null;
+        string? domain = null;
+        if (spec.Record is { } kind)
+        {
+            record = input.Id is { } id ? await records.FindAsync(kind, id, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.")
+                : throw new ProtonToolInputException($"Which {kind.ToString().ToLowerInvariant()}? Give its id from find.");
+            domain = record.Domain;
+        }
+        else if (!spec.Company)
+        {
+            domain = spec.OnlyIn ?? input.Domain?.Code() ?? OpenPageTool.HomeDomain(context);
+        }
+
+        if (!spec.Company && (domain is null || !context.Access.VisibleDomains.Contains(domain)))
+        {
+            throw new ProtonToolInputException("This user can't see that business.");
+        }
+
+        if (spec.OnlyIn is { } only && domain != only)
+        {
+            throw new ProtonToolInputException($"{spec.Label} is only for {only} projects.");
+        }
+
+        var label = record is null ? spec.Label : $"{spec.Label} for {record.Name}";
+        var command = new ProtonUiCommand(
+            ProtonUiCommandType.OpenSurface, label, record?.Id, domain, Surface: input.Surface,
+            SettingsSection: input.Surface == ProtonSurface.SettingsSection ? input.Section ?? ProtonSettingsSection.General : null,
+            CompanyTab: input.Surface == ProtonSurface.CompanyOverviewTab ? input.Tab ?? ProtonCompanyTab.Overview : null);
+        return new ProtonToolOutput(
+            new UiOutcome(label, "The app opens it when your answer is shown, without filling or saving anything. Say what you opened."),
+            record is null ? [] : [record]) { UiCommand = command };
+    }
+}
+
+public sealed record SetPreferenceInput
+{
+    [Description("Light or dark.")]
+    public ProtonTheme? Theme { get; init; }
+
+    [Description("Message sounds on (true) or off (false): only when the user asked in their own words.")]
+    public bool? Sounds { get; init; }
+}
+
+/// <summary>Changes one of the person's own display choices in this browser: the theme, or message sounds when they asked.</summary>
+public sealed class SetPreferenceTool : ProtonTool<SetPreferenceInput>
+{
+    public override string Name => "set_preference";
+
+    public override string Description => "Switch the app to light or dark, or turn message sounds on or off, when the user asks.";
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
+
+    protected override Task<ProtonToolOutput> RunAsync(SetPreferenceInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        if (input.Theme is null == input.Sounds is null)
+        {
+            throw new ProtonToolInputException("Change one thing: the theme or the sounds.");
+        }
+
+        // a muted chat can hide a message someone sent: only the person's own words turn the sounds off
+        if (input.Sounds is not null && context.Turn != ProtonTurnOrigin.Typed)
+        {
+            throw new ProtonToolInputException("Sounds change only when the user asks for it in their own words.");
+        }
+
+        var command = input.Theme is { } theme
+            ? new ProtonUiCommand(ProtonUiCommandType.SetPreference, theme == ProtonTheme.Dark ? "dark mode" : "light mode", Theme: theme)
+            : new ProtonUiCommand(ProtonUiCommandType.SetPreference, input.Sounds == true ? "message sounds on" : "message sounds off", Sounds: input.Sounds);
+        return Task.FromResult(new ProtonToolOutput(new UiOutcome(command.Label, "The app changes it when your answer is shown. Say so in a few words."), [])
+        {
+            UiCommand = command,
+        });
+    }
 }

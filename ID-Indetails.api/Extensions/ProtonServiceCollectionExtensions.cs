@@ -87,6 +87,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, OpenPageTool>();
         services.AddScoped<IProtonTool, OfferChoicesTool>();
         services.AddScoped<IProtonTool, SuggestRepliesTool>();
+        services.AddScoped<IProtonTool, OpenSurfaceTool>();
+        services.AddScoped<IProtonTool, SetPreferenceTool>();
         services.AddScoped<IProtonTool, RefreshPageTool>();
 
         // Action tools: they only propose; the user's confirmation carries a proposal out (ProtonActionService).

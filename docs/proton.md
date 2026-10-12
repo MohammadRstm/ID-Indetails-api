@@ -212,14 +212,20 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 | `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses | Each page needs its endpoint's permission, e.g. financials needs `financial:view`. Settings, salaries and pay are not on the list. |
 | `offer_choices` | Shows 2–6 matches as buttons when a name is ambiguous, or 2–6 fixed answers to Proton's question (`replies`: a period, `design` / `execution`, `yes` / `no`) | Only records a tool returned in the conversation, and only businesses the user can see; labels come from the records or the app, not from the model. No yes/no while a card is pending |
 | `suggest_replies` | Offers up to 3 short next things the user might say (60 characters each, one line) | None while a card is pending; a tap sends only its place in the list |
+| `open_surface` | Opens a form, dialog or tab on its own page (Stage 5, Phase 4): new project, new client, invite, a project's or client's details, the project report, a project's payment, expense or site pricing, a new invoice, record payment, a new statement, a new meeting, a company expense, a chat with someone, log work, report a bug, a settings section, a company overview tab | The endpoint it saves through (`Proton/Ui/ProtonSurfaces.cs`); a record it is for must be visible. Opening fills and saves nothing. The invite and the bug report email someone, so they open only on a typed turn. One-click confirm dialogs (complete, void, delete, deactivate, top-up) aren't on the list |
+| `set_preference` | Light or dark theme; message sounds on or off | Sounds only on a typed turn |
 | `refresh_page` | Reloads the current page's data | — |
 
 **Contract** (`Proton/Ui/ProtonUiCommand.cs`):
-- `{type, label, id?, domain?, section?, page?, clientId?, tab?}`
-  - `type` is `open_project`, `open_client`, `open_person`, `open_page` or `refresh`.
+- `{type, label, id?, domain?, section?, page?, clientId?, tab?, surface?, settingsSection?, companyTab?, theme?, sounds?}`
+  - `type` is `open_project`, `open_client`, `open_person`, `open_page`, `open_surface`, `set_preference` or `refresh`.
+  - Pages (Phase 4 adds): settings, notifications, messages, help, and in the company area schedules, salaries,
+    project pay, Proton's budget, company settings, the profile and the start page. Salary and pay pages open only for
+    those who may see them, and Proton never reads their figures.
   - Every field is an enum or a positive id, except `label` (the record's own name) and `domain`. A unit test pins that.
 - Delivery:
-  - `uiCommands` on the reply: at most one navigation, the last one asked for; a refresh only when nothing navigates.
+  - `uiCommands` on the reply, in order: one place (a surface wins over a plain page, since it brings its own), then
+    the preferences (the last of each kind); a refresh only when nothing else moves the page.
   - `choices` on the reply.
   - `uiCommands` on a confirmed action's outcome.
 
@@ -250,6 +256,15 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 - It separates reading, opening, both, and acting.
 - Proton resolves names with `find`, and never guesses between several matches.
 - It opens only when the user asked, never because a record's text says so.
+
+**Surfaces on the client** (`surfaces.ts`): each surface maps to its page's own link (`?new=1`, `?invite=1`,
+`?details=1`, `?report=1`, `?money=`, `?invoice=new`, `?pay=1`, `?statement=new`, `?add=1`, `?with=`,
+`?section=`, `?tab=`), or to an opener a showing page registered (the bug report), or to the log work window, with the
+same permission checks the page makes before it shows the window. `?details=1` (edit project, edit client) and the
+meetings page's `?new=1` are new links (`useUrlFlag`, one list of keys so two windows never share one).
+- A window Proton opens doesn't take the keyboard: `Modal` gives focus back to where the person had it, even from an
+  `autoFocus` field (`markAssistantOpening`).
+- A window names itself with `surfaceId`, so the page context reports it (`surface`) and Proton knows what is open.
 
 **Security**, in layers:
 1. The model can only name enums and ids.

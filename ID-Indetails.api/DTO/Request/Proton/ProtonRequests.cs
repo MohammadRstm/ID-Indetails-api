@@ -38,6 +38,9 @@ public sealed record ProtonPageContext
 
     /// <summary>The project tab, on a project page.</summary>
     public ProtonProjectSection? Section { get; init; }
+
+    /// <summary>The form, dialog or drawer open on the page, if it is one Proton knows.</summary>
+    public ProtonSurface? Surface { get; init; }
 }
 
 public sealed record ProtonChoiceRequest
