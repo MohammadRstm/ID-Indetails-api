@@ -19,6 +19,7 @@ using ID_Indetails.api.Proton.Prompts;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
+using ID_Indetails.api.Repositories.Proton.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
@@ -38,6 +39,7 @@ public sealed class ProtonChatAgent(
     ProtonUsageService usage,
     IPermissionService permissions,
     ProtonRecords records,
+    IProtonActionRepository actions,
     ICompanySettingsService companySettings,
     IClock clock,
     IOptions<ProtonOptions> options,
@@ -46,7 +48,20 @@ public sealed class ProtonChatAgent(
 {
     private readonly ILogger _log = loggers.CreateLogger(ProtonToolbox.LogCategory);
 
+    /// <summary>A question on the JSON endpoint: the whole reply at once.</summary>
     public async Task<ProtonReplyResponse> AskAsync(
+        ClaimsPrincipal caller, long userId, AskProtonRequest request, CancellationToken cancellationToken)
+    {
+        await using var question = await PrepareAsync(caller, userId, request, cancellationToken);
+        return await AnswerAsync(question, null, options.Value.QuestionTimeoutSeconds, cancellationToken);
+    }
+
+    /// <summary>
+    /// Everything that can refuse a question, before any of its answer is sent: Proton switched on, the allowance and
+    /// budget, the conversation (ended, someone else's, access changed, still busy), and a button that wasn't offered.
+    /// The question holds its conversation until it is disposed.
+    /// </summary>
+    public async Task<ProtonQuestion> PrepareAsync(
         ClaimsPrincipal caller, long userId, AskProtonRequest request, CancellationToken cancellationToken)
     {
         await usage.EnsureCanAskAsync(userId, cancellationToken);
@@ -70,10 +85,8 @@ public sealed class ProtonChatAgent(
                 conversation.RollOver();
             }
 
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.QuestionTimeoutSeconds));
             var tools = await toolbox.OpenAsync(
-                caller, userId, new ProtonOrigin(conversation.Id, options.Value.Model, ProtonPrompts.ChatVersion), timeout.Token);
+                caller, userId, new ProtonOrigin(conversation.Id, options.Value.Model, ProtonPrompts.ChatVersion), cancellationToken);
             tools.Context.Remember(conversation.Known.Values);
             tools.Context.ActionPending = conversation.HasPendingAction(clock.UtcNow);
             // known from the request's shape, never from its text
@@ -86,77 +99,106 @@ public sealed class ProtonChatAgent(
             // A button becomes a question written by the app, once it is known to be one the last reply offered.
             var text = request switch
             {
-                { Choice: { } choice } => await ChosenAsync(choice, conversation, tools.Context, timeout.Token),
+                { Choice: { } choice } => await ChosenAsync(choice, conversation, tools.Context, cancellationToken),
                 { Reply: { } reply } => Replied(reply, conversation),
                 { Suggestion: { } index } => Suggested(index, conversation),
                 _ => request.Text,
             };
-            var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, timeout.Token) : null;
-            var company = (await companySettings.BrandingAsync(timeout.Token)).Name;
+            var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, cancellationToken) : null;
+            var company = (await companySettings.BrandingAsync(cancellationToken)).Name;
             var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion);
-            var turn = await RunTurnAsync(caller, access, conversation, tools, text, notes, timeout.Token);
-
-            var record = turn.Record(userId, conversation.Id, text, clock.UtcNow, usage.Prices);
-            await usage.RecordAsync(record, CancellationToken.None);
-            // what a question costs in time and money, to measure before Proton grows (no question or answer text)
-            _log.LogInformation(
-                "Proton question {Outcome} in {WallMs} ms (first model reply after {FirstReplyMs} ms): {RoundTrips} model calls, " +
-                "{ToolCalls} tool calls taking {ToolMs} ms, {InputTokens} input and {OutputTokens} output tokens, about {CostUsd} USD.",
-                record.Outcome, turn.ElapsedMs, turn.FirstReplyMs, record.RoundTrips, record.ToolCalls, turn.ToolCalls.Sum(t => t.ElapsedMs),
-                record.InputTokens + record.CacheReadTokens + record.CacheWriteTokens, record.OutputTokens, record.CostUsd);
-            if (turn.Outcome == ProtonOutcome.Failed)
-            {
-                throw new ServiceUnavailableException(ErrorCodes.ProtonUnavailable, "Sorry, I couldn't answer that just now. Please try again.");
-            }
-
-            conversation.Messages.AddRange(turn.Messages);
-            conversation.RememberExchange(text, turn.Answer);
-            conversation.Questions++;
-            conversation.LastInputTokens = turn.LastInputTokens;
-            foreach (var known in tools.Context.Known)
-            {
-                conversation.Known[(known.Type, known.Id)] = known;
-            }
-
-            var ok = turn.ToolCalls.Where(t => t.Status == ProtonToolStatus.Ok).ToList();
-            // One proposal at a time: a later one in the same answer has already replaced earlier ones.
-            var pending = turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending;
-            var choices = ok.LastOrDefault(t => t.Choices is not null)?.Choices ?? [];
-            var replies = ok.LastOrDefault(t => t.QuickReplies is not null)?.QuickReplies ?? [];
-            var suggestions = ok.LastOrDefault(t => t.Suggestions is not null)?.Suggestions ?? [];
-            if (pending is not null)
-            {
-                // offered before the proposal in the same answer: next to a card, nothing may pass for its Confirm
-                conversation.Proposed(pending.Id, pending.ExpiresAt);
-                replies = replies.Where(r => !ProtonUiRules.IsYesOrNo(r.Reply)).ToList();
-                suggestions = [];
-            }
-
-            if (choices.Count > 0 || replies.Count > 0 || request.Choice is not null || request.Reply is not null)
-            {
-                conversation.OfferedChoices = choices;
-                conversation.OfferedReplies = replies.Select(r => r.Reply).ToList();
-            }
-
-            conversation.OfferedSuggestions = suggestions;
-
-            return new ProtonReplyResponse(
-                conversation.Id,
-                turn.Answer,
-                turn.RefsIn(turn.Answer),
-                turn.Outcome == ProtonOutcome.Limited,
-                await usage.MineAsync(userId, CancellationToken.None),
-                turn.Sources(),
-                ProtonUiRules.Pick(ok.Select(t => t.UiCommand).OfType<ProtonUiCommand>()),
-                choices,
-                replies,
-                suggestions,
-                pending,
-                rolledOver);
+            return new ProtonQuestion(caller, userId, access, conversation, tools, request, text, notes, rolledOver);
         }
-        finally
+        catch
         {
             conversation.End();
+            throw;
+        }
+    }
+
+    /// <summary>Answers a prepared question within the time given, telling <paramref name="listener"/> how it goes when there is one.</summary>
+    public async Task<ProtonReplyResponse> AnswerAsync(
+        ProtonQuestion question, IProtonListener? listener, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        var (conversation, tools, request, text) = (question.Conversation, question.Tools, question.Request, question.Text);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        var turn = await RunTurnAsync(question.Caller, question.Access, conversation, tools, text, question.Notes, listener, timeout.Token);
+
+        if (turn.Outcome == ProtonOutcome.Failed)
+        {
+            await DropProposalsAsync(turn);
+        }
+
+        var record = turn.Record(question.UserId, conversation.Id, text, clock.UtcNow, usage.Prices);
+        await usage.RecordAsync(record, CancellationToken.None);
+        // what a question costs in time and money, to measure before Proton grows (no question or answer text)
+        _log.LogInformation(
+            "Proton question {Outcome} in {WallMs} ms (first model reply after {FirstReplyMs} ms): {RoundTrips} model calls, " +
+            "{ToolCalls} tool calls taking {ToolMs} ms, {InputTokens} input and {OutputTokens} output tokens, about {CostUsd} USD.",
+            record.Outcome, turn.ElapsedMs, turn.FirstReplyMs, record.RoundTrips, record.ToolCalls, turn.ToolCalls.Sum(t => t.ElapsedMs),
+            record.InputTokens + record.CacheReadTokens + record.CacheWriteTokens, record.OutputTokens, record.CostUsd);
+        if (turn.Outcome == ProtonOutcome.Failed)
+        {
+            throw new ServiceUnavailableException(ErrorCodes.ProtonUnavailable, "Sorry, I couldn't answer that just now. Please try again.");
+        }
+
+        conversation.Messages.AddRange(turn.Messages);
+        conversation.RememberExchange(text, turn.Answer);
+        conversation.Questions++;
+        conversation.LastInputTokens = turn.LastInputTokens;
+        foreach (var known in tools.Context.Known)
+        {
+            conversation.Known[(known.Type, known.Id)] = known;
+        }
+
+        var ok = turn.ToolCalls.Where(t => t.Status == ProtonToolStatus.Ok).ToList();
+        // One proposal at a time: a later one in the same answer has already replaced earlier ones.
+        var pending = turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending;
+        var choices = ok.LastOrDefault(t => t.Choices is not null)?.Choices ?? [];
+        var replies = ok.LastOrDefault(t => t.QuickReplies is not null)?.QuickReplies ?? [];
+        var suggestions = ok.LastOrDefault(t => t.Suggestions is not null)?.Suggestions ?? [];
+        if (pending is not null)
+        {
+            // offered before the proposal in the same answer: next to a card, nothing may pass for its Confirm
+            conversation.Proposed(pending.Id, pending.ExpiresAt);
+            replies = replies.Where(r => !ProtonUiRules.IsYesOrNo(r.Reply)).ToList();
+            suggestions = [];
+        }
+
+        if (choices.Count > 0 || replies.Count > 0 || request.Choice is not null || request.Reply is not null)
+        {
+            conversation.OfferedChoices = choices;
+            conversation.OfferedReplies = replies.Select(r => r.Reply).ToList();
+        }
+
+        conversation.OfferedSuggestions = suggestions;
+
+        return new ProtonReplyResponse(
+            conversation.Id,
+            turn.Answer,
+            turn.RefsIn(turn.Answer),
+            turn.Outcome == ProtonOutcome.Limited,
+            await usage.MineAsync(question.UserId, CancellationToken.None),
+            turn.Sources(),
+            ProtonUiRules.Pick(ok.Select(t => t.UiCommand).OfType<ProtonUiCommand>()),
+            choices,
+            replies,
+            suggestions,
+            pending,
+            question.RolledOver);
+    }
+
+    /// <summary>
+    /// A question that failed or was stopped never showed its card, so a change it proposed must not stay waiting for a
+    /// Confirm that can't come.
+    /// </summary>
+    private async Task DropProposalsAsync(ProtonTurn turn)
+    {
+        foreach (var pending in turn.ToolCalls.Select(t => t.Pending).OfType<Actions.ProtonPendingAction>())
+        {
+            await actions.CloseAsync(pending.Id, ProtonActionStatus.Superseded, clock.UtcNow, CancellationToken.None);
+            _log.LogInformation("Proton action {ActionId} dropped: its question didn't finish.", pending.Id);
         }
     }
 
@@ -251,14 +293,19 @@ public sealed class ProtonChatAgent(
 
     private async Task<ProtonTurn> RunTurnAsync(
         ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, ProtonToolSession tools, string text, ProtonNotes notes,
-        CancellationToken cancellationToken)
+        IProtonListener? listener, CancellationToken cancellationToken)
     {
         var settings = options.Value;
         var turn = new ProtonTurn(settings.Model);
         try
         {
             var definitions = tools.Tools.Select(Define).ToList();
-            var system = ProtonPrompts.ChatFor(email.Value.ProductName);
+            // a breakpoint on the system prompt caches the tools and the prompt for everyone; the automatic one below
+            // caches the conversation so far
+            var system = new List<TextBlockParam>
+            {
+                new() { Text = ProtonPrompts.ChatFor(email.Value.ProductName), CacheControl = new CacheControlEphemeral() },
+            };
             turn.Messages.Add(new MessageParam
             {
                 Role = Role.User,
@@ -272,7 +319,7 @@ public sealed class ProtonChatAgent(
             for (var trip = 1; trip <= settings.MaxRoundTrips; trip++)
             {
                 var lastTrip = trip == settings.MaxRoundTrips || turn.ToolCalls.Count >= settings.MaxToolCallsPerQuestion;
-                var response = await anthropic.Messages.Create(new MessageCreateParams
+                var request = new MessageCreateParams
                 {
                     Model = settings.Model,
                     MaxTokens = settings.MaxOutputTokens,
@@ -283,7 +330,10 @@ public sealed class ProtonChatAgent(
                     Thinking = new ThinkingConfigAdaptive(),
                     OutputConfig = new OutputConfig { Effort = Enum.Parse<Effort>(settings.Effort, ignoreCase: true) },
                     CacheControl = new CacheControlEphemeral(),
-                }, cancellationToken);
+                };
+                var response = listener is null
+                    ? await anthropic.Messages.Create(request, cancellationToken)
+                    : await StreamAsync(request, listener, trip, cancellationToken);
                 turn.Count(response);
 
                 var (assistant, toolUses) = ProtonEcho.Of(response);
@@ -294,7 +344,7 @@ public sealed class ProtonChatAgent(
                     turn.Messages.Add(new MessageParam
                     {
                         Role = Role.User,
-                        Content = await RunToolsAsync(tools, toolUses, turn, conversation.Focus, cancellationToken),
+                        Content = await RunToolsAsync(tools, toolUses, turn, conversation.Focus, listener, cancellationToken),
                     });
                     continue;
                 }
@@ -328,7 +378,8 @@ public sealed class ProtonChatAgent(
     }
 
     private async Task<List<ContentBlockParam>> RunToolsAsync(
-        ProtonToolSession tools, IReadOnlyList<ToolUseBlock> toolUses, ProtonTurn turn, ConversationFocus focus, CancellationToken cancellationToken)
+        ProtonToolSession tools, IReadOnlyList<ToolUseBlock> toolUses, ProtonTurn turn, ConversationFocus focus, IProtonListener? listener,
+        CancellationToken cancellationToken)
     {
         var results = new List<ContentBlockParam>();
         foreach (var toolUse in toolUses)
@@ -342,6 +393,11 @@ public sealed class ProtonChatAgent(
             }
             else
             {
+                if (listener is not null)
+                {
+                    await listener.StatusAsync(ProtonStatus.Of(toolUse.Name), cancellationToken);
+                }
+
                 // One at a time: the tools share the request's database context.
                 result = await tools.RunAsync(toolUse.Name, input, cancellationToken);
                 focus.Take(result);
@@ -357,6 +413,26 @@ public sealed class ProtonChatAgent(
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// One model call, streamed: the answer's text goes to the listener as it is written, and the reply is put back
+    /// together for the tool loop. The stream may run as long as the whole question may.
+    /// </summary>
+    private async Task<Message> StreamAsync(MessageCreateParams request, IProtonListener listener, int trip, CancellationToken cancellationToken)
+    {
+        var client = anthropic.WithOptions(o => o with { Timeout = TimeSpan.FromSeconds(options.Value.StreamQuestionTimeoutSeconds) });
+        var message = new ProtonStreamedMessage();
+        await foreach (var streamEvent in client.Messages.CreateStreaming(request, cancellationToken))
+        {
+            message.Add(streamEvent.Json);
+            if (streamEvent.TryPickContentBlockDelta(out var block) && block.Delta.TryPickText(out var text))
+            {
+                await listener.DeltaAsync(trip, text.Text, cancellationToken);
+            }
+        }
+
+        return message.ToMessage();
     }
 
     private static string Answer(Message response)
@@ -537,4 +613,44 @@ internal sealed class ProtonTurn(string model)
         Answer = ProtonText.Cut(Answer, MaxAnswerLength),
         Tools = JsonSerializer.Serialize(ToolCalls.Select(t => new { tool = t.Tool, input = ProtonInputSummary.Summarize(t.Input), status = t.Status.ToString(), ms = t.ElapsedMs }), ProtonJson.Options),
     };
+}
+
+/// <summary>
+/// A question that passed every check (<see cref="ProtonChatAgent.PrepareAsync"/>). It holds its conversation, one
+/// question at a time, until it is disposed.
+/// </summary>
+public sealed class ProtonQuestion : IAsyncDisposable
+{
+    internal ProtonQuestion(
+        ClaimsPrincipal caller, long userId, UserAccess access, ProtonConversation conversation, ProtonToolSession tools,
+        AskProtonRequest request, string text, ProtonNotes notes, bool rolledOver)
+    {
+        (Caller, UserId, Access, Conversation, Tools, Request, Text, Notes, RolledOver) =
+            (caller, userId, access, conversation, tools, request, text, notes, rolledOver);
+    }
+
+    internal ClaimsPrincipal Caller { get; }
+
+    internal long UserId { get; }
+
+    internal UserAccess Access { get; }
+
+    internal ProtonConversation Conversation { get; }
+
+    internal ProtonToolSession Tools { get; }
+
+    internal AskProtonRequest Request { get; }
+
+    /// <summary>The question as the model gets it: typed, or written by the app for a button.</summary>
+    internal string Text { get; }
+
+    internal ProtonNotes Notes { get; }
+
+    internal bool RolledOver { get; }
+
+    public ValueTask DisposeAsync()
+    {
+        Conversation.End();
+        return ValueTask.CompletedTask;
+    }
 }

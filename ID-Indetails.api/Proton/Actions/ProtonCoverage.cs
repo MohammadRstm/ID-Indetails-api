@@ -224,6 +224,7 @@ public static class ProtonCoverage
 
         // Proton itself
         Own("Proton.Ask"),
+        Own("Proton.Stream"),
         Own("Proton.Confirm"),
         Own("Proton.Cancel"),
         Own("Proton.EndConversation"),

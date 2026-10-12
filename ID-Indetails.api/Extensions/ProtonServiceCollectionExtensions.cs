@@ -42,6 +42,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddSingleton<ProtonConversationStore>();
         services.AddScoped<ProtonToolbox>();
         services.AddScoped<ProtonChatAgent>();
+        services.AddScoped<ProtonStreamingService>();
         services.AddScoped<ProtonActionService>();
 
         // Read-only tools, shared by every Proton interface.

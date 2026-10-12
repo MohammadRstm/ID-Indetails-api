@@ -41,6 +41,13 @@ public sealed class ProtonOptions
     [Range(10, 600)]
     public int QuestionTimeoutSeconds { get; init; } = 55;
 
+    /// <summary>
+    /// The whole question on the streaming endpoint. It may run longer: its pings keep the connection busy, so no
+    /// proxy's read timeout is reached while Proton works.
+    /// </summary>
+    [Range(10, 600)]
+    public int StreamQuestionTimeoutSeconds { get; init; } = 120;
+
     [Range(1, 100)]
     public int MaxQuestionsPerConversation { get; init; } = 20;
 
