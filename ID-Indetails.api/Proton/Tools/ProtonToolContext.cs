@@ -44,6 +44,12 @@ public sealed class ProtonToolContext(
 
     public ProtonTurnOrigin Turn { get; set; } = ProtonTurnOrigin.Continue;
 
+    /// <summary>
+    /// What the user typed in this conversation, this turn included: an email address or a recipient Proton uses must
+    /// come from it, never from text in the data.
+    /// </summary>
+    public string TypedText { get; set; } = string.Empty;
+
     /// <summary>A proposal is waiting for the user's Confirm: no yes/no or suggested replies then, so none can pass for one.</summary>
     public bool ActionPending { get; set; }
 

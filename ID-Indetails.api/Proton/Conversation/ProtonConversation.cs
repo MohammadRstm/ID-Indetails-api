@@ -73,6 +73,22 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
         }
     }
 
+    private const int TypedKept = 30;
+
+    private readonly Queue<string> _typed = new();
+
+    /// <summary>The questions the user typed (not picked or tapped), newest last: where addresses and recipients may come from.</summary>
+    public IReadOnlyCollection<string> Typed => _typed;
+
+    public void RememberTyped(string text)
+    {
+        _typed.Enqueue(text);
+        while (_typed.Count > TypedKept)
+        {
+            _typed.Dequeue();
+        }
+    }
+
     private const int RecapExchanges = 3;
     private const int RecapTextLength = 400;
 

@@ -11,6 +11,8 @@ public enum ProtonUiCommandType
     OpenPage,
     /// <summary>Open a form, dialog or drawer, on the page it belongs to.</summary>
     OpenSurface,
+    /// <summary>Fill a form already open (or opened just before) for the person to review and save: never submitted.</summary>
+    FillForm,
     /// <summary>Change one of the person's own display choices in this browser (theme, message sounds).</summary>
     SetPreference,
     /// <summary>Fetch the current page's data again.</summary>
@@ -67,6 +69,7 @@ public enum ProtonSurface
     NewMeeting,
     AddCompanyExpense,
     MessagePerson,
+    MessageTeam,
     LogWork,
     ReportBug,
     SettingsSection,
@@ -137,21 +140,24 @@ public sealed record ProtonUiCommand(
     ProtonSettingsSection? SettingsSection = null,
     ProtonCompanyTab? CompanyTab = null,
     ProtonTheme? Theme = null,
-    bool? Sounds = null)
+    bool? Sounds = null,
+    ProtonFormFill? Fill = null)
 {
     public static ProtonUiCommand Open(ProtonRef record, ProtonProjectSection? section = null) => record.Type switch
     {
         ProtonRefType.Project => new(ProtonUiCommandType.OpenProject, record.Name, record.Id, record.Domain,
             section is ProtonProjectSection.Overview ? null : section),
         ProtonRefType.Client => new(ProtonUiCommandType.OpenClient, record.Name, record.Id, record.Domain),
-        _ => new(ProtonUiCommandType.OpenPerson, record.Name, record.Id, record.Domain),
+        ProtonRefType.Person => new(ProtonUiCommandType.OpenPerson, record.Name, record.Id, record.Domain),
+        // a team has no page of its own: its chat opens through open_surface
+        _ => new(ProtonUiCommandType.OpenSurface, record.Name, record.Id, record.Domain, Surface: ProtonSurface.MessageTeam),
     };
 
     public static ProtonUiCommand Refresh { get; } = new(ProtonUiCommandType.Refresh, "this page");
 
     /// <summary>Takes the person to another page (opening a surface does too: it lives on its own page).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool Navigates => Type is not (ProtonUiCommandType.Refresh or ProtonUiCommandType.SetPreference);
+    public bool Navigates => Type is not (ProtonUiCommandType.Refresh or ProtonUiCommandType.SetPreference or ProtonUiCommandType.FillForm);
 }
 
 /// <summary>An option the user can pick instead of typing; built from a record a tool returned, never from the model's words.</summary>
@@ -204,8 +210,8 @@ public static class ProtonUiRules
 
     /// <summary>
     /// What a reply asks the app to do, in the order the app runs it: one place to go (the last asked for, so a later
-    /// "open X" replaces an earlier one; a surface brings its own page, so it wins over a plain page), then the
-    /// preferences asked for (the last of each kind). A refresh only when nothing else moves the page.
+    /// "open X" replaces an earlier one; a surface brings its own page, so it wins over a plain page), then one fill
+    /// (the last), then the preferences asked for (the last of each kind). A refresh only when nothing else moves the page.
     /// </summary>
     public static IReadOnlyList<ProtonUiCommand> Pick(IEnumerable<ProtonUiCommand> commands)
     {
@@ -214,6 +220,11 @@ public static class ProtonUiRules
         if ((all.LastOrDefault(c => c.Type == ProtonUiCommandType.OpenSurface) ?? all.LastOrDefault(c => c.Navigates)) is { } go)
         {
             sequence.Add(go);
+        }
+
+        if (all.LastOrDefault(c => c.Type == ProtonUiCommandType.FillForm) is { } fill)
+        {
+            sequence.Add(fill);
         }
 
         if (all.LastOrDefault(c => c.Theme is not null) is { } theme)

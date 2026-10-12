@@ -19,6 +19,29 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
     public static ProtonEndpoint OfWrite<TController>(string action) where TController : ControllerBase
         => Build<TController>(action, writes: true);
 
+    /// <summary>
+    /// The endpoints with no permission of their own (everyone has a chat and a bell): who may see what is decided in
+    /// their service, for the signed-in person, so Proton reads them as that person. Only those listed here; each
+    /// still needs proton:use, and only GETs.
+    /// </summary>
+    public static readonly IReadOnlySet<string> RuleBased = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Messages.Contacts", "Messages.Conversations", "Notifications.List",
+    };
+
+    /// <summary>A GET endpoint from <see cref="RuleBased"/>: <c>proton:use</c> is its policy here, and its service decides the rest.</summary>
+    public static ProtonEndpoint OfRuleBased<TController>(string action) where TController : ControllerBase
+    {
+        var name = $"{typeof(TController).Name.Replace("Controller", "")}.{action}";
+        var method = typeof(TController).GetMethods(BindingFlags.Public | BindingFlags.Instance).SingleOrDefault(m => m.Name == action);
+        if (!RuleBased.Contains(name) || method?.GetCustomAttribute<HttpGetAttribute>() is null)
+        {
+            throw new InvalidOperationException($"{name} is not a rule-based read Proton may stand in for.");
+        }
+
+        return new ProtonEndpoint(name, [Authorization.AuthorizationPolicies.PermissionPrefix + Constants.PermissionCodes.ProtonUse], false);
+    }
+
     private static ProtonEndpoint Build<TController>(string action, bool writes) where TController : ControllerBase
     {
         var methods = typeof(TController).GetMethods(BindingFlags.Public | BindingFlags.Instance)

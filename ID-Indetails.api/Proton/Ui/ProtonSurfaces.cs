@@ -44,6 +44,7 @@ public static class ProtonSurfaces
         [ProtonSurface.NewMeeting] = new("the new meeting form", ProtonEndpoint.OfWrite<MeetingsController>(nameof(MeetingsController.Create))),
         [ProtonSurface.AddCompanyExpense] = new("the add company expense form", ProtonEndpoint.OfWrite<OverheadController>(nameof(OverheadController.Create)), Company: true),
         [ProtonSurface.MessagePerson] = new("a chat", null, ProtonRefType.Person),
+        [ProtonSurface.MessageTeam] = new("the team chat", null, ProtonRefType.Team),
         [ProtonSurface.LogWork] = new("the log work form", ProtonEndpoint.OfWrite<WorkEntriesController>(nameof(WorkEntriesController.Create)), OnlyIn: DomainCodes.Design),
         [ProtonSurface.ReportBug] = new("the report a problem form", null, EmailsSomeone: true),
         [ProtonSurface.SettingsSection] = new("settings", null),

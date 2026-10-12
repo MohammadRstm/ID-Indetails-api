@@ -2,6 +2,7 @@ using System.ComponentModel;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Proton.Ui;
+using ID_Indetails.api.Services.Messaging.Abstraction;
 
 namespace ID_Indetails.api.Proton.Tools;
 
@@ -260,7 +261,7 @@ public sealed class OfferChoicesTool : ProtonTool<OfferChoicesInput>
 
     private static string Detail(ProtonRef record)
     {
-        var kind = record.Type switch { ProtonRefType.Project => "Project", ProtonRefType.Client => "Client", _ => "Person" };
+        var kind = record.Type switch { ProtonRefType.Project => "Project", ProtonRefType.Client => "Client", ProtonRefType.Team => "Team chat", _ => "Person" };
         return record.Domain is { } domain ? $"{kind} · {char.ToUpperInvariant(domain[0])}{domain[1..]}" : kind;
     }
 }
@@ -450,4 +451,160 @@ public sealed class SetPreferenceTool : ProtonTool<SetPreferenceInput>
             UiCommand = command,
         });
     }
+}
+
+public sealed record FillFormInput
+{
+    public required ProtonForm Form { get; init; }
+
+    [Description("The record the form is for: the project for edit_project, the client when editing one. Leave out otherwise.")]
+    public long? Id { get; init; }
+
+    public ClientFill? Client { get; init; }
+
+    public MeetingFill? Meeting { get; init; }
+
+    public NewProjectFill? NewProject { get; init; }
+
+    public EditProjectFill? EditProject { get; init; }
+
+    public ReportBugFill? ReportBug { get; init; }
+
+    public InviteFill? Invite { get; init; }
+
+    [Description("The draft for a chat: give person_id or team_id (from find_recipient) and the body.")]
+    public MessageDraft? Message { get; init; }
+}
+
+public sealed record MessageDraft
+{
+    public long? PersonId { get; init; }
+
+    public long? TeamId { get; init; }
+
+    [Description("The message, in the user's voice, from what the user said.")]
+    public required string Body { get; init; }
+}
+
+/// <summary>
+/// Fills a form for the user to review and save themselves: the form opened with open_surface (in the same answer or
+/// before), its values typed per form, checked here first. The app fills empty, visible fields only, marks them, and
+/// never submits; Enter in a filled form waits until the user has touched it. Nothing about money, pay, passwords or
+/// permissions can be expressed. A draft message, an invitation and a bug report need the user's own words.
+/// </summary>
+public sealed class FillFormTool(ProtonRecords records, IMessagingService messaging) : ProtonTool<FillFormInput>
+{
+    public override string Name => "fill_form";
+
+    public override string Description =>
+        "Fill a form for the user to check and save: open it first with open_surface (in the same answer is fine). " +
+        "Give only the values for that form, from what the user said or a tool returned; leave out anything you don't " +
+        "know. The user presses Save or Send themselves. For changes you can propose on a card, propose instead unless " +
+        "the user asked for the form.";
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
+
+    private static readonly IReadOnlyDictionary<ProtonForm, ProtonSurface> SurfaceOf = new Dictionary<ProtonForm, ProtonSurface>
+    {
+        [ProtonForm.Meeting] = ProtonSurface.NewMeeting,
+        [ProtonForm.NewProject] = ProtonSurface.NewProject,
+        [ProtonForm.EditProject] = ProtonSurface.EditProject,
+        [ProtonForm.ReportBug] = ProtonSurface.ReportBug,
+        [ProtonForm.Invite] = ProtonSurface.InvitePerson,
+    };
+
+    protected override async Task<ProtonToolOutput> RunAsync(FillFormInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var given = new object?[] { input.Client, input.Meeting, input.NewProject, input.EditProject, input.ReportBug, input.Invite, input.Message }
+            .Count(v => v is not null);
+        if (given != 1)
+        {
+            throw new ProtonToolInputException($"Give the values of the {input.Form} form, and only those.");
+        }
+
+        var fill = new ProtonFormFill(input.Form, input.Id, input.Client, input.Meeting, input.NewProject, input.EditProject, input.ReportBug, input.Invite,
+            input.Message is { } m ? new MessageFill { Body = m.Body } : null);
+        var problems = ProtonFormRules.Problems(fill);
+        if (problems.Count > 0)
+        {
+            throw new ProtonToolInputException(string.Join(" ", problems));
+        }
+
+        // what the form saves through, as the surface it opens in needs
+        if (input.Form == ProtonForm.Client)
+        {
+            await context.RequireAsync(input.Id is null
+                ? ProtonEndpoint.OfWrite<ClientsController>(nameof(ClientsController.Create))
+                : ProtonEndpoint.OfWrite<ClientsController>(nameof(ClientsController.Update)));
+        }
+        else if (SurfaceOf.TryGetValue(input.Form, out var surface) && ProtonSurfaces.All[surface].Endpoint is { } endpoint)
+        {
+            await context.RequireAsync(endpoint);
+        }
+
+        if (input.Form is ProtonForm.ReportBug or ProtonForm.Invite or ProtonForm.Message && context.Turn != ProtonTurnOrigin.Typed)
+        {
+            throw new ProtonToolInputException("This form sends something in the user's name, so it is filled only when they ask in their own words.");
+        }
+
+        var label = $"the {Words(input.Form)} form";
+        ProtonRef? record = null;
+        switch (input.Form)
+        {
+            case ProtonForm.EditProject:
+                record = (input.Id is { } projectId ? await records.FindAsync(ProtonRefType.Project, projectId, context, cancellationToken) : null)
+                    ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                break;
+            case ProtonForm.Client when input.Id is { } clientId:
+                record = await records.FindAsync(ProtonRefType.Client, clientId, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                break;
+            case ProtonForm.Meeting when input.Meeting!.ProjectId is { } meetingProject:
+                _ = await records.FindAsync(ProtonRefType.Project, meetingProject, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                break;
+            case ProtonForm.NewProject when input.NewProject!.ClientId is { } newClient:
+                _ = await records.FindAsync(ProtonRefType.Client, newClient, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                break;
+            case ProtonForm.Invite when input.Invite!.Email is { } email && !context.TypedText.Contains(email, StringComparison.OrdinalIgnoreCase):
+                throw new ProtonToolInputException("Use an email address only when the user typed it in this conversation; leave it out otherwise.");
+            case ProtonForm.Message:
+                (record, label) = await RecipientAsync(input.Message!, context, cancellationToken);
+                fill = fill with { Id = record.Id };
+                break;
+        }
+
+        var chat = record?.Type == ProtonRefType.Team ? ProtonSurface.MessageTeam : ProtonSurface.MessagePerson;
+        var command = new ProtonUiCommand(ProtonUiCommandType.FillForm, label, record?.Id, record?.Domain, Fill: fill,
+            Surface: input.Form == ProtonForm.Message ? chat : null);
+        return new ProtonToolOutput(
+            new UiOutcome(label, "The app fills the empty fields when your answer is shown; the user checks and saves it. Say so, and say what you left out."),
+            record is null ? [] : [record]) { UiCommand = command };
+    }
+
+    /// <summary>A draft goes only to someone the user may message: a contact, or a team chat they are in.</summary>
+    private async Task<(ProtonRef Recipient, string Label)> RecipientAsync(MessageDraft draft, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        if (draft.PersonId is null == draft.TeamId is null)
+        {
+            throw new ProtonToolInputException("Give person_id or team_id, from find_recipient.");
+        }
+
+        if (draft.PersonId is { } personId)
+        {
+            var contact = (await messaging.ContactsAsync(cancellationToken)).FirstOrDefault(c => c.Id == personId)
+                ?? throw new Exceptions.Base.NotFoundException("Not someone this user can message.");
+            return (new ProtonRef(ProtonRefType.Person, contact.Id, contact.Name, contact.Domain), $"a draft to {contact.Name}");
+        }
+
+        var team = await records.FindAsync(ProtonRefType.Team, draft.TeamId!.Value, context, cancellationToken)
+            ?? throw new Exceptions.Base.NotFoundException("Not a team chat this user is in.");
+        return (team, $"a draft to {team.Name}");
+    }
+
+    private static string Words(ProtonForm form) => form switch
+    {
+        ProtonForm.NewProject => "new project",
+        ProtonForm.EditProject => "project details",
+        ProtonForm.ReportBug => "bug report",
+        _ => form.ToString().ToLowerInvariant(),
+    };
 }

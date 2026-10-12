@@ -104,6 +104,8 @@ public sealed class ProtonChatAgent(
                 { Suggestion: { } index } => Suggested(index, conversation),
                 _ => request.Text,
             };
+            IEnumerable<string> typed = tools.Context.Turn == ProtonTurnOrigin.Typed ? [.. conversation.Typed, text] : conversation.Typed;
+            tools.Context.TypedText = string.Join("\n", typed);
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, cancellationToken) : null;
             var company = (await companySettings.BrandingAsync(cancellationToken)).Name;
             var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion);
@@ -145,6 +147,11 @@ public sealed class ProtonChatAgent(
 
         conversation.Messages.AddRange(turn.Messages);
         conversation.RememberExchange(text, turn.Answer);
+        if (tools.Context.Turn == ProtonTurnOrigin.Typed)
+        {
+            conversation.RememberTyped(text);
+        }
+
         conversation.Questions++;
         conversation.LastInputTokens = turn.LastInputTokens;
         foreach (var known in tools.Context.Known)

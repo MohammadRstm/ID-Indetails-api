@@ -79,6 +79,11 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetCompanySummaryTool>();
         services.AddScoped<IProtonTool, SummarizeChangesTool>();
         services.AddScoped<IProtonTool, GetAttentionTool>();
+
+        // The user's own chats and notifications, read as them through their services (no message bodies).
+        services.AddScoped<IProtonTool, FindRecipientTool>();
+        services.AddScoped<IProtonTool, GetMyInboxTool>();
+        services.AddScoped<IProtonTool, GetMyNotificationsTool>();
         services.AddScoped<ProtonBriefingService>();
 
         // UI tools: they read nothing new, they ask the app to open a page or record the user may already open.
@@ -88,6 +93,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, OfferChoicesTool>();
         services.AddScoped<IProtonTool, SuggestRepliesTool>();
         services.AddScoped<IProtonTool, OpenSurfaceTool>();
+        services.AddScoped<IProtonTool, FillFormTool>();
         services.AddScoped<IProtonTool, SetPreferenceTool>();
         services.AddScoped<IProtonTool, RefreshPageTool>();
 
