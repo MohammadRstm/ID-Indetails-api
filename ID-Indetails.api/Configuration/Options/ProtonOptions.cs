@@ -66,12 +66,19 @@ public sealed class ProtonOptions
     [Range(1, 100_000)]
     public int MonthlyQuestionsPerUser { get; init; } = 300;
 
+    /// <summary>
+    /// Past this many tools for a person, all but the core set are deferred and found through tool search, so the
+    /// model keeps choosing well as the list grows.
+    /// </summary>
+    [Range(10, 500)]
+    public int DeferToolsAbove { get; init; } = 55;
+
     /// <summary>Analytical tools that load every project's money or all of a period's work: at most this many per question.</summary>
     [Range(1, 20)]
     public int MaxHeavyToolCallsPerQuestion { get; init; } = 4;
 
     /// <summary>
-    /// A conversation whose last request sent more input tokens than this (cached or not) takes no more questions:
+    /// A conversation whose last request sent more input tokens than this (cached or not) rolls over to a recap:
     /// every question re-sends the earlier ones with their tool results, so long analytical threads get expensive.
     /// </summary>
     [Range(10_000, 1_000_000)]
@@ -80,6 +87,59 @@ public sealed class ProtonOptions
     public ProtonPrices Prices { get; init; } = new();
 
     public ProtonInsightOptions Insights { get; init; } = new();
+
+    public ProtonActionOptions Actions { get; init; } = new();
+}
+
+/// <summary>
+/// Which kinds of change Proton may propose, and how many (docs/proton.md, "The action engine"). Everything outside Core is off
+/// until it is switched on here; a switched-off kind keeps its tools (so the prompt cache holds) but refuses them.
+/// </summary>
+public sealed class ProtonActionOptions
+{
+    /// <summary>All of Proton's actions, Core included: off means it proposes nothing.</summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>Completing, archiving and reopening projects.</summary>
+    public bool Lifecycle { get; init; }
+
+    public bool Deletes { get; init; }
+
+    /// <summary>People's details, deactivating and reactivating, sessions and sign-in.</summary>
+    public bool Access { get; init; }
+
+    public bool CompanyRules { get; init; }
+
+    /// <summary>Working time, hour excuses and schedules.</summary>
+    public bool PayRules { get; init; }
+
+    public bool Money { get; init; }
+
+    /// <summary>Sending messages as the person.</summary>
+    public bool Messaging { get; init; }
+
+    /// <summary>Proposals waiting for a Confirm at once, per conversation.</summary>
+    [Range(1, 10)]
+    public int MaxPendingActions { get; init; } = 3;
+
+    [Range(1, 1_000)]
+    public int MaxConfirmedActionsPerHour { get; init; } = 30;
+
+    [Range(1, 500)]
+    public int MaxMessagesPerDay { get; init; } = 20;
+
+    public bool IsOn(Proton.Actions.ProtonFamily family) => Enabled && family switch
+    {
+        Proton.Actions.ProtonFamily.Core => true,
+        Proton.Actions.ProtonFamily.Lifecycle => Lifecycle,
+        Proton.Actions.ProtonFamily.Deletes => Deletes,
+        Proton.Actions.ProtonFamily.Access => Access,
+        Proton.Actions.ProtonFamily.CompanyRules => CompanyRules,
+        Proton.Actions.ProtonFamily.PayRules => PayRules,
+        Proton.Actions.ProtonFamily.Money => Money,
+        Proton.Actions.ProtonFamily.Messaging => Messaging,
+        _ => false,
+    };
 }
 
 /// <summary>

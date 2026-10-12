@@ -21,9 +21,31 @@ public interface IProtonActionTool : IProtonTool
 /// <summary>One line of what will change. <paramref name="Before"/> is empty for something new.</summary>
 public sealed record ProtonChange(string Label, string? Before, string After);
 
+/// <summary>How a card is confirmed: one Confirm, a second step to look again, or the typed phrase on top.</summary>
+public enum ProtonConfirm
+{
+    Standard,
+    TwoStep,
+    Typed,
+}
+
 /// <summary>What the user is shown and confirms.</summary>
 /// <param name="OpensAfter">What the app opens once the change is done, when it will ("the new project"); shown on the card.</param>
-public sealed record ProtonPreview(string Title, IReadOnlyList<ProtonChange> Changes, string? Note = null, string? OpensAfter = null);
+/// <param name="Confirm">At least what the action's tier needs; the confirmation checks the tier itself, never this alone.</param>
+/// <param name="Phrase">What the user types to confirm, for <see cref="ProtonConfirm.Typed"/>: the record's name, an invoice number.</param>
+/// <param name="Area">The business it happens in, shown on the card.</param>
+/// <param name="Irreversible">It can't be undone in the app.</param>
+/// <param name="Reach">Who it affects or notifies, computed on the server ("23 people in Design").</param>
+public sealed record ProtonPreview(
+    string Title,
+    IReadOnlyList<ProtonChange> Changes,
+    string? Note = null,
+    string? OpensAfter = null,
+    ProtonConfirm Confirm = ProtonConfirm.Standard,
+    string? Phrase = null,
+    string? Area = null,
+    bool Irreversible = false,
+    string? Reach = null);
 
 /// <summary>A proposed change: the exact request to send (JSON), what the user sees, and the record it acts on.</summary>
 public sealed record ProtonProposal(string Arguments, ProtonPreview Preview, ProtonRef? Target);
@@ -70,6 +92,19 @@ public abstract class ProtonActionTool<TInput, TArgs> : ProtonTool<TInput>, IPro
         {
             preview = preview with { OpensAfter = opens };
         }
+
+        // a strong action is never confirmed with one click, whatever its spec drew
+        if (ProtonCoverage.TierOf(Name) == ProtonTier.Strong && preview.Confirm == ProtonConfirm.Standard)
+        {
+            preview = preview with { Confirm = ProtonConfirm.TwoStep };
+        }
+
+        if (preview.Confirm == ProtonConfirm.Typed && string.IsNullOrWhiteSpace(preview.Phrase))
+        {
+            throw new InvalidOperationException($"{Name}: a typed confirmation needs its phrase.");
+        }
+
+        preview = preview with { Area = preview.Area ?? target?.Domain };
 
         return new ProtonToolOutput(preview, target is null ? [] : [target])
         {

@@ -24,4 +24,16 @@ public sealed class SystemClock(IOptions<CompanyOptions> company) : IClock
         var start = _zone.IsInvalidTime(midnight) ? midnight.AddHours(1) : midnight;
         return TimeZoneInfo.ConvertTimeToUtc(start, _zone);
     }
+
+    public DateTime FromCompanyTime(DateOnly day, int minutes)
+    {
+        var local = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified).AddMinutes(minutes);
+        // a skipped hour (clocks forward) has no instant: the wall clock reads the next valid one
+        while (_zone.IsInvalidTime(local))
+        {
+            local = local.AddMinutes(30);
+        }
+
+        return TimeZoneInfo.ConvertTimeToUtc(local, _zone);
+    }
 }

@@ -138,7 +138,8 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
         other.PendingAction.ShouldBeNull();
         api.Anthropic.ToolResults(1).ShouldHaveSingleItem().ToJsonString().ShouldContain("not_found");
 
-        // Proposed while allowed, then the permission is taken away: the confirmation is refused and recorded.
+        // Proposed while allowed, then the permission is taken away: the card was made for access the user no longer has,
+        // so it is closed unrun.
         api.Anthropic.Reset();
         var reply = await ProposeAsync(admin, "propose_add_requirement", new { project_id = project.Id, text = "Review drawings" });
         reply.PendingAction.ShouldNotBeNull();
@@ -146,9 +147,9 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
             new { changes = new[] { new { code = PermissionCodes.RequirementManage, action = "revoke", reason = "test" } } }, superAdmin.AccessToken);
         revoke.IsSuccessStatusCode.ShouldBeTrue(await revoke.Content.ReadAsStringAsync());
 
-        await (await ConfirmAsync(admin, reply.PendingAction.Id, reply.ConversationId)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await ConfirmAsync(admin, reply.PendingAction.Id, reply.ConversationId)).ShouldFailWithAsync(409, ErrorCodes.ProtonActionNotPending);
         (await RequirementsAsync(project.Id)).ShouldBe(0);
-        (await CountAsync(db => db.ProtonActions.CountAsync(a => a.PublicId == reply.PendingAction.Id && a.Status == ProtonActionStatus.Failed)))
+        (await CountAsync(db => db.ProtonActions.CountAsync(a => a.PublicId == reply.PendingAction.Id && a.Status == ProtonActionStatus.Superseded)))
             .ShouldBe(1);
     }
 
@@ -243,12 +244,13 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
 
         api.Anthropic.ToolResults(1).ShouldHaveSingleItem().ToJsonString().ShouldContain("forbidden");
         reply.PendingAction.ShouldNotBeNull().Tool.ShouldBe("propose_create_project");
+        reply.PendingActions.Select(p => p.Tool).ShouldBe(["propose_change_project_status", "propose_create_project"]);
         (await CountAsync(db => db.ActivityEvents.CountAsync())).ShouldBe(activity);
         (await CountAsync(db => db.Projects.CountAsync())).ShouldBe(projects);
         (await (await Client.GetAsync($"/api/projects/{project.Id}", superAdmin.AccessToken)).ReadAsync<ProjectResponse>())
             .Status.ShouldBe(ProjectStatus.Active);
-        // The earlier hold proposal in the same answer was replaced by the later one.
+        // two cards wait for the user, and nothing ran
         (await CountAsync(db => db.ProtonActions.CountAsync(a => a.ConversationId == reply.ConversationId && a.Status == ProtonActionStatus.Pending)))
-            .ShouldBe(1);
+            .ShouldBe(2);
     }
 }

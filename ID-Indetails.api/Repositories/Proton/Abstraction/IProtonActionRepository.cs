@@ -15,8 +15,28 @@ public interface IProtonActionRepository
     /// <summary>Not tracked.</summary>
     Task<ProtonAction?> FindAsync(Guid publicId, CancellationToken cancellationToken = default);
 
-    /// <summary>Marks the conversation's other pending proposals superseded.</summary>
-    Task SupersedeAsync(Guid conversationId, Guid exceptPublicId, DateTime at, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Marks the conversation's other pending proposals of the same tool for the same record superseded: a changed
+    /// request replaces the card it changes, and other cards stay.
+    /// </summary>
+    Task SupersedeAsync(
+        Guid conversationId, string tool, string? targetType, long? targetId, Guid exceptPublicId, DateTime at, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The conversation's proposals still waiting for a Confirm (pending, not expired), apart from the one a new
+    /// proposal for the same tool and target would replace.
+    /// </summary>
+    Task<int> CountPendingAsync(
+        Guid conversationId, string tool, string? targetType, long? targetId, DateTime at, CancellationToken cancellationToken = default);
+
+    /// <summary>The proposals the user confirmed since <paramref name="since"/> (carried out, or tried).</summary>
+    Task<int> CountConfirmedSinceAsync(long userId, DateTime since, CancellationToken cancellationToken = default);
+
+    /// <summary>The user's own proposals, newest first: what Proton proposed and what became of each.</summary>
+    Task<IReadOnlyList<ProtonAction>> MineAsync(long userId, int take, CancellationToken cancellationToken = default);
+
+    /// <summary>Everyone's proposals, newest first, with who proposed them: for those who manage Proton.</summary>
+    Task<IReadOnlyList<(ProtonAction Action, string Who)>> AllAsync(int take, CancellationToken cancellationToken = default);
 
     /// <summary>Pending → executing for its own proposer before it expires. False when another request got there first.</summary>
     Task<bool> TryClaimAsync(Guid publicId, long userId, DateTime at, CancellationToken cancellationToken = default);

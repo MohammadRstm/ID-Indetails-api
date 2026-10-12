@@ -26,8 +26,30 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
     /// </summary>
     public static readonly IReadOnlySet<string> RuleBased = new HashSet<string>(StringComparer.Ordinal)
     {
-        "Messages.Contacts", "Messages.Conversations", "Notifications.List",
+        "Messages.Contacts", "Messages.Conversations", "Notifications.List", "Teams.List",
     };
+
+    /// <summary>
+    /// Write endpoints with no permission of their own because they change only the signed-in person (their name and
+    /// phone): proton:use is their policy here, and they can't reach anyone else.
+    /// </summary>
+    public static readonly IReadOnlySet<string> Self = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "Profile.UpdateProfile",
+    };
+
+    /// <summary>A write endpoint from <see cref="Self"/>, for an action on the person themselves.</summary>
+    public static ProtonEndpoint OfSelf<TController>(string action) where TController : ControllerBase
+    {
+        var name = $"{typeof(TController).Name.Replace("Controller", "")}.{action}";
+        var method = typeof(TController).GetMethods(BindingFlags.Public | BindingFlags.Instance).SingleOrDefault(m => m.Name == action);
+        if (!Self.Contains(name) || method is null || method.GetCustomAttribute<HttpGetAttribute>() is not null)
+        {
+            throw new InvalidOperationException($"{name} is not a write on the person themselves Proton may stand in for.");
+        }
+
+        return new ProtonEndpoint(name, [Authorization.AuthorizationPolicies.PermissionPrefix + Constants.PermissionCodes.ProtonUse], true);
+    }
 
     /// <summary>A GET endpoint from <see cref="RuleBased"/>: <c>proton:use</c> is its policy here, and its service decides the rest.</summary>
     public static ProtonEndpoint OfRuleBased<TController>(string action) where TController : ControllerBase

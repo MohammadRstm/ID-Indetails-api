@@ -42,14 +42,14 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
 
     // a confirmation can arrive while a question is being answered
     private readonly Lock _pendingLock = new();
-    private (Guid Id, DateTime ExpiresAt)? _pending;
+    private readonly Dictionary<Guid, DateTime> _pending = [];
 
-    /// <summary>The newest proposal is waiting for its Confirm (until the user decides or it expires).</summary>
+    /// <summary>A proposal is waiting for its Confirm (until the user decides or it expires).</summary>
     public bool HasPendingAction(DateTime now)
     {
         lock (_pendingLock)
         {
-            return _pending is { } pending && pending.ExpiresAt > now;
+            return _pending.Values.Any(expires => expires > now);
         }
     }
 
@@ -57,19 +57,16 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
     {
         lock (_pendingLock)
         {
-            _pending = (actionId, expiresAt);
+            _pending[actionId] = expiresAt;
         }
     }
 
-    /// <summary>The user confirmed or cancelled a proposal: if it was the waiting one, nothing waits any more.</summary>
+    /// <summary>The user confirmed or cancelled a proposal: it waits no more.</summary>
     public void Decided(Guid actionId)
     {
         lock (_pendingLock)
         {
-            if (_pending?.Id == actionId)
-            {
-                _pending = null;
-            }
+            _pending.Remove(actionId);
         }
     }
 

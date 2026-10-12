@@ -154,4 +154,8 @@ public static class ErrorCodes
     public const string ProtonActionExpired = "proton_action_expired";
     public const string ProtonActionStale = "proton_action_stale";
     public const string ProtonChoiceInvalid = "proton_choice_invalid";
+    public const string ProtonActionsOff = "proton_actions_off";
+    public const string ProtonTooManyPending = "proton_too_many_pending";
+    public const string ProtonActionLimit = "proton_action_limit";
+    public const string ProtonPhraseMismatch = "proton_phrase_mismatch";
 }

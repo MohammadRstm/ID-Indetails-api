@@ -85,7 +85,17 @@ public static class ProtonCoverage
     /// a new action is held back until it is classified.
     /// </summary>
     public static bool NeedsTypedTurn(string tool)
-        => Entries.FirstOrDefault(e => e.Tool == tool)?.Family is not (ProtonFamily.Core or ProtonFamily.Lifecycle);
+        => FamilyOf(tool) is not (ProtonFamily.Core or ProtonFamily.Lifecycle);
+
+    /// <summary>The family a built action belongs to; null for a tool with no entry, which no switch turns on.</summary>
+    public static ProtonFamily? FamilyOf(string tool) => Entries.FirstOrDefault(e => e.Tool == tool)?.Family;
+
+    /// <summary>
+    /// How strongly a built action is confirmed: the strongest of its endpoints. This, not anything stored with the
+    /// proposal, is what the confirmation enforces. A tool with no entry is strong.
+    /// </summary>
+    public static ProtonTier TierOf(string tool)
+        => Entries.Where(e => e.Tool == tool).Select(e => e.Tier ?? ProtonTier.Strong).DefaultIfEmpty(ProtonTier.Strong).Max();
 
     private const ProtonTier T1 = ProtonTier.Standard;
     private const ProtonTier T2 = ProtonTier.Strong;
@@ -107,13 +117,13 @@ public static class ProtonCoverage
         Action("Requirements.Done", "propose_set_requirement_done"),
         Action("Requirements.Undone", "propose_set_requirement_done"),
         Planned("Requirements.Delete", T2, ProtonFamily.Deletes),
-        Planned("Meetings.Create", T1, ProtonFamily.Core),
-        Planned("Meetings.Update", T1, ProtonFamily.Core),
+        Action("Meetings.Create", "propose_schedule_meeting"),
+        Action("Meetings.Update", "propose_update_meeting"),
         Planned("Meetings.Delete", T2, ProtonFamily.Deletes),
-        Planned("Clients.Create", T1, ProtonFamily.Core),
-        Planned("Clients.Update", T1, ProtonFamily.Core),
-        Planned("Clients.Archive", T1, ProtonFamily.Core),
-        Planned("Clients.Restore", T1, ProtonFamily.Core),
+        Action("Clients.Create", "propose_create_client"),
+        Action("Clients.Update", "propose_update_client"),
+        Action("Clients.Archive", "propose_set_client_archived"),
+        Action("Clients.Restore", "propose_set_client_archived"),
         Planned("Clients.Delete", T2, ProtonFamily.Deletes),
         ReadOnly("Clients.Check", "the duplicate warning when proposing a client"),
         // own work: employees only, once they get Proton (decision 26); the delete has a restore, so it stays standard
@@ -121,10 +131,10 @@ public static class ProtonCoverage
         Planned("WorkEntries.Update", T1, ProtonFamily.Core),
         Planned("WorkEntries.Delete", T1, ProtonFamily.Core),
         Planned("WorkEntries.Restore", T1, ProtonFamily.Core),
-        Planned("WorkEntries.AddComment", T1, ProtonFamily.Core),
-        Planned("BoardLayouts.Save", T1, ProtonFamily.Core),
+        Action("WorkEntries.AddComment", "propose_comment_work_entry"),
+        Open("BoardLayouts.Save", "the person drags their own board's cards into place"),
         // resets the person's own board layout to the default: a preference, not a record
-        Planned("BoardLayouts.Delete", T1, ProtonFamily.Core),
+        Open("BoardLayouts.Delete", "the board's own menu puts its cards back in the default order"),
         Open("Files.Upload", "uploads come from the person's own device"),
 
         // Execution sites (money: costs and client prices)
@@ -196,10 +206,10 @@ public static class ProtonCoverage
         Open("Invitations.Resend", "it emails the person again", externalSend: true),
         Never("Invitations.Validate", "takes the invited person's secret token"),
         Never("Invitations.Accept", "takes the invited person's secret token and new password"),
-        Planned("Teams.Create", T1, ProtonFamily.Core),
-        Planned("Teams.Rename", T1, ProtonFamily.Core),
+        Action("Teams.Create", "propose_create_team"),
+        Action("Teams.Rename", "propose_rename_team"),
         Planned("Teams.Delete", T2, ProtonFamily.Deletes),
-        Planned("Profile.UpdateProfile", T1, ProtonFamily.Core),
+        Action("Profile.UpdateProfile", "propose_update_my_profile"),
         Open("Profile.SetPhoto", "photos come from the person's own device"),
         Open("Profile.RemovePhoto", "a photo change: done on the profile page"),
 

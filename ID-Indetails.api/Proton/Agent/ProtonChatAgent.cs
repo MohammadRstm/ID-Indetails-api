@@ -67,7 +67,7 @@ public sealed class ProtonChatAgent(
         await usage.EnsureCanAskAsync(userId, cancellationToken);
 
         var access = await permissions.GetAccessAsync(userId, cancellationToken);
-        var conversation = OpenConversation(userId, request.ConversationId, Fingerprint(access));
+        var conversation = OpenConversation(userId, request.ConversationId, ProtonToolbox.FingerprintOf(access));
         if (!conversation.TryBegin())
         {
             throw new ConflictException(ErrorCodes.ProtonBusy, "I'm still answering your last question.");
@@ -160,15 +160,21 @@ public sealed class ProtonChatAgent(
         }
 
         var ok = turn.ToolCalls.Where(t => t.Status == ProtonToolStatus.Ok).ToList();
-        // One proposal at a time: a later one in the same answer has already replaced earlier ones.
-        var pending = turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending;
+        // a later proposal for the same tool and record replaced an earlier one in the same answer
+        var proposals = turn.ToolCalls.Select(t => t.Pending).OfType<Actions.ProtonPendingAction>()
+            .GroupBy(p => (p.Tool, p.Target?.Type, p.Target?.Id)).Select(g => g.Last()).ToList();
+        var pending = proposals.LastOrDefault();
         var choices = ok.LastOrDefault(t => t.Choices is not null)?.Choices ?? [];
         var replies = ok.LastOrDefault(t => t.QuickReplies is not null)?.QuickReplies ?? [];
         var suggestions = ok.LastOrDefault(t => t.Suggestions is not null)?.Suggestions ?? [];
         if (pending is not null)
         {
             // offered before the proposal in the same answer: next to a card, nothing may pass for its Confirm
-            conversation.Proposed(pending.Id, pending.ExpiresAt);
+            foreach (var proposal in proposals)
+            {
+                conversation.Proposed(proposal.Id, proposal.ExpiresAt);
+            }
+
             replies = replies.Where(r => !ProtonUiRules.IsYesOrNo(r.Reply)).ToList();
             suggestions = [];
         }
@@ -192,6 +198,7 @@ public sealed class ProtonChatAgent(
             choices,
             replies,
             suggestions,
+            proposals,
             pending,
             question.RolledOver);
     }
@@ -311,7 +318,10 @@ public sealed class ProtonChatAgent(
         var turn = new ProtonTurn(settings.Model);
         try
         {
-            var definitions = tools.Tools.Select(Define).ToList();
+            // fixed for the question, and the same for everyone with the same tools, so it stays in the cached prefix
+            var deferring = tools.Tools.Count > settings.DeferToolsAbove;
+            var definitions = tools.Tools.Select(t => Define(t, deferring && !ProtonToolSearch.Core.Contains(t.Name))).ToList();
+            if (deferring) definitions.Add(new ToolSearchToolBm25_20251119 { Type = ToolSearchToolBm25_20251119Type.ToolSearchToolBm25 });
             // a breakpoint on the system prompt caches the tools and the prompt for everyone; the automatic one below
             // caches the conversation so far
             var system = new List<TextBlockParam>
@@ -360,6 +370,9 @@ public sealed class ProtonChatAgent(
                     });
                     continue;
                 }
+
+                // the provider paused a long server-side step (a tool search): sending the turn back lets it carry on
+                if (response.StopReason == StopReason.PauseTurn && !lastTrip) continue;
 
                 turn.Finish(response, Answer(response), lastTrip);
                 if (turn.Outcome == ProtonOutcome.Refused)
@@ -460,13 +473,14 @@ public sealed class ProtonChatAgent(
         return string.IsNullOrWhiteSpace(text) ? "I couldn't put an answer together. Please try asking another way." : text;
     }
 
-    private static ToolUnion Define(IProtonTool tool)
+    private static ToolUnion Define(IProtonTool tool, bool deferred)
     {
         var schema = tool.InputSchema;
         return new Tool
         {
             Name = tool.Name,
             Description = tool.Description,
+            DeferLoading = deferred ? true : null,
             InputSchema = new InputSchema
             {
                 Properties = schema["properties"]?.AsObject()
@@ -515,9 +529,6 @@ public sealed class ProtonChatAgent(
         return actions.Count == 0 ? note : note + "\nSince the last message (from the confirmation buttons): " + string.Join(" ", actions);
     }
 
-    /// <summary>What a conversation's answers depended on: if any of it changes, the conversation ends.</summary>
-    private static string Fingerprint(UserAccess access)
-        => string.Join('|', access.Role, access.Domain, string.Join(',', access.VisibleDomains), string.Join(',', access.Permissions.Order(StringComparer.Ordinal)));
 }
 
 /// <summary>What the app adds to a question's context note besides the conversation's own state.</summary>

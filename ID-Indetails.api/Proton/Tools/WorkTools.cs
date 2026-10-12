@@ -262,3 +262,37 @@ public sealed class GetWorkOverviewTool(IReportService reports) : ProtonTool<Wor
             new DayRange(o.From, o.To));
     }
 }
+
+public sealed record WorkEntryIdInput
+{
+    [Description("From list_work_entries.")]
+    public required long WorkEntryId { get; init; }
+}
+
+public sealed record WorkEntryCommentRow(string Author, string Body, string At);
+
+public sealed record WorkEntryDetail(WorkEntryRow Entry, IReadOnlyList<WorkEntryCommentRow> Comments);
+
+/// <summary>One work entry with its comments, as GET /api/work-entries/{id} returns it (without the attachment).</summary>
+public sealed class GetWorkEntryTool(IWorkEntryQueryService workEntries, IClock clock) : ProtonTool<WorkEntryIdInput>
+{
+    public override string Name => "get_work_entry";
+
+    public override string Description => "One logged work entry in full, with the comments on it. Design only.";
+
+    public override string? OnlyInDomain => DomainCodes.Design;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<WorkEntriesController>(nameof(WorkEntriesController.Get));
+
+    protected override async Task<ProtonToolOutput> RunAsync(WorkEntryIdInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var detail = await workEntries.GetAsync(input.WorkEntryId, cancellationToken);
+        var e = detail.Entry;
+        var row = new WorkEntryRow(
+            e.Id, new ProtonNamed(e.Person.Id, e.Person.Name), new ProtonNamed(e.Project.Id, e.Project.Title),
+            clock.Local(e.StartedAt), clock.Local(e.EndedAt), e.Minutes, e.OvertimeMinutes, ProtonText.Cut(e.Description, 2000)!);
+        var comments = detail.Comments.Select(c => new WorkEntryCommentRow(c.Author.Name, ProtonText.Cut(c.Body, 1000)!, clock.Local(c.CreatedAt))).ToList();
+        return new ProtonToolOutput(new WorkEntryDetail(row, comments),
+            [new ProtonRef(ProtonRefType.Person, e.Person.Id, e.Person.Name), new ProtonRef(ProtonRefType.Project, e.Project.Id, e.Project.Title, DomainCodes.Design)]);
+    }
+}

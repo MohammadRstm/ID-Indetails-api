@@ -54,6 +54,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetProjectFinancialsTool>();
         services.AddScoped<IProtonTool, GetSiteSummaryTool>();
         services.AddScoped<IProtonTool, ListWorkEntriesTool>();
+        services.AddScoped<IProtonTool, GetWorkEntryTool>();
+        services.AddScoped<IProtonTool, ListTeamsTool>();
         services.AddScoped<IProtonTool, GetTimeSummaryTool>();
         services.AddScoped<IProtonTool, GetWorkOverviewTool>();
         services.AddScoped<IProtonTool, GetPersonTool>();
@@ -101,6 +103,15 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeAddRequirementTool>();
         services.AddScoped<IProtonTool, ProposeUpdateRequirementTool>();
         services.AddScoped<IProtonTool, ProposeSetRequirementDoneTool>();
+        services.AddScoped<IProtonTool, ProposeCreateClientTool>();
+        services.AddScoped<IProtonTool, ProposeUpdateClientTool>();
+        services.AddScoped<IProtonTool, ProposeSetClientArchivedTool>();
+        services.AddScoped<IProtonTool, ProposeScheduleMeetingTool>();
+        services.AddScoped<IProtonTool, ProposeUpdateMeetingTool>();
+        services.AddScoped<IProtonTool, ProposeCreateTeamTool>();
+        services.AddScoped<IProtonTool, ProposeRenameTeamTool>();
+        services.AddScoped<IProtonTool, ProposeUpdateMyProfileTool>();
+        services.AddScoped<IProtonTool, ProposeCommentWorkEntryTool>();
         services.AddScoped<IProtonTool, ProposeChangeProjectStatusTool>();
         services.AddScoped<IProtonTool, ProposeUpdateProjectTool>();
         services.AddScoped<IProtonTool, ProposeCreateProjectTool>();

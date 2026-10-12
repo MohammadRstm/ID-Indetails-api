@@ -58,6 +58,18 @@ public sealed class ProtonController(
     public Task<ProtonActionOutcomeResponse> Cancel(Guid actionId, DecideProtonActionRequest request, CancellationToken cancellationToken)
         => actions.CancelAsync(currentUser.Id, actionId, request, cancellationToken);
 
+    /// <summary>The caller's own proposals and what became of them (decision 37).</summary>
+    [HttpGet("actions")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    public Task<IReadOnlyList<ProtonActionSummaryResponse>> Actions(CancellationToken cancellationToken)
+        => actions.MineAsync(currentUser.Id, cancellationToken);
+
+    /// <summary>Everyone's proposals, with who they were for: the record of what Proton did, for those who manage it.</summary>
+    [HttpGet("actions/all")]
+    [HasPermission(PermissionCodes.ProtonBudgetManage)]
+    public Task<IReadOnlyList<ProtonActionSummaryResponse>> AllActions(CancellationToken cancellationToken)
+        => actions.AllAsync(cancellationToken);
+
     [HttpDelete("conversations/{conversationId:guid}")]
     [HasPermission(PermissionCodes.ProtonUse)]
     public IActionResult EndConversation(Guid conversationId)
