@@ -49,6 +49,9 @@ The API refuses to start in Production with development settings:
 - As in development, the connection string and a JWT signing key of at least 32 characters are required.
 - With `Proton:Enabled` true, `Proton:ApiKey` is required (`PROTON_ENABLED`, `PROTON_API_KEY` and
   `PROTON_MONTHLY_BUDGET_USD` in the server's `.env`; Proton is off by default, see [proton.md](proton.md)).
+- With `Proton:Voice:Enabled` true, `Proton:Voice:ApiKey` (an OpenAI project key) is required
+  (`PROTON_VOICE_ENABLED`, `PROTON_VOICE_API_KEY`). The web server's `Permissions-Policy` must allow the microphone
+  on the app's own origin (`microphone=(self)`).
 
 The refresh cookie is always `HttpOnly`, `Secure` and `SameSite=Strict`, on `/api/auth` only. `GET /health`
 answers only `Healthy` or `Unhealthy` (whether the database answers). It isn't public, because nginx doesn't proxy it;

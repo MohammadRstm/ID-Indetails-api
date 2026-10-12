@@ -37,6 +37,24 @@ public class ProtonApiFactory : ApiFactory
     }
 }
 
+/// <summary>Proton with voice switched on, talking to <see cref="FakeVoiceProvider"/> instead of the real provider.</summary>
+public sealed class ProtonVoiceApiFactory : ProtonApiFactory
+{
+    public FakeVoiceProvider Voice { get; } = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.UseSetting("Proton:Voice:Enabled", "true");
+        builder.UseSetting("Proton:Voice:ApiKey", "voice-test-key");
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<ID_Indetails.api.Proton.Voice.IProtonVoiceProvider>();
+            services.AddSingleton<ID_Indetails.api.Proton.Voice.IProtonVoiceProvider>(Voice);
+        });
+    }
+}
+
 /// <summary>No budget and two questions a person, to prove both limits.</summary>
 public sealed class ProtonLimitsApiFactory : ProtonApiFactory
 {

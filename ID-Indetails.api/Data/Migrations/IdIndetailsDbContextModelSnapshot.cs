@@ -3078,6 +3078,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("cache_write_tokens");
 
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("channel");
+
                     b.Property<Guid>("ConversationId")
                         .HasColumnType("char(36)")
                         .HasColumnName("conversation_id");
@@ -3142,6 +3148,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
 
+                    b.Property<int?>("VoiceSeconds")
+                        .HasColumnType("int")
+                        .HasColumnName("voice_seconds");
+
                     b.HasKey("Id")
                         .HasName("pk_proton_usage");
 
@@ -3153,7 +3163,11 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("proton_usage", null, t =>
                         {
+                            t.HasCheckConstraint("ck_proton_usage_channel", "`channel` IN ('text', 'voice')");
+
                             t.HasCheckConstraint("ck_proton_usage_outcome", "`outcome` IN ('answered', 'refused', 'limited', 'failed')");
+
+                            t.HasCheckConstraint("ck_proton_usage_voice_seconds_non_negative", "`voice_seconds` IS NULL OR `voice_seconds` >= 0");
                         });
                 });
 

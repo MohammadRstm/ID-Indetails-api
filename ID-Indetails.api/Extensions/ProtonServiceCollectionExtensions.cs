@@ -7,6 +7,7 @@ using ID_Indetails.api.Proton.Conversation;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
+using ID_Indetails.api.Proton.Voice;
 using ID_Indetails.api.Repositories.Proton.Abstraction;
 using ID_Indetails.api.Repositories.Proton.Implementation;
 using Microsoft.Extensions.Options;
@@ -21,6 +22,11 @@ public static class ProtonServiceCollectionExtensions
         services.AddOptions<ProtonOptions>().BindConfiguration(ProtonOptions.SectionName)
             .ValidateDataAnnotations()
             .Validate(o => !o.Enabled || !string.IsNullOrWhiteSpace(o.ApiKey), "Proton:ApiKey is required when Proton is enabled.")
+            .Validate(o => !o.Voice.Enabled || !string.IsNullOrWhiteSpace(o.Voice.ApiKey), "Proton:Voice:ApiKey is required when voice is enabled.")
+            .Validate(o => Uri.TryCreate(o.Voice.BaseUrl, UriKind.Absolute, out var url) && (url.Scheme == Uri.UriSchemeHttps || url.IsLoopback),
+                "Proton:Voice:BaseUrl must be an https URL.")
+            .Validate(o => o.Voice.MaxSessionMinutes is >= 1 and <= 60 && o.Voice.PricePerMinuteUsd >= 0 && o.Voice.CloseWaitSeconds is >= 1 and <= 120,
+                "Proton:Voice limits are out of range.")
             .ValidateOnStart();
 
         // One client for the app: it holds the HTTP connection pool. The SDK's own retry covers one transient failure.
@@ -46,6 +52,14 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<ProtonChatAgent>();
         services.AddScoped<ProtonStreamingService>();
         services.AddScoped<ProtonActionService>();
+
+        // Voice: the live model listens and speaks; its questions go to the agent above. The key stays on the server.
+        services.AddHttpClient(OpenAiVoiceProvider.ClientName, client => client.Timeout = TimeSpan.FromSeconds(20));
+        services.AddSingleton<IProtonVoiceProvider, OpenAiVoiceProvider>();
+        services.AddSingleton<ProtonVoiceSessions>();
+        services.AddSingleton<ProtonVoiceWatch>();
+        services.AddHostedService(sp => sp.GetRequiredService<ProtonVoiceWatch>());
+        services.AddScoped<ProtonVoiceService>();
 
         // Read-only tools, shared by every Proton interface.
         services.AddScoped<IProtonTool, FindTool>();

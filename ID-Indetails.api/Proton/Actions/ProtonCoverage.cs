@@ -240,6 +240,8 @@ public static class ProtonCoverage
         Own("Proton.Remember"),
         Own("Proton.Forget"),
         Own("Proton.EndConversation"),
+        Own("Proton.StartVoice"),
+        Own("Proton.EndVoice"),
         Never("Proton.TopUp", "an assistant raising its own spending limit is a conflict of interest"),
     ];
 }

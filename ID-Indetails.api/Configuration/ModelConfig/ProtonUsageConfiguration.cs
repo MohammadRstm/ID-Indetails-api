@@ -12,7 +12,11 @@ public class ProtonUsageConfiguration : IEntityTypeConfiguration<ProtonUsage>
     public void Configure(EntityTypeBuilder<ProtonUsage> builder)
     {
         builder.ToTable("proton_usage", t =>
-            t.HasCheckConstraint("ck_proton_usage_outcome", SnakeCaseEnum.CheckSql<ProtonOutcome>("outcome")));
+        {
+            t.HasCheckConstraint("ck_proton_usage_outcome", SnakeCaseEnum.CheckSql<ProtonOutcome>("outcome"));
+            t.HasCheckConstraint("ck_proton_usage_channel", SnakeCaseEnum.CheckSql<ProtonChannel>("channel"));
+            t.HasCheckConstraint("ck_proton_usage_voice_seconds_non_negative", "`voice_seconds` IS NULL OR `voice_seconds` >= 0");
+        });
 
         builder.HasKey(x => x.Id);
 

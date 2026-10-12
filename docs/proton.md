@@ -60,15 +60,15 @@ POST /api/proton/messages
   118 write endpoints:
   - a built action (8), or one planned at a confirmation tier and family (68);
   - a prefilled form (2), or a place opened for the user (22);
-  - a read-only POST (3), never (11), or Proton's own controls (4).
+  - a read-only POST (3), never (11), or Proton's own controls (9).
 
   `ProtonCoverageTests` fails when an endpoint has no entry, when an action and its tool disagree, when an action
   needing a money, pay, access or company-rules permission isn't confirmed strongly in the matching family, when a
   delete without a restore isn't strong, or when an endpoint that emails someone isn't flagged. The sensitivity tags
   are a code-only property of `PermissionCatalog.Definition` (not seeded).
 - **The model is replaceable, the tools aren't.** `ProtonToolbox` and the tools are provider-neutral. The chat
-  (`Proton/Agent/ProtonChatAgent.cs`) is the only code that knows Claude. A future live-voice interface would be another
-  agent over the same toolbox.
+  (`Proton/Agent/ProtonChatAgent.cs`) is the only code that knows Claude. Voice (see [Voice](#voice)) adds no agent
+  and no tools: the live model only listens and speaks, and hands every question to this same agent.
 
 ## The tools
 
@@ -609,9 +609,15 @@ per-question facts go in the context note.
 | `GET /api/proton/memories`, `POST`, `DELETE …/{id}` | `proton:use` | what Proton remembers for the caller; saving is rate limited under `proton` |
 | `GET /api/proton/actions/all` | `proton_budget:manage` | everyone's last 50 proposals, with who proposed them |
 
+| `POST /api/proton/voice/sessions` | `proton:use` | `{conversationId?, sdp}` → `{sessionId, sdp, conversationId, endsAt}`: starts a voice session with the browser's WebRTC offer; rate policy `proton` |
+| `POST /api/proton/voice/sessions/{sessionId}/end` | `proton:use` | ends the caller's session (204, also when it already ended) |
+
 Errors use the uniform contract: `503 proton_unavailable` (switched off, or the model failed), `422 proton_budget_used`,
 `422 proton_allowance_used`, `409 proton_busy` (a question is still being answered in that conversation),
 `404 proton_conversation_ended`, `422 proton_choice_invalid` (a pick, quick reply or suggestion that wasn't offered, or a record no longer visible), `429 too_many_requests`.
+Voice adds `503 proton_voice_unavailable` (switched off or refused by the provider; `404` for a spoken question in a session
+that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller already has a session open) and
+`409 proton_voice_repeated` (a spoken question delivered twice).
 
 ## Configuration (`Proton` section)
 
@@ -633,9 +639,46 @@ Errors use the uniform contract: `503 proton_unavailable` (switched off, or the 
 | `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
 | `Prices` | Sonnet 5.5 list prices | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion` |
 
+| `Voice` | off | `Enabled`, `ApiKey` (an OpenAI project key: user secrets locally, `Proton__Voice__ApiKey` / `PROTON_VOICE_API_KEY` in production; required when enabled), `Model` (`gpt-live-1`), `Voice` (`marin`), `BaseUrl` (`https://api.openai.com/v1/`), `PricePerMinuteUsd` (0.05), `MaxSessionMinutes` (10), `CloseWaitSeconds` (15) |
+
 `RateLimiting:ProtonPermitsPerMinute` (default 10) limits questions per person per minute.
 
 Locally: `dotnet user-secrets set "Proton:ApiKey" "<key>"` and `"Proton:Enabled" "true"` in `ID-Indetails.api`.
+
+## Voice
+
+People can talk to Proton through OpenAI's GPT-Live (`gpt-live-1`). It is one assistant with two ways in, not a second agent:
+
+- **The live model is only the ears and the voice.** The session uses *client delegation*: when GPT-Live needs
+  anything about the company or the app, it hands the request off. The browser takes what the person said (the
+  transcript since the last hand-off) and asks it on `POST /api/proton/messages/stream` with
+  `voice: {sessionId, delegationId}`, in the same conversation as the text chat. Proton answers as for a typed question,
+  with the same tools, checks and cards, and the browser passes the answer back for GPT-Live to say. GPT-Live is given
+  no tools and no company data; its instructions are `Proton/Prompts/voice-live.md`.
+- **A spoken question is a turn of its own kind** (`ProtonTurnOrigin.Spoken`). Like a tap, it can't start the gated
+  kinds of change (sending, deleting, money, access, company rules, pay rules), fill a form that emails or sends
+  something, or turn sounds off: a transcript can mishear an amount or an address. Everyday and lifecycle changes can be
+  proposed, as a card; nothing is done until the person presses Confirm on it, with every check of a typed proposal.
+  Speech never confirms. The context note tells the model the question was spoken, so its answer is short.
+- **Asked once.** Each hand-off has the provider's id; a second request with the same id is refused (`409 proton_voice_repeated`),
+  so a retry or reconnect can't ask a question twice. A spoken question must name the caller's running session and its
+  conversation.
+- **The key stays on the server.** The browser sends its WebRTC offer to `POST /api/proton/voice/sessions`; the server
+  creates the session (`POST /v1/live/sessions`, `store: false`, the voice prompt, and the conversation's last few
+  exchanges as history) and returns only the provider's answer and the session id. Audio then flows between the browser
+  and the provider. The provider gets a hashed id per person (`OpenAI-Safety-Identifier`), never the id itself.
+- **The server watches every session** (`ProtonVoiceWatch`, over the provider's `/attach` WebSocket). It reads the
+  session's usage, and closes it when it reaches `MaxSessionMinutes`, when the month's budget runs out, when the
+  person ends it, or when the app stops. One session per person (`409 proton_voice_busy`); sessions live in server
+  memory, like conversations.
+- **Usage.** A session is one `proton_usage` row: `channel = voice`, the voice model, `voice_seconds` and the
+  estimated cost (`PricePerMinuteUsd`, at least the 15 seconds the provider bills at start). Without a final figure from
+  the provider, the time is estimated from how long the session was open, and the row's outcome is `failed`. The
+  questions asked in a session are ordinary rows with `channel = voice` and the chat model, so the two providers' costs
+  never mix. A session is not a question: it doesn't count toward the allowance. The budget page shows voice sessions,
+  minutes and cost on their own.
+- **Production.** Set `PROTON_VOICE_ENABLED` and `PROTON_VOICE_API_KEY`; the web server's
+  `Permissions-Policy` allows the microphone on the app's own origin.
 
 ## Logs
 

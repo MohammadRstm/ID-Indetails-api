@@ -159,6 +159,15 @@ public static class ErrorCodes
     public const string ProtonActionLimit = "proton_action_limit";
     public const string ProtonPhraseMismatch = "proton_phrase_mismatch";
 
+    /// <summary>Voice is switched off, the provider refused the session, or the session asked about isn't running.</summary>
+    public const string ProtonVoiceUnavailable = "proton_voice_unavailable";
+
+    /// <summary>The person already has a voice session open.</summary>
+    public const string ProtonVoiceBusy = "proton_voice_busy";
+
+    /// <summary>A spoken question that was already asked in this session: it isn't asked twice.</summary>
+    public const string ProtonVoiceRepeated = "proton_voice_repeated";
+
     /// <summary>Not something Proton may remember: not the person's own words, a full list, or not a preference.</summary>
     public const string ProtonMemoryRefused = "proton_memory_refused";
 }

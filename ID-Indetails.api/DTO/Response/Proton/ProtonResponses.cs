@@ -32,6 +32,8 @@ public sealed record ProtonReplyResponse(
 /// </summary>
 /// <param name="Available">Proton is switched on and neither this allowance nor the company's budget is used up.</param>
 /// <param name="CompanyLimitReached">The company's monthly budget is used up, for everyone.</param>
+/// <param name="VoiceAvailable">Talking to Proton is switched on too, and Proton is available.</param>
+/// <param name="VoiceMaxMinutes">How long a voice conversation can last before it closes.</param>
 public sealed record ProtonUsageResponse(
     DateOnly Month,
     bool Available,
@@ -39,7 +41,9 @@ public sealed record ProtonUsageResponse(
     int QuestionsUsed,
     int QuestionsRemaining,
     int UsedPct,
-    bool CompanyLimitReached);
+    bool CompanyLimitReached,
+    bool VoiceAvailable = false,
+    int VoiceMaxMinutes = 0);
 
 public sealed record ProtonTopUpResponse(long Id, decimal AmountUsd, string? Note, string AddedBy, DateTime AddedAt);
 
@@ -61,7 +65,18 @@ public sealed record ProtonBudgetResponse(
     IReadOnlyList<ProtonDomainUsageResponse> ByDomain,
     IReadOnlyList<ProtonToolUsageResponse> ByTool,
     IReadOnlyList<ProtonDayUsageResponse> ByDay,
-    IReadOnlyList<ProtonConversationUsageResponse> TopConversations);
+    IReadOnlyList<ProtonConversationUsageResponse> TopConversations,
+    ProtonVoiceUsageResponse Voice);
+
+/// <summary>This month's voice sessions: their time and estimated cost, apart from the questions asked in them (counted as questions).</summary>
+/// <param name="Estimated">Sessions whose time the provider never reported, so it was estimated from how long they were open.</param>
+public sealed record ProtonVoiceUsageResponse(string Model, int Sessions, decimal Minutes, decimal CostUsd, int Estimated);
+
+/// <summary>A voice session the browser connects to: the provider's WebRTC answer and the ids to use with it. No key.</summary>
+/// <param name="Sdp">The provider's answer to the browser's offer.</param>
+/// <param name="ConversationId">The Proton conversation its questions go to.</param>
+/// <param name="EndsAt">When the server closes it.</param>
+public sealed record ProtonVoiceSessionResponse(string SessionId, string Sdp, Guid ConversationId, DateTime EndsAt);
 
 /// <param name="Domain">The people's domain as it is now; null for company-wide roles.</param>
 public sealed record ProtonDomainUsageResponse(string? Domain, int Questions, decimal CostUsd);

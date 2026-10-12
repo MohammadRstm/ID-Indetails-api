@@ -26,6 +26,13 @@ public sealed class AskProtonRequestValidator : AbstractValidator<AskProtonReque
         });
         RuleFor(x => x.Reply).IsInEnum().WithMessage("Pick one of the options.");
         RuleFor(x => x.Suggestion).InclusiveBetween(0, ProtonUiRules.MaxSuggestions - 1).WithMessage("Pick one of the suggestions.");
+        When(x => x.Voice is not null, () =>
+        {
+            RuleFor(x => x).Must(x => Buttons(x) == 0).WithMessage("A spoken question can't also pick an option.");
+            RuleFor(x => x.ConversationId).NotEmpty().WithMessage("A spoken question belongs to its conversation.");
+            RuleFor(x => x.Voice!.SessionId).Must(ProtonVoiceIds.IsValid).WithMessage("Unknown voice session.");
+            RuleFor(x => x.Voice!.DelegationId).Must(ProtonVoiceIds.IsValid).WithMessage("Unknown spoken question.");
+        });
     }
 
     /// <summary>How many of the last reply's buttons the request answers with.</summary>
@@ -44,6 +51,28 @@ public sealed class ProtonPageContextValidator : AbstractValidator<ProtonPageCon
         RuleFor(x => x.Surface).IsInEnum();
         RuleFor(x => x.EntityType).IsInEnum().NotNull().When(x => x.EntityId is not null).WithMessage("A record needs its kind.");
         RuleFor(x => x.EntityId).NotNull().GreaterThan(0).When(x => x.EntityType is not null).WithMessage("A record needs its id.");
+    }
+}
+
+/// <summary>The provider's ids are opaque, but short and plain: letters, digits, "_" and "-".</summary>
+public static class ProtonVoiceIds
+{
+    public const int MaxLength = 128;
+
+    public static bool IsValid(string? id)
+        => id is { Length: > 0 and <= MaxLength } && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
+}
+
+/// <summary>A WebRTC offer: a session description, of a size a browser's audio offer has.</summary>
+public sealed class StartProtonVoiceRequestValidator : AbstractValidator<StartProtonVoiceRequest>
+{
+    public const int MaxSdpLength = 20_000;
+
+    public StartProtonVoiceRequestValidator()
+    {
+        RuleFor(x => x.Sdp).NotEmpty().WithMessage("The browser's connection offer is missing.")
+            .MaximumLength(MaxSdpLength).WithMessage("The browser's connection offer is too long.")
+            .Must(s => s.StartsWith("v=0", StringComparison.Ordinal)).WithMessage("That isn't a connection offer.");
     }
 }
 

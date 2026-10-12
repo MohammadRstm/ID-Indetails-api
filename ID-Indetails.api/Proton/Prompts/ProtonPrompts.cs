@@ -21,6 +21,13 @@ public static class ProtonPrompts
     /// <summary>The chat prompt with the app's name filled in: the same for everyone, so it stays cached.</summary>
     public static string ChatFor(string productName) => Chat.Replace(ProductToken, productName);
 
+    /// <summary>For the live voice model: when to hand a question to Proton, how to say its answers, and that speech confirms nothing.</summary>
+    public static string Voice { get; } = Read("voice-live.md");
+
+    public static string VoiceVersion { get; } = Version(Voice);
+
+    public static string VoiceFor(string productName) => Voice.Replace(ProductToken, productName);
+
     private static string Read(string file)
     {
         var name = $"{typeof(ProtonPrompts).Namespace}.{file}";

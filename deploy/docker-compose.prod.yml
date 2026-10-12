@@ -81,6 +81,8 @@ services:
       Proton__Enabled: ${PROTON_ENABLED:-false}
       Proton__ApiKey: ${PROTON_API_KEY:-}
       Proton__MonthlyBudgetUsd: ${PROTON_MONTHLY_BUDGET_USD:-50}
+      Proton__Voice__Enabled: ${PROTON_VOICE_ENABLED:-false}
+      Proton__Voice__ApiKey: ${PROTON_VOICE_API_KEY:-}
       # Pushes to the phone app: off unless switched on; Expo's access token is optional (docs/notifications.md).
       Push__Enabled: ${PUSH_ENABLED:-false}
       Push__Expo__AccessToken: ${EXPO_ACCESS_TOKEN:-}
