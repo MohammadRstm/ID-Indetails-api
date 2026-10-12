@@ -19,4 +19,7 @@ public static class AuthClaimTypes
 
     /// <summary>"true" until a generated password has been replaced.</summary>
     public const string MustChangePassword = "must_change_password";
+
+    /// <summary>The phone app's session id. Only on tokens issued to the app; device registration ties a push token to it.</summary>
+    public const string SessionId = "sid";
 }

@@ -19,12 +19,16 @@ There is **no self-signup**. A developer creates the first super admin. After th
 | `POST /api/invitations/{userId}/resend` | `employee:invite` or `employee:invite_super_admin` | Emails a fresh link; the previous one stops working |
 | `POST /api/invitations/validate` | Anyone with a link | What the signup page shows (email, role, domain, team, position) |
 | `POST /api/invitations/accept` | Anyone with a link | Sets name, phone and password, activates the account, signs in |
+| `POST /api/mobile/auth/login` | Anyone | The phone app's sign-in: `{ email, password }`. Returns both tokens in the body (see [Mobile sessions](#mobile-sessions)) |
+| `POST /api/mobile/auth/refresh` | The refresh token | `{ refreshToken }`. Rotates it and returns new tokens |
+| `POST /api/mobile/auth/logout` | Anyone | `{ refreshToken }`. Ends this phone's session and removes its push device. Always `204` |
+| `POST /api/mobile/auth/change-password` | Signed in (allowed while a temporary password is pending) | `{ currentPassword, newPassword }`. Signs out every other session; this phone gets new tokens |
 
 Every request counts against a global limit: 300 a minute per signed-in user, or 60 a minute per IP without a valid access token. On top of it:
 
-- Login, forgot and reset password and the two public invitation endpoints: 10 a minute per IP, together (`auth`).
-- Refresh: 60 a minute per IP on its own (`refresh`), since every page load refreshes and an office shares one address; the refresh token itself is the secret.
-- Change password and change sign-in address, which check the current password: 10 a minute per person (`credential`).
+- Login (the website's and the phone's), forgot and reset password and the two public invitation endpoints: 10 a minute per IP, together (`auth`).
+- Refresh (the website's and the phone's): 60 a minute per IP on its own (`refresh`), since every page load refreshes and an office shares one address; the refresh token itself is the secret.
+- Change password (on either) and change sign-in address, which check the current password: 10 a minute per person (`credential`).
 - Requests that email an address the caller chooses (invoice and statement emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
 - Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Bug reports: 5 an hour per person. Setup: 5 an hour per IP.
 
@@ -87,6 +91,7 @@ A JWT signed with HMAC-SHA256, valid for **15 minutes** (`Jwt:AccessTokenMinutes
 | `team` | Team (department) name. Absent if none |
 | `position` | Job title. Absent if none |
 | `must_change_password` | `"true"` until a generated password is replaced |
+| `sid` | The phone app's session id. Only on tokens issued to the app; push devices are tied to it |
 
 Permissions are **not** in the token, and the `role` claim is informational only. The server checks permissions against the database on every request, so a permission change or automatic role change applies immediately (see [authorization.md](authorization.md)). The client gets them from `/me` and the login response.
 
@@ -97,6 +102,34 @@ Permissions are **not** in the token, and the `role` claim is informational only
 - **Storage:** a random token is generated and discarded. The cookie carries its SHA-256 hash, and the database stores the SHA-256 of the cookie value. Nothing in the database can be replayed as a cookie.
 - **Reuse detection:** presenting a refresh cookie that was rotated more than 30 seconds ago revokes **all** of that user's sessions, because the old cookie may have been stolen. Within those 30 seconds (an answer lost on a bad connection, two tabs at once) it is only refused (`Business/Auth/RefreshTokenRules.cs`).
 - **Other revocations:** changing or resetting the password and logging out revoke refresh tokens too.
+- **Sessions and reasons:** each sign-in starts a session (`refresh_tokens.session_id`) that its refreshes continue. Every token records which app it belongs to (`client`: `web` or `mobile`) and, once it stops working, why (`revoke_reason`): `rotated` (refreshed), `superseded` (see Mobile sessions), `signed_out`, or `revoked` (a password change or reset, a super admin, deactivation, a new sign-in address, theft). Tokens from before this have neither.
+- **Each app's tokens work only there:** a phone's token sent as the cookie, or a cookie sent to the phone's endpoints, is refused like an unknown one and ends nothing.
+
+### Mobile sessions
+
+The phone app can't use the cookie, so it has its own endpoints (`Controllers/MobileAuthController`). They run the same checks as the website (the same answer and timing for unknown emails, `sign_in_suspended`, inactive accounts, password rehashing, last seen) and differ only in transport, lifetime and replays.
+
+- **Tokens in the body.** Login, refresh and change-password answer `{ accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, user }`; `user` is what `/me` returns. The app keeps the refresh token in the phone's secure store.
+- **30 days since last use.** Each refresh moves the session's end to 30 days ahead (`MobileSession:RefreshTokenDays`), so a phone used once a month stays signed in; there is no absolute cap. The access token is the same 15-minute token, with a `sid` claim.
+- **Several phones.** Each sign-in on a phone is its own session.
+- **Signing out** ends that session only, and removes its push device ([me.md](me.md#my-devices)). An unknown token answers `204` too. Changing the password on the phone ends every other session and keeps the phone's session id with a new refresh token.
+
+**Replays.** A refresh can succeed while its answer is lost on a weak connection; the phone then presents the token it still holds. What happens depends on the token presented, P (`Business/Auth/MobileRefreshRules.cs`):
+
+| P is | Answer |
+|---|---|
+| Unknown or expired | `401 refresh_token_invalid` |
+| Valid | A normal rotation: P becomes `rotated`, a new token in the same session is returned |
+| `rotated`, and no token after it was ever presented, within 5 minutes of its rotation (`MobileSession:ReplayGraceSeconds`) | A lost answer. The session's newest, never presented token becomes `superseded` and a new one is returned. Repeated retries in the window work the same way. Logged at Information |
+| `rotated`, as above, but the session already reached its end | `401 refresh_token_invalid`, nothing else |
+| `rotated`, as above, after the 5 minutes | A stale replay: `401 refresh_token_invalid` and **only this session** ends (`revoked`). Logged as a warning |
+| `rotated`, and a token after it was itself presented | Two holders: theft. Every session of the person ends, everywhere, access tokens included (`sessions_valid_from`). Logged as a warning |
+| `superseded` | Theft, as above: only someone other than the phone that retried can hold it |
+| `signed_out` or `revoked` | `401 refresh_token_invalid`, nothing else |
+
+Warnings and the retries go to the `ID_Indetails.api.Security` log category. Claiming a token (rotating P, or superseding the newest) is one conditional update, so of two refreshes at once only one gets a new token; the other gets `401 refresh_token_reused`. The app sends one refresh at a time.
+
+A stolen token is still caught: used after the phone moved on, it is "two holders"; used before, the phone's next refresh presents the superseded token, which ends everything. The 5-minute window only exists for phone sessions, and only for a token whose successors were never used.
 
 ## Using it from the React client
 
@@ -124,6 +157,9 @@ Every error has the same shape:
 | `Setup:SuperAdminKey` | empty | **Secret.** When empty, the setup endpoint is disabled |
 | `Jwt:Issuer` / `Jwt:Audience` | `id-indetails-api` / `id-indetails-client` | |
 | `RefreshToken:SameSite` | `Strict` | `None` only if the client is ever on another site |
+| `RefreshToken:ExpirationDays` | `1` | The website's refresh tokens |
+| `MobileSession:RefreshTokenDays` | `30` | How long a phone stays signed in since its last refresh (1 to 90) |
+| `MobileSession:ReplayGraceSeconds` | `300` | How long after a rotation the phone may present the old token again (0 to 900) |
 | `Frontend:BaseUrl` | `http://localhost:5173` | Used for links in emails |
 | `Frontend:ResetPasswordPath` | `/reset-password` | The client's page for choosing a new password |
 | `PasswordReset:ExpirationMinutes` | `30` | How long a reset link works (5 to 1440) |

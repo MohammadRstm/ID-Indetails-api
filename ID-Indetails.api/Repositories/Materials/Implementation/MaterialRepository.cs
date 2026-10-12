@@ -31,6 +31,17 @@ public sealed class MaterialRepository(IdIndetailsDbContext db) : IMaterialRepos
         return materialIds.Select(id => rows[id]).ToList();
     }
 
+    public async Task<IReadOnlyList<ProjectMaterial>> ByClientRefsAsync(
+        long addedById,
+        IReadOnlyCollection<Guid> clientRefs,
+        CancellationToken cancellationToken = default)
+    {
+        var refs = clientRefs.Select(r => (Guid?)r).ToList();
+        return await db.ProjectMaterials.AsNoTracking()
+            .Where(m => m.AddedById == addedById && refs.Contains(m.ClientRef))
+            .ToListAsync(cancellationToken);
+    }
+
     public void Add(ProjectMaterial material) => db.ProjectMaterials.Add(material);
 
     private IQueryable<MaterialRecord> Rows(IQueryable<ProjectMaterial> materials)
