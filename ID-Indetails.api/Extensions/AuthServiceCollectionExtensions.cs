@@ -28,6 +28,7 @@ public static class AuthServiceCollectionExtensions
             .ValidateDataAnnotations()
             .Validate(o => Enum.TryParse<SameSiteMode>(o.SameSite, true, out _), "RefreshToken:SameSite must be Strict, Lax or None.")
             .ValidateOnStart();
+        services.AddOptions<MobileSessionOptions>().BindConfiguration(MobileSessionOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<SetupOptions>().BindConfiguration(SetupOptions.SectionName);
         services.AddOptions<RateLimitOptions>().BindConfiguration(RateLimitOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
 
