@@ -269,7 +269,8 @@ public enum MoneySort
 
 public sealed record CompareMoneyInput
 {
-    public ProtonDomain Domain { get; init; }
+    [Description("design or execution. May be left out only when the user sees one of them.")]
+    public ProtonDomain? Domain { get; init; }
 
     [Description("Default this_month.")]
     public ProtonPeriod? Period { get; init; }
@@ -340,7 +341,10 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
         var pair = context.Compare(input.Period, input.From, input.To, ProtonPeriod.ThisMonth, input.CompareWith, input.CompareFrom, input.CompareTo);
         var limit = ProtonText.Limit(input.Limit, 10, 15);
         var t = analysis.Thresholds;
-        var domain = input.Domain.Code();
+        // never a silent default: the money of a business the user didn't ask about would read as the answer
+        var domain = input.Domain.Code()
+            ?? (context.Access.VisibleDomains.Count == 1 ? context.Access.VisibleDomains.First()
+                : throw new ProtonToolInputException("Which business: design or execution? Ask the user if it isn't clear."));
         var ranges = pair.Previous is { } previous ? new[] { pair.Current, previous } : [pair.Current];
         var money = await analysis.MoneyAsync(domain, ranges, cancellationToken);
         var now = money.Totals[0];

@@ -50,17 +50,15 @@ public sealed record ActivityRow(
     int? WorkMinutes,
     string? WorkDescription);
 
-public sealed record ActivityList(DateOnly From, DateOnly To, bool MoreThanShown, IReadOnlyList<ActivityRow> Events);
+/// <param name="Total">Every event in the period that the user may see; <paramref name="Events"/> are the newest of them.</param>
+public sealed record ActivityList(DateOnly From, DateOnly To, int Total, bool MoreThanShown, IReadOnlyList<ActivityRow> Events);
 
 /// <summary>
-/// The activity feed, as GET /api/activity returns it (it already hides what the user may not see). The feed has no
-/// date filter, so pages are read newest first until the period's start, three pages at most.
+/// The activity feed, as GET /api/activity returns it (it already hides what the user may not see), filtered to the
+/// period by the feed itself, newest first.
 /// </summary>
 public sealed class GetRecentActivityTool(IActivityFeedService activity, IClock clock) : ProtonTool<RecentActivityInput>
 {
-    private const int PageSize = 40;
-    private const int MaxPages = 3;
-
     public override string Name => "get_recent_activity";
 
     public override string Description =>
@@ -78,8 +76,7 @@ public sealed class GetRecentActivityTool(IActivityFeedService activity, IClock 
 
         var range = context.Period(input.Period, input.From, input.To, ProtonPeriod.Last7Days);
         var limit = ProtonText.Limit(input.Limit, 20, 30);
-        var start = clock.CompanyDayStartUtc(range.From);
-        var end = clock.CompanyDayStartUtc(range.To.AddDays(1));
+        // the feed filters by the period itself, so an older period is read as fully as a recent one
         var query = new ActivityListQuery
         {
             Group = input.Group,
@@ -87,18 +84,14 @@ public sealed class GetRecentActivityTool(IActivityFeedService activity, IClock 
             ProjectId = input.ProjectId,
             ClientId = input.ClientId,
             UserId = input.UserId,
-            PageSize = PageSize,
+            From = range.From,
+            To = range.To,
+            PageSize = limit,
         };
         await context.ValidateAsync(query, cancellationToken);
 
-        var events = new List<DTO.Response.Activity.ActivityItemResponse>();
-        var reachedStart = false;
-        for (var page = 1; page <= MaxPages && !reachedStart && events.Count < limit; page++)
-        {
-            var result = await activity.ListAsync(query with { Page = page }, cancellationToken);
-            events.AddRange(result.Items.Where(e => e.OccurredAt >= start && e.OccurredAt < end));
-            reachedStart = result.Items.Count < PageSize || result.Items.Any(e => e.OccurredAt < start);
-        }
+        var result = await activity.ListAsync(query, cancellationToken);
+        var events = result.Items;
 
         var rows = events.Take(limit).Select(e => new ActivityRow(
             clock.Local(e.OccurredAt),
@@ -122,7 +115,7 @@ public sealed class GetRecentActivityTool(IActivityFeedService activity, IClock 
             .OfType<ProtonRef>()
             .Distinct()
             .ToList();
-        return new ProtonToolOutput(new ActivityList(range.From, range.To, events.Count > limit || !reachedStart, rows), refs, range);
+        return new ProtonToolOutput(new ActivityList(range.From, range.To, result.TotalCount, rows.Count < result.TotalCount, rows), refs, range);
     }
 }
 
