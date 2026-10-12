@@ -85,11 +85,24 @@ public sealed class OpenAiVoiceProvider(IHttpClientFactory clients, IOptions<Pro
         Authorize(request.Headers);
         request.Headers.Add("OpenAI-Safety-Identifier", SafetyId(start.UserId));
 
-        using var response = await clients.CreateClient(ClientName).SendAsync(request, cancellationToken);
+        HttpResponseMessage response;
+        try
+        {
+            response = await clients.CreateClient(ClientName).SendAsync(request, cancellationToken);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            _log.LogWarning("Proton voice session: the provider couldn't be reached ({Error}).", exception.GetType().Name);
+            throw new ServiceUnavailableException(ErrorCodes.ProtonVoiceUnavailable, "Voice isn't available right now. You can still type your question.");
+        }
+
+        using var _ = response;
         if (!response.IsSuccessStatusCode)
         {
-            // the status only: the provider's message may echo the request
-            _log.LogWarning("Proton voice session refused by the provider: HTTP {Status}.", (int)response.StatusCode);
+            // the provider's error codes only: its message may echo the request
+            var error = await ErrorOfAsync(response, cancellationToken);
+            _log.LogWarning("Proton voice session refused by the provider: HTTP {Status}, type {ErrorType}, code {ErrorCode}, param {ErrorParam}.",
+                (int)response.StatusCode, error?["type"]?.ToString(), error?["code"]?.ToString(), error?["param"]?.ToString());
             throw new ServiceUnavailableException(ErrorCodes.ProtonVoiceUnavailable, response.StatusCode == HttpStatusCode.TooManyRequests
                 ? "Voice is busy right now. Please try again in a moment, or type your question."
                 : "Voice isn't available right now. You can still type your question.");
@@ -124,6 +137,19 @@ public sealed class OpenAiVoiceProvider(IHttpClientFactory clients, IOptions<Pro
         }
 
         return new WebSocketVoiceLink(socket);
+    }
+
+    /// <summary>The provider's <c>error</c> object, when its response has one.</summary>
+    private static async Task<JsonNode?> ErrorOfAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken))?["error"];
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private Uri BaseUri() => new(Voice.BaseUrl.EndsWith('/') ? Voice.BaseUrl : Voice.BaseUrl + "/");
