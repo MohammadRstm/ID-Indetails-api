@@ -53,6 +53,34 @@ public static class ProtonDatasets
             Notes: notes);
     }
 
+    /// <summary>Monthly hours: one row a month, the current one "so far".</summary>
+    public static ProtonDataset Months(string title, IReadOnlyList<(DateOnly Month, decimal Hours)> months, DateOnly today)
+    {
+        var thisMonth = new DateOnly(today.Year, today.Month, 1);
+        return new ProtonDataset(
+            title,
+            [Label("month", "Month", ProtonColumnKind.Month), Figure("hours", "Hours", ProtonUnit.Hours)],
+            months.Select(m => new ProtonDataRow([ProtonCell.Of(m.Month), ProtonCell.Of(m.Hours)], Partial: m.Month == thisMonth)).ToList(),
+            months.Count == 0 ? null : Period(months[0].Month, today));
+    }
+
+    /// <summary>
+    /// Daily minutes added up by month, for the months the days cover in full (a month whose first days weren't read
+    /// would look smaller than it was), up to this one.
+    /// </summary>
+    public static IReadOnlyList<(DateOnly Month, decimal Hours)> ByMonth(IEnumerable<(DateOnly Day, int Minutes)> days, DateOnly readFrom, DateOnly today)
+    {
+        var first = readFrom.Day == 1 ? readFrom : new DateOnly(readFrom.Year, readFrom.Month, 1).AddMonths(1);
+        var minutes = days.GroupBy(d => new DateOnly(d.Day.Year, d.Day.Month, 1)).ToDictionary(g => g.Key, g => g.Sum(d => d.Minutes));
+        var months = new List<(DateOnly, decimal)>();
+        for (var month = first; month <= today; month = month.AddMonths(1))
+        {
+            months.Add((month, ProtonText.Hours(minutes.GetValueOrDefault(month))));
+        }
+
+        return months;
+    }
+
     /// <summary>
     /// Headline figures of a period and, when compared, the one before: the first row is the period, the second the
     /// one it is compared with.

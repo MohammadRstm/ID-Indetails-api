@@ -8,6 +8,7 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Ui;
@@ -406,8 +407,37 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
         return new ProtonToolOutput(
             team,
             [projectRef, .. people.Select(p => new ProtonRef(ProtonRefType.Person, p.Id, p.Name))],
-            range);
+            range)
+        {
+            Datasets = TeamDatasets(project.Title, work, people, range, context.Today),
+        };
     }
+
+    /// <summary>The project's hours as tables: by week over its life (whatever the period asked), and by person.</summary>
+    private static IReadOnlyList<ProtonDataset> TeamDatasets(
+        string title, ProjectWorkResponse work, IReadOnlyList<TeamMember> people, DayRange? range, DateOnly today)
+    {
+        var weeks = work.Weekly.Select(w => (w.WeekStart, ProtonText.Hours(w.Minutes), w.Entries)).ToList();
+        var weekly = weeks.Count == 0 ? null : ProtonDatasets.Weeks($"{title}: hours by week", weeks, weeks[0].WeekStart, Min(weeks[^1].WeekStart.AddDays(6), today), today);
+        if (weekly is not null && range is not null)
+        {
+            weekly = weekly with { Notes = [.. weekly.Notes ?? [], "The project's work week by week, not only in the period asked about."] };
+        }
+
+        var byPerson = new ProtonDataset(
+            $"{title}: hours by person",
+            [ProtonDatasets.Label("person", "Person"), ProtonDatasets.Figure("hours", "Hours", ProtonUnit.Hours),
+                ProtonDatasets.Figure("overtime", "Overtime hours", ProtonUnit.Hours), ProtonDatasets.Figure("entries", "Entries", ProtonUnit.Count)],
+            people.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Person, p.Id, p.Name),
+                ProtonCell.Of(p.Name), ProtonCell.Of(p.Hours), ProtonCell.Of(p.OvertimeHours), ProtonCell.Of(p.Entries))).ToList(),
+            range is null ? "All time" : ProtonDatasets.Period(range),
+            people.Count,
+            PartsOfWhole: true);
+        return ProtonDatasets.WithRows(weekly, byPerson);
+    }
+
+    private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 }
 
 public sealed record ProjectFinancials(

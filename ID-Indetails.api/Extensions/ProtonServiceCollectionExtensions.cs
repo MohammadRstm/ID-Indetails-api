@@ -91,6 +91,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ListClientsTool>();
         services.AddScoped<IProtonTool, GetClientTool>();
         services.AddScoped<IProtonTool, GetDomainFinanceTool>();
+        services.AddScoped<IProtonTool, GetMoneyByMonthTool>();
         services.AddScoped<IProtonTool, GetFinanceProjectsTool>();
         services.AddScoped<IProtonTool, GetMoneyAttentionTool>();
         services.AddScoped<IProtonTool, ListInvoicesTool>();

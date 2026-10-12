@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Clients;
+using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Clients.Abstraction;
 
 namespace ID_Indetails.api.Proton.Tools;
@@ -139,6 +141,29 @@ public sealed class GetClientTool(IClientService clients) : ProtonTool<ClientIdI
         return new ProtonToolOutput(
             card,
             [new ProtonRef(ProtonRefType.Client, c.Id, c.DisplayName, c.Domain),
-             .. (card.ProjectMoney ?? []).Select(p => new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, c.Domain))]);
+             .. (card.ProjectMoney ?? []).Select(p => new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, c.Domain))])
+        {
+            Datasets = Datasets(c.DisplayName, c.Domain, c.Work, card.ProjectMoney, context.Today),
+        };
+    }
+
+    /// <summary>The client as tables: hours by month over the last year, and each project's money when the user may see it.</summary>
+    private static IReadOnlyList<ProtonDataset> Datasets(
+        string name, string domain, ClientWorkResponse? work, IReadOnlyList<ClientProjectRow>? projects, DateOnly today)
+    {
+        var monthly = work is null ? null : ProtonDatasets.Months(
+            $"{name}: hours by month", work.Monthly.Select(m => (m.Month, ProtonText.Hours(m.Minutes))).ToList(), today);
+        var usd = (string key, string label) => ProtonDatasets.Figure(key, label, ProtonUnit.Usd);
+        var money = projects is null ? null : new ProtonDataset(
+            $"{name}: money by project",
+            [ProtonDatasets.Label("project", "Project"), ProtonDatasets.Label("status", "Status", ProtonColumnKind.Status), usd("revenue", "Revenue"),
+                usd("cost", "Cost"), usd("profit", "Profit"), ProtonDatasets.Figure("margin", "Margin", ProtonUnit.Percent)],
+            projects.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, domain),
+                ProtonCell.Of(p.Title), ProtonDatasets.Status(p.Status), ProtonCell.Of(p.Revenue), ProtonCell.Of(p.Cost), ProtonCell.Of(p.Profit),
+                ProtonCell.Of(ProtonAnalysis.Pct(p.Margin)))).ToList(),
+            "All time",
+            projects.Count);
+        return ProtonDatasets.WithRows(monthly, money);
     }
 }

@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Proton;
 using ID_Indetails.api.DTO.Response.Reports;
@@ -177,5 +178,56 @@ public class ProtonPresentTests(ProtonApiFactory api) : IClassFixture<ProtonApiF
         describedToAdmin.ShouldNotContain("profit");
         refused.Blocks.ShouldBeEmpty();
         Result(2)["message"]!.GetValue<string>().ShouldContain("There is no column \"revenue\"");
+    }
+
+    [Fact]
+    public async Task Money_by_month_is_the_financials_own_and_only_for_people_who_may_see_money()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("get_money_by_month", new { domain = "design", months = 6 }),
+            FakeAnthropic.ToolUse("present_data", new { dataset = "d1", @as = "line", columns = new[] { "received", "cost" } }, id: "toolu_2"),
+            FakeAnthropic.Text("Cost has been steady."));
+
+        var reply = await OkAsync<ProtonReplyResponse>(AskAsync(superAdmin, "How has design money gone by month?"));
+
+        var monthly = await OkAsync<List<FinanceMonthResponse>>(Client.GetAsync("/api/finance/design/monthly?months=6", superAdmin.AccessToken));
+        var line = reply.Blocks.ShouldHaveSingleItem().Chart!;
+        line.Kind.ShouldBe(ProtonPresentForm.Line);
+        line.Axis.ShouldBe(ProtonColumnKind.Month);
+        line.Series.Select(s => s.Key).ShouldBe(["received", "cost"]);
+        line.Points.Select(p => p.Values[0]).ShouldBe(monthly.Select(m => (decimal?)m.Revenue));
+        line.Points.Select(p => p.Values[1]).ShouldBe(monthly.Select(m => (decimal?)m.Cost));
+        line.Points[^1].Partial.ShouldBeTrue();
+
+        // without financial:view the tool isn't offered at all
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.Text("I can't see the money."));
+        await OkAsync<ProtonReplyResponse>(AskAsync(admin, "Design money by month?"));
+        api.Anthropic.ToolsOffered(0).ShouldNotContain("get_money_by_month");
+    }
+
+    /// <summary>The weeks and months a person's summary already holds are kept for charts, not thrown away.</summary>
+    [Fact]
+    public async Task A_persons_hours_by_month_can_be_charted()
+    {
+        var (superAdmin, anna, _) = await HoursAsync();
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("get_person_work", new { user_id = anna.User.Id, period = "custom", from = From, to = To }),
+            FakeAnthropic.ToolUse("present_data", new { dataset = "d2", @as = "columns" }, id: "toolu_2"),
+            FakeAnthropic.Text("March was her busiest month."));
+
+        var reply = await OkAsync<ProtonReplyResponse>(AskAsync(superAdmin, "How much has Anna worked each month?"));
+
+        Result(1)["datasets"]!.AsArray().Select(d => d!["title"]!.GetValue<string>())
+            .ShouldBe([$"{anna.User.FirstName} {anna.User.LastName}: hours by week", $"{anna.User.FirstName} {anna.User.LastName}: hours by month",
+                $"{anna.User.FirstName} {anna.User.LastName}: hours by project"]);
+        var chart = reply.Blocks.ShouldHaveSingleItem().Chart!;
+        chart.Axis.ShouldBe(ProtonColumnKind.Month);
+        chart.Points.Single(p => p.Label == "2026-03-01").Values.ShouldBe([6m]);
+        chart.Points[^1].Partial.ShouldBeTrue();
     }
 }

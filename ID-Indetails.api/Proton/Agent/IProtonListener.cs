@@ -31,6 +31,7 @@ public static class ProtonStatus
         ["summarize_changes"] = "Looking at what changed…",
         ["compare_work"] = "Comparing the hours…",
         ["compare_money"] = "Comparing the figures…",
+        ["get_money_by_month"] = "Reading the money month by month…",
         ["open_record"] = "Opening it…",
         ["open_page"] = "Opening it…",
         ["offer_choices"] = "Lining up the options…",

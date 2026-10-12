@@ -111,7 +111,7 @@ public class ProtonToolCatalogTests
         Tools.Where(t => ui.Contains(t.Name)).Select(t => t.Name).ShouldBe(ui, ignoreOrder: true);
         Tools.Where(t => ui.Contains(t.Name)).ShouldAllBe(t => !t.Endpoint.Writes && !t.Heavy);
         Tools.Where(t => t.Heavy).Select(t => t.Name)
-            .ShouldBe(["compare_money", "review_project", "get_company_summary", "get_attention"], ignoreOrder: true);
+            .ShouldBe(["compare_money", "get_money_by_month", "review_project", "get_company_summary", "get_attention"], ignoreOrder: true);
     }
 
     [Fact]

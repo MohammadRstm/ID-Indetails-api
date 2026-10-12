@@ -170,6 +170,25 @@ public class ProtonPresentationTests
         past.Rows.ShouldAllBe(r => !r.Partial);
     }
 
+    /// <summary>A month whose first days weren't read would look smaller than it was: it is left out, not shown short.</summary>
+    [Fact]
+    public void Monthly_hours_cover_only_months_read_in_full_and_mark_this_one_so_far()
+    {
+        var days = new[] { (new DateOnly(2025, 10, 20), 600), (new DateOnly(2025, 11, 3), 120), (new DateOnly(2025, 11, 4), 60), (new DateOnly(2026, 10, 1), 90) };
+
+        var months = ProtonDatasets.ByMonth(days, readFrom: new(2025, 10, 13), today: new(2026, 10, 12));
+
+        months.Count.ShouldBe(12);
+        months[0].ShouldBe((new DateOnly(2025, 11, 1), 3m));
+        months[1].ShouldBe((new DateOnly(2025, 12, 1), 0m));
+        months[^1].ShouldBe((new DateOnly(2026, 10, 1), 1.5m));
+        ProtonDatasets.ByMonth(days, readFrom: new(2025, 10, 1), today: new(2026, 10, 12))[0].ShouldBe((new DateOnly(2025, 10, 1), 10m));
+
+        var data = ProtonDatasets.Months("Hours by month", months, new(2026, 10, 12));
+        data.Rows.Select(r => r.Partial).ShouldBe([.. Enumerable.Repeat(false, 11), true]);
+        ProtonPresentationRules.FormsFor(data).ShouldBe([ProtonPresentForm.Columns, ProtonPresentForm.Line, ProtonPresentForm.Table]);
+    }
+
     [Theory]
     [InlineData("Show me hours by person as a table", ProtonVisualAsk.Table)]
     [InlineData("can you tabulate that", ProtonVisualAsk.Table)]

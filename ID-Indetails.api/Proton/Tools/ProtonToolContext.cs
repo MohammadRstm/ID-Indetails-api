@@ -42,6 +42,15 @@ public sealed class ProtonToolContext(
 
     public DateOnly Today => today;
 
+    /// <summary>
+    /// The business a money question is about: the one asked for, or the user's only one. Never a silent default:
+    /// the money of a business the user didn't ask about would read as the answer.
+    /// </summary>
+    public string DomainOf(ProtonDomain? asked)
+        => asked.Code()
+           ?? (access.VisibleDomains.Count == 1 ? access.VisibleDomains.First()
+               : throw new ProtonToolInputException("Which business: design or execution? Ask the user if it isn't clear."));
+
     public DayOfWeek FirstDayOfWeek => firstDayOfWeek;
 
     public ProtonTurnOrigin Turn { get; set; } = ProtonTurnOrigin.Continue;
