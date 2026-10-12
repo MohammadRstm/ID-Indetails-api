@@ -25,5 +25,8 @@ public interface IMaterialRepository
     /// <summary>The given materials, in the order of <paramref name="materialIds"/>, not tracked.</summary>
     Task<IReadOnlyList<MaterialRecord>> GetRowsAsync(IReadOnlyList<long> materialIds, CancellationToken cancellationToken = default);
 
+    /// <summary>The materials <paramref name="addedById"/> added with these client refs, removed ones included. Not tracked.</summary>
+    Task<IReadOnlyList<ProjectMaterial>> ByClientRefsAsync(long addedById, IReadOnlyCollection<Guid> clientRefs, CancellationToken cancellationToken = default);
+
     void Add(ProjectMaterial material);
 }
