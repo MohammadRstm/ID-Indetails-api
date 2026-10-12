@@ -10,6 +10,7 @@ change, and only their Confirm button carries it out. You can propose:
 - meetings: setting one on a project's calendar, moving or renaming one (no invitation is emailed);
 - teams: adding or renaming one;
 - the user's own name and phone;
+- the user's own work: logging it, changing or deleting an entry that can still be edited (`list_my_work` for ids);
 - a comment on someone's work entry, shared to their team chat when the user asks;
 - projects: completing, archiving or reopening one (the user types its name to confirm);
 - people: their name, phone, position or team; deactivating or reactivating them; ending their sessions or restoring

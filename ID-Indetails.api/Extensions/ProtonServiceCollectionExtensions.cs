@@ -55,6 +55,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetSiteSummaryTool>();
         services.AddScoped<IProtonTool, ListWorkEntriesTool>();
         services.AddScoped<IProtonTool, GetWorkEntryTool>();
+        services.AddScoped<IProtonTool, ListMyWorkTool>();
         services.AddScoped<IProtonTool, ListTeamsTool>();
         services.AddScoped<IProtonTool, GetCompanySettingsTool>();
         services.AddScoped<IProtonTool, GetDomainSettingsTool>();
@@ -123,6 +124,9 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeCompanySettingsTool>();
         services.AddScoped<IProtonTool, ProposeDomainSettingsTool>();
         services.AddScoped<IProtonTool, ProposeSendMessageTool>();
+        services.AddScoped<IProtonTool, ProposeLogWorkTool>();
+        services.AddScoped<IProtonTool, ProposeUpdateMyWorkTool>();
+        services.AddScoped<IProtonTool, ProposeDeleteMyWorkTool>();
         services.AddScoped<IProtonTool, ProposeChangeProjectStatusTool>();
         services.AddScoped<IProtonTool, ProposeUpdateProjectTool>();
         services.AddScoped<IProtonTool, ProposeCreateProjectTool>();

@@ -2264,7 +2264,7 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             Code = "proton:use",
-                            Description = "Ask Proton, the read-only company assistant"
+                            Description = "Ask Proton, the company assistant, which proposes changes only for the person to confirm"
                         },
                         new
                         {
@@ -3708,6 +3708,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "employee",
                             PermissionCode = "labour_report:create"
+                        },
+                        new
+                        {
+                            RoleCode = "employee",
+                            PermissionCode = "proton:use"
                         });
                 });
 

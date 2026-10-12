@@ -296,3 +296,48 @@ public sealed class GetWorkEntryTool(IWorkEntryQueryService workEntries, IClock 
             [new ProtonRef(ProtonRefType.Person, e.Person.Id, e.Person.Name), new ProtonRef(ProtonRefType.Project, e.Project.Id, e.Project.Title, DomainCodes.Design)]);
     }
 }
+
+public sealed record MyWorkInput
+{
+    [Description("Default this_week.")]
+    public ProtonPeriod? Period { get; init; }
+
+    public DateOnly? From { get; init; }
+
+    public DateOnly? To { get; init; }
+
+    public long? ProjectId { get; init; }
+
+    [Description("Entries to return, 1 to 25 (default 20), newest first.")]
+    public int? Limit { get; init; }
+}
+
+/// <summary>The user's own logged work, as GET /api/me/work-entries returns it: for employees, who see only their own.</summary>
+public sealed class ListMyWorkTool(IWorkEntryQueryService workEntries, IClock clock) : ProtonTool<MyWorkInput>
+{
+    public override string Name => "list_my_work";
+
+    public override string Description =>
+        "The user's own logged work entries in a period, newest first, with whether each can still be edited. Design only.";
+
+    public override string? OnlyInDomain => DomainCodes.Design;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<MyWorkController>(nameof(MyWorkController.ListEntries));
+
+    protected override async Task<ProtonToolOutput> RunAsync(MyWorkInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var range = context.Period(input.Period, input.From, input.To, ProtonPeriod.ThisWeek);
+        var query = new MyWorkEntryListQuery { From = range.From, To = range.To, ProjectId = input.ProjectId, PageSize = ProtonText.Limit(input.Limit, 20, 25) };
+        await context.ValidateAsync(query, cancellationToken);
+        var page = await workEntries.ListMineAsync(query, cancellationToken);
+        var rows = page.Items.Select(e => new MyWorkRow(
+            e.Id, new ProtonNamed(e.Project.Id, e.Project.Title), clock.Local(e.StartedAt), clock.Local(e.EndedAt), e.Minutes, e.OvertimeMinutes,
+            ProtonText.Cut(e.Description, 400), e.CanEdit)).ToList();
+        return new ProtonToolOutput(new MyWorkList(range.From, range.To, page.TotalCount, rows),
+            rows.Select(r => new ProtonRef(ProtonRefType.Project, r.Project.Id, r.Project.Name, DomainCodes.Design)).Distinct().ToList(), range);
+    }
+}
+
+public sealed record MyWorkRow(long Id, ProtonNamed Project, string Started, string Ended, int Minutes, int OvertimeMinutes, string? Description, bool Editable);
+
+public sealed record MyWorkList(DateOnly From, DateOnly To, int Total, IReadOnlyList<MyWorkRow> Entries);

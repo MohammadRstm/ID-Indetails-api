@@ -91,6 +91,8 @@ public class ProtonStreamTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
     {
         var superAdmin = await SuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        (await _steps.Client.PutJsonAsync($"/api/users/{employee.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.ProtonUse, action = "revoke", reason = "test" } } }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         await (await StreamAsync(employee, new { text = "Hi" })).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await StreamAsync(superAdmin, new { text = "" })).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);

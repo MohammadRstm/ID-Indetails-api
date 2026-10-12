@@ -113,6 +113,10 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
             [ProtonPage.CompanySettings] = (null, false, true, "company settings"),
             [ProtonPage.CompanyProfile] = (null, false, true, "your profile"),
             [ProtonPage.Launcher] = (null, false, true, "the start page"),
+            // the person's own pages: their route decides who has them (employees)
+            [ProtonPage.MyWork] = (null, false, false, "your work"),
+            [ProtonPage.MyPay] = (ProtonEndpoint.Of<MyWorkController>(nameof(MyWorkController.ListEntries)), true, false, "your pay"),
+            [ProtonPage.MyProfile] = (null, false, false, "your profile"),
         };
 
     public override string Name => "open_page";
@@ -121,7 +125,7 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
         "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people, financials " +
         "(optionally a tab), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
         "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
-        "start page. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
+        "start page; for employees their own my_work, my_pay and my_profile. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
 
@@ -474,6 +478,9 @@ public sealed record FillFormInput
 
     [Description("The draft for a chat: give person_id or team_id (from find_recipient) and the body.")]
     public MessageDraft? Message { get; init; }
+
+    [Description("The user's own work for the log form.")]
+    public LogWorkFill? LogWork { get; init; }
 }
 
 public sealed record MessageDraft
@@ -511,11 +518,12 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
         [ProtonForm.EditProject] = ProtonSurface.EditProject,
         [ProtonForm.ReportBug] = ProtonSurface.ReportBug,
         [ProtonForm.Invite] = ProtonSurface.InvitePerson,
+        [ProtonForm.LogWork] = ProtonSurface.LogWork,
     };
 
     protected override async Task<ProtonToolOutput> RunAsync(FillFormInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var given = new object?[] { input.Client, input.Meeting, input.NewProject, input.EditProject, input.ReportBug, input.Invite, input.Message }
+        var given = new object?[] { input.Client, input.Meeting, input.NewProject, input.EditProject, input.ReportBug, input.Invite, input.Message, input.LogWork }
             .Count(v => v is not null);
         if (given != 1)
         {
@@ -523,7 +531,7 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
         }
 
         var fill = new ProtonFormFill(input.Form, input.Id, input.Client, input.Meeting, input.NewProject, input.EditProject, input.ReportBug, input.Invite,
-            input.Message is { } m ? new MessageFill { Body = m.Body } : null);
+            input.Message is { } m ? new MessageFill { Body = m.Body } : null, input.LogWork);
         var problems = ProtonFormRules.Problems(fill);
         if (problems.Count > 0)
         {
@@ -560,6 +568,9 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
                 break;
             case ProtonForm.Meeting when input.Meeting!.ProjectId is { } meetingProject:
                 _ = await records.FindAsync(ProtonRefType.Project, meetingProject, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                break;
+            case ProtonForm.LogWork when input.LogWork!.ProjectId is { } workProject:
+                _ = await records.FindAsync(ProtonRefType.Project, workProject, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
                 break;
             case ProtonForm.NewProject when input.NewProject!.ClientId is { } newClient:
                 _ = await records.FindAsync(ProtonRefType.Client, newClient, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
@@ -605,6 +616,7 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
         ProtonForm.NewProject => "new project",
         ProtonForm.EditProject => "project details",
         ProtonForm.ReportBug => "bug report",
+        ProtonForm.LogWork => "log work",
         _ => form.ToString().ToLowerInvariant(),
     };
 }

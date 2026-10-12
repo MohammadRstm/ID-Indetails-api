@@ -57,7 +57,7 @@ public class ProtonBriefingTests(ProtonApiFactory api) : IClassFixture<ProtonApi
     }
 
     [Fact]
-    public async Task Each_person_is_briefed_on_what_they_may_see_and_employees_not_at_all()
+    public async Task Each_person_is_briefed_on_what_they_may_see()
     {
         api.Anthropic.Reset();
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
@@ -68,6 +68,7 @@ public class ProtonBriefingTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         var briefing = await BriefingAsync(designAdmin);
 
         briefing.Items.ShouldAllBe(i => i.Domain != DomainCodes.Execution);
-        await (await Client.GetAsync("/api/proton/briefing", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        // employees have Proton too (decision 26), within their own domain
+        (await BriefingAsync(employee)).Items.ShouldAllBe(i => i.Domain != DomainCodes.Execution);
     }
 }

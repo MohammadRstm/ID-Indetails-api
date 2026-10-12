@@ -46,6 +46,9 @@ public enum ProtonPage
     CompanySettings,
     CompanyProfile,
     Launcher,
+    MyWork,
+    MyPay,
+    MyProfile,
 }
 
 /// <summary>

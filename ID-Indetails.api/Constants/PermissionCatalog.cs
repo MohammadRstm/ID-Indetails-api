@@ -81,7 +81,7 @@ public static class PermissionCatalog
         new(P.HoursExcuse, "Excuse hours and days off in the hours ledger", Sensitivity: Pay),
 
         // Admins and super admins only: employees don't get Proton yet.
-        new(P.ProtonUse, "Ask Proton, the read-only company assistant"),
+        new(P.ProtonUse, "Ask Proton, the company assistant, which proposes changes only for the person to confirm"),
         new(P.ProtonBudgetManage, "See Proton's costs and usage, and top up its monthly budget"),
     ];
 
@@ -118,6 +118,7 @@ public static class PermissionCatalog
         P.WorkEntryViewOwn,
         P.MaterialCreate,
         P.LabourReportCreate,
+        P.ProtonUse,
     ];
 
     /// <summary>Permission codes held by each role.</summary>
