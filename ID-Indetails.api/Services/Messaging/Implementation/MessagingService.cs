@@ -16,6 +16,7 @@ using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Files.Implementation;
 using ID_Indetails.api.Services.Messaging.Abstraction;
+using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
 
@@ -34,6 +35,7 @@ public sealed class MessagingService(
     IFileClaims fileClaims,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
+    IPushQueue pushes,
     IClock clock) : IMessagingService
 {
     private const string ChatNotFound = "Chat not found.";
@@ -75,6 +77,12 @@ public sealed class MessagingService(
         return new MessagesBadgeResponse(inbox.States.Sum(s => s.Unread), inbox.States.Any(s => s.UnreadMention));
     }
 
+    public async Task<int> UnreadCountForAsync(long userId, CancellationToken cancellationToken = default)
+    {
+        var person = (await messaging.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
+        return person is { Status: UserStatus.Active } ? (await InboxAsync(person, cancellationToken)).States.Sum(s => s.Unread) : 0;
+    }
+
     public async Task<IReadOnlyList<ContactResponse>> ContactsAsync(CancellationToken cancellationToken = default)
     {
         var me = await ViewerAsync(cancellationToken);
@@ -112,6 +120,7 @@ public sealed class MessagingService(
             conversation, me.Id, request.Body, MessageKinds.Text, mentionIds, request.AttachmentIds, null, null, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         TeamChanged(team, memberIds);
+        pushes.Message(message.Id, team.Id, memberIds.Where(id => id != me.Id), mentionIds);
 
         return await OneAsync(message.Id, cancellationToken);
     }
@@ -157,6 +166,7 @@ public sealed class MessagingService(
         await transaction.CommitAsync(cancellationToken);
         live.ChatChanged(other.Id, new LiveChat(null, me.Id));
         live.ChatChanged(me.Id, new LiveChat(null, other.Id));
+        pushes.Message(message.Id, null, [other.Id], []);
 
         return await OneAsync(message.Id, cancellationToken);
     }
@@ -216,9 +226,11 @@ public sealed class MessagingService(
         // The card speaks to the whole chat (the prototype's @all).
         var memberIds = (await MembersAsync(team, cancellationToken)).Select(p => p.Id).ToList();
         var conversation = await TeamConversationForWriteAsync(team, cancellationToken);
+        var others = memberIds.Where(id => id != commenterId).ToList();
         var message = await PostAsync(
-            conversation, commenterId, body, MessageKinds.TaskComment, memberIds.Where(id => id != commenterId).ToList(), [], entryId, commentId, cancellationToken);
+            conversation, commenterId, body, MessageKinds.TaskComment, others, [], entryId, commentId, cancellationToken);
         TeamChanged(team, memberIds);
+        pushes.Message(message.Id, team.Id, others, others);
         return message.Id;
     }
 

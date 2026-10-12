@@ -51,5 +51,11 @@ public class ProjectMaterial
 
     public DateTime? DeletedAt { get; set; }
 
+    /// <summary>
+    /// The phone app's own id for the material, given when it was recorded (maybe offline), so a batch sent again adds
+    /// it only once. Unique per person who added it; null for materials added on the website.
+    /// </summary>
+    public Guid? ClientRef { get; set; }
+
     public Project Project { get; set; } = null!;
 }

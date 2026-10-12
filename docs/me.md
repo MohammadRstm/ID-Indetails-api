@@ -89,6 +89,34 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - Only the order is kept (`user_board_layouts.layout` holds `{ "order": [...] }`), as in the prototype: a card takes the width of the slot it lands in. The client drops keys it no longer knows and places new cards at their default spot, so the server only checks the shape: 1 to 30 card keys, each lowercase letters, digits and dashes (40 at most), none twice (`400`).
 - The client saves on every move and deletes the layout when the order matches the default again. Nobody reads or changes anyone else's layout.
 
+## My devices
+
+The phones that receive the caller's pushes ([notifications.md](notifications.md#pushes)).
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `PUT /api/me/devices` | The phone app's sign-in | `{ pushToken, platform: ios \| android, appVersion }`: registers this phone for pushes, or updates it |
+| `DELETE /api/me/devices/current` | Signed in | Stops pushes to this phone (`204`, also when there is nothing to remove) |
+| `GET /api/me/devices` | Signed in | The caller's phones, newest first: `{ id, platform, appVersion, createdAt, updatedAt, current }` |
+| `DELETE /api/me/devices/{id}` | Signed in | Signs that phone out: its session ends and its pushes stop (`204`). Someone else's device reads as `404` |
+
+- **Tied to a session.** A device belongs to the phone app's session it was registered from (the access token's `sid`, see [authentication.md](authentication.md#mobile-sessions)). Registering needs that session: a website token is refused (`403`), and a session that has ended is `401`. `current` marks the caller's own phone.
+- **One token, one person.** A push token is unique: registered by someone else (a shared phone), it moves to the caller, so nobody gets the previous person's pushes. A session keeps one device; a new token from the same phone replaces the old one.
+- **When devices go.** Signing out on the phone deletes its device. Every other way a session ends (a password change, a super admin, deactivation, theft, 30 idle days) stops its pushes at once, because only devices whose session still has a valid refresh token are listed or sent to, and a daily job deletes them. Expo reporting a token as no longer registered deletes it too.
+- The push token is never returned.
+
+## My notification settings
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/me/notification-settings` | Signed in | `{ quietFromMinute, quietToMinute, mutedCategories, isDefault }` |
+| `PUT /api/me/notification-settings` | Signed in | `{ quietFromMinute, quietToMinute, mutedCategories }` replaces them and answers as `GET` |
+
+- **Quiet hours** are minutes after midnight in the company's time zone (0 to 1439), both set or both null (no quiet hours), and different from each other (`400` otherwise). A range may cross midnight (1320 to 420 is 22:00 to 07:00). Pushes during them arrive silently.
+- **Muted categories** (`work`, `requirements`, `projects`, `meetings`, `sites`, `money`, `people`, `messages`) send no pushes at all; each once (`400`). The in-app list is unchanged.
+- **Defaults.** Until the person saves their own, `GET` answers 22:00 to 07:00 with nothing muted and `isDefault: true`.
+- Stored in `user_notification_settings` and `user_notification_mutes`. Nobody reads or changes anyone else's.
+
 ## Reporting a bug
 
 | Endpoint | Who | What |
