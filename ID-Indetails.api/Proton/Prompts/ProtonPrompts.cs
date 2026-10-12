@@ -9,10 +9,17 @@ namespace ID_Indetails.api.Proton.Prompts;
 /// </summary>
 public static class ProtonPrompts
 {
-    /// <summary>For the text chat: who Proton is, what it may see, how it analyses, how it moves around the app, how it proposes changes, and how to answer in writing.</summary>
-    public static string Chat { get; } = string.Join("\n\n", Read("proton.md"), Read("data.md"), Read("analysis.md"), Read("navigation.md"), Read("actions.md"), Read("chat.md"));
+    /// <summary>Where the prompts name the app: replaced by the product name users know it by.</summary>
+    public const string ProductToken = "{product}";
+
+    /// <summary>For the text chat: who Proton is and how it sounds, the company, what it may see, how it analyses, how it moves around the app, how it proposes changes, and how to answer in writing.</summary>
+    public static string Chat { get; } = string.Join("\n\n",
+        Read("persona.md"), Read("proton.md"), Read("data.md"), Read("analysis.md"), Read("navigation.md"), Read("actions.md"), Read("chat.md"));
 
     public static string ChatVersion { get; } = Version(Chat);
+
+    /// <summary>The chat prompt with the app's name filled in: the same for everyone, so it stays cached.</summary>
+    public static string ChatFor(string productName) => Chat.Replace(ProductToken, productName);
 
     private static string Read(string file)
     {

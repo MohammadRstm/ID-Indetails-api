@@ -80,10 +80,49 @@ public sealed record ProtonUiCommand(
 /// <param name="Detail">What tells it apart: kind and business ("Project · Design").</param>
 public sealed record ProtonChoice(ProtonRefType Type, long Id, string Label, string? Detail, string? Domain);
 
+/// <summary>An answer to Proton's own question that the app can offer as a button: a period, a business, or yes or no.</summary>
+public enum ProtonQuickReply
+{
+    Yes,
+    No,
+    Design,
+    Execution,
+    Today,
+    ThisWeek,
+    LastWeek,
+    ThisMonth,
+    LastMonth,
+    ThisQuarter,
+    LastQuarter,
+    ThisYear,
+    LastYear,
+}
+
+/// <summary>A quick-reply button: the value, in the app's own words. The model never writes the label.</summary>
+public sealed record ProtonQuickReplyOption(ProtonQuickReply Reply, string Label);
+
 public static class ProtonUiRules
 {
     public const int MinChoices = 2;
     public const int MaxChoices = 6;
+
+    public const int MaxSuggestions = 3;
+    public const int MaxSuggestionLength = 60;
+
+    public static bool IsYesOrNo(ProtonQuickReply reply) => reply is ProtonQuickReply.Yes or ProtonQuickReply.No;
+
+    public static ProtonQuickReplyOption Option(ProtonQuickReply reply) => new(reply, reply switch
+    {
+        ProtonQuickReply.ThisWeek => "This week",
+        ProtonQuickReply.LastWeek => "Last week",
+        ProtonQuickReply.ThisMonth => "This month",
+        ProtonQuickReply.LastMonth => "Last month",
+        ProtonQuickReply.ThisQuarter => "This quarter",
+        ProtonQuickReply.LastQuarter => "Last quarter",
+        ProtonQuickReply.ThisYear => "This year",
+        ProtonQuickReply.LastYear => "Last year",
+        _ => reply.ToString(),
+    });
 
     /// <summary>
     /// What a reply asks the app to do: at most one navigation (the last asked for, so a later "open X" replaces an

@@ -5,9 +5,11 @@ people, logged time, activity and, for people allowed to see it, money (Stage 1)
 changes, which happen only when the user confirms them on a card (Stage 2, [Controlled actions](#controlled-actions-stage-2)).
 It also **analyses**: compares periods, summarises the company, says what changed and what may need attention, with
 every number calculated in code (Stage 3, [Analysis](#analysis-stage-3)), and **opens pages and records** in the app
-through typed commands (Stage 4, [Navigation](#navigation-stage-4)). Proton itself never writes anything. The
-design and decisions are in [proton-stage-1-plan.md](proton-stage-1-plan.md),
-[proton-stage-2-plan.md](proton-stage-2-plan.md), [proton-stage-3-plan.md](proton-stage-3-plan.md) and [proton-stage-4-plan.md](proton-stage-4-plan.md).
+through typed commands (Stage 4, [Navigation](#navigation-stage-4)). It talks like a colleague, in the first person
+and the user's language, and is honest that it is an AI (Stage 5, [How Proton talks](#how-proton-talks-stage-5)).
+Proton itself never writes anything. The design and decisions are in [proton-stage-1-plan.md](proton-stage-1-plan.md),
+[proton-stage-2-plan.md](proton-stage-2-plan.md), [proton-stage-3-plan.md](proton-stage-3-plan.md),
+[proton-stage-4-plan.md](proton-stage-4-plan.md) and [proton-stage-5-plan.md](proton-stage-5-plan.md).
 
 ## Who can use it
 
@@ -183,8 +185,8 @@ entries and new payments would make it stale.
 **Limits.**
 - At most `MaxHeavyToolCallsPerQuestion` (4) heavy analyses per question; the next is refused with a note to answer
   with what Proton has.
-- A conversation whose last model request passed `MaxConversationInputTokens` (80,000) input tokens takes no more
-  questions (`404 proton_conversation_ended`).
+- A conversation whose last model request passed `MaxConversationInputTokens` (80,000) input tokens rolls over (see
+  [Conversations](#conversations-and-follow-ups)).
 
 **Answer rules** (`analysis.md`):
 - Facts, calculations, interpretation ("Based on this data, …") and recommendation ("You may want to …") are kept
@@ -208,7 +210,8 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 |---|---|---|
 | `open_record` | Opens a project (optionally on `requirements`, `timeline` or `meetings`), a client or a person | The record's own GET endpoint. The record is read first through its service, so an id the user can't see is `not_found` and nothing opens. A tab the user can't open falls back to the overview, and Proton says so. |
 | `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses | Each page needs its endpoint's permission, e.g. financials needs `financial:view`. Settings, salaries and pay are not on the list. |
-| `offer_choices` | Shows 2–6 matches as buttons when a name is ambiguous | Only records a tool returned in the conversation; labels come from those records, not from the model |
+| `offer_choices` | Shows 2–6 matches as buttons when a name is ambiguous, or 2–6 fixed answers to Proton's question (`replies`: a period, `design` / `execution`, `yes` / `no`) | Only records a tool returned in the conversation, and only businesses the user can see; labels come from the records or the app, not from the model. No yes/no while a card is pending |
+| `suggest_replies` | Offers up to 3 short next things the user might say (60 characters each, one line) | None while a card is pending; a tap sends only its place in the list |
 | `refresh_page` | Reloads the current page's data | — |
 
 **Contract** (`Proton/Ui/ProtonUiCommand.cs`):
@@ -230,7 +233,9 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 
 **Picking a choice.** The client sends `{conversationId, choice: {type, id}}` and no text.
 - The pick must be one of the last offered options and still visible to the user. Otherwise the API answers `422 proton_choice_invalid`.
-- An accepted pick becomes a question written by Hourline. Options can be used once.
+- An accepted pick becomes a question written by the app. Options can be used once.
+- A quick reply is sent as `{conversationId, reply}` and a suggested reply as `{conversationId, suggestion}` (its
+  place in the list), each checked against what the last reply offered; the server writes the question's text.
 
 **After an action.**
 - Every action takes `open_after`.
@@ -254,19 +259,43 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 
 Prompt injection can at most open a page the user may already open.
 
+## How Proton talks (Stage 5)
+
+Phase 1 of [proton-stage-5-plan.md](proton-stage-5-plan.md) (E1–E3, G6).
+
+- **Persona** (`persona.md`, loaded first): first person, warm and direct, the user's first name now and then, one
+  question at a time, small talk answered briefly. It replies in the user's language (English, Arabic, French) and keeps
+  record names as they are. It says it is an AI whenever asked, never claims human experiences, and corrects anyone who
+  seems to think it is a person.
+- **Name.** The prompts say `{product}`, filled in with `Email:ProductName` ("ID InDetails"), so users only ever see
+  the name they know. The company's name comes from its branding, in the context note.
+- **Greeting and briefing.** The panel greets the user itself (first name, time of day; no model call) and shows
+  `GET /api/proton/briefing`: the three things most worth a look and how many more, from get_attention's rules and
+  read path, only for users who could ask get_attention. No model call and no question used.
+- **Small talk is free.** A question Proton answered without any tool doesn't count toward the monthly allowance; it
+  still costs the budget.
+- **Turn origin** (decision 33). The server sets each turn's origin from the request's shape: `typed`, `choice` (a
+  pick or a quick reply) or `suggestion`. On a turn the user didn't type, the toolbox refuses any proposal in a gated
+  family (Deletes, Access, CompanyRules, PayRules, Money, Messaging, or a tool with no coverage entry), with the tool
+  list unchanged. Today's actions are all Core.
+- **Nothing beside a card passes for a Confirm.** While a proposal is pending, Proton offers no yes/no buttons and no
+  suggested replies, and a yes/no click is refused.
+
 ## Conversations and follow-ups
 
 - Kept **in server memory** (`ProtonConversationStore`), keyed by user and conversation id: nobody else can continue
-  someone's conversation. They end after 30 idle minutes, after 4 hours, after 20 questions, or on restart. The client
-  never sends history back.
+  someone's conversation. They end after 30 idle minutes, after 4 hours, or on restart (`404
+  proton_conversation_ended`; the client starts a new one and says so). The client never sends history back.
+- **Rollover.** At 20 questions, or once the last model request passed `MaxConversationInputTokens`, the chat carries
+  on under the same id instead of ending: the messages are dropped, and the next question gets a recap written by the
+  app from the last three questions and answers (400 characters each). The focus, the known records, offered options
+  and pending proposals stay. The reply says `rolledOver: true`.
 - The message list is exactly what was sent to the model, append-only. A failed question adds nothing to it.
 - A **focus** (`ConversationFocus`) is updated from tool results, not guessed from text: the current project, client,
   people and period, and from analytical results what the period was compared with and the last analysis. It is sent with each question in a short context note, with today's date and who is asking, so
   "it", "they" and "the month before" resolve reliably.
-- If the user's role, permissions or domains change, the conversation is closed (answers given under the old access
-  must not carry over).
-- A conversation whose last model request passed `Proton:MaxConversationInputTokens` input tokens ends: every question
-  re-sends the earlier ones with their tool results.
+- If the user's role, permissions or domains change, the conversation is closed with no recap (answers given under
+  the old access must not carry over).
 
 ## Controlled actions (Stage 2)
 
@@ -310,11 +339,12 @@ will change (before → after), its risk, and Cancel / Confirm. Typing "yes" con
 
 ## Prompts
 
-Markdown files in `Proton/Prompts/` (`proton.md` who Proton is and its rules, `data.md` what it may see and that
-people's text is data, `analysis.md` how to present comparisons, judgements, "why" answers and anything about people, `actions.md` how to
-propose changes and that only the card confirms them, `chat.md` how to
-answer in chat), embedded in the assembly. The prompt version recorded with
-each question is a hash of their text. The system prompt is the same for everyone, so it is cached by the provider;
+Markdown files in `Proton/Prompts/` (`persona.md` who Proton is and how it sounds, `proton.md` the company and the
+grounding rules, `data.md` what it may see and that people's text is data, `analysis.md` how to present comparisons,
+judgements, "why" answers and anything about people, `navigation.md` how it moves around the app and offers buttons,
+`actions.md` how to propose changes and that only the card confirms them, `chat.md` how to answer in chat), embedded
+in the assembly. `{product}` is replaced with the product name. The prompt version recorded with each question is a
+hash of their text. The system prompt is the same for everyone, so it is cached by the provider;
 per-question facts go in the context note.
 
 ## Usage, limits and cost
@@ -327,13 +357,14 @@ per-question facts go in the context note.
 - **Monthly company budget** (USD): `Proton:MonthlyBudgetUsd` plus that month's top-ups (`proton_budget_top_ups`,
   added by super admins, never edited). Once the month's estimated cost reaches it, nobody can ask until a top-up.
 - **Monthly question allowance per person**: `Proton:MonthlyQuestionsPerUser`. People see this allowance (used,
-  remaining, percentage) — never money.
+  remaining, percentage) — never money. Only questions Proton used a tool for count (decision 19).
 - Cost is estimated from `Proton:Prices` (USD per million tokens). The provider's bill is the truth; also set a spend
   limit on the Anthropic workspace as a backstop.
 
 | Endpoint | Permission | |
 |---|---|---|
-| `POST /api/proton/messages` | `proton:use` | `{conversationId?, text, page?, choice?}` → `{conversationId, reply, refs, limited, usage, sources, uiCommands, choices, pendingAction}`; rate policy `proton` |
+| `POST /api/proton/messages` | `proton:use` | `{conversationId?, text, page?, choice? \| reply? \| suggestion?}` → `{conversationId, reply, refs, limited, usage, sources, uiCommands, choices, quickReplies, suggestions, pendingAction, rolledOver}`; rate policy `proton` |
+| `GET /api/proton/briefing` | `proton:use` | `{items: [{project?, domain?, facts}], more}`: what get_attention finds first, with no model call; rate policy `proton` |
 | `DELETE /api/proton/conversations/{id}` | `proton:use` | ends a conversation |
 | `GET /api/proton/usage` | `proton:use` | the caller's question allowance and whether Proton is available |
 | `GET /api/proton/budget` | `proton_budget:manage` | this month's budget, top-ups, estimated spend, and spending by person, domain, tool (calls, average time) and day, with the 10 most expensive conversations |
@@ -341,7 +372,7 @@ per-question facts go in the context note.
 
 Errors use the uniform contract: `503 proton_unavailable` (switched off, or the model failed), `422 proton_budget_used`,
 `422 proton_allowance_used`, `409 proton_busy` (a question is still being answered in that conversation),
-`404 proton_conversation_ended`, `422 proton_choice_invalid` (a pick that wasn't offered or is no longer visible), `429 too_many_requests`.
+`404 proton_conversation_ended`, `422 proton_choice_invalid` (a pick, quick reply or suggestion that wasn't offered, or a record no longer visible), `429 too_many_requests`.
 
 ## Configuration (`Proton` section)
 
@@ -353,10 +384,10 @@ Errors use the uniform contract: `503 proton_unavailable` (switched off, or the 
 | `Effort` | `low` | `low` … `max` |
 | `MaxOutputTokens`, `MaxRoundTrips`, `MaxToolCallsPerQuestion` | 8000, 8, 12 | per question; at the limit the model must answer with what it has |
 | `ModelTimeoutSeconds`, `ToolTimeoutSeconds`, `QuestionTimeoutSeconds` | 40, 20, 55 | the question stays under nginx's 60-second read timeout |
-| `MaxQuestionsPerConversation`, `ConversationIdleMinutes` | 20, 30 | |
+| `MaxQuestionsPerConversation`, `ConversationIdleMinutes` | 20, 30 | a conversation at the question limit rolls over |
 | `MonthlyBudgetUsd`, `MonthlyQuestionsPerUser` | 50, 300 | |
 | `MaxHeavyToolCallsPerQuestion` | 4 | analyses that load every project's money; the next one is refused |
-| `MaxConversationInputTokens` | 80000 | a conversation past it takes no more questions |
+| `MaxConversationInputTokens` | 80000 | a conversation past it rolls over |
 | `Insights` | 30%, 10 h, 1,000 USD, 1.5×, 0.5×, 4 periods, 14 days | `NotablePct`, `NotableHours`, `NotableUsd`, `UnusualHigh`, `UnusualLow`, `BaselinePeriods`, `TargetSoonDays` |
 | `Prices` | Sonnet 5.5 list prices | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion` |
 
@@ -368,7 +399,9 @@ Locally: `dotnet user-secrets set "Proton:ApiKey" "<key>"` and `"Proton:Enabled"
 
 Category `ID_Indetails.api.Proton`: each tool call (name, status, duration, parameters with free text replaced by its
 length), refusals as warnings, failures as errors. One line per question gives its outcome, wall time,
-time to the first model reply, model and tool calls, time in tools, tokens and estimated cost. Question and answer text never go to the logs.
+time to the first model reply, model and tool calls, time in tools, tokens and estimated cost. A rollover logs the
+conversation's question and token counts; a question the model declined logs its policy category. Question and
+answer text never go to the logs.
 
 ## Tests
 

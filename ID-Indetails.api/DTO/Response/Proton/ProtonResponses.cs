@@ -8,6 +8,9 @@ namespace ID_Indetails.api.DTO.Response.Proton;
 /// <param name="Sources">What the analytical figures in the reply rest on, shown under it as "Based on".</param>
 /// <param name="UiCommands">What the app opens or refreshes once the reply is shown: at most one page, or a refresh.</param>
 /// <param name="Choices">Options to pick from with a click instead of typing; the pick is checked against these.</param>
+/// <param name="QuickReplies">Answers to Proton's question as buttons, in the app's words; a click is checked against these.</param>
+/// <param name="Suggestions">Replies the user might send next, as buttons; a tap sends only its place in this list.</param>
+/// <param name="RolledOver">The chat had grown too long, so Proton carried on from a short recap of it.</param>
 public sealed record ProtonReplyResponse(
     Guid ConversationId,
     string Reply,
@@ -17,7 +20,10 @@ public sealed record ProtonReplyResponse(
     IReadOnlyList<ProtonSourceResponse> Sources,
     IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonUiCommand> UiCommands,
     IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonChoice> Choices,
-    ID_Indetails.api.Proton.Actions.ProtonPendingAction? PendingAction = null);
+    IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonQuickReplyOption> QuickReplies,
+    IReadOnlyList<string> Suggestions,
+    ID_Indetails.api.Proton.Actions.ProtonPendingAction? PendingAction = null,
+    bool RolledOver = false);
 
 /// <summary>
 /// A person's own Proton allowance this month, in questions — never in money.
@@ -80,3 +86,11 @@ public sealed record ProtonActionOutcomeResponse(
 /// <param name="Partial">The period is still running, so its figures are "so far".</param>
 /// <param name="Omitted">What the analysis left out: what the user can't see, or data the system doesn't hold.</param>
 public sealed record ProtonSourceResponse(string Label, string? Period, string? ComparedWith, bool Partial, string? Scope, IReadOnlyList<string> Omitted);
+
+/// <summary>What may need the user's attention, for Proton's greeting: the same rules as get_attention, with no model call.</summary>
+/// <param name="More">How many more items there are beyond these.</param>
+public sealed record ProtonBriefingResponse(IReadOnlyList<ProtonBriefingItem> Items, int More);
+
+/// <param name="Project">The project the item is about; null for one about a whole business (<paramref name="Domain"/>).</param>
+/// <param name="Facts">What was measured, in words, most pressing first.</param>
+public sealed record ProtonBriefingItem(ProtonRef? Project, string? Domain, IReadOnlyList<string> Facts);

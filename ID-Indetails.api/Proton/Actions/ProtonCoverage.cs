@@ -79,6 +79,14 @@ public static class ProtonCoverage
 
     private static ProtonCoverageEntry Own(string endpoint) => new(endpoint, ProtonCoverageKind.Own);
 
+    /// <summary>
+    /// Whether an action may only be proposed on a turn the user typed (decision 33): every family that sends,
+    /// deletes, moves money or changes access, company rules or pay rules. A tool without an entry counts as one, so
+    /// a new action is held back until it is classified.
+    /// </summary>
+    public static bool NeedsTypedTurn(string tool)
+        => Entries.FirstOrDefault(e => e.Tool == tool)?.Family is not (ProtonFamily.Core or ProtonFamily.Lifecycle);
+
     private const ProtonTier T1 = ProtonTier.Standard;
     private const ProtonTier T2 = ProtonTier.Strong;
 

@@ -1,6 +1,7 @@
 using FluentValidation;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Proton;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Validators.Common;
 
 namespace ID_Indetails.api.Validators.Proton;
@@ -14,15 +15,22 @@ public sealed class AskProtonRequestValidator : AbstractValidator<AskProtonReque
 
     public AskProtonRequestValidator()
     {
-        RuleFor(x => x.Text).NotEmpty().When(x => x.Choice is null).WithMessage("Ask a question.")
+        RuleFor(x => x.Text).NotEmpty().When(x => Buttons(x) == 0).WithMessage("Ask a question.")
             .MaximumLength(MaxTextLength).WithMessage($"A question can be at most {MaxTextLength} characters.");
+        RuleFor(x => x).Must(x => Buttons(x) <= 1).WithMessage("Pick one option at a time.");
         RuleFor(x => x.Page!).SetValidator(new ProtonPageContextValidator()).When(x => x.Page is not null);
         When(x => x.Choice is not null, () =>
         {
             RuleFor(x => x.Choice!.Type).IsInEnum().WithMessage("Pick one of the options.");
             RuleFor(x => x.Choice!.Id).GreaterThan(0).WithMessage("Pick one of the options.");
         });
+        RuleFor(x => x.Reply).IsInEnum().WithMessage("Pick one of the options.");
+        RuleFor(x => x.Suggestion).InclusiveBetween(0, ProtonUiRules.MaxSuggestions - 1).WithMessage("Pick one of the suggestions.");
     }
+
+    /// <summary>How many of the last reply's buttons the request answers with.</summary>
+    private static int Buttons(AskProtonRequest request)
+        => (request.Choice is null ? 0 : 1) + (request.Reply is null ? 0 : 1) + (request.Suggestion is null ? 0 : 1);
 }
 
 /// <summary>A page is described by known values only: an area, a page, and a record only together with its kind.</summary>

@@ -36,7 +36,7 @@ public sealed class ProtonActionService(
         if (action.ExpiresAt <= now)
         {
             await actions.CloseAsync(actionId, ProtonActionStatus.Expired, now, cancellationToken);
-            throw new BusinessRuleException(ErrorCodes.ProtonActionExpired, "This proposal has expired. Ask Proton again.");
+            throw new BusinessRuleException(ErrorCodes.ProtonActionExpired, "This proposal has expired. Ask me again if you still want it.");
         }
 
         // From here on it can never run twice: only one request moves it out of pending.
@@ -104,14 +104,18 @@ public sealed class ProtonActionService(
     {
         ProtonActionStatus.Executing => "This proposal is already being carried out.",
         ProtonActionStatus.Succeeded => "This proposal was already carried out.",
-        ProtonActionStatus.Failed => "This proposal was already tried and failed. Ask Proton again.",
+        ProtonActionStatus.Failed => "This proposal was already tried and failed. Ask me again if you want another go.",
         ProtonActionStatus.Cancelled => "This proposal was cancelled.",
         ProtonActionStatus.Superseded => "A newer proposal replaced this one.",
-        _ => "This proposal has expired. Ask Proton again.",
+        _ => "This proposal has expired. Ask me again if you still want it.",
     });
 
     private void Note(long userId, ProtonAction action, string note)
-        => conversations.Find(userId, action.ConversationId)?.NoteAction(note);
+    {
+        var conversation = conversations.Find(userId, action.ConversationId);
+        conversation?.NoteAction(note);
+        conversation?.Decided(action.PublicId);
+    }
 
     private static ProtonPreview? Preview(ProtonAction action)
         => System.Text.Json.JsonSerializer.Deserialize<ProtonPreview>(action.Preview, ProtonJson.Options);

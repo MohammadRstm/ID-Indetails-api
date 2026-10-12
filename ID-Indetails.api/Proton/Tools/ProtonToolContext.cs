@@ -9,6 +9,19 @@ using Microsoft.AspNetCore.Authorization;
 namespace ID_Indetails.api.Proton.Tools;
 
 /// <summary>
+/// Who wrote the question, as the server knows it: the user typed it, picked one of the options, or tapped a reply
+/// Proton suggested. Only a typed turn may start the gated kinds of change (see ProtonCoverage.NeedsTypedTurn).
+/// </summary>
+public enum ProtonTurnOrigin
+{
+    /// <summary>Not a question from the user; also what a context starts as, so a forgotten origin fails closed.</summary>
+    Continue,
+    Choice,
+    Suggestion,
+    Typed,
+}
+
+/// <summary>
 /// What a running tool may lean on: the caller's authorization against other endpoints, the existing request
 /// validators, and the company calendar for turning period words into days. One per question.
 /// </summary>
@@ -28,6 +41,11 @@ public sealed class ProtonToolContext(
     public DateOnly Today => today;
 
     public DayOfWeek FirstDayOfWeek => firstDayOfWeek;
+
+    public ProtonTurnOrigin Turn { get; set; } = ProtonTurnOrigin.Continue;
+
+    /// <summary>A proposal is waiting for the user's Confirm: no yes/no or suggested replies then, so none can pass for one.</summary>
+    public bool ActionPending { get; set; }
 
     private readonly Dictionary<(ProtonRefType, long), ProtonRef> _known = [];
 

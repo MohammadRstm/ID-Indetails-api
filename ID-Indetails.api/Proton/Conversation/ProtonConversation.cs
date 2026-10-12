@@ -34,6 +34,81 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
     /// <summary>The options of the last reply that offered any; a pick must be one of them.</summary>
     public IReadOnlyList<Ui.ProtonChoice> OfferedChoices { get; set; } = [];
 
+    /// <summary>The quick replies offered with them; a click must be one of these.</summary>
+    public IReadOnlyList<Ui.ProtonQuickReply> OfferedReplies { get; set; } = [];
+
+    /// <summary>The last reply's suggested replies: a tap names one by its place, and the text is taken from here.</summary>
+    public IReadOnlyList<string> OfferedSuggestions { get; set; } = [];
+
+    // a confirmation can arrive while a question is being answered
+    private readonly Lock _pendingLock = new();
+    private (Guid Id, DateTime ExpiresAt)? _pending;
+
+    /// <summary>The newest proposal is waiting for its Confirm (until the user decides or it expires).</summary>
+    public bool HasPendingAction(DateTime now)
+    {
+        lock (_pendingLock)
+        {
+            return _pending is { } pending && pending.ExpiresAt > now;
+        }
+    }
+
+    public void Proposed(Guid actionId, DateTime expiresAt)
+    {
+        lock (_pendingLock)
+        {
+            _pending = (actionId, expiresAt);
+        }
+    }
+
+    /// <summary>The user confirmed or cancelled a proposal: if it was the waiting one, nothing waits any more.</summary>
+    public void Decided(Guid actionId)
+    {
+        lock (_pendingLock)
+        {
+            if (_pending?.Id == actionId)
+            {
+                _pending = null;
+            }
+        }
+    }
+
+    private const int RecapExchanges = 3;
+    private const int RecapTextLength = 400;
+
+    private readonly Queue<(string Question, string Answer)> _exchanges = new();
+
+    /// <summary>
+    /// What the app tells the model about the chat before a rollover, until a question after it is answered. Written
+    /// by the app from the last questions and answers; null when there was no rollover.
+    /// </summary>
+    public string? Recap { get; private set; }
+
+    /// <summary>The last few questions and answers, as they were shown: what a rollover's recap is made of.</summary>
+    public void RememberExchange(string question, string answer)
+    {
+        Recap = null;
+        _exchanges.Enqueue((ProtonText.Cut(question, RecapTextLength)!, ProtonText.Cut(answer, RecapTextLength)!));
+        while (_exchanges.Count > RecapExchanges)
+        {
+            _exchanges.Dequeue();
+        }
+    }
+
+    /// <summary>
+    /// Starts the chat afresh under the same id when it is too long to carry on: the messages go, and the next question
+    /// gets a recap instead. What the tools found (focus, known records, offered options) stays, and so do pending
+    /// proposals and their notes, which belong to this id.
+    /// </summary>
+    public void RollOver()
+    {
+        Messages.Clear();
+        Questions = 0;
+        LastInputTokens = 0;
+        Recap = _exchanges.Count == 0 ? null : "Earlier in this chat (a recap by the app; the earlier messages are no longer available): "
+            + string.Join(" ", _exchanges.Select(e => $"The user asked: \"{e.Question}\" You answered: \"{e.Answer}\""));
+    }
+
     private readonly Queue<string> _actionNotes = new();
 
     /// <summary>

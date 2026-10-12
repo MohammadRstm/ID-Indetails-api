@@ -68,13 +68,14 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
         reply.Refs.ShouldContain(r => r.Type == ProtonRefType.Project && r.Id == project.Id);
         reply.Usage.QuestionsUsed.ShouldBe(1);
 
-        // First call: the static prompt, the tools this super admin may use, and the question after Hourline's context note.
+        // First call: the static prompt with the app's name, the tools this super admin may use, and the question after the app's context note.
         var first = api.Anthropic.Requests[0];
-        first["system"]!.ToJsonString().ShouldContain("You are Proton");
+        first["system"]!.ToJsonString().ShouldContain("You are Proton, the AI assistant inside ID InDetails");
+        first["system"]!.ToJsonString().ShouldNotContain("{product}");
         api.Anthropic.ToolsOffered(0).ShouldContain("list_projects");
         api.Anthropic.ToolsOffered(0).ShouldContain("get_company_overview");
         var question = first["messages"]!.AsArray().Last()!.ToJsonString();
-        question.ShouldContain("Context from Hourline");
+        question.ShouldContain("Context from the app");
         question.ShouldContain("Which projects are active?");
 
         // Second call: the project list, read through the projects service.
@@ -220,6 +221,30 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
         await (await AskAsync(admin, "Still there?", mine.ConversationId)).ShouldFailWithAsync(404, ErrorCodes.ProtonConversationEnded);
     }
 
+    /// <summary>Unlike a chat that grows too long, one whose answers were given under other permissions isn't recapped.</summary>
+    [Fact]
+    public async Task A_change_of_access_ends_the_chat_and_nothing_of_it_carries_over()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        api.Anthropic.Reply(FakeAnthropic.Text("Hello."), FakeAnthropic.Text("I'm here."));
+        var first = await OkAsync(AskAsync(admin, "Hi, I'm looking into the Tower Seven figures"));
+
+        var granted = await Client.PutJsonAsync($"/api/users/{admin.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.FinancialView, action = "grant", reason = "Handles the money" } } }, superAdmin.AccessToken);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+
+        var ended = await (await AskAsync(admin, "Still there?", first.ConversationId)).ShouldFailWithAsync(404, ErrorCodes.ProtonConversationEnded);
+        ended.Message.ShouldContain("access changed");
+
+        var fresh = await OkAsync(AskAsync(admin, "Still there?"));
+        fresh.ConversationId.ShouldNotBe(first.ConversationId);
+        var sent = api.Anthropic.Requests[1]["messages"]!.ToJsonString();
+        sent.ShouldNotContain("Tower Seven");
+        sent.ShouldNotContain("recap");
+    }
+
     [Fact]
     public async Task Bad_tool_input_goes_back_to_the_model_and_a_question_needs_text()
     {
@@ -289,18 +314,25 @@ public class ProtonLimitTests(ProtonLimitsApiFactory api) : IClassFixture<Proton
         budget.BudgetUsd.ShouldBe(5m);
         budget.TopUps.ShouldHaveSingleItem().Note.ShouldBe("October");
 
-        api.Anthropic.Reply(FakeAnthropic.Text("Hello."), FakeAnthropic.Text("Hello again."));
+        async Task<ProtonUsageResponse> Usage() => await (await Client.GetAsync("/api/proton/usage", admin.AccessToken)).ReadAsync<ProtonUsageResponse>();
+        api.Anthropic.Reply(
+            FakeAnthropic.Text("Hello! What can I look up for you?"),
+            FakeAnthropic.ToolUse("list_projects", new { }), FakeAnthropic.Text("There are no projects yet."),
+            FakeAnthropic.ToolUse("list_projects", new { }), FakeAnthropic.Text("Still none."));
+        // small talk answered without a tool doesn't use one of the month's questions; it still costs the budget
+        (await Ask()).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await Usage()).QuestionsUsed.ShouldBe(0);
         (await Ask()).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await Ask()).StatusCode.ShouldBe(HttpStatusCode.OK);
         await (await Ask()).ShouldFailWithAsync(422, ErrorCodes.ProtonAllowanceUsed);
 
-        var usage = await (await Client.GetAsync("/api/proton/usage", admin.AccessToken)).ReadAsync<ProtonUsageResponse>();
+        var usage = await Usage();
         usage.QuestionsUsed.ShouldBe(2);
         usage.QuestionsRemaining.ShouldBe(0);
         usage.Available.ShouldBeFalse();
 
         var spent = await (await Client.GetAsync("/api/proton/budget", superAdmin.AccessToken)).ReadAsync<ProtonBudgetResponse>();
-        spent.Questions.ShouldBe(2);
+        spent.Questions.ShouldBe(3);
         spent.SpentUsd.ShouldBeGreaterThan(0m);
         spent.ByUser.ShouldHaveSingleItem().UserId.ShouldBe(admin.User.Id);
     }
@@ -320,5 +352,6 @@ public class ProtonSwitchedOffTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(503, ErrorCodes.ProtonUnavailable);
         var usage = await (await _steps.Client.GetAsync("/api/proton/usage", superAdmin.AccessToken)).ReadAsync<ProtonUsageResponse>();
         usage.Available.ShouldBeFalse();
+        await (await _steps.Client.GetAsync("/api/proton/briefing", superAdmin.AccessToken)).ShouldFailWithAsync(503, ErrorCodes.ProtonUnavailable);
     }
 }

@@ -142,6 +142,18 @@ public class ProtonCoverageTests
         }
     }
 
+    /// <summary>Only Core and Lifecycle actions may start from a click or a suggested reply; an unclassified tool may not.</summary>
+    [Fact]
+    public void Only_core_and_lifecycle_actions_may_start_on_a_turn_the_user_did_not_type()
+    {
+        foreach (var entry in ProtonCoverage.Entries.Where(e => e.Kind == ProtonCoverageKind.Action))
+        {
+            ProtonCoverage.NeedsTypedTurn(entry.Tool!).ShouldBe(entry.Family is not (ProtonFamily.Core or ProtonFamily.Lifecycle), entry.Tool);
+        }
+
+        ProtonCoverage.NeedsTypedTurn("propose_something_new").ShouldBeTrue();
+    }
+
     /// <summary>
     /// Endpoints with their own rate limit send something outside the app (emails, bug reports) or take credentials:
     /// none of them is a Proton action, and every one that emails someone says so.

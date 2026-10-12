@@ -21,6 +21,7 @@ using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Company.Abstraction;
 using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Proton.Agent;
@@ -37,8 +38,10 @@ public sealed class ProtonChatAgent(
     ProtonUsageService usage,
     IPermissionService permissions,
     ProtonRecords records,
+    ICompanySettingsService companySettings,
     IClock clock,
     IOptions<ProtonOptions> options,
+    IOptions<EmailOptions> email,
     ILoggerFactory loggers)
 {
     private readonly ILogger _log = loggers.CreateLogger(ProtonToolbox.LogCategory);
@@ -52,20 +55,46 @@ public sealed class ProtonChatAgent(
         var conversation = OpenConversation(userId, request.ConversationId, Fingerprint(access));
         if (!conversation.TryBegin())
         {
-            throw new ConflictException(ErrorCodes.ProtonBusy, "Proton is still answering your last question.");
+            throw new ConflictException(ErrorCodes.ProtonBusy, "I'm still answering your last question.");
         }
 
         try
         {
+            // Too long to carry on: the chat starts afresh under the same id, with a recap, instead of ending.
+            var rolledOver = conversation.Questions >= options.Value.MaxQuestionsPerConversation
+                || conversation.LastInputTokens > options.Value.MaxConversationInputTokens;
+            if (rolledOver)
+            {
+                _log.LogInformation("Proton conversation {ConversationId} rolled over after {Questions} questions and {InputTokens} input tokens.",
+                    conversation.Id, conversation.Questions, conversation.LastInputTokens);
+                conversation.RollOver();
+            }
+
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.QuestionTimeoutSeconds));
             var tools = await toolbox.OpenAsync(
                 caller, userId, new ProtonOrigin(conversation.Id, options.Value.Model, ProtonPrompts.ChatVersion), timeout.Token);
             tools.Context.Remember(conversation.Known.Values);
-            // A pick from the buttons becomes a question written by Hourline, once it is known to be one of the options.
-            var text = request.Choice is { } choice ? await ChosenAsync(choice, conversation, tools.Context, timeout.Token) : request.Text;
+            tools.Context.ActionPending = conversation.HasPendingAction(clock.UtcNow);
+            // known from the request's shape, never from its text
+            tools.Context.Turn = request switch
+            {
+                { Choice: not null } or { Reply: not null } => ProtonTurnOrigin.Choice,
+                { Suggestion: not null } => ProtonTurnOrigin.Suggestion,
+                _ => ProtonTurnOrigin.Typed,
+            };
+            // A button becomes a question written by the app, once it is known to be one the last reply offered.
+            var text = request switch
+            {
+                { Choice: { } choice } => await ChosenAsync(choice, conversation, tools.Context, timeout.Token),
+                { Reply: { } reply } => Replied(reply, conversation),
+                { Suggestion: { } index } => Suggested(index, conversation),
+                _ => request.Text,
+            };
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, timeout.Token) : null;
-            var turn = await RunTurnAsync(caller, access, conversation, tools, text, page, timeout.Token);
+            var company = (await companySettings.BrandingAsync(timeout.Token)).Name;
+            var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion);
+            var turn = await RunTurnAsync(caller, access, conversation, tools, text, notes, timeout.Token);
 
             var record = turn.Record(userId, conversation.Id, text, clock.UtcNow, usage.Prices);
             await usage.RecordAsync(record, CancellationToken.None);
@@ -77,10 +106,11 @@ public sealed class ProtonChatAgent(
                 record.InputTokens + record.CacheReadTokens + record.CacheWriteTokens, record.OutputTokens, record.CostUsd);
             if (turn.Outcome == ProtonOutcome.Failed)
             {
-                throw new ServiceUnavailableException(ErrorCodes.ProtonUnavailable, "Proton couldn't answer right now. Please try again.");
+                throw new ServiceUnavailableException(ErrorCodes.ProtonUnavailable, "Sorry, I couldn't answer that just now. Please try again.");
             }
 
             conversation.Messages.AddRange(turn.Messages);
+            conversation.RememberExchange(text, turn.Answer);
             conversation.Questions++;
             conversation.LastInputTokens = turn.LastInputTokens;
             foreach (var known in tools.Context.Known)
@@ -89,11 +119,26 @@ public sealed class ProtonChatAgent(
             }
 
             var ok = turn.ToolCalls.Where(t => t.Status == ProtonToolStatus.Ok).ToList();
+            // One proposal at a time: a later one in the same answer has already replaced earlier ones.
+            var pending = turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending;
             var choices = ok.LastOrDefault(t => t.Choices is not null)?.Choices ?? [];
-            if (choices.Count > 0 || request.Choice is not null)
+            var replies = ok.LastOrDefault(t => t.QuickReplies is not null)?.QuickReplies ?? [];
+            var suggestions = ok.LastOrDefault(t => t.Suggestions is not null)?.Suggestions ?? [];
+            if (pending is not null)
+            {
+                // offered before the proposal in the same answer: next to a card, nothing may pass for its Confirm
+                conversation.Proposed(pending.Id, pending.ExpiresAt);
+                replies = replies.Where(r => !ProtonUiRules.IsYesOrNo(r.Reply)).ToList();
+                suggestions = [];
+            }
+
+            if (choices.Count > 0 || replies.Count > 0 || request.Choice is not null || request.Reply is not null)
             {
                 conversation.OfferedChoices = choices;
+                conversation.OfferedReplies = replies.Select(r => r.Reply).ToList();
             }
+
+            conversation.OfferedSuggestions = suggestions;
 
             return new ProtonReplyResponse(
                 conversation.Id,
@@ -104,8 +149,10 @@ public sealed class ProtonChatAgent(
                 turn.Sources(),
                 ProtonUiRules.Pick(ok.Select(t => t.UiCommand).OfType<ProtonUiCommand>()),
                 choices,
-                // One proposal at a time: a later one in the same answer has already replaced earlier ones.
-                turn.ToolCalls.LastOrDefault(t => t.Pending is not null)?.Pending);
+                replies,
+                suggestions,
+                pending,
+                rolledOver);
         }
         finally
         {
@@ -123,29 +170,19 @@ public sealed class ProtonChatAgent(
         }
 
         var conversation = conversations.Find(userId, id)
-            ?? throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "This conversation has ended. Start a new one.");
+            ?? throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "I no longer have our earlier chat, so we're starting fresh.");
         if (conversation.AccessFingerprint != fingerprint)
         {
-            // Earlier answers were given under different permissions: they must not carry over.
+            // Earlier answers were given under different permissions: they must not carry over, not even as a recap.
             conversations.Remove(userId, id);
-            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "Your access changed, so this conversation was closed. Start a new one.");
-        }
-
-        if (conversation.Questions >= options.Value.MaxQuestionsPerConversation)
-        {
-            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "This conversation is full. Start a new one.");
-        }
-
-        if (conversation.LastInputTokens > options.Value.MaxConversationInputTokens)
-        {
-            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "This conversation has grown long. Start a new one to keep answers quick.");
+            throw new NotFoundException(ErrorCodes.ProtonConversationEnded, "Your access changed, so I closed our earlier chat and we're starting fresh.");
         }
 
         return conversation;
     }
 
     /// <summary>
-    /// The option the user picked, as a question Hourline writes for them: it must be one of the last offered options and
+    /// The option the user picked, as a question the app writes for them: it must be one of the last offered options and
     /// still visible to the user now. Anything else is refused, so the client can't make Proton act on a record it chose.
     /// </summary>
     private async Task<string> ChosenAsync(
@@ -155,11 +192,38 @@ public sealed class ProtonChatAgent(
         var record = offered ? await records.FindAsync(choice.Type, choice.Id, context, cancellationToken) : null;
         if (record is null)
         {
-            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That option is no longer available. Ask again.");
+            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That option isn't available any more. Could you ask me again?");
         }
 
         conversation.OfferedChoices = [];
+        conversation.OfferedReplies = [];
         return $"[The user picked this from the options you offered] {Describe(record)}.";
+    }
+
+    /// <summary>A quick reply, in the app's words, once it is known to be one the last reply offered.</summary>
+    private string Replied(ProtonQuickReply reply, ProtonConversation conversation)
+    {
+        if (!conversation.OfferedReplies.Contains(reply) || (ProtonUiRules.IsYesOrNo(reply) && conversation.HasPendingAction(clock.UtcNow)))
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That option isn't available any more. Could you ask me again?");
+        }
+
+        conversation.OfferedChoices = [];
+        conversation.OfferedReplies = [];
+        return $"[The user picked this from the options you offered] {ProtonUiRules.Option(reply).Label}.";
+    }
+
+    /// <summary>The suggested reply the user tapped, taken from what this conversation offered: the client sends only its place.</summary>
+    private static string Suggested(int index, ProtonConversation conversation)
+    {
+        if (index < 0 || index >= conversation.OfferedSuggestions.Count)
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonChoiceInvalid, "That suggestion isn't available any more. Could you type it instead?");
+        }
+
+        var text = conversation.OfferedSuggestions[index];
+        conversation.OfferedSuggestions = [];
+        return text;
     }
 
     /// <summary>
@@ -186,7 +250,7 @@ public sealed class ProtonChatAgent(
         => string.Concat(value.ToString().Select((c, i) => i > 0 && char.IsUpper(c) ? $" {char.ToLowerInvariant(c)}" : char.ToLowerInvariant(c).ToString()));
 
     private async Task<ProtonTurn> RunTurnAsync(
-        ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, ProtonToolSession tools, string text, string? page,
+        ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, ProtonToolSession tools, string text, ProtonNotes notes,
         CancellationToken cancellationToken)
     {
         var settings = options.Value;
@@ -194,12 +258,13 @@ public sealed class ProtonChatAgent(
         try
         {
             var definitions = tools.Tools.Select(Define).ToList();
+            var system = ProtonPrompts.ChatFor(email.Value.ProductName);
             turn.Messages.Add(new MessageParam
             {
                 Role = Role.User,
                 Content = new List<ContentBlockParam>
                 {
-                    new TextBlockParam { Text = ContextNote(caller, access, conversation, page) },
+                    new TextBlockParam { Text = ContextNote(caller, access, conversation, notes) },
                     new TextBlockParam { Text = text },
                 },
             });
@@ -211,7 +276,7 @@ public sealed class ProtonChatAgent(
                 {
                     Model = settings.Model,
                     MaxTokens = settings.MaxOutputTokens,
-                    System = ProtonPrompts.Chat,
+                    System = system,
                     Messages = [.. conversation.Messages, .. turn.Messages],
                     Tools = definitions,
                     ToolChoice = lastTrip ? new ToolChoiceNone() : new ToolChoiceAuto(),
@@ -235,6 +300,12 @@ public sealed class ProtonChatAgent(
                 }
 
                 turn.Finish(response, Answer(response), lastTrip);
+                if (turn.Outcome == ProtonOutcome.Refused)
+                {
+                    // the category only (a policy name), never the question
+                    _log.LogInformation("Proton's model declined a question ({Category}).", response.StopDetails?.Category?.Raw() ?? "no category");
+                }
+
                 return turn;
             }
 
@@ -318,24 +389,39 @@ public sealed class ProtonChatAgent(
     }
 
     /// <summary>
-    /// Facts the model needs each question, written by Hourline (not the user): today in the company's time zone, who
+    /// Facts the model needs each question, written by the app (not the user): today in the company's time zone, who
     /// is asking and what they can see, and what the conversation is about. Sent with the question rather than in the
     /// system prompt, so the prompt stays the same for everyone and is cached.
     /// </summary>
-    private string ContextNote(ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, string? page)
+    private string ContextNote(ClaimsPrincipal caller, UserAccess access, ProtonConversation conversation, ProtonNotes notes)
     {
         var name = $"{caller.FindFirst(AuthClaimTypes.FirstName)?.Value} {caller.FindFirst(AuthClaimTypes.LastName)?.Value}".Trim();
         var today = clock.CompanyToday;
         var actions = conversation.TakeActionNotes();
         var note = $"""
-            [Context from Hourline — not written by the user]
+            [Context from the app — not written by the user]
             Today: {today.ToString("dddd d MMMM yyyy", CultureInfo.InvariantCulture)} (company time zone).
             Asking: {(name.Length > 0 ? name : "a user")}, {access.Role.Replace('_', ' ')}, who can see: {string.Join(", ", access.VisibleDomains)}.
             Conversation focus: {conversation.Focus.Describe()}.
             """;
-        if (page is not null)
+        if (notes.Company is { Length: > 0 } company)
+        {
+            note += $"\nCompany: {company}.";
+        }
+
+        if (notes.Page is { } page)
         {
             note += $"\nWhere the user is in the app (where they are, not data): {page}.";
+        }
+
+        if (conversation.Recap is { } recap)
+        {
+            note += $"\n{recap}";
+        }
+
+        if (notes.Suggested)
+        {
+            note += "\nThis message is one of the replies you suggested, which the user tapped rather than typed.";
         }
 
         return actions.Count == 0 ? note : note + "\nSince the last message (from the confirmation buttons): " + string.Join(" ", actions);
@@ -345,6 +431,12 @@ public sealed class ProtonChatAgent(
     private static string Fingerprint(UserAccess access)
         => string.Join('|', access.Role, access.Domain, string.Join(',', access.VisibleDomains), string.Join(',', access.Permissions.Order(StringComparer.Ordinal)));
 }
+
+/// <summary>What the app adds to a question's context note besides the conversation's own state.</summary>
+/// <param name="Page">Where the user is, already checked against what they may see.</param>
+/// <param name="Company">The company's name from its branding, when set.</param>
+/// <param name="Suggested">The question is one of Proton's suggested replies, tapped rather than typed.</param>
+internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false);
 
 /// <summary>One question's progress: the messages it adds, the tools it ran, the tokens it used and how it ended.</summary>
 internal sealed class ProtonTurn(string model)
