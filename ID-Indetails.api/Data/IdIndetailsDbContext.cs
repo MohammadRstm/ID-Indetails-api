@@ -88,6 +88,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ProtonAction> ProtonActions => Set<ProtonAction>();
 
     public DbSet<ProtonMemory> ProtonMemories => Set<ProtonMemory>();
+    public DbSet<ProtonStoredConversation> ProtonConversations => Set<ProtonStoredConversation>();
+    public DbSet<ProtonStoredMessage> ProtonConversationMessages => Set<ProtonStoredMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -124,6 +126,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
         StoreAsSnakeCase<ProtonChannel>(configurationBuilder);
+        StoreAsSnakeCase<ProtonMessageRole>(configurationBuilder);
+        StoreAsSnakeCase<ProtonMessageOrigin>(configurationBuilder);
         StoreAsSnakeCase<ProtonActionStatus>(configurationBuilder);
         StoreAsSnakeCase<ProtonActionRisk>(configurationBuilder);
         StoreAsSnakeCase<RefreshTokenClient>(configurationBuilder);

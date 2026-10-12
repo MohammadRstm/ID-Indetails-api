@@ -57,10 +57,11 @@ POST /api/proton/messages
   - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
-  118 write endpoints:
-  - a built action (8), or one planned at a confirmation tier and family (68);
-  - a prefilled form (2), or a place opened for the user (22);
-  - a read-only POST (3), never (11), or Proton's own controls (9).
+  132 write endpoints:
+  - a built action (73);
+  - a prefilled form (2), or a place opened for the user (25);
+  - a read-only POST (3), never (19: passwords, tokens and the phone app's own sign-in, devices and push settings among
+    them), or Proton's own controls (10).
 
   `ProtonCoverageTests` fails when an endpoint has no entry, when an action and its tool disagree, when an action
   needing a money, pay, access or company-rules permission isn't confirmed strongly in the matching family, when a
@@ -92,10 +93,12 @@ POST /api/proton/messages
 | `get_domain_dashboard` | `GET /api/dashboard/{domain}` + deadlines | |
 | `list_clients` / `get_client` | `GET /api/clients`, `/{id}` | |
 | `get_domain_finance` | `GET /api/finance/{domain}/summary` | |
+| `get_money_by_month` | `GET /api/finance/{domain}/monthly` | received, expected revenue, cost by source and profit month by month (2–36 months); heavy |
 | `get_finance_projects` | `GET /api/finance/{domain}/projects` | ranked by revenue, cost, profit, margin or hours (all time) |
 | `get_money_attention` | `GET /api/finance/{domain}/attention` | |
 | `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | paid in USD, balance in the invoice's currency |
 | `get_company_overview` | `GET /api/company/overview` | without admin salaries and net profit |
+| `present_data` | — (open to whoever may list projects) | shows a dataset a tool returned as a chart, a table or headline figures; reads nothing |
 
 **Never available to Proton**, for anyone: salaries and pay, hourly rates and per-person labour cost, admin salaries
 (and net profit, which would reveal them), bank details, passwords and other credentials. A unit test
@@ -211,7 +214,7 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 
 | Tool | What it does | Permission |
 |---|---|---|
-| `open_record` | Opens a project (optionally on `requirements`, `timeline` or `meetings`), a client or a person | The record's own GET endpoint. The record is read first through its service, so an id the user can't see is `not_found` and nothing opens. A tab the user can't open falls back to the overview, and Proton says so. |
+| `open_record` | Opens a project (optionally on a tab: `requirements`, `meetings`, and on Design projects `financials`, `overview`, `analytics`, `contributors` or `timeline`), a client or a person | The record's own GET endpoint. The record is read first through its service, so an id the user can't see is `not_found` and nothing opens. Tabs follow the project page's own rules: `financials` needs `financial:view`, `analytics` and `contributors` everyone's work (`work_entry:view_all`), and a Design project's `overview` is someone's own work (employees, or people who see neither money nor everyone's work). A tab the user can't open falls back to their first tab, and Proton says so. |
 | `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses | Each page needs its endpoint's permission, e.g. financials needs `financial:view`. Settings, salaries and pay are not on the list. |
 | `offer_choices` | Shows 2–6 matches as buttons when a name is ambiguous, or 2–6 fixed answers to Proton's question (`replies`: a period, `design` / `execution`, `yes` / `no`) | Only records a tool returned in the conversation, and only businesses the user can see; labels come from the records or the app, not from the model. No yes/no while a card is pending |
 | `suggest_replies` | Offers up to 3 short next things the user might say (60 characters each, one line) | None while a card is pending; a tap sends only its place in the list |
@@ -360,9 +363,9 @@ submits or sends anything itself.
 
 ## Conversations and follow-ups
 
-- Kept **in server memory** (`ProtonConversationStore`), keyed by user and conversation id: nobody else can continue
-  someone's conversation. They end after 30 idle minutes, after 4 hours, or on restart (`404
-  proton_conversation_ended`; the client starts a new one and says so). The client never sends history back.
+- Held **in server memory** (`ProtonConversationStore`), keyed by user and conversation id: nobody else can continue
+  someone's conversation. The server lets one go after 30 idle minutes, after 4 hours, or on restart; a saved chat
+  then carries on from a recap (see "Saved chats"). The client never sends history back.
 - **Rollover.** At 20 questions, or once the last model request passed `MaxConversationInputTokens`, the chat carries
   on under the same id instead of ending: the messages are dropped, and the next question gets a recap written by the
   app from the last three questions and answers (400 characters each). The focus, the known records, offered options
@@ -373,6 +376,57 @@ submits or sends anything itself.
   "it", "they" and "the month before" resolve reliably.
 - If the user's role, permissions or domains change, the conversation is closed with no recap (answers given under
   the old access must not carry over).
+
+## Saved chats
+
+Every answered question is saved, as the user saw it, in `proton_conversations` and `proton_conversation_messages`
+(`ProtonHistoryService`, `ProtonHistoryRepository`): the question as typed, said or tapped (a button is saved as its
+label, not the text the app wrote for the model), the answer with its links, sources, cards and charts. Only the owner
+reaches a chat (`GET/PATCH/DELETE /api/proton/conversations[/{id}]`; anyone else gets 404).
+
+- **The page.** `/{area}/assistant/{chatId?}` lists the chats, opens one, renames and deletes it; the panel's menu has
+  "Go to chat" for the chat in hand. The panel stays available on every page.
+- **Carrying on.** Asking in a saved chat the server no longer holds restores it under the same id from its last
+  three questions and answers, as after a rollover; what the tools found then is looked up again.
+- **Access.** A chat keeps a hash of the access it began under and the permissions and domains it was held with. If
+  the owner lost a permission or a domain since, its messages aren't returned (`hidden` says why), since they could
+  show what the owner may no longer see; if their access changed in any way, it can be read but not carried on.
+- **Retention.** A daily job (`ProtonHistoryCleanupJob`) deletes chats untouched for `History:RetentionDays` (90).
+  Deleting a chat, by hand or by the job, also replaces its words in the usage ledger with `[deleted]`; the counts
+  and costs stay.
+
+## Charts, tables and headline figures
+
+Tools that return figures also return **datasets**: the same data as typed tables (`ProtonDataset`: columns with
+their units, rows, the period, notes), built in code from the service's own response. The conversation keeps the last
+12 (`d1`, `d2`…); the model is told each one's id, title, columns, period, notes and the forms it fits, never its
+values twice. `present_data` shows one under the answer:
+
+| Form | When | |
+|---|---|---|
+| `bar` | ranked categories | at most 30 bars; a missing figure is left out and said, never drawn as 0 |
+| `columns`, `line` | weeks, months or days in order | 3 to 60 points; the last one "so far" while its period runs |
+| `composition` | the parts of one whole | 2 to 8 parts, all of them, none below zero (instead of a pie) |
+| `kpis` | a few headline figures | at most 6; with the previous period and the change, worked out in code |
+| `table` | anything to scan | 100 rows and 8 columns at most |
+
+`ProtonPresentationRules` decides: a chart never mixes units, a trend needs points in time, a composition needs every
+part, and whatever was left out ("Shows 15 of 40 projects", "The last week isn't over") is said under the block. The
+model picks only the form, the columns, the order, how many and a short title; a form the data can't take is refused
+with the reason and what would fit. Notes from the data (a partial period, unconverted costs, whole-week bars that
+start before the period) travel with the block.
+
+- **Which tools.** Hours by week, project, person and client (`get_time_summary`), compared hours and money
+  (`compare_work`, `compare_money`), the project list, a project's money, projects by status and deadlines, money by
+  month, a person's weeks, months and projects, a project's weeks and people, a client's months and projects' money.
+  Money columns appear only for people who may see money: they come from the same services.
+- **Asked for.** When the user asks for a chart, a graph, a table or a pie in their own words (`ProtonVisualRequest`,
+  English, French and Arabic; ordinary words of the business such as "table", "steel bars" or "plot area" don't
+  count), an answer without one sends the model back once to show it or say why the data can't take that form.
+- **Limits.** `Visuals:MaxBlocksPerAnswer` (3), 64 KB a block, data at most `Visuals:DatasetMinutes` (15) old.
+- **Client.** The panel shows a block small; a click opens it in full with its figures as a table. The assistant page
+  shows blocks in full with a Chart / Table switch. Blocks are checked against a schema before drawing and saved with
+  the chat. In a voice session the speaker is told a chart is on screen instead of reading it out.
 
 ## What Proton remembers (Stage 5, Phase 10)
 
@@ -576,7 +630,8 @@ on. It replaces the top-bar button. It is mounted once, in `LiveRoute`, never on
 Markdown files in `Proton/Prompts/` (`persona.md` who Proton is and how it sounds, `proton.md` the company and the
 grounding rules, `data.md` what it may see and that people's text is data, `analysis.md` how to present comparisons,
 judgements, "why" answers and anything about people, `navigation.md` how it moves around the app and offers buttons,
-`actions.md` how to propose changes and that only the card confirms them, `chat.md` how to answer in chat), embedded
+`actions.md` how to propose changes and that only the card confirms them, `messages.md` messages sent as the user,
+`present.md` when to show a chart or a table, `chat.md` how to answer in chat), embedded
 in the assembly. `{product}` is replaced with the product name. The prompt version recorded with each question is a
 hash of their text. The system prompt is the same for everyone, so it is cached by the provider;
 per-question facts go in the context note.
@@ -639,6 +694,8 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 | `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
 | `Prices` | Sonnet 5.5 list prices | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion` |
 
+| `History` | 90 days, cleanup on | `RetentionDays`, `CleanupEnabled` (off in tests) |
+| `Visuals` | on, 3 a reply, 15 minutes | `Enabled` (off: `present_data` stays listed but refuses), `MaxBlocksPerAnswer`, `DatasetMinutes` |
 | `Voice` | off | `Enabled`, `ApiKey` (an OpenAI project key: user secrets locally, `Proton__Voice__ApiKey` / `PROTON_VOICE_API_KEY` in production; required when enabled), `Model` (`gpt-live-1`), `Voice` (`marin`), `BaseUrl` (`https://api.openai.com/v1/`), `PricePerMinuteUsd` (0.05), `MaxSessionMinutes` (10), `CloseWaitSeconds` (15) |
 
 `RateLimiting:ProtonPermitsPerMinute` (default 10) limits questions per person per minute.
@@ -708,9 +765,9 @@ answer text never go to the logs.
   super admin's summary covers both domains and the company; attention ranks each project once with its facts;
   change counts leave pay out; the activity date filter; the heavy-analysis limit; the conversation-size limit; and the
   comparison carried into a follow-up.
-- Real model, opt-in (`ProtonEvalTests`): 21 golden questions against a seeded company, checked in code (tools used,
+- Real model, opt-in (`ProtonEvalTests`): 42 golden questions against a seeded company, checked in code (tools used,
   every quoted number found in a tool result, size words only after a rule fired, "why" answers say what the data
-  can't establish, nothing judges a person, no money for a user without `financial:view`). Runs only with
+  can't establish, nothing judges a person, no money for a user without `financial:view`, charts and tables in the form asked for). Runs only with
   `PROTON_EVAL_API_KEY` set (optional `PROTON_EVAL_MODEL`), costs about 2–4 USD, never in CI; the answers are written
   to the test output for review. Run it before enabling Proton and after prompt changes:
   `PROTON_EVAL_API_KEY=... dotnet test ID-Indetails.IntegrationTests --filter ProtonEvalTests --logger "console;verbosity=detailed"`.
@@ -719,5 +776,13 @@ answer text never go to the logs.
   permission and from the fixed list; post-confirm navigation only after success and when the card said so; page
   context naming a record only if visible; choices only from found records, a pick checked and usable once. The
   real-model evaluation includes navigation cases.
+- Saved chats (`ProtonHistoryRulesTests`, `ProtonHistoryTests`): titles, the access hash, lost access; each answer
+  saved as the user saw it, only the owner reaches a chat, carrying on after the server let it go, hidden after lost
+  access, deleting removes its words from the usage ledger.
+- Charts and tables (`ProtonPresentationTests`, `ProtonPresentTests`): every form's rules and refusals, missing values,
+  notes, titles, monthly hours, request detection in three languages with the business's own words as negatives;
+  end to end, a block built from the tool's figures (matching the report), refused forms, a dataset staying in its
+  chat, the one-time reminder when a table was asked for, money columns only for people who may see money, money by
+  month matching Financials, and blocks saved with the chat.
 - Not automated: prompt injection and refusals with the real model. Try the question catalogue in the Stage 1 plan by
   hand too.

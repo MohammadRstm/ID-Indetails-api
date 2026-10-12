@@ -97,6 +97,31 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
     /// </summary>
     public string? Recap { get; private set; }
 
+    /// <summary>Datasets a conversation keeps: enough for the last few answers' charts and tables to be shown again.</summary>
+    public const int MaxDatasets = 12;
+
+    private readonly List<Ui.ProtonHeldDataset> _datasets = [];
+
+    /// <summary>
+    /// The datasets tools returned in this chat, newest last: present_data can show any of them in another form, from
+    /// the same values. Kept through a rollover (they are values, not messages); a carried-on chat starts without.
+    /// </summary>
+    public IReadOnlyList<Ui.ProtonHeldDataset> Datasets => _datasets;
+
+    /// <summary>The number the next dataset's id takes, so ids are never reused in a chat.</summary>
+    public int NextDataset { get; private set; } = 1;
+
+    public void Keep(IEnumerable<Ui.ProtonHeldDataset> datasets, int next)
+    {
+        _datasets.AddRange(datasets);
+        if (_datasets.Count > MaxDatasets)
+        {
+            _datasets.RemoveRange(0, _datasets.Count - MaxDatasets);
+        }
+
+        NextDataset = Math.Max(NextDataset, next);
+    }
+
     /// <summary>The last few questions and answers, shortened: what a recap or a new voice session starts from.</summary>
     public IReadOnlyList<(string Question, string Answer)> Exchanges => [.. _exchanges];
 
@@ -123,6 +148,20 @@ public sealed class ProtonConversation(Guid id, long userId, string accessFinger
         LastInputTokens = 0;
         Recap = _exchanges.Count == 0 ? null : "Earlier in this chat (a recap by the app; the earlier messages are no longer available): "
             + string.Join(" ", _exchanges.Select(e => $"The user asked: \"{e.Question}\" You answered: \"{e.Answer}\""));
+    }
+
+    /// <summary>
+    /// Carries on a saved chat the server no longer held: its last questions and answers become the recap, as after a
+    /// rollover. Anything the tools found then is gone, so the model looks it up again.
+    /// </summary>
+    public void Resume(IEnumerable<(string Question, string Answer)> exchanges)
+    {
+        foreach (var (question, answer) in exchanges)
+        {
+            RememberExchange(question, answer);
+        }
+
+        RollOver();
     }
 
     private readonly Queue<string> _actionNotes = new();

@@ -180,8 +180,14 @@ public sealed class ReviewProjectTool(ProtonAnalysisService analysis, IProjectSe
                 allTime is { Revenue: > 0 } ? Business.Finance.MoneyAttention.UsedPct(allTime.Revenue, allTime.Cost) : null);
             if (await context.CanCallAsync(ProtonAnalysisService.MoneyAttention))
             {
-                signals.AddRange(ProtonAnalysisService.MoneySignals(
-                    (await analysis.MoneyAttentionAsync(project.Domain, cancellationToken)).Where(i => i.ProjectId == project.Id), project.Domain));
+                var followUps = await analysis.MoneyAttentionAsync(project.Domain, cancellationToken);
+                var mine = followUps.Where(i => i.ProjectId == project.Id).ToList();
+                signals.AddRange(ProtonAnalysisService.MoneySignals(mine, project.Domain));
+                if (mine.Count == 0 && followUps.Count >= Business.Finance.MoneyAttention.MaxItems)
+                {
+                    // the domain's list was full: this project may have a follow-up that didn't make the cut
+                    omitted.Add(ProtonAnalysisService.MoneyCapped(project.Domain));
+                }
             }
 
             rules.Add(ProtonSignals.NotableMoneyRule(t));
@@ -276,6 +282,10 @@ public sealed class GetCompanySummaryTool(
     IOverheadService overhead) : ProtonTool<CompanySummaryInput>
 {
     private const int AttentionItems = 5;
+
+    /// <summary>Said when the company's overhead is left out, so a summary without it isn't read as complete.</summary>
+    public const string NoOverhead = "Company overhead isn't included: it needs the company or overhead permission.";
+
     private static readonly ProtonEndpoint Activity = ProtonEndpoint.Of<ActivityController>(nameof(ActivityController.List));
     private static readonly ProtonEndpoint Overhead = ProtonEndpoint.Of<OverheadController>(nameof(OverheadController.Monthly));
 
@@ -392,6 +402,10 @@ public sealed class GetCompanySummaryTool(
         if (await context.CanCallAsync(Overhead))
         {
             company = new CompanyBlock((await overhead.MonthlyAsync(2, cancellationToken)).Select(m => new OverheadMonth(m.Month, m.Totals)).ToList());
+        }
+        else
+        {
+            omitted.Add(NoOverhead);
         }
 
         var scan = await analysis.SignalsAsync(context, null, cancellationToken);

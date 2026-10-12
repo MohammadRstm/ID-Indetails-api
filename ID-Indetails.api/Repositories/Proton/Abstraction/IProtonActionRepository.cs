@@ -38,6 +38,9 @@ public interface IProtonActionRepository
     /// <summary>The user's own proposals, newest first: what Proton proposed and what became of each.</summary>
     Task<IReadOnlyList<ProtonAction>> MineAsync(long userId, int take, CancellationToken cancellationToken = default);
 
+    /// <summary>The person's proposals in one of their conversations, oldest first.</summary>
+    Task<IReadOnlyList<ProtonAction>> InConversationAsync(long userId, Guid conversationId, CancellationToken cancellationToken = default);
+
     /// <summary>Everyone's proposals, newest first, with who proposed them: for those who manage Proton.</summary>
     Task<IReadOnlyList<(ProtonAction Action, string Who)>> AllAsync(int take, CancellationToken cancellationToken = default);
 

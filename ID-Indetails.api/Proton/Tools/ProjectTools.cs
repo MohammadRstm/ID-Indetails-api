@@ -8,8 +8,10 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Execution.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Requirements.Abstraction;
@@ -123,7 +125,72 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
         var shown = rows.Take(limit).Select(p => Row(p, context.Today)).ToList();
         return new ProtonToolOutput(
             new ProjectList(total, shown.Count, shown),
-            shown.Select(p => new ProtonRef(ProtonRefType.Project, p.Id, p.Title, p.Domain)).ToList());
+            shown.Select(p => new ProtonRef(ProtonRefType.Project, p.Id, p.Title, p.Domain)).ToList())
+        {
+            Datasets = ProtonDatasets.WithRows(Dataset(rows.Take(ProtonDatasets.MaxRows).Select(p => Row(p, context.Today)).ToList(), total)),
+        };
+    }
+
+    /// <summary>The list as a table: hours and money columns only when the rows carry them (the user may see them).</summary>
+    private static ProtonDataset Dataset(IReadOnlyList<ProjectRow> rows, int total)
+    {
+        var work = rows.Any(r => r.Work is not null);
+        var money = rows.Any(r => r.Money is not null);
+        var overdue = rows.Any(r => r.Overdue);
+        var columns = new List<ProtonColumn>
+        {
+            ProtonDatasets.Label("project", "Project"), ProtonDatasets.Label("status", "Status", ProtonColumnKind.Status),
+            ProtonDatasets.Label("client", "Client"), ProtonDatasets.Label("owner", "Owner"),
+            ProtonDatasets.Label("target", "Target date", ProtonColumnKind.Date), ProtonDatasets.Figure("progress", "Progress", ProtonUnit.Percent),
+        };
+        if (overdue)
+        {
+            columns.Add(ProtonDatasets.Figure("days_overdue", "Days overdue", ProtonUnit.Days));
+        }
+
+        if (work)
+        {
+            columns.Add(ProtonDatasets.Figure("hours", "Hours", ProtonUnit.Hours));
+            columns.Add(ProtonDatasets.Figure("hours_14_days", "Hours, last 14 days", ProtonUnit.Hours));
+        }
+
+        if (money)
+        {
+            columns.Add(ProtonDatasets.Figure("revenue", "Revenue", ProtonUnit.Usd));
+            columns.Add(ProtonDatasets.Figure("cost", "Cost", ProtonUnit.Usd));
+            columns.Add(ProtonDatasets.Figure("profit", "Profit", ProtonUnit.Usd));
+        }
+
+        var data = rows.Select(r =>
+        {
+            var cells = new List<ProtonCell>
+            {
+                ProtonCell.Of(r.Title), ProtonDatasets.Status(r.Status), ProtonCell.Of(r.Client), ProtonCell.Of(r.Owner), ProtonCell.Of(r.TargetDate),
+                ProtonCell.Of(r.ProgressPct),
+            };
+            if (overdue)
+            {
+                cells.Add(ProtonCell.Of(r.DaysOverdue));
+            }
+
+            if (work)
+            {
+                cells.Add(ProtonCell.Of(r.Work?.Hours));
+                cells.Add(ProtonCell.Of(r.Work?.HoursLast14Days));
+            }
+
+            if (money)
+            {
+                cells.Add(ProtonCell.Of(r.Money?.Revenue));
+                cells.Add(ProtonCell.Of(r.Money?.Cost));
+                cells.Add(ProtonCell.Of(r.Money?.Profit));
+            }
+
+            return new ProtonDataRow(cells, new ProtonRef(ProtonRefType.Project, r.Id, r.Title, r.Domain));
+        }).ToList();
+        return new ProtonDataset(
+            "Projects", columns, data, TotalRows: total,
+            Notes: rows.Any(r => r.Money?.HasUnconverted == true) ? ["Some projects have costs in another currency with no exchange rate on their day: they're left out."] : null);
     }
 
     /// <summary>Overdue projects are active or on hold, so only those two statuses are read, a few pages at most.</summary>
@@ -340,8 +407,37 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
         return new ProtonToolOutput(
             team,
             [projectRef, .. people.Select(p => new ProtonRef(ProtonRefType.Person, p.Id, p.Name))],
-            range);
+            range)
+        {
+            Datasets = TeamDatasets(project.Title, work, people, range, context.Today),
+        };
     }
+
+    /// <summary>The project's hours as tables: by week over its life (whatever the period asked), and by person.</summary>
+    private static IReadOnlyList<ProtonDataset> TeamDatasets(
+        string title, ProjectWorkResponse work, IReadOnlyList<TeamMember> people, DayRange? range, DateOnly today)
+    {
+        var weeks = work.Weekly.Select(w => (w.WeekStart, ProtonText.Hours(w.Minutes), w.Entries)).ToList();
+        var weekly = weeks.Count == 0 ? null : ProtonDatasets.Weeks($"{title}: hours by week", weeks, weeks[0].WeekStart, Min(weeks[^1].WeekStart.AddDays(6), today), today);
+        if (weekly is not null && range is not null)
+        {
+            weekly = weekly with { Notes = [.. weekly.Notes ?? [], "The project's work week by week, not only in the period asked about."] };
+        }
+
+        var byPerson = new ProtonDataset(
+            $"{title}: hours by person",
+            [ProtonDatasets.Label("person", "Person"), ProtonDatasets.Figure("hours", "Hours", ProtonUnit.Hours),
+                ProtonDatasets.Figure("overtime", "Overtime hours", ProtonUnit.Hours), ProtonDatasets.Figure("entries", "Entries", ProtonUnit.Count)],
+            people.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Person, p.Id, p.Name),
+                ProtonCell.Of(p.Name), ProtonCell.Of(p.Hours), ProtonCell.Of(p.OvertimeHours), ProtonCell.Of(p.Entries))).ToList(),
+            range is null ? "All time" : ProtonDatasets.Period(range),
+            people.Count,
+            PartsOfWhole: true);
+        return ProtonDatasets.WithRows(weekly, byPerson);
+    }
+
+    private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 }
 
 public sealed record ProjectFinancials(
@@ -391,18 +487,55 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
                 m.Projected, ProtonText.Hours(m.LabourHours), m.CashProfit, m.MaterialProfit,
                 "All-time figures in USD. Margin is empty until it means something (project done, 5% progress or 10 hours logged). " +
                 "Costs without an exchange rate for their day are listed as unconverted, not counted."),
-            new ProtonRef(ProtonRefType.Project, p.Id, p.Title, p.Domain));
+            new ProtonRef(ProtonRefType.Project, p.Id, p.Title, p.Domain)) with { Datasets = Datasets(p.Title, m) };
+    }
+
+    /// <summary>The project's money as tables: its headline figures, and its cost by source (which adds up to its cost).</summary>
+    private static IReadOnlyList<ProtonDataset> Datasets(string title, ProjectMoneyResponse m)
+    {
+        var usd = (string key, string label) => ProtonDatasets.Figure(key, label, ProtonUnit.Usd);
+        var notes = new List<string> { "All time." };
+        if (m.Cost.Unconverted.Count > 0)
+        {
+            notes.Add($"Left out of these USD figures for want of an exchange rate on their day: {string.Join(", ", ProtonAnalysis.Unconverted(m.Cost.Unconverted))}.");
+        }
+
+        if (m.Cost.UnpricedLabourMinutes > 0)
+        {
+            notes.Add($"{ProtonText.Hours(m.Cost.UnpricedLabourMinutes)} hours of people with no pay record aren't in the labour cost.");
+        }
+
+        var headline = new ProtonDataset(
+            $"{title}: money",
+            [ProtonDatasets.Label("project", "Project"), usd("revenue", "Revenue"), usd("received", "Received"), usd("outstanding", "Outstanding"),
+                usd("cost", "Cost"), usd("profit", "Profit"), ProtonDatasets.Figure("margin", "Margin", ProtonUnit.Percent)],
+            [ProtonDatasets.Row(null, ProtonCell.Of(title), ProtonCell.Of(m.Revenue), ProtonCell.Of(m.Billing.Received), ProtonCell.Of(m.Billing.Outstanding),
+                ProtonCell.Of(m.Cost.Total), ProtonCell.Of(m.Profit), ProtonCell.Of(ProtonAnalysis.Pct(m.Margin)))],
+            Notes: notes);
+        var bySource = new ProtonDataset(
+            $"{title}: cost by source",
+            [ProtonDatasets.Label("source", "Source"), usd("cost", "Cost")],
+            [
+                ProtonDatasets.Row(null, ProtonCell.Of("Labour"), ProtonCell.Of(m.Cost.Labour)),
+                ProtonDatasets.Row(null, ProtonCell.Of("Expenses"), ProtonCell.Of(m.Cost.Expenses)),
+                ProtonDatasets.Row(null, ProtonCell.Of("Materials"), ProtonCell.Of(m.Cost.Materials)),
+                ProtonDatasets.Row(null, ProtonCell.Of("Ground labour"), ProtonCell.Of(m.Cost.GroundLabour)),
+            ],
+            PartsOfWhole: true,
+            Notes: notes);
+        return [headline, bySource];
     }
 }
 
+/// <param name="MaterialCost">Null when the user may not see money; the counts are still given.</param>
 public sealed record SiteSummary(
-    long ProjectId, string Title, int MaterialCount, decimal MaterialCost, int ReportedLabourWeeks, decimal GroundLabourCost, string Currency);
+    long ProjectId, string Title, int MaterialCount, decimal? MaterialCost, int ReportedLabourWeeks, decimal? GroundLabourCost, string? Currency, string? Note);
 
 public sealed class GetSiteSummaryTool(IProjectService projects, ISiteRecordsService siteRecords) : ProtonTool<ProjectIdInput>
 {
     public override string Name => "get_site_summary";
 
-    public override string Description => "An Execution site's recorded materials and ground labour, in USD.";
+    public override string Description => "An Execution site's recorded materials and ground labour: counts, and their cost in USD for those who may see money.";
 
     public override string? OnlyInDomain => DomainCodes.Execution;
 
@@ -421,7 +554,9 @@ public sealed class GetSiteSummaryTool(IProjectService projects, ISiteRecordsSer
         var summary = (await siteRecords.SummariesAsync(query, cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("Site not found.");
         return ProtonToolOutput.Of(
-            new SiteSummary(project.Id, project.Title, summary.MaterialCount, summary.MaterialCost, summary.ReportedWeeks, summary.GroundLabour, "USD"),
+            new SiteSummary(project.Id, project.Title, summary.MaterialCount, summary.MaterialCost, summary.ReportedWeeks, summary.GroundLabour,
+                summary.MaterialCost is null ? null : "USD",
+                summary.MaterialCost is null ? "The costs aren't shown: they need the financial permission." : null),
             new ProtonRef(ProtonRefType.Project, project.Id, project.Title, project.Domain));
     }
 }

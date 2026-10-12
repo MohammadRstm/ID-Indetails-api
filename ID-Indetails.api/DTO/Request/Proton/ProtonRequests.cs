@@ -96,3 +96,18 @@ public sealed record DecideProtonActionRequest
     /// <summary>For a card that asks for it: the phrase the user typed. Checked against the one stored with the proposal.</summary>
     public string? Typed { get; init; }
 }
+
+/// <summary>The person's saved chats, a page at a time, optionally by title.</summary>
+public sealed record ProtonConversationListQuery
+{
+    public string? Search { get; init; }
+
+    public int Page { get; init; } = 1;
+
+    public int PageSize { get; init; } = 20;
+}
+
+public sealed record RenameProtonConversationRequest
+{
+    public string Title { get; init; } = string.Empty;
+}

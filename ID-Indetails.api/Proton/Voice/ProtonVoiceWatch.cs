@@ -196,8 +196,12 @@ public sealed class ProtonVoiceWatch(
 
     private decimal CostOf(int seconds) => Math.Round(seconds * Voice.PricePerMinuteUsd / 60m, 6);
 
+    /// <summary>The usage's seconds, whatever kind of number the event carries them as.</summary>
     private static int SecondsOf(JsonObject message)
-        => message["usage"]?["seconds"] is JsonValue value && value.TryGetValue(out double seconds) ? (int)Math.Ceiling(seconds) : 0;
+        => message["usage"]?["seconds"] is JsonValue value
+           && double.TryParse(value.ToJsonString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
+            ? (int)Math.Ceiling(seconds)
+            : 0;
 
     private sealed class Tally
     {

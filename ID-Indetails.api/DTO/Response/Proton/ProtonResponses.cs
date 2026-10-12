@@ -12,6 +12,7 @@ namespace ID_Indetails.api.DTO.Response.Proton;
 /// <param name="QuickReplies">Answers to Proton's question as buttons, in the app's words; a click is checked against these.</param>
 /// <param name="Suggestions">Replies the user might send next, as buttons; a tap sends only its place in this list.</param>
 /// <param name="RolledOver">The chat had grown too long, so Proton carried on from a short recap of it.</param>
+/// <param name="Blocks">Charts, tables and headline figures shown under the answer, built by the server from the tools' data.</param>
 public sealed record ProtonReplyResponse(
     Guid ConversationId,
     string Reply,
@@ -24,6 +25,7 @@ public sealed record ProtonReplyResponse(
     IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonQuickReplyOption> QuickReplies,
     IReadOnlyList<string> Suggestions,
     IReadOnlyList<ID_Indetails.api.Proton.Actions.ProtonPendingAction> PendingActions,
+    IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonBlock> Blocks,
     ID_Indetails.api.Proton.Actions.ProtonPendingAction? PendingAction = null,
     bool RolledOver = false);
 
@@ -129,3 +131,39 @@ public sealed record ProtonActionSummaryResponse(
     long? ResultId,
     string? ErrorMessage,
     string? Who);
+
+/// <summary>One of the person's saved chats, in their list.</summary>
+public sealed record ProtonConversationSummaryResponse(Guid Id, string Title, DateTime CreatedAt, DateTime UpdatedAt, int MessageCount);
+
+/// <summary>
+/// A saved chat, as its owner saw it. <paramref name="Hidden"/> says why its messages aren't given: the owner no longer
+/// has some of the access they had then, so it could show what they may no longer see.
+/// </summary>
+/// <param name="CanContinue">Questions can still be asked in it: the owner's access is the same as when it began.</param>
+public sealed record ProtonConversationResponse(
+    Guid Id,
+    string Title,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    bool CanContinue,
+    string? Hidden,
+    IReadOnlyList<ProtonStoredMessageResponse> Messages);
+
+/// <param name="Cards">The changes proposed with an answer, and what became of them.</param>
+/// <param name="Blocks">The charts and tables shown with an answer, as they were shown.</param>
+public sealed record ProtonStoredMessageResponse(
+    int Seq,
+    ID_Indetails.api.Enums.ProtonMessageRole Role,
+    ID_Indetails.api.Enums.ProtonMessageOrigin? Origin,
+    string Text,
+    IReadOnlyList<ProtonRef> Refs,
+    IReadOnlyList<ProtonSourceResponse> Sources,
+    IReadOnlyList<ProtonStoredCardResponse> Cards,
+    IReadOnlyList<ID_Indetails.api.Proton.Ui.ProtonBlock> Blocks,
+    DateTime CreatedAt);
+
+/// <param name="Message">What the change came to, when it failed.</param>
+public sealed record ProtonStoredCardResponse(
+    ID_Indetails.api.Proton.Actions.ProtonPendingAction Card,
+    ID_Indetails.api.Enums.ProtonActionStatus Status,
+    string? Message);

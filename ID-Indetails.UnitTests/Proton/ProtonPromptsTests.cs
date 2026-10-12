@@ -24,4 +24,13 @@ public class ProtonPromptsTests
         chat.ShouldNotContain(ProtonPrompts.ProductToken);
         chat.ShouldContain("You are Proton, the AI assistant inside ID InDetails");
     }
+
+    /// <summary>Charts and tables come from present_data, built from the data; never drawn in text or invented.</summary>
+    [Fact]
+    public void The_chat_prompt_shows_figures_only_through_present_data()
+    {
+        ProtonPrompts.Chat.ShouldContain("`present_data`");
+        ProtonPrompts.Chat.ShouldContain("show the closest form that fits");
+        ProtonPrompts.Chat.ShouldContain("never a table drawn in");
+    }
 }

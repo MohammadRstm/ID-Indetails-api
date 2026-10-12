@@ -7,7 +7,9 @@ using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Memory;
 using ID_Indetails.api.Proton.Usage;
+using ID_Indetails.api.Proton.History;
 using ID_Indetails.api.Proton.Voice;
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -28,6 +30,7 @@ public sealed class ProtonController(
     ProtonBriefingService briefing,
     ProtonMemoryService memories,
     ProtonVoiceService voice,
+    ProtonHistoryService history,
     ICurrentUser currentUser) : ControllerBase
 {
     [HttpPost("messages")]
@@ -114,11 +117,30 @@ public sealed class ProtonController(
         return NoContent();
     }
 
+    /// <summary>The caller's saved chats, most recently used first.</summary>
+    [HttpGet("conversations")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    public Task<PagedResponse<ProtonConversationSummaryResponse>> Conversations([FromQuery] ProtonConversationListQuery query, CancellationToken cancellationToken)
+        => history.ListAsync(currentUser.Id, query, cancellationToken);
+
+    /// <summary>One of the caller's saved chats, as they saw it; anyone else's is not found.</summary>
+    [HttpGet("conversations/{conversationId:guid}")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    public Task<ProtonConversationResponse> Conversation(Guid conversationId, CancellationToken cancellationToken)
+        => history.GetAsync(currentUser.Id, conversationId, cancellationToken);
+
+    [HttpPatch("conversations/{conversationId:guid}")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    public Task<ProtonConversationSummaryResponse> RenameConversation(
+        Guid conversationId, RenameProtonConversationRequest request, CancellationToken cancellationToken)
+        => history.RenameAsync(currentUser.Id, conversationId, request, cancellationToken);
+
+    /// <summary>Deletes one of the caller's chats, saved and held, and its words in the usage ledger. Fine if it's already gone.</summary>
     [HttpDelete("conversations/{conversationId:guid}")]
     [HasPermission(PermissionCodes.ProtonUse)]
-    public IActionResult EndConversation(Guid conversationId)
+    public async Task<IActionResult> DeleteConversation(Guid conversationId, CancellationToken cancellationToken)
     {
-        agent.Forget(currentUser.Id, conversationId);
+        await history.DeleteAsync(currentUser.Id, conversationId, cancellationToken);
         return NoContent();
     }
 

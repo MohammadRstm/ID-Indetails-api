@@ -3056,6 +3056,145 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("proton_memories", (string)null);
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonStoredConversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AccessDomains")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("access_domains");
+
+                    b.Property<string>("AccessFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasColumnName("access_fingerprint");
+
+                    b.Property<string>("AccessPermissions")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("access_permissions");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("MessageCount")
+                        .HasColumnType("int")
+                        .HasColumnName("message_count");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("varchar(120)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proton_conversations");
+
+                    b.HasIndex("UpdatedAt")
+                        .HasDatabaseName("ix_proton_conversations_updated_at");
+
+                    b.HasIndex("UserId", "UpdatedAt")
+                        .HasDatabaseName("ix_proton_conversations_user_id_updated_at");
+
+                    b.ToTable("proton_conversations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_proton_conversations_message_count_non_negative", "`message_count` >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonStoredMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ActionIds")
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("action_ids");
+
+                    b.Property<string>("Blocks")
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("blocks");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Origin")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("origin");
+
+                    b.Property<string>("Refs")
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("refs");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("role");
+
+                    b.Property<int>("Seq")
+                        .HasColumnType("int")
+                        .HasColumnName("seq");
+
+                    b.Property<string>("Sources")
+                        .HasMaxLength(255)
+                        .HasColumnType("json")
+                        .HasColumnName("sources");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("text");
+
+                    b.HasKey("Id")
+                        .HasName("pk_proton_conversation_messages");
+
+                    b.HasIndex("ConversationId", "Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ix_proton_conversation_messages_conversation_id_seq");
+
+                    b.ToTable("proton_conversation_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_proton_conversation_messages_origin", "`origin` IS NULL OR `origin` IN ('typed', 'choice', 'suggestion', 'spoken')");
+
+                            t.HasCheckConstraint("ck_proton_conversation_messages_role", "`role` IN ('user', 'proton')");
+
+                            t.HasCheckConstraint("ck_proton_conversation_messages_seq_positive", "`seq` > 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProtonUsage", b =>
                 {
                     b.Property<long>("Id")
@@ -5414,6 +5553,30 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonStoredConversation", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_proton_conversations_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonStoredMessage", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.ProtonStoredConversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_proton_conversation_messages_proton_conversations_conversati");
+
+                    b.Navigation("Conversation");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProtonUsage", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", "User")
@@ -5820,6 +5983,11 @@ namespace ID_Indetails.api.Data.Migrations
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>
                 {
                     b.Navigation("Assignees");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProtonStoredConversation", b =>
+                {
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Role", b =>

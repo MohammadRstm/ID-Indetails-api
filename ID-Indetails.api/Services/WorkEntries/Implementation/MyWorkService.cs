@@ -35,6 +35,10 @@ public sealed class MyWorkService(
     IClock clock) : IMyWorkService
 {
     public const int SummaryWeeks = 16;
+
+    /// <summary>Days of daily totals in a work summary, ending today: a year.</summary>
+    public const int DailyDays = 365;
+
     public const int RecentOnProject = 12;
     public const int WeeksOnProject = 8;
     public const int TeamActivityOnProject = 6;
@@ -173,7 +177,7 @@ public sealed class MyWorkService(
         var quarterStart = WorkStats.QuarterStartOf(today);
         var lastQuarterStart = quarterStart.AddMonths(-3);
         var elapsedDays = today.DayNumber - quarterStart.DayNumber;
-        var yearAgo = today.AddDays(-364);
+        var yearAgo = today.AddDays(-(DailyDays - 1));
         var (activeDays, longestStreak) = WorkStats.Streaks(worked, yearAgo, today);
         var words = query.Search?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
 

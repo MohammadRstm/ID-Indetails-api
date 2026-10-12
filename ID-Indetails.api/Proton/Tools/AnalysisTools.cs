@@ -7,6 +7,7 @@ using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Proton.Analysis;
+using ID_Indetails.api.Proton.Ui;
 
 namespace ID_Indetails.api.Proton.Tools;
 
@@ -79,6 +80,33 @@ public static class ProtonAnalysis
 
     public static IReadOnlyList<string> Unconverted(IEnumerable<UnconvertedCostResponse> costs)
         => costs.Select(c => $"{c.Amount:0.00} {c.Currency}").ToList();
+
+    /// <summary>
+    /// Compared groups as a table: the figure now, and when compared the figure before and the change. Every group is
+    /// kept (up to a table's worth), so the figures now add up to the total.
+    /// </summary>
+    public static ProtonDataset Groups(
+        string title, string key, string label, ProtonPeriodPair pair, IReadOnlyList<ProtonGroupRow> rows, ProtonUnit unit, string figure,
+        Func<ProtonGroupRow, ProtonRef?> link, IReadOnlyList<string>? notes = null)
+    {
+        var compared = pair.Previous is not null;
+        IReadOnlyList<ProtonColumn> columns = compared
+            ? [ProtonDatasets.Label(key, label), ProtonDatasets.Figure("now", figure, unit), ProtonDatasets.Figure("before", $"{figure} before", unit),
+                ProtonDatasets.Figure("change", "Change", unit)]
+            : [ProtonDatasets.Label(key, label), ProtonDatasets.Figure("now", figure, unit)];
+        return new ProtonDataset(
+            title,
+            columns,
+            rows.Take(ProtonDatasets.MaxRows).Select(r => ProtonDatasets.Row(
+                link(r),
+                compared
+                    ? [ProtonCell.Of(r.Name), ProtonCell.Of(r.Value.Current), ProtonCell.Of(r.Value.Previous), ProtonCell.Of(r.Value.Diff)]
+                    : [ProtonCell.Of(r.Name), ProtonCell.Of(r.Value.Current)])).ToList(),
+            ProtonDatasets.Period(pair.Current),
+            rows.Count,
+            PartsOfWhole: true,
+            Notes: notes);
+    }
 }
 
 /// <param name="SharePct">Its share of the current total.</param>
@@ -210,8 +238,34 @@ public sealed class CompareWorkTool(ProtonAnalysisService analysis) : ProtonTool
         {
             Basis = ProtonAnalysis.Basis(
                 "Hours compared", pair, Scope(input), [ProtonSignals.NotableHoursRule(t), ProtonAnalysisService.HoursAreRecorded], omitted),
+            Datasets = Datasets(pair, now, before, grouping, rows, refType),
         };
     }
+
+    /// <summary>The comparison as tables: the headline figures of both periods, and the hours of each group.</summary>
+    private static IReadOnlyList<ProtonDataset> Datasets(
+        ProtonPeriodPair pair,
+        DTO.Response.Reports.WorkTotalsResponse now,
+        DTO.Response.Reports.WorkTotalsResponse? before,
+        WorkGrouping grouping,
+        IReadOnlyList<ProtonGroupRow> rows,
+        ProtonRefType refType)
+    {
+        var totals = ProtonDatasets.Compared(
+            "Hours compared",
+            pair,
+            [ProtonDatasets.Figure("hours", "Hours", ProtonUnit.Hours), ProtonDatasets.Figure("entries", "Entries", ProtonUnit.Count),
+                ProtonDatasets.Figure("people", "People", ProtonUnit.Count), ProtonDatasets.Figure("projects", "Projects", ProtonUnit.Count)],
+            Figures(now),
+            before is null ? null : Figures(before));
+        var groups = grouping == WorkGrouping.Total ? null : ProtonAnalysis.Groups(
+            $"Hours by {grouping.ToString().ToLowerInvariant()}", grouping.ToString().ToLowerInvariant(), grouping.ToString(), pair, rows, ProtonUnit.Hours, "Hours",
+            r => r.Id is { } id ? new ProtonRef(refType, id, r.Name, refType == ProtonRefType.Project ? DomainCodes.Design : null) : null);
+        return ProtonDatasets.WithRows(totals, groups);
+    }
+
+    private static IReadOnlyList<decimal?> Figures(DTO.Response.Reports.WorkTotalsResponse w)
+        => [ProtonText.Hours(w.TotalMinutes), w.EntryCount, w.ByPerson.Count, w.ByProject.Count];
 
     private async Task<DTO.Response.Reports.WorkTotalsResponse> TotalsAsync(
         CompareWorkInput input, DayRange range, ProtonToolContext context, CancellationToken cancellationToken)
@@ -269,7 +323,8 @@ public enum MoneySort
 
 public sealed record CompareMoneyInput
 {
-    public ProtonDomain Domain { get; init; }
+    [Description("design or execution. May be left out only when the user sees one of them.")]
+    public ProtonDomain? Domain { get; init; }
 
     [Description("Default this_month.")]
     public ProtonPeriod? Period { get; init; }
@@ -340,7 +395,7 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
         var pair = context.Compare(input.Period, input.From, input.To, ProtonPeriod.ThisMonth, input.CompareWith, input.CompareFrom, input.CompareTo);
         var limit = ProtonText.Limit(input.Limit, 10, 15);
         var t = analysis.Thresholds;
-        var domain = input.Domain.Code();
+        var domain = context.DomainOf(input.Domain);
         var ranges = pair.Previous is { } previous ? new[] { pair.Current, previous } : [pair.Current];
         var money = await analysis.MoneyAsync(domain, ranges, cancellationToken);
         var now = money.Totals[0];
@@ -354,6 +409,7 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
             ? ProtonAnalysis.Rows(SourcesOf(now.Cost), before is null ? null : SourcesOf(before.Cost), t.NotableUsd, t)
             : null;
 
+        IReadOnlyList<MoneyProjectRow>? ranked = null;
         IReadOnlyList<MoneyProjectRow>? projects = null;
         IReadOnlyList<ProtonGroupRow>? increases = null;
         var withMoney = money.Projects.Where(p => p.Periods.Any(m => m.Received != 0 || m.Cost.Total != 0)).ToList();
@@ -377,7 +433,8 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
                 MoneySort.CostChange => rows.OrderByDescending(r => Math.Abs(r.Cost.Diff ?? 0)),
                 _ => rows.OrderByDescending(r => r.Cost.Current),
             };
-            projects = sorted.ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase).Take(limit).ToList();
+            ranked = sorted.ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase).ToList();
+            projects = ranked.Take(limit).ToList();
             if (before is not null)
             {
                 increases = ProtonAnalysis.Increases(
@@ -420,8 +477,43 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
                     "received: payments on the day they arrived; cost: every cost dated in the period, in USD at the rate of its day",
                 ],
                 comparison.Unconverted.Count > 0 ? ["costs with no exchange rate on their day are listed apart, not in the totals"] : []),
+            Datasets = Datasets(pair, money, bySource, ranked, domain),
         };
     }
+
+    /// <summary>The comparison as tables, all in USD: the headline figures of both periods, cost by source, and each project's money.</summary>
+    private static IReadOnlyList<ProtonDataset> Datasets(
+        ProtonPeriodPair pair, FinanceProjectPeriodsResponse money, IReadOnlyList<ProtonGroupRow>? bySource, IReadOnlyList<MoneyProjectRow>? projects, string domain)
+    {
+        var now = money.Totals[0];
+        var before = money.Totals.Count > 1 ? money.Totals[1] : null;
+        IReadOnlyList<string> unconverted = now.Unconverted.Count > 0
+            ? [$"Left out of these USD figures for want of an exchange rate on their day: {string.Join(", ", ProtonAnalysis.Unconverted(now.Unconverted))}."]
+            : [];
+        var usd = (string key, string label) => ProtonDatasets.Figure(key, label, ProtonUnit.Usd);
+        var totals = ProtonDatasets.Compared(
+            "Money compared",
+            pair,
+            [usd("received", "Received"), usd("expected_revenue", "Expected revenue"), usd("cost", "Cost"), usd("profit", "Profit"),
+                ProtonDatasets.Figure("margin", "Margin", ProtonUnit.Percent)],
+            Figures(now),
+            before is null ? null : Figures(before),
+            unconverted);
+        var sources = bySource is null ? null : ProtonAnalysis.Groups("Cost by source", "source", "Source", pair, bySource, ProtonUnit.Usd, "Cost", _ => null, unconverted);
+        var perProject = projects is null ? null : new ProtonDataset(
+            "Money by project",
+            [ProtonDatasets.Label("project", "Project"), usd("received", "Received"), usd("cost", "Cost"), usd("profit", "Profit")],
+            projects.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, domain),
+                ProtonCell.Of(p.Title), ProtonCell.Of(p.Received.Current), ProtonCell.Of(p.Cost.Current), ProtonCell.Of(p.Profit.Current))).ToList(),
+            ProtonDatasets.Period(pair.Current),
+            projects.Count,
+            Notes: projects.Any(p => p.HasUnconverted) ? ["Some projects have costs in another currency with no exchange rate on their day: they're left out."] : null);
+        return ProtonDatasets.WithRows(totals, sources, perProject);
+    }
+
+    private static IReadOnlyList<decimal?> Figures(FinanceDomainPeriodResponse m)
+        => [m.Received, m.ExpectedRevenue, m.Cost.Total, m.Profit, ProtonAnalysis.Pct(m.Margin)];
 
     private static IEnumerable<(long?, string, decimal)> SourcesOf(PeriodCostResponse c)
         => [(1, Sources[0], c.Labour), (2, Sources[1], c.Expenses), (3, Sources[2], c.Materials), (4, Sources[3], c.GroundLabour)];

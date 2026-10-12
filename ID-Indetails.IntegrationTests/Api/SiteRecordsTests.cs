@@ -65,9 +65,17 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
         cards.Select(c => c.ProjectId).ShouldBe([site.Id, quiet.Id]);
         cards[0].ShouldSatisfyAllConditions(
             c => c.MaterialCount.ShouldBe(1),
-            c => c.MaterialCost.ShouldBe(100m),
             c => c.MyLastRecordedAt.ShouldNotBeNull());
         cards[1].MyLastRecordedAt.ShouldBeNull();
+
+        // Regression: the cost totals are company money, so someone recording on the site without financial:view
+        // gets the counts but not the amounts; someone with it gets both.
+        cards[0].MaterialCost.ShouldBeNull();
+        cards[0].GroundLabour.ShouldBeNull();
+        var withMoney = (await (await Client.GetAsync($"/api/projects/site-summary?ids={site.Id}", superAdmin.AccessToken))
+            .ReadAsync<List<SiteSummaryResponse>>()).Single();
+        withMoney.MaterialCost.ShouldBe(100m);
+        withMoney.GroundLabour.ShouldBe(0m);
 
         (await (await Client.GetAsync($"/api/projects/site-summary?ids={site.Id}", designAdmin.AccessToken)).ReadAsync<List<SiteSummaryResponse>>())
             .ShouldBeEmpty();

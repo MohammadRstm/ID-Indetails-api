@@ -31,11 +31,13 @@ public static class ProtonStatus
         ["summarize_changes"] = "Looking at what changed…",
         ["compare_work"] = "Comparing the hours…",
         ["compare_money"] = "Comparing the figures…",
+        ["get_money_by_month"] = "Reading the money month by month…",
         ["open_record"] = "Opening it…",
         ["open_page"] = "Opening it…",
         ["offer_choices"] = "Lining up the options…",
         ["suggest_replies"] = "Thinking of next steps…",
         ["refresh_page"] = "Refreshing the page…",
+        ["present_data"] = "Laying out the figures…",
     };
 
     public const string Default = "Looking into it…";

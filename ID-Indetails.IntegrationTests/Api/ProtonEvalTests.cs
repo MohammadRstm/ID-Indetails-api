@@ -6,6 +6,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Proton;
+using ID_Indetails.api.Proton.Ui;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -170,6 +171,8 @@ public sealed record ProtonEvalCompany(AuthResponse SuperAdmin, AuthResponse Des
 /// <param name="MustMention">Words one of which the answer must contain.</param>
 /// <param name="NoTools">Conversation, not a lookup: the last answer must use no tool.</param>
 /// <param name="Matches">A pattern the answer must match, e.g. the script of the language it was asked in.</param>
+/// <param name="Forms">The answer must show a chart, table or figures in one of these forms.</param>
+/// <param name="NoBlocks">A figure or two that reads fine in words: no chart or table.</param>
 public sealed record ProtonEvalCase(
     string Name,
     string[] Questions,
@@ -182,7 +185,9 @@ public sealed record ProtonEvalCase(
     bool Choices = false,
     bool OnVilla = false,
     bool NoTools = false,
-    string? Matches = null)
+    string? Matches = null,
+    ProtonPresentForm[]? Forms = null,
+    bool NoBlocks = false)
 {
     public override string ToString() => Name;
 }
@@ -196,7 +201,7 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
 {
     private static readonly string[] SizeWords = ["significant", "notable", "notably", "unusual", "dramatic", "sharp", "huge", "massive"];
     private static readonly string[] Judgements = ["underperform", "lazy", "slacking", "fire ", "firing", "dismiss", "let go", "let him go", "let her go", "replace them", "disciplin"];
-    private static readonly string[] CantTell = ["doesn't show", "does not show", "doesn't tell", "does not tell", "can't tell", "cannot tell", "doesn't establish", "does not establish", "doesn't explain", "does not explain", "not recorded", "doesn't record", "does not record", "can't say why", "cannot say why", "doesn't say why", "does not say why", "doesn't say", "can't know", "cannot know"];
+    private static readonly string[] CantTell = ["doesn't show", "does not show", "doesn't tell", "does not tell", "can't tell", "cannot tell", "doesn't establish", "does not establish", "doesn't explain", "does not explain", "not recorded", "doesn't record", "does not record", "can't say why", "cannot say why", "doesn't say why", "does not say why", "doesn't say", "can't know", "cannot know", "but not why", "not why"];
 
     public static TheoryData<ProtonEvalCase> Cases => new()
     {
@@ -236,6 +241,14 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         new("are you a person", ["Wait, am I talking to a real person?"], [], NoTools: true, MustMention: ["an AI", "AI assistant", "artificial"]),
         new("in Arabic", ["كيف حال مشروع Villa Mounir؟"], ["review_project"], Matches: @"\p{IsArabic}"),
         new("in French", ["Quels projets sont en retard ?"], [], MustMention: ["Library fit-out"], Matches: @"(?i)\b(le|la|les|projet|est|en)\b"),
+        // charts and tables: shown when asked for in the asked form, built from a tool's data; one figure stays in words
+        new("table asked", ["Show the hours by person over the last 14 days as a table."], ["get_time_summary", "compare_work"], Forms: [ProtonPresentForm.Table]),
+        new("weekly chart", ["Chart the Design hours week by week for the last 8 weeks."], ["get_time_summary"], Forms: [ProtonPresentForm.Columns, ProtonPresentForm.Line]),
+        new("pie asked", ["Make a pie chart of the hours by project in the last 14 days."], ["get_time_summary", "compare_work"], Forms: [ProtonPresentForm.Composition]),
+        new("one figure in words", ["How many hours were logged on Villa Mounir in the last 7 days?"], [], NoBlocks: true),
+        new("money by month", ["How has Design's money gone month by month over the last 6 months?"], ["get_money_by_month"]),
+        new("table in Arabic", ["اعرض ساعات العمل لكل شخص في آخر 14 يومًا في جدول"], ["get_time_summary", "compare_work"], Forms: [ProtonPresentForm.Table], Matches: @"\p{IsArabic}"),
+        new("admin table", ["List the active Design projects as a table."], ["list_projects"], NoMoney: true, Forms: [ProtonPresentForm.Table]),
     };
 
     [ProtonEvalFact]
@@ -310,6 +323,22 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
             problems.Add("quotes money to a user without financial:view");
         }
 
+        var shown = reply.Blocks.Select(FormOf).ToList();
+        if (eval.Forms is { } forms && !shown.Intersect(forms).Any())
+        {
+            problems.Add($"showed [{string.Join(", ", shown)}], expected one of [{string.Join(", ", forms)}]");
+        }
+
+        if (eval.NoBlocks && shown.Count > 0)
+        {
+            problems.Add($"drew [{string.Join(", ", shown)}] for a figure that reads fine in words");
+        }
+
+        if (eval.NoMoney && reply.Blocks.Any(ShowsMoney))
+        {
+            problems.Add("shows money in a chart or table to a user without financial:view");
+        }
+
         if (eval.Opens is { } opens && reply.UiCommands.Any(c => c.Type != ID_Indetails.api.Proton.Ui.ProtonUiCommandType.Refresh) != opens)
         {
             problems.Add(opens ? "didn't open anything" : $"opened {string.Join(", ", reply.UiCommands.Select(c => c.Label))} without being asked");
@@ -343,9 +372,22 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         }
 
         output.WriteLine($"## {eval.Name}\nQ: {string.Join(" / ", eval.Questions)}\nTools: {string.Join(", ", used)}\nCost: {turn.CostUsd:0.0000} USD\nA: {answer}\n" +
+            (reply.Blocks.Count == 0 ? "" : $"Shown: {string.Join("; ", reply.Blocks.Select(b => $"{FormOf(b)} \"{b.Title}\""))}\n") +
             (problems.Count == 0 ? "OK" : "PROBLEMS:\n- " + string.Join("\n- ", problems) + "\nWhat the model wrote on the way:\n" + Transcript(lastRequest)));
         problems.ShouldBeEmpty(answer);
     }
+
+    private static ProtonPresentForm FormOf(ProtonBlock block) => block.Type switch
+    {
+        ProtonBlockType.Table => ProtonPresentForm.Table,
+        ProtonBlockType.Kpis => ProtonPresentForm.Kpis,
+        _ => block.Chart!.Kind,
+    };
+
+    private static bool ShowsMoney(ProtonBlock block)
+        => block.Chart?.Series.Any(s => s.Unit == ProtonUnit.Usd) == true
+           || block.Table?.Columns.Any(c => c.Unit == ProtonUnit.Usd) == true
+           || block.Kpis?.Items.Any(k => k.Unit == ProtonUnit.Usd) == true;
 
     /// <summary>The model's own text and tool calls in the last question's turn, before the final reply: to see where an answer went.</summary>
     private static string Transcript(string request)

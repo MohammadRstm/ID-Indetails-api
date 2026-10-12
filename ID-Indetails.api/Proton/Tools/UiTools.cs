@@ -16,7 +16,7 @@ public sealed record OpenRecordInput
     [Description("The id from find or another tool. Never guess one.")]
     public required long Id { get; init; }
 
-    [Description("Projects only: the tab to open. Default overview.")]
+    [Description("Projects only: the tab to open. Leave out for the project's first tab for this user.")]
     public ProtonProjectSection? Section { get; init; }
 }
 
@@ -28,14 +28,16 @@ public sealed class OpenRecordTool(ProtonRecords records) : ProtonTool<OpenRecor
 {
     private static readonly ProtonEndpoint Requirements = ProtonEndpoint.Of<RequirementsController>(nameof(RequirementsController.List));
     private static readonly ProtonEndpoint Timeline = ProtonEndpoint.Of<WorkInsightsController>(nameof(WorkInsightsController.Timeline));
+    private static readonly ProtonEndpoint ProjectWork = ProtonEndpoint.Of<WorkInsightsController>(nameof(WorkInsightsController.ProjectWork));
     private static readonly ProtonEndpoint Meetings = ProtonEndpoint.Of<MeetingsController>(nameof(MeetingsController.List));
 
     public override string Name => "open_record";
 
     public override string Description =>
         "Open a project, client or person in the app for the user (\"take me to…\", \"open…\", \"show me its requirements\"). " +
-        "Use the id from find. Projects can open on a tab: requirements, timeline (Design) or meetings. Opening needs no " +
-        "other lookup; only read data too if the user also asked a question about it.";
+        "Use the id from find. Projects can open on a tab: requirements or meetings, and on Design projects financials (its " +
+        "money), analytics (charts of its work), contributors (who worked on it and how much) or timeline (its history as a " +
+        "calendar). Opening needs no other lookup; only read data too if the user also asked a question about it.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonRecords.ProjectGet;
 
@@ -47,7 +49,7 @@ public sealed class OpenRecordTool(ProtonRecords records) : ProtonTool<OpenRecor
         var note = "The app opens it when your answer is shown. Say what you opened in a few words.";
         if (section is { } asked && !await CanOpenAsync(asked, record, context))
         {
-            note = $"The {asked.ToString().ToLowerInvariant()} tab isn't available to this user here, so the project opens on its overview. Say so.";
+            note = $"The {asked.ToString().ToLowerInvariant()} tab isn't available to this user here, so the project opens on its first tab. Say so.";
             section = null;
         }
 
@@ -55,13 +57,24 @@ public sealed class OpenRecordTool(ProtonRecords records) : ProtonTool<OpenRecor
         return new ProtonToolOutput(new UiOutcome(Describe(command), note), [record]) { UiCommand = command };
     }
 
-    private static async Task<bool> CanOpenAsync(ProtonProjectSection section, ProtonRef project, ProtonToolContext context) => section switch
+    /// <summary>The project page's own rules for its tabs: a tab the person may not open isn't asked for.</summary>
+    private static async Task<bool> CanOpenAsync(ProtonProjectSection section, ProtonRef project, ProtonToolContext context)
     {
-        ProtonProjectSection.Requirements => await context.CanCallAsync(Requirements),
-        ProtonProjectSection.Timeline => project.Domain == DomainCodes.Design && await context.CanCallAsync(Timeline),
-        ProtonProjectSection.Meetings => await context.CanCallAsync(Meetings),
-        _ => true,
-    };
+        var design = project.Domain == DomainCodes.Design;
+        var access = context.Access;
+        return section switch
+        {
+            ProtonProjectSection.Financials => design && access.Has(PermissionCodes.FinancialView),
+            // a Design project's overview is the person's own work: those who see money or everyone's work have their own tabs
+            ProtonProjectSection.Overview => !design || access.Has(PermissionCodes.WorkEntryViewOwn)
+                || (!access.Has(PermissionCodes.FinancialView) && !access.Has(PermissionCodes.WorkEntryViewAll)),
+            ProtonProjectSection.Analytics or ProtonProjectSection.Contributors => design && await context.CanCallAsync(ProjectWork),
+            ProtonProjectSection.Requirements => await context.CanCallAsync(Requirements),
+            ProtonProjectSection.Timeline => design && await context.CanCallAsync(Timeline),
+            ProtonProjectSection.Meetings => await context.CanCallAsync(Meetings),
+            _ => false,
+        };
+    }
 
     internal static string Describe(ProtonUiCommand command)
         => command.Section is { } section ? $"{command.Label}: {section.ToString().ToLowerInvariant()}" : command.Label;

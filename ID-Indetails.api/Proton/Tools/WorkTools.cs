@@ -6,6 +6,7 @@ using ID_Indetails.api.DTO.Request.Reports;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Reports;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Reports.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
@@ -174,7 +175,40 @@ public sealed class GetTimeSummaryTool(IReportService reports) : ProtonTool<Time
         var refs = byProject.Select(p => new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, DomainCodes.Design))
             .Concat(byPerson.Select(p => new ProtonRef(ProtonRefType.Person, p.UserId, p.Name)))
             .ToList();
-        return new ProtonToolOutput(summary, refs, new DayRange(report.From, report.To));
+        return new ProtonToolOutput(summary, refs, new DayRange(report.From, report.To)) { Datasets = Datasets(report, context.Today) };
+    }
+
+    /// <summary>The same report as tables: weekly hours, and hours by project, person and client (each adds up to the total).</summary>
+    private static IReadOnlyList<ProtonDataset> Datasets(WorkReportResponse report, DateOnly today)
+    {
+        var period = ProtonDatasets.Period(report.From, report.To);
+        var hours = ProtonDatasets.Figure("hours", "Hours", ProtonUnit.Hours);
+        var entries = ProtonDatasets.Figure("entries", "Entries", ProtonUnit.Count);
+        var weekly = ProtonDatasets.Weeks(
+            "Hours by week", report.Weekly.Select(w => (w.WeekStart, ProtonText.Hours(w.Minutes), w.Entries)).ToList(), report.From, report.To, today);
+        var byProject = new ProtonDataset(
+            "Hours by project",
+            [ProtonDatasets.Label("project", "Project"), hours, entries, ProtonDatasets.Figure("people", "People", ProtonUnit.Count),
+                ProtonDatasets.Figure("share", "Share of hours", ProtonUnit.Percent)],
+            report.ByProject.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, DomainCodes.Design),
+                ProtonCell.Of(p.Title), ProtonCell.Of(ProtonText.Hours(p.Minutes)), ProtonCell.Of(p.Entries), ProtonCell.Of(p.People), ProtonCell.Of(p.SharePct))).ToList(),
+            period, report.ByProject.Count, PartsOfWhole: true);
+        var byPerson = new ProtonDataset(
+            "Hours by person",
+            [ProtonDatasets.Label("person", "Person"), hours, ProtonDatasets.Figure("overtime", "Overtime hours", ProtonUnit.Hours), entries],
+            report.ByPerson.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Person, p.UserId, p.Name),
+                ProtonCell.Of(p.Name), ProtonCell.Of(ProtonText.Hours(p.Minutes)), ProtonCell.Of(ProtonText.Hours(p.OvertimeMinutes)), ProtonCell.Of(p.Entries))).ToList(),
+            period, report.ByPerson.Count, PartsOfWhole: true);
+        var byClient = new ProtonDataset(
+            "Hours by client",
+            [ProtonDatasets.Label("client", "Client"), hours],
+            report.ByClient.Take(ProtonDatasets.MaxRows).Select(c => ProtonDatasets.Row(
+                c.ClientId is { } id ? new ProtonRef(ProtonRefType.Client, id, c.Name ?? "") : null,
+                ProtonCell.Of(c.Name ?? "Internal work"), ProtonCell.Of(ProtonText.Hours(c.Minutes)))).ToList(),
+            period, report.ByClient.Count, PartsOfWhole: true);
+        return ProtonDatasets.WithRows(weekly, byProject, byPerson, byClient);
     }
 
     private static TimeWeek Week(DTO.Response.WorkEntries.WeekTotalResponse week)

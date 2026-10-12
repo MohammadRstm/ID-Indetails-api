@@ -104,9 +104,17 @@ public enum ProtonTheme
     Dark,
 }
 
+/// <summary>
+/// A project page's tabs, in the page's order. Design projects: financials (money), overview (the person's own work),
+/// analytics and contributors (everyone's work), timeline (the history calendar); every project has requirements and
+/// meetings. The page opens on the first one the person may open.
+/// </summary>
 public enum ProtonProjectSection
 {
+    Financials,
     Overview,
+    Analytics,
+    Contributors,
     Requirements,
     Timeline,
     Meetings,

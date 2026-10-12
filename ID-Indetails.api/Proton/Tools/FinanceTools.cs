@@ -12,6 +12,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
+using ID_Indetails.api.Validators.Finance;
 
 namespace ID_Indetails.api.Proton.Tools;
 
@@ -45,6 +46,101 @@ public sealed class GetDomainFinanceTool(IDomainFinanceService finance) : Proton
         await context.ValidateAsync(query, cancellationToken);
         var summary = await finance.SummaryAsync(input.Domain.Code(), query, cancellationToken);
         return new ProtonToolOutput(summary, [], new DayRange(summary.From, summary.To));
+    }
+}
+
+public sealed record MoneyByMonthInput
+{
+    [Description("design or execution. May be left out only when the user sees one of them.")]
+    public ProtonDomain? Domain { get; init; }
+
+    [Description("Months to return, ending with this one, 2 to 36 (default 12).")]
+    public int? Months { get; init; }
+}
+
+/// <param name="SoFar">The month isn't over: its figures are so far.</param>
+/// <param name="Unconverted">Costs of the month left out of the USD figures for want of an exchange rate, in their own currency.</param>
+public sealed record MoneyMonthRow(
+    DateOnly Month,
+    bool SoFar,
+    decimal Received,
+    decimal ExpectedRevenue,
+    decimal Labour,
+    decimal Expenses,
+    decimal Materials,
+    decimal GroundLabour,
+    decimal Cost,
+    decimal Profit,
+    IReadOnlyList<string>? Unconverted);
+
+public sealed record MoneyByMonth(string Domain, IReadOnlyList<MoneyMonthRow> Months, string Note);
+
+/// <summary>
+/// A domain's money month by month, as GET /api/finance/{domain}/monthly returns it: what was received, the revenue
+/// expected, cost by source and profit, in USD.
+/// </summary>
+public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonTool<MoneyByMonthInput>
+{
+    public const int DefaultMonths = 12;
+
+    public override string Name => "get_money_by_month";
+
+    public override string Description =>
+        "A domain's money month by month, oldest first, in USD: money received, expected revenue, cost by source " +
+        "(labour, expenses, materials, ground labour) and profit (received less cost). Use it for monthly trends of " +
+        "revenue, cost or profit, and for money charts by month.";
+
+    public override bool Heavy => true;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<FinanceController>(nameof(FinanceController.Monthly));
+
+    protected override async Task<ProtonToolOutput> RunAsync(MoneyByMonthInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var domain = context.DomainOf(input.Domain);
+        var query = new FinanceMonthsQuery { Months = Math.Clamp(input.Months ?? DefaultMonths, 2, FinanceMonthsQueryValidator.MaxMonths) };
+        await context.ValidateAsync(query, cancellationToken);
+        var months = await finance.MonthlyAsync(domain, query, cancellationToken);
+        var thisMonth = new DateOnly(context.Today.Year, context.Today.Month, 1);
+        var rows = months.Select(m => new MoneyMonthRow(
+            m.Month, m.Month == thisMonth, m.Revenue, m.ExpectedRevenue, m.Labour, m.Expenses, m.Materials, m.GroundLabour, m.Cost, m.Profit,
+            m.Unconverted.Count > 0 ? ProtonAnalysis.Unconverted(m.Unconverted) : null)).ToList();
+        var period = rows.Count == 0 ? null : new DayRange(rows[0].Month, rows[^1].SoFar ? context.Today : rows[^1].Month.AddMonths(1).AddDays(-1));
+        return new ProtonToolOutput(
+            new MoneyByMonth(domain, rows,
+                "Received: payments on the day they arrived. Cost: every cost dated in the month, in USD at the rate of its day; costs with no " +
+                "rate are listed apart, not counted. Profit is received less cost, so it swings with when clients pay."),
+            [],
+            period)
+        {
+            Datasets = Datasets(rows, period),
+        };
+    }
+
+    private static IReadOnlyList<Ui.ProtonDataset> Datasets(IReadOnlyList<MoneyMonthRow> rows, DayRange? period)
+    {
+        var usd = (string key, string label) => Ui.ProtonDatasets.Figure(key, label, Ui.ProtonUnit.Usd);
+        var month = Ui.ProtonDatasets.Label("month", "Month", Ui.ProtonColumnKind.Month);
+        var words = period is null ? null : Ui.ProtonDatasets.Period(period);
+        IReadOnlyList<string>? notes = rows.Any(r => r.Unconverted is not null)
+            ? [$"Left out for want of an exchange rate: {string.Join("; ", rows.Where(r => r.Unconverted is not null).Select(r => $"{r.Month:MMM yyyy} {string.Join(", ", r.Unconverted!)}"))}."]
+            : null;
+        var money = new Ui.ProtonDataset(
+            "Money by month",
+            [month, usd("received", "Received"), usd("expected_revenue", "Expected revenue"), usd("cost", "Cost"), usd("profit", "Profit")],
+            rows.Select(r => new Ui.ProtonDataRow(
+                [Ui.ProtonCell.Of(r.Month), Ui.ProtonCell.Of(r.Received), Ui.ProtonCell.Of(r.ExpectedRevenue), Ui.ProtonCell.Of(r.Cost), Ui.ProtonCell.Of(r.Profit)],
+                Partial: r.SoFar)).ToList(),
+            words,
+            Notes: notes);
+        var cost = new Ui.ProtonDataset(
+            "Cost by source, by month",
+            [month, usd("labour", "Labour"), usd("expenses", "Expenses"), usd("materials", "Materials"), usd("ground_labour", "Ground labour")],
+            rows.Select(r => new Ui.ProtonDataRow(
+                [Ui.ProtonCell.Of(r.Month), Ui.ProtonCell.Of(r.Labour), Ui.ProtonCell.Of(r.Expenses), Ui.ProtonCell.Of(r.Materials), Ui.ProtonCell.Of(r.GroundLabour)],
+                Partial: r.SoFar)).ToList(),
+            words,
+            Notes: notes);
+        return Ui.ProtonDatasets.WithRows(money, cost);
     }
 }
 

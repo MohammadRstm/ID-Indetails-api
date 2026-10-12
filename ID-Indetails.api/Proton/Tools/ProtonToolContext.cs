@@ -42,6 +42,15 @@ public sealed class ProtonToolContext(
 
     public DateOnly Today => today;
 
+    /// <summary>
+    /// The business a money question is about: the one asked for, or the user's only one. Never a silent default:
+    /// the money of a business the user didn't ask about would read as the answer.
+    /// </summary>
+    public string DomainOf(ProtonDomain? asked)
+        => asked.Code()
+           ?? (access.VisibleDomains.Count == 1 ? access.VisibleDomains.First()
+               : throw new ProtonToolInputException("Which business: design or execution? Ask the user if it isn't clear."));
+
     public DayOfWeek FirstDayOfWeek => firstDayOfWeek;
 
     public ProtonTurnOrigin Turn { get; set; } = ProtonTurnOrigin.Continue;
@@ -75,6 +84,51 @@ public sealed class ProtonToolContext(
     }
 
     public ProtonRef? KnownRecord(ProtonRefType type, long id) => _known.GetValueOrDefault((type, id));
+
+    private readonly Dictionary<string, Ui.ProtonHeldDataset> _datasets = new(StringComparer.Ordinal);
+    private readonly List<Ui.ProtonHeldDataset> _newDatasets = [];
+
+    /// <summary>The number the next dataset's id takes ("d" and a number, counted per conversation).</summary>
+    public int NextDataset { get; private set; } = 1;
+
+    /// <summary>The datasets this question's tools returned, for the conversation to keep.</summary>
+    public IReadOnlyList<Ui.ProtonHeldDataset> NewDatasets => _newDatasets;
+
+    /// <summary>Charts, tables and figures shown in this question's answer so far.</summary>
+    public int BlocksShown { get; set; }
+
+    /// <summary>The datasets the conversation holds from earlier questions.</summary>
+    public void Hold(IEnumerable<Ui.ProtonHeldDataset> datasets, int next)
+    {
+        foreach (var held in datasets)
+        {
+            _datasets[held.Id] = held;
+        }
+
+        NextDataset = Math.Max(NextDataset, next);
+    }
+
+    /// <summary>Keeps a dataset a tool returned, under a new id.</summary>
+    public Ui.ProtonHeldDataset HoldDataset(string tool, Ui.ProtonDataset dataset, DateTime at)
+    {
+        var held = new Ui.ProtonHeldDataset($"d{NextDataset++}", tool, dataset, at);
+        _datasets[held.Id] = held;
+        _newDatasets.Add(held);
+        return held;
+    }
+
+    /// <summary>Forgets datasets whose tool call didn't succeed after all (its result was too large).</summary>
+    public void Drop(IEnumerable<Ui.ProtonHeldDataset> datasets)
+    {
+        foreach (var held in datasets)
+        {
+            _datasets.Remove(held.Id);
+            _newDatasets.Remove(held);
+        }
+    }
+
+    /// <summary>A dataset a tool returned to this user in this conversation; null for any other id.</summary>
+    public Ui.ProtonHeldDataset? Dataset(string id) => _datasets.GetValueOrDefault(id);
 
     /// <summary>Whether the caller passes every authorization policy of <paramref name="endpoint"/>.</summary>
     public async Task<bool> CanCallAsync(ProtonEndpoint endpoint)

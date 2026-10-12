@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Execution;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Execution;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Execution;
@@ -37,15 +38,17 @@ public sealed class SiteRecordsService(
         var money = await finance.GetAsync(sites, cancellationToken);
         var activity = (await records.ActivityAsync(sites.Select(s => s.Id).ToList(), actor.UserId, cancellationToken))
             .ToDictionary(a => a.ProjectId);
+        // a site's cost totals are company money: counts for everyone who sees the site, amounts only with financial:view
+        var seesMoney = actor.Has(PermissionCodes.FinancialView);
 
         return query.Ids.Distinct()
             .Where(money.ContainsKey)
             .Select(id => new SiteSummaryResponse(
                 id,
                 activity[id].MaterialCount,
-                money[id].Costs.Materials,
+                seesMoney ? money[id].Costs.Materials : null,
                 activity[id].ReportedWeeks,
-                money[id].Costs.GroundLabour,
+                seesMoney ? money[id].Costs.GroundLabour : null,
                 activity[id].LastRecordedAt))
             .ToList();
     }

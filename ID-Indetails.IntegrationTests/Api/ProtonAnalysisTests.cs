@@ -114,6 +114,28 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         data.ToJsonString().ShouldNotContain("labour_by_person");
     }
 
+    /// <summary>Regression: without a domain, compare_money quietly used Design, whatever the user sees.</summary>
+    [Fact]
+    public async Task Compare_money_without_a_domain_asks_unless_the_user_sees_one_business()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, executionMoney) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("compare_money", new { }), FakeAnthropic.Text("Which business?"));
+
+        await OkAsync(AskAsync(superAdmin, "How is our money this month?"));
+        var both = Result(1);
+        both["status"]!.GetValue<string>().ShouldBe("invalid");
+        both["message"]!.GetValue<string>().ShouldContain("Which business");
+
+        // someone who sees only Execution gets Execution, not Design
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("compare_money", new { }), FakeAnthropic.Text("Here it is."));
+        var reply = await OkAsync(AskAsync(executionMoney, "How is our money this month?"));
+        Result(1)["status"]!.GetValue<string>().ShouldBe("ok");
+        reply.Sources.ShouldHaveSingleItem().Label.ShouldStartWith("Execution");
+    }
+
     [Fact]
     public async Task A_summary_holds_only_what_the_user_may_see_and_says_what_it_left_out()
     {
@@ -139,6 +161,8 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         domains[0]!["work"].ShouldNotBeNull();
         summary["data"]!["company"].ShouldBeNull();
         summary["basis"]!["omitted"]!.ToJsonString().ShouldContain("financial:view");
+        // Regression: the overhead was left out without a word, so the summary read as complete
+        summary["basis"]!["omitted"]!.ToJsonString().ShouldContain("overhead");
         Result(2)["status"]!.GetValue<string>().ShouldBe("forbidden");
         reply.Sources.ShouldHaveSingleItem().Omitted.ShouldContain(o => o.Contains("financial:view"));
 
@@ -151,6 +175,29 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         full["domains"]!.AsArray().ShouldAllBe(d => d!["money"] != null);
         full["company"].ShouldNotBeNull();
         full.ToJsonString().ShouldNotContain("salar", Case.Insensitive);
+        (Result(1)["basis"]!["omitted"]?.ToJsonString() ?? "").ShouldNotContain("overhead");
+    }
+
+    /// <summary>
+    /// Regression: the money follow-ups stop at the dashboard's 6 most urgent, and attention read as if that were
+    /// every money problem there is.
+    /// </summary>
+    [Fact]
+    public async Task Attention_says_when_the_money_follow_ups_were_capped()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        // created by someone who can't set money, so none has a payment agreed: seven follow-ups, one over the cap
+        for (var i = 0; i < 7; i++)
+        {
+            await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
+        }
+
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("get_attention", new { domain = "design", limit = 10 }), FakeAnthropic.Text("Several things."));
+        await OkAsync(AskAsync(superAdmin, "Is there anything I should look at?"));
+
+        Result(1)["basis"]!["omitted"]!.ToJsonString().ShouldContain("most urgent");
     }
 
     [Fact]
@@ -178,6 +225,40 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         // overdue is ranked before on hold
         items.ToList().FindIndex(i => i!["project"]?["id"]?.GetValue<long>() == late.Id)
             .ShouldBeLessThan(items.ToList().FindIndex(i => i!["project"]?["id"]?.GetValue<long>() == paused.Id));
+    }
+
+    /// <summary>
+    /// Regression: the feed was read newest first, three pages of 40, and filtered to the period afterwards, so an
+    /// older period behind more than 120 newer events came back empty.
+    /// </summary>
+    [Fact]
+    public async Task Recent_activity_reads_an_older_period_whatever_happened_since()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var created = await _steps.ScalarAsync<long>(
+            "SELECT id FROM activity_events WHERE project_id = @p ORDER BY id LIMIT 1", ("@p", project.Id));
+        // the creation happened 40 days ago; 125 events on the same project happened since
+        await _steps.ExecuteAsync("UPDATE activity_events SET occurred_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 40 DAY) WHERE id = @id", ("@id", created));
+        await _steps.ExecuteAsync(
+            "INSERT INTO activity_events (domain_code, kind, occurred_at, actor_id, project_id, client_id, subject_type, subject_id, amount, prev_amount, payload, is_demo) " +
+            "SELECT e.domain_code, e.kind, UTC_TIMESTAMP(3), e.actor_id, e.project_id, e.client_id, e.subject_type, e.subject_id, e.amount, e.prev_amount, e.payload, e.is_demo " +
+            "FROM activity_events e CROSS JOIN (SELECT 1 FROM information_schema.columns LIMIT 125) n WHERE e.id = @id", ("@id", created));
+        var day = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-40));
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("get_recent_activity", new
+            {
+                project_id = project.Id, period = "custom", from = day.AddDays(-1).ToString("yyyy-MM-dd"), to = day.AddDays(1).ToString("yyyy-MM-dd"),
+            }),
+            FakeAnthropic.Text("It was created then."));
+
+        await OkAsync(AskAsync(superAdmin, "What happened on that project 40 days ago?"));
+
+        var data = Result(1)["data"]!;
+        data["events"]!.AsArray().Count.ShouldBe(1);
+        data["total"]!.GetValue<int>().ShouldBe(1);
+        data["more_than_shown"]!.GetValue<bool>().ShouldBeFalse();
     }
 
     [Fact]

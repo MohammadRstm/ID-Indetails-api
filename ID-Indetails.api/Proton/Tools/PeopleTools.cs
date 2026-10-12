@@ -3,11 +3,14 @@ using ID_Indetails.api.Business.Proton;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.WorkEntries;
+using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Teams.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
+using ID_Indetails.api.Services.WorkEntries.Implementation;
 
 namespace ID_Indetails.api.Proton.Tools;
 
@@ -116,7 +119,31 @@ public sealed class GetPersonWorkTool(IMyWorkService myWork) : ProtonTool<Person
         return new ProtonToolOutput(
             work,
             [new ProtonRef(ProtonRefType.Person, s.Person.Id, s.Person.Name), .. projects.Select(p => new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, DomainCodes.Design))],
-            range);
+            range)
+        {
+            Datasets = Datasets(s, projects, range),
+        };
+    }
+
+    /// <summary>The person's hours as tables: the last weeks, the last twelve months, and by project in the period.</summary>
+    private static IReadOnlyList<ProtonDataset> Datasets(WorkSummaryResponse s, IReadOnlyList<PersonProjectHours> projects, DayRange range)
+    {
+        var name = s.Person.Name;
+        var weekly = s.Weekly.Count == 0 ? null : ProtonDatasets.Weeks(
+            $"{name}: hours by week", s.Weekly.Select(w => (w.WeekStart, ProtonText.Hours(w.Minutes), w.Entries)).ToList(), s.Weekly[0].WeekStart, s.Today, s.Today);
+        var monthly = ProtonDatasets.Months(
+            $"{name}: hours by month", ProtonDatasets.ByMonth(s.Daily.Select(d => (d.Day, d.Minutes)), s.Today.AddDays(-MyWorkService.DailyDays + 1), s.Today), s.Today);
+        var byProject = new ProtonDataset(
+            $"{name}: hours by project",
+            [ProtonDatasets.Label("project", "Project"), ProtonDatasets.Figure("hours", "Hours", ProtonUnit.Hours),
+                ProtonDatasets.Figure("overtime", "Overtime hours", ProtonUnit.Hours), ProtonDatasets.Figure("entries", "Entries", ProtonUnit.Count)],
+            projects.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, DomainCodes.Design),
+                ProtonCell.Of(p.Title), ProtonCell.Of(p.Hours), ProtonCell.Of(p.OvertimeHours), ProtonCell.Of(p.Entries))).ToList(),
+            ProtonDatasets.Period(range),
+            projects.Count,
+            PartsOfWhole: true);
+        return ProtonDatasets.WithRows(weekly, monthly, byProject);
     }
 }
 

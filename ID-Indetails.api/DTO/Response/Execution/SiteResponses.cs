@@ -6,14 +6,14 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.DTO.Response.Execution;
 
 /// <summary>A site's card: what was recorded there, and when the caller last recorded something.</summary>
-/// <param name="MaterialCost">From the shared finance calculator, in USD.</param>
-/// <param name="GroundLabour">From the shared finance calculator, in USD.</param>
+/// <param name="MaterialCost">From the shared finance calculator, in USD; null without financial:view.</param>
+/// <param name="GroundLabour">From the shared finance calculator, in USD; null without financial:view.</param>
 public sealed record SiteSummaryResponse(
     long ProjectId,
     int MaterialCount,
-    decimal MaterialCost,
+    decimal? MaterialCost,
     int ReportedWeeks,
-    decimal GroundLabour,
+    decimal? GroundLabour,
     DateTime? MyLastRecordedAt);
 
 public sealed record SiteRecordsWeekResponse(DateOnly WeekStart, decimal Materials, decimal Labour, decimal Value);

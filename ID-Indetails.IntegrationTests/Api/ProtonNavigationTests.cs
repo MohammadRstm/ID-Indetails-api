@@ -72,6 +72,39 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         api.Anthropic.ToolResults(1).Single().ToJsonString().ShouldNotContain(site.Title);
     }
 
+    /// <summary>
+    /// The project page's tabs as the page itself allows them: money for those who see money, everyone's work for those
+    /// who see it, the overview only as someone's own work. A tab that isn't the person's opens their first tab instead.
+    /// </summary>
+    [Fact]
+    public async Task A_project_opens_on_a_tab_only_when_the_page_would_show_it()
+    {
+        var (superAdmin, designAdmin) = await PeopleAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+
+        async Task<(ProtonProjectSection? Opened, string Note)> OpenAsync(AuthResponse who, long id, string section)
+        {
+            api.Anthropic.Reset();
+            api.Anthropic.Reply(
+                FakeAnthropic.ToolUse("open_record", new { type = "project", id, section }),
+                FakeAnthropic.Text("Opening it."));
+            var reply = await AskAsync(who, new { text = $"Open its {section}" });
+            return (reply.UiCommands.Single().Section, Result(1)["data"]!["note"]!.GetValue<string>());
+        }
+
+        (await OpenAsync(superAdmin, project.Id, "financials")).Opened.ShouldBe(ProtonProjectSection.Financials);
+        (await OpenAsync(superAdmin, project.Id, "analytics")).Opened.ShouldBe(ProtonProjectSection.Analytics);
+        (await OpenAsync(designAdmin, project.Id, "contributors")).Opened.ShouldBe(ProtonProjectSection.Contributors);
+
+        // admins see no money; neither sees the overview, which is an employee's own work; a site has no work tabs
+        var money = await OpenAsync(designAdmin, project.Id, "financials");
+        money.Opened.ShouldBeNull();
+        money.Note.ShouldContain("opens on its first tab");
+        (await OpenAsync(superAdmin, project.Id, "overview")).Opened.ShouldBeNull();
+        (await OpenAsync(superAdmin, site.Id, "analytics")).Opened.ShouldBeNull();
+    }
+
     [Fact]
     public async Task Pages_open_only_for_those_their_endpoint_lets_in_and_only_from_the_fixed_list()
     {

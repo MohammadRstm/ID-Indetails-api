@@ -35,7 +35,6 @@ namespace ID_Indetails.api.Proton.Agent;
 public sealed class ProtonChatAgent(
     IAnthropicClient anthropic,
     ProtonToolbox toolbox,
-    ProtonConversationStore conversations,
     ProtonUsageService usage,
     IPermissionService permissions,
     ProtonRecords records,
@@ -43,6 +42,7 @@ public sealed class ProtonChatAgent(
     ICompanySettingsService companySettings,
     Memory.ProtonMemoryService memories,
     Voice.ProtonVoiceSessions voiceSessions,
+    History.ProtonHistoryService history,
     IClock clock,
     IOptions<ProtonOptions> options,
     IOptions<EmailOptions> email,
@@ -69,7 +69,7 @@ public sealed class ProtonChatAgent(
         await usage.EnsureCanAskAsync(userId, cancellationToken);
 
         var access = await permissions.GetAccessAsync(userId, cancellationToken);
-        var conversation = conversations.Open(userId, request.ConversationId, ProtonToolbox.FingerprintOf(access));
+        var conversation = await history.OpenAsync(userId, request.ConversationId, ProtonToolbox.FingerprintOf(access), cancellationToken);
         if (!conversation.TryBegin())
         {
             throw new ConflictException(ErrorCodes.ProtonBusy, "I'm still answering your last question.");
@@ -90,6 +90,7 @@ public sealed class ProtonChatAgent(
             var tools = await toolbox.OpenAsync(
                 caller, userId, new ProtonOrigin(conversation.Id, options.Value.Model, ProtonPrompts.ChatVersion), cancellationToken);
             tools.Context.Remember(conversation.Known.Values);
+            tools.Context.Hold(conversation.Datasets, conversation.NextDataset);
             tools.Context.ActionPending = conversation.HasPendingAction(clock.UtcNow);
             // known from the request's shape, never from its text
             tools.Context.Turn = request switch
@@ -104,21 +105,23 @@ public sealed class ProtonChatAgent(
                 ClaimSpoken(userId, spoken, conversation);
             }
 
-            // A button becomes a question written by the app, once it is known to be one the last reply offered.
-            var text = request switch
+            // A button becomes a question written by the app, once it is known to be one the last reply offered; the
+            // saved chat keeps what the user saw on it.
+            var (text, shown) = request switch
             {
                 { Choice: { } choice } => await ChosenAsync(choice, conversation, tools.Context, cancellationToken),
                 { Reply: { } reply } => Replied(reply, conversation),
                 { Suggestion: { } index } => Suggested(index, conversation),
-                _ => request.Text,
+                _ => (request.Text, request.Text),
             };
             IEnumerable<string> typed = tools.Context.Turn == ProtonTurnOrigin.Typed ? [.. conversation.Typed, text] : conversation.Typed;
             tools.Context.TypedText = string.Join("\n", typed);
             var page = request.Page is { } at ? await PageNoteAsync(at, tools.Context, cancellationToken) : null;
             var company = (await companySettings.BrandingAsync(cancellationToken)).Name;
             var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion, await memories.NoteAsync(userId, cancellationToken),
-                tools.Context.Turn == ProtonTurnOrigin.Spoken);
-            return new ProtonQuestion(caller, userId, access, conversation, tools, request, text, notes, rolledOver);
+                tools.Context.Turn == ProtonTurnOrigin.Spoken,
+                tools.Context.Turn is ProtonTurnOrigin.Typed or ProtonTurnOrigin.Spoken ? ProtonVisualRequest.Detect(text) : null);
+            return new ProtonQuestion(caller, userId, access, conversation, tools, request, text, notes, rolledOver) { Shown = shown };
         }
         catch
         {
@@ -164,6 +167,7 @@ public sealed class ProtonChatAgent(
 
         conversation.Questions++;
         conversation.LastInputTokens = turn.LastInputTokens;
+        conversation.Keep(tools.Context.NewDatasets, tools.Context.NextDataset);
         foreach (var known in tools.Context.Known)
         {
             conversation.Known[(known.Type, known.Id)] = known;
@@ -197,7 +201,7 @@ public sealed class ProtonChatAgent(
 
         conversation.OfferedSuggestions = suggestions;
 
-        return new ProtonReplyResponse(
+        var reply = new ProtonReplyResponse(
             conversation.Id,
             turn.Answer,
             turn.RefsIn(turn.Answer),
@@ -209,8 +213,35 @@ public sealed class ProtonChatAgent(
             replies,
             suggestions,
             proposals,
+            ok.Select(t => t.Block).OfType<ProtonBlock>().ToList(),
             pending,
             question.RolledOver);
+        await SaveAsync(question, reply);
+        return reply;
+    }
+
+    /// <summary>
+    /// Keeps the answered question in the person's saved chats. The answer stands even if saving fails: the chat then
+    /// misses this exchange, which is logged.
+    /// </summary>
+    private async Task SaveAsync(ProtonQuestion question, ProtonReplyResponse reply)
+    {
+        var origin = question.Tools.Context.Turn switch
+        {
+            ProtonTurnOrigin.Choice => ProtonMessageOrigin.Choice,
+            ProtonTurnOrigin.Suggestion => ProtonMessageOrigin.Suggestion,
+            ProtonTurnOrigin.Spoken => ProtonMessageOrigin.Spoken,
+            _ => ProtonMessageOrigin.Typed,
+        };
+        try
+        {
+            await history.RecordAsync(
+                new History.ProtonExchange(question.UserId, question.Conversation, question.Access, question.Shown, origin, reply), CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            _log.LogError(exception, "Proton conversation {ConversationId}: an answered question couldn't be saved.", question.Conversation.Id);
+        }
     }
 
     /// <summary>
@@ -225,8 +256,6 @@ public sealed class ProtonChatAgent(
             _log.LogInformation("Proton action {ActionId} dropped: its question didn't finish.", pending.Id);
         }
     }
-
-    public void Forget(long userId, Guid conversationId) => conversations.Remove(userId, conversationId);
 
     /// <summary>
     /// A spoken question belongs to the person's running voice session, in this conversation, and is asked once: a
@@ -250,7 +279,7 @@ public sealed class ProtonChatAgent(
     /// The option the user picked, as a question the app writes for them: it must be one of the last offered options and
     /// still visible to the user now. Anything else is refused, so the client can't make Proton act on a record it chose.
     /// </summary>
-    private async Task<string> ChosenAsync(
+    private async Task<(string Text, string Shown)> ChosenAsync(
         ProtonChoiceRequest choice, ProtonConversation conversation, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var offered = conversation.OfferedChoices.Any(c => c.Type == choice.Type && c.Id == choice.Id);
@@ -262,11 +291,11 @@ public sealed class ProtonChatAgent(
 
         conversation.OfferedChoices = [];
         conversation.OfferedReplies = [];
-        return $"[The user picked this from the options you offered] {Describe(record)}.";
+        return ($"[The user picked this from the options you offered] {Describe(record)}.", record.Name);
     }
 
     /// <summary>A quick reply, in the app's words, once it is known to be one the last reply offered.</summary>
-    private string Replied(ProtonQuickReply reply, ProtonConversation conversation)
+    private (string Text, string Shown) Replied(ProtonQuickReply reply, ProtonConversation conversation)
     {
         if (!conversation.OfferedReplies.Contains(reply) || (ProtonUiRules.IsYesOrNo(reply) && conversation.HasPendingAction(clock.UtcNow)))
         {
@@ -275,11 +304,12 @@ public sealed class ProtonChatAgent(
 
         conversation.OfferedChoices = [];
         conversation.OfferedReplies = [];
-        return $"[The user picked this from the options you offered] {ProtonUiRules.Option(reply).Label}.";
+        var label = ProtonUiRules.Option(reply).Label;
+        return ($"[The user picked this from the options you offered] {label}.", label);
     }
 
     /// <summary>The suggested reply the user tapped, taken from what this conversation offered: the client sends only its place.</summary>
-    private static string Suggested(int index, ProtonConversation conversation)
+    private static (string Text, string Shown) Suggested(int index, ProtonConversation conversation)
     {
         if (index < 0 || index >= conversation.OfferedSuggestions.Count)
         {
@@ -288,7 +318,7 @@ public sealed class ProtonChatAgent(
 
         var text = conversation.OfferedSuggestions[index];
         conversation.OfferedSuggestions = [];
-        return text;
+        return (text, text);
     }
 
     /// <summary>
@@ -351,6 +381,7 @@ public sealed class ProtonChatAgent(
             // what comes after such a call is only a closing line, so the two are kept together
             var answered = "";
             var askedToAnswer = false;
+            var askedForVisual = false;
             for (var trip = 1; trip <= settings.MaxRoundTrips; trip++)
             {
                 var lastTrip = trip == settings.MaxRoundTrips || turn.ToolCalls.Count >= settings.MaxToolCallsPerQuestion;
@@ -405,6 +436,21 @@ public sealed class ProtonChatAgent(
 
                 // the provider paused a long server-side step (a tool search): sending the turn back lets it carry on
                 if (response.StopReason == StopReason.PauseTurn && !lastTrip) continue;
+
+                // The user asked for a chart or a table in their own words and the answer came without it: the model is
+                // sent back once, to show it or say why the data can't take that form. What it wrote stays the answer.
+                if (notes.Visual is { } wanted && !askedForVisual && !lastTrip && response.StopReason == StopReason.EndTurn
+                    && options.Value.Visuals.Enabled && !ProtonVisualRequest.Answered(wanted, turn.ToolCalls))
+                {
+                    askedForVisual = true;
+                    answered = Join(answered, TextOf(response));
+                    turn.Messages.Add(new MessageParam
+                    {
+                        Role = Role.User,
+                        Content = new List<ContentBlockParam> { new TextBlockParam { Text = ProtonVisualRequest.Reminder(wanted) } },
+                    });
+                    continue;
+                }
 
                 turn.Finish(response, Answer(response, answered), lastTrip);
                 if (turn.Outcome == ProtonOutcome.Refused)
@@ -492,8 +538,8 @@ public sealed class ProtonChatAgent(
         return message.ToMessage();
     }
 
-    /// <summary>Tools that only add buttons under the answer: the text before them is part of the answer.</summary>
-    private static readonly IReadOnlySet<string> ButtonTools = new HashSet<string>(StringComparer.Ordinal) { "suggest_replies", "offer_choices" };
+    /// <summary>Tools that only add something under the answer (buttons, a chart, a table): the text before them is part of the answer.</summary>
+    private static readonly IReadOnlySet<string> ButtonTools = new HashSet<string>(StringComparer.Ordinal) { "suggest_replies", "offer_choices", "present_data" };
 
     private static string Answer(Message response, string answered)
     {
@@ -601,7 +647,8 @@ public sealed class ProtonChatAgent(
 /// <param name="Suggested">The question is one of Proton's suggested replies, tapped rather than typed.</param>
 /// <param name="Memories">What the user asked Proton to remember, framed as their preferences.</param>
 /// <param name="Spoken">The question was said aloud in a voice session.</param>
-internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false, string? Memories = null, bool Spoken = false);
+/// <param name="Visual">The chart or table the user asked for in their own words, if any.</param>
+internal sealed record ProtonNotes(string? Page, string? Company, bool Suggested = false, string? Memories = null, bool Spoken = false, ProtonVisualAsk? Visual = null);
 
 /// <summary>One question's progress: the messages it adds, the tools it ran, the tokens it used and how it ended.</summary>
 internal sealed class ProtonTurn(string model)
@@ -733,6 +780,9 @@ public sealed class ProtonQuestion : IAsyncDisposable
 
     /// <summary>The question as the model gets it: typed, or written by the app for a button.</summary>
     internal string Text { get; }
+
+    /// <summary>The question as the user saw it: what they typed or said, or the button's label.</summary>
+    internal string Shown { get; init; } = string.Empty;
 
     internal ProtonNotes Notes { get; }
 

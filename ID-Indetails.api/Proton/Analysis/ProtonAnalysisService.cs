@@ -48,6 +48,10 @@ public sealed class ProtonAnalysisService(
     public const string NoExecutionHours = "hours: Execution doesn't log hours";
     public const string HoursAreRecorded = "hours are the time people recorded, which isn't necessarily all the work done";
 
+    /// <summary>Said when a domain's money follow-ups reached their cap, so the list isn't read as every problem there is.</summary>
+    public static string MoneyCapped(string domain)
+        => $"money follow-ups in {domain}: only the {Business.Finance.MoneyAttention.MaxItems} most urgent are checked, there may be more";
+
     private const int PageSize = 100;
     private const int MaxPages = 20;
 
@@ -153,8 +157,14 @@ public sealed class ProtonAnalysisService(
 
             if (await context.CanCallAsync(MoneyAttention))
             {
-                signals.AddRange(MoneySignals(await MoneyAttentionAsync(code, cancellationToken), code));
+                var moneyItems = await MoneyAttentionAsync(code, cancellationToken);
+                signals.AddRange(MoneySignals(moneyItems, code));
                 signals.AddRange(await CostChangeSignalsAsync(code, context.Today, cancellationToken));
+                if (moneyItems.Count >= Business.Finance.MoneyAttention.MaxItems)
+                {
+                    // the dashboard's list stops at its most urgent items: more projects may have the same problem
+                    omitted.Add(MoneyCapped(code));
+                }
             }
             else
             {
