@@ -22,6 +22,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | Uploads: message and work-entry attachments, profile photos, the company logo and sign-in branding | [files.md](files.md) | `MR-Files` |
 | The prototype gaps: Design cost over time, client overview, list totals, CSV export, wider search, timeline entries, People columns, overtime preview, site teams | [projects.md](projects.md), [clients.md](clients.md), [design.md](design.md), [me.md](me.md) | `MR-Gaps` |
 | PDFs of invoices, statements and project reports; emailing invoices and statements | [documents.md](documents.md) | `MR-Gaps` |
+| The phone app's API: 30-day mobile sessions, push devices, pushes and reminders, notification settings, duplicate-safe offline materials and labour weeks | [authentication.md](authentication.md#mobile-sessions), [notifications.md](notifications.md#pushes), [me.md](me.md#my-devices), [execution.md](execution.md) | `MR-Mobile-Api` |
 
 The tests: 369 unit tests and 297 integration tests against real MySQL. The integration run takes about 4 minutes ([local-development.md](local-development.md#tests)).
 

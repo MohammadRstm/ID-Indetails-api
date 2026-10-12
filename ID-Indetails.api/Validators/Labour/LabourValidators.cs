@@ -28,6 +28,7 @@ public sealed class SubmitLabourWeekRequestValidator : AbstractValidator<SubmitL
                 .Must((d, pay) => d.Workers * pay <= MoneyRules.MaxAmount).WithMessage("Workers × daily pay is too large.");
         });
         RuleFor(x => x.Note).ClientText("Note", 500);
+        RuleFor(x => x.ExpectedVersion).MaximumLength(32).WithMessage("The expected version is too long.");
     }
 }
 
