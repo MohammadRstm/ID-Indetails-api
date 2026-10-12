@@ -52,13 +52,18 @@ public sealed class FakeAnthropic : HttpMessageHandler
     /// <param name="inputTokens">What the request "cost" in input tokens, to test limits on a conversation's size.</param>
     public static string Text(string text, int inputTokens = 1200) => Message("end_turn", new { type = "text", text }, inputTokens);
 
-    private static string Message(string stopReason, object content, int inputTokens = 1200) => JsonSerializer.Serialize(new
+    /// <summary>A response made of several blocks, in order (for example the server's own tool search before a tool call).</summary>
+    public static string Blocks(string stopReason, params object[] blocks) => Message(stopReason, blocks);
+
+    private static string Message(string stopReason, object content, int inputTokens = 1200) => Message(stopReason, new[] { content }, inputTokens);
+
+    private static string Message(string stopReason, object[] content, int inputTokens = 1200) => JsonSerializer.Serialize(new
     {
         id = "msg_" + Guid.NewGuid().ToString("N")[..12],
         type = "message",
         role = "assistant",
         model = "claude-sonnet-5-5",
-        content = new[] { content },
+        content,
         stop_reason = stopReason,
         stop_sequence = (string?)null,
         usage = new { input_tokens = inputTokens, output_tokens = 80, cache_creation_input_tokens = 0, cache_read_input_tokens = 400 },

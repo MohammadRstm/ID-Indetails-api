@@ -2,6 +2,7 @@ using System.Net;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Hubs;
 using ID_Indetails.api.Jobs;
+using ID_Indetails.api.Proton.Safety;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Activity.Implementation;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
@@ -292,6 +293,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
         services.AddProton();
+        // last, so they wrap the real senders: no email, file, notification or live signal while a Proton tool runs
+        services.AddProtonSideEffectGuards();
 
         return services;
     }

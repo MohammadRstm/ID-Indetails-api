@@ -46,6 +46,21 @@ POST /api/proton/messages
   else); action tools mirror a write endpoint but only *propose* (see Controlled actions); and while any tool runs,
   an EF Core command interceptor refuses every statement that isn't a `SELECT` (`Proton/Safety/ProtonReadOnly.cs`).
   A refused write is logged as an error.
+  Nor can a tool reach anyone or leave a change behind while it runs:
+  - the email sender, file storage, notification sender and live updates are wrapped last in the app's wiring
+    (`Proton/Safety/ProtonSideEffectGuards.cs`) and refuse while a tool runs;
+  - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
+    proposal row) can't write it.
+- **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
+  118 write endpoints:
+  - a built action (8), or one planned at a confirmation tier and family (68);
+  - a prefilled form (2), or a place opened for the user (22);
+  - a read-only POST (3), never (11), or Proton's own controls (4).
+
+  `ProtonCoverageTests` fails when an endpoint has no entry, when an action and its tool disagree, when an action
+  needing a money, pay, access or company-rules permission isn't confirmed strongly in the matching family, when a
+  delete without a restore isn't strong, or when an endpoint that emails someone isn't flagged. The sensitivity tags
+  are a code-only property of `PermissionCatalog.Definition` (not seeded).
 - **The model is replaceable, the tools aren't.** `ProtonToolbox` and the tools are provider-neutral. The chat
   (`Proton/Agent/ProtonChatAgent.cs`) is the only code that knows Claude. A future live-voice interface would be another
   agent over the same toolbox.
@@ -306,7 +321,8 @@ per-question facts go in the context note.
 
 - Every question is one row in `proton_usage`: who, when, conversation, model, prompt version, outcome
   (`answered`, `refused`, `limited`, `failed`), model and tool call counts, tokens, the **estimated** cost, the question,
-  the answer (up to 8,000 characters) and the tool calls (name, parameters, status, duration — never their results).
+  the answer (up to 8,000 characters) and the tool calls (name, status, duration, and parameters with free text
+  replaced by its length — never their results).
   Failed questions are recorded too, with the tokens they used.
 - **Monthly company budget** (USD): `Proton:MonthlyBudgetUsd` plus that month's top-ups (`proton_budget_top_ups`,
   added by super admins, never edited). Once the month's estimated cost reaches it, nobody can ask until a top-up.
@@ -351,7 +367,8 @@ Locally: `dotnet user-secrets set "Proton:ApiKey" "<key>"` and `"Proton:Enabled"
 ## Logs
 
 Category `ID_Indetails.api.Proton`: each tool call (name, status, duration, parameters with free text replaced by its
-length), refusals as warnings, failures as errors. Question and answer text never go to the logs.
+length), refusals as warnings, failures as errors. One line per question gives its outcome, wall time,
+time to the first model reply, model and tool calls, time in tools, tokens and estimated cost. Question and answer text never go to the logs.
 
 ## Tests
 

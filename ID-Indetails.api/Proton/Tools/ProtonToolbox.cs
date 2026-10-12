@@ -130,7 +130,7 @@ public sealed class ProtonToolbox(
             try
             {
                 // Action tools only propose here: they run inside the same read-only guard as every read.
-                var output = await ProtonReadOnly.RunAsync(() => tool.RunAsync(input, session.Context, timeout.Token));
+                var output = await RunGuardedAsync(tool, input, session.Context, timeout.Token);
                 result = output.Proposal is { } proposal && tool is IProtonActionTool action
                     ? await ProposeAsync(session, action, input, proposal, output, watch, cancellationToken)
                     : Ok(name, input, new { status = "ok", basis = output.Basis, data = output.Data }, output, watch);
@@ -175,6 +175,31 @@ public sealed class ProtonToolbox(
         _log.Log(level, "Proton tool {Tool} {Status} in {ElapsedMs} ms with {Input}.",
             name, result.Status, result.ElapsedMs, ProtonInputSummary.Of(input));
         return result;
+    }
+
+    /// <summary>
+    /// The tool inside the read-only guard. A change it staged without saving would be written by the next save in the
+    /// request (the proposal row, the usage record), so it is dropped and the call refused, as a database write is.
+    /// </summary>
+    private async Task<ProtonToolOutput> RunGuardedAsync(IProtonTool tool, JsonElement input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var stagedBefore = unitOfWork.HasChanges;
+        var leaked = false;
+        ProtonToolOutput? output = null;
+        try
+        {
+            output = await ProtonReadOnly.RunAsync(() => tool.RunAsync(input, context, cancellationToken));
+        }
+        finally
+        {
+            if (!stagedBefore && unitOfWork.HasChanges)
+            {
+                unitOfWork.DiscardChanges();
+                leaked = true;
+            }
+        }
+
+        return leaked ? throw new ProtonWriteRefusedException("Proton tools are read-only: a change staged during a lookup was dropped.") : output!;
     }
 
     /// <summary>
@@ -279,17 +304,22 @@ public sealed class ProtonToolSession(
         => toolbox.ExecuteAsync(this, name, arguments, cancellationToken);
 }
 
-/// <summary>Tool inputs for logs: ids, numbers, dates and enum values as they are; other text only as its length.</summary>
+/// <summary>
+/// Tool inputs for logs and the usage record: ids, numbers, dates and enum values as they are; other text only as its
+/// length, so a question's names, notes and messages are never kept through its tool calls.
+/// </summary>
 public static class ProtonInputSummary
 {
-    public static string Of(JsonElement input)
+    public static string Of(JsonElement input) => Summarize(input).ToJsonString();
+
+    public static JsonObject Summarize(JsonElement input)
     {
+        var summary = new JsonObject();
         if (input.ValueKind != JsonValueKind.Object)
         {
-            return "{}";
+            return summary;
         }
 
-        var summary = new JsonObject();
         foreach (var property in input.EnumerateObject())
         {
             summary[property.Name] = property.Value.ValueKind switch
@@ -302,7 +332,7 @@ public static class ProtonInputSummary
             };
         }
 
-        return summary.ToJsonString();
+        return summary;
     }
 
     private static bool IsCode(string value)

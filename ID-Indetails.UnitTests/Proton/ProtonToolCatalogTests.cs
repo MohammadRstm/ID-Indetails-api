@@ -6,10 +6,7 @@ using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Extensions;
 using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Tools;
-using ID_Indetails.api.Configuration.Options;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using Moq;
 using Shouldly;
 
 namespace ID_Indetails.UnitTests.Proton;
@@ -17,11 +14,9 @@ namespace ID_Indetails.UnitTests.Proton;
 /// <summary>Guarantees about the tool set as a whole: read-only, authorized like the API, and without the excluded data.</summary>
 public class ProtonToolCatalogTests
 {
-    private static readonly Type[] ToolTypes = typeof(IProtonTool).Assembly.GetTypes()
-        .Where(t => typeof(IProtonTool).IsAssignableFrom(t) && t is { IsClass: true, IsAbstract: false })
-        .ToArray();
+    private static readonly Type[] ToolTypes = ProtonTestTools.Types;
 
-    private static readonly IReadOnlyList<IProtonTool> Tools = ToolTypes.Select(Create).ToList();
+    private static readonly IReadOnlyList<IProtonTool> Tools = ProtonTestTools.All;
 
     [Fact]
     public void Every_tool_is_registered_once_with_a_unique_snake_case_name()
@@ -72,12 +67,10 @@ public class ProtonToolCatalogTests
             PermissionCodes.PaymentRecord, PermissionCodes.PaymentVoid, PermissionCodes.ExpenseManage, PermissionCodes.EmployeePayManage,
             PermissionCodes.ProjectPricingManage, PermissionCodes.BillingSettingsManage, PermissionCodes.ExchangeRateManage,
         ];
+        // the actions that exist are exactly the ones the coverage registry lists as built (see ProtonCoverageTests)
         var actions = Tools.OfType<IProtonActionTool>().ToList();
         actions.Select(a => a.Name).ShouldBe(
-        [
-            "propose_add_requirement", "propose_update_requirement", "propose_set_requirement_done",
-            "propose_change_project_status", "propose_update_project", "propose_create_project",
-        ], ignoreOrder: true);
+            ProtonCoverage.Entries.Where(e => e.Kind == ProtonCoverageKind.Action).Select(e => e.Tool!).Distinct(), ignoreOrder: true);
         foreach (var action in actions)
         {
             action.Endpoint.Name.ShouldNotContain("Delete", Case.Insensitive, action.Name);
@@ -117,7 +110,11 @@ public class ProtonToolCatalogTests
         Tools.Single(t => t.Name == "summarize_changes").InputSchema.ToJsonString().ShouldContain("\"last7_days\"");
     }
 
-    /// <summary>Pay, rates, admin salaries (and the net profit that reveals them), bank details and secrets never reach the model.</summary>
+    /// <summary>
+    /// Pay, rates, admin salaries (and the net profit that reveals them), bank details and secrets never reach the model:
+    /// not in what tools return, nor in proposal previews and stored arguments (which go back to the model), nor in UI
+    /// commands.
+    /// </summary>
     [Fact]
     public void No_tool_output_can_carry_the_excluded_fields()
     {
@@ -127,8 +124,12 @@ public class ProtonToolCatalogTests
             "UnconvertedAdminSalaries", "NetProfit", "CurrentPay", "Pay", "PayHistory", "Salary", "BankAccount",
             "BankName", "Iban", "Swift", "PasswordHash", "Token", "ApiKey",
         ];
+        // A site crew's daily pay is a site cost, already shown to anyone who sees the project (decision 13).
+        string[] payAllowed = ["DailyPay"];
+        string[] namespaces = ["ID_Indetails.api.Proton.Tools", "ID_Indetails.api.Proton.Actions", "ID_Indetails.api.Proton.Ui"];
         var outputs = typeof(IProtonTool).Assembly.GetTypes()
-            .Where(t => t.Namespace == typeof(IProtonTool).Namespace && !typeof(IProtonTool).IsAssignableFrom(t) && !t.Name.EndsWith("Input"));
+            .Where(t => namespaces.Contains(t.Namespace) && !typeof(IProtonTool).IsAssignableFrom(t) && !t.Name.EndsWith("Input")
+                && !t.Name.Contains('<'));
 
         var properties = new HashSet<string>();
         var seen = new HashSet<Type>();
@@ -138,6 +139,8 @@ public class ProtonToolCatalogTests
         }
 
         properties.Intersect(excluded).ShouldBeEmpty();
+        // any other pay field ("BasePay", "PayRate"…) needs a decision too: "Pay" as a word, not "Payment"
+        properties.Where(p => Regex.IsMatch(p, "Pay(?![a-z])") && !payAllowed.Contains(p)).ShouldBeEmpty();
     }
 
     private static void Collect(Type type, HashSet<string> properties, HashSet<Type> seen)
@@ -164,20 +167,4 @@ public class ProtonToolCatalogTests
             Collect(property.PropertyType, properties, seen);
         }
     }
-
-    /// <summary>A tool with mocked services: enough to read its name, endpoint and schema.</summary>
-    private static IProtonTool Create(Type type) => (IProtonTool)Build(type);
-
-    /// <summary>Mocks for interfaces; Proton's own sealed services (the analysis service) built from mocks in turn.</summary>
-    private static object Build(Type type)
-    {
-        var constructor = type.GetConstructors().Single();
-        var arguments = constructor.GetParameters().Select(p => Argument(p.ParameterType)).ToArray();
-        return constructor.Invoke(arguments);
-    }
-
-    private static object Argument(Type type)
-        => type == typeof(IOptions<ProtonOptions>) ? Options.Create(new ProtonOptions())
-            : type.IsSealed ? Build(type)
-            : ((Mock)Activator.CreateInstance(typeof(Mock<>).MakeGenericType(type))!).Object;
 }

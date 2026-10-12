@@ -8,6 +8,12 @@ public interface IUnitOfWork
 {
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Whether anything is staged and not saved yet.</summary>
+    bool HasChanges { get; }
+
+    /// <summary>Drops everything staged and not saved, so a later save can't write it.</summary>
+    void DiscardChanges();
+
     /// <summary>
     /// Starts a transaction. Disposing it without <see cref="IUnitOfWorkTransaction.CommitAsync"/>
     /// rolls everything back.
