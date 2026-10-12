@@ -58,7 +58,13 @@ public sealed class ReportService(
         var total = views.Sum(e => e.Minutes);
         var overtimeById = await overtime.OvertimeOfAsync(views, cancellationToken);
         var weeks = Math.Clamp((int)Math.Ceiling((to.DayNumber - from.DayNumber + 1) / 7.0), MinReportWeeks, MaxReportWeeks);
-        var weekly = WorkStats.Weekly(worked, to, weeks, calendar.FirstDayOfWeek);
+        // The bars are whole weeks, and the first ones can start before the range: their work is loaded too, so a bar
+        // is never zero just because its days weren't read. Totals and breakdowns still cover the range only.
+        var firstWeek = WorkStats.WeekStartOf(to, calendar.FirstDayOfWeek).AddDays(-7 * (weeks - 1));
+        var before = firstWeek < from ? await EntriesAsync(query, firstWeek, from.AddDays(-1), cancellationToken) : [];
+        var weekWorked = worked.Concat(before.Select(ToWorked)).ToList();
+        var weekly = WorkStats.Weekly(weekWorked, to, weeks, calendar.FirstDayOfWeek);
+        var weekWorkedByProject = weekWorked.GroupBy(w => w.ProjectId).ToDictionary(g => g.Key, g => g.ToList());
         var projects = (await reports.DesignProjectsAsync(cancellationToken)).ToDictionary(p => p.Id);
 
         var byProject = views
@@ -74,7 +80,7 @@ public sealed class ReportService(
                     g.Count(),
                     g.Select(e => e.UserId).Distinct().Count(),
                     SharePct(minutes, total),
-                    WorkStats.Weekly(g.Select(ToWorked), to, weeks, calendar.FirstDayOfWeek).Select(w => w.Minutes).ToList());
+                    WorkStats.Weekly(weekWorkedByProject[g.Key], to, weeks, calendar.FirstDayOfWeek).Select(w => w.Minutes).ToList());
             })
             .OrderByDescending(p => p.Minutes)
             .ToList();
@@ -156,8 +162,12 @@ public sealed class ReportService(
         var today = clock.CompanyToday;
         var from = query.From ?? WorkStats.QuarterStartOf(today);
         var to = query.To ?? today;
+        return (actor, from, to, await EntriesAsync(query, from, to, cancellationToken));
+    }
 
-        var views = await entries.ListAsync(
+    /// <summary>The report's work between two company days, inclusive, with its filters.</summary>
+    private Task<IReadOnlyList<WorkEntryView>> EntriesAsync(WorkReportQuery query, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+        => entries.ListAsync(
             new WorkEntrySearch(
                 query.UserId,
                 query.ProjectId,
@@ -166,8 +176,6 @@ public sealed class ReportService(
                 clock.CompanyDayStartUtc(to.AddDays(1)),
                 InternalOnly: query.Internal),
             cancellationToken);
-        return (actor, from, to, views);
-    }
 
     private static IReadOnlyList<ReportClientResponse> ByClient(IEnumerable<WorkEntryView> views)
         => views
@@ -189,7 +197,10 @@ public sealed class ReportService(
             ? (query.From!.Value, query.From.Value.AddDays(-(end.DayNumber - query.From.Value.DayNumber + 1)), query.From.Value.AddDays(-1))
             : Periods(query.Period, today);
         var weekStart = WorkStats.WeekStartOf(today, calendar.FirstDayOfWeek);
-        var since = Min(previousFrom, weekStart);
+        var weeks = (int)Math.Ceiling((end.DayNumber - from.DayNumber + 1) / 7.0);
+        // the bars are whole weeks, the earliest starting before the previous period: read their work too
+        var previousFirstWeek = WorkStats.WeekStartOf(previousTo, calendar.FirstDayOfWeek).AddDays(-7 * (weeks - 1));
+        var since = Min(Min(previousFrom, weekStart), previousFirstWeek);
 
         var rows = await entries.RowsAsync(new WorkEntrySearch(From: clock.CompanyDayStartUtc(since)), cancellationToken);
         var worked = rows.Select(r => new WorkStats.Worked(r.Id, r.UserId, r.ProjectId, clock.ToCompanyTime(r.StartedAt), r.Minutes)).ToList();
@@ -197,7 +208,6 @@ public sealed class ReportService(
         var previous = worked.Where(w => w.Day >= previousFrom && w.Day <= previousTo).ToList();
         var thisWeek = worked.Where(w => w.Day >= weekStart && w.Day <= today).ToList();
         var overtimeById = await overtime.OvertimeOfAsync(rows.Where(r => clock.ToCompanyDate(r.StartedAt) >= from), cancellationToken);
-        var weeks = (int)Math.Ceiling((end.DayNumber - from.DayNumber + 1) / 7.0);
 
         var projects = await reports.DesignProjectsAsync(cancellationToken);
         var titles = projects.ToDictionary(p => p.Id, p => p.Title);

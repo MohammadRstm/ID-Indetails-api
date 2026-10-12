@@ -62,6 +62,34 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await (await Client.GetAsync("/api/reports/work", admin.AccessToken)).ReadAsync<WorkReportResponse>()).Money.ShouldBeNull();
     }
 
+    /// <summary>
+    /// Regression: the weekly bars reach back to whole weeks before a short range, but only the range's work was
+    /// read, so those earlier bars showed 0 even when work was logged then.
+    /// </summary>
+    [Fact]
+    public async Task Weekly_bars_before_a_short_range_show_the_work_logged_then_not_zero()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        // Tuesday 27 January 2026, two weeks before the range: 2 hours. Tuesday 10 February, in the range: 1 hour.
+        await Work.InsertAsync(anna.User.Id, project.Id, "2026-01-27 07:00:00", "2026-01-27 09:00:00");
+        await Work.InsertAsync(anna.User.Id, project.Id, "2026-02-10 07:00:00", "2026-02-10 08:00:00");
+
+        var report = await (await Client.GetAsync($"/api/reports/work?from=2026-02-09&to=2026-02-11&userId={anna.User.Id}", admin.AccessToken))
+            .ReadAsync<WorkReportResponse>();
+
+        // the range's figures count the range only
+        report.TotalMinutes.ShouldBe(60);
+        report.ByProject.Single().Minutes.ShouldBe(60);
+        // three weekly bars, oldest first: the first is the week of 27 January, with its real 2 hours
+        report.Weekly.Count.ShouldBe(3);
+        report.Weekly[0].Minutes.ShouldBe(120);
+        report.Weekly[^1].Minutes.ShouldBe(60);
+        report.ByProject.Single().Weekly.ShouldBe([120, 0, 60]);
+    }
+
     [Fact]
     public async Task The_overview_compares_periods_and_flags_what_needs_attention()
     {
