@@ -27,25 +27,26 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
     public static readonly IReadOnlySet<string> RuleBased = new HashSet<string>(StringComparer.Ordinal)
     {
         "Messages.Contacts", "Messages.Conversations", "Notifications.List", "Teams.List",
+        "Company.GetSettings", "DomainSettings.Get",
     };
 
     /// <summary>
-    /// Write endpoints with no permission of their own because they change only the signed-in person (their name and
-    /// phone): proton:use is their policy here, and they can't reach anyone else.
+    /// Write endpoints with no permission of their own: changing the signed-in person's own name and phone, and sending
+    /// a message, which their service limits to the chats the sender may write in. proton:use is their policy here.
     /// </summary>
-    public static readonly IReadOnlySet<string> Self = new HashSet<string>(StringComparer.Ordinal)
+    public static readonly IReadOnlySet<string> RuleBasedWrites = new HashSet<string>(StringComparer.Ordinal)
     {
-        "Profile.UpdateProfile",
+        "Profile.UpdateProfile", "Messages.SendDirect", "Messages.SendToTeam",
     };
 
-    /// <summary>A write endpoint from <see cref="Self"/>, for an action on the person themselves.</summary>
-    public static ProtonEndpoint OfSelf<TController>(string action) where TController : ControllerBase
+    /// <summary>A write endpoint from <see cref="RuleBasedWrites"/>: its service decides who it may reach.</summary>
+    public static ProtonEndpoint OfRuleBasedWrite<TController>(string action) where TController : ControllerBase
     {
         var name = $"{typeof(TController).Name.Replace("Controller", "")}.{action}";
         var method = typeof(TController).GetMethods(BindingFlags.Public | BindingFlags.Instance).SingleOrDefault(m => m.Name == action);
-        if (!Self.Contains(name) || method is null || method.GetCustomAttribute<HttpGetAttribute>() is not null)
+        if (!RuleBasedWrites.Contains(name) || method is null || method.GetCustomAttribute<HttpGetAttribute>() is not null)
         {
-            throw new InvalidOperationException($"{name} is not a write on the person themselves Proton may stand in for.");
+            throw new InvalidOperationException($"{name} is not a rule-based write Proton may stand in for.");
         }
 
         return new ProtonEndpoint(name, [Authorization.AuthorizationPolicies.PermissionPrefix + Constants.PermissionCodes.ProtonUse], true);

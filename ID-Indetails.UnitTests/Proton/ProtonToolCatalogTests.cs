@@ -61,7 +61,7 @@ public class ProtonToolCatalogTests
 
     /// <summary>Only action tools touch write endpoints, and only the approved low/medium-risk ones, never money or deletion.</summary>
     [Fact]
-    public void Only_action_tools_stand_in_for_write_endpoints_and_none_moves_money_or_deletes()
+    public void Only_action_tools_stand_in_for_write_endpoints_and_money_and_deletes_only_in_their_families()
     {
         foreach (var tool in Tools)
         {
@@ -79,10 +79,19 @@ public class ProtonToolCatalogTests
         var actions = Tools.OfType<IProtonActionTool>().ToList();
         actions.Select(a => a.Name).ShouldBe(
             ProtonCoverage.Entries.Where(e => e.Kind == ProtonCoverageKind.Action).Select(e => e.Tool!).Distinct(), ignoreOrder: true);
+        // a delete or a money write only ever in its own family, which is off until switched on (decisions 4 and 5)
         foreach (var action in actions)
         {
-            action.Endpoint.Name.ShouldNotContain("Delete", Case.Insensitive, action.Name);
-            action.Endpoint.Policies.ShouldAllBe(p => !money.Any(m => p.Contains(m)), action.Name);
+            var family = ProtonCoverage.FamilyOf(action.Name);
+            if (action.Endpoint.Name.Contains("Delete", StringComparison.OrdinalIgnoreCase))
+            {
+                family.ShouldBe(ProtonFamily.Deletes, action.Name);
+            }
+
+            if (action.Endpoint.Policies.Any(p => money.Any(m => p.Contains(m))))
+            {
+                family.ShouldBe(ProtonFamily.Money, action.Name);
+            }
         }
     }
 
@@ -133,7 +142,8 @@ public class ProtonToolCatalogTests
             "BankName", "Iban", "Swift", "PasswordHash", "Token", "ApiKey",
         ];
         // A site crew's daily pay is a site cost, already shown to anyone who sees the project (decision 13).
-        string[] payAllowed = ["DailyPay"];
+        // Whether someone's time away is paid is a yes or no the user gives, never an amount.
+        string[] payAllowed = ["DailyPay", "PayGap"];
         string[] namespaces = ["ID_Indetails.api.Proton.Tools", "ID_Indetails.api.Proton.Actions", "ID_Indetails.api.Proton.Ui"];
         var outputs = typeof(IProtonTool).Assembly.GetTypes()
             .Where(t => namespaces.Contains(t.Namespace) && !typeof(IProtonTool).IsAssignableFrom(t) && !t.Name.EndsWith("Input")

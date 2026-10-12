@@ -156,6 +156,25 @@ public class ProtonEverydayActionsTests(ProtonApiFactory api) : IClassFixture<Pr
     }
 
     [Fact]
+    public async Task Strong_families_stay_off_until_switched_on()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        foreach (var (tool, input) in new (string, object)[]
+        {
+            ("propose_project_lifecycle", new { project_id = project.Id, change = "complete" }),
+            ("propose_deactivate_employee", new { user_id = superAdmin.User.Id }),
+            ("propose_domain_settings", new { domain = "design", hold_logging = true }),
+            ("propose_send_message", new { person_id = superAdmin.User.Id, body = "Hi" }),
+        })
+        {
+            var (reply, result) = await ProposeAsync(superAdmin, tool, input);
+            reply.PendingAction.ShouldBeNull(tool);
+            result["message"]!.GetValue<string>().ShouldContain("switched on", customMessage: tool);
+        }
+    }
+
+    [Fact]
     public async Task A_comment_reaches_the_entry_and_needs_the_comment_permission()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

@@ -56,8 +56,8 @@ public class ProtonCoverageTests
     {
         int Count(ProtonCoverageKind kind) => ProtonCoverage.Entries.Count(e => e.Kind == kind);
 
-        Count(ProtonCoverageKind.Action).ShouldBe(18);
-        Count(ProtonCoverageKind.Planned).ShouldBe(56);
+        Count(ProtonCoverageKind.Action).ShouldBe(31);
+        Count(ProtonCoverageKind.Planned).ShouldBe(43);
         ProtonCoverage.Entries.Count(e => e is { Kind: ProtonCoverageKind.Planned, Tier: ProtonTier.Standard }).ShouldBe(4);
         Count(ProtonCoverageKind.Prefill).ShouldBe(2);
         Count(ProtonCoverageKind.Open).ShouldBe(24);

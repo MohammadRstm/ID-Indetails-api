@@ -30,7 +30,8 @@ public sealed record MessageView(
     long? RefCommentId,
     IReadOnlyList<MessagePerson> Mentions,
     IReadOnlyList<FileView> Attachments,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool ViaProton);
 
 /// <summary>An existing conversation of the user, with where they read up to and what is still unread.</summary>
 public sealed record ConversationState(

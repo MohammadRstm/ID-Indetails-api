@@ -280,7 +280,8 @@ public sealed class ProtonToolbox(
     /// Runs a confirmed action: only if the user still passes the write endpoint's policies now, and outside the
     /// read-only guard. The tool re-validates its stored request and calls the existing service.
     /// </summary>
-    internal async Task<ProtonActionDone> ExecuteAsync(ProtonToolSession session, string name, string arguments, CancellationToken cancellationToken)
+    internal async Task<ProtonActionDone> ExecuteAsync(
+        ProtonToolSession session, long actionId, string name, string arguments, CancellationToken cancellationToken)
     {
         var tool = session.Tools.OfType<IProtonActionTool>().FirstOrDefault(t => t.Name == name);
         if (tool is null || !await session.Context.CanCallAsync(tool.Endpoint))
@@ -288,6 +289,7 @@ public sealed class ProtonToolbox(
             throw new ForbiddenException(ErrorCodes.Forbidden, "You're no longer allowed to do this.");
         }
 
+        session.Context.ConfirmedActionId = actionId;
         return await tool.ExecuteAsync(arguments, session.Context, cancellationToken);
     }
 
@@ -333,8 +335,8 @@ public sealed class ProtonToolSession(
         => toolbox.RunAsync(this, name, input, cancellationToken);
 
     /// <summary>For the confirmation flow only (<see cref="ProtonActionService"/>); no model ever reaches it.</summary>
-    internal Task<ProtonActionDone> ExecuteAsync(string name, string arguments, CancellationToken cancellationToken)
-        => toolbox.ExecuteAsync(this, name, arguments, cancellationToken);
+    internal Task<ProtonActionDone> ExecuteAsync(long actionId, string name, string arguments, CancellationToken cancellationToken)
+        => toolbox.ExecuteAsync(this, actionId, name, arguments, cancellationToken);
 }
 
 /// <summary>
