@@ -30,7 +30,7 @@ All of them need only a signed-in, active user. Who may read and write each chat
 - **Messages** are up to 4,000 characters and can't be edited or deleted. A message has text, photos or videos, or both: `attachmentIds` takes up to 10 of the sender's own uploads, each attached once, which the chat's people can then download ([files.md](files.md)). Each message lists its `attachments`.
 - **Shared comments.** A work-entry comment posted with `sendToGroup: true` also goes to the entry author's team chat as a `task_comment` message: the comment text, the entry as it is now (`taskComment`: author, project, description and start; null once the entry is deleted). Its `minutes` and `attachment` are only filled for readers who may read the entry itself (its author and holders of `work_entry:view_all`): colleagues' hours stay private, and a mention of everyone in the chat, the prototype's @all. If the author is in no team, the comment is refused (`422 no_team_chat`).
 - **Teams.** A team whose chat has messages can't be deleted (`422 team_has_chat`), so history is never lost. Rename it instead.
-- Messages don't send bell notifications: the messages badge covers them, as in the prototype.
+- Messages don't send bell notifications: the messages badge covers them, as in the prototype. They do push to the other people's phones, with the sender and a short preview ([notifications.md](notifications.md#pushes)).
 - **Sent through Proton.** A message Proton sent as the user, after they confirmed its card, carries
   `messages.proton_action_id` (the confirmed action; null for everything typed, and set back to null if that action is
   ever cleared out). Each message says so as `viaProton`, and the chat shows a small "with Proton" mark, so recipients

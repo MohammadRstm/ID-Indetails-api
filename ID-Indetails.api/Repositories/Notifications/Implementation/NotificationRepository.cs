@@ -64,6 +64,23 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
+        return (await DescribeAsync(rows, cancellationToken), total);
+    }
+
+    public async Task<NotificationView?> GetVisibleAsync(
+        long id,
+        long recipientId,
+        IReadOnlyList<string> visibleDomains,
+        IReadOnlyList<string> hiddenKinds,
+        CancellationToken cancellationToken = default)
+    {
+        var row = await Visible(recipientId, visibleDomains, hiddenKinds).AsNoTracking().SingleOrDefaultAsync(n => n.Id == id, cancellationToken);
+        return row is null ? null : (await DescribeAsync([row], cancellationToken))[0];
+    }
+
+    /// <summary>The rows with their actor's name and photo and their project's title and tile, in the same order.</summary>
+    private async Task<IReadOnlyList<NotificationView>> DescribeAsync(IReadOnlyList<Notification> rows, CancellationToken cancellationToken)
+    {
         var actorIds = rows.Where(n => n.ActorId != null).Select(n => n.ActorId!.Value).Distinct().ToList();
         var projectIds = rows.Where(n => n.ProjectId != null).Select(n => n.ProjectId!.Value).Distinct().ToList();
         var actors = (await db.Users.AsNoTracking()
@@ -76,7 +93,7 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
             .Select(p => new { p.Id, p.Title, p.DomainCode, p.Icon, p.Tint })
             .ToDictionaryAsync(p => p.Id, cancellationToken);
 
-        var items = rows.Select(n =>
+        return rows.Select(n =>
         {
             var project = n.ProjectId is { } p ? projects.GetValueOrDefault(p) : null;
             (string Name, long? PhotoFileId)? actor = n.ActorId is { } a && actors.TryGetValue(a, out var found) ? found : null;
@@ -98,8 +115,6 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
                 n.CreatedAt,
                 n.ReadAt);
         }).ToList();
-
-        return (items, total);
     }
 
     public Task<int> CountUnreadAsync(long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds, CancellationToken cancellationToken = default)
