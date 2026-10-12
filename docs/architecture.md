@@ -23,7 +23,7 @@ Request → Middleware → Controller → FluentValidation → Service → Busin
 | Folder | What goes in it |
 |---|---|
 | `Controllers/` | Thin HTTP endpoints. They receive requests, call a service and return a response. No business logic and no database access. |
-| `Middlewares/` | Cross-cutting HTTP concerns: centralized exception handling, correlation IDs, sending a request's live signals once it has succeeded. |
+| `Middlewares/` | Cross-cutting HTTP concerns: centralized exception handling, correlation IDs, sending a request's live signals and queueing its pushes once it has succeeded. |
 | `Hubs/` | SignalR hubs. `LiveHub` (`/hubs/live`) pushes "something changed" signals to signed-in clients; see [messaging.md](messaging.md#live-updates). |
 | `Validators/` | FluentValidation validators for request DTOs (shape, format, ranges). Not for rules that depend on stored state. |
 | `DTO/Request/`, `DTO/Response/` | What the API accepts and returns. Entities are never exposed directly. |
@@ -39,7 +39,7 @@ Request → Middleware → Controller → FluentValidation → Service → Busin
 | `Exceptions/` | Typed exceptions that centralized handling turns into the uniform error contract. The folder is plural on purpose: a folder named `Exception` creates a namespace that hides `System.Exception` (CS0118). |
 | `Authorization/Handlers/`, `Authorization/Requirements/` | Policy requirements and handlers for permission and domain checks. See [authorization.md](authorization.md). |
 | `Extensions/` | `IServiceCollection` and `WebApplication` extension methods, so `Program.cs` stays short. |
-| `HealthChecks/`, `RateLimiting/`, `Jobs/` | Health endpoints, rate-limit policies and background jobs. |
+| `HealthChecks/`, `RateLimiting/`, `Jobs/` | Health endpoints, rate-limit policies and background jobs (scheduled notifications, the push sender and its receipts, file and device cleanup). |
 
 ## Conventions
 

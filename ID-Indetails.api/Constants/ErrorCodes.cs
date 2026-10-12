@@ -119,6 +119,7 @@ public static class ErrorCodes
     public const string LabourWeekOutOfRange = "labour_week_out_of_range";
     public const string LabourDayOutsideWeek = "labour_day_outside_week";
     public const string LabourDayInFuture = "labour_day_in_future";
+    public const string LabourWeekChanged = "labour_week_changed";
     public const string StatementEmpty = "statement_empty";
 
     // Dependencies

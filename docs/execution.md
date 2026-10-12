@@ -9,7 +9,7 @@ What site staff and admins record on an Execution project, and how it is priced 
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/projects/{id}/materials?type=&supplier=&addedById=&from=&to=&search=&page=1&pageSize=30` | `project:view` | Newest first, with totals, types, suppliers and who added them |
-| `POST /api/projects/{id}/materials` | `material:create` | `{ items: [{ name, quantity, unit, unitCost, amount, supplier, note, clientPrice }] }`, 1–100 at a time |
+| `POST /api/projects/{id}/materials` | `material:create` | `{ items: [{ name, quantity, unit, unitCost, amount, supplier, note, clientPrice, clientRef }] }`, 1–100 at a time. Answers the materials in request order |
 | `PUT /api/projects/{id}/materials/{materialId}` | `material:create` (own) or `material:manage` (anyone's) | Replaces name, quantity, unit, unit cost, amount, supplier and note |
 | `DELETE /api/projects/{id}/materials/{materialId}` | `material:create` (own) or `material:manage` (anyone's) | Soft delete (`deleted_at`) |
 | `PUT /api/projects/{id}/materials/{materialId}/client-price` | `project:pricing_manage` | `{ clientPrice }`; `null` returns it to the project's markup |
@@ -24,6 +24,7 @@ Rules (`Business/Materials/MaterialRules.cs`):
 - **Grouping:** types and suppliers are grouped by their text trimmed, with single spaces, in lower case (`type` and `supplier` filters take these keys). A type is labelled as most recently typed. The `from`/`to` filters are days in the company time zone. `matching` totals cover everything the filters match, `all` the whole project.
 - Events: `material_added`, `material_updated`, `material_removed` (cost in the `amount` columns) and `material_priced` (new and previous client price), with the name in the payload.
 - Adding materials sends one `materials_added` notification (the count in the payload) to every active person who holds `material:manage` and can see the domain (super admins included), except the person who added them.
+- **Sent twice.** The phone app records materials offline and may send a batch again when its answer was lost. Each item can carry `clientRef`, a UUID the app gives the material once. If the caller already added a material with that ref, it is returned in the item's place: nothing is added, and no event or notification is sent. A batch whose items all exist changes nothing, and answers even on a site finalised since; one with new items follows the usual rules for those. A ref belongs to the person who added it (two people may use the same one), appears once in a batch, and is never reused on another site (`400`). The website sends none.
 
 Material cost and client prices feed the shared finance calculator (`Business/Finance/ProjectFinance.cs`): cost is converted at the rate of the day a material was added.
 
@@ -32,8 +33,8 @@ Material cost and client prices feed the shared finance calculator (`Business/Fi
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/projects/{id}/labour-weeks` | `project:view` | Every week from the project's first to the current one (or the one it was finalised in), newest first, reported or not, with the labour total |
-| `GET /api/projects/{id}/labour-weeks/{weekStart}` | `project:view` | One week's days. A week not yet reported comes back filled in from the defaults, up to today (`isReported: false`) |
-| `PUT /api/projects/{id}/labour-weeks/{weekStart}` | `labour_report:create` (new or own weeks) or `labour_report:manage` (anyone's) | `{ days: [{ date, workers, dailyPay }], note }` submits the week, or replaces the days of one already reported |
+| `GET /api/projects/{id}/labour-weeks/{weekStart}` | `project:view` | One week's days. A week not yet reported comes back filled in from the defaults, up to today (`isReported: false`). `version` is `"0"` until it is reported, then changes whenever it does |
+| `PUT /api/projects/{id}/labour-weeks/{weekStart}` | `labour_report:create` (new or own weeks) or `labour_report:manage` (anyone's) | `{ days: [{ date, workers, dailyPay }], note, expectedVersion }` submits the week, or replaces the days of one already reported. `expectedVersion` is optional |
 | `GET /api/projects/{id}/labour-defaults` | `project:view` | The defaults in force today and every change |
 | `POST /api/projects/{id}/labour-defaults` | `labour_report:manage` (admins) | `{ workers, dailyPay }`, applying from today |
 
@@ -46,6 +47,15 @@ Rules (`Business/Labour/LabourRules.cs`):
 - People change only the weeks they submitted; `labour_report:manage` changes anyone's (`403 forbidden`). `canEdit` says whether the caller may. Everyone who can see the project sees workers and day rates.
 - Events: `labour_week_submitted` and `labour_week_updated` (the week's total, and the previous one, in the amount columns) and `labour_defaults_set` (the daily pay in the amount columns, the crew sizes in the payload).
 - Submitting or updating a week sends a `labour_week_submitted` notification to every active person who holds `labour_report:manage` and can see the domain (super admins included), except the person who did it.
+- **Sent again, or after a change** (`Business/Labour/LabourResubmission.cs`). The phone app submits weeks offline and sends the `version` it loaded as `expectedVersion`:
+
+  | Situation | Answer |
+  |---|---|
+  | The stored days and note already equal the submission | `200` with the week: nothing saved, no event, no notification. The website gets this too, so an identical save no longer re-notifies the managers |
+  | `expectedVersion` sent, the week changed since, and the days or note differ | `409 labour_week_changed`; the app shows both and lets the person resend against the new version or keep theirs |
+  | Otherwise (the website sends no version) | Saved as before |
+
+  The version is the time of the week's last change in milliseconds; each change is recorded at least a millisecond after the previous one, so it always moves.
 
 ## Client statements
 

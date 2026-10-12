@@ -1,5 +1,6 @@
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -14,13 +15,18 @@ public sealed class SessionService(
     IRefreshTokenRepository refreshTokens,
     IPermissionService permissions,
     IOptions<RefreshTokenOptions> refreshOptions,
+    IOptions<MobileSessionOptions> mobileOptions,
     IClock clock) : ISessionService
 {
-    public async Task<AuthSession> StartAsync(User user, CancellationToken cancellationToken = default)
+    public Task<AuthSession> StartAsync(User user, CancellationToken cancellationToken = default)
+        => StartAsync(user, RefreshTokenClient.Web, Guid.NewGuid(), cancellationToken);
+
+    public async Task<AuthSession> StartAsync(User user, RefreshTokenClient client, Guid sessionId, CancellationToken cancellationToken = default)
     {
         var now = clock.UtcNow;
+        var mobile = client == RefreshTokenClient.Mobile;
         var (cookieValue, storedHash) = SecureTokens.NewRefreshToken();
-        var refreshExpiresAt = now.AddDays(refreshOptions.Value.ExpirationDays);
+        var refreshExpiresAt = now.AddDays(mobile ? mobileOptions.Value.RefreshTokenDays : refreshOptions.Value.ExpirationDays);
 
         var stored = new RefreshToken
         {
@@ -28,10 +34,12 @@ public sealed class SessionService(
             TokenHash = storedHash,
             CreatedAt = now,
             ExpiresAt = refreshExpiresAt,
+            Client = client,
+            SessionId = sessionId,
         };
         refreshTokens.Add(stored);
 
-        var (accessToken, accessExpiresAt) = accessTokens.Create(user);
+        var (accessToken, accessExpiresAt) = accessTokens.Create(user, mobile ? sessionId : null);
 
         var response = new AuthResponse
         {

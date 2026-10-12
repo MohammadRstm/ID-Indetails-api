@@ -19,6 +19,9 @@ public interface ICurrentUser
     string? Domain { get; }
 
     string FullName { get; }
+
+    /// <summary>The phone app's session (the <c>sid</c> claim). Null for the website's tokens.</summary>
+    Guid? SessionId { get; }
 }
 
 public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
@@ -39,6 +42,8 @@ public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 
     public string FullName =>
         $"{Claim(AuthClaimTypes.FirstName)} {Claim(AuthClaimTypes.LastName)}".Trim();
+
+    public Guid? SessionId => Guid.TryParse(Claim(AuthClaimTypes.SessionId), out var id) ? id : null;
 
     private string? Claim(string type) => Principal.FindFirst(type)?.Value;
 }

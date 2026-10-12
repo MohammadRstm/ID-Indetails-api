@@ -48,6 +48,12 @@ public sealed record NewMaterialRequest : MaterialEntryRequest
 {
     /// <summary>A price of its own for the client. Needs <c>project:pricing_manage</c>; empty means the project's markup.</summary>
     public decimal? ClientPrice { get; init; }
+
+    /// <summary>
+    /// The phone app's own id for this material (a UUID). If the caller already added a material with it, that one is
+    /// returned instead of adding another.
+    /// </summary>
+    public Guid? ClientRef { get; init; }
 }
 
 public sealed record AddMaterialsRequest
