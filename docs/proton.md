@@ -764,9 +764,9 @@ answer text never go to the logs.
   super admin's summary covers both domains and the company; attention ranks each project once with its facts;
   change counts leave pay out; the activity date filter; the heavy-analysis limit; the conversation-size limit; and the
   comparison carried into a follow-up.
-- Real model, opt-in (`ProtonEvalTests`): 21 golden questions against a seeded company, checked in code (tools used,
+- Real model, opt-in (`ProtonEvalTests`): 42 golden questions against a seeded company, checked in code (tools used,
   every quoted number found in a tool result, size words only after a rule fired, "why" answers say what the data
-  can't establish, nothing judges a person, no money for a user without `financial:view`). Runs only with
+  can't establish, nothing judges a person, no money for a user without `financial:view`, charts and tables in the form asked for). Runs only with
   `PROTON_EVAL_API_KEY` set (optional `PROTON_EVAL_MODEL`), costs about 2–4 USD, never in CI; the answers are written
   to the test output for review. Run it before enabling Proton and after prompt changes:
   `PROTON_EVAL_API_KEY=... dotnet test ID-Indetails.IntegrationTests --filter ProtonEvalTests --logger "console;verbosity=detailed"`.
