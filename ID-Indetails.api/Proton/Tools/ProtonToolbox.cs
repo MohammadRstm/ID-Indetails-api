@@ -55,7 +55,15 @@ public sealed record ProtonToolResult(
     public IReadOnlyList<Ui.ProtonQuickReplyOption>? QuickReplies { get; init; }
 
     public IReadOnlyList<string>? Suggestions { get; init; }
+
+    public Ui.ProtonBlock? Block { get; init; }
 }
+
+/// <summary>What the model is told of a dataset a tool returned: enough to show it, none of its values (they are in data).</summary>
+/// <param name="Forms">The forms it fits as it is.</param>
+/// <param name="Notes">What the answer should say with it: a period that isn't over, what was left out.</param>
+public sealed record ProtonDatasetNote(
+    string Id, string Title, string? Period, int Rows, int TotalRows, IReadOnlyList<string> Columns, IReadOnlyList<Ui.ProtonPresentForm> Forms, IReadOnlyList<string>? Notes);
 
 /// <summary>Which conversation, model and prompt the tools are used for: recorded with every proposed action.</summary>
 public sealed record ProtonOrigin(Guid ConversationId, string Model, string PromptVersion);
@@ -150,12 +158,23 @@ public sealed class ProtonToolbox(
             {
                 // Action tools only propose here: they run inside the same read-only guard as every read.
                 var output = await RunGuardedAsync(tool, input, session.Context, timeout.Token);
+                // the result's datasets are held for present_data; the model gets their ids and shapes, not their values twice
+                var held = output.Datasets?.Select(d => session.Context.HoldDataset(name, d, clock.UtcNow)).ToList();
+                var notes = held?.Select(h => new ProtonDatasetNote(
+                    h.Id, h.Dataset.Title, h.Dataset.Period, h.Dataset.Rows.Count, h.Dataset.Total,
+                    h.Dataset.Columns.Select(c => c.Unit is { } unit ? $"{c.Key} ({unit.ToString().ToLowerInvariant()})" : c.Key).ToList(),
+                    Ui.ProtonPresentationRules.FormsFor(h.Dataset),
+                    h.Dataset.Notes is { Count: > 0 } said ? said : null)).ToList();
                 result = output.Proposal is { } proposal && tool is IProtonActionTool action
                     ? await ProposeAsync(session, action, input, proposal, output, watch, cancellationToken)
-                    : Ok(name, input, new { status = "ok", basis = output.Basis, data = output.Data }, output, watch);
+                    : Ok(name, input, new { status = "ok", basis = output.Basis, datasets = notes, data = output.Data }, output, watch);
                 if (result.Status == ProtonToolStatus.Ok)
                 {
                     session.Context.Remember(output.Refs);
+                }
+                else
+                {
+                    session.Context.Drop(held ?? []);
                 }
             }
             catch (ProtonToolInputException exception)
@@ -307,6 +326,7 @@ public sealed class ProtonToolbox(
             : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch))
             {
                 Basis = output.Basis, UiCommand = output.UiCommand, Choices = output.Choices, QuickReplies = output.QuickReplies, Suggestions = output.Suggestions,
+                Block = output.Block,
             };
     }
 

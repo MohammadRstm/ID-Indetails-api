@@ -13,6 +13,6 @@ public static class ProtonToolSearch
         "get_domain_dashboard", "get_recent_activity",
         "compare_work", "compare_money", "summarize_changes", "review_project", "get_project_financials", "get_time_summary",
         "get_person_work", "list_work_entries",
-        "open_record", "open_page", "open_surface", "offer_choices", "suggest_replies", "refresh_page",
+        "open_record", "open_page", "open_surface", "offer_choices", "suggest_replies", "present_data", "refresh_page",
     };
 }

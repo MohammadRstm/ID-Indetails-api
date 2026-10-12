@@ -25,6 +25,8 @@ public static class ProtonServiceCollectionExtensions
             .Validate(o => !o.Voice.Enabled || !string.IsNullOrWhiteSpace(o.Voice.ApiKey), "Proton:Voice:ApiKey is required when voice is enabled.")
             .Validate(o => Uri.TryCreate(o.Voice.BaseUrl, UriKind.Absolute, out var url) && (url.Scheme == Uri.UriSchemeHttps || url.IsLoopback),
                 "Proton:Voice:BaseUrl must be an https URL.")
+            .Validate(o => o.History.RetentionDays is >= 1 and <= 3650, "Proton:History:RetentionDays must be between 1 and 3650.")
+            .Validate(o => o.Visuals.MaxBlocksPerAnswer is >= 1 and <= 10 && o.Visuals.DatasetMinutes is >= 1 and <= 240, "Proton:Visuals limits are out of range.")
             .Validate(o => o.Voice.MaxSessionMinutes is >= 1 and <= 60 && o.Voice.PricePerMinuteUsd >= 0 && o.Voice.CloseWaitSeconds is >= 1 and <= 120,
                 "Proton:Voice limits are out of range.")
             .ValidateOnStart();
@@ -45,6 +47,9 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonUsageRepository, ProtonUsageRepository>();
         services.AddScoped<IProtonActionRepository, ProtonActionRepository>();
         services.AddScoped<IProtonMemoryRepository, ProtonMemoryRepository>();
+        services.AddScoped<IProtonHistoryRepository, ProtonHistoryRepository>();
+        services.AddScoped<Proton.History.ProtonHistoryService>();
+        services.AddHostedService<Jobs.ProtonHistoryCleanupJob>();
         services.AddScoped<Proton.Memory.ProtonMemoryService>();
         services.AddScoped<ProtonUsageService>();
         services.AddSingleton<ProtonConversationStore>();
@@ -117,6 +122,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, FillFormTool>();
         services.AddScoped<IProtonTool, SetPreferenceTool>();
         services.AddScoped<IProtonTool, RefreshPageTool>();
+        services.AddScoped<IProtonTool, PresentDataTool>();
 
         // Action tools: they only propose; the user's confirmation carries a proposal out (ProtonActionService).
         services.AddScoped<IProtonTool, ProposeAddRequirementTool>();

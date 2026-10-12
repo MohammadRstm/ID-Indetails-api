@@ -83,6 +83,15 @@ public sealed record ProtonToolOutput(object Data, IReadOnlyList<ProtonRef> Refs
     /// <summary>Set by suggest_replies: what the user might say next, sent back by its place in the list, never as text.</summary>
     public IReadOnlyList<string>? Suggestions { get; init; }
 
+    /// <summary>
+    /// Set by tools whose result can be shown as a chart, a table or headline figures: the same data as typed tables,
+    /// built in code. The conversation keeps them so present_data can show them without the model writing a value.
+    /// </summary>
+    public IReadOnlyList<Ui.ProtonDataset>? Datasets { get; init; }
+
+    /// <summary>Set by present_data: the chart, table or figures shown with the answer.</summary>
+    public Ui.ProtonBlock? Block { get; init; }
+
     public static ProtonToolOutput Of(object data, params ProtonRef[] refs) => new(data, refs);
 }
 

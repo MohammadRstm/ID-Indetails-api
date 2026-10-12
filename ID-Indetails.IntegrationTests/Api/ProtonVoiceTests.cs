@@ -134,6 +134,10 @@ public class ProtonVoiceTests(ProtonVoiceApiFactory api) : IClassFixture<ProtonV
         var questions = await db.ProtonUsage.AsNoTracking()
             .Where(u => u.UserId == superAdmin.User.Id && u.VoiceSeconds == null).OrderBy(u => u.Id).Select(u => u.Channel).ToListAsync();
         questions.ShouldBe([ProtonChannel.Voice, ProtonChannel.Text]);
+        // the saved chat keeps how each question was asked
+        var saved = await db.ProtonConversationMessages.AsNoTracking()
+            .Where(m => m.ConversationId == session.ConversationId && m.Role == ProtonMessageRole.User).OrderBy(m => m.Seq).Select(m => m.Origin).ToListAsync();
+        saved.ShouldBe([ProtonMessageOrigin.Spoken, ProtonMessageOrigin.Typed]);
         await NoSessionsAsync();
     }
 

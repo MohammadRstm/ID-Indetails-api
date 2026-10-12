@@ -39,6 +39,9 @@ public sealed class ProtonActionRepository(IdIndetailsDbContext db) : IProtonAct
     public async Task<IReadOnlyList<ProtonAction>> MineAsync(long userId, int take, CancellationToken cancellationToken = default)
         => await db.ProtonActions.AsNoTracking().Where(a => a.UserId == userId).OrderByDescending(a => a.CreatedAt).Take(take).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<ProtonAction>> InConversationAsync(long userId, Guid conversationId, CancellationToken cancellationToken = default)
+        => await db.ProtonActions.AsNoTracking().Where(a => a.UserId == userId && a.ConversationId == conversationId).OrderBy(a => a.CreatedAt).ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<(ProtonAction Action, string Who)>> AllAsync(int take, CancellationToken cancellationToken = default)
     {
         var rows = await db.ProtonActions.AsNoTracking()

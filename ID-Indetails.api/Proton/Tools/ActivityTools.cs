@@ -1,10 +1,12 @@
 using System.ComponentModel;
 using ID_Indetails.api.Business.Proton;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Activity;
 using ID_Indetails.api.DTO.Request.Meetings;
 using ID_Indetails.api.DTO.Response.Dashboard;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Activity.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Dashboard.Abstraction;
@@ -195,6 +197,22 @@ public sealed class GetDomainDashboardTool(IDashboardService dashboard) : Proton
         var deadlines = await dashboard.DeadlinesAsync(domain, cancellationToken);
         return new ProtonToolOutput(
             new DomainDashboard(cards, deadlines, "Deadlines lists at most 8 requirements; total and overdue count them all."),
-            deadlines.Items.Select(d => new ProtonRef(ProtonRefType.Project, d.Project.Id, d.Project.Title, domain)).Distinct().ToList());
+            deadlines.Items.Select(d => new ProtonRef(ProtonRefType.Project, d.Project.Id, d.Project.Title, domain)).Distinct().ToList())
+        {
+            Datasets = ProtonDatasets.WithRows(
+                new ProtonDataset(
+                    $"{(domain == DomainCodes.Design ? "Design" : "Execution")} projects by status",
+                    [ProtonDatasets.Label("status", "Status", ProtonColumnKind.Status), ProtonDatasets.Figure("projects", "Projects", ProtonUnit.Count)],
+                    cards.ProjectsByStatus.Select(s => ProtonDatasets.Row(null, ProtonDatasets.Status(s.Status), ProtonCell.Of(s.Count))).ToList(),
+                    PartsOfWhole: true),
+                new ProtonDataset(
+                    "Requirement deadlines",
+                    [ProtonDatasets.Label("requirement", "Requirement"), ProtonDatasets.Label("project", "Project"),
+                        ProtonDatasets.Label("deadline", "Deadline", ProtonColumnKind.Date), ProtonDatasets.Figure("days_left", "Days left", ProtonUnit.Days)],
+                    deadlines.Items.Select(d => ProtonDatasets.Row(
+                        new ProtonRef(ProtonRefType.Project, d.Project.Id, d.Project.Title, domain),
+                        ProtonCell.Of(ProtonText.Cut(d.Text, 120)), ProtonCell.Of(d.Project.Title), ProtonCell.Of(d.Deadline), ProtonCell.Of(d.DaysLeft))).ToList(),
+                    TotalRows: deadlines.Total)),
+        };
     }
 }

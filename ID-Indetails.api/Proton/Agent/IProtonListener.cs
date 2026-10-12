@@ -36,6 +36,7 @@ public static class ProtonStatus
         ["offer_choices"] = "Lining up the options…",
         ["suggest_replies"] = "Thinking of next steps…",
         ["refresh_page"] = "Refreshing the page…",
+        ["present_data"] = "Laying out the figures…",
     };
 
     public const string Default = "Looking into it…";

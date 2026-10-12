@@ -23,7 +23,7 @@ public sealed class ProtonVoiceService(
     IProtonVoiceProvider provider,
     ProtonVoiceSessions sessions,
     ProtonVoiceWatch watch,
-    ProtonConversationStore conversations,
+    History.ProtonHistoryService history,
     ProtonUsageService usage,
     IPermissionService permissions,
     IClock clock,
@@ -41,7 +41,7 @@ public sealed class ProtonVoiceService(
 
         await usage.EnsureCanAskAsync(userId, cancellationToken);
         var access = await permissions.GetAccessAsync(userId, cancellationToken);
-        var conversation = conversations.Open(userId, request.ConversationId, ProtonToolbox.FingerprintOf(access));
+        var conversation = await history.OpenAsync(userId, request.ConversationId, ProtonToolbox.FingerprintOf(access), cancellationToken);
 
         var now = clock.UtcNow;
         var session = new ProtonVoiceSession(userId, conversation.Id, now, now.AddMinutes(voice.MaxSessionMinutes));

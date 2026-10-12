@@ -91,6 +91,36 @@ public sealed class ProtonOptions
     public ProtonActionOptions Actions { get; init; } = new();
 
     public ProtonVoiceOptions Voice { get; init; } = new();
+
+    public ProtonHistoryOptions History { get; init; } = new();
+
+    public ProtonVisualOptions Visuals { get; init; } = new();
+}
+
+/// <summary>
+/// Charts, tables and headline figures in answers (present_data). Off, the tool stays listed (so the prompt cache
+/// holds) but refuses, and answers are words only.
+/// </summary>
+public sealed class ProtonVisualOptions
+{
+    public bool Enabled { get; init; } = true;
+
+    [Range(1, 10)]
+    public int MaxBlocksPerAnswer { get; init; } = 3;
+
+    /// <summary>How old data may be and still be shown: older, it is read again first.</summary>
+    [Range(1, 240)]
+    public int DatasetMinutes { get; init; } = 15;
+}
+
+/// <summary>Saved chats: how long one nobody uses is kept before the daily job deletes it.</summary>
+public sealed class ProtonHistoryOptions
+{
+    [Range(1, 3650)]
+    public int RetentionDays { get; init; } = 90;
+
+    /// <summary>Off in tests, so the job doesn't run behind them.</summary>
+    public bool CleanupEnabled { get; init; } = true;
 }
 
 /// <summary>

@@ -107,3 +107,26 @@ public sealed class DecideProtonActionRequestValidator : AbstractValidator<Decid
         RuleFor(x => x.Typed).MaximumLength(200);
     }
 }
+
+public sealed class ProtonConversationListQueryValidator : AbstractValidator<ProtonConversationListQuery>
+{
+    public const int MaxPageSize = 50;
+
+    public ProtonConversationListQueryValidator()
+    {
+        RuleFor(x => x.Search).MaximumLength(100);
+        RuleFor(x => x.Page).ValidPage();
+        RuleFor(x => x.PageSize).InclusiveBetween(1, MaxPageSize).WithMessage($"Page size must be between 1 and {MaxPageSize}.");
+    }
+}
+
+public sealed class RenameProtonConversationRequestValidator : AbstractValidator<RenameProtonConversationRequest>
+{
+    public RenameProtonConversationRequestValidator()
+    {
+        RuleFor(x => x.Title).Must(t => !string.IsNullOrWhiteSpace(t)).WithMessage("Give the chat a name.")
+            .MaximumLength(Configuration.ModelConfig.ProtonStoredConversationConfiguration.TitleLength)
+            .WithMessage($"A chat's name can be at most {Configuration.ModelConfig.ProtonStoredConversationConfiguration.TitleLength} characters.")
+            .Must(t => t.All(c => !char.IsControl(c))).WithMessage("A chat's name is one line of text.");
+    }
+}

@@ -178,7 +178,8 @@ public sealed class ProtonActionService(
         }
     }
 
-    private static ProtonPreview? Preview(ProtonAction action)
+    /// <summary>The card a proposal showed, as stored with it.</summary>
+    public static ProtonPreview? Preview(ProtonAction action)
         => System.Text.Json.JsonSerializer.Deserialize<ProtonPreview>(action.Preview, ProtonJson.Options);
 
     private static string Title(ProtonAction action) => Preview(action)?.Title ?? action.Tool;

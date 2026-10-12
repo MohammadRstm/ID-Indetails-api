@@ -107,7 +107,7 @@ public class ProtonToolCatalogTests
         tools.Select(t => t.Name).ShouldBe(analytical, ignoreOrder: true);
         tools.ShouldAllBe(t => !t.Endpoint.Writes);
         // UI tools only ask the app to open what the user may already open: reads too, never a write
-        string[] ui = ["open_record", "open_page", "open_surface", "set_preference", "offer_choices", "suggest_replies", "refresh_page"];
+        string[] ui = ["open_record", "open_page", "open_surface", "set_preference", "offer_choices", "suggest_replies", "refresh_page", "present_data"];
         Tools.Where(t => ui.Contains(t.Name)).Select(t => t.Name).ShouldBe(ui, ignoreOrder: true);
         Tools.Where(t => ui.Contains(t.Name)).ShouldAllBe(t => !t.Endpoint.Writes && !t.Heavy);
         Tools.Where(t => t.Heavy).Select(t => t.Name)
