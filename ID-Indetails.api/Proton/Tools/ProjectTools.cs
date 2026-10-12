@@ -395,14 +395,15 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
     }
 }
 
+/// <param name="MaterialCost">Null when the user may not see money; the counts are still given.</param>
 public sealed record SiteSummary(
-    long ProjectId, string Title, int MaterialCount, decimal MaterialCost, int ReportedLabourWeeks, decimal GroundLabourCost, string Currency);
+    long ProjectId, string Title, int MaterialCount, decimal? MaterialCost, int ReportedLabourWeeks, decimal? GroundLabourCost, string? Currency, string? Note);
 
 public sealed class GetSiteSummaryTool(IProjectService projects, ISiteRecordsService siteRecords) : ProtonTool<ProjectIdInput>
 {
     public override string Name => "get_site_summary";
 
-    public override string Description => "An Execution site's recorded materials and ground labour, in USD.";
+    public override string Description => "An Execution site's recorded materials and ground labour: counts, and their cost in USD for those who may see money.";
 
     public override string? OnlyInDomain => DomainCodes.Execution;
 
@@ -421,7 +422,9 @@ public sealed class GetSiteSummaryTool(IProjectService projects, ISiteRecordsSer
         var summary = (await siteRecords.SummariesAsync(query, cancellationToken)).FirstOrDefault()
             ?? throw new NotFoundException("Site not found.");
         return ProtonToolOutput.Of(
-            new SiteSummary(project.Id, project.Title, summary.MaterialCount, summary.MaterialCost, summary.ReportedWeeks, summary.GroundLabour, "USD"),
+            new SiteSummary(project.Id, project.Title, summary.MaterialCount, summary.MaterialCost, summary.ReportedWeeks, summary.GroundLabour,
+                summary.MaterialCost is null ? null : "USD",
+                summary.MaterialCost is null ? "The costs aren't shown: they need the financial permission." : null),
             new ProtonRef(ProtonRefType.Project, project.Id, project.Title, project.Domain));
     }
 }
