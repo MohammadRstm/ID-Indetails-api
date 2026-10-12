@@ -166,6 +166,9 @@ public class ProtonEverydayActionsTests(ProtonApiFactory api) : IClassFixture<Pr
             ("propose_deactivate_employee", new { user_id = superAdmin.User.Id }),
             ("propose_domain_settings", new { domain = "design", hold_logging = true }),
             ("propose_send_message", new { person_id = superAdmin.User.Id, body = "Hi" }),
+            ("propose_record_payment", new { project_id = project.Id, amount = 100m }),
+            ("propose_delete", new { kind = "client", id = project.Client!.Id }),
+            ("propose_hour_excuse", new { user_id = superAdmin.User.Id, month = "2026-10", minutes = 30 }),
         })
         {
             var (reply, result) = await ProposeAsync(superAdmin, tool, input);

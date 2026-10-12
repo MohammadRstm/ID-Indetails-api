@@ -474,6 +474,33 @@ and confirmed strongly: a second step at least, and a typed phrase the server st
 Reads for them: `get_company_settings` and `get_domain_settings` (both rule-based: everyone may read them). Each
 spec re-reads its target at Confirm and refuses a stale change (`422 proton_action_stale`).
 
+## Money, deletes and pay rules (Stage 5, Phase 9)
+
+Three more families, each off until switched on (`Proton:Actions:Money`, `Deletes`, `PayRules`). Every card is strong:
+two steps, and where money is recorded or something can't be undone the user types the amount (digits and a point,
+no separators: `2500`, `320.5`) or the invoice number, which the server stored with the proposal.
+
+| Tool | Stands in for | Typed |
+|---|---|---|
+| `propose_create_invoice`, `propose_update_invoice` | `POST /api/projects/{id}/invoices`, `PUT /api/invoices/{id}` | — (a draft is sent to nobody) |
+| `propose_invoice_step` | `…/issue`, `…/void`, `DELETE /api/invoices/{id}` (discard), `DELETE …/schedule` | issue and discard: the total; void: the invoice number (refused while payments are recorded against it) |
+| `propose_record_invoice_delivery`, `propose_record_statement_delivery` | `…/deliveries` | — (WhatsApp or by hand only: emails are sent from the app) |
+| `propose_record_payment` | `POST /api/projects/{id}/payments` | the amount; at the dated exchange rate in force, never one Proton sets; the card gives the invoice's balance before and after |
+| `propose_payment_step` | `PUT /api/payments/{id}/invoice`, `…/void` | void: the amount |
+| `propose_add_expense`, `propose_delete_expense` | project expenses | the amount |
+| `propose_add_materials`, `propose_material_step` | a site's materials (add, correct, delete, client price) | add: the total cost; delete: its cost |
+| `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13) |
+| `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync` |
+| `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; bank details are never read into a proposal: they are taken from the database when the change is made |
+| `propose_exchange_rate` | `POST /api/exchange-rates` | the rate |
+| `propose_project_money` | `PUT /api/projects/{id}/billing` (Design revenue), `…/pricing` (Execution fee and markup) | the new amount |
+| `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
+| `propose_delete` | requirement, meeting and client deletes | the project's or client's name; a client with projects is archived instead |
+| `propose_working_time`, `propose_schedule`, `propose_hour_excuse` | the company week, someone's own week, excused hours | — ; the cards describe the effect in words and never show an amount |
+
+A tool standing in for endpoints with different permissions (issue and void an invoice) declares them as step
+endpoints: the one a proposal goes through is required on propose and again on confirm, on top of the tool's own.
+
 ## Messages sent as the user (Stage 5, Phase 7)
 
 `propose_send_message` (prompt: `Proton/Prompts/messages.md`) sends one message, as the user, to one person or one

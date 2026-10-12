@@ -56,8 +56,8 @@ public class ProtonCoverageTests
     {
         int Count(ProtonCoverageKind kind) => ProtonCoverage.Entries.Count(e => e.Kind == kind);
 
-        Count(ProtonCoverageKind.Action).ShouldBe(34);
-        Count(ProtonCoverageKind.Planned).ShouldBe(39);
+        Count(ProtonCoverageKind.Action).ShouldBe(73);
+        Count(ProtonCoverageKind.Planned).ShouldBe(0);
         ProtonCoverage.Entries.Count(e => e is { Kind: ProtonCoverageKind.Planned, Tier: ProtonTier.Standard }).ShouldBe(0);
         Count(ProtonCoverageKind.Prefill).ShouldBe(2);
         Count(ProtonCoverageKind.Open).ShouldBe(25);
@@ -77,11 +77,15 @@ public class ProtonCoverageTests
         {
             var tool = tools[group.Key];
             group.Select(e => e.Endpoint).ShouldContain(tool.Endpoint.Name, group.Key);
-            // a tool for several endpoints (hold/resume, done/undone) is checked against each one's own policies
+            // a tool for several endpoints (hold/resume, done/undone) is checked against each one's own policies: its own
+            // endpoint's, or a step endpoint's, which the tool then requires as well for that step
+            var allowed = new[] { tool.Endpoint }.Concat(tool.StepEndpoints)
+                .Select(s => Endpoints.Single(e => e.Name == s.Name).Permissions.Order().ToList())
+                .ToList();
             foreach (var entry in group)
             {
-                Endpoints.Single(e => e.Name == entry.Endpoint).Permissions
-                    .ShouldBe(Endpoints.Single(e => e.Name == tool.Endpoint.Name).Permissions, ignoreOrder: true, entry.Endpoint);
+                var permissions = Endpoints.Single(e => e.Name == entry.Endpoint).Permissions.Order().ToList();
+                allowed.ShouldContain(a => a.SequenceEqual(permissions), entry.Endpoint);
             }
         }
     }
