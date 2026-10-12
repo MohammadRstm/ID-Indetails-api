@@ -11,6 +11,9 @@ public interface IMessagingService
 
     Task<MessagesBadgeResponse> BadgeAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Someone's unread messages, counted as their badge counts them (for the app icon's badge on a push). 0 for anyone inactive.</summary>
+    Task<int> UnreadCountForAsync(long userId, CancellationToken cancellationToken = default);
+
     /// <summary>The people the caller can message directly, by name.</summary>
     Task<IReadOnlyList<ContactResponse>> ContactsAsync(CancellationToken cancellationToken = default);
 

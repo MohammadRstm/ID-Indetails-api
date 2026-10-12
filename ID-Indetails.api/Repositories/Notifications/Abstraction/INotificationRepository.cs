@@ -57,6 +57,9 @@ public interface INotificationRepository
     /// <summary>Unread notifications, counted the way <see cref="SearchAsync"/> lists them.</summary>
     Task<int> CountUnreadAsync(long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds, CancellationToken cancellationToken = default);
 
+    /// <summary>One of the recipient's notifications as <see cref="SearchAsync"/> would list it, or null. Not tracked.</summary>
+    Task<NotificationView?> GetVisibleAsync(long id, long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds, CancellationToken cancellationToken = default);
+
     /// <summary>One of the recipient's notifications, if <see cref="SearchAsync"/> would list it. Tracked.</summary>
     Task<Notification?> GetForUpdateAsync(long id, long recipientId, IReadOnlyList<string> visibleDomains, IReadOnlyList<string> hiddenKinds, CancellationToken cancellationToken = default);
 

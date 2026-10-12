@@ -5,6 +5,7 @@ using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 
 namespace ID_Indetails.api.Services.Notifications.Implementation;
@@ -14,18 +15,21 @@ public sealed class NotificationSender(
     IUserRepository users,
     IPermissionService permissions,
     ILiveUpdates live,
+    IPushQueue pushes,
     IClock clock) : INotificationSender
 {
     public async Task SendAsync(NotificationDraft draft, IEnumerable<long> recipientIds, CancellationToken cancellationToken = default)
     {
         var payload = Serialise(draft);
         var allowed = await AllowedAsync(draft, recipientIds, cancellationToken);
-        foreach (var recipientId in allowed)
+        var created = allowed.Select(recipientId => New(draft, recipientId, payload)).ToList();
+        foreach (var notification in created)
         {
-            notifications.Add(New(draft, recipientId, payload));
+            notifications.Add(notification);
         }
 
         live.NotificationsChanged(allowed);
+        pushes.Notifications(created);
     }
 
     public async Task SendDigestAsync(
@@ -37,6 +41,7 @@ public sealed class NotificationSender(
         var payload = Serialise(draft);
         var allowed = await AllowedAsync(draft, recipientIds, cancellationToken);
         live.NotificationsChanged(allowed);
+        var changed = new List<Notification>();
         foreach (var recipientId in allowed)
         {
             var digest = await notifications.GetDigestForUpdateAsync(recipientId, digestKey, cancellationToken);
@@ -45,6 +50,7 @@ public sealed class NotificationSender(
                 var created = New(draft, recipientId, payload);
                 created.DigestKey = digestKey;
                 notifications.Add(created);
+                changed.Add(created);
                 continue;
             }
 
@@ -55,7 +61,10 @@ public sealed class NotificationSender(
             digest.Payload = payload;
             digest.CreatedAt = clock.UtcNow;
             digest.ReadAt = null;
+            changed.Add(digest);
         }
+
+        pushes.Notifications(changed, digest: true);
     }
 
     public async Task SendOnceAsync(NotificationDraft draft, string key, IEnumerable<long> recipientIds, CancellationToken cancellationToken = default)
@@ -69,14 +78,17 @@ public sealed class NotificationSender(
         var payload = Serialise(draft);
         var alreadySent = await notifications.RecipientsWithKeyAsync(key, allowed, cancellationToken);
         var fresh = allowed.Where(id => !alreadySent.Contains(id)).ToList();
+        var created = new List<Notification>();
         foreach (var recipientId in fresh)
         {
-            var created = New(draft, recipientId, payload);
-            created.DigestKey = key;
-            notifications.Add(created);
+            var notification = New(draft, recipientId, payload);
+            notification.DigestKey = key;
+            notifications.Add(notification);
+            created.Add(notification);
         }
 
         live.NotificationsChanged(fresh);
+        pushes.Notifications(created);
     }
 
     public Task<IReadOnlyList<long>> DomainMembersAsync(string domain, CancellationToken cancellationToken = default)

@@ -20,4 +20,27 @@ public interface IAuthService
     Task<AuthSession> ChangePasswordAsync(long userId, ChangePasswordRequest request, CancellationToken cancellationToken = default);
 
     Task<CurrentUserResponse> GetCurrentUserAsync(long userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Signs in on the phone: a new mobile session, with the same checks as <see cref="LoginAsync"/>.</summary>
+    Task<AuthSession> MobileLoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Rotates a phone's refresh token by the mobile rules (<c>Business/Auth/MobileRefreshRules</c>): a token presented
+    /// again because its answer was lost gets a new one within the grace; later it ends that session; a token held by
+    /// two parties ends every session.
+    /// </summary>
+    Task<AuthSession> MobileRefreshAsync(string? refreshToken, CancellationToken cancellationToken = default);
+
+    /// <summary>Ends the phone's session the token belongs to and removes its push device. Always succeeds.</summary>
+    Task MobileLogoutAsync(string? refreshToken, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Like <see cref="ChangePasswordAsync"/>, keeping the phone's session <paramref name="sessionId"/> (a new one when
+    /// null) with a new refresh token.
+    /// </summary>
+    Task<AuthSession> MobileChangePasswordAsync(
+        long userId,
+        Guid? sessionId,
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken = default);
 }

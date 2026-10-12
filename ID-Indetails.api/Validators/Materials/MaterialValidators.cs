@@ -56,6 +56,7 @@ public sealed class NewMaterialRequestValidator : AbstractValidator<NewMaterialR
     {
         Include(new MaterialEntryRequestValidator());
         RuleFor(x => x.ClientPrice).Amount("Client price");
+        RuleFor(x => x.ClientRef).NotEqual(Guid.Empty).WithMessage("The client reference must be a UUID.");
     }
 }
 
@@ -68,6 +69,9 @@ public sealed class AddMaterialsRequestValidator : AbstractValidator<AddMaterial
         RuleFor(x => x.Items)
             .Must(items => items is { Count: >= 1 and <= MaxItems })
             .WithMessage($"Add 1 to {MaxItems} materials at a time.");
+        RuleFor(x => x.Items)
+            .Must(items => items is null || items.Where(i => i.ClientRef is not null).GroupBy(i => i.ClientRef).All(g => g.Count() == 1))
+            .WithMessage("Each client reference can be used once in a batch.");
         RuleForEach(x => x.Items).SetValidator(new NewMaterialRequestValidator());
     }
 }
