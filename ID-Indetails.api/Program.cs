@@ -10,6 +10,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddApi(builder.Configuration);
 builder.Services.AddAuth(builder.Configuration);
+// Before the application services: they end by wrapping the content store with Proton's guards.
+builder.Services.AddContentStore(builder.Configuration, builder.Environment);
 builder.Services.AddApplicationServices();
 builder.Services.AddHosting(builder.Configuration, builder.Environment);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

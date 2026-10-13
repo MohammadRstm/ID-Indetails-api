@@ -92,6 +92,7 @@ chmod 600 .env
   it stops at the start with "required variable MYSQL_API_USER is missing".
 - **`PUBLIC_DOMAIN`:** the domain from the A record, without `https://`. Set `ACME_EMAIL` to your email.
 - **The `SMTP_*` lines:** your mail provider's details.
+- **The `R2_*` lines:** the Cloudflare R2 bucket for the client portal's files, and the API token for it (setup in [content-storage.md](content-storage.md)). All four are required: without them the stack stops at the start with "required variable R2_ACCOUNT_ID is missing".
 
 This file is the only place the secrets live. Keep a copy in your password manager.
 
