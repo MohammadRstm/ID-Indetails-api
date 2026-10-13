@@ -46,6 +46,7 @@ public static class PermissionExplanations
         [PermissionCodes.ClientCreate] = "Add new clients, with their contact details, so projects can be made for them.",
         [PermissionCodes.ClientManage] = "Edit clients' details and contacts, archive or restore them, and delete clients with no projects.",
         [PermissionCodes.ClientAccessManage] = "On Design projects: invite the client's contacts to the client portal by email, resend or cancel invitations, and end a client's access to the project.",
+        [PermissionCodes.ClientPortalManage] = "On Design projects: upload the presentation, 3D and drawing files for the client portal, and rename, move, replace, download or delete them. They stay drafts the client can't see.",
 
         // Money
         [PermissionCodes.FinancialView] = "See the money: projects' revenue, cost, profit and margin, people's cost rates, invoices and payments. Without it, these are hidden everywhere.",

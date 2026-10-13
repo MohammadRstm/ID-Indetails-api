@@ -154,6 +154,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<BugReportOptions>().BindConfiguration(BugReportOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<FileStorageOptions>().BindConfiguration(FileStorageOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<PortalContentOptions>().BindConfiguration(PortalContentOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
@@ -179,6 +180,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPortalInvitationRepository, PortalInvitationRepository>();
         services.AddScoped<IPortalAccessRepository, PortalAccessRepository>();
         services.AddScoped<IPortalSessionRepository, PortalSessionRepository>();
+        services.AddScoped<IPortalContentRepository, PortalContentRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IMessagingRepository, MessagingRepository>();
         services.AddScoped<IFileRepository, FileRepository>();
@@ -227,6 +229,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPortalSessionService, PortalSessionService>();
         services.AddScoped<IPortalAuthService, PortalAuthService>();
         services.AddScoped<IPortalAccessService, PortalAccessService>();
+        services.AddScoped<IPortalContentService, PortalContentService>();
+        services.AddScoped<IPortalContentMaintenance, PortalContentMaintenance>();
+        services.AddHostedService<PortalContentCleanupJob>();
         services.AddScoped<IPermissionManagementService, PermissionManagementService>();
         services.AddScoped<IEmployeeService, EmployeeService>();
         services.AddScoped<ISignInEmailService, SignInEmailService>();

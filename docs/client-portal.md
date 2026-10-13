@@ -1,13 +1,11 @@
-# Client portal: accounts, invitations and access (Phase 1)
+# Client portal
 
-A Design project's client can follow the project in a client portal. Phase 1 covers:
-- client accounts;
-- invitations;
-- the clients' own sign-in;
-- access per project.
+A Design project's client can follow the project in a client portal.
+- **Phase 1:** client accounts, invitations, the clients' own sign-in, and access per project.
+- **Phase 2:** staff prepare the portal's files (presentation, 3D, drawings) as drafts in a private content store. See
+  [Content (Phase 2)](#content-phase-2).
 
-The portal's content (presentations, 3D and drawings, publishing, comments, chat and notifications to clients) comes in
-later phases.
+Publishing, the client's view of the files, comments, chat and notifications to clients come in later phases.
 
 **Execution projects have no client portal.** Their endpoints answer 404, and the permission is limited to Design.
 
@@ -174,8 +172,122 @@ All foreign keys restrict deletion; nothing cascades.
 The email links use `Frontend:PortalInvitationPath` (`/portal/invite`), `PortalLoginPath` (`/portal/login`) and
 `PortalResetPasswordPath` (`/portal/reset-password`).
 
+## Content (Phase 2)
+
+Staff with `client_portal:manage` (Design only; admins and super admins by default) prepare the files a client will
+see: **Presentation**, **3D** and **Drawings**. Everything is a **draft** until publishing exists: no client endpoint
+reads content, the store is private, and links are only handed out to staff after the permission check.
+
+### Where the bytes go
+- Files live in the **content store**: Cloudflare R2 in production, a folder on disk in development and tests
+  (`ContentStore:Provider`; see [content-storage.md](content-storage.md)). Never on the server's disk in production,
+  and never through `/api/files`.
+- The browser sends each file **in parts, straight to the store**, through short-lived signed links. The API never
+  carries the bytes, so the server's memory, disk and request limits don't matter, and there is **no size limit**:
+  only R2's own (about 5 TiB a file, 10,000 parts).
+- Parts are all one size but the last: 16 MiB, or more for files over 160 GiB.
+- Keys are `portal/{projectId}/{random}`: unguessable, never the file name. The name is kept in the row and sent back
+  as the download name.
+
+### Upload lifecycle
+1. `POST .../uploads` writes a `portal_uploads` row with the key **before** anything reaches the store, then starts a
+   multipart upload. The same client token again returns the same upload.
+2. `POST .../uploads/{id}/parts` hands out links (about an hour each, up to 100 at a time). The browser PUTs each part.
+3. `POST .../uploads/{id}/complete`:
+   - the server lists the parts itself (nothing the browser says about them is trusted);
+   - it joins them, checks the size against the one announced, and checks the first bytes against the extension;
+   - a file that isn't what its extension says is deleted and the upload marked `rejected`;
+   - in one transaction, with the upload locked, it adds the file and the item (or swaps the file into the item it
+     replaces). Repeating the call returns the same item. If the store finished but the database didn't, the retry
+     carries on from the joined object.
+4. `DELETE .../uploads/{id}` cancels: the row is marked first, then the parts and any object are dropped.
+
+**Consistency.** The rows lead:
+- every object's key is in a row before the object exists;
+- a file no longer used is marked (`deleted_at`) in the same transaction that stops using it, and its object is
+  deleted afterwards, then the row;
+- whatever fails there, the hourly cleanup (`PortalContentCleanupJob`) finishes:
+  - uploads with no request for 24 hours are expired, and their parts and objects removed;
+  - files marked deleted lose their objects, then their rows;
+  - ended uploads are forgotten after a week.
+- Once a week the job lists `portal/` in the store and logs unknown objects, missing objects and size differences. It
+  deletes unknown objects only when `PortalContent:DeleteOrphans` is on: after a database restore, newer files would
+  look unknown.
+
+### What is accepted
+Images (JPG, PNG, WebP, GIF, HEIC, TIFF), video (MP4, M4V, MOV, WebM), PDF, Office (DOCX, XLSX, PPTX), ZIP, drawings
+(DWG, DXF, RVT, IFC, SKP, 3DM) and 3D models (GLB, glTF, OBJ, FBX, STL, 3DS, MAX, BLEND, USDZ, DAE).
+- The type comes from the extension and is checked against the first 4 KB once the file has arrived. Programs and
+  web pages are refused whatever their extension; SVG and HTML are never taken.
+- The content type is the server's, never the browser's.
+- **Previews:** JPEG, PNG, WebP and GIF images and MP4/WebM videos inline; PDFs open in the browser's own viewer in a
+  new tab; everything else is downloaded. Nothing is converted, recompressed or altered.
+
+### Sizes and storage use
+Each file keeps its **original size** (the file the person picked) and its **stored size** (what the store reports for
+the object, measured when the upload completes). They are equal: nothing is compressed. A project's usage (files,
+original and stored bytes) is a sum over its live rows, so it never lists the store on a page load; the weekly check
+keeps the rows honest. Usage is informational: nothing is refused because of it.
+
+### Order and drafts
+- Items keep their place in a section in `sort_order`, with gaps of 1,024 so a later phase can move one between two
+  others; ties go by id. New files go to the end; moving to another section puts the item at its end.
+- Replacing a file keeps the item, its title and its place.
+- Publishing (a later phase) adds published columns to `portal_items`. Every item today then reads as never published.
+
+### Who can do what
+- `client_portal:manage` and a Design project the person can see: everything above. Without it, 403; Execution
+  projects and other domains' projects answer 404.
+- Only the person who started an upload can carry it on, complete or cancel it.
+- Client projects only: an internal project answers 422 `portal_project_not_eligible`.
+- An archived project is read-only (422 `portal_content_read_only`); its files can still be opened and downloaded.
+- Client tokens are refused by every content endpoint (401). The content store's links are the only way to the bytes,
+  minted after these checks and short-lived.
+
+### Content endpoints (`client_portal:manage`)
+
+| Method and path | Purpose |
+|---|---|
+| `GET /api/projects/{id}/portal/content` | Every section's items, usage, whether it can change, accepted extensions |
+| `POST /api/projects/{id}/portal/content/uploads` | Start an upload `{ clientToken, section, fileName, size, replaceItemId? }` |
+| `POST .../uploads/{uploadId}/parts` | Links for `{ partNumbers }` |
+| `POST .../uploads/{uploadId}/complete` | Join, check and add |
+| `DELETE .../uploads/{uploadId}` | Cancel |
+| `PUT .../items/{itemId}` | Rename `{ title }` or move `{ section }` |
+| `DELETE .../items/{itemId}` | Delete the item and its file |
+| `GET .../items/{itemId}/link?inline=` | A five-minute link to open or download |
+
+All of them are `Never` for Proton.
+
+### Tables (migration `ClientPortalContent`)
+- `portal_uploads`: uploads on their way (project, section, the item replaced, client token, key, store upload id,
+  file name, announced size, status `uploading` / `completed` / `cancelled` / `rejected` / `expired`, who, when, last
+  activity). Unique key; unique `(created_by_id, client_token)`; `(status, last_activity_at)` for the cleanup.
+- `portal_files`: objects in the store (project, key, original name, content type, original and stored size, uploader,
+  when, `deleted_at`). Unique key; `(project_id, deleted_at)` for usage.
+- `portal_items`: what a section shows (project, section, file, title, sort order, created, updated, updated by).
+  Unique file; `(project_id, section, sort_order)`.
+- Seed: the permission `client_portal:manage` (Design) for admins and super admins.
+- All foreign keys restrict.
+- **Rollback** drops the three tables and the seed, but not the objects in the store: empty `portal/` in the bucket
+  first if the content should go too.
+
+### Configuration (`PortalContent` section)
+| Key | Default | Meaning |
+|---|---|---|
+| `UploadInactivityHours` | 24 | An upload with no request for this long is abandoned |
+| `PartLinkMinutes` | 60 | How long a part link lasts |
+| `PreviewLinkMinutes` | 60 | How long the list's image and video links last |
+| `DownloadLinkMinutes` | 5 | How long an open or download link lasts |
+| `JobsEnabled` | true | The hourly cleanup and weekly check (off in integration tests) |
+| `DeleteOrphans` | false | Whether the weekly check deletes objects no row knows about |
+| `OrphanGraceDays` | 7 | How old an unknown object must be before it counts |
+
 ## Known limits (later phases)
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a
   signed-in client looks anonymous to the limiter.
-- **Archived projects** still appear to their clients. Read-only behaviour comes with the content phases.
+- **Archived projects** still appear to their clients. Their content is read-only for staff; the client side comes
+  with publishing.
+- **Content activity** (uploads, renames, deletions) isn't in the activity feed: drafts are internal. Publishing will
+  be recorded.
 - **No client notifications yet.** Publishing notifications come in a later phase.

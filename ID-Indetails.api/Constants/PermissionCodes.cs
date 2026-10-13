@@ -40,6 +40,7 @@ public static class PermissionCodes
 
     // Client portal (Design only)
     public const string ClientAccessManage = "client_access:manage";
+    public const string ClientPortalManage = "client_portal:manage";
 
     // Money
     public const string FinancialView = "financial:view";

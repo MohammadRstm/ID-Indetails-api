@@ -102,4 +102,5 @@ The cache is in-process. Running more than one API instance would need a shared 
 
 Client portal endpoints (`/api/portal/*`) use their own token scheme and the `Portal` policy; staff permissions never
 apply to them, and client tokens never pass a staff endpoint. Inviting clients and ending their access needs
-`client_access:manage` (Design only). See [client-portal.md](client-portal.md).
+`client_access:manage` (Design only); preparing the portal's files needs `client_portal:manage` (Design only). See
+[client-portal.md](client-portal.md).

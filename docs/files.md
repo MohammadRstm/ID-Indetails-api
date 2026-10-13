@@ -2,6 +2,8 @@
 
 Photos and videos: attachments on messages and work entries, profile photos and the company logo. A file is uploaded first, and its id is then attached to what it belongs to.
 
+Client portal files are separate: they go straight from the browser to the content store and are never served here. See [client-portal.md](client-portal.md#content-phase-2).
+
 ## Endpoints
 
 | Endpoint | Who | What |

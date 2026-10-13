@@ -253,6 +253,12 @@ public static class ProtonCoverage
         Never("PortalAuth.ResetPassword", "takes a secret token and a new password"),
         Never("PortalInvitations.Validate", "reads a client's secret invitation token"),
         Never("PortalInvitations.Accept", "takes a secret token and a new password"),
+        Never("ProjectPortalContent.StartUpload", "files for the client portal are chosen and sent by a person"),
+        Never("ProjectPortalContent.PartLinks", "hands out links to write into the client portal's file storage"),
+        Never("ProjectPortalContent.Complete", "adds an uploaded file to the client portal"),
+        Never("ProjectPortalContent.Cancel", "stops a person's own upload"),
+        Never("ProjectPortalContent.Update", "decides what the client portal shows"),
+        Never("ProjectPortalContent.Delete", "deletes a client portal file for good"),
 
         // Proton itself
         Own("Proton.Ask"),

@@ -25,6 +25,9 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<PortalInvitation> PortalInvitations => Set<PortalInvitation>();
     public DbSet<PortalRefreshToken> PortalRefreshTokens => Set<PortalRefreshToken>();
     public DbSet<PortalPasswordResetToken> PortalPasswordResetTokens => Set<PortalPasswordResetToken>();
+    public DbSet<PortalUpload> PortalUploads => Set<PortalUpload>();
+    public DbSet<PortalFile> PortalFiles => Set<PortalFile>();
+    public DbSet<PortalItem> PortalItems => Set<PortalItem>();
 
     // Clients and projects
     public DbSet<Client> Clients => Set<Client>();
@@ -141,6 +144,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<DevicePlatform>(configurationBuilder);
         StoreAsSnakeCase<NotificationCategory>(configurationBuilder);
         StoreAsSnakeCase<PortalAccountStatus>(configurationBuilder);
+        StoreAsSnakeCase<PortalSection>(configurationBuilder);
+        StoreAsSnakeCase<PortalUploadStatus>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)
