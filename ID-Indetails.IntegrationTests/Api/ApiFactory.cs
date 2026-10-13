@@ -81,6 +81,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("FileStorage:CleanupEnabled", "false");
         builder.UseSetting("ContentStore:Provider", "Local");
         builder.UseSetting("ContentStore:Local:RootPath", ContentStoreRoot);
+        builder.UseSetting("PortalContent:JobsEnabled", "false");
         builder.UseSetting("Push:DeviceCleanupEnabled", "false");
         builder.UseSetting("Push:Enabled", PushEnabled ? "true" : "false");
 

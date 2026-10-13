@@ -259,6 +259,7 @@ public static class ProtonCoverage
         Never("ProjectPortalContent.Cancel", "stops a person's own upload"),
         Never("ProjectPortalContent.Update", "decides what the client portal shows"),
         Never("ProjectPortalContent.Delete", "deletes a client portal file for good"),
+        Never("LocalContentStore.PutPart", "the development store's signed link a browser sends a file's bytes to"),
 
         // Proton itself
         Own("Proton.Ask"),
