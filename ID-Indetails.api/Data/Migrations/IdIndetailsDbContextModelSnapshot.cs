@@ -2129,6 +2129,12 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "client_portal:manage",
+                            Description = "Upload and manage the files for a project's client portal",
+                            DomainCode = "design"
+                        },
+                        new
+                        {
                             Code = "financial:view",
                             Description = "See revenue, cost, profit, margin and rates"
                         },
@@ -2371,6 +2377,83 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalFile", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(127)
+                        .HasColumnType("varchar(127)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("OriginalName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("original_name");
+
+                    b.Property<long>("OriginalSizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("original_size_bytes");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<long>("StoredSizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("stored_size_bytes");
+
+                    b.Property<long>("UploadedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("uploaded_by_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_files");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_portal_files_deleted_at");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_files_storage_key");
+
+                    b.HasIndex("UploadedById")
+                        .HasDatabaseName("ix_portal_files_uploaded_by_id");
+
+                    b.HasIndex("ProjectId", "DeletedAt")
+                        .HasDatabaseName("ix_portal_files_project_id_deleted_at");
+
+                    b.ToTable("portal_files", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_files_original_size_positive", "`original_size_bytes` > 0");
+
+                            t.HasCheckConstraint("ck_portal_files_stored_size_non_negative", "`stored_size_bytes` >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalInvitation", b =>
                 {
                     b.Property<long>("Id")
@@ -2435,6 +2518,72 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasDatabaseName("ix_portal_invitations_account_id_project_id");
 
                     b.ToTable("portal_invitations", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("FileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("file_id");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Section")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("section");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("UpdatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_items");
+
+                    b.HasIndex("FileId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_items_file_id");
+
+                    b.HasIndex("UpdatedById")
+                        .HasDatabaseName("ix_portal_items_updated_by_id");
+
+                    b.HasIndex("ProjectId", "Section", "SortOrder")
+                        .HasDatabaseName("ix_portal_items_project_id_section_sort_order");
+
+                    b.ToTable("portal_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_items_section", "`section` IN ('presentation', 'model', 'drawing')");
+                        });
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.PortalPasswordResetToken", b =>
@@ -2604,6 +2753,107 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("portal_refresh_tokens", null, t =>
                         {
                             t.HasCheckConstraint("ck_portal_refresh_tokens_revoke_reason", "`revoke_reason` IN ('rotated', 'superseded', 'signed_out', 'revoked')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalUpload", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ClientToken")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("client_token");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("last_activity_at");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<long?>("ReplaceItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("replace_item_id");
+
+                    b.Property<string>("Section")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("section");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<string>("StoreUploadId")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("varchar(1024)")
+                        .HasColumnName("store_upload_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_uploads");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_portal_uploads_project_id");
+
+                    b.HasIndex("ReplaceItemId")
+                        .HasDatabaseName("ix_portal_uploads_replace_item_id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_uploads_storage_key");
+
+                    b.HasIndex("CreatedById", "ClientToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_uploads_created_by_id_client_token");
+
+                    b.HasIndex("Status", "LastActivityAt")
+                        .HasDatabaseName("ix_portal_uploads_status_last_activity_at");
+
+                    b.ToTable("portal_uploads", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_uploads_section", "`section` IN ('presentation', 'model', 'drawing')");
+
+                            t.HasCheckConstraint("ck_portal_uploads_size_positive", "`size_bytes` > 0");
+
+                            t.HasCheckConstraint("ck_portal_uploads_status", "`status` IN ('uploading', 'completed', 'cancelled', 'rejected', 'expired')");
                         });
                 });
 
@@ -3922,6 +4172,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "client_portal:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "financial:view"
                         },
                         new
@@ -4163,6 +4418,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "admin",
                             PermissionCode = "client_access:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
+                            PermissionCode = "client_portal:manage"
                         },
                         new
                         {
@@ -5732,6 +5992,23 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_portal_accounts_users_created_by_id");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalFile", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_files_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_files_users_uploaded_by_id");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalInvitation", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.PortalAccount", "Account")
@@ -5758,6 +6035,32 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Account");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalItem", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalFile", "File")
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_items_portal_files_file_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_items_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_items_users_updated_by_id");
+
+                    b.Navigation("File");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.PortalPasswordResetToken", b =>
@@ -5820,6 +6123,29 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("ReplacedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_portal_refresh_tokens_portal_refresh_tokens_replaced_by_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalUpload", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_uploads_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_uploads_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.PortalItem", null)
+                        .WithMany()
+                        .HasForeignKey("ReplaceItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_uploads_portal_items_replace_item_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Project", b =>
