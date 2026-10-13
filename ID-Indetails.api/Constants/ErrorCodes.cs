@@ -191,4 +191,22 @@ public static class ErrorCodes
     public const string PortalAlreadyInvited = "portal_already_invited";
 
     public const string PortalAccessAlreadyEnded = "portal_access_already_ended";
+
+    /// <summary>503. Client portal content storage isn't configured (ContentStore:Provider), or can't be reached.</summary>
+    public const string ContentStorageUnavailable = "content_storage_unavailable";
+
+    /// <summary>The file's extension isn't one the client portal accepts.</summary>
+    public const string PortalFileTypeNotAllowed = "portal_file_type_not_allowed";
+
+    /// <summary>The uploaded bytes aren't the kind of file the extension says; the upload was refused and removed.</summary>
+    public const string PortalFileContentMismatch = "portal_file_content_mismatch";
+
+    /// <summary>Not every part of the upload has arrived, or a part has the wrong size.</summary>
+    public const string PortalUploadIncomplete = "portal_upload_incomplete";
+
+    /// <summary>The upload was cancelled, refused or expired, so it can't continue or be completed.</summary>
+    public const string PortalUploadEnded = "portal_upload_ended";
+
+    /// <summary>The project's client portal content can't change now (an archived project is read-only).</summary>
+    public const string PortalContentReadOnly = "portal_content_read_only";
 }
