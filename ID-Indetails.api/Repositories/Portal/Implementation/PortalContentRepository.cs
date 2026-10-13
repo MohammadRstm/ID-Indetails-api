@@ -23,12 +23,11 @@ public sealed class PortalContentRepository(IdIndetailsDbContext db) : IPortalCo
 
     public async Task<PortalUsage> UsageAsync(long projectId, CancellationToken cancellationToken = default)
     {
-        var totals = await db.PortalFiles.AsNoTracking()
-            .Where(f => f.ProjectId == projectId && f.DeletedAt == null)
-            .GroupBy(_ => 1)
-            .Select(g => new { Files = g.Count(), Original = g.Sum(f => f.OriginalSizeBytes), Stored = g.Sum(f => f.StoredSizeBytes) })
-            .SingleOrDefaultAsync(cancellationToken);
-        return totals is null ? new PortalUsage(0, 0, 0) : new PortalUsage(totals.Files, totals.Original, totals.Stored);
+        var live = db.PortalFiles.AsNoTracking().Where(f => f.ProjectId == projectId && f.DeletedAt == null);
+        return new PortalUsage(
+            await live.CountAsync(cancellationToken),
+            await live.SumAsync(f => (long?)f.OriginalSizeBytes, cancellationToken) ?? 0,
+            await live.SumAsync(f => (long?)f.StoredSizeBytes, cancellationToken) ?? 0);
     }
 
     public async Task<PortalItem?> GetItemForUpdateAsync(long projectId, long itemId, CancellationToken cancellationToken = default)
