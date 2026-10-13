@@ -103,6 +103,9 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         return await response.ReadAsync<PortalContentResponse>();
     }
 
+    private static async Task OkAsync(HttpResponseMessage response)
+        => response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+
     private async Task<PortalContentResponse> PublishAsync(AuthResponse staff, long projectId)
     {
         var revision = (await ContentAsync(staff, projectId)).Revision;
@@ -189,7 +192,7 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // a new file for the kitchen, a new title, a new order, a removal and an addition
         await UploadAsync(s.Staff, s.Project.Id, "Kitchen v2.jpg", OtherJpeg, replaceItemId: kitchen.Item!.Id);
-        await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/items/{bedroom.Item!.Id}", new { title = "Main bedroom" }, s.Staff.AccessToken));
+        await OkAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/items/{bedroom.Item!.Id}", new { title = "Main bedroom" }, s.Staff.AccessToken));
         await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/sections/presentation/order",
             new { itemIds = new[] { bedroom.Item.Id, kitchen.Item.Id } }, s.Staff.AccessToken));
         (await Client.DeleteAsync($"{Base(s.Project.Id)}/items/{old.Item!.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
@@ -327,7 +330,7 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await PublishAsync(s.Staff, s.Project.Id);
 
         await UploadAsync(s.Staff, s.Project.Id, "Kitchen v2.jpg", OtherJpeg, replaceItemId: kitchen.Item!.Id);
-        await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/items/{kitchen.Item.Id}", new { title = "Renamed", section = "model" }, s.Staff.AccessToken));
+        await OkAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/items/{kitchen.Item.Id}", new { title = "Renamed", section = "model" }, s.Staff.AccessToken));
         var extra = await UploadAsync(s.Staff, s.Project.Id, "Extra.jpg", Jpeg);
         await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/summary", new { summary = "Something else" }, s.Staff.AccessToken));
 
