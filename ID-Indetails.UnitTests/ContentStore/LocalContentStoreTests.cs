@@ -3,6 +3,7 @@ using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.ContentStore.Implementation;
+using ID_Indetails.api.Services.ContentStore.Abstraction;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
