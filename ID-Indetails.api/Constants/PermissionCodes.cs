@@ -38,6 +38,9 @@ public static class PermissionCodes
     public const string ClientCreate = "client:create";
     public const string ClientManage = "client:manage";
 
+    // Client portal (Design only)
+    public const string ClientAccessManage = "client_access:manage";
+
     // Money
     public const string FinancialView = "financial:view";
     public const string InvoiceCreate = "invoice:create";

@@ -2123,6 +2123,12 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "client_access:manage",
+                            Description = "Invite clients to a project's client portal and end their access",
+                            DomainCode = "design"
+                        },
+                        new
+                        {
                             Code = "financial:view",
                             Description = "See revenue, cost, profit, margin and rates"
                         },
@@ -2270,6 +2276,334 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "proton_budget:manage",
                             Description = "See Proton's costs and usage, and top up its monthly budget"
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalAccount", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("ActivatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("activated_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("varchar(254)")
+                        .HasColumnName("email");
+
+                    b.Property<int>("FailedSignIns")
+                        .HasColumnType("int")
+                        .HasColumnName("failed_sign_ins");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("first_name");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("last_name");
+
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("locked_until");
+
+                    b.Property<string>("PasswordHash")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<DateTime?>("SessionsValidFrom")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("sessions_valid_from");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_accounts");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_portal_accounts_created_by_id");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_accounts_email");
+
+                    b.ToTable("portal_accounts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_accounts_active_has_credentials", "`status` <> 'active' OR (`password_hash` IS NOT NULL AND `first_name` IS NOT NULL AND `last_name` IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_portal_accounts_status", "`status` IN ('invited', 'active')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalInvitation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_id");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<long>("InvitedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("invited_by_id");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasColumnName("token_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_invitations");
+
+                    b.HasIndex("InvitedById")
+                        .HasDatabaseName("ix_portal_invitations_invited_by_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_portal_invitations_project_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_invitations_token_hash");
+
+                    b.HasIndex("AccountId", "ProjectId")
+                        .HasDatabaseName("ix_portal_invitations_account_id_project_id");
+
+                    b.ToTable("portal_invitations", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalPasswordResetToken", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("used_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_password_reset_tokens");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_portal_password_reset_tokens_account_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_password_reset_tokens_token_hash");
+
+                    b.ToTable("portal_password_reset_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalProjectAccess", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_id");
+
+                    b.Property<DateTime>("GrantedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("granted_at");
+
+                    b.Property<long>("GrantedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("granted_by_id");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<long?>("RevokedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("revoked_by_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_project_access");
+
+                    b.HasIndex("GrantedById")
+                        .HasDatabaseName("ix_portal_project_access_granted_by_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_portal_project_access_project_id");
+
+                    b.HasIndex("RevokedById")
+                        .HasDatabaseName("ix_portal_project_access_revoked_by_id");
+
+                    b.HasIndex("AccountId", "ProjectId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_project_access_account_id_project_id");
+
+                    b.ToTable("portal_project_access", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalRefreshToken", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<long?>("ReplacedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("replaced_by_id");
+
+                    b.Property<string>("RevokeReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("revoke_reason");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasColumnName("token_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_refresh_tokens");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_portal_refresh_tokens_account_id");
+
+                    b.HasIndex("ReplacedById")
+                        .HasDatabaseName("ix_portal_refresh_tokens_replaced_by_id");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_portal_refresh_tokens_session_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_refresh_tokens_token_hash");
+
+                    b.ToTable("portal_refresh_tokens", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_refresh_tokens_revoke_reason", "`revoke_reason` IN ('rotated', 'superseded', 'signed_out', 'revoked')");
                         });
                 });
 
@@ -3583,6 +3917,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "client_access:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "financial:view"
                         },
                         new
@@ -3819,6 +4158,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "admin",
                             PermissionCode = "client:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
+                            PermissionCode = "client_access:manage"
                         },
                         new
                         {
@@ -5376,6 +5720,106 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_permissions_domains_domain_code");
 
                     b.Navigation("Domain");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalAccount", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_accounts_users_created_by_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalInvitation", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_invitations_portal_accounts_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("InvitedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_invitations_users_invited_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_invitations_projects_project_id");
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalPasswordResetToken", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_password_reset_tokens_portal_accounts_account_id");
+
+                    b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalProjectAccess", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_project_access_portal_accounts_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_project_access_users_granted_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_project_access_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("RevokedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_project_access_users_revoked_by_id");
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalRefreshToken", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_refresh_tokens_portal_accounts_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.PortalRefreshToken", null)
+                        .WithMany()
+                        .HasForeignKey("ReplacedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_refresh_tokens_portal_refresh_tokens_replaced_by_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Project", b =>

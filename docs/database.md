@@ -74,6 +74,9 @@ There is no self-signup.
 
 Who may invite whom is decided by permissions (`employee:invite`, `employee:invite_super_admin`) and enforced by the API, not the schema. See [authorization.md](authorization.md). Tokens (refresh, invitation, password reset) are stored only as unique hashes.
 
+Client portal accounts are separate tables (`portal_accounts`, `portal_project_access`, `portal_invitations`,
+`portal_refresh_tokens`, `portal_password_reset_tokens`); see [client-portal.md](client-portal.md).
+
 ## Rules the database enforces
 
 - A super admin has no domain; everyone else has exactly one.

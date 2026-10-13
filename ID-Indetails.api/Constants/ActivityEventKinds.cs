@@ -33,6 +33,15 @@ public static class ActivityEventKinds
     public const string ClientRestored = "client_restored";
     public const string ClientDeleted = "client_deleted";
 
+    // Client portal (project and client are set; subject: the portal account; the email in the payload).
+    // An account that set its password has no staff actor.
+    public const string PortalClientInvited = "portal_client_invited";
+    public const string PortalInvitationResent = "portal_invitation_resent";
+    public const string PortalInvitationRevoked = "portal_invitation_revoked";
+    public const string PortalInvitationAccepted = "portal_invitation_accepted";
+    public const string PortalAccessGranted = "portal_access_granted";
+    public const string PortalAccessRevoked = "portal_access_revoked";
+
     // Projects (subject: the project). Money goes in the amount columns, never the payload.
     public const string ProjectCreated = "project_created";
     public const string ProjectUpdated = "project_updated";

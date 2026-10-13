@@ -80,7 +80,7 @@ public class PermissionCatalogTests
             PermissionCodes.MeetingManage, PermissionCodes.MeetingCreate,
             PermissionCodes.WorkEntryViewAll, PermissionCodes.WorkEntryComment,
             PermissionCodes.MaterialCreate, PermissionCodes.MaterialManage, PermissionCodes.LabourReportCreate, PermissionCodes.LabourReportManage,
-            PermissionCodes.ClientView, PermissionCodes.ClientCreate, PermissionCodes.ClientManage,
+            PermissionCodes.ClientView, PermissionCodes.ClientCreate, PermissionCodes.ClientManage, PermissionCodes.ClientAccessManage,
             PermissionCodes.EmployeeView, PermissionCodes.EmployeeManage, PermissionCodes.TeamManage,
             PermissionCodes.ActivityView, PermissionCodes.ReportView, PermissionCodes.DomainSettingsManage, PermissionCodes.ProtonUse,
         ], ignoreOrder: true);

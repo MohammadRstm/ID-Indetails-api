@@ -66,6 +66,12 @@ public static class ActivityGroups
         [ActivityEventKinds.ClientArchived] = ActivityGroup.Projects,
         [ActivityEventKinds.ClientRestored] = ActivityGroup.Projects,
         [ActivityEventKinds.ClientDeleted] = ActivityGroup.Projects,
+        [ActivityEventKinds.PortalClientInvited] = ActivityGroup.Projects,
+        [ActivityEventKinds.PortalInvitationResent] = ActivityGroup.Projects,
+        [ActivityEventKinds.PortalInvitationRevoked] = ActivityGroup.Projects,
+        [ActivityEventKinds.PortalInvitationAccepted] = ActivityGroup.Projects,
+        [ActivityEventKinds.PortalAccessGranted] = ActivityGroup.Projects,
+        [ActivityEventKinds.PortalAccessRevoked] = ActivityGroup.Projects,
 
         [ActivityEventKinds.EmployeeUpdated] = ActivityGroup.People,
         [ActivityEventKinds.EmployeeDeactivated] = ActivityGroup.People,

@@ -173,6 +173,79 @@ public static class AccountEmails
         return Compose(toAddress, firstName, subject, Page(productName, changed, html, Sent(productName, "this address used to sign in to an account")), text);
     }
 
+    /// <summary>To a client invited to a project's client portal: a one-time link to set up their account. No password is sent.</summary>
+    public static EmailMessage PortalInvitation(
+        string productName,
+        string toAddress,
+        string inviterName,
+        string projectTitle,
+        string acceptUrl,
+        DateTime expiresAtUtc)
+    {
+        var expires = Expiry(expiresAtUtc);
+        var subject = $"Follow your project \"{projectTitle}\" on {productName}";
+        var invited = $"{inviterName} has invited you to follow your project \"{projectTitle}\" on the {productName} client portal.";
+        var next = "Open the link below to set up your account: you'll enter your name and choose your own password, then you can sign in.";
+        var once = $"This link can be used once and expires on {expires}. If it expires, ask your project contact to send a new one.";
+        var unexpected = "If you weren't expecting this invitation, you can safely ignore this email.";
+
+        var html = Title("You're invited")
+            + Paragraph("Hello,")
+            + Paragraph(invited)
+            + Paragraph(next)
+            + Button(acceptUrl, "Set up my account")
+            + Note(once)
+            + Note(unexpected);
+
+        var text = $"""
+            Hello,
+
+            {invited}
+
+            {next}
+
+            Set up your account: {acceptUrl}
+
+            {once}
+            {unexpected}
+            """;
+
+        return Compose(toAddress, null, subject, Page(productName, invited, html, Sent(productName, "you were invited to a client portal")), text);
+    }
+
+    /// <summary>To a client who already has a portal account and was given access to another project.</summary>
+    public static EmailMessage PortalAccessGranted(
+        string productName,
+        string toAddress,
+        string? firstName,
+        string inviterName,
+        string projectTitle,
+        string loginUrl)
+    {
+        var greeting = Greeting(firstName);
+        var subject = $"You can now follow \"{projectTitle}\" on {productName}";
+        var granted = $"{inviterName} has given you access to your project \"{projectTitle}\" on the {productName} client portal.";
+        var how = "Sign in with your email address and your usual password to see it.";
+
+        var html = Title("A new project for you")
+            + Paragraph(greeting)
+            + Paragraph(granted)
+            + Paragraph(how)
+            + Button(loginUrl, "Sign in");
+
+        var text = $"""
+            {greeting}
+
+            {granted}
+
+            {how}
+
+            Sign in: {loginUrl}
+            """;
+
+        return Compose(toAddress, firstName, subject, Page(productName, granted, html, Sent(productName, "you have a client portal account")), text);
+    }
+
     private static string Greeting(string? firstName) => string.IsNullOrWhiteSpace(firstName) ? "Hello," : $"Hello {firstName},";
 
     private static string Expiry(DateTime utc) => utc.ToString("dddd d MMMM yyyy, HH:mm 'UTC'", CultureInfo.InvariantCulture);
