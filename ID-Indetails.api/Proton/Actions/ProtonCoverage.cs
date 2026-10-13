@@ -258,7 +258,14 @@ public static class ProtonCoverage
         Never("ProjectPortalContent.Complete", "adds an uploaded file to the client portal"),
         Never("ProjectPortalContent.Cancel", "stops a person's own upload"),
         Never("ProjectPortalContent.Update", "decides what the client portal shows"),
-        Never("ProjectPortalContent.Delete", "deletes a client portal file for good"),
+        Never("ProjectPortalContent.Delete", "removes a client portal file; published ones go from clients at the next publish"),
+        Never("ProjectPortalContent.Reorder", "decides what the client portal shows"),
+        Never("ProjectPortalContent.SetHero", "decides what the client portal shows"),
+        Never("ProjectPortalContent.ClearHero", "decides what the client portal shows"),
+        Never("ProjectPortalContent.SetSummary", "writes to the company's clients"),
+        Never("ProjectPortalContent.Restore", "decides what the client portal shows"),
+        Never("ProjectPortalContent.Publish", "shows the company's work to someone outside it"),
+        Never("ProjectPortalContent.Discard", "deletes unpublished client portal files for good"),
         Never("LocalContentStore.PutPart", "the development store's signed link a browser sends a file's bytes to"),
 
         // Proton itself

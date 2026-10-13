@@ -1,18 +1,15 @@
 using ID_Indetails.api.Authorization;
-using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Portal;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Portal;
-using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Portal;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Portal.Abstraction;
-using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.ContentStore.Abstraction;
 using ID_Indetails.api.Services.Portal.Abstraction;
@@ -24,51 +21,30 @@ namespace ID_Indetails.api.Services.Portal.Implementation;
 /// Staff preparing a Design project's client portal content (client_portal:manage). The browser sends each file in
 /// parts straight to the content store; the API only hands out short-lived links, then checks what arrived before
 /// adding it. The upload row is written before anything is sent, so the store never holds an object no row knows
-/// about; the cleanup removes what an abandoned upload left. Execution projects have no portal and read as not found.
+/// about; the cleanup removes what an abandoned upload left. Every change here is to the draft: clients see the
+/// published copy until someone publishes (<see cref="PortalPublishingService"/>). Execution projects have no portal
+/// and read as not found.
 /// </summary>
 public sealed class PortalContentService(
     ICurrentUser currentUser,
-    IPermissionService permissions,
+    IPortalContentViews views,
     IPortalContentRepository content,
+    IPortalContentMaintenance maintenance,
     IContentStore store,
     IUnitOfWork unitOfWork,
     IClock clock,
-    IOptions<PortalContentOptions> options,
-    ILogger<PortalContentService> logger) : IPortalContentService
+    IOptions<PortalContentOptions> options) : IPortalContentService
 {
-    private const string ProjectNotFound = "Project not found.";
     private const string UploadNotFound = "Upload not found.";
     private const string ItemNotFound = "File not found.";
 
     public async Task<PortalContentResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)
-    {
-        var project = await VisibleProjectAsync(projectId, cancellationToken);
-        var items = await content.ItemsAsync(projectId, cancellationToken);
-        var denial = PortalContentRules.CheckEditable(project.BillingType, project.ClientId, project.Status);
-        var previewExpiresAt = clock.UtcNow.AddMinutes(options.Value.PreviewLinkMinutes);
-
-        var described = new List<PortalContentItemResponse>(items.Count);
-        foreach (var item in items)
-        {
-            described.Add(await DescribeAsync(item, previewExpiresAt, cancellationToken));
-        }
-
-        return new PortalContentResponse
-        {
-            ProjectId = projectId,
-            StorageReady = store.IsAvailable,
-            CanEdit = store.IsAvailable && denial is null,
-            ReadOnlyReason = denial?.Message,
-            Usage = Usage(await content.UsageAsync(projectId, cancellationToken)),
-            AcceptedExtensions = PortalContentRules.AcceptedExtensions,
-            Items = described,
-        };
-    }
+        => await views.ContentAsync(await views.VisibleProjectAsync(projectId, cancellationToken), cancellationToken);
 
     public async Task<PortalUploadStartedResponse> StartUploadAsync(
         long projectId, StartPortalUploadRequest request, CancellationToken cancellationToken = default)
     {
-        var project = await VisibleProjectAsync(projectId, cancellationToken);
+        var project = await views.VisibleProjectAsync(projectId, cancellationToken);
         Throw(PortalContentRules.CheckEditable(project.BillingType, project.ClientId, project.Status));
         RequireStore();
 
@@ -77,6 +53,11 @@ public sealed class PortalContentService(
             ?? throw new RequestValidationException(
                 ErrorCodes.PortalFileTypeNotAllowed, "fileName",
                 $"The client portal doesn't take this kind of file. It takes: {string.Join(", ", PortalContentRules.AcceptedExtensions)}.");
+        if (request.Hero && !PortalPublishRules.CanBeHero(type.ContentType))
+        {
+            throw new RequestValidationException(ErrorCodes.PortalHeroNotImage, "fileName", "The hero image must be a JPEG, PNG or WebP image.");
+        }
+
         var now = clock.UtcNow;
 
         // the same file started again (a retried request) carries on with its upload
@@ -93,17 +74,23 @@ public sealed class PortalContentService(
             return Started(existing);
         }
 
-        if (request.ReplaceItemId is { } replaceItemId && !await content.ItemExistsAsync(projectId, replaceItemId, cancellationToken))
+        if (!request.Hero && request.ReplaceItemId is { } replaceItemId)
         {
-            throw new NotFoundException(ItemNotFound);
+            // gone, or removed in the draft: there is nothing to replace
+            var target = await content.ItemViewAsync(projectId, replaceItemId, cancellationToken);
+            if (target is null || target.RemovedAt is not null)
+            {
+                throw new NotFoundException(ItemNotFound);
+            }
         }
 
         // written before anything reaches the store, so the cleanup can always find the key
         var upload = new PortalUpload
         {
             ProjectId = projectId,
-            Section = request.Section!.Value,
-            ReplaceItemId = request.ReplaceItemId,
+            Section = request.Hero ? null : request.Section!.Value,
+            IsHero = request.Hero,
+            ReplaceItemId = request.Hero ? null : request.ReplaceItemId,
             ClientToken = request.ClientToken,
             StorageKey = PortalContentRules.NewStorageKey(projectId),
             FileName = name,
@@ -135,7 +122,7 @@ public sealed class PortalContentService(
     public async Task<PortalPartLinksResponse> PartLinksAsync(
         long projectId, long uploadId, PortalPartLinksRequest request, CancellationToken cancellationToken = default)
     {
-        await VisibleProjectAsync(projectId, cancellationToken);
+        await views.VisibleProjectAsync(projectId, cancellationToken);
         RequireStore();
         var upload = await OwnUploadAsync(projectId, uploadId, cancellationToken);
         if (upload.Status != PortalUploadStatus.Uploading)
@@ -165,12 +152,12 @@ public sealed class PortalContentService(
 
     public async Task<PortalUploadCompletedResponse> CompleteUploadAsync(long projectId, long uploadId, CancellationToken cancellationToken = default)
     {
-        var project = await VisibleProjectAsync(projectId, cancellationToken);
+        var project = await views.VisibleProjectAsync(projectId, cancellationToken);
         RequireStore();
         var upload = await OwnUploadAsync(projectId, uploadId, cancellationToken);
         if (upload.Status == PortalUploadStatus.Completed)
         {
-            return await CompletedAsync(projectId, upload.StorageKey, cancellationToken);
+            return await CompletedAsync(projectId, upload, cancellationToken);
         }
 
         if (upload.Status != PortalUploadStatus.Uploading)
@@ -195,18 +182,14 @@ public sealed class PortalContentService(
             await RejectAsync(upload, $"This isn't a real .{type.Extension} file, so it was refused.", cancellationToken);
         }
 
-        var replaced = await AddToProjectAsync(projectId, upload.Id, type, storedSize, cancellationToken);
-        if (replaced is not null)
-        {
-            await DeleteFileAsync(replaced, cancellationToken);
-        }
-
-        return await CompletedAsync(projectId, upload.StorageKey, cancellationToken);
+        var released = await AddToProjectAsync(projectId, upload.Id, type, storedSize, cancellationToken);
+        await maintenance.DeleteReleasedAsync(released, cancellationToken);
+        return await CompletedAsync(projectId, upload, cancellationToken);
     }
 
     public async Task CancelUploadAsync(long projectId, long uploadId, CancellationToken cancellationToken = default)
     {
-        await VisibleProjectAsync(projectId, cancellationToken);
+        await views.VisibleProjectAsync(projectId, cancellationToken);
         await OwnUploadAsync(projectId, uploadId, cancellationToken);
 
         // locked, so it can't cross a completion that is adding the file right now
@@ -226,18 +209,24 @@ public sealed class PortalContentService(
             await transaction.CommitAsync(cancellationToken);
         }
 
-        await RemoveFromStoreAsync(upload, cancellationToken);
+        await maintenance.RemoveUploadAsync(upload, cancellationToken);
     }
 
     public async Task<PortalContentItemResponse> UpdateItemAsync(
         long projectId, long itemId, UpdatePortalItemRequest request, CancellationToken cancellationToken = default)
     {
-        var project = await VisibleProjectAsync(projectId, cancellationToken);
+        var project = await views.VisibleProjectAsync(projectId, cancellationToken);
         Throw(PortalContentRules.CheckEditable(project.BillingType, project.ClientId, project.Status));
 
         await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
         {
-            var item = await content.GetItemForUpdateAsync(projectId, itemId, cancellationToken) ?? throw new NotFoundException(ItemNotFound);
+            var settings = await content.LockSettingsAsync(projectId, cancellationToken);
+            var item = await content.GetItemForUpdateAsync(projectId, itemId, cancellationToken);
+            if (item is null || item.RemovedAt is not null)
+            {
+                throw new NotFoundException(ItemNotFound);
+            }
+
             if (request.Title is not null)
             {
                 item.Title = request.Title.Trim();
@@ -251,58 +240,73 @@ public sealed class PortalContentService(
 
             item.UpdatedAt = clock.UtcNow;
             item.UpdatedById = currentUser.Id;
+            settings.Revision++;
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
 
         var view = await content.ItemViewAsync(projectId, itemId, cancellationToken) ?? throw new NotFoundException(ItemNotFound);
-        return await DescribeAsync(view, clock.UtcNow.AddMinutes(options.Value.PreviewLinkMinutes), cancellationToken);
+        return await views.ItemAsync(view, (await content.SettingsAsync(projectId, cancellationToken)).HeroFileId, cancellationToken);
     }
 
+    /// <summary>
+    /// A file clients have never seen goes at once. A published one is only marked removed: clients keep it until the
+    /// next publish, and the person can undo it until then.
+    /// </summary>
     public async Task<PortalUsageChangedResponse> DeleteItemAsync(long projectId, long itemId, CancellationToken cancellationToken = default)
     {
-        var project = await VisibleProjectAsync(projectId, cancellationToken);
+        var project = await views.VisibleProjectAsync(projectId, cancellationToken);
         Throw(PortalContentRules.CheckEditable(project.BillingType, project.ClientId, project.Status));
 
         var now = clock.UtcNow;
-        var cancelled = new List<PortalUpload>();
-        PortalFile file;
+        List<PortalUpload> cancelled;
+        List<PortalFile> released;
         await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
         {
-            var item = await content.GetItemForUpdateAsync(projectId, itemId, cancellationToken) ?? throw new NotFoundException(ItemNotFound);
-
-            // a replacement still on its way has nothing left to replace
-            foreach (var upload in await content.UploadsReplacingAsync(item.Id, cancellationToken))
+            var settings = await content.LockSettingsAsync(projectId, cancellationToken);
+            var items = (await content.ItemsToChangeAsync(projectId, cancellationToken)).ToList();
+            var item = items.SingleOrDefault(i => i.Id == itemId) ?? throw new NotFoundException(ItemNotFound);
+            if (item.RemovedAt is not null)
             {
-                if (upload.Status == PortalUploadStatus.Uploading)
-                {
-                    upload.Status = PortalUploadStatus.Cancelled;
-                    upload.LastActivityAt = now;
-                    cancelled.Add(upload);
-                }
-
-                upload.ReplaceItemId = null;
+                return new PortalUsageChangedResponse(Usage(await content.UsageAsync(projectId, cancellationToken)));
             }
 
-            file = item.File;
-            file.DeletedAt = now;
-            content.Remove(item);
+            // a replacement still on its way has nothing left to replace
+            cancelled = await StopReplacementsAsync(item.Id, now, cancellationToken);
+
+            var candidates = new List<PortalFile> { item.File };
+            if (item.PublishedFileId is { } publishedFileId)
+            {
+                item.RemovedAt = now;
+                if (item.FileId != publishedFileId)
+                {
+                    item.File = (await content.FilesAsync([publishedFileId], cancellationToken)).Single();
+                }
+            }
+            else
+            {
+                content.Remove(item);
+                items.Remove(item);
+            }
+
+            settings.Revision++;
+            released = PortalReferences.Release(candidates, items, settings, now);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
 
         foreach (var upload in cancelled)
         {
-            await RemoveFromStoreAsync(upload, cancellationToken);
+            await maintenance.RemoveUploadAsync(upload, cancellationToken);
         }
 
-        await DeleteFileAsync(file, cancellationToken);
+        await maintenance.DeleteReleasedAsync(released, cancellationToken);
         return new PortalUsageChangedResponse(Usage(await content.UsageAsync(projectId, cancellationToken)));
     }
 
     public async Task<PortalContentLinkResponse> LinkAsync(long projectId, long itemId, bool inline, CancellationToken cancellationToken = default)
     {
-        await VisibleProjectAsync(projectId, cancellationToken);
+        await views.VisibleProjectAsync(projectId, cancellationToken);
         RequireStore();
         var item = await content.ItemViewAsync(projectId, itemId, cancellationToken) ?? throw new NotFoundException(ItemNotFound);
 
@@ -311,16 +315,6 @@ public sealed class PortalContentService(
         var url = await store.GetDownloadUrlAsync(
             item.File.StorageKey, item.File.OriginalName, item.File.ContentType, showInline, expiresAt, cancellationToken);
         return new PortalContentLinkResponse(url, expiresAt);
-    }
-
-    /// <summary>A Design project the caller manages client portal content on. Anything else reads as not found.</summary>
-    private async Task<PortalContentProject> VisibleProjectAsync(long projectId, CancellationToken cancellationToken)
-    {
-        var actor = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ClientPortalManage);
-        var project = await content.GetProjectAsync(projectId, cancellationToken);
-        return project is not null && project.DomainCode == DomainCodes.Design && actor.CanSee(project.DomainCode)
-            ? project
-            : throw new NotFoundException(ProjectNotFound);
     }
 
     /// <summary>Only the person who started an upload can carry it on, complete or cancel it.</summary>
@@ -366,11 +360,11 @@ public sealed class PortalContentService(
     }
 
     /// <summary>
-    /// Adds the checked file to its section, or swaps it in for the replaced item's, in one transaction with the upload
-    /// locked. Returns the replaced file, whose object is deleted once this is saved. If the upload was cancelled in the
-    /// meantime, nothing is added and the object is removed.
+    /// Adds the checked file to its section, swaps it in for the replaced item's, or makes it the draft hero, in one
+    /// transaction with the project's content locked. Returns the files nothing points at any more, whose objects are
+    /// deleted once this is saved. If the upload was cancelled in the meantime, nothing is added and the object is removed.
     /// </summary>
-    private async Task<PortalFile?> AddToProjectAsync(
+    private async Task<IReadOnlyList<PortalFile>> AddToProjectAsync(
         long projectId, long uploadId, PortalContentRules.FileType type, long storedSize, CancellationToken cancellationToken)
     {
         var now = clock.UtcNow;
@@ -378,14 +372,16 @@ public sealed class PortalContentService(
         PortalUpload upload;
         await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
         {
+            var settings = await content.LockSettingsAsync(projectId, cancellationToken);
             upload = await content.GetUploadForUpdateAsync(uploadId, cancellationToken) ?? throw new NotFoundException(UploadNotFound);
             if (upload.Status == PortalUploadStatus.Completed)
             {
-                return null;
+                return [];
             }
 
             if (upload.Status == PortalUploadStatus.Uploading)
             {
+                var items = await content.ItemsToChangeAsync(projectId, cancellationToken);
                 var file = new PortalFile
                 {
                     ProjectId = projectId,
@@ -398,14 +394,23 @@ public sealed class PortalContentService(
                     CreatedAt = now,
                 };
                 content.Add(file);
+                var candidates = new List<PortalFile>();
 
-                PortalFile? replaced = null;
-                if (upload.ReplaceItemId is { } replaceItemId)
+                if (upload.IsHero)
                 {
-                    var item = await content.GetItemForUpdateAsync(projectId, replaceItemId, cancellationToken)
-                        ?? throw new NotFoundException(ItemNotFound);
-                    replaced = item.File;
-                    replaced.DeletedAt = now;
+                    // the new file needs its id before the settings can point at it
+                    await unitOfWork.SaveChangesAsync(cancellationToken);
+                    if (settings.HeroFileId is { } oldHero)
+                    {
+                        candidates.AddRange(await content.FilesAsync([oldHero], cancellationToken));
+                    }
+
+                    settings.HeroFileId = file.Id;
+                }
+                else if (upload.ReplaceItemId is { } replaceItemId)
+                {
+                    var item = items.SingleOrDefault(i => i.Id == replaceItemId && i.RemovedAt is null) ?? throw new NotFoundException(ItemNotFound);
+                    candidates.Add(item.File);
                     item.File = file;
                     item.UpdatedAt = now;
                     item.UpdatedById = currentUser.Id;
@@ -415,10 +420,10 @@ public sealed class PortalContentService(
                     content.Add(new PortalItem
                     {
                         ProjectId = projectId,
-                        Section = upload.Section,
+                        Section = upload.Section!.Value,
                         File = file,
                         Title = PortalContentRules.DefaultTitle(upload.FileName),
-                        SortOrder = PortalContentRules.NextSortOrder(await content.LastSortOrderAsync(projectId, upload.Section, cancellationToken)),
+                        SortOrder = PortalContentRules.NextSortOrder(await content.LastSortOrderAsync(projectId, upload.Section!.Value, cancellationToken)),
                         CreatedAt = now,
                         UpdatedAt = now,
                         UpdatedById = currentUser.Id,
@@ -427,24 +432,51 @@ public sealed class PortalContentService(
 
                 upload.Status = PortalUploadStatus.Completed;
                 upload.LastActivityAt = now;
+                settings.Revision++;
+                var released = PortalReferences.Release(candidates, items, settings, now);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
-                return replaced;
+                return released;
             }
         }
 
         // cancelled (or its item deleted) while the parts were being joined
-        await RemoveFromStoreAsync(upload, cancellationToken);
+        await maintenance.RemoveUploadAsync(upload, cancellationToken);
         throw Ended();
     }
 
-    private async Task<PortalUploadCompletedResponse> CompletedAsync(long projectId, string storageKey, CancellationToken cancellationToken)
+    /// <summary>Uploads on their way to replace the item's file are cancelled, and none of them points at it any more.</summary>
+    private async Task<List<PortalUpload>> StopReplacementsAsync(long itemId, DateTime now, CancellationToken cancellationToken)
     {
-        var itemId = await content.ItemIdForKeyAsync(storageKey, cancellationToken)
+        var cancelled = new List<PortalUpload>();
+        foreach (var upload in await content.UploadsReplacingAsync(itemId, cancellationToken))
+        {
+            if (upload.Status == PortalUploadStatus.Uploading)
+            {
+                upload.Status = PortalUploadStatus.Cancelled;
+                upload.LastActivityAt = now;
+                cancelled.Add(upload);
+            }
+
+            upload.ReplaceItemId = null;
+        }
+
+        return cancelled;
+    }
+
+    private async Task<PortalUploadCompletedResponse> CompletedAsync(long projectId, PortalUpload upload, CancellationToken cancellationToken)
+    {
+        var usage = Usage(await content.UsageAsync(projectId, cancellationToken));
+        if (upload.IsHero)
+        {
+            return new PortalUploadCompletedResponse(null, usage);
+        }
+
+        var itemId = await content.ItemIdForKeyAsync(upload.StorageKey, cancellationToken)
             ?? throw new NotFoundException(ItemNotFound); // completed, then replaced or deleted since
         var view = await content.ItemViewAsync(projectId, itemId, cancellationToken) ?? throw new NotFoundException(ItemNotFound);
-        var item = await DescribeAsync(view, clock.UtcNow.AddMinutes(options.Value.PreviewLinkMinutes), cancellationToken);
-        return new PortalUploadCompletedResponse(item, Usage(await content.UsageAsync(projectId, cancellationToken)));
+        var hero = (await content.SettingsAsync(projectId, cancellationToken)).HeroFileId;
+        return new PortalUploadCompletedResponse(await views.ItemAsync(view, hero, cancellationToken), usage);
     }
 
     /// <summary>Refuses what arrived: the object is deleted, the upload marked refused, and the uploader told why.</summary>
@@ -455,68 +487,6 @@ public sealed class PortalContentService(
         upload.LastActivityAt = clock.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
         throw new RequestValidationException(ErrorCodes.PortalFileContentMismatch, "file", message);
-    }
-
-    /// <summary>Best effort: drops an ended upload's parts and object. What fails here, the cleanup does later.</summary>
-    private async Task RemoveFromStoreAsync(PortalUpload upload, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await store.AbortUploadAsync(upload.StorageKey, upload.StoreUploadId, cancellationToken);
-            await store.DeleteAsync(upload.StorageKey, cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Could not remove ended upload {UploadId} from the content store; the cleanup will.", upload.Id);
-        }
-    }
-
-    /// <summary>Best effort: deletes a file no longer used, object first. What fails here, the cleanup does later.</summary>
-    private async Task DeleteFileAsync(PortalFile file, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await store.DeleteAsync(file.StorageKey, cancellationToken);
-            content.Remove(file);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Could not delete client portal file {FileId} yet; the cleanup will.", file.Id);
-        }
-    }
-
-    private async Task<PortalContentItemResponse> DescribeAsync(PortalItemView item, DateTime previewExpiresAt, CancellationToken cancellationToken)
-    {
-        var preview = PortalContentRules.PreviewOf(item.File.ContentType);
-        var previewUrl = store.IsAvailable && preview is PortalPreview.Image or PortalPreview.Video
-            ? await store.GetDownloadUrlAsync(item.File.StorageKey, item.File.OriginalName, item.File.ContentType, true, previewExpiresAt, cancellationToken)
-            : null;
-
-        return new PortalContentItemResponse
-        {
-            Id = item.Id,
-            Section = item.Section,
-            Title = item.Title,
-            SortOrder = item.SortOrder,
-            IsDraft = true,
-            File = new PortalContentFileResponse
-            {
-                Id = item.File.Id,
-                Name = item.File.OriginalName,
-                ContentType = item.File.ContentType,
-                Preview = preview,
-                OriginalBytes = item.File.OriginalSizeBytes,
-                StoredBytes = item.File.StoredSizeBytes,
-                UploadedAt = item.File.CreatedAt,
-                UploadedBy = item.File.UploadedByName is null ? null : new PersonRefResponse(item.File.UploadedById, item.File.UploadedByName),
-            },
-            PreviewUrl = previewUrl,
-            PreviewUrlExpiresAt = previewUrl is null ? null : previewExpiresAt,
-            CreatedAt = item.CreatedAt,
-            UpdatedAt = item.UpdatedAt,
-            UpdatedBy = item.UpdatedByName is null ? null : new PersonRefResponse(item.UpdatedById, item.UpdatedByName),
-        };
     }
 
     private static PortalUploadStartedResponse Started(PortalUpload upload)

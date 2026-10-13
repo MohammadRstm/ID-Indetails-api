@@ -209,4 +209,16 @@ public static class ErrorCodes
 
     /// <summary>The project's client portal content can't change now (an archived project is read-only).</summary>
     public const string PortalContentReadOnly = "portal_content_read_only";
+
+    /// <summary>409. The drafts changed since the revision the person saw: they should look again before publishing or discarding.</summary>
+    public const string PortalRevisionStale = "portal_revision_stale";
+
+    /// <summary>409. A new order must list exactly the section's current files; someone added, removed or moved one meanwhile.</summary>
+    public const string PortalOrderStale = "portal_order_stale";
+
+    /// <summary>Only a JPEG, PNG or WebP image can be the hero.</summary>
+    public const string PortalHeroNotImage = "portal_hero_not_image";
+
+    /// <summary>Discarding needs a published version to go back to.</summary>
+    public const string PortalNeverPublished = "portal_never_published";
 }

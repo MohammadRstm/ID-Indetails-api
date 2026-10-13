@@ -12,7 +12,11 @@ public class PortalUpload
 
     public long ProjectId { get; set; }
 
-    public PortalSection Section { get; set; }
+    /// <summary>Null for a hero image, which belongs to no section.</summary>
+    public PortalSection? Section { get; set; }
+
+    /// <summary>A hero image for the project's presentation rather than a section's file.</summary>
+    public bool IsHero { get; set; }
 
     /// <summary>The item whose file this upload replaces; null for a new item.</summary>
     public long? ReplaceItemId { get; set; }

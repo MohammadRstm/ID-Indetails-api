@@ -15,6 +15,10 @@ public class PortalUploadConfiguration : IEntityTypeConfiguration<PortalUpload>
             t.HasCheckConstraint("ck_portal_uploads_section", SnakeCaseEnum.CheckSql<PortalSection>("section"));
             t.HasCheckConstraint("ck_portal_uploads_status", SnakeCaseEnum.CheckSql<PortalUploadStatus>("status"));
             t.HasCheckConstraint("ck_portal_uploads_size_positive", "`size_bytes` > 0");
+            // a hero image belongs to no section and replaces no item; every other upload has a section
+            t.HasCheckConstraint(
+                "ck_portal_uploads_hero_or_section",
+                "(`is_hero` = 1 AND `section` IS NULL AND `replace_item_id` IS NULL) OR (`is_hero` = 0 AND `section` IS NOT NULL)");
         });
 
         builder.HasKey(x => x.Id);

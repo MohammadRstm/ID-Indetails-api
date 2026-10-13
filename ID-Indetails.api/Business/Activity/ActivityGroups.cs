@@ -72,6 +72,7 @@ public static class ActivityGroups
         [ActivityEventKinds.PortalInvitationAccepted] = ActivityGroup.Projects,
         [ActivityEventKinds.PortalAccessGranted] = ActivityGroup.Projects,
         [ActivityEventKinds.PortalAccessRevoked] = ActivityGroup.Projects,
+        [ActivityEventKinds.PortalPublished] = ActivityGroup.Projects,
 
         [ActivityEventKinds.EmployeeUpdated] = ActivityGroup.People,
         [ActivityEventKinds.EmployeeDeactivated] = ActivityGroup.People,

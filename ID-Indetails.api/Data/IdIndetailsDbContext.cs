@@ -28,6 +28,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<PortalUpload> PortalUploads => Set<PortalUpload>();
     public DbSet<PortalFile> PortalFiles => Set<PortalFile>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
+    public DbSet<PortalSettings> PortalSettings => Set<PortalSettings>();
 
     // Clients and projects
     public DbSet<Client> Clients => Set<Client>();

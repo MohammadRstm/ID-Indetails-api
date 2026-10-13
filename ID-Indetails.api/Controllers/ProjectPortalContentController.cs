@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Portal;
 using ID_Indetails.api.DTO.Response.Portal;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Portal.Abstraction;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,7 +15,7 @@ namespace ID_Indetails.api.Controllers;
 [ApiController]
 [Route("api/projects/{projectId:long}/portal/content")]
 [HasPermission(PermissionCodes.ClientPortalManage)]
-public sealed class ProjectPortalContentController(IPortalContentService portalContent) : ControllerBase
+public sealed class ProjectPortalContentController(IPortalContentService portalContent, IPortalPublishingService publishing) : ControllerBase
 {
     /// <summary>Every section's files, the storage they use, and whether they can change now.</summary>
     [HttpGet]
@@ -58,4 +59,43 @@ public sealed class ProjectPortalContentController(IPortalContentService portalC
     [HttpGet("items/{itemId:long}/link")]
     public Task<PortalContentLinkResponse> Link(long projectId, long itemId, [FromQuery] bool inline, CancellationToken cancellationToken)
         => portalContent.LinkAsync(projectId, itemId, inline, cancellationToken);
+
+    /// <summary>A section's new order: every one of its current files, once. 409 when the section changed meanwhile.</summary>
+    [HttpPut("sections/{section}/order")]
+    public Task<PortalContentResponse> Reorder(long projectId, PortalSection section, PortalOrderRequest request, CancellationToken cancellationToken)
+        => publishing.ReorderAsync(projectId, section, request, cancellationToken);
+
+    /// <summary>Uses an image item's file as the draft hero.</summary>
+    [HttpPut("hero")]
+    public Task<PortalContentResponse> SetHero(long projectId, PortalHeroRequest request, CancellationToken cancellationToken)
+        => publishing.SetHeroAsync(projectId, request, cancellationToken);
+
+    [HttpDelete("hero")]
+    public Task<PortalContentResponse> ClearHero(long projectId, CancellationToken cancellationToken)
+        => publishing.ClearHeroAsync(projectId, cancellationToken);
+
+    /// <summary>The draft introduction for the client; empty clears it.</summary>
+    [HttpPut("summary")]
+    public Task<PortalContentResponse> SetSummary(long projectId, PortalSummaryRequest request, CancellationToken cancellationToken)
+        => publishing.SetSummaryAsync(projectId, request, cancellationToken);
+
+    /// <summary>Undoes a removal before it is published.</summary>
+    [HttpPost("items/{itemId:long}/restore")]
+    public Task<PortalContentResponse> Restore(long projectId, long itemId, CancellationToken cancellationToken)
+        => publishing.RestoreAsync(projectId, itemId, cancellationToken);
+
+    /// <summary>Makes the draft what clients see, all at once. 409 when the drafts changed since the revision sent.</summary>
+    [HttpPost("publish")]
+    public Task<PortalContentResponse> Publish(long projectId, PortalRevisionRequest request, CancellationToken cancellationToken)
+        => publishing.PublishAsync(projectId, request, cancellationToken);
+
+    /// <summary>Puts the draft back to what clients see; files never published are deleted.</summary>
+    [HttpPost("discard")]
+    public Task<PortalContentResponse> Discard(long projectId, PortalRevisionRequest request, CancellationToken cancellationToken)
+        => publishing.DiscardAsync(projectId, request, cancellationToken);
+
+    /// <summary>The draft, shaped exactly as the client's page.</summary>
+    [HttpGet("preview")]
+    public Task<PortalPresentationResponse> Preview(long projectId, CancellationToken cancellationToken)
+        => publishing.PreviewAsync(projectId, cancellationToken);
 }

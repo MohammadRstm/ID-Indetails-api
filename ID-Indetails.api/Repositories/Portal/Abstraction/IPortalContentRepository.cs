@@ -9,8 +9,40 @@ public interface IPortalContentRepository
 {
     Task<PortalContentProject?> GetProjectAsync(long projectId, CancellationToken cancellationToken = default);
 
-    /// <summary>Every item of the project, by section, then order, then id.</summary>
+    /// <summary>Every item of the project (removed ones too), by section, then order, then id.</summary>
     Task<IReadOnlyList<PortalItemView>> ItemsAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>The project's hero, introduction, revision and last publication, or the empty values before any change.</summary>
+    Task<PortalSettingsView> SettingsAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The project's settings row, created if missing, and locked until the transaction ends. Every change to the
+    /// content takes this lock first, so changes and publications happen one at a time. Tracked.
+    /// </summary>
+    Task<PortalSettings> LockSettingsAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every item of the project, with its file. Tracked; take the settings lock first.</summary>
+    Task<IReadOnlyList<PortalItem>> ItemsToChangeAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Files by id. Tracked.</summary>
+    Task<IReadOnlyList<PortalFile>> FilesAsync(IEnumerable<long> ids, CancellationToken cancellationToken = default);
+
+    Task<PortalFileView?> FileViewAsync(long fileId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// What a presentation shows: the draft (live items, by section and order) or the published copy (by published
+    /// section and order, removed items included until the next publish).
+    /// </summary>
+    Task<IReadOnlyList<PresentationRow>> PresentationAsync(long projectId, bool published, CancellationToken cancellationToken = default);
+
+    /// <summary>The published file of the item, when the item belongs to the project and is published.</summary>
+    Task<PortalFileView?> PublishedFileAsync(long projectId, long itemId, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether a client account has live access to the Design project.</summary>
+    Task<bool> ClientCanOpenAsync(long accountId, long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether any draft or published copy, or hero, still points at the file.</summary>
+    Task<bool> IsReferencedAsync(long fileId, CancellationToken cancellationToken = default);
 
     Task<PortalItemView?> ItemViewAsync(long projectId, long itemId, CancellationToken cancellationToken = default);
 
