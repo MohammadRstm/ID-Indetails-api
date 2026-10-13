@@ -1,3 +1,4 @@
+using ID_Indetails.api.Services.ContentStore.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
@@ -8,15 +9,16 @@ namespace ID_Indetails.api.Proton.Safety;
 /// <summary>
 /// The read-only guarantee beyond the database. While a Proton tool runs (looking something up, or preparing a proposal),
 /// these wrappers refuse every way a service could reach someone or leave a trace: sending an email, writing or deleting
-/// a file, staging a notification, or signalling a live client. Reads pass through. Outside a tool they change nothing.
+/// a file or a client portal upload, staging a notification, or signalling a live client. Reads pass through. Outside a tool they change nothing.
 /// </summary>
 public static class ProtonSideEffectGuards
 {
-    /// <summary>Wraps the current registrations of the four services. Call after they are registered (and again after a test replaces one).</summary>
+    /// <summary>Wraps the current registrations of the five services. Call after they are registered (and again after a test replaces one).</summary>
     public static IServiceCollection AddProtonSideEffectGuards(this IServiceCollection services)
         => services
             .Guard<IEmailSender>(inner => new GuardedEmailSender(inner))
             .Guard<IFileStorage>(inner => new GuardedFileStorage(inner))
+            .Guard<IContentStore>(inner => new GuardedContentStore(inner))
             .Guard<INotificationSender>(inner => new GuardedNotificationSender(inner))
             .Guard<ILiveUpdates>(inner => new GuardedLiveUpdates(inner));
 
@@ -59,6 +61,58 @@ public static class ProtonSideEffectGuards
             ProtonReadOnly.ThrowIfActive("deleting a file");
             inner.Delete(key);
         }
+    }
+
+    /// <summary>Starting, signing, completing, aborting and deleting are refused; reads and download links pass through.</summary>
+    private sealed class GuardedContentStore(IContentStore inner) : IContentStore
+    {
+        public bool IsAvailable => inner.IsAvailable;
+
+        public Task<string> StartUploadAsync(string key, string contentType, CancellationToken cancellationToken = default)
+        {
+            ProtonReadOnly.ThrowIfActive("starting a file upload");
+            return inner.StartUploadAsync(key, contentType, cancellationToken);
+        }
+
+        public Task<string> GetPartUploadUrlAsync(string key, string uploadId, int partNumber, DateTime expiresAt, CancellationToken cancellationToken = default)
+        {
+            ProtonReadOnly.ThrowIfActive("signing a file upload link");
+            return inner.GetPartUploadUrlAsync(key, uploadId, partNumber, expiresAt, cancellationToken);
+        }
+
+        public Task<IReadOnlyList<StoredPart>?> ListPartsAsync(string key, string uploadId, CancellationToken cancellationToken = default)
+            => inner.ListPartsAsync(key, uploadId, cancellationToken);
+
+        public Task CompleteUploadAsync(string key, string uploadId, IReadOnlyList<StoredPart> parts, CancellationToken cancellationToken = default)
+        {
+            ProtonReadOnly.ThrowIfActive("completing a file upload");
+            return inner.CompleteUploadAsync(key, uploadId, parts, cancellationToken);
+        }
+
+        public Task AbortUploadAsync(string key, string uploadId, CancellationToken cancellationToken = default)
+        {
+            ProtonReadOnly.ThrowIfActive("aborting a file upload");
+            return inner.AbortUploadAsync(key, uploadId, cancellationToken);
+        }
+
+        public Task<long?> GetSizeAsync(string key, CancellationToken cancellationToken = default)
+            => inner.GetSizeAsync(key, cancellationToken);
+
+        public Task<byte[]> ReadStartAsync(string key, int count, CancellationToken cancellationToken = default)
+            => inner.ReadStartAsync(key, count, cancellationToken);
+
+        public Task<string> GetDownloadUrlAsync(
+            string key, string fileName, string contentType, bool inline, DateTime expiresAt, CancellationToken cancellationToken = default)
+            => inner.GetDownloadUrlAsync(key, fileName, contentType, inline, expiresAt, cancellationToken);
+
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
+        {
+            ProtonReadOnly.ThrowIfActive("deleting a stored file");
+            return inner.DeleteAsync(key, cancellationToken);
+        }
+
+        public IAsyncEnumerable<StoredObject> ListAsync(string prefix, CancellationToken cancellationToken = default)
+            => inner.ListAsync(prefix, cancellationToken);
     }
 
     private sealed class GuardedNotificationSender(INotificationSender inner) : INotificationSender

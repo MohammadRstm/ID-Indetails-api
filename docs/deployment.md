@@ -52,6 +52,7 @@ The API refuses to start in Production with development settings:
 - With `Proton:Voice:Enabled` true, `Proton:Voice:ApiKey` (an OpenAI project key) is required
   (`PROTON_VOICE_ENABLED`, `PROTON_VOICE_API_KEY`). The web server's `Permissions-Policy` must allow the microphone
   on the app's own origin (`microphone=(self)`).
+- `ContentStore:Provider` can't be `Local`, and with `R2` its four settings are required (`R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` in the server's `.env`; the compose file requires all four). See [content-storage.md](content-storage.md).
 
 The refresh cookie is always `HttpOnly`, `Secure` and `SameSite=Strict`, on `/api/auth` only. `GET /health`
 answers only `Healthy` or `Unhealthy` (whether the database answers). It isn't public, because nginx doesn't proxy it;
