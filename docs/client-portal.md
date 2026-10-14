@@ -376,12 +376,13 @@ published file. The same API serves both sides (`PortalDiscussionService`, with 
 
 ### Who takes part
 Worked out on every request, never stored and never taken from the browser:
-- **staff:** every active super admin; the project's manager (its owner); and active staff who uploaded a portal file
-  to the project or logged work on it. Nobody else, whatever their permissions;
+- **staff:** every active super admin; and the project's manager (its owner) and active staff who uploaded a portal file
+  to the project or logged work on it, as long as they can see Design (their home domain, or a Design permission
+  they were granted, as for every other Design record). Nobody else, whatever their permissions;
 - **clients:** active accounts with live access to the project.
 
-Anyone else gets a 404, the same as for a project that doesn't exist. Ending a client's access, or deactivating a staff
-member, takes them out at once.
+Anyone else gets a 404, the same as for a project that doesn't exist. Ending a client's access, deactivating a staff
+member, or moving them to Execution takes them out at once.
 
 ### Chat and comments
 - Plain text only (rendered escaped by the client), up to 4,000 characters in the chat and 2,000 in a comment.
@@ -397,7 +398,8 @@ member, takes them out at once.
   person gets a mention notification once; an edit that adds someone notifies them.
 - **Read markers** only move forward, and never past what exists: one per person on the project's chat
   (`portal_reads`), and one per person on each file's comments (`portal_comment_reads`), so reading one file's comments
-  leaves the others new. `POST {base}/read` takes `lastMessageId`, and/or `itemId` with `lastCommentId`.
+  leaves the others new. `POST {base}/read` takes `lastMessageId`, and/or `itemId` with `lastCommentId`. Two tabs
+  writing a person's first marker at once keep one: the second finds the first and moves it.
 - **Archived** projects: everything readable, nothing writable (422 `portal_discussion_closed`). **Completed** projects
   work as usual.
 
@@ -407,8 +409,9 @@ member, takes them out at once.
   counts what came since the person last read it (it starts again at 1 once read). See
   [notifications.md](notifications.md).
 - **Clients** have their own (`portal_notifications`): `team_message` (rolling per project), `team_comment` (rolling per
-  file) and `mention` (once). A rolling one adds to its count while unread and starts again at 1 once read. They're shown
-  and counted only while the client has access to the project. `GET /api/portal/me` gives each project's unread count.
+  file) and `mention` (once). A rolling one adds to its count while unread and starts again at 1 once read. Each is
+  written in one statement (`INSERT ... ON DUPLICATE KEY UPDATE`), so messages sent at the same moment still make one
+  notification counting them all. They're shown and counted only while the client has access to the project. `GET /api/portal/me` gives each project's unread count.
 - No notification holds the text written: only who, which project and which file.
 
 ### Live

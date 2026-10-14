@@ -16,7 +16,7 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
             .Select(p => new DiscussionProject(p.Id, p.DomainCode, p.Title, p.Status, p.BillingType, p.ClientId, p.OwnerId))
             .SingleOrDefaultAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<DiscussionPerson>> StaffAsync(DiscussionProject project, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<StaffCandidate>> StaffAsync(DiscussionProject project, CancellationToken cancellationToken = default)
     {
         var uploaders = db.PortalFiles.Where(f => f.ProjectId == project.Id).Select(f => f.UploadedById);
         var loggers = db.WorkEntries.Where(e => e.ProjectId == project.Id && e.DeletedAt == null).Select(e => e.UserId);
@@ -24,9 +24,12 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
             .Where(u => u.Status == UserStatus.Active
                 && (u.RoleCode == RoleCodes.SuperAdmin || u.Id == project.OwnerId || uploaders.Contains(u.Id) || loggers.Contains(u.Id)))
             .OrderBy(u => u.FirstName).ThenBy(u => u.LastName).ThenBy(u => u.Id)
-            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, u.RoleCode })
             .ToListAsync(cancellationToken);
-        return people.Select(u => new DiscussionPerson(DiscussionSide.Staff, u.Id, Name(u.FirstName, u.LastName, u.Email))).ToList();
+        return people
+            .Select(u => new StaffCandidate(
+                new DiscussionPerson(DiscussionSide.Staff, u.Id, Name(u.FirstName, u.LastName, u.Email)), u.RoleCode == RoleCodes.SuperAdmin))
+            .ToList();
     }
 
     public async Task<IReadOnlyList<DiscussionPerson>> ClientsAsync(long projectId, CancellationToken cancellationToken = default)
@@ -91,6 +94,46 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
         return await CommentRows(comments.OrderBy(c => c.Id), cancellationToken);
     }
 
+    public async Task<IReadOnlyList<CommentThreadFacts>> CommentThreadsAsync(
+        long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default)
+    {
+        var comments = db.PortalComments.AsNoTracking().Where(c => c.ProjectId == projectId);
+        var threads = await comments
+            .GroupBy(c => c.ItemId)
+            .Select(g => new { ItemId = g.Key, Count = g.Count(), LastId = g.Max(c => c.Id) })
+            .ToListAsync(cancellationToken);
+        if (threads.Count == 0)
+        {
+            return [];
+        }
+
+        var lastIds = threads.Select(t => t.LastId).ToList();
+        var lasts = await comments
+            .Where(c => lastIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.ItemTitle, c.FileName, c.CreatedAt })
+            .ToDictionaryAsync(c => c.Id, cancellationToken);
+
+        // a comment is unread until the reader's marker on its own file reaches it
+        var unread = reader.Side == DiscussionSide.Staff
+            ? comments.Where(c => c.DeletedAt == null && (c.AuthorUserId == null || c.AuthorUserId != reader.Id)
+                && !db.PortalCommentReads.Any(r => r.ItemId == c.ItemId && r.UserId == reader.Id && r.LastCommentId >= c.Id))
+            : comments.Where(c => c.DeletedAt == null && (c.AuthorAccountId == null || c.AuthorAccountId != reader.Id)
+                && !db.PortalCommentReads.Any(r => r.ItemId == c.ItemId && r.AccountId == reader.Id && r.LastCommentId >= c.Id));
+        var unreadByItem = await unread
+            .GroupBy(c => c.ItemId)
+            .Select(g => new { ItemId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.ItemId, g => g.Count, cancellationToken);
+
+        return threads
+            .Select(t =>
+            {
+                var last = lasts[t.LastId];
+                return new CommentThreadFacts(
+                    t.ItemId, t.Count, t.LastId, last.CreatedAt, last.ItemTitle, last.FileName, unreadByItem.GetValueOrDefault(t.ItemId));
+            })
+            .ToList();
+    }
+
     public async Task<DiscussionCommentRow?> CommentRowAsync(long projectId, long commentId, CancellationToken cancellationToken = default)
         => (await CommentRows(db.PortalComments.Where(c => c.ProjectId == projectId && c.Id == commentId), cancellationToken)).SingleOrDefault();
 
@@ -141,13 +184,6 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
             ? db.PortalCommentReads.SingleOrDefaultAsync(r => r.ProjectId == projectId && r.ItemId == itemId && r.UserId == reader.Id, cancellationToken)
             : db.PortalCommentReads.SingleOrDefaultAsync(r => r.ProjectId == projectId && r.ItemId == itemId && r.AccountId == reader.Id, cancellationToken);
 
-    public async Task<IReadOnlyDictionary<long, long>> CommentReadsAsync(long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default)
-    {
-        var reads = db.PortalCommentReads.AsNoTracking().Where(r => r.ProjectId == projectId);
-        reads = reader.Side == DiscussionSide.Staff ? reads.Where(r => r.UserId == reader.Id) : reads.Where(r => r.AccountId == reader.Id);
-        return await reads.ToDictionaryAsync(r => r.ItemId, r => r.LastCommentId, cancellationToken);
-    }
-
     public async Task<IReadOnlyDictionary<long, int>> UnreadForClientAsync(
         long accountId, IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
     {
@@ -171,10 +207,34 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
         return unread;
     }
 
-    public async Task<PortalNotification?> GetNotificationForUpdateAsync(long accountId, string digestKey, CancellationToken cancellationToken = default)
-        => (await db.PortalNotifications
-            .FromSql($"SELECT * FROM `portal_notifications` WHERE `account_id` = {accountId} AND `digest_key` = {digestKey} FOR UPDATE")
-            .ToListAsync(cancellationToken)).SingleOrDefault();
+    public Task AddNotificationAsync(PortalNotification notification, bool rolling, CancellationToken cancellationToken = default)
+    {
+        var kind = SnakeCaseEnum.ToDb(notification.Kind);
+
+        // MySQL makes the updates left to right, so the count reads read_at before it is cleared
+        return rolling
+            ? db.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO `portal_notifications` (`account_id`, `project_id`, `kind`, `subject_id`, `payload`, `digest_key`, `count`, `created_at`)
+                VALUES ({notification.AccountId}, {notification.ProjectId}, {kind}, {notification.SubjectId}, {notification.Payload},
+                    {notification.DigestKey}, {notification.Count}, {notification.CreatedAt}) AS new
+                ON DUPLICATE KEY UPDATE
+                    `count` = IF(`portal_notifications`.`read_at` IS NULL, `portal_notifications`.`count` + 1, 1),
+                    `read_at` = NULL,
+                    `created_at` = new.`created_at`,
+                    `payload` = new.`payload`,
+                    `subject_id` = new.`subject_id`
+                """,
+                cancellationToken)
+            : db.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO `portal_notifications` (`account_id`, `project_id`, `kind`, `subject_id`, `payload`, `digest_key`, `count`, `created_at`)
+                VALUES ({notification.AccountId}, {notification.ProjectId}, {kind}, {notification.SubjectId}, {notification.Payload},
+                    {notification.DigestKey}, {notification.Count}, {notification.CreatedAt}) AS new
+                ON DUPLICATE KEY UPDATE `count` = `portal_notifications`.`count`
+                """,
+                cancellationToken);
+    }
 
     public async Task<IReadOnlyList<PortalNotificationRow>> NotificationsAsync(
         long accountId, long? before, int take, CancellationToken cancellationToken = default)
@@ -215,8 +275,6 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
     public void Add(PortalRead read) => db.PortalReads.Add(read);
 
     public void Add(PortalCommentRead read) => db.PortalCommentReads.Add(read);
-
-    public void Add(PortalNotification notification) => db.PortalNotifications.Add(notification);
 
     public void Remove(PortalMention mention) => db.PortalMentions.Remove(mention);
 
