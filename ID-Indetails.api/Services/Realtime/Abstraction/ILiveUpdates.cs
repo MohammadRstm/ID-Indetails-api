@@ -15,6 +15,12 @@ public interface ILiveUpdates
     /// <summary>A chat changed for this person: a new message, or they read it on another device.</summary>
     void ChatChanged(long userId, LiveChat chat);
 
+    /// <summary>A project's client portal discussion changed, for these staff members and these clients.</summary>
+    void PortalChanged(long projectId, IEnumerable<long> userIds, IEnumerable<long> accountIds);
+
+    /// <summary>These clients' bells changed.</summary>
+    void PortalNotificationsChanged(IEnumerable<long> accountIds);
+
     Task FlushAsync(CancellationToken cancellationToken = default);
 
     void Discard();
@@ -26,8 +32,17 @@ public interface ILivePublisher
     Task PublishAsync(IReadOnlyCollection<long> userIds, string signal, object? payload, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Sends a signal to every live connection of these clients (the portal hub).</summary>
+public interface IPortalLivePublisher
+{
+    Task PublishAsync(IReadOnlyCollection<long> accountIds, string signal, object? payload, CancellationToken cancellationToken = default);
+}
+
 public static class LiveSignals
 {
     public const string Notifications = "notifications";
     public const string Messages = "messages";
+
+    /// <summary><c>{ projectId }</c>: that project's client portal discussion changed.</summary>
+    public const string Portal = "portal";
 }

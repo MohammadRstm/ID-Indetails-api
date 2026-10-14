@@ -64,6 +64,9 @@ public static class PushCategories
         [NotificationKinds.PermissionsChanged] = NotificationCategory.People,
 
         [PushKinds.Message] = NotificationCategory.Messages,
+        [NotificationKinds.PortalClientMessage] = NotificationCategory.Messages,
+        [NotificationKinds.PortalClientComment] = NotificationCategory.Messages,
+        [NotificationKinds.PortalMention] = NotificationCategory.Messages,
     };
 
     /// <summary>Null for the log-your-hours reminder, and for a kind this API doesn't know.</summary>

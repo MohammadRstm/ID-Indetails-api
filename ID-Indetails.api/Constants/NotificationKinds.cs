@@ -122,4 +122,13 @@ public static class NotificationKinds
 
     /// <summary>A draft invoice is still unissued 3 days after it was created (subject: the invoice). Once per draft, to whoever sees the domain's money.</summary>
     public const string InvoiceDraftWaiting = "invoice_draft_waiting";
+
+    /// <summary>A client wrote in a project's client portal chat (digest key <c>portal_chat:{projectId}</c>). To the staff taking part.</summary>
+    public const string PortalClientMessage = "portal_client_message";
+
+    /// <summary>A client commented on a file (subject: the item; digest key <c>portal_comments:{itemId}</c>). To the project's owner and the file's uploader.</summary>
+    public const string PortalClientComment = "portal_client_comment";
+
+    /// <summary>Someone mentioned you in a client portal chat message or comment (subject type <c>message</c> or <c>comment</c>; once each).</summary>
+    public const string PortalMention = "portal_mention";
 }

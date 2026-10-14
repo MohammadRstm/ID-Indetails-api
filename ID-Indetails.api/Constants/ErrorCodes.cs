@@ -221,4 +221,7 @@ public static class ErrorCodes
 
     /// <summary>Discarding needs a published version to go back to.</summary>
     public const string PortalNeverPublished = "portal_never_published";
+
+    /// <summary>422. The project is archived: its discussion can be read, but nothing new can be written.</summary>
+    public const string PortalDiscussionClosed = "portal_discussion_closed";
 }

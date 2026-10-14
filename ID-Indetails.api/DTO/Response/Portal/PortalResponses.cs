@@ -29,7 +29,8 @@ public sealed record PortalAccountResponse
     public required IReadOnlyList<PortalProjectResponse> Projects { get; init; }
 }
 
-public sealed record PortalProjectResponse(long Id, string Title, ProjectStatus Status);
+/// <param name="Unread">Unread chat messages and comments on the project.</param>
+public sealed record PortalProjectResponse(long Id, string Title, ProjectStatus Status, int Unread);
 
 /// <summary>What an invitation link opens, shown before the client sets their password.</summary>
 public sealed record PortalInvitationPreviewResponse

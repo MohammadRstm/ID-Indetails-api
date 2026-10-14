@@ -6,7 +6,7 @@ namespace ID_Indetails.UnitTests.Services;
 
 public class LiveUpdatesTests
 {
-    private sealed class Capturing : ILivePublisher
+    private sealed class Capturing : ILivePublisher, IPortalLivePublisher
     {
         public List<(IReadOnlyCollection<long> UserIds, string Signal, object? Payload)> Sent { get; } = [];
 
@@ -21,7 +21,7 @@ public class LiveUpdatesTests
     public async Task A_request_sends_each_person_each_signal_once_then_nothing_more()
     {
         var publisher = new Capturing();
-        var live = new LiveUpdates(publisher);
+        var live = new LiveUpdates(publisher, new Capturing());
         var engineering = new LiveChat(1, null);
 
         live.NotificationsChanged([3, 4]);
@@ -48,12 +48,32 @@ public class LiveUpdatesTests
     public async Task Discarded_signals_are_never_sent()
     {
         var publisher = new Capturing();
-        var live = new LiveUpdates(publisher);
+        var live = new LiveUpdates(publisher, new Capturing());
 
         live.NotificationsChanged([3]);
         live.Discard();
         await live.FlushAsync();
 
         publisher.Sent.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Portal_signals_go_to_staff_through_the_staff_hub_and_to_clients_through_theirs()
+    {
+        var staff = new Capturing();
+        var clients = new Capturing();
+        var live = new LiveUpdates(staff, clients);
+
+        live.PortalChanged(7, [3, 4], [10]);
+        live.PortalChanged(7, [3], [10, 11]);
+        live.PortalNotificationsChanged([10]);
+        await live.FlushAsync();
+
+        staff.Sent.Single().ShouldSatisfyAllConditions(
+            s => s.Signal.ShouldBe(LiveSignals.Portal),
+            s => s.UserIds.ShouldBe([3, 4], ignoreOrder: true));
+        clients.Sent.ShouldContain(s => s.Signal == LiveSignals.Portal && s.UserIds.Count == 2);
+        clients.Sent.ShouldContain(s => s.Signal == LiveSignals.Notifications && s.UserIds.Single() == 10);
+        clients.Sent.Count.ShouldBe(2);
     }
 }

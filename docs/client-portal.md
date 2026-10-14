@@ -6,8 +6,8 @@ A Design project's client can follow the project in a client portal.
   [Content (Phase 2)](#content-phase-2).
 - **Phase 3:** the draft is arranged (order, hero image, introduction), previewed, and published project-wide; clients
   see the published presentation. See [Publishing and the client's page (Phase 3)](#publishing-and-the-clients-page-phase-3).
-
-Comments, chat and notifications to clients come in later phases.
+- **Phase 4:** the project's discussion: a chat, comments on published files, @mentions, and in-app notifications on
+  both sides, live. See [Discussion (Phase 4)](#discussion-phase-4).
 
 **Execution projects have no client portal.** Their endpoints answer 404, and the permission is limited to Design.
 
@@ -363,9 +363,81 @@ Adds the published columns and `removed_at` to `portal_items` (with a check that
 index for the client's page), the table `portal_settings`, and `is_hero` to `portal_uploads` (whose `section` becomes
 optional: a hero upload has none). Only adds; the rollback drops them.
 
+## Discussion (Phase 4)
+
+Each Design client project has a **discussion**: one chat for the whole project, and a comment thread on each
+published file. The same API serves both sides (`PortalDiscussionService`, with the caller's side).
+
+### Who takes part
+Worked out on every request, never stored and never taken from the browser:
+- **staff:** every active super admin; the project's manager (its owner); and active staff who uploaded a portal file
+  to the project or logged work on it. Nobody else, whatever their permissions;
+- **clients:** active accounts with live access to the project.
+
+Anyone else gets a 404, the same as for a project that doesn't exist. Ending a client's access, or deactivating a staff
+member, takes them out at once.
+
+### Chat and comments
+- Plain text only (rendered escaped by the client), up to 4,000 characters in the chat and 2,000 in a comment.
+- Each message or comment carries a **client token** made by the browser: sending it again returns the first one and
+  notifies nobody twice (unique per author and token).
+- **Authors can edit** their messages and comments (shown "edited"; the earlier wording isn't kept) and **delete their
+  own comments** (the comment keeps its place without its text). Chat messages aren't deleted.
+- **Comments are on published files only.** Each keeps the item and file it was written about and their names. When the
+  file is replaced and republished, older comments read "on an earlier version"; when the file is unpublished, its
+  thread stays readable, closed, and is never attached to another file. Drafts can't be commented on or found.
+- **Threads are flat**: a file's comments in order.
+- **Mentions**: the people taking part, by key (`u{id}` staff, `c{id}` clients), checked on the server. A mentioned
+  person gets a mention notification once; an edit that adds someone notifies them.
+- **Read markers** (`portal_reads`) per person and project, for the chat and for comments; they only move forward.
+- **Archived** projects: everything readable, nothing writable (422 `portal_discussion_closed`). **Completed** projects
+  work as usual.
+
+### Notifications
+- **Staff** use the usual notifications (and pushes, when they're on): `portal_client_message` (rolling per project),
+  `portal_client_comment` (to the manager and the file's uploader, rolling per file) and `portal_mention`. See
+  [notifications.md](notifications.md).
+- **Clients** have their own (`portal_notifications`): `team_message` (rolling per project), `team_comment` (rolling per
+  file) and `mention` (once). A rolling one adds to its count while unread and starts again at 1 once read. They're shown
+  and counted only while the client has access to the project. `GET /api/portal/me` gives each project's unread count.
+- No notification holds the text written: only who, which project and which file.
+
+### Live
+- Staff: the existing hub (`/hubs/live`) gets a `portal` signal (`{ projectId }`).
+- Clients: their own hub, **`/hubs/portal`** (`PortalHub`): portal tokens only, each connection in its account's group,
+  signals `portal` (`{ projectId }`) and `notifications`. No signal carries content; pages fetch what changed.
+
+### Rate limit
+Clients' writes (send, edit, comment, delete) are limited per portal account (`RateLimiting:PortalWritePermitsPerMinute`,
+30). Their other requests still count against the per-address limit (below).
+
+### Endpoints
+Staff: `/api/projects/{id}/portal/discussion`; clients: `/api/portal/projects/{id}/discussion`.
+
+| Method and path | Purpose |
+|---|---|
+| `GET {base}` | Summary: whether it can be written in, unread counts, participants (for mentions), comment threads |
+| `GET {base}/messages?before=&limit=` | A page of the chat, oldest first (newest page without `before`) |
+| `POST {base}/messages` / `PUT {base}/messages/{id}` | Send / edit a message |
+| `GET {base}/comments/{itemId}` | A file's thread |
+| `POST {base}/comments` / `PUT` / `DELETE {base}/comments/{id}` | Comment / edit / delete |
+| `POST {base}/read` | Move the read markers |
+| `GET /api/portal/notifications`, `GET .../unread-count`, `POST .../read` | The client's bell |
+
+All writes are `Never` for Proton.
+
+### Tables (migration `ClientPortalDiscussion`)
+- `portal_messages`, `portal_comments`: author (a user or a portal account, exactly one), text, client token (unique per
+  author), `edited_at`; comments also the item and file ids (plain columns, not foreign keys: items are unpublished and
+  files replaced later), the item's title and file name, `deleted_at`.
+- `portal_mentions`: a message or a comment, and a user or an account (exactly one each).
+- `portal_reads`: one marker per person and project.
+- `portal_notifications`: the client's notifications, unique per account and key.
+
 ## Known limits (later phases)
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a
-  signed-in client looks anonymous to the limiter.
+  signed-in client looks anonymous to the limiter (60 requests a minute per address). Discussion writes also have their
+  own per-account limit.
 - **Archived projects** still appear to their clients. Their content is read-only for staff; the client side comes
   with publishing.
 - **Content activity** (uploads, renames, deletions) isn't in the activity feed: drafts are internal. Publishing will

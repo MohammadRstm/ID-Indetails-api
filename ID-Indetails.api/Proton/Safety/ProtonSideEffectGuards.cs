@@ -156,6 +156,18 @@ public static class ProtonSideEffectGuards
             inner.ChatChanged(userId, chat);
         }
 
+        public void PortalChanged(long projectId, IEnumerable<long> userIds, IEnumerable<long> accountIds)
+        {
+            ProtonReadOnly.ThrowIfActive("signalling a live update");
+            inner.PortalChanged(projectId, userIds, accountIds);
+        }
+
+        public void PortalNotificationsChanged(IEnumerable<long> accountIds)
+        {
+            ProtonReadOnly.ThrowIfActive("signalling a live update");
+            inner.PortalNotificationsChanged(accountIds);
+        }
+
         public Task FlushAsync(CancellationToken cancellationToken = default)
         {
             ProtonReadOnly.ThrowIfActive("signalling a live update");

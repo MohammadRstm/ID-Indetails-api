@@ -21,6 +21,7 @@ namespace ID_Indetails.api.Services.Portal.Implementation;
 public sealed class PortalSessionService(
     IPortalSessionRepository sessions,
     IPortalAccessRepository access,
+    IPortalDiscussionRepository discussion,
     IOptions<JwtOptions> jwtOptions,
     IOptions<PortalOptions> portalOptions,
     IClock clock) : IPortalSessionService
@@ -57,13 +58,14 @@ public sealed class PortalSessionService(
     public async Task<PortalAccountResponse> DescribeAsync(PortalAccount account, CancellationToken cancellationToken = default)
     {
         var projects = await access.ProjectsOfAsync(account.Id, cancellationToken);
+        var unread = await discussion.UnreadForClientAsync(account.Id, projects.Select(p => p.Id).ToList(), cancellationToken);
         return new PortalAccountResponse
         {
             Id = account.Id,
             Email = account.Email,
             FirstName = account.FirstName ?? string.Empty,
             LastName = account.LastName ?? string.Empty,
-            Projects = projects.Select(p => new PortalProjectResponse(p.Id, p.Title, p.Status)).ToList(),
+            Projects = projects.Select(p => new PortalProjectResponse(p.Id, p.Title, p.Status, unread.GetValueOrDefault(p.Id))).ToList(),
         };
     }
 
