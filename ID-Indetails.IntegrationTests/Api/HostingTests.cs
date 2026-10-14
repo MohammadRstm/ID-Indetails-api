@@ -43,6 +43,7 @@ public class ProductionSettingsTests
     [InlineData("Proxy:KnownNetworks:0", null)]
     [InlineData("Email:UseStartTls", "false")]
     [InlineData("Setup:SuperAdminKey", "short-setup-key")]
+    [InlineData("ContentStore:Provider", "Local")]
     public async Task Production_refuses_to_start_on_development_settings(string key, string? value)
     {
         // null: the setting is missing
@@ -73,6 +74,12 @@ public sealed class ProductionApiFactory(IReadOnlyDictionary<string, string> set
         ["Email:UseStartTls"] = "true",
         ["Setup:SuperAdminKey"] = "a-production-setup-key-of-at-least-32-characters",
         ["Proxy:KnownNetworks:0"] = "172.16.0.0/12",
+        // the client portal's files are in R2 in production (these are never used: the portal's jobs are off in tests)
+        ["ContentStore:Provider"] = "R2",
+        ["ContentStore:R2:AccountId"] = "0123456789abcdef0123456789abcdef",
+        ["ContentStore:R2:Bucket"] = "portal-test",
+        ["ContentStore:R2:AccessKeyId"] = "test-access-key-id",
+        ["ContentStore:R2:SecretAccessKey"] = "test-secret-access-key-not-real",
     };
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
