@@ -342,8 +342,9 @@ survives its item being deleted or replaced.
   project, an unpublished file) is the same 404. Before the first publish the page is empty (`isPublished: false`).
 - Completed projects stay published to their clients, and staff can still change and publish them. Archived projects
   stay visible to clients but can't change or be published.
-- Signed image links carry `Cache-Control: private, max-age=3600`, so the browser keeps what it loaded while the link
-  lasts. There are no thumbnails: the original is loaded, lazily.
+- Signed links carry `Cache-Control: private, max-age=` the whole seconds the link has left (at least 0; for R2, counted
+  when the link is made), so the browser doesn't keep what it loaded much past the link's end: an hour for a preview,
+  five minutes for a download. There are no thumbnails: the original is loaded, lazily.
 
 ### Endpoints added (staff, `client_portal:manage`)
 | Method and path | Purpose |

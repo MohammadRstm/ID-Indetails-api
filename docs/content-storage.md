@@ -12,14 +12,15 @@ Code: `Services/ContentStore/` (`IContentStore` and its three implementations), 
 |---|---|---|
 | `None` (default) | A server with nothing set up yet | `UnconfiguredContentStore`. The app runs; anything that needs the store answers `503 content_storage_unavailable` ("Client portal file storage isn't set up yet…"). `IContentStore.IsAvailable` is false |
 | `Local` | Development and tests | `LocalContentStore`. A folder on disk. Production refuses to start with it. Because there is no S3 to presign for it, it hands out its own signed links, served by `LocalContentStoreController` |
-| `R2` | Production | `R2ContentStore`. A private Cloudflare R2 bucket through its S3 API (AWSSDK.S3). A network failure or a 5xx answer from R2 becomes `503 content_storage_unavailable` ("The file storage can't be reached right now…"); the cause is in the server log |
+| `R2` | Production | `R2ContentStore`. A private Cloudflare R2 bucket through its S3 API (AWSSDK.S3). A network failure or a 5xx answer from R2 becomes `503 content_storage_unavailable` ("The file storage can't be reached right now…"); `R2ContentStore` logs the cause as a warning, with the exception, before the 503 is answered |
 
 ### The local store
 
 - Objects are at `{RootPath}/{key}`. An upload in progress is at `{RootPath}/.uploads/{uploadId}/`, with a `meta.json` (the key and content type) and one `{partNumber}.part` file per part. Completing joins the parts into the object and deletes that folder.
 - Its links are relative: `/api/content-store/parts/{token}` (PUT the raw bytes of a part) and `/api/content-store/objects/{token}` (GET, with range support). A token is `base64url(payload).base64url(HMAC-SHA256(payload))`; the payload says what it allows (a part upload or a download, the key, the expiry in Unix seconds). A link made for one operation is refused for the other, and a changed, expired or foreign token answers `404` with no detail. A part larger than 5 GiB is refused, as on R2.
 - The controller is anonymous and exempt from the rate limits, because the signed token is the authorization (like a presigned URL) and its requests carry no sign-in. It answers `404` unless the local store is the one in use.
-- A download is served with `X-Content-Type-Options: nosniff`, `Cache-Control: private, max-age=300` and `Content-Disposition` `inline` or `attachment`.
+- A download is served with `X-Content-Type-Options: nosniff`, `Cache-Control: private, max-age={seconds the link has left}` and `Content-Disposition` `inline` or `attachment`.
+- Completing an upload whose folder is gone (joined by another attempt a moment ago, or aborted) does nothing, as on R2 (below).
 
 ## Configuration
 
@@ -81,6 +82,8 @@ The browser talks to R2 only if the client's Content-Security-Policy allows it. 
 - A part is 5 MiB to 5 GiB; every part except the last must be the same size; an upload has at most 10,000 parts.
 - A presigned link lasts at most 7 days, and works only on the S3 endpoint (`https://{AccountId}.r2.cloudflarestorage.com`), not on a custom domain.
 - R2 aborts a multipart upload that was never completed after 7 days by default, and frees its parts, so an abandoned upload doesn't cost storage for long.
+- A download link asks R2 to answer with `Cache-Control: private, max-age={seconds the link had left when it was made}`, so the browser never keeps a file much longer than its link lasts.
+- Completing an upload R2 no longer has (`NoSuchUpload`: joined by another attempt a moment ago, or abandoned) isn't an error: whether the object exists then decides.
 - Links are signed without checksum parameters (`RequestChecksumCalculation` and `ResponseChecksumValidation` are `WHEN_REQUIRED`), because AWSSDK 4 would otherwise add some that R2 and a browser's plain PUT can't satisfy.
 
 ## Backups
