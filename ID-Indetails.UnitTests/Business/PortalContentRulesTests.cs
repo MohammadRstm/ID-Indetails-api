@@ -146,6 +146,39 @@ public class PortalContentRulesTests
         PortalContentRules.DefaultTitle(new string('b', 250) + ".jpg").Length.ShouldBe(PortalContentRules.MaxTitleLength);
     }
 
+    [Theory]
+    [InlineData(253)]
+    [InlineData(254)]
+    [InlineData(255)]
+    [InlineData(995)]
+    public void A_long_name_is_cut_to_fit_however_long_its_extension(int extensionLength)
+    {
+        var name = PortalContentRules.SafeName("plan." + new string('x', extensionLength));
+
+        name.Length.ShouldBe(PortalContentRules.MaxNameLength);
+        name.ShouldStartWith("p");
+    }
+
+    [Theory]
+    [InlineData(0x202E)] // right-to-left override: it would show "photo" + RLO + "gpj.exe" as "photoexe.jpg"
+    [InlineData(0x200B)] // zero width space
+    [InlineData(0x200D)] // zero width joiner
+    [InlineData(0x2060)] // word joiner
+    [InlineData(0xFEFF)] // byte order mark
+    [InlineData(0x00AD)] // soft hyphen
+    [InlineData(0x0007)] // a control character
+    [InlineData(0x0009)] // a tab
+    public void Names_lose_control_and_invisible_formatting_characters(int code)
+    {
+        var hidden = (char)code;
+
+        PortalContentRules.SafeName($"{hidden}Living{hidden} room{hidden}.jpg").ShouldBe("Living room.jpg");
+    }
+
+    [Fact]
+    public void Names_keep_the_letters_and_punctuation_people_type()
+        => PortalContentRules.SafeName("Façade – 3D (v2).glb").ShouldBe("Façade – 3D (v2).glb");
+
     [Fact]
     public void New_items_go_after_the_last_with_room_between()
     {
