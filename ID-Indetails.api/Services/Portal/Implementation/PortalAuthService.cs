@@ -71,6 +71,10 @@ public sealed class PortalAuthService(
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
+        // The account's invitations are settled by one acceptance at a time, with no invitation or resend meanwhile, so
+        // two of its links used at once can't claim each other's invitations.
+        await accounts.LockAsync(account.Id, cancellationToken);
+
         // Atomic claim: if the same link is submitted twice at once, only one succeeds.
         if (!await invitations.TryAcceptAsync(invitation.Id, now, cancellationToken))
         {
@@ -85,11 +89,19 @@ public sealed class PortalAuthService(
         account.LastSeenAt = now;
         account.UpdatedAt = now;
 
-        // Other projects the client was invited to before setting up the account open too: each was given by staff.
+        // Other projects the client was invited to before setting up the account open too: each was given by staff, and
+        // is checked again like the link's own. Each project opens once; every other pending invitation is cancelled,
+        // so none of the account's links stays usable.
         var accepted = new List<PortalInvitation> { invitation };
         foreach (var other in await invitations.PendingForAccountAsync(account.Id, now, cancellationToken))
         {
-            if (other.Id != invitation.Id && await invitations.TryAcceptAsync(other.Id, now, cancellationToken))
+            var opens = accepted.All(a => a.ProjectId != other.ProjectId)
+                && await CanAcceptAsync(account.Email, other.ProjectId, cancellationToken);
+            if (!opens)
+            {
+                await invitations.TryRevokeAsync(other.Id, now, cancellationToken);
+            }
+            else if (await invitations.TryAcceptAsync(other.Id, now, cancellationToken))
             {
                 accepted.Add(other);
             }
@@ -128,10 +140,10 @@ public sealed class PortalAuthService(
         var check = passwords.Verify(account, request.Password);
         if (check == PasswordCheck.Failed)
         {
-            (account.FailedSignIns, account.LockedUntil) = PortalRules.AfterWrongPassword(
-                account.FailedSignIns, now, Options.LockoutAttempts, Options.LockoutMinutes);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            if (account.LockedUntil is not null)
+            // Counted in the database, so wrong passwords sent at once all count.
+            var paused = await accounts.CountWrongPasswordAsync(
+                account.Id, Options.LockoutAttempts, now.AddMinutes(Options.LockoutMinutes), cancellationToken);
+            if (paused)
             {
                 _security.LogWarning("Portal account {AccountId} paused after repeated wrong passwords.", account.Id);
             }
@@ -301,8 +313,18 @@ public sealed class PortalAuthService(
 
         var state = PortalRules.StateOf(
             invitation.AcceptedAt, invitation.RevokedAt, invitation.ExpiresAt, invitation.Account.Status, clock.UtcNow);
+        if (state == PortalInvitationState.Usable && !await CanAcceptAsync(invitation.Account.Email, invitation.ProjectId, cancellationToken))
+        {
+            // The project no longer takes this client (it or its client was archived, or the address is no longer a contact).
+            state = PortalInvitationState.Revoked;
+        }
+
         return state == PortalInvitationState.Usable ? invitation : throw InvitationRefused(state);
     }
+
+    /// <summary>Whether the project would still take the address now: see <see cref="PortalRules.CanAccept"/>.</summary>
+    private async Task<bool> CanAcceptAsync(string email, long projectId, CancellationToken cancellationToken)
+        => await access.GetProjectAsync(projectId, cancellationToken) is { } project && PortalRules.CanAccept(project, email);
 
     private static BusinessRuleException InvitationRefused(PortalInvitationState state) => state switch
     {

@@ -7,6 +7,9 @@ public interface IPortalAccessRepository
 {
     Task<PortalProjectFacts?> GetProjectAsync(long projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>The ids of the client's projects.</summary>
+    Task<IReadOnlyList<long>> ProjectIdsOfClientAsync(long clientId, CancellationToken cancellationToken = default);
+
     /// <summary>Tracked, live or not.</summary>
     Task<PortalProjectAccess?> GetAsync(long accountId, long projectId, CancellationToken cancellationToken = default);
 

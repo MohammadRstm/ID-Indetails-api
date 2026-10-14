@@ -308,6 +308,141 @@ public class PortalTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Archiving_the_client_ends_its_contacts_access_and_invitations_and_restoring_gives_nothing_back()
+    {
+        var (client, cookie, s) = await ActiveClientAsync();
+        var second = await ProjectForAsync(s.SuperAdmin, s.ClientId, DomainCodes.Design);
+        (await InviteAsync(s, projectId: second.Id)).IsSuccessStatusCode.ShouldBeTrue();
+        var colleague = AuthTestSteps.NewEmail("colleague");
+        (await Client.PutJsonAsync($"/api/clients/{s.ClientId}", new
+        {
+            name = "Rita Frem",
+            label = "Client",
+            contacts = new[] { new { kind = "email", value = s.ContactEmail, label = "Office" }, new { kind = "email", value = colleague, label = "Home" } },
+        }, s.SuperAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await InviteAsync(s, colleague)).IsSuccessStatusCode.ShouldBeTrue();
+        var colleagueLink = api.Emails.InvitationTokenFor(colleague);
+
+        await Task.Delay(1100); // the session cut-off keeps tokens of the same second
+        (await Client.PostEmptyAsync($"/api/clients/{s.ClientId}/archive", s.SuperAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        // Both projects end, so the client is signed out; the colleague's link is cancelled.
+        (await _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM portal_project_access WHERE project_id IN (@p, @q) AND revoked_at IS NULL",
+            ("@p", s.Project.Id), ("@q", second.Id))).ShouldBe(0);
+        await (await MeAsync(client.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
+        await (await PortalRefreshAsync(cookie)).ShouldFailWithAsync(401, ErrorCodes.RefreshTokenInvalid);
+        await (await Client.PostJsonAsync("/api/portal/invitations/validate", new { token = colleagueLink }))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalInvitationRevoked);
+
+        (await Client.PostEmptyAsync($"/api/clients/{s.ClientId}/restore", s.SuperAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        var again = await (await Client.PostJsonAsync("/api/portal/auth/login", new { email = s.ContactEmail, password = Password }))
+            .ReadAsync<PortalAuthResponse>();
+        again.Account.Projects.ShouldBeEmpty();
+        await (await Client.PostJsonAsync("/api/portal/invitations/validate", new { token = colleagueLink }))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalInvitationRevoked);
+        var listed = await (await Client.GetAsync($"/api/projects/{s.Project.Id}/portal/clients", s.SuperAdmin.AccessToken))
+            .ReadAsync<PortalClientsResponse>();
+        listed.Clients.Single(c => c.Email == s.ContactEmail).Status.ShouldBe(PortalClientStatus.AccessEnded);
+        listed.Clients.Single(c => c.Email == colleague).Status.ShouldBe(PortalClientStatus.NotInvited);
+    }
+
+    [Fact]
+    public async Task A_link_is_refused_once_its_project_is_archived_and_accepting_another_link_cancels_it()
+    {
+        var s = await DesignProjectAsync();
+        var second = await ProjectForAsync(s.SuperAdmin, s.ClientId, DomainCodes.Design);
+        await InvitedAsync(s);
+        var first = api.Emails.InvitationTokenFor(s.ContactEmail);
+        (await InviteAsync(s, projectId: second.Id)).IsSuccessStatusCode.ShouldBeTrue();
+        var toSecond = api.Emails.InvitationTokenFor(s.ContactEmail);
+
+        (await Client.PostEmptyAsync($"/api/projects/{second.Id}/archive", s.SuperAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync("/api/portal/invitations/validate", new { token = toSecond }))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalInvitationRevoked);
+        await (await Client.PostJsonAsync("/api/portal/invitations/accept", new { token = toSecond, firstName = "Rita", lastName = "Frem", password = Password }))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalInvitationRevoked);
+
+        // The other link still works and opens only its own project; the archived project's invitation is cancelled.
+        var (auth, _) = await AcceptAsync(first);
+        auth.Account.Projects.Select(p => p.Id).ShouldBe([s.Project.Id]);
+        (await _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM portal_invitations WHERE project_id = @p AND revoked_at IS NOT NULL", ("@p", second.Id))).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_link_is_refused_once_the_address_is_no_longer_one_of_the_clients_contacts()
+    {
+        var s = await DesignProjectAsync();
+        await InvitedAsync(s);
+        var token = api.Emails.InvitationTokenFor(s.ContactEmail);
+
+        (await Client.PutJsonAsync($"/api/clients/{s.ClientId}", new
+        {
+            name = "Rita Frem",
+            label = "Client",
+            contacts = new[] { new { kind = "email", value = AuthTestSteps.NewEmail("replacement"), label = "Office" } },
+        }, s.SuperAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        await (await Client.PostJsonAsync("/api/portal/invitations/accept", new { token, firstName = "Rita", lastName = "Frem", password = Password }))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalInvitationRevoked);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_project_access WHERE project_id = @p", ("@p", s.Project.Id))).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_link_is_refused_while_its_client_is_archived()
+    {
+        var s = await DesignProjectAsync();
+        await InvitedAsync(s);
+        var token = api.Emails.InvitationTokenFor(s.ContactEmail);
+
+        // Archived behind the API's back, so the invitation is still pending and only the check on accepting stops it.
+        await _steps.ScalarAsync<int>("UPDATE clients SET archived_at = UTC_TIMESTAMP(3) WHERE id = @id; SELECT 1", ("@id", s.ClientId));
+
+        await (await Client.PostJsonAsync("/api/portal/invitations/accept", new { token, firstName = "Rita", lastName = "Frem", password = Password }))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalInvitationRevoked);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_project_access WHERE project_id = @p", ("@p", s.Project.Id))).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Two_pending_invitations_to_one_project_are_accepted_as_one_access()
+    {
+        var s = await DesignProjectAsync();
+        var invitation = (await InvitedAsync(s)).Clients.Single();
+        var token = api.Emails.InvitationTokenFor(s.ContactEmail);
+
+        // What two invitations sent at the same moment could leave: a second pending invitation to the same project.
+        await _steps.ScalarAsync<int>(
+            "INSERT INTO portal_invitations (account_id, project_id, token_hash, sent_at, expires_at, invited_by_id) " +
+            "SELECT account_id, project_id, @hash, sent_at, expires_at, invited_by_id FROM portal_invitations WHERE id = @id; SELECT 1",
+            ("@hash", Guid.NewGuid().ToString("N")), ("@id", invitation.InvitationId!.Value));
+
+        var (auth, _) = await AcceptAsync(token);
+        auth.Account.Projects.Select(p => p.Id).ShouldBe([s.Project.Id]);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_project_access WHERE project_id = @p", ("@p", s.Project.Id))).ShouldBe(1);
+
+        // No link of the account is left waiting.
+        (await _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM portal_invitations WHERE project_id = @p AND accepted_at IS NULL AND revoked_at IS NULL", ("@p", s.Project.Id)))
+            .ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task An_accepted_invitation_cannot_be_cancelled_and_access_stays()
+    {
+        var (client, _, s) = await ActiveClientAsync();
+        var invitationId = await _steps.ScalarAsync<long>("SELECT id FROM portal_invitations WHERE project_id = @p", ("@p", s.Project.Id));
+
+        await (await Client.PostEmptyAsync($"/api/projects/{s.Project.Id}/portal/invitations/{invitationId}/revoke", s.SuperAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalInvitationUsed);
+
+        (await MeAsync(client.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM portal_invitations WHERE id = @id AND accepted_at IS NOT NULL AND revoked_at IS NULL", ("@id", invitationId))).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Refresh_rotates_the_cookie_and_a_reused_one_ends_every_session()
     {
         var (_, cookie, _) = await ActiveClientAsync();
@@ -348,6 +483,19 @@ public class PortalTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // A staff sign-in with the client's credentials finds no one.
         await (await Client.PostJsonAsync("/api/auth/login", new { email = s.ContactEmail, password = Password }))
+            .ShouldFailWithAsync(401, ErrorCodes.InvalidCredentials);
+    }
+
+    [Fact]
+    public async Task Wrong_passwords_sent_at_once_all_count_towards_the_pause()
+    {
+        var (_, _, s) = await ActiveClientAsync();
+
+        var attempts = await Task.WhenAll(Enumerable.Range(0, 10).Select(_ =>
+            Client.PostJsonAsync("/api/portal/auth/login", new { email = s.ContactEmail, password = "wrong-password-123" })));
+        attempts.ShouldAllBe(r => (int)r.StatusCode == 401);
+
+        await (await Client.PostJsonAsync("/api/portal/auth/login", new { email = s.ContactEmail, password = Password }))
             .ShouldFailWithAsync(401, ErrorCodes.InvalidCredentials);
     }
 

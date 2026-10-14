@@ -28,7 +28,8 @@ public interface IProjectRepository
     Task<(IReadOnlyList<Project> Items, int TotalCount)> SearchAsync(ProjectSearch search, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Ids of the domain's completed projects completed by <paramref name="beforeUtc"/> with no activity event after it.
+    /// Ids of the domain's completed projects completed by <paramref name="beforeUtc"/> with no activity event, client
+    /// portal chat message or (undeleted) comment after it.
     /// </summary>
     Task<IReadOnlyList<long>> QuietCompletedAsync(string domain, DateTime beforeUtc, CancellationToken cancellationToken = default);
 

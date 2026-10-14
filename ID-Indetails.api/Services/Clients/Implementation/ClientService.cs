@@ -22,6 +22,7 @@ using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Portal.Abstraction;
 
 namespace ID_Indetails.api.Services.Clients.Implementation;
 
@@ -35,6 +36,7 @@ public sealed class ClientService(
     IWorkEntryRepository entries,
     IActivityEventRepository activity,
     INotificationSender notifications,
+    IPortalAccessService portalAccess,
     IUnitOfWork unitOfWork,
     IClock clock) : IClientService
 {
@@ -240,13 +242,22 @@ public sealed class ClientService(
     public async Task<ClientResponse> SetArchivedAsync(long clientId, bool archived, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var client = await VisibleClientForUpdateAsync(actor, clientId, cancellationToken);
         Throw(ClientRules.CheckArchive(client.ArchivedAt is not null, archived));
 
         client.ArchivedAt = archived ? clock.UtcNow : null;
         client.UpdatedAt = clock.UtcNow;
         activity.Add(ClientEvent(client, archived ? ActivityEventKinds.ClientArchived : ActivityEventKinds.ClientRestored, actor.UserId));
+
+        // An archived client's contacts stop following its projects in the client portal; restoring gives nothing back.
+        if (archived)
+        {
+            await portalAccess.EndAllForClientAsync(client.Id, client.DomainCode, actor.UserId, cancellationToken);
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, client.Id, cancellationToken);
     }

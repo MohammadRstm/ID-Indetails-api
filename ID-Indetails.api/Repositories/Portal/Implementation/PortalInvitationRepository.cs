@@ -28,6 +28,7 @@ public sealed class PortalInvitationRepository(IdIndetailsDbContext db) : IPorta
         => await db.PortalInvitations
             .Include(i => i.Project)
             .Where(i => i.AccountId == accountId && i.AcceptedAt == null && i.RevokedAt == null && i.ExpiresAt > now)
+            .OrderBy(i => i.Id)
             .ToListAsync(cancellationToken);
 
     public Task<bool> HasPendingAsync(long accountId, long projectId, DateTime now, CancellationToken cancellationToken = default)
@@ -41,6 +42,11 @@ public sealed class PortalInvitationRepository(IdIndetailsDbContext db) : IPorta
         => await db.PortalInvitations
             .Where(i => i.Id == invitationId && i.AcceptedAt == null && i.RevokedAt == null && i.ExpiresAt > acceptedAt)
             .ExecuteUpdateAsync(s => s.SetProperty(i => i.AcceptedAt, acceptedAt), cancellationToken) == 1;
+
+    public async Task<bool> TryRevokeAsync(long invitationId, DateTime revokedAt, CancellationToken cancellationToken = default)
+        => await db.PortalInvitations
+            .Where(i => i.Id == invitationId && i.AcceptedAt == null && i.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.RevokedAt, revokedAt), cancellationToken) == 1;
 
     public Task RevokePendingAsync(long accountId, long projectId, DateTime revokedAt, CancellationToken cancellationToken = default)
         => db.PortalInvitations
