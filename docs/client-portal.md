@@ -453,8 +453,9 @@ All writes are `Never` for Proton.
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a
   signed-in client looks anonymous to the limiter (60 requests a minute per address). Discussion writes also have their
   own per-account limit.
-- **Archived projects** still appear to their clients. Their content is read-only for staff; the client side comes
-  with publishing.
-- **Content activity** (uploads, renames, deletions) isn't in the activity feed: drafts are internal. Publishing will
-  be recorded.
-- **No client notifications yet.** Publishing notifications come in a later phase.
+- **Archived projects** still appear to their clients, read-only on both sides: the published page and the
+  discussion can be read, but nothing can be changed, published or written.
+- **Content activity** (uploads, renames, deletions) isn't in the activity feed: drafts are internal. Publishing is
+  recorded (`portal_published`).
+- **Client notifications** cover the discussion only (team messages, team comments, mentions). Publishing doesn't
+  notify clients yet.
