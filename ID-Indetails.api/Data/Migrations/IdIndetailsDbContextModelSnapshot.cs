@@ -2377,6 +2377,98 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalComment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AuthorAccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("author_account_id");
+
+                    b.Property<long?>("AuthorUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("author_user_id");
+
+                    b.Property<string>("Body")
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("body");
+
+                    b.Property<string>("ClientToken")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("client_token");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<DateTime?>("EditedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("edited_at");
+
+                    b.Property<long>("FileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("file_id");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<long>("ItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("ItemTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("item_title");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_comments");
+
+                    b.HasIndex("AuthorAccountId", "ClientToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_comments_author_account_id_client_token");
+
+                    b.HasIndex("AuthorUserId", "ClientToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_comments_author_user_id_client_token");
+
+                    b.HasIndex("ProjectId", "Id")
+                        .HasDatabaseName("ix_portal_comments_project_id_id");
+
+                    b.HasIndex("ProjectId", "ItemId", "Id")
+                        .HasDatabaseName("ix_portal_comments_project_id_item_id_id");
+
+                    b.ToTable("portal_comments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_comments_body_unless_deleted", "`body` IS NOT NULL OR `deleted_at` IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_portal_comments_one_author", "(`author_user_id` IS NULL) <> (`author_account_id` IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalFile", b =>
                 {
                     b.Property<long>("Id")
@@ -2621,6 +2713,200 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalMention", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_id");
+
+                    b.Property<long?>("CommentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("comment_id");
+
+                    b.Property<long?>("MessageId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("message_id");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_mentions");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_portal_mentions_account_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_portal_mentions_user_id");
+
+                    b.HasIndex("CommentId", "AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_mentions_comment_id_account_id");
+
+                    b.HasIndex("CommentId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_mentions_comment_id_user_id");
+
+                    b.HasIndex("MessageId", "AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_mentions_message_id_account_id");
+
+                    b.HasIndex("MessageId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_mentions_message_id_user_id");
+
+                    b.ToTable("portal_mentions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_mentions_one_person", "(`user_id` IS NULL) <> (`account_id` IS NULL)");
+
+                            t.HasCheckConstraint("ck_portal_mentions_one_place", "(`message_id` IS NULL) <> (`comment_id` IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AuthorAccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("author_account_id");
+
+                    b.Property<long?>("AuthorUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("author_user_id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)")
+                        .HasColumnName("body");
+
+                    b.Property<string>("ClientToken")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("client_token");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("EditedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("edited_at");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_messages");
+
+                    b.HasIndex("AuthorAccountId", "ClientToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_messages_author_account_id_client_token");
+
+                    b.HasIndex("AuthorUserId", "ClientToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_messages_author_user_id_client_token");
+
+                    b.HasIndex("ProjectId", "Id")
+                        .HasDatabaseName("ix_portal_messages_project_id_id");
+
+                    b.ToTable("portal_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_messages_one_author", "(`author_user_id` IS NULL) <> (`author_account_id` IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalNotification", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_id");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("int")
+                        .HasColumnName("count");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DigestKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar(128)")
+                        .HasColumnName("digest_key");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Payload")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("payload");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("read_at");
+
+                    b.Property<long?>("SubjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("subject_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_notifications");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_portal_notifications_project_id");
+
+                    b.HasIndex("AccountId", "DigestKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_notifications_account_id_digest_key");
+
+                    b.HasIndex("AccountId", "ReadAt", "Id")
+                        .HasDatabaseName("ix_portal_notifications_account_id_read_at_id");
+
+                    b.ToTable("portal_notifications", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_notifications_count_positive", "`count` > 0");
+
+                            t.HasCheckConstraint("ck_portal_notifications_kind", "`kind` IN ('team_message', 'team_comment', 'mention')");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalPasswordResetToken", b =>
                 {
                     b.Property<long>("Id")
@@ -2720,6 +3006,63 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasDatabaseName("ix_portal_project_access_account_id_project_id");
 
                     b.ToTable("portal_project_access", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalRead", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_id");
+
+                    b.Property<long?>("LastCommentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_comment_id");
+
+                    b.Property<long?>("LastMessageId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_message_id");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_reads");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_portal_reads_account_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_portal_reads_user_id");
+
+                    b.HasIndex("ProjectId", "AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_reads_project_id_account_id");
+
+                    b.HasIndex("ProjectId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_reads_project_id_user_id");
+
+                    b.ToTable("portal_reads", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_reads_one_reader", "(`user_id` IS NULL) <> (`account_id` IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.PortalRefreshToken", b =>
@@ -6091,6 +6434,28 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_portal_accounts_users_created_by_id");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalComment", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_comments_portal_accounts_author_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_comments_users_author_user_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_comments_projects_project_id");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalFile", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.Project", null)
@@ -6168,6 +6533,72 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("File");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalMention", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_mentions_portal_accounts_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.PortalComment", null)
+                        .WithMany()
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_mentions_portal_comments_comment_id");
+
+                    b.HasOne("ID_Indetails.api.Models.PortalMessage", null)
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_mentions_portal_messages_message_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_mentions_users_user_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalMessage", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_messages_portal_accounts_author_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_messages_users_author_user_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_messages_projects_project_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalNotification", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_notifications_portal_accounts_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_notifications_projects_project_id");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalPasswordResetToken", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.PortalAccount", "Account")
@@ -6212,6 +6643,28 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Account");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalRead", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_reads_portal_accounts_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_reads_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_reads_users_user_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.PortalRefreshToken", b =>
