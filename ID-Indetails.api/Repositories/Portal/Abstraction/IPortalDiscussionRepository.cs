@@ -8,8 +8,11 @@ public interface IPortalDiscussionRepository
 {
     Task<DiscussionProject?> ProjectAsync(long projectId, CancellationToken cancellationToken = default);
 
-    /// <summary>Active staff taking part: super admins, the project's manager, and whoever uploaded a portal file to it or logged work on it.</summary>
-    Task<IReadOnlyList<DiscussionPerson>> StaffAsync(DiscussionProject project, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Active staff who may take part: super admins, the project's manager, and whoever uploaded a portal file to it or
+    /// logged work on it. Whether the others can see the project's domain is for the caller to check.
+    /// </summary>
+    Task<IReadOnlyList<StaffCandidate>> StaffAsync(DiscussionProject project, CancellationToken cancellationToken = default);
 
     /// <summary>Active client accounts with live access to the project.</summary>
     Task<IReadOnlyList<DiscussionPerson>> ClientsAsync(long projectId, CancellationToken cancellationToken = default);
@@ -35,6 +38,12 @@ public interface IPortalDiscussionRepository
 
     /// <summary>A file's comments (or every comment of the project), oldest first, deleted ones included.</summary>
     Task<IReadOnlyList<DiscussionCommentRow>> CommentsAsync(long projectId, long? itemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Each of the project's comment threads, without the comments' text. Unread: comments not deleted and not written
+    /// by the reader, past the reader's marker on that file.
+    /// </summary>
+    Task<IReadOnlyList<CommentThreadFacts>> CommentThreadsAsync(long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default);
 
     Task<DiscussionCommentRow?> CommentRowAsync(long projectId, long commentId, CancellationToken cancellationToken = default);
 
@@ -62,14 +71,15 @@ public interface IPortalDiscussionRepository
     /// <summary>The reader's marker on a file's comments, if any. Tracked.</summary>
     Task<PortalCommentRead?> GetCommentReadAsync(long projectId, long itemId, DiscussionPerson reader, CancellationToken cancellationToken = default);
 
-    /// <summary>How far the reader has read each file's comments, by item.</summary>
-    Task<IReadOnlyDictionary<long, long>> CommentReadsAsync(long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default);
-
     /// <summary>Unread chat messages and comments on each project, for a client.</summary>
     Task<IReadOnlyDictionary<long, int>> UnreadForClientAsync(long accountId, IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
-    /// <summary>The client's notification with this key, locked until the transaction ends. Tracked.</summary>
-    Task<PortalNotification?> GetNotificationForUpdateAsync(long accountId, string digestKey, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Writes a client's notification at once, in one statement, so two writers at the same moment can't both add it:
+    /// with a key not used yet it is added as given; a <paramref name="rolling"/> one adds to the one with its key (or
+    /// starts it again at 1 once read) and takes the new time, payload and subject; a one-off already sent stays as it is.
+    /// </summary>
+    Task AddNotificationAsync(PortalNotification notification, bool rolling, CancellationToken cancellationToken = default);
 
     /// <summary>A client's notifications on projects they still have access to, newest first.</summary>
     Task<IReadOnlyList<PortalNotificationRow>> NotificationsAsync(long accountId, long? before, int take, CancellationToken cancellationToken = default);
@@ -88,8 +98,6 @@ public interface IPortalDiscussionRepository
     void Add(PortalRead read);
 
     void Add(PortalCommentRead read);
-
-    void Add(PortalNotification notification);
 
     void Remove(PortalMention mention);
 }

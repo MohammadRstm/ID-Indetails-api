@@ -1,31 +1,43 @@
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.ContentStore.Abstraction;
 using ID_Indetails.api.Services.ContentStore.Implementation;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using Moq;
 using Shouldly;
 
 namespace ID_Indetails.UnitTests.ContentStore;
 
-/// <summary>Presigned links are made without any network call, so they are checked with fake credentials.</summary>
+/// <summary>
+/// Presigned links are made without any network call, so they are checked with fake credentials. What only R2 itself
+/// answers (NoSuchUpload on a completion, an outage) can't be reached from here: the client is built inside the store.
+/// </summary>
 public sealed class R2ContentStoreTests : IDisposable
 {
     private const string AccountId = "0123456789abcdef0123456789abcdef";
     private const string Bucket = "portal-test";
     private const string Key = "portal/12/3f2a9c4e";
 
-    private readonly R2ContentStore _store = new(Options.Create(new ContentStoreOptions
-    {
-        Provider = ContentStoreProvider.R2,
-        R2 = new R2ContentStoreOptions
+    private static readonly DateTime Now = DateTime.UtcNow;
+
+    private readonly R2ContentStore _store = new(
+        Options.Create(new ContentStoreOptions
         {
-            AccountId = AccountId,
-            Bucket = Bucket,
-            AccessKeyId = "test-access-key-id",
-            SecretAccessKey = "test-secret-access-key-not-real",
-        },
-    }));
+            Provider = ContentStoreProvider.R2,
+            R2 = new R2ContentStoreOptions
+            {
+                AccountId = AccountId,
+                Bucket = Bucket,
+                AccessKeyId = "test-access-key-id",
+                SecretAccessKey = "test-secret-access-key-not-real",
+            },
+        }),
+        Mock.Of<IClock>(c => c.UtcNow == Now),
+        NullLogger<R2ContentStore>.Instance);
 
     public void Dispose() => _store.Dispose();
 
@@ -71,6 +83,22 @@ public sealed class R2ContentStoreTests : IDisposable
         query["response-content-disposition"].ToString().ShouldBe("attachment; filename=\"Plan _ v2.pdf\"; filename*=UTF-8''Plan%20%E2%80%93%20v2.pdf");
         query.ContainsKey("partNumber").ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task A_download_link_is_cached_by_the_browser_only_while_it_lasts()
+    {
+        var query = QueryOf(new Uri(await _store.GetDownloadUrlAsync(Key, "plan.pdf", "application/pdf", inline: true, Now.AddMinutes(5))));
+
+        query["response-cache-control"].ToString().ShouldBe("private, max-age=300");
+    }
+
+    [Theory]
+    [InlineData(3600.0, "private, max-age=3600")]
+    [InlineData(299.9, "private, max-age=299")]
+    [InlineData(0.0, "private, max-age=0")]
+    [InlineData(-30.0, "private, max-age=0")]
+    public void The_cache_lasts_the_whole_seconds_a_link_has_left(double secondsLeft, string expected)
+        => ContentLinks.CacheControl(Now.AddSeconds(secondsLeft), Now).ShouldBe(expected);
 
     [Theory]
     [InlineData("plan.pdf", true, "inline; filename=\"plan.pdf\"; filename*=UTF-8''plan.pdf")]

@@ -238,6 +238,10 @@ namespace ID_Indetails.api.Data.Migrations
             migrationBuilder.DropTable(
                 name: "portal_files");
 
+            // grants made since would otherwise stop the permission from being deleted (restricting foreign keys)
+            migrationBuilder.Sql("DELETE FROM `user_permission_overrides` WHERE `permission_code` = 'client_portal:manage';");
+            migrationBuilder.Sql("DELETE FROM `role_permissions` WHERE `permission_code` = 'client_portal:manage';");
+
             migrationBuilder.DeleteData(
                 table: "role_permissions",
                 keyColumns: new[] { "permission_code", "role_code" },

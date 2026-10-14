@@ -10,6 +10,7 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Portal.Abstraction;
+using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Portal.Abstraction;
@@ -18,15 +19,16 @@ using ID_Indetails.api.Services.Realtime.Abstraction;
 namespace ID_Indetails.api.Services.Portal.Implementation;
 
 /// <summary>
-/// A Design client project's discussion. Who takes part is read from the project, its files, its work and its client
-/// access on every call (<see cref="PortalDiscussionRules"/>), never from what the browser says. Clients see and
-/// comment on published files only. Notifications name who and where, never the text: staff through the usual
-/// notifications, clients through their own. Every change signals both sides' live connections, without content.
+/// A Design client project's discussion. Who takes part is read from the project, its files, its work, the staff's
+/// access and its client access on every call (<see cref="PortalDiscussionRules"/>), never from what the browser says.
+/// Clients see and comment on published files only. Notifications name who and where, never the text: staff through
+/// the usual notifications, clients through their own. Every change signals both sides' live connections, without content.
 /// </summary>
 public sealed class PortalDiscussionService(
     ICurrentUser currentUser,
     ICurrentPortalAccount currentAccount,
     IPortalDiscussionRepository discussion,
+    IPermissionService permissions,
     INotificationSender notifications,
     ILiveUpdates live,
     IUnitOfWork unitOfWork,
@@ -107,12 +109,18 @@ public sealed class PortalDiscussionService(
         }
 
         var mentioned = Mentioned(request.Mentions, room);
-        message.Body = PortalDiscussionRules.Clean(request.Body);
-        message.EditedAt = clock.UtcNow;
-        var added = await ReplaceMentionsAsync(mentioned, messageId, null, cancellationToken);
-        await NotifyMentionsAsync(room, new Written(messageId, null, null, null, null), added, cancellationToken);
-        Signal(room);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        // a client's mention is written at once: the edit commits with it or not at all
+        await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
+        {
+            message.Body = PortalDiscussionRules.Clean(request.Body);
+            message.EditedAt = clock.UtcNow;
+            var added = await ReplaceMentionsAsync(mentioned, messageId, null, cancellationToken);
+            await NotifyMentionsAsync(room, new Written(messageId, null, null, null, null), added, cancellationToken);
+            Signal(room);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
         return await MessageAsync(room, messageId, cancellationToken);
     }
 
@@ -198,12 +206,18 @@ public sealed class PortalDiscussionService(
         }
 
         var mentioned = Mentioned(request.Mentions, room);
-        comment.Body = body;
-        comment.EditedAt = clock.UtcNow;
-        var added = await ReplaceMentionsAsync(mentioned, null, commentId, cancellationToken);
-        await NotifyMentionsAsync(room, new Written(null, commentId, comment.ItemId, item.Title, item.UploadedById), added, cancellationToken);
-        Signal(room);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        // a client's mention is written at once: the edit commits with it or not at all
+        await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
+        {
+            comment.Body = body;
+            comment.EditedAt = clock.UtcNow;
+            var added = await ReplaceMentionsAsync(mentioned, null, commentId, cancellationToken);
+            await NotifyMentionsAsync(room, new Written(null, commentId, comment.ItemId, item.Title, item.UploadedById), added, cancellationToken);
+            Signal(room);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
         return await CommentAsync(room, commentId, cancellationToken);
     }
 
@@ -253,31 +267,46 @@ public sealed class PortalDiscussionService(
             live.PortalChanged(projectId, [], [room.Me.Id]);
         }
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
         return await SummaryAsync(room, cancellationToken);
     }
 
+    /// <summary>
+    /// Moves the marker on the chat. The person's first marker is saved on its own: when another tab saved one a moment
+    /// earlier, that one is moved instead.
+    /// </summary>
     private async Task MarkChatReadAsync(Room room, long? seen, CancellationToken cancellationToken)
     {
         var projectId = room.Project.Id;
+        var newest = await discussion.NewestMessageIdAsync(projectId, cancellationToken);
         var read = await discussion.GetReadAsync(projectId, room.Me, cancellationToken);
         if (read is null)
         {
-            read = new PortalRead
+            discussion.Add(new PortalRead
             {
                 ProjectId = projectId,
                 UserId = room.Me.Side == DiscussionSide.Staff ? room.Me.Id : null,
                 AccountId = room.Me.Side == DiscussionSide.Client ? room.Me.Id : null,
-            };
-            discussion.Add(read);
+                LastMessageId = PortalDiscussionRules.MoveMarker(null, seen, newest),
+                UpdatedAt = clock.UtcNow,
+            });
+            if (await unitOfWork.TrySaveChangesAsync(cancellationToken))
+            {
+                return;
+            }
+
+            read = await discussion.GetReadAsync(projectId, room.Me, cancellationToken)
+                ?? throw new InvalidOperationException("The chat read marker that was there a moment ago is gone.");
         }
 
-        read.LastMessageId = PortalDiscussionRules.MoveMarker(
-            read.LastMessageId, seen, await discussion.NewestMessageIdAsync(projectId, cancellationToken));
+        read.LastMessageId = PortalDiscussionRules.MoveMarker(read.LastMessageId, seen, newest);
         read.UpdatedAt = clock.UtcNow;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Moves the marker on one file's comments; a file of this project with no comments has nothing to mark.</summary>
+    /// <summary>
+    /// Moves the marker on one file's comments; a file of this project with no comments has nothing to mark. The first
+    /// marker is saved as on the chat (<see cref="MarkChatReadAsync"/>).
+    /// </summary>
     private async Task MarkCommentsReadAsync(Room room, long itemId, long? seen, CancellationToken cancellationToken)
     {
         var projectId = room.Project.Id;
@@ -290,18 +319,27 @@ public sealed class PortalDiscussionService(
         var read = await discussion.GetCommentReadAsync(projectId, itemId, room.Me, cancellationToken);
         if (read is null)
         {
-            read = new PortalCommentRead
+            discussion.Add(new PortalCommentRead
             {
                 ProjectId = projectId,
                 ItemId = itemId,
                 UserId = room.Me.Side == DiscussionSide.Staff ? room.Me.Id : null,
                 AccountId = room.Me.Side == DiscussionSide.Client ? room.Me.Id : null,
-            };
-            discussion.Add(read);
+                LastCommentId = PortalDiscussionRules.MoveMarker(null, seen, newest) ?? 0,
+                UpdatedAt = clock.UtcNow,
+            });
+            if (await unitOfWork.TrySaveChangesAsync(cancellationToken))
+            {
+                return;
+            }
+
+            read = await discussion.GetCommentReadAsync(projectId, itemId, room.Me, cancellationToken)
+                ?? throw new InvalidOperationException("The comments read marker that was there a moment ago is gone.");
         }
 
         read.LastCommentId = PortalDiscussionRules.MoveMarker(read.LastCommentId == 0 ? null : read.LastCommentId, seen, newest) ?? 0;
         read.UpdatedAt = clock.UtcNow;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>The project's discussion with the caller in it; a 404 for anyone not taking part.</summary>
@@ -313,7 +351,7 @@ public sealed class PortalDiscussionService(
             throw new NotFoundException(NotAvailable);
         }
 
-        var staff = await discussion.StaffAsync(project, cancellationToken);
+        var staff = await StaffTakingPartAsync(project, cancellationToken);
         var clients = await discussion.ClientsAsync(projectId, cancellationToken);
         var me = side == DiscussionSide.Staff
             ? staff.SingleOrDefault(p => p.Id == currentUser.Id)
@@ -321,30 +359,45 @@ public sealed class PortalDiscussionService(
         return me is null ? throw new NotFoundException(NotAvailable) : new Room(project, me, staff, clients);
     }
 
+    /// <summary>
+    /// Super admins, and the other candidates while they can see the project's domain, as everywhere else in the app: a
+    /// Design employee moved to Execution no longer takes part in a Design project's discussion.
+    /// </summary>
+    private async Task<IReadOnlyList<DiscussionPerson>> StaffTakingPartAsync(DiscussionProject project, CancellationToken cancellationToken)
+    {
+        var staff = new List<DiscussionPerson>();
+        foreach (var candidate in await discussion.StaffAsync(project, cancellationToken))
+        {
+            if (candidate.IsSuperAdmin || (await permissions.GetAccessAsync(candidate.Person.Id, cancellationToken)).CanSee(project.DomainCode))
+            {
+                staff.Add(candidate.Person);
+            }
+        }
+
+        return staff;
+    }
+
     private async Task<DiscussionSummaryResponse> SummaryAsync(Room room, CancellationToken cancellationToken)
     {
         var projectId = room.Project.Id;
         var read = await discussion.GetReadAsync(projectId, room.Me, cancellationToken);
-        var comments = await discussion.CommentsAsync(projectId, null, cancellationToken);
+        var facts = await discussion.CommentThreadsAsync(projectId, room.Me, cancellationToken);
         var published = await discussion.PublishedItemsAsync(projectId, cancellationToken);
-        var commentReads = await discussion.CommentReadsAsync(projectId, room.Me, cancellationToken);
 
-        var threads = comments
-            .GroupBy(c => c.ItemId)
+        var threads = facts
+            .OrderByDescending(t => t.LastAt).ThenByDescending(t => t.LastCommentId)
             .Select(thread =>
             {
-                var last = thread.MaxBy(c => c.Id)!;
-                var shown = published.GetValueOrDefault(thread.Key);
+                var shown = published.GetValueOrDefault(thread.ItemId);
                 return new CommentThreadSummaryResponse(
-                    thread.Key,
-                    shown?.Title ?? last.ItemTitle,
-                    shown?.FileName ?? last.FileName,
+                    thread.ItemId,
+                    shown?.Title ?? thread.ItemTitle,
+                    shown?.FileName ?? thread.FileName,
                     shown is not null,
-                    thread.Count(),
-                    thread.Count(c => c.Id > commentReads.GetValueOrDefault(thread.Key) && c.DeletedAt is null && c.Author.Key != room.Me.Key),
-                    last.CreatedAt);
+                    thread.Count,
+                    thread.Unread,
+                    thread.LastAt);
             })
-            .OrderByDescending(t => t.LastAt)
             .ToList();
 
         var closed = PortalDiscussionRules.CheckWritable(room.Project.Status);
@@ -356,7 +409,7 @@ public sealed class PortalDiscussionService(
             UnreadMessages = await discussion.UnreadMessagesAsync(projectId, read?.LastMessageId, room.Me, cancellationToken),
             UnreadComments = threads.Sum(t => t.Unread),
             LastMessageId = await discussion.NewestMessageIdAsync(projectId, cancellationToken),
-            LastCommentId = comments.Count == 0 ? null : comments.Max(c => c.Id),
+            LastCommentId = facts.Count == 0 ? null : facts.Max(t => t.LastCommentId),
             Participants = room.Everyone.Select(p => Person(p, room.Me)).ToList(),
             Threads = threads,
         };
@@ -513,42 +566,25 @@ public sealed class PortalDiscussionService(
 
     /// <summary>
     /// A client's notification. A rolling one adds to the unread one with its key (or starts again at 1 once read); a
-    /// one-off is never sent twice.
+    /// one-off is never sent twice. Written at once, in the caller's transaction.
     /// </summary>
-    private async Task NotifyClientAsync(
+    private Task NotifyClientAsync(
         long accountId, long projectId, PortalNotificationKind kind, long? subjectId, string key, bool rolling, object payload,
         CancellationToken cancellationToken)
-    {
-        var now = clock.UtcNow;
-        var json = JsonSerializer.Serialize(payload, JsonSerializerOptions.Web);
-        var existing = await discussion.GetNotificationForUpdateAsync(accountId, key, cancellationToken);
-        if (existing is null)
-        {
-            discussion.Add(new PortalNotification
+        => discussion.AddNotificationAsync(
+            new PortalNotification
             {
                 AccountId = accountId,
                 ProjectId = projectId,
                 Kind = kind,
                 SubjectId = subjectId,
-                Payload = json,
+                Payload = JsonSerializer.Serialize(payload, JsonSerializerOptions.Web),
                 DigestKey = key,
                 Count = 1,
-                CreatedAt = now,
-            });
-            return;
-        }
-
-        if (!rolling)
-        {
-            return;
-        }
-
-        existing.Count = existing.ReadAt is null ? existing.Count + 1 : 1;
-        existing.ReadAt = null;
-        existing.CreatedAt = now;
-        existing.Payload = json;
-        existing.SubjectId = subjectId;
-    }
+                CreatedAt = clock.UtcNow,
+            },
+            rolling,
+            cancellationToken);
 
     /// <summary>Everyone taking part sees the change on their open pages.</summary>
     private void Signal(Room room)

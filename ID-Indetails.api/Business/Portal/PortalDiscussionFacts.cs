@@ -17,6 +17,16 @@ public sealed record DiscussionCommentRow(
     public DiscussionPerson Author => DiscussionRows.Author(AuthorUserId, AuthorAccountId, AuthorName);
 }
 
+/// <summary>
+/// One file's comment thread at a glance, without any text: how many comments, the newest one (with the item's title
+/// and file name as it was written about), and how many the reader hasn't read.
+/// </summary>
+public sealed record CommentThreadFacts(
+    long ItemId, int Count, long LastCommentId, DateTime LastAt, string ItemTitle, string FileName, int Unread);
+
+/// <summary>A staff member who may take part: a super admin always does, anyone else while they can see the project's domain.</summary>
+public sealed record StaffCandidate(DiscussionPerson Person, bool IsSuperAdmin);
+
 /// <summary>A file clients see now: what a comment on it is about.</summary>
 public sealed record PublishedItemFacts(long ItemId, string Title, long FileId, string FileName, long UploadedById);
 

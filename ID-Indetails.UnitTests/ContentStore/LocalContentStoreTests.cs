@@ -226,6 +226,25 @@ public sealed class LocalContentStoreTests : IDisposable
         download.ContentType.ShouldBe("application/pdf");
         download.Inline.ShouldBeFalse();
         File.ReadAllBytes(download.Path).ShouldBe(data);
+        download.CacheControl.ShouldBe("private, max-age=300");
+
+        // served later, it may be kept only for what the link has left
+        _now = Start.AddMinutes(4);
+        store.ResolveDownload(TokenOf(url)).ShouldNotBeNull().CacheControl.ShouldBe("private, max-age=60");
+    }
+
+    [Fact]
+    public async Task Completing_an_upload_that_is_already_joined_is_not_an_error()
+    {
+        var store = NewStore();
+        var (uploadId, token) = await StartedAsync(store);
+        await store.WritePartAsync(token, new MemoryStream(Bytes(40, 1)), 40);
+        var parts = (await store.ListPartsAsync(Key, uploadId)).ShouldNotBeNull();
+        await store.CompleteUploadAsync(Key, uploadId, parts);
+
+        await store.CompleteUploadAsync(Key, uploadId, parts);
+
+        (await store.GetSizeAsync(Key)).ShouldBe(40);
     }
 
     [Fact]
