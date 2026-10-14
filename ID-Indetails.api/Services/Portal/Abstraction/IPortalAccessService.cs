@@ -21,4 +21,10 @@ public interface IPortalAccessService
     /// client or becomes internal. Staged in the caller's unit of work and transaction.
     /// </summary>
     Task EndAllForProjectAsync(long projectId, string domainCode, long? previousClientId, long actorId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The same for every project of the client, when the client is archived; restoring it gives nothing back. Saved in
+    /// the caller's unit of work, inside its transaction.
+    /// </summary>
+    Task EndAllForClientAsync(long clientId, string domainCode, long actorId, CancellationToken cancellationToken = default);
 }

@@ -52,6 +52,9 @@ because:
 - **Who can be invited:**
   - only an **email contact of the project's client**, so invitations never go to arbitrary addresses;
   - on a Design client project that isn't archived, whose client isn't archived.
+- **Checked again when the link is opened and used** (`PortalRules.CanAccept`): if the project or its client has been
+  archived, or the address is no longer one of the client's contacts, the link reads as cancelled. Moving the project to
+  another client cancels its invitations outright.
 
 ## Invitation flow
 
@@ -64,20 +67,30 @@ because:
    project, or why the link can't be used:
    - `404 portal_invitation_invalid`: no such link;
    - `422 portal_invitation_expired`;
-   - `422 portal_invitation_revoked`: cancelled, or replaced by a resend;
+   - `422 portal_invitation_revoked`: cancelled, replaced by a resend, or no longer allowed (see "Checked again when the
+     link is opened and used" above);
    - `422 portal_invitation_used`: the account is already set up, so sign in.
 3. **The client sets up the account.** `POST /api/portal/invitations/accept { token, firstName, lastName, password }`:
    - The password follows the staff rules (10–128 characters, PBKDF2 hashing).
    - The token is claimed atomically, so it can be used **once**.
-   - The account becomes `active` and gets access to the project, plus any other project it had a pending invitation to.
+   - The account becomes `active` and gets access to the project, plus any other project it had a pending invitation to
+     that still passes the same check. Each project is opened once; every other pending invitation of the account (one
+     that fails the check, or a second one to the same project) is cancelled, so none of its links stays usable.
    - The client is signed in.
 4. **An address that already has an active account** gets access to the new project at once, and an email saying so. No
    second account and no new password.
 5. **Resend** (`…/invitations/{id}/resend`) replaces the link; the old one reads as revoked. **Cancel**
-   (`…/invitations/{id}/revoke`) stops a pending link.
+   (`…/invitations/{id}/revoke`) stops a pending link. Cancelling is a single conditional update, like accepting: an
+   invitation the client has just accepted can't be cancelled (`422 portal_invitation_used`), and their access stays.
 6. **End access** (`…/portal/access/{id}/revoke`): the project disappears from the client's portal at once, and their
    pending invitations to it are cancelled. If it was their last project, they are signed out everywhere.
 7. **Moving the project to another client, or making it internal**, ends every client's access to it.
+8. **Archiving the client** ends every contact's access to all of the client's projects and cancels their pending
+   invitations; anyone left with no project is signed out. **Restoring the client gives nothing back**: staff invite again.
+
+**At the same moment.** Inviting, resending and accepting for one address lock its account row first, so they take
+turns: two invitations sent at once never leave two pending links to one project, and two links of one account used at
+once can't claim each other's invitations.
 
 ## Client sign-in
 
@@ -93,7 +106,8 @@ Errors:
   hash.
 - After **10 wrong passwords** in a row, sign-in pauses for **15 minutes** (`Portal:LockoutAttempts`,
   `Portal:LockoutMinutes`). During the pause even the right password gets the same generic answer, so the pause can't be
-  used to test passwords.
+  used to test passwords. Each wrong password is counted in the database in a single statement, so wrong passwords sent
+  at once all count.
 - Rate limits: the per-IP `auth` limit applies to login, invitations and resets; `refresh` to refresh; staff invitation
   emails use the per-person `email` limit.
 
@@ -120,7 +134,8 @@ Proton never calls any of these: they are `Never` in `ProtonCoverage`.
   `activity_events`, with the project, the client and `subject_type = portal_account`. They appear under Projects in the
   Design activity feed.
   - An acceptance has no staff actor.
-  - These events count as project activity for auto-archive.
+  - These events count as project activity for auto-archive. So do the project's chat messages and (not deleted)
+    comments: a completed project whose discussion went on in the last 90 days isn't archived automatically.
 - **Security log.** Sign-in refusals, pauses and reused refresh tokens go to the security log
   (`ID_Indetails.api.Security`).
 
