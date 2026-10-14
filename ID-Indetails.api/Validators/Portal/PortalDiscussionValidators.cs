@@ -12,7 +12,7 @@ internal static class DiscussionText
             .Must(b => b.Trim().Length <= max).WithMessage($"A {what} can be at most {max} characters.");
 
     public static IRuleBuilderOptions<T, IReadOnlyList<string>> MentionKeys<T>(this IRuleBuilder<T, IReadOnlyList<string>> rule)
-        => rule.Must(keys => keys.Count <= 50 && keys.All(k => k.Length is > 1 and <= 24)).WithMessage("Those mentions aren't valid.");
+        => rule.Must(keys => keys.Count <= 50 && keys.All(k => k is { Length: > 1 and <= 24 })).WithMessage("Those mentions aren't valid.");
 }
 
 public sealed class PortalMessageRequestValidator : AbstractValidator<PortalMessageRequest>
@@ -43,6 +43,18 @@ public sealed class PortalEditRequestValidator : AbstractValidator<PortalEditReq
         // the longer limit here; a comment's own is checked when it is saved
         RuleFor(x => x.Body).Written(PortalDiscussionRules.MaxMessageLength, "message");
         RuleFor(x => x.Mentions).MentionKeys();
+    }
+}
+
+public sealed class PortalReadRequestValidator : AbstractValidator<PortalReadRequest>
+{
+    public PortalReadRequestValidator()
+    {
+        // a comment marker belongs to one file
+        RuleFor(x => x).Must(x => (x.ItemId is null) == (x.LastCommentId is null)).WithMessage("Say which file's comments were read.");
+        RuleFor(x => x.LastMessageId).GreaterThan(0).When(x => x.LastMessageId is not null);
+        RuleFor(x => x.ItemId).GreaterThan(0).When(x => x.ItemId is not null);
+        RuleFor(x => x.LastCommentId).GreaterThan(0).When(x => x.LastCommentId is not null);
     }
 }
 

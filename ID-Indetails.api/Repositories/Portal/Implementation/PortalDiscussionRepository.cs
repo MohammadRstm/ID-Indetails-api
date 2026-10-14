@@ -67,8 +67,8 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
     public Task<long?> NewestMessageIdAsync(long projectId, CancellationToken cancellationToken = default)
         => db.PortalMessages.Where(m => m.ProjectId == projectId).MaxAsync(m => (long?)m.Id, cancellationToken);
 
-    public Task<long?> NewestCommentIdAsync(long projectId, CancellationToken cancellationToken = default)
-        => db.PortalComments.Where(c => c.ProjectId == projectId).MaxAsync(c => (long?)c.Id, cancellationToken);
+    public Task<long?> NewestCommentIdAsync(long projectId, long itemId, CancellationToken cancellationToken = default)
+        => db.PortalComments.Where(c => c.ProjectId == projectId && c.ItemId == itemId).MaxAsync(c => (long?)c.Id, cancellationToken);
 
     public Task<int> UnreadMessagesAsync(long projectId, long? after, DiscussionPerson reader, CancellationToken cancellationToken = default)
     {
@@ -136,22 +136,34 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
             ? db.PortalReads.SingleOrDefaultAsync(r => r.ProjectId == projectId && r.UserId == reader.Id, cancellationToken)
             : db.PortalReads.SingleOrDefaultAsync(r => r.ProjectId == projectId && r.AccountId == reader.Id, cancellationToken);
 
+    public Task<PortalCommentRead?> GetCommentReadAsync(long projectId, long itemId, DiscussionPerson reader, CancellationToken cancellationToken = default)
+        => reader.Side == DiscussionSide.Staff
+            ? db.PortalCommentReads.SingleOrDefaultAsync(r => r.ProjectId == projectId && r.ItemId == itemId && r.UserId == reader.Id, cancellationToken)
+            : db.PortalCommentReads.SingleOrDefaultAsync(r => r.ProjectId == projectId && r.ItemId == itemId && r.AccountId == reader.Id, cancellationToken);
+
+    public async Task<IReadOnlyDictionary<long, long>> CommentReadsAsync(long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default)
+    {
+        var reads = db.PortalCommentReads.AsNoTracking().Where(r => r.ProjectId == projectId);
+        reads = reader.Side == DiscussionSide.Staff ? reads.Where(r => r.UserId == reader.Id) : reads.Where(r => r.AccountId == reader.Id);
+        return await reads.ToDictionaryAsync(r => r.ItemId, r => r.LastCommentId, cancellationToken);
+    }
+
     public async Task<IReadOnlyDictionary<long, int>> UnreadForClientAsync(
         long accountId, IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
     {
         var unread = new Dictionary<long, int>();
         foreach (var projectId in projectIds)
         {
-            var marker = await db.PortalReads.AsNoTracking()
+            var afterMessage = await db.PortalReads.AsNoTracking()
                 .Where(r => r.ProjectId == projectId && r.AccountId == accountId)
-                .Select(r => new { r.LastMessageId, r.LastCommentId })
-                .SingleOrDefaultAsync(cancellationToken);
-            var afterMessage = marker?.LastMessageId ?? 0;
-            var afterComment = marker?.LastCommentId ?? 0;
+                .Select(r => r.LastMessageId)
+                .SingleOrDefaultAsync(cancellationToken) ?? 0;
             var messages = await db.PortalMessages.CountAsync(
                 m => m.ProjectId == projectId && m.Id > afterMessage && (m.AuthorAccountId == null || m.AuthorAccountId != accountId), cancellationToken);
+            // a comment is unread until the client's marker on its own file reaches it
             var comments = await db.PortalComments.CountAsync(
-                c => c.ProjectId == projectId && c.Id > afterComment && c.DeletedAt == null && (c.AuthorAccountId == null || c.AuthorAccountId != accountId),
+                c => c.ProjectId == projectId && c.DeletedAt == null && (c.AuthorAccountId == null || c.AuthorAccountId != accountId)
+                    && !db.PortalCommentReads.Any(r => r.ItemId == c.ItemId && r.AccountId == accountId && r.LastCommentId >= c.Id),
                 cancellationToken);
             unread[projectId] = messages + comments;
         }
@@ -201,6 +213,8 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
     public void Add(PortalMention mention) => db.PortalMentions.Add(mention);
 
     public void Add(PortalRead read) => db.PortalReads.Add(read);
+
+    public void Add(PortalCommentRead read) => db.PortalCommentReads.Add(read);
 
     public void Add(PortalNotification notification) => db.PortalNotifications.Add(notification);
 

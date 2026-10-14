@@ -389,13 +389,16 @@ member, takes them out at once.
 - **Threads are flat**: a file's comments in order.
 - **Mentions**: the people taking part, by key (`u{id}` staff, `c{id}` clients), checked on the server. A mentioned
   person gets a mention notification once; an edit that adds someone notifies them.
-- **Read markers** (`portal_reads`) per person and project, for the chat and for comments; they only move forward.
+- **Read markers** only move forward, and never past what exists: one per person on the project's chat
+  (`portal_reads`), and one per person on each file's comments (`portal_comment_reads`), so reading one file's comments
+  leaves the others new. `POST {base}/read` takes `lastMessageId`, and/or `itemId` with `lastCommentId`.
 - **Archived** projects: everything readable, nothing writable (422 `portal_discussion_closed`). **Completed** projects
   work as usual.
 
 ### Notifications
 - **Staff** use the usual notifications (and pushes, when they're on): `portal_client_message` (rolling per project),
-  `portal_client_comment` (to the manager and the file's uploader, rolling per file) and `portal_mention`. See
+  `portal_client_comment` (to the manager and the file's uploader, rolling per file) and `portal_mention`. A rolling one
+  counts what came since the person last read it (it starts again at 1 once read). See
   [notifications.md](notifications.md).
 - **Clients** have their own (`portal_notifications`): `team_message` (rolling per project), `team_comment` (rolling per
   file) and `mention` (once). A rolling one adds to its count while unread and starts again at 1 once read. They're shown
@@ -408,8 +411,10 @@ member, takes them out at once.
   signals `portal` (`{ projectId }`) and `notifications`. No signal carries content; pages fetch what changed.
 
 ### Rate limit
-Clients' writes (send, edit, comment, delete) are limited per portal account (`RateLimiting:PortalWritePermitsPerMinute`,
-30). Their other requests still count against the per-address limit (below).
+Clients' writes (send, edit, comment, delete) are limited per portal account and address
+(`RateLimiting:PortalWritePermitsPerMinute`, 30). The token is read unchecked to pick the bucket, so the address is part
+of it: a made-up token naming someone's account can't use up theirs. Their other requests still count against the
+per-address limit (below).
 
 ### Endpoints
 Staff: `/api/projects/{id}/portal/discussion`; clients: `/api/portal/projects/{id}/discussion`.
@@ -431,7 +436,8 @@ All writes are `Never` for Proton.
   author), `edited_at`; comments also the item and file ids (plain columns, not foreign keys: items are unpublished and
   files replaced later), the item's title and file name, `deleted_at`.
 - `portal_mentions`: a message or a comment, and a user or an account (exactly one each).
-- `portal_reads`: one marker per person and project.
+- `portal_reads`: one chat marker per person and project.
+- `portal_comment_reads`: one comment marker per person and file (the item id, a plain column as on the comments).
 - `portal_notifications`: the client's notifications, unique per account and key.
 
 ## Known limits (later phases)

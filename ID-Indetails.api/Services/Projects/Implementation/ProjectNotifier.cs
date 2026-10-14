@@ -104,7 +104,7 @@ public sealed class ProjectNotifier(
                 new { projectTitle = project.Title, latestText = requirement.Text }),
             $"requirements-added-{project.Id}-{clock.CompanyToday:yyyy-MM-dd}",
             recipients,
-            cancellationToken);
+            cancellationToken: cancellationToken);
     }
 
     public async Task RequirementDoneAsync(

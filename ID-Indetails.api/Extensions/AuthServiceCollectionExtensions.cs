@@ -218,10 +218,11 @@ public static class AuthServiceCollectionExtensions
                 "proton:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                 _ => PerMinute(limits.ProtonPermitsPerMinute)));
 
-            // The portal token isn't the default scheme, so it is read here only to pick the bucket; the endpoint
-            // checks it. A made-up token gains nothing: the global limit still counts it by address.
+            // The portal token isn't the default scheme, so it is read here unchecked, only to pick the bucket; the
+            // endpoint checks it. The bucket is the account at an address: a made-up token naming someone else's
+            // account fills its own bucket, never theirs.
             options.AddPolicy(RateLimitPolicies.PortalWrite, context => RateLimitPartition.GetFixedWindowLimiter(
-                "portal-write:" + (PortalAccountOf(context) ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                $"portal-write:{PortalAccountOf(context) ?? "anonymous"}@{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
                 _ => PerMinute(limits.PortalWritePermitsPerMinute)));
 
             options.AddPolicy(RateLimitPolicies.Setup, context => RateLimitPartition.GetFixedWindowLimiter(

@@ -233,23 +233,15 @@ public sealed class PortalDiscussionService(
         DiscussionSide side, long projectId, PortalReadRequest request, CancellationToken cancellationToken = default)
     {
         var room = await OpenAsync(side, projectId, cancellationToken);
-        var read = await discussion.GetReadAsync(projectId, room.Me, cancellationToken);
-        if (read is null)
+        if (request.LastMessageId is not null)
         {
-            read = new PortalRead
-            {
-                ProjectId = projectId,
-                UserId = room.Me.Side == DiscussionSide.Staff ? room.Me.Id : null,
-                AccountId = room.Me.Side == DiscussionSide.Client ? room.Me.Id : null,
-            };
-            discussion.Add(read);
+            await MarkChatReadAsync(room, request.LastMessageId, cancellationToken);
         }
 
-        read.LastMessageId = PortalDiscussionRules.MoveMarker(
-            read.LastMessageId, request.LastMessageId, await discussion.NewestMessageIdAsync(projectId, cancellationToken));
-        read.LastCommentId = PortalDiscussionRules.MoveMarker(
-            read.LastCommentId, request.LastCommentId, await discussion.NewestCommentIdAsync(projectId, cancellationToken));
-        read.UpdatedAt = clock.UtcNow;
+        if (request is { ItemId: { } itemId, LastCommentId: not null })
+        {
+            await MarkCommentsReadAsync(room, itemId, request.LastCommentId, cancellationToken);
+        }
 
         // the person's other tabs and devices update their unread counts
         if (room.Me.Side == DiscussionSide.Staff)
@@ -263,6 +255,53 @@ public sealed class PortalDiscussionService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await SummaryAsync(room, cancellationToken);
+    }
+
+    private async Task MarkChatReadAsync(Room room, long? seen, CancellationToken cancellationToken)
+    {
+        var projectId = room.Project.Id;
+        var read = await discussion.GetReadAsync(projectId, room.Me, cancellationToken);
+        if (read is null)
+        {
+            read = new PortalRead
+            {
+                ProjectId = projectId,
+                UserId = room.Me.Side == DiscussionSide.Staff ? room.Me.Id : null,
+                AccountId = room.Me.Side == DiscussionSide.Client ? room.Me.Id : null,
+            };
+            discussion.Add(read);
+        }
+
+        read.LastMessageId = PortalDiscussionRules.MoveMarker(
+            read.LastMessageId, seen, await discussion.NewestMessageIdAsync(projectId, cancellationToken));
+        read.UpdatedAt = clock.UtcNow;
+    }
+
+    /// <summary>Moves the marker on one file's comments; a file of this project with no comments has nothing to mark.</summary>
+    private async Task MarkCommentsReadAsync(Room room, long itemId, long? seen, CancellationToken cancellationToken)
+    {
+        var projectId = room.Project.Id;
+        var newest = await discussion.NewestCommentIdAsync(projectId, itemId, cancellationToken);
+        if (newest is null)
+        {
+            return;
+        }
+
+        var read = await discussion.GetCommentReadAsync(projectId, itemId, room.Me, cancellationToken);
+        if (read is null)
+        {
+            read = new PortalCommentRead
+            {
+                ProjectId = projectId,
+                ItemId = itemId,
+                UserId = room.Me.Side == DiscussionSide.Staff ? room.Me.Id : null,
+                AccountId = room.Me.Side == DiscussionSide.Client ? room.Me.Id : null,
+            };
+            discussion.Add(read);
+        }
+
+        read.LastCommentId = PortalDiscussionRules.MoveMarker(read.LastCommentId == 0 ? null : read.LastCommentId, seen, newest) ?? 0;
+        read.UpdatedAt = clock.UtcNow;
     }
 
     /// <summary>The project's discussion with the caller in it; a 404 for anyone not taking part.</summary>
@@ -288,7 +327,7 @@ public sealed class PortalDiscussionService(
         var read = await discussion.GetReadAsync(projectId, room.Me, cancellationToken);
         var comments = await discussion.CommentsAsync(projectId, null, cancellationToken);
         var published = await discussion.PublishedItemsAsync(projectId, cancellationToken);
-        var readComments = read?.LastCommentId ?? 0;
+        var commentReads = await discussion.CommentReadsAsync(projectId, room.Me, cancellationToken);
 
         var threads = comments
             .GroupBy(c => c.ItemId)
@@ -302,7 +341,7 @@ public sealed class PortalDiscussionService(
                     shown?.FileName ?? last.FileName,
                     shown is not null,
                     thread.Count(),
-                    thread.Count(c => c.Id > readComments && c.DeletedAt is null && c.Author.Key != room.Me.Key),
+                    thread.Count(c => c.Id > commentReads.GetValueOrDefault(thread.Key) && c.DeletedAt is null && c.Author.Key != room.Me.Key),
                     last.CreatedAt);
             })
             .OrderByDescending(t => t.LastAt)
@@ -402,19 +441,22 @@ public sealed class PortalDiscussionService(
 
         if (room.Me.Side == DiscussionSide.Client)
         {
-            var staff = room.Staff.Where(p => !mentionedKeys.Contains(p.Key)).ToList();
+            // rolling, counting what came since each person last read it
             if (what.MessageId is not null)
             {
                 await notifications.SendDigestAsync(
                     new NotificationDraft(NotificationKinds.PortalClientMessage, null, project.DomainCode, project.Id, null, null, payload),
-                    $"portal_chat:{project.Id}", staff.Select(p => p.Id), cancellationToken);
+                    $"portal_chat:{project.Id}", room.Staff.Where(p => !mentionedKeys.Contains(p.Key)).Select(p => p.Id),
+                    restartOnceRead: true, cancellationToken);
             }
             else
             {
-                var concerned = staff.Where(p => p.Id == project.OwnerId || p.Id == what.UploaderId).ToList();
+                var concerned = room.Staff.Where(p => p.Id == project.OwnerId || p.Id == what.UploaderId).ToList();
                 await notifications.SendDigestAsync(
                     new NotificationDraft(NotificationKinds.PortalClientComment, null, project.DomainCode, project.Id, "item", what.ItemId, payload),
-                    $"portal_comments:{what.ItemId}", (concerned.Count > 0 ? concerned : staff).Select(p => p.Id), cancellationToken);
+                    $"portal_comments:{what.ItemId}",
+                    (concerned.Count > 0 ? concerned : room.Staff).Where(p => !mentionedKeys.Contains(p.Key)).Select(p => p.Id),
+                    restartOnceRead: true, cancellationToken);
             }
         }
         else

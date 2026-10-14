@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ID_Indetails.api.Data.Migrations
 {
     [DbContext(typeof(IdIndetailsDbContext))]
-    [Migration("20261014124613_ClientPortalDiscussion")]
+    [Migration("20261014132033_ClientPortalDiscussion")]
     partial class ClientPortalDiscussion
     {
         /// <inheritdoc />
@@ -2472,6 +2472,66 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalCommentRead", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AccountId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_id");
+
+                    b.Property<long>("ItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("item_id");
+
+                    b.Property<long>("LastCommentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_comment_id");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long?>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_portal_comment_reads");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_portal_comment_reads_account_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_portal_comment_reads_project_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_portal_comment_reads_user_id");
+
+                    b.HasIndex("ItemId", "AccountId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_comment_reads_item_id_account_id");
+
+                    b.HasIndex("ItemId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_portal_comment_reads_item_id_user_id");
+
+                    b.ToTable("portal_comment_reads", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_comment_reads_one_reader", "(`user_id` IS NULL) <> (`account_id` IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalFile", b =>
                 {
                     b.Property<long>("Id")
@@ -3023,10 +3083,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Property<long?>("AccountId")
                         .HasColumnType("bigint")
                         .HasColumnName("account_id");
-
-                    b.Property<long?>("LastCommentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("last_comment_id");
 
                     b.Property<long?>("LastMessageId")
                         .HasColumnType("bigint")
@@ -6457,6 +6513,28 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_portal_comments_projects_project_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalCommentRead", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_comment_reads_portal_accounts_account_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_comment_reads_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_comment_reads_users_user_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.PortalFile", b =>

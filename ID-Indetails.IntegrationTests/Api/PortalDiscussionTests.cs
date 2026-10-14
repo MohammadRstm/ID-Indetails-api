@@ -280,6 +280,38 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Each_files_comments_are_read_on_their_own()
+    {
+        var s = await ProjectWithClientAsync();
+        var living = await PublishedFileAsync(s);
+        var kitchen = await PublishedFileAsync(s, "Kitchen.jpg", OtherJpeg);
+        async Task<PortalCommentResponse> TeamCommentsAsync(long itemId, string body) => await OkAsync<PortalCommentResponse>(Client.PostJsonAsync(
+            $"{Staff(s.Project.Id)}/comments", new { itemId, body, clientToken = Guid.NewGuid().ToString(), mentions = Array.Empty<string>() }, s.Staff.AccessToken));
+        await TeamCommentsAsync(living, "Darker sofa?");
+        var newest = await TeamCommentsAsync(living, "Or lighter walls?");
+        await TeamCommentsAsync(kitchen, "Marble or wood?");
+        Task<DiscussionSummaryResponse> ReadAsync(object request)
+            => OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/read", request));
+
+        // reading one file's comments leaves the other file's new
+        var read = await ReadAsync(new { itemId = living, lastCommentId = newest.Id });
+        read.Threads.Single(t => t.ItemId == living).Unread.ShouldBe(0);
+        read.Threads.Single(t => t.ItemId == kitchen).Unread.ShouldBe(1);
+        read.UnreadComments.ShouldBe(1);
+        (await OkAsync<PortalAccountResponse>(AsClient(s.ClientToken, HttpMethod.Get, "/api/portal/me"))).Projects.Single().Unread.ShouldBe(1);
+
+        // a marker never passes the file's own newest comment, so what comes later is new
+        await ReadAsync(new { itemId = living, lastCommentId = newest.Id + 1000 });
+        await TeamCommentsAsync(living, "One more idea");
+        (await OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Get, Mine(s.Project.Id))))
+            .Threads.Single(t => t.ItemId == living).Unread.ShouldBe(1);
+
+        // a comment marker needs its file
+        (await AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/read", new { lastCommentId = newest.Id }))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Authors_edit_or_delete_their_own_comments_and_a_deleted_one_keeps_its_place()
     {
         var s = await ProjectWithClientAsync();

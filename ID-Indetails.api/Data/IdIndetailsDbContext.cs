@@ -32,6 +32,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<PortalMessage> PortalMessages => Set<PortalMessage>();
     public DbSet<PortalComment> PortalComments => Set<PortalComment>();
     public DbSet<PortalRead> PortalReads => Set<PortalRead>();
+    public DbSet<PortalCommentRead> PortalCommentReads => Set<PortalCommentRead>();
     public DbSet<PortalMention> PortalMentions => Set<PortalMention>();
     public DbSet<PortalNotification> PortalNotifications => Set<PortalNotification>();
 

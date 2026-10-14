@@ -27,7 +27,8 @@ public interface IPortalDiscussionRepository
 
     Task<long?> NewestMessageIdAsync(long projectId, CancellationToken cancellationToken = default);
 
-    Task<long?> NewestCommentIdAsync(long projectId, CancellationToken cancellationToken = default);
+    /// <summary>The newest comment on a file of the project, deleted ones included.</summary>
+    Task<long?> NewestCommentIdAsync(long projectId, long itemId, CancellationToken cancellationToken = default);
 
     /// <summary>Messages after <paramref name="after"/> not written by <paramref name="reader"/>.</summary>
     Task<int> UnreadMessagesAsync(long projectId, long? after, DiscussionPerson reader, CancellationToken cancellationToken = default);
@@ -55,8 +56,14 @@ public interface IPortalDiscussionRepository
     /// <summary>A message's or a comment's mentions. Tracked.</summary>
     Task<IReadOnlyList<PortalMention>> MentionsAsync(long? messageId, long? commentId, CancellationToken cancellationToken = default);
 
-    /// <summary>The reader's marker on the project, if any. Tracked.</summary>
+    /// <summary>The reader's marker on the project's chat, if any. Tracked.</summary>
     Task<PortalRead?> GetReadAsync(long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default);
+
+    /// <summary>The reader's marker on a file's comments, if any. Tracked.</summary>
+    Task<PortalCommentRead?> GetCommentReadAsync(long projectId, long itemId, DiscussionPerson reader, CancellationToken cancellationToken = default);
+
+    /// <summary>How far the reader has read each file's comments, by item.</summary>
+    Task<IReadOnlyDictionary<long, long>> CommentReadsAsync(long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default);
 
     /// <summary>Unread chat messages and comments on each project, for a client.</summary>
     Task<IReadOnlyDictionary<long, int>> UnreadForClientAsync(long accountId, IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
@@ -79,6 +86,8 @@ public interface IPortalDiscussionRepository
     void Add(PortalMention mention);
 
     void Add(PortalRead read);
+
+    void Add(PortalCommentRead read);
 
     void Add(PortalNotification notification);
 

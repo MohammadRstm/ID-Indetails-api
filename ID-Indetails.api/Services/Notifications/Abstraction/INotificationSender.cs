@@ -24,9 +24,11 @@ public interface INotificationSender
 
     /// <summary>
     /// Like <see cref="SendAsync"/>, but keeps one rolling notification per recipient and <paramref name="digestKey"/>:
-    /// a repeat adds 1 to its count, takes the new payload and actor, and shows as unread and new again.
+    /// a repeat adds 1 to its count, takes the new payload and actor, and shows as unread and new again. With
+    /// <paramref name="restartOnceRead"/>, a repeat after the recipient read it counts from 1 again (what's new since).
     /// </summary>
-    Task SendDigestAsync(NotificationDraft draft, string digestKey, IEnumerable<long> recipientIds, CancellationToken cancellationToken = default);
+    Task SendDigestAsync(
+        NotificationDraft draft, string digestKey, IEnumerable<long> recipientIds, bool restartOnceRead = false, CancellationToken cancellationToken = default);
 
     /// <summary>Like <see cref="SendAsync"/>, but only to recipients who never got a notification with <paramref name="key"/>.</summary>
     Task SendOnceAsync(NotificationDraft draft, string key, IEnumerable<long> recipientIds, CancellationToken cancellationToken = default);

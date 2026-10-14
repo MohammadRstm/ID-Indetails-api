@@ -13,6 +13,44 @@ namespace ID_Indetails.api.Data.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "portal_comment_reads",
+                columns: table => new
+                {
+                    id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    project_id = table.Column<long>(type: "bigint", nullable: false),
+                    item_id = table.Column<long>(type: "bigint", nullable: false),
+                    user_id = table.Column<long>(type: "bigint", nullable: true),
+                    account_id = table.Column<long>(type: "bigint", nullable: true),
+                    last_comment_id = table.Column<long>(type: "bigint", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "datetime(3)", precision: 3, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_portal_comment_reads", x => x.id);
+                    table.CheckConstraint("ck_portal_comment_reads_one_reader", "(`user_id` IS NULL) <> (`account_id` IS NULL)");
+                    table.ForeignKey(
+                        name: "fk_portal_comment_reads_portal_accounts_account_id",
+                        column: x => x.account_id,
+                        principalTable: "portal_accounts",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_portal_comment_reads_projects_project_id",
+                        column: x => x.project_id,
+                        principalTable: "projects",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "fk_portal_comment_reads_users_user_id",
+                        column: x => x.user_id,
+                        principalTable: "users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Restrict);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
                 name: "portal_comments",
                 columns: table => new
                 {
@@ -151,7 +189,6 @@ namespace ID_Indetails.api.Data.Migrations
                     user_id = table.Column<long>(type: "bigint", nullable: true),
                     account_id = table.Column<long>(type: "bigint", nullable: true),
                     last_message_id = table.Column<long>(type: "bigint", nullable: true),
-                    last_comment_id = table.Column<long>(type: "bigint", nullable: true),
                     updated_at = table.Column<DateTime>(type: "datetime(3)", precision: 3, nullable: false)
                 },
                 constraints: table =>
@@ -221,6 +258,33 @@ namespace ID_Indetails.api.Data.Migrations
                         onDelete: ReferentialAction.Restrict);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_portal_comment_reads_account_id",
+                table: "portal_comment_reads",
+                column: "account_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_portal_comment_reads_item_id_account_id",
+                table: "portal_comment_reads",
+                columns: new[] { "item_id", "account_id" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_portal_comment_reads_item_id_user_id",
+                table: "portal_comment_reads",
+                columns: new[] { "item_id", "user_id" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_portal_comment_reads_project_id",
+                table: "portal_comment_reads",
+                column: "project_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_portal_comment_reads_user_id",
+                table: "portal_comment_reads",
+                column: "user_id");
 
             migrationBuilder.CreateIndex(
                 name: "ix_portal_comments_author_account_id_client_token",
@@ -337,6 +401,9 @@ namespace ID_Indetails.api.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "portal_comment_reads");
+
             migrationBuilder.DropTable(
                 name: "portal_mentions");
 

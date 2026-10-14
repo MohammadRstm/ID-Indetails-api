@@ -36,6 +36,7 @@ public sealed class NotificationSender(
         NotificationDraft draft,
         string digestKey,
         IEnumerable<long> recipientIds,
+        bool restartOnceRead = false,
         CancellationToken cancellationToken = default)
     {
         var payload = Serialise(draft);
@@ -54,7 +55,7 @@ public sealed class NotificationSender(
                 continue;
             }
 
-            digest.Count++;
+            digest.Count = restartOnceRead && digest.ReadAt is not null ? 1 : digest.Count + 1;
             digest.ActorId = draft.ActorId;
             digest.SubjectType = draft.SubjectType;
             digest.SubjectId = draft.SubjectId;

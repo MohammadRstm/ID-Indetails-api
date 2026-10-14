@@ -31,10 +31,13 @@ public sealed record PortalEditRequest
     public IReadOnlyList<string> Mentions { get; init; } = [];
 }
 
-/// <summary>How far the person has read: the newest message and comment they have seen.</summary>
+/// <summary>How far the person has read: the newest chat message they have seen, and/or the newest comment on one file.</summary>
 public sealed record PortalReadRequest
 {
     public long? LastMessageId { get; init; }
+
+    /// <summary>The file whose comments were read; goes with <see cref="LastCommentId"/>.</summary>
+    public long? ItemId { get; init; }
 
     public long? LastCommentId { get; init; }
 }
