@@ -19,6 +19,7 @@ using ID_Indetails.api.Services.Common.Implementation;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
 using ID_Indetails.api.Services.Portal.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Services.Portal.Implementation;
@@ -38,6 +39,7 @@ public sealed class PortalAccessService(
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IEmailSender emailSender,
+    ILiveUpdates live,
     IClock clock,
     IOptions<PortalOptions> portalOptions,
     IOptions<FrontendOptions> frontendOptions,
@@ -208,6 +210,7 @@ public sealed class PortalAccessService(
             row.RevokedAt = now;
             row.RevokedById = actorId;
             await EndSessionsIfNoAccessLeftAsync(row.Account, projectId, now, cancellationToken);
+            live.PortalAccessChanged([row.AccountId]);
             activity.Add(Event(ActivityEventKinds.PortalAccessRevoked, domainCode, projectId, previousClientId, row.Account, actorId, now));
         }
     }
@@ -264,6 +267,8 @@ public sealed class PortalAccessService(
         row.RevokedById = currentUser.Id;
         await invitations.RevokePendingAsync(row.AccountId, projectId, now, cancellationToken);
         await EndSessionsIfNoAccessLeftAsync(row.Account, projectId, now, cancellationToken);
+        // the client's open pages load again, and find the project gone (or themselves signed out)
+        live.PortalAccessChanged([row.AccountId]);
     }
 
     /// <summary>Signs the account out everywhere when <paramref name="endedProjectId"/> was its last project.</summary>

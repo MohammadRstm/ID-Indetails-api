@@ -169,6 +169,12 @@ public static class ProtonSideEffectGuards
             inner.PortalNotificationsChanged(accountIds);
         }
 
+        public void PortalAccessChanged(IEnumerable<long> accountIds)
+        {
+            ProtonReadOnly.ThrowIfActive("signalling a live update");
+            inner.PortalAccessChanged(accountIds);
+        }
+
         public Task FlushAsync(CancellationToken cancellationToken = default)
         {
             ProtonReadOnly.ThrowIfActive("signalling a live update");
