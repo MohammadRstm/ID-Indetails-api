@@ -12,8 +12,9 @@ using ID_Indetails.api.Services.Settings.Abstraction;
 namespace ID_Indetails.api.Services.Projects.Implementation;
 
 /// <summary>
-/// A completed project qualifies when both its completion and its latest activity event (invoices, payments, edits…)
-/// are at least 90 days old. Archiving it is a system event: no actor, and no notification, as archiving never notifies.
+/// A completed project qualifies when its completion, its latest activity event (invoices, payments, edits…) and its
+/// latest client portal message or comment are all at least 90 days old. Archiving it is a system event: no actor, and
+/// no notification, as archiving never notifies.
 /// </summary>
 public sealed class ProjectAutoArchive(
     IProjectRepository projects,

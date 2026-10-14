@@ -163,4 +163,38 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
         archived.Actor.ShouldBeNull();
         archived.Payload!.Value.GetProperty("automatic").GetBoolean().ShouldBeTrue();
     }
+
+    [Fact]
+    public async Task Auto_archive_leaves_a_completed_project_alone_while_its_client_portal_discussion_is_recent()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken, autoArchive: true);
+        var chatting = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var commented = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var commentDeleted = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        foreach (var project in new[] { chatting, commented, commentDeleted })
+        {
+            (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+            await SqlAsync("UPDATE projects SET completed_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 100 DAY) WHERE id = @id", ("@id", project.Id));
+            await SqlAsync("UPDATE activity_events SET occurred_at = DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 100 DAY) WHERE project_id = @id", ("@id", project.Id));
+        }
+
+        // Written today in the client portal; a deleted comment no longer counts.
+        await SqlAsync(
+            "INSERT INTO portal_messages (project_id, author_user_id, body, client_token, created_at) VALUES (@p, @u, 'Any news?', @t, UTC_TIMESTAMP(3))",
+            ("@p", chatting.Id), ("@u", superAdmin.User.Id), ("@t", Guid.NewGuid().ToString("N")));
+        foreach (var (project, deleted) in new[] { (commented, false), (commentDeleted, true) })
+        {
+            await SqlAsync(
+                "INSERT INTO portal_comments (project_id, item_id, file_id, item_title, file_name, author_user_id, body, client_token, created_at, deleted_at) " +
+                "VALUES (@p, 1, 1, 'Moodboard', 'moodboard.jpg', @u, IF(@deleted = 1, NULL, 'Lovely'), @t, UTC_TIMESTAMP(3), IF(@deleted = 1, UTC_TIMESTAMP(3), NULL))",
+                ("@p", project.Id), ("@u", superAdmin.User.Id), ("@t", Guid.NewGuid().ToString("N")), ("@deleted", deleted ? 1 : 0));
+        }
+
+        await RunTwiceAsync(ScheduledCheck.AutoArchive);
+
+        (await StatusAsync(chatting.Id, superAdmin.AccessToken)).ShouldBe(ProjectStatus.Completed);
+        (await StatusAsync(commented.Id, superAdmin.AccessToken)).ShouldBe(ProjectStatus.Completed);
+        (await StatusAsync(commentDeleted.Id, superAdmin.AccessToken)).ShouldBe(ProjectStatus.Archived);
+    }
 }
