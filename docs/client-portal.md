@@ -193,15 +193,18 @@ reads content, the store is private, and links are only handed out to staff afte
 
 ### Upload lifecycle
 1. `POST .../uploads` writes a `portal_uploads` row with the key **before** anything reaches the store, then starts a
-   multipart upload. The same client token again returns the same upload.
+   multipart upload. The same client token again returns the same upload, once the store has started it; one the
+   store hasn't started yet (two starts at the same moment), or whose start failed, answers 409 `portal_upload_ended`,
+   and the browser starts again with a new token.
 2. `POST .../uploads/{id}/parts` hands out links (about an hour each, up to 100 at a time). The browser PUTs each part.
 3. `POST .../uploads/{id}/complete`:
    - the server lists the parts itself (nothing the browser says about them is trusted);
    - it joins them, checks the size against the one announced, and checks the first bytes against the extension;
    - a file that isn't what its extension says is deleted and the upload marked `rejected`;
    - in one transaction, with the upload locked, it adds the file and the item (or swaps the file into the item it
-     replaces). Repeating the call returns the same item. If the store finished but the database didn't, the retry
-     carries on from the joined object.
+     replaces). Repeating the call, even at the same moment, returns the same item. If the store finished but the
+     database didn't, the retry carries on from the joined object; when the store no longer has the upload (joined
+     already, or abandoned), the object decides: there, it carries on; gone, 409 `portal_upload_ended`.
 4. `DELETE .../uploads/{id}` cancels: the row is marked first, then the parts and any object are dropped.
 
 **Consistency.** The rows lead:
@@ -297,7 +300,9 @@ replaces, all of it at once.
   and introduction (`summary`, `published_summary`), the `revision`, and the last publication (`published_revision`,
   `published_at`, `published_by_id`).
 - Uploads, renames, moves, new orders, hero and introduction changes touch the draft only. Each one takes the project's
-  content lock (the settings row, `SELECT ... FOR UPDATE`) and moves `revision` on.
+  content lock (the settings row, `SELECT ... FOR UPDATE`) and moves `revision` on. The row is made, or locked
+  exclusively at once if it exists, by `INSERT ... ON DUPLICATE KEY UPDATE`, so changes at the same moment wait for
+  each other rather than deadlock.
 - An item's state: **new** (never published), **changed** (file, title or section differ), **unchanged**, or **removed**:
   deleting a published item only sets `removed_at`; clients keep it until the next publish, and **restore** undoes it. A
   never-published item is deleted at once, as in Phase 2.

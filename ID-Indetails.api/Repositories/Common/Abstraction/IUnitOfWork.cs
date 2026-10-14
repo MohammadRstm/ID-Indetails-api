@@ -8,6 +8,12 @@ public interface IUnitOfWork
 {
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Saves, unless a unique index refuses a new row because another request saved the same one a moment ago: then
+    /// everything staged is dropped and it returns false, so the caller can read that row instead. Stage only that row.
+    /// </summary>
+    Task<bool> TrySaveChangesAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Whether anything is staged and not saved yet.</summary>
     bool HasChanges { get; }
 

@@ -31,9 +31,11 @@ public sealed class PortalContentRepository(IdIndetailsDbContext db) : IPortalCo
 
     public async Task<PortalSettings> LockSettingsAsync(long projectId, CancellationToken cancellationToken = default)
     {
-        // created by whoever comes first; the others find it
+        // created by whoever comes first; the others find it. An existing row is locked exclusively right away (INSERT
+        // IGNORE would take a shared lock, and two callers upgrading theirs at once deadlock).
         await db.Database.ExecuteSqlAsync(
-            $"INSERT IGNORE INTO `portal_settings` (`project_id`, `revision`) VALUES ({projectId}, 0)", cancellationToken);
+            $"INSERT INTO `portal_settings` (`project_id`, `revision`) VALUES ({projectId}, 0) ON DUPLICATE KEY UPDATE `project_id` = `project_id`",
+            cancellationToken);
         return (await db.PortalSettings
             .FromSql($"SELECT * FROM `portal_settings` WHERE `project_id` = {projectId} FOR UPDATE")
             .ToListAsync(cancellationToken)).Single();
