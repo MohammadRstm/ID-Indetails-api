@@ -32,6 +32,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Uploads of this API, deleted with it.</summary>
     public string FilesRoot { get; } = Path.Combine(Path.GetTempPath(), $"idi_test_files_{Guid.NewGuid():N}");
 
+    /// <summary>The client portal's content of this API (the local content store), deleted with it.</summary>
+    public string ContentStoreRoot { get; } = Path.Combine(Path.GetTempPath(), $"idi_test_content_{Guid.NewGuid():N}");
+
     public MigratedDatabaseFixture Database => _database;
 
     /// <summary>Per-IP auth requests per minute. High by default so tests don't trip it.</summary>
@@ -53,6 +56,11 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         {
             Directory.Delete(FilesRoot, recursive: true);
         }
+
+        if (Directory.Exists(ContentStoreRoot))
+        {
+            Directory.Delete(ContentStoreRoot, recursive: true);
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -71,6 +79,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Proton:History:CleanupEnabled", "false");
         builder.UseSetting("FileStorage:RootPath", FilesRoot);
         builder.UseSetting("FileStorage:CleanupEnabled", "false");
+        builder.UseSetting("ContentStore:Provider", "Local");
+        builder.UseSetting("ContentStore:Local:RootPath", ContentStoreRoot);
+        builder.UseSetting("PortalContent:JobsEnabled", "false");
         builder.UseSetting("Push:DeviceCleanupEnabled", "false");
         builder.UseSetting("Push:Enabled", PushEnabled ? "true" : "false");
 

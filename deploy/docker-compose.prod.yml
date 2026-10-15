@@ -86,6 +86,12 @@ services:
       # Pushes to the phone app: off unless switched on; Expo's access token is optional (docs/notifications.md).
       Push__Enabled: ${PUSH_ENABLED:-false}
       Push__Expo__AccessToken: ${EXPO_ACCESS_TOKEN:-}
+      # Client portal files live in a private Cloudflare R2 bucket (docs/content-storage.md).
+      ContentStore__Provider: R2
+      ContentStore__R2__AccountId: ${R2_ACCOUNT_ID:?}
+      ContentStore__R2__Bucket: ${R2_BUCKET:?}
+      ContentStore__R2__AccessKeyId: ${R2_ACCESS_KEY_ID:?}
+      ContentStore__R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:?}
       # The client's nginx, and the TLS proxy before it, are trusted for the visitor's address and scheme.
       Proxy__KnownNetworks__0: 172.30.0.0/24
     volumes:
@@ -107,6 +113,8 @@ services:
     security_opt: [no-new-privileges:true]
     environment:
       API_UPSTREAM: http://api:8080
+      # Added to the Content-Security-Policy, so the browser may upload to and preview from R2 (docs/content-storage.md).
+      CONTENT_STORE_ORIGIN: https://${R2_ACCOUNT_ID:?}.r2.cloudflarestorage.com
     networks: [proxy]
     depends_on:
       # nginx looks the API up once, when it starts: it restarts with the API, so it never keeps a stale address
