@@ -77,4 +77,32 @@ public class PortalRulesTests
         PortalRules.StatusOf(PortalAccountStatus.Invited, null, false, null, Now, Now.AddHours(2), Now).ShouldBe(PortalClientStatus.NotInvited);
         PortalRules.StatusOf(null, null, false, null, null, null, Now).ShouldBe(PortalClientStatus.NotInvited);
     }
+
+    [Fact]
+    public void A_project_has_news_when_published_since_last_opened_or_never_opened_or_anything_is_unread()
+    {
+        // nothing published, nothing unread
+        PortalRules.HasNews(null, null, 0).ShouldBeFalse();
+        PortalRules.HasNews(null, Now, 0).ShouldBeFalse();
+
+        // published and never opened, or published after the last visit
+        PortalRules.HasNews(Now, null, 0).ShouldBeTrue();
+        PortalRules.HasNews(Now, Now.AddMinutes(-1), 0).ShouldBeTrue();
+
+        // opened since the last publication
+        PortalRules.HasNews(Now, Now, 0).ShouldBeFalse();
+        PortalRules.HasNews(Now, Now.AddMinutes(1), 0).ShouldBeFalse();
+
+        // unread messages or comments, whatever was opened
+        PortalRules.HasNews(Now, Now.AddMinutes(1), 2).ShouldBeTrue();
+        PortalRules.HasNews(null, null, 1).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_projects_latest_activity_is_the_latest_moment_there_is()
+    {
+        PortalRules.LatestOf(Now, Now.AddHours(2), Now.AddHours(1)).ShouldBe(Now.AddHours(2));
+        PortalRules.LatestOf(null, Now, null).ShouldBe(Now);
+        PortalRules.LatestOf(null, null, null).ShouldBeNull();
+    }
 }

@@ -29,13 +29,15 @@ public sealed record PortalItemView(
         Id, File.Id, Title, Section, SortOrder, PublishedFileId, PublishedTitle, PublishedSection, PublishedSortOrder, RemovedAt is not null, ForClient);
 }
 
-/// <summary>A project's hero, introduction, revision and last publication; empty values before anything changed.</summary>
+/// <summary>A project's introduction, revision and last publication; empty values before anything changed.</summary>
 public sealed record PortalSettingsView(
-    long? HeroFileId, long? PublishedHeroFileId, string? Summary, string? PublishedSummary, int Revision,
-    DateTime? PublishedAt, long? PublishedById, string? PublishedByName)
+    string? Summary, string? PublishedSummary, int Revision, DateTime? PublishedAt, long? PublishedById, string? PublishedByName)
 {
-    public static readonly PortalSettingsView Empty = new(null, null, null, null, 0, null, null, null);
+    public static readonly PortalSettingsView Empty = new(null, null, 0, null, null, null);
 }
+
+/// <summary>The files of a project's hero images: the draft list and the published one, each in order.</summary>
+public sealed record PortalHeroes(IReadOnlyList<long> Draft, IReadOnlyList<long> Published);
 
 /// <summary>One file as a presentation shows it: no uploader, no storage details beyond what a link needs.</summary>
 public sealed record PresentationRow(long ItemId, PortalSection Section, string Title, PortalFileView File);

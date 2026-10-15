@@ -55,10 +55,11 @@ public sealed class PortalContentViews(
         var canManage = (await AccessAsync(cancellationToken)).Has(PermissionCodes.ClientPortalManage);
         var items = await content.ItemsAsync(project.Id, cancellationToken);
         var settings = await content.SettingsAsync(project.Id, cancellationToken);
+        var heroes = await content.HeroesAsync(project.Id, cancellationToken);
         var denial = PortalContentRules.CheckEditable(project.BillingType, project.ClientId, project.Status);
         var canEdit = canManage && store.IsAvailable && denial is null;
         var changes = PortalPublishRules.ChangesOf(
-            items.Select(i => i.Copies).ToList(), settings.HeroFileId, settings.PublishedHeroFileId, settings.Summary, settings.PublishedSummary);
+            items.Select(i => i.Copies).ToList(), heroes.Draft, heroes.Published, settings.Summary, settings.PublishedSummary);
 
         // the client portal shows the client-relevant files only; the others are the team's
         var described = new List<PortalContentItemResponse>();
@@ -66,9 +67,11 @@ public sealed class PortalContentViews(
         {
             if (PortalPublishRules.StateOf(item.Copies) is { } state)
             {
-                described.Add(await ItemAsync(item, state, settings.HeroFileId, cancellationToken));
+                described.Add(await ItemAsync(item, state, heroes.Draft, cancellationToken));
             }
         }
+
+        var draftHeroes = await HeroesAsync(heroes.Draft, cancellationToken);
 
         return new PortalContentResponse
         {
@@ -89,7 +92,8 @@ public sealed class PortalContentViews(
             HasUnpublishedChanges = changes.Any,
             CanPublish = canEdit && changes.Any,
             CanDiscard = canEdit && changes.Any && settings.PublishedAt is not null,
-            Hero = settings.HeroFileId is { } heroFileId ? await HeroAsync(heroFileId, cancellationToken) : null,
+            Heroes = draftHeroes,
+            Hero = draftHeroes.FirstOrDefault(),
             Summary = settings.Summary,
         };
     }
@@ -98,14 +102,14 @@ public sealed class PortalContentViews(
     {
         var project = access.Project;
         var items = await content.ItemsAsync(project.Id, cancellationToken);
-        var heroFileId = (await content.SettingsAsync(project.Id, cancellationToken)).HeroFileId;
+        var heroFileIds = (await content.HeroesAsync(project.Id, cancellationToken)).Draft;
         var counts = await comments.CountsAsync(project.Id, cancellationToken);
         var denial = ProjectFileRules.CheckEditable(project.Status);
 
         var described = new List<ProjectFileResponse>(items.Count);
         foreach (var item in items)
         {
-            described.Add(await FileAsync(access, item, heroFileId, counts.GetValueOrDefault(item.Id) ?? ProjectFileCommentCounts.None, cancellationToken));
+            described.Add(await FileAsync(access, item, heroFileIds, counts.GetValueOrDefault(item.Id) ?? ProjectFileCommentCounts.None, cancellationToken));
         }
 
         return new ProjectFilesResponse
@@ -126,9 +130,9 @@ public sealed class PortalContentViews(
     public async Task<ProjectFileResponse> FileAsync(ProjectFilesAccess access, long itemId, CancellationToken cancellationToken = default)
     {
         var item = await content.ItemViewAsync(access.Project.Id, itemId, cancellationToken) ?? throw new NotFoundException("File not found.");
-        var heroFileId = (await content.SettingsAsync(access.Project.Id, cancellationToken)).HeroFileId;
+        var heroFileIds = (await content.HeroesAsync(access.Project.Id, cancellationToken)).Draft;
         var counts = (await comments.CountsAsync(access.Project.Id, cancellationToken)).GetValueOrDefault(itemId) ?? ProjectFileCommentCounts.None;
-        return await FileAsync(access, item, heroFileId, counts, cancellationToken);
+        return await FileAsync(access, item, heroFileIds, counts, cancellationToken);
     }
 
     public async Task<PortalPresentationResponse> PresentationAsync(
@@ -137,7 +141,8 @@ public sealed class PortalContentViews(
         var settings = await content.SettingsAsync(project.Id, cancellationToken);
         var isPublished = !published || settings.PublishedAt is not null;
         IReadOnlyList<PresentationRow> rows = isPublished ? await content.PresentationAsync(project.Id, published, cancellationToken) : [];
-        var heroFileId = !isPublished ? null : published ? settings.PublishedHeroFileId : settings.HeroFileId;
+        var heroes = await content.HeroesAsync(project.Id, cancellationToken);
+        IReadOnlyList<long> heroFileIds = !isPublished ? [] : published ? heroes.Published : heroes.Draft;
 
         var sections = new List<PresentationSectionResponse>();
         foreach (var section in Sections)
@@ -163,12 +168,14 @@ public sealed class PortalContentViews(
             sections.Add(new PresentationSectionResponse(section, items));
         }
 
-        PresentationHeroResponse? hero = null;
-        if (heroFileId is { } fileId && store.IsAvailable && await content.FileViewAsync(fileId, cancellationToken) is { } heroFile)
+        var shownHeroes = new List<PresentationHeroResponse>();
+        foreach (var heroFile in await HeroFilesAsync(heroFileIds, cancellationToken))
         {
-            var expiresAt = clock.UtcNow.AddMinutes(options.Value.PreviewLinkMinutes);
-            var url = await store.GetDownloadUrlAsync(heroFile.StorageKey, heroFile.OriginalName, heroFile.ContentType, true, expiresAt, cancellationToken);
-            hero = new PresentationHeroResponse(url, expiresAt, heroFile.OriginalName);
+            var (url, expiresAt) = await PreviewLinkAsync(heroFile, PortalPreview.Image, cancellationToken);
+            if (url is not null && expiresAt is not null)
+            {
+                shownHeroes.Add(new PresentationHeroResponse(url, expiresAt.Value, heroFile.OriginalName));
+            }
         }
 
         return new PortalPresentationResponse
@@ -179,7 +186,8 @@ public sealed class PortalContentViews(
             Summary = !isPublished ? null : published ? settings.PublishedSummary : settings.Summary,
             IsPublished = isPublished,
             PublishedAt = settings.PublishedAt,
-            Hero = hero,
+            Hero = shownHeroes.FirstOrDefault(),
+            Heroes = shownHeroes,
             Sections = sections,
         };
     }
@@ -208,7 +216,8 @@ public sealed class PortalContentViews(
             : throw new NotFoundException("Project not found.");
     }
 
-    private async Task<PortalContentItemResponse> ItemAsync(PortalItemView item, PortalItemState state, long? heroFileId, CancellationToken cancellationToken)
+    private async Task<PortalContentItemResponse> ItemAsync(
+        PortalItemView item, PortalItemState state, IReadOnlyList<long> heroFileIds, CancellationToken cancellationToken)
     {
         var preview = PortalContentRules.PreviewOf(item.File.ContentType);
         var (previewUrl, previewExpiresAt) = await PreviewLinkAsync(item.File, preview, cancellationToken);
@@ -221,7 +230,7 @@ public sealed class PortalContentViews(
             SortOrder = item.SortOrder,
             IsDraft = state != PortalItemState.Unchanged,
             State = state,
-            IsHero = heroFileId == item.File.Id,
+            IsHero = heroFileIds.Contains(item.File.Id),
             CanBeHero = state != PortalItemState.Removed && PortalPublishRules.CanBeHero(item.File.ContentType),
             File = FileResponse(item.File, preview),
             PreviewUrl = previewUrl,
@@ -234,7 +243,7 @@ public sealed class PortalContentViews(
     }
 
     private async Task<ProjectFileResponse> FileAsync(
-        ProjectFilesAccess access, PortalItemView item, long? heroFileId, ProjectFileCommentCounts counts, CancellationToken cancellationToken)
+        ProjectFilesAccess access, PortalItemView item, IReadOnlyList<long> heroFileIds, ProjectFileCommentCounts counts, CancellationToken cancellationToken)
     {
         var preview = PortalContentRules.PreviewOf(item.File.ContentType);
         var (previewUrl, previewExpiresAt) = await PreviewLinkAsync(item.File, preview, cancellationToken);
@@ -248,7 +257,7 @@ public sealed class PortalContentViews(
             SortOrder = item.SortOrder,
             ForClient = item.ForClient,
             Removed = removed,
-            IsHero = heroFileId == item.File.Id,
+            IsHero = heroFileIds.Contains(item.File.Id),
             CanBeHero = !removed && PortalPublishRules.CanBeHero(item.File.ContentType),
             File = FileResponse(item.File, preview),
             PreviewUrl = previewUrl,
@@ -279,16 +288,23 @@ public sealed class PortalContentViews(
     private static PersonRefResponse? Uploader(PortalFileView file)
         => file.UploadedByName is null ? null : new PersonRefResponse(file.UploadedById, file.UploadedByName);
 
-    private async Task<PortalHeroResponse?> HeroAsync(long fileId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<PortalHeroResponse>> HeroesAsync(IReadOnlyList<long> fileIds, CancellationToken cancellationToken)
     {
-        var file = await content.FileViewAsync(fileId, cancellationToken);
-        if (file is null)
+        var heroes = new List<PortalHeroResponse>();
+        foreach (var file in await HeroFilesAsync(fileIds, cancellationToken))
         {
-            return null;
+            var (url, expiresAt) = await PreviewLinkAsync(file, PortalPreview.Image, cancellationToken);
+            heroes.Add(new PortalHeroResponse(file.Id, file.OriginalName, url, expiresAt));
         }
 
-        var (url, expiresAt) = await PreviewLinkAsync(file, PortalPreview.Image, cancellationToken);
-        return new PortalHeroResponse(file.Id, file.OriginalName, url, expiresAt);
+        return heroes;
+    }
+
+    /// <summary>The hero images' files, in the list's order.</summary>
+    private async Task<IReadOnlyList<PortalFileView>> HeroFilesAsync(IReadOnlyList<long> fileIds, CancellationToken cancellationToken)
+    {
+        var files = (await content.FileViewsAsync(fileIds, cancellationToken)).ToDictionary(f => f.Id);
+        return fileIds.Where(files.ContainsKey).Select(id => files[id]).ToList();
     }
 
     /// <summary>A short-lived inline link for images and videos; nothing for other files, or without a store.</summary>

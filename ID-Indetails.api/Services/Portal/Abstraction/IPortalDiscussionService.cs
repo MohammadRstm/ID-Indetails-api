@@ -21,6 +21,9 @@ public interface IPortalDiscussionService
     Task<PortalChatMessageResponse> EditMessageAsync(
         DiscussionSide side, long projectId, long messageId, PortalEditRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Deletes one's own message for everyone: it keeps its place without its text or mentions. Safe to repeat.</summary>
+    Task<PortalChatMessageResponse> DeleteMessageAsync(DiscussionSide side, long projectId, long messageId, CancellationToken cancellationToken = default);
+
     Task<PortalCommentThreadResponse> ThreadAsync(DiscussionSide side, long projectId, long itemId, CancellationToken cancellationToken = default);
 
     Task<PortalCommentResponse> AddCommentAsync(DiscussionSide side, long projectId, PortalCommentRequest request, CancellationToken cancellationToken = default);

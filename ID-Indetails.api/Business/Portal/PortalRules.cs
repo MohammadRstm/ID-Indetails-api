@@ -93,4 +93,14 @@ public static class PortalRules
 
         return hasAccess ? PortalClientStatus.AccessEnded : PortalClientStatus.NotInvited;
     }
+
+    /// <summary>
+    /// Whether a project's card in the client's list shows news: anything unread, or a publication since the client
+    /// last opened the project (any publication, when they never opened it).
+    /// </summary>
+    public static bool HasNews(DateTime? publishedAt, DateTime? lastOpenedAt, int unread)
+        => unread > 0 || (publishedAt is { } published && (lastOpenedAt is null || published > lastOpenedAt));
+
+    /// <summary>A project's latest activity for its client: the latest of these moments, or null when there's none.</summary>
+    public static DateTime? LatestOf(params DateTime?[] moments) => moments.Max();
 }

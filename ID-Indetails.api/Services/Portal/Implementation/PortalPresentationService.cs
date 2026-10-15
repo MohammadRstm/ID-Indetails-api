@@ -20,6 +20,7 @@ namespace ID_Indetails.api.Services.Portal.Implementation;
 public sealed class PortalPresentationService(
     ICurrentPortalAccount currentAccount,
     IPortalContentRepository content,
+    IPortalAccessRepository access,
     IPortalContentViews views,
     IContentStore store,
     IClock clock,
@@ -28,7 +29,13 @@ public sealed class PortalPresentationService(
     private const string NotAvailable = "This project isn't available.";
 
     public async Task<PortalPresentationResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)
-        => await views.PresentationAsync(await OpenProjectAsync(projectId, cancellationToken), published: true, cancellationToken);
+    {
+        // what was published until now is no longer news; taken before the page is read, so a publish meanwhile stays news
+        var openedAt = clock.UtcNow;
+        var presentation = await views.PresentationAsync(await OpenProjectAsync(projectId, cancellationToken), published: true, cancellationToken);
+        await access.MarkOpenedAsync(currentAccount.Id, projectId, openedAt, cancellationToken);
+        return presentation;
+    }
 
     public async Task<PortalContentLinkResponse> LinkAsync(long projectId, long itemId, bool inline, CancellationToken cancellationToken = default)
     {

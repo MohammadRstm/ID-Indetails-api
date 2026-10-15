@@ -439,6 +439,18 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
         (await ScalarAsync<int>("SELECT COUNT(*) FROM permissions WHERE code = 'project:pricing_manage'")).ShouldBe(1);
     }
 
+    // ---------- client portal (PortalUx) ----------
+
+    [Fact]
+    public async Task Only_a_deleted_portal_message_has_no_text()
+    {
+        var user = await ActiveUserAsync("design");
+        var project = await InsertAsync(ProjectSql("design", user, "NULL", "internal", 0));
+
+        await ShouldViolateAsync(PortalMessageSql(project, user, "NULL"), "ck_portal_messages_body_unless_deleted");
+        (await InsertAsync(PortalMessageSql(project, user, Now))).ShouldBeGreaterThan(0);
+    }
+
     // ---------- EF Core mapping round trip ----------
 
     [Fact]
@@ -534,6 +546,11 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     private static string LabourWeekSql(long projectId, long userId, string weekStart) =>
         "INSERT INTO labour_weeks (project_id, week_start, submitted_at, submitted_by_id) " +
         $"VALUES ({projectId}, '{weekStart}', {Now}, {userId})";
+
+    /// <summary>A staff member's chat message without text, deleted at <paramref name="deletedAt"/> (SQL).</summary>
+    private static string PortalMessageSql(long projectId, long userId, string deletedAt) =>
+        "INSERT INTO portal_messages (project_id, author_user_id, body, client_token, created_at, deleted_at) " +
+        $"VALUES ({projectId}, {userId}, NULL, '{Guid.NewGuid():N}', {Now}, {deletedAt})";
 
     private async Task ExecuteAsync(string sql)
     {

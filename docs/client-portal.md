@@ -11,6 +11,8 @@ A Design project's client can follow the project in a client portal.
 - **Project files:** the files of Phases 2 and 3 became every Design project's files, for its whole team, with
   comments. The client portal shows only the files chosen for the client (`for_client`). See
   [Project files](#project-files); it changes some of what Phases 2 and 3 say, as noted there.
+- **Portal UX:** up to 12 hero images instead of one, deleting a chat message for everyone, and the client's project
+  list with a cover, dates and a "news" flag. See [Portal UX](#portal-ux).
 
 **Execution projects have no client portal and no project files.** Their endpoints answer 404, and the permissions are
 limited to Design.
@@ -115,7 +117,8 @@ Errors:
 - Rate limits: the per-IP `auth` limit applies to login, invitations and resets; `refresh` to refresh; staff invitation
   emails use the per-person `email` limit.
 
-`GET /api/portal/me` (portal token only) returns the account and the Design projects it may open.
+`GET /api/portal/me` (portal token only) returns the account and the Design projects it may open, newest first, with
+what each project's card shows (see [The client's project list](#the-clients-project-list)).
 
 ## Endpoints
 
@@ -320,14 +323,15 @@ the client.
 - `portal_items` keeps both: the plain columns are the draft, `published_file_id`, `published_title`,
   `published_section` and `published_sort_order` what clients see (all set or all null; null = never published).
   `for_client` says whether the file is chosen for the client.
-- `portal_settings` (one row per project) keeps the draft and published hero (`hero_file_id`, `published_hero_file_id`)
-  and introduction (`summary`, `published_summary`), the `revision`, and the last publication (`published_revision`,
-  `published_at`, `published_by_id`).
-- Every change to the files, the choices, the hero or the introduction takes the project's content lock (the settings
-  row, `SELECT ... FOR UPDATE`). The row is made, or locked exclusively at once if it exists, by
+- `portal_settings` (one row per project) keeps the draft and published introduction (`summary`, `published_summary`),
+  the `revision`, and the last publication (`published_revision`, `published_at`, `published_by_id`). The hero images
+  are rows of `portal_hero_images`: the draft list (`is_published = 0`) and the published one (`= 1`), each in
+  `sort_order` (see [Portal UX](#portal-ux)).
+- Every change to the files, the choices, the hero images or the introduction takes the project's content lock (the
+  settings row, `SELECT ... FOR UPDATE`). The row is made, or locked exclusively at once if it exists, by
   `INSERT ... ON DUPLICATE KEY UPDATE`, so changes at the same moment wait for each other rather than deadlock.
 - `revision` moves on only with what changes the next publish: a change to a **client-relevant** file (chosen for the
-  client, or still published), a choice, the hero or the introduction. Renaming or adding a file the team keeps to
+  client, or still published), a choice, the hero images or the introduction. Renaming or adding a file the team keeps to
   itself doesn't make a publish stale.
 - A client-relevant item's state: **new** (chosen, never published), **changed** (file, title or section differ),
   **unchanged**, or **removed** (published, then deleted or no longer chosen; clients keep it until the next publish).
@@ -340,8 +344,8 @@ the client.
 1. refused (409 `portal_revision_stale`) when the drafts moved on since the revision the person saw, and (422) on an
    archived or non-client project;
 2. removed items are deleted; each chosen item's draft is copied into its published columns; a published item no
-   longer chosen has its published columns cleared (it stays one of the project's files); the hero and introduction
-   are copied, and the publication recorded;
+   longer chosen has its published columns cleared (it stays one of the project's files); the published hero images
+   become the draft's (same images, same order) and the introduction is copied, and the publication recorded;
 3. files nothing points at any more are let go (below), and one `portal_published` activity event is written: the hook
    for client notifications later (none are sent now).
 
@@ -349,30 +353,33 @@ Clients see the old version or the new one, never a mix: a failed publish rolls 
 to publish it just answers the content.
 
 **Discard** (`POST .../discard { expectedRevision }`) puts back only the client's side: every item not removed is
-chosen again exactly when clients see it now (`for_client = published_file_id IS NOT NULL`), and the hero and
-introduction go back to the published ones. Titles, sections, order, replaced files and deletions belong to Project
-files and stay as they are, and nothing is deleted. It needs a publication to go back to (422 `portal_never_published`).
+chosen again exactly when clients see it now (`for_client = published_file_id IS NOT NULL`), the draft hero images
+become the published ones (same images, same order), and the introduction goes back to the published one. Titles,
+sections, order, replaced files and deletions belong to Project files and stay as they are. It needs a publication to
+go back to (422 `portal_never_published`).
 
 ### Files are let go only when nothing uses them
-A file is marked deleted only when no item's draft or published copy and neither hero points at it, checked inside
-the change that drops the reference (`PortalReferences`). The cleanup checks again before deleting the object, and
-the restricting foreign keys refuse to delete a row still used. So the hero, kept by its file rather than by an item,
-survives its item being deleted or replaced.
+A file is marked deleted only when no item's draft or published copy and no draft or published hero image points at
+it, checked inside the change that drops the reference (`PortalReferences`). The cleanup checks again before deleting
+the object, and the restricting foreign keys refuse to delete a row still used. So a hero image, kept by its file rather
+than by an item, survives its item being deleted or replaced; a file uploaded as a hero image and then taken off (or
+discarded) before it was ever published goes.
 
-### Order and hero
+### Order and hero images
 - `PUT /api/projects/{id}/files/sections/{section}/order { itemIds }` (`project_files:manage`) takes the section's
   current (not removed) items, each once; anything else is 409 `portal_order_stale` (someone added, removed or moved a
   file). Drag and drop is within a section; moving between sections stays the Phase 2 "Move to".
-- `PUT .../hero { itemId }` uses an image item's file; `DELETE .../hero` clears it; a hero can also be uploaded
-  (`POST /api/projects/{id}/files/uploads` with `hero: true`, no section; `client_portal:manage`, client projects only).
-  Only JPEG, PNG or WebP (400 `portal_hero_not_image`).
+- The hero images: see [Portal UX](#hero-images).
 - `PUT .../summary { summary }`: plain text, up to 2,000 characters.
 
 ### Preview and the client's page
 - `GET .../content/preview` (staff) and `GET /api/portal/projects/{id}` (client) answer the same shape, built by the same
   code (`PortalContentViews.PresentationAsync`): the draft (the chosen items not removed) for the preview, the published
-  copy for the client. It holds the project's title and status, the introduction, the hero and the three sections, and
+  copy for the client. It holds the project's title and status, the introduction, the hero images (`heroes`, in order,
+  each `{ url, urlExpiresAt, name }`; `hero` is the first, or null, for the phone app) and the three sections, and
   nothing about staff, uploaders or storage.
+- Opening `GET /api/portal/projects/{id}` records when the client opened the project
+  (`portal_project_access.last_opened_at`, one `UPDATE`), for the project list's news flag.
 - `GET /api/portal/projects/{id}/items/{itemId}/link?inline=` gives a five-minute link to a **published** file.
 - A client gets anything only with live access to the Design project; every refusal (no access, access ended, another
   project, an unpublished file) is the same 404. Before the first publish the page is empty (`isPublished: false`).
@@ -388,7 +395,7 @@ The order and restore moved to [Project files](#project-files) (`.../files/secti
 
 | Method and path | Who | Purpose |
 |---|---|---|
-| `PUT` / `DELETE .../content/hero` | `client_portal:manage` | Set or clear the draft hero |
+| `POST .../content/heroes`, `DELETE .../content/heroes/{fileId}`, `PUT .../content/heroes/order` | `client_portal:manage` | The draft hero images (since Portal UX; `PUT` / `DELETE .../content/hero` are gone) |
 | `PUT .../content/summary` | `client_portal:manage` | The draft introduction |
 | `POST .../content/publish` | `client_portal:manage` | Publish everything |
 | `POST .../content/discard` | `client_portal:manage` | Back to what clients see |
@@ -421,8 +428,11 @@ member, or moving them to Execution takes them out at once.
 - Plain text only (rendered escaped by the client), up to 4,000 characters in the chat and 2,000 in a comment.
 - Each message or comment carries a **client token** made by the browser: sending it again returns the first one and
   notifies nobody twice (unique per author and token).
-- **Authors can edit** their messages and comments (shown "edited"; the earlier wording isn't kept) and **delete their
-  own comments** (the comment keeps its place without its text). Chat messages aren't deleted.
+- **Authors can edit** their messages and comments (shown "edited"; the earlier wording isn't kept) and **delete**
+  them for everyone: a deleted message or comment keeps its place without its text and mentions (`body` null,
+  `deleted: true`), can't be edited, and is never unread. Deleting again changes nothing. Only the author may (403
+  otherwise), and not on an archived project (422 `portal_discussion_closed`); editing a deleted one is 422
+  `portal_discussion_closed` too.
 - **Comments are on published files only.** Each keeps the item and file it was written about and their names. When the
   file is replaced and republished, older comments read "on an earlier version"; when the file is unpublished, its
   thread stays readable, closed, and is never attached to another file. Drafts can't be commented on or found.
@@ -465,7 +475,7 @@ Staff: `/api/projects/{id}/portal/discussion`; clients: `/api/portal/projects/{i
 |---|---|
 | `GET {base}` | Summary: whether it can be written in, unread counts, participants (for mentions), comment threads |
 | `GET {base}/messages?before=&limit=` | A page of the chat, oldest first (newest page without `before`) |
-| `POST {base}/messages` / `PUT {base}/messages/{id}` | Send / edit a message |
+| `POST {base}/messages` / `PUT` / `DELETE {base}/messages/{id}` | Send / edit / delete a message (for everyone) |
 | `GET {base}/comments/{itemId}` | A file's thread |
 | `POST {base}/comments` / `PUT` / `DELETE {base}/comments/{id}` | Comment / edit / delete |
 | `POST {base}/read` | Move the read markers |
@@ -475,8 +485,9 @@ All writes are `Never` for Proton.
 
 ### Tables (migration `ClientPortalDiscussion`)
 - `portal_messages`, `portal_comments`: author (a user or a portal account, exactly one), text, client token (unique per
-  author), `edited_at`; comments also the item and file ids (plain columns, not foreign keys: items are unpublished and
-  files replaced later), the item's title and file name, `deleted_at`.
+  author), `edited_at`, `deleted_at` (a check that only a deleted one has no text; messages since migration
+  `PortalUx`); comments also the item and file ids (plain columns, not foreign keys: items are unpublished and files
+  replaced later), the item's title and file name.
 - `portal_mentions`: a message or a comment, and a user or an account (exactly one each).
 - `portal_reads`: one chat marker per person and project.
 - `portal_comment_reads`: one comment marker per person and file (the item id, a plain column as on the comments).
@@ -487,7 +498,7 @@ All writes are `Never` for Proton.
 Every Design project, for a client or internal, has **Project files**: the presentation, 3D and drawing files its team
 works on, in the same three sections and the same content store as above. They are the project's own; a client sees a
 file only once it is **chosen for the client** (`portal_items.for_client`) and published. The client portal tab shows
-the chosen files, with the hero, the introduction, the preview, publishing, client access and the discussion.
+the chosen files, with the hero images, the introduction, the preview, publishing, client access and the discussion.
 
 ### Who may do what
 Everything is on Design projects only; anything else answers 404. An archived project is read-only (422
@@ -549,7 +560,8 @@ Each file says its uploader, whether the caller may change it (`canEdit`), its c
 open }`), whether it is chosen (`forClient`) and its state for the client (`clientState`, null for a file that isn't
 for the client and never reached them). All the writes are `Never` for Proton.
 
-The client portal tab keeps `GET`, `PUT/DELETE /hero`, `PUT /summary`, `POST /publish`, `POST /discard`, `GET /preview`
+The client portal tab keeps `GET`, the hero images (`POST /heroes`, `DELETE /heroes/{fileId}`, `PUT /heroes/order`),
+`PUT /summary`, `POST /publish`, `POST /discard`, `GET /preview`
 and `GET /items/{itemId}/link` under `/api/projects/{id}/portal/content`; its answer adds `canManage`
 (`client_portal:manage`) and each item's `uploadedBy`, and `canEdit` needs `canManage` too.
 
@@ -562,6 +574,55 @@ and `GET /items/{itemId}/link` under `/api/projects/{id}/portal/content`; its an
 - Seed: the permission `project_files:manage` (Design) for admins and super admins; `client_portal:manage` is taken off
   the admin role.
 - **Rollback** drops the table and the column, and gives admins `client_portal:manage` back.
+
+## Portal UX
+
+### Hero images
+A project's client portal has up to 12 hero images, in order; the client's page shows the first big and the others
+beside it. The staff answer has `heroes` (each `{ fileId, name, url, urlExpiresAt }`, in order) and `hero`, the first or
+null; the client's page has `heroes` and `hero` likewise (see [Preview and the client's page](#preview-and-the-clients-page)).
+
+| Method and path (`/api/projects/{id}/portal/content`) | Purpose |
+|---|---|
+| `POST /heroes { itemId }` | Adds an image item's file at the end of the draft. Only JPEG, PNG or WebP (400 `portal_hero_not_image`); 409 `portal_hero_already_added` when it is one already; 422 `portal_hero_limit` past 12 |
+| `DELETE /heroes/{fileId}` | Takes it off the draft (404 when it isn't on it) |
+| `PUT /heroes/order { fileIds }` | The draft's new order: exactly its files, each once (409 `portal_order_stale` otherwise) |
+
+- All three need `client_portal:manage` on a Design client project that isn't archived (422
+  `portal_content_read_only`), take the content lock and move the revision on. They are `Never` for Proton.
+- A hero can also be uploaded (`POST /api/projects/{id}/files/uploads` with `hero: true`, no section;
+  `client_portal:manage`, client projects only): it goes at the end of the draft, within the same limit (checked when
+  the upload starts and again when it completes).
+- The hero changed (`changes.heroChanged`) when the draft list, images and order, differs from the published one: a
+  new order put back as it was is nothing to publish. Publishing makes the published list the draft's; discarding the
+  draft list the published one. Either way, a row whose image stays is kept and only takes its new place.
+- `isHero` on an item (here and in Project files) says its file is one of the draft hero images.
+
+### The client's project list
+`GET /api/portal/me` (and the account in every sign-in answer) lists the projects newest first, by start date, then id.
+Each project has, besides `id`, `title`, `status` and `unread` (unread chat messages and comments):
+
+| Field | What it is |
+|---|---|
+| `heroUrl`, `heroUrlExpiresAt` | An hour-long inline link to the first published hero image, or null |
+| `startedOn` | The project's start date |
+| `lastPublishedAt` | The last publication, or null before the first |
+| `lastActivityAt` | The latest of the last publication, the newest chat message and the newest comment (deleted ones aside), or null |
+| `hasNews` | Something new: a publication since the client last opened the project (any publication, if they never opened it), or anything unread |
+
+The list is read in one query (with the cover files in a second one); the unread counts are counted per project, as
+before. The web client sorts by these fields itself.
+
+### Tables (migration `PortalUx`)
+- `portal_hero_images`: `project_id`, `file_id` (both restricting foreign keys), `sort_order`, `is_published`; unique
+  `(project_id, is_published, file_id)`, and `(project_id, is_published, sort_order)` for each list in order. The
+  migration copies each project's `portal_settings.hero_file_id` into a draft row and `published_hero_file_id` into a
+  published row (both at `sort_order` 0), then drops those two columns and their foreign keys.
+- `portal_messages`: `body` becomes optional and `deleted_at` is added, with the check
+  `ck_portal_messages_body_unless_deleted` (only a deleted message has no text).
+- `portal_project_access.last_opened_at` (`datetime(3)`, null until the client opens the project).
+- **Rollback** puts the first image of each list back into the two `portal_settings` columns, drops the table, drops
+  `deleted_at` and `last_opened_at` (a deleted message's text is gone for good: it comes back empty).
 
 ## Known limits (later phases)
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a

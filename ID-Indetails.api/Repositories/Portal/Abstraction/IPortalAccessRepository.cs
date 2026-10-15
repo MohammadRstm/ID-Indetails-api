@@ -25,8 +25,11 @@ public interface IPortalAccessRepository
     /// <summary>Whether the account has access to any project other than <paramref name="exceptProjectId"/>.</summary>
     Task<bool> HasLiveAccessAsync(long accountId, long exceptProjectId, CancellationToken cancellationToken = default);
 
-    /// <summary>The Design projects the account may open now, by title.</summary>
+    /// <summary>The Design projects the account may open now, newest first (by start date, then id), with what their cards show.</summary>
     Task<IReadOnlyList<PortalProjectSummary>> ProjectsOfAsync(long accountId, CancellationToken cancellationToken = default);
+
+    /// <summary>Records, in one statement, when the client opened the project's page.</summary>
+    Task MarkOpenedAsync(long accountId, long projectId, DateTime openedAt, CancellationToken cancellationToken = default);
 
     void Add(PortalProjectAccess access);
 }

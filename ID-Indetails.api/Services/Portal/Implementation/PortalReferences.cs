@@ -4,14 +4,16 @@ namespace ID_Indetails.api.Services.Portal.Implementation;
 
 /// <summary>
 /// The one rule for letting a client portal file go: only when nothing points at it any more, neither an item's draft
-/// or published copy nor the draft or published hero. Checked against the project's items and settings as they stand
-/// in the change being saved, under the project's content lock.
+/// or published copy nor a draft or published hero image. Checked against the project's items and hero images as they
+/// stand in the change being saved, under the project's content lock.
 /// </summary>
 internal static class PortalReferences
 {
     /// <summary>Marks deleted (at <paramref name="now"/>) the candidates nothing points at, and returns them.</summary>
     /// <param name="items">Every item of the project that stays, as changed.</param>
-    public static List<PortalFile> Release(IEnumerable<PortalFile> candidates, IEnumerable<PortalItem> items, PortalSettings settings, DateTime now)
+    /// <param name="heroes">Every hero image row of the project that stays, draft and published, as changed.</param>
+    public static List<PortalFile> Release(
+        IEnumerable<PortalFile> candidates, IEnumerable<PortalItem> items, IEnumerable<PortalHeroImage> heroes, DateTime now)
     {
         var used = new HashSet<long>();
         foreach (var item in items)
@@ -24,14 +26,9 @@ internal static class PortalReferences
             }
         }
 
-        if (settings.HeroFileId is { } hero)
+        foreach (var hero in heroes)
         {
-            used.Add(hero);
-        }
-
-        if (settings.PublishedHeroFileId is { } publishedHero)
-        {
-            used.Add(publishedHero);
+            used.Add(hero.File is { } file ? file.Id : hero.FileId);
         }
 
         var released = candidates.DistinctBy(f => f.Id).Where(f => f.Id != 0 && f.DeletedAt is null && !used.Contains(f.Id)).ToList();

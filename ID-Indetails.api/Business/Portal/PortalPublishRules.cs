@@ -1,3 +1,5 @@
+using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Business.Portal;
@@ -22,12 +24,15 @@ public sealed record PortalChanges(
 /// <item>A chosen item is new until first published, and changed when its file, title or section differs from the
 /// published copy. A published item deleted or no longer chosen is removed: clients keep it until the next publish. A
 /// new order shows as the section being reordered.</item>
-/// <item>Only a JPEG, PNG or WebP image can be the hero: what every browser shows.</item>
+/// <item>Only a JPEG, PNG or WebP image can be a hero image: what every browser shows. There are up to 12, each image
+/// once, in order; the hero changed when the draft list (images and order) differs from the published one.</item>
 /// </list>
 /// </summary>
 public static class PortalPublishRules
 {
     public const int MaxSummaryLength = 2000;
+
+    public const int MaxHeroes = 12;
 
     private static readonly string[] HeroTypes = ["image/jpeg", "image/png", "image/webp"];
 
@@ -60,8 +65,11 @@ public static class PortalPublishRules
             : PortalItemState.Unchanged;
     }
 
+    /// <param name="heroFileIds">The draft hero images' files, in order.</param>
+    /// <param name="publishedHeroFileIds">The published hero images' files, in order.</param>
     public static PortalChanges ChangesOf(
-        IReadOnlyList<PortalItemCopies> items, long? heroFileId, long? publishedHeroFileId, string? summary, string? publishedSummary)
+        IReadOnlyList<PortalItemCopies> items, IReadOnlyList<long> heroFileIds, IReadOnlyList<long> publishedHeroFileIds,
+        string? summary, string? publishedSummary)
     {
         var states = items.Select(StateOf).OfType<PortalItemState>().ToList();
         return new PortalChanges(
@@ -69,9 +77,15 @@ public static class PortalPublishRules
             states.Count(s => s == PortalItemState.Changed),
             states.Count(s => s == PortalItemState.Removed),
             ReorderedSections(items),
-            heroFileId != publishedHeroFileId,
+            !heroFileIds.SequenceEqual(publishedHeroFileIds),
             (summary ?? string.Empty) != (publishedSummary ?? string.Empty));
     }
+
+    /// <summary>Another hero image fits only while the draft has fewer than <see cref="MaxHeroes"/>.</summary>
+    public static RuleDenial? CheckCanAddHero(int draftHeroes)
+        => draftHeroes >= MaxHeroes
+            ? RuleDenial.BusinessRule(ErrorCodes.PortalHeroLimit, $"There can be at most {MaxHeroes} hero images. Remove one first.")
+            : null;
 
     /// <summary>
     /// Sections whose published items, still chosen and staying where they are, come in a different order in the draft.

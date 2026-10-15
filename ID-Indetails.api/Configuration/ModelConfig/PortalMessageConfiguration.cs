@@ -10,12 +10,16 @@ public class PortalMessageConfiguration : IEntityTypeConfiguration<PortalMessage
     public void Configure(EntityTypeBuilder<PortalMessage> builder)
     {
         builder.ToTable("portal_messages", t =>
+        {
             // written by a staff member or by a client, never both and never neither
-            t.HasCheckConstraint("ck_portal_messages_one_author", "(`author_user_id` IS NULL) <> (`author_account_id` IS NULL)"));
+            t.HasCheckConstraint("ck_portal_messages_one_author", "(`author_user_id` IS NULL) <> (`author_account_id` IS NULL)");
+            // only a deleted message has no text
+            t.HasCheckConstraint("ck_portal_messages_body_unless_deleted", "`body` IS NOT NULL OR `deleted_at` IS NOT NULL");
+        });
 
         builder.HasKey(x => x.Id);
 
-        builder.Property(x => x.Body).IsRequired().HasMaxLength(PortalDiscussionRules.MaxMessageLength);
+        builder.Property(x => x.Body).HasMaxLength(PortalDiscussionRules.MaxMessageLength);
         builder.Property(x => x.ClientToken).IsRequired().HasMaxLength(64);
 
         // the chat, page by page

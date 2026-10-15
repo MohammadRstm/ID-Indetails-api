@@ -47,6 +47,15 @@ public sealed class PortalHeroRequestValidator : AbstractValidator<PortalHeroReq
     }
 }
 
+public sealed class PortalHeroOrderRequestValidator : AbstractValidator<PortalHeroOrderRequest>
+{
+    public PortalHeroOrderRequestValidator()
+    {
+        RuleFor(x => x.FileIds).NotEmpty().WithMessage("List the hero images in their new order.");
+        RuleForEach(x => x.FileIds).GreaterThan(0);
+    }
+}
+
 public sealed class PortalSummaryRequestValidator : AbstractValidator<PortalSummaryRequest>
 {
     public PortalSummaryRequestValidator()

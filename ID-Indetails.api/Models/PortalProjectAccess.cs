@@ -21,6 +21,9 @@ public class PortalProjectAccess
 
     public long? RevokedById { get; set; }
 
+    /// <summary>When the client last opened the project's page; null until they do. The project list's news flag compares with it.</summary>
+    public DateTime? LastOpenedAt { get; set; }
+
     public PortalAccount Account { get; set; } = null!;
 
     public Project Project { get; set; } = null!;

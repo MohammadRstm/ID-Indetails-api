@@ -23,16 +23,6 @@ public class PortalSettingsConfiguration : IEntityTypeConfiguration<PortalSettin
             .HasForeignKey<PortalSettings>(x => x.ProjectId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne<PortalFile>()
-            .WithMany()
-            .HasForeignKey(x => x.HeroFileId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasOne<PortalFile>()
-            .WithMany()
-            .HasForeignKey(x => x.PublishedHeroFileId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasOne<User>()
             .WithMany()
             .HasForeignKey(x => x.PublishedById)

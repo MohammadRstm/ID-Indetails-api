@@ -132,6 +132,15 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         return await response.ReadAsync<PortalPresentationResponse>();
     }
 
+    private async Task<PortalContentResponse> AddHeroAsync(AuthResponse staff, long projectId, long itemId)
+        => await ChangeAsync(await Client.PostJsonAsync($"{Base(projectId)}/heroes", new { itemId }, staff.AccessToken));
+
+    private async Task<PortalContentResponse> OrderHeroesAsync(AuthResponse staff, long projectId, params long[] fileIds)
+        => await ChangeAsync(await Client.PutJsonAsync($"{Base(projectId)}/heroes/order", new { fileIds }, staff.AccessToken));
+
+    private Task<long> LiveFilesAsync(long fileId)
+        => _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_files WHERE id = @id AND deleted_at IS NULL", ("@id", fileId));
+
     private Task<HttpResponseMessage> AsClientAsync(string clientToken, string url)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -274,44 +283,222 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task The_hero_is_an_image_kept_by_its_file_and_reaches_clients_when_published()
+    public async Task Hero_images_are_added_ordered_and_removed_in_the_draft_and_reach_clients_when_published()
     {
         var s = await ProjectWithClientAsync();
         var living = await UploadAsync(s.Staff, s.Project.Id, "Living room.jpg", Jpeg);
+        var kitchen = await UploadAsync(s.Staff, s.Project.Id, "Kitchen.jpg", OtherJpeg);
         var plan = await UploadAsync(s.Staff, s.Project.Id, "Plan.pdf", Pdf, "drawing");
+        var livingFile = living.Item!.File.Id;
+        var kitchenFile = kitchen.Item!.File.Id;
 
-        await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/hero", new { itemId = plan.Item!.Id }, s.Staff.AccessToken))
+        await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/heroes", new { itemId = plan.Item!.Id }, s.Staff.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.PortalHeroNotImage);
-        var chosen = await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/hero", new { itemId = living.Item!.Id }, s.Staff.AccessToken));
-        chosen.Hero!.FileId.ShouldBe(living.Item.File.Id);
-        chosen.Items.Single(i => i.Id == living.Item.Id).IsHero.ShouldBeTrue();
-        chosen.Changes.HeroChanged.ShouldBeTrue();
+        var first = await AddHeroAsync(s.Staff, s.Project.Id, living.Item.Id);
+        first.Heroes.Select(h => h.FileId).ShouldBe([livingFile]);
+        first.Hero!.FileId.ShouldBe(livingFile);
+        first.Items.Single(i => i.Id == living.Item.Id).IsHero.ShouldBeTrue();
+        first.Changes.HeroChanged.ShouldBeTrue();
 
-        // deleting the item doesn't take the hero with it: the hero keeps the file
-        (await Client.DeleteAsync($"{Files(s.Project.Id)}/items/{living.Item.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        (await PreviewAsync(s.Staff, s.Project.Id)).Hero.ShouldNotBeNull();
-        (await ContentAsync(s.Staff, s.Project.Id)).Hero!.FileId.ShouldBe(living.Item.File.Id);
+        // an image is a hero once
+        await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/heroes", new { itemId = living.Item.Id }, s.Staff.AccessToken))
+            .ShouldFailWithAsync(409, ErrorCodes.PortalHeroAlreadyAdded);
 
-        // an uploaded hero takes its place, and the old one, used by nothing now, goes
+        // added images and uploaded ones go at the end
+        await AddHeroAsync(s.Staff, s.Project.Id, kitchen.Item.Id);
         await (await Client.PostJsonAsync($"{Files(s.Project.Id)}/uploads",
             new { clientToken = Guid.NewGuid().ToString(), hero = true, fileName = "cover.pdf", size = Pdf.Length }, s.Staff.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.PortalHeroNotImage);
         var uploaded = await UploadAsync(s.Staff, s.Project.Id, "Cover.jpg", OtherJpeg, hero: true);
         uploaded.Item.ShouldBeNull();
         var withCover = await ContentAsync(s.Staff, s.Project.Id);
-        withCover.Hero!.Name.ShouldBe("Cover.jpg");
-        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_files WHERE id = @id", ("@id", living.Item.File.Id))).ShouldBe(0);
+        withCover.Heroes.Select(h => h.Name).ShouldBe(["Living room.jpg", "Kitchen.jpg", "Cover.jpg"]);
+        var coverFile = withCover.Heroes[2].FileId;
 
-        (await ClientViewAsync(s.ClientToken, s.Project.Id)).Hero.ShouldBeNull();
+        // a new order lists exactly the draft's images
+        await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/heroes/order", new { fileIds = new[] { coverFile, livingFile } }, s.Staff.AccessToken))
+            .ShouldFailWithAsync(409, ErrorCodes.PortalOrderStale);
+        var ordered = await OrderHeroesAsync(s.Staff, s.Project.Id, coverFile, livingFile, kitchenFile);
+        ordered.Heroes.Select(h => h.FileId).ShouldBe([coverFile, livingFile, kitchenFile]);
+        ordered.Hero!.Name.ShouldBe("Cover.jpg");
+        var preview = await PreviewAsync(s.Staff, s.Project.Id);
+        preview.Heroes.Select(h => h.Name).ShouldBe(["Cover.jpg", "Living room.jpg", "Kitchen.jpg"]);
+        preview.Hero!.Name.ShouldBe("Cover.jpg");
+
+        // clients see them only once published, in the same order
+        var before = await ClientViewAsync(s.ClientToken, s.Project.Id);
+        before.Heroes.ShouldBeEmpty();
+        before.Hero.ShouldBeNull();
         await PublishAsync(s.Staff, s.Project.Id);
         var seen = await ClientViewAsync(s.ClientToken, s.Project.Id);
+        seen.Heroes.Select(h => h.Name).ShouldBe(["Cover.jpg", "Living room.jpg", "Kitchen.jpg"]);
         seen.Hero!.Name.ShouldBe("Cover.jpg");
-        (await Client.GetAsync(seen.Hero.Url)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.GetAsync(seen.Heroes[1].Url)).IsSuccessStatusCode.ShouldBeTrue();
+        (await ContentAsync(s.Staff, s.Project.Id)).Changes.HeroChanged.ShouldBeFalse();
 
-        // clearing it is a draft change too
-        var cleared = await ChangeAsync(await Client.DeleteAsync($"{Base(s.Project.Id)}/hero", s.Staff.AccessToken));
-        cleared.Hero.ShouldBeNull();
-        (await ClientViewAsync(s.ClientToken, s.Project.Id)).Hero.ShouldNotBeNull();
+        // a new order undone is nothing to publish
+        (await OrderHeroesAsync(s.Staff, s.Project.Id, livingFile, coverFile, kitchenFile)).Changes.HeroChanged.ShouldBeTrue();
+        var undone = await OrderHeroesAsync(s.Staff, s.Project.Id, coverFile, livingFile, kitchenFile);
+        undone.Changes.HeroChanged.ShouldBeFalse();
+        undone.HasUnpublishedChanges.ShouldBeFalse();
+
+        // taking one off is a draft change: clients keep it until the next publish
+        var removed = await ChangeAsync(await Client.DeleteAsync($"{Base(s.Project.Id)}/heroes/{kitchenFile}", s.Staff.AccessToken));
+        removed.Heroes.Select(h => h.FileId).ShouldBe([coverFile, livingFile]);
+        removed.Items.Single(i => i.Id == kitchen.Item.Id).IsHero.ShouldBeFalse();
+        removed.Changes.HeroChanged.ShouldBeTrue();
+        await (await Client.DeleteAsync($"{Base(s.Project.Id)}/heroes/{kitchenFile}", s.Staff.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        (await ClientViewAsync(s.ClientToken, s.Project.Id)).Heroes.Count.ShouldBe(3);
+        await PublishAsync(s.Staff, s.Project.Id);
+        (await ClientViewAsync(s.ClientToken, s.Project.Id)).Heroes.Select(h => h.Name).ShouldBe(["Cover.jpg", "Living room.jpg"]);
+
+        // the kitchen is still one of the project's files
+        (await LiveFilesAsync(kitchenFile)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_hero_image_keeps_its_file_until_neither_list_uses_it()
+    {
+        var s = await ProjectWithClientAsync();
+        var living = await UploadAsync(s.Staff, s.Project.Id, "Living room.jpg", Jpeg);
+        var livingFile = living.Item!.File.Id;
+        await AddHeroAsync(s.Staff, s.Project.Id, living.Item.Id);
+
+        // deleting the item doesn't take the hero image with it: the hero keeps the file
+        (await Client.DeleteAsync($"{Files(s.Project.Id)}/items/{living.Item.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await LiveFilesAsync(livingFile)).ShouldBe(1);
+        (await PreviewAsync(s.Staff, s.Project.Id)).Heroes.Single().Name.ShouldBe("Living room.jpg");
+        (await ContentAsync(s.Staff, s.Project.Id)).Hero!.FileId.ShouldBe(livingFile);
+        await UploadAsync(s.Staff, s.Project.Id, "Cover.jpg", OtherJpeg, hero: true);
+        await PublishAsync(s.Staff, s.Project.Id);
+
+        // off the draft, the published list still holds it
+        await ChangeAsync(await Client.DeleteAsync($"{Base(s.Project.Id)}/heroes/{livingFile}", s.Staff.AccessToken));
+        (await LiveFilesAsync(livingFile)).ShouldBe(1);
+        (await ClientViewAsync(s.ClientToken, s.Project.Id)).Heroes.Select(h => h.Name).ShouldBe(["Living room.jpg", "Cover.jpg"]);
+
+        // published without it: nothing uses it any more, so it goes
+        await PublishAsync(s.Staff, s.Project.Id);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_files WHERE id = @id", ("@id", livingFile))).ShouldBe(0);
+        (await ClientViewAsync(s.ClientToken, s.Project.Id)).Heroes.Select(h => h.Name).ShouldBe(["Cover.jpg"]);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_hero_images WHERE project_id = @p", ("@p", s.Project.Id))).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Discarding_puts_the_published_hero_images_back_and_lets_a_draft_only_upload_go()
+    {
+        var s = await ProjectWithClientAsync();
+        var a = await UploadAsync(s.Staff, s.Project.Id, "A.jpg", Jpeg);
+        var b = await UploadAsync(s.Staff, s.Project.Id, "B.jpg", OtherJpeg);
+        await AddHeroAsync(s.Staff, s.Project.Id, a.Item!.Id);
+        await PublishAsync(s.Staff, s.Project.Id);
+
+        await AddHeroAsync(s.Staff, s.Project.Id, b.Item!.Id);
+        await UploadAsync(s.Staff, s.Project.Id, "Cover.jpg", OtherJpeg, hero: true);
+        var draft = await ContentAsync(s.Staff, s.Project.Id);
+        var coverFile = draft.Heroes.Single(h => h.Name == "Cover.jpg").FileId;
+        draft = await OrderHeroesAsync(s.Staff, s.Project.Id, coverFile, b.Item.File.Id, a.Item.File.Id);
+        draft.Changes.HeroChanged.ShouldBeTrue();
+
+        var discarded = await ChangeAsync(await Client.PostJsonAsync($"{Base(s.Project.Id)}/discard", new { expectedRevision = draft.Revision }, s.Staff.AccessToken));
+        discarded.Heroes.Select(h => h.FileId).ShouldBe([a.Item.File.Id]);
+        discarded.Changes.HeroChanged.ShouldBeFalse();
+        discarded.HasUnpublishedChanges.ShouldBeFalse();
+
+        // B is still one of the project's files; the uploaded cover was only ever a draft hero image, so it goes
+        (await LiveFilesAsync(b.Item.File.Id)).ShouldBe(1);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_files WHERE id = @id", ("@id", coverFile))).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task There_are_at_most_twelve_hero_images()
+    {
+        var s = await ProjectWithClientAsync();
+        var extra = await UploadAsync(s.Staff, s.Project.Id, "Extra.jpg", Jpeg);
+        for (var i = 1; i <= 12; i++)
+        {
+            await UploadAsync(s.Staff, s.Project.Id, $"Cover {i}.jpg", OtherJpeg, hero: true);
+        }
+
+        var full = await ContentAsync(s.Staff, s.Project.Id);
+        full.Heroes.Count.ShouldBe(12);
+        await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/heroes", new { itemId = extra.Item!.Id }, s.Staff.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalHeroLimit);
+        await (await Client.PostJsonAsync($"{Files(s.Project.Id)}/uploads",
+            new { clientToken = Guid.NewGuid().ToString(), hero = true, fileName = "One more.jpg", size = Jpeg.Length }, s.Staff.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalHeroLimit);
+
+        // one off, and there's room again
+        await ChangeAsync(await Client.DeleteAsync($"{Base(s.Project.Id)}/heroes/{full.Heroes[0].FileId}", s.Staff.AccessToken));
+        (await AddHeroAsync(s.Staff, s.Project.Id, extra.Item.Id)).Heroes[^1].Name.ShouldBe("Extra.jpg");
+    }
+
+    [Fact]
+    public async Task The_clients_project_list_shows_each_projects_cover_dates_and_news_newest_project_first()
+    {
+        var s = await ProjectWithClientAsync();
+        async Task<IReadOnlyList<PortalProjectResponse>> ListAsync()
+        {
+            var me = await AsClientAsync(s.ClientToken, "/api/portal/me");
+            me.IsSuccessStatusCode.ShouldBeTrue(await me.Content.ReadAsStringAsync());
+            return (await me.ReadAsync<PortalAccountResponse>()).Projects;
+        }
+
+        async Task<PortalProjectResponse> CardAsync() => (await ListAsync()).Single(p => p.Id == s.Project.Id);
+
+        // nothing published or written yet: nothing new, no cover, no activity
+        var fresh = await CardAsync();
+        fresh.StartedOn.ShouldBe(s.Project.StartDate);
+        fresh.HasNews.ShouldBeFalse();
+        fresh.HeroUrl.ShouldBeNull();
+        fresh.HeroUrlExpiresAt.ShouldBeNull();
+        fresh.LastPublishedAt.ShouldBeNull();
+        fresh.LastActivityAt.ShouldBeNull();
+
+        // published and never opened: news, with the first published hero image as the cover
+        var living = await UploadAsync(s.Staff, s.Project.Id, "Living room.jpg", Jpeg);
+        await AddHeroAsync(s.Staff, s.Project.Id, living.Item!.Id);
+        await UploadAsync(s.Staff, s.Project.Id, "Cover.jpg", OtherJpeg, hero: true);
+        var first = await PublishAsync(s.Staff, s.Project.Id);
+        var published = await CardAsync();
+        published.HasNews.ShouldBeTrue();
+        published.Unread.ShouldBe(0);
+        published.LastPublishedAt.ShouldBe(first.Publication.PublishedAt);
+        published.LastActivityAt.ShouldBe(first.Publication.PublishedAt);
+        published.HeroUrlExpiresAt.ShouldNotBeNull();
+        (await (await Client.GetAsync(published.HeroUrl!)).Content.ReadAsByteArrayAsync()).ShouldBe(Jpeg);
+
+        // opened: no longer news, until the next publish
+        await ClientViewAsync(s.ClientToken, s.Project.Id);
+        (await CardAsync()).HasNews.ShouldBeFalse();
+        await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/summary", new { summary = "Welcome" }, s.Staff.AccessToken));
+        var second = await PublishAsync(s.Staff, s.Project.Id);
+        var republished = await CardAsync();
+        republished.HasNews.ShouldBeTrue();
+        republished.LastPublishedAt.ShouldBe(second.Publication.PublishedAt);
+        await ClientViewAsync(s.ClientToken, s.Project.Id);
+        (await CardAsync()).HasNews.ShouldBeFalse();
+
+        // a team message is news while unread, and the latest activity
+        var sent = await Client.PostJsonAsync($"/api/projects/{s.Project.Id}/portal/discussion/messages",
+            new { body = "Have a look", clientToken = Guid.NewGuid().ToString(), mentions = Array.Empty<string>() }, s.Staff.AccessToken);
+        sent.IsSuccessStatusCode.ShouldBeTrue(await sent.Content.ReadAsStringAsync());
+        var message = await sent.ReadAsync<PortalChatMessageResponse>();
+        var written = await CardAsync();
+        written.Unread.ShouldBe(1);
+        written.HasNews.ShouldBeTrue();
+        written.LastActivityAt.ShouldBe(message.CreatedAt);
+        written.LastPublishedAt.ShouldBe(second.Publication.PublishedAt);
+
+        // the newest project first: by start date, then id
+        var other = await ProjectAsync(s.Staff, DomainCodes.Design, s.ClientId);
+        await GrantAsync(s.Staff, other.Id, s.ContactEmail, firstTime: false);
+        await _steps.ExecuteAsync("UPDATE projects SET start_date = '2026-01-10' WHERE id = @p", ("@p", s.Project.Id));
+        var list = await ListAsync();
+        list.Select(p => p.Id).ShouldBe([other.Id, s.Project.Id]);
+        list[1].StartedOn.ShouldBe(new DateOnly(2026, 1, 10));
+        list[0].HasNews.ShouldBeFalse();
+        list[0].LastPublishedAt.ShouldBeNull();
     }
 
     [Fact]
@@ -393,6 +580,8 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(422, ErrorCodes.PortalContentReadOnly);
         await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/summary", new { summary = "x" }, s.Staff.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.PortalContentReadOnly);
+        await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/heroes", new { itemId = content.Items[0].Id }, s.Staff.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalContentReadOnly);
         await (await Client.PutJsonAsync($"{Files(s.Project.Id)}/sections/presentation/order", new { itemIds = content.Items.Select(i => i.Id) }, s.Staff.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.PortalContentReadOnly);
 
@@ -447,7 +636,7 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
             await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/publish", new { expectedRevision = 0 }, outsider.AccessToken))
                 .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.GetAsync($"{Base(s.Project.Id)}/preview", outsider.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
-            await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/hero", new { itemId = kitchen.Item!.Id }, outsider.AccessToken))
+            await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/heroes", new { itemId = kitchen.Item!.Id }, outsider.AccessToken))
                 .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         }
 
@@ -464,6 +653,8 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/publish", new { expectedRevision = seen.Revision }, designAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/summary", new { summary = "Hello" }, designAdmin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/heroes", new { itemId = kitchen.Item.Id }, designAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         // granted client_portal:manage, they may: the same rule as for a super admin

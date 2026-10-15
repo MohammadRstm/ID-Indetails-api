@@ -433,6 +433,59 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Authors_delete_their_own_messages_for_everyone_and_a_deleted_one_keeps_its_place()
+    {
+        var s = await ProjectWithClientAsync();
+        var staffKey = $"u{s.Staff.User.Id}";
+        var message = await OkAsync<PortalChatMessageResponse>(AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/messages",
+            Message("Can you check this, @Test super_admin?", [staffKey])));
+        message.Mentions.ShouldBe([staffKey]);
+        message.Deleted.ShouldBeFalse();
+        var kept = await OkAsync<PortalChatMessageResponse>(AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/messages", Message("This one stays")));
+        (await OkAsync<DiscussionSummaryResponse>(Client.GetAsync(Staff(s.Project.Id), s.Staff.AccessToken))).UnreadMessages.ShouldBe(2);
+
+        // only its author deletes a message
+        await (await Client.DeleteAsync($"{Staff(s.Project.Id)}/messages/{message.Id}", s.Staff.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        var deleted = await OkAsync<PortalChatMessageResponse>(AsClient(s.ClientToken, HttpMethod.Delete, $"{Mine(s.Project.Id)}/messages/{message.Id}"));
+        deleted.Id.ShouldBe(message.Id);
+        deleted.Deleted.ShouldBeTrue();
+        deleted.Body.ShouldBeNull();
+        deleted.Mentions.ShouldBeEmpty();
+        deleted.CanEdit.ShouldBeFalse();
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_mentions WHERE message_id = @m", ("@m", message.Id))).ShouldBe(0);
+
+        // deleting it again changes nothing, and it can't be edited back
+        var again = await OkAsync<PortalChatMessageResponse>(AsClient(s.ClientToken, HttpMethod.Delete, $"{Mine(s.Project.Id)}/messages/{message.Id}"));
+        again.Deleted.ShouldBeTrue();
+        await (await AsClient(s.ClientToken, HttpMethod.Put, $"{Mine(s.Project.Id)}/messages/{message.Id}", new { body = "Back again", mentions = Array.Empty<string>() }))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalDiscussionClosed);
+
+        // the team sees it in its place without its text, and it's no longer new to them
+        var page = await OkAsync<PortalMessagePageResponse>(Client.GetAsync($"{Staff(s.Project.Id)}/messages", s.Staff.AccessToken));
+        page.Messages.Select(m => m.Id).ShouldBe([message.Id, kept.Id]);
+        page.Messages[0].Deleted.ShouldBeTrue();
+        page.Messages[0].Body.ShouldBeNull();
+        page.Messages[1].Body.ShouldBe("This one stays");
+        (await OkAsync<DiscussionSummaryResponse>(Client.GetAsync(Staff(s.Project.Id), s.Staff.AccessToken))).UnreadMessages.ShouldBe(1);
+
+        // a team message deleted before the client read it is never new to them
+        var withdrawn = await OkAsync<PortalChatMessageResponse>(Client.PostJsonAsync($"{Staff(s.Project.Id)}/messages", Message("Wrong chat"), s.Staff.AccessToken));
+        (await OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Get, Mine(s.Project.Id)))).UnreadMessages.ShouldBe(1);
+        (await OkAsync<PortalChatMessageResponse>(Client.DeleteAsync($"{Staff(s.Project.Id)}/messages/{withdrawn.Id}", s.Staff.AccessToken))).Deleted.ShouldBeTrue();
+        (await OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Get, Mine(s.Project.Id)))).UnreadMessages.ShouldBe(0);
+        (await OkAsync<PortalAccountResponse>(AsClient(s.ClientToken, HttpMethod.Get, "/api/portal/me"))).Projects.Single().Unread.ShouldBe(0);
+
+        // an archived project's chat can't change any more
+        (await Client.PostEmptyAsync($"/api/projects/{s.Project.Id}/complete", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.PostEmptyAsync($"/api/projects/{s.Project.Id}/archive", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await AsClient(s.ClientToken, HttpMethod.Delete, $"{Mine(s.Project.Id)}/messages/{kept.Id}"))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalDiscussionClosed);
+        page = await OkAsync<PortalMessagePageResponse>(AsClient(s.ClientToken, HttpMethod.Get, $"{Mine(s.Project.Id)}/messages"));
+        page.Messages.Single(m => m.Id == kept.Id).Deleted.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task An_archived_projects_discussion_can_be_read_but_not_written_and_a_completed_ones_works()
     {
         var s = await ProjectWithClientAsync();

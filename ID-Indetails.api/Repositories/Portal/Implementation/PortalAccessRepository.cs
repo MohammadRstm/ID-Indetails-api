@@ -77,9 +77,27 @@ public sealed class PortalAccessRepository(IdIndetailsDbContext db) : IPortalAcc
     public async Task<IReadOnlyList<PortalProjectSummary>> ProjectsOfAsync(long accountId, CancellationToken cancellationToken = default)
         => await db.PortalProjectAccess.AsNoTracking()
             .Where(a => a.AccountId == accountId && a.RevokedAt == null && a.Project.DomainCode == DomainCodes.Design)
-            .OrderBy(a => a.Project.Title)
-            .Select(a => new PortalProjectSummary(a.Project.Id, a.Project.Title, a.Project.Status))
+            .OrderByDescending(a => a.Project.StartDate).ThenByDescending(a => a.ProjectId)
+            .Select(a => new PortalProjectSummary(
+                a.Project.Id,
+                a.Project.Title,
+                a.Project.Status,
+                a.Project.StartDate,
+                a.LastOpenedAt,
+                db.PortalSettings.Where(s => s.ProjectId == a.ProjectId).Max(s => s.PublishedAt),
+                db.PortalMessages.Where(m => m.ProjectId == a.ProjectId && m.DeletedAt == null).Max(m => (DateTime?)m.CreatedAt),
+                db.PortalComments.Where(c => c.ProjectId == a.ProjectId && c.DeletedAt == null).Max(c => (DateTime?)c.CreatedAt),
+                db.PortalHeroImages
+                    .Where(h => h.ProjectId == a.ProjectId && h.IsPublished)
+                    .OrderBy(h => h.SortOrder).ThenBy(h => h.Id)
+                    .Select(h => (long?)h.FileId)
+                    .FirstOrDefault()))
             .ToListAsync(cancellationToken);
+
+    public Task MarkOpenedAsync(long accountId, long projectId, DateTime openedAt, CancellationToken cancellationToken = default)
+        => db.PortalProjectAccess
+            .Where(a => a.AccountId == accountId && a.ProjectId == projectId)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.LastOpenedAt, openedAt), cancellationToken);
 
     public void Add(PortalProjectAccess access) => db.PortalProjectAccess.Add(access);
 }

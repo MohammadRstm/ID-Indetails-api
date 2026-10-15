@@ -25,9 +25,24 @@ public sealed class PortalContentRepository(IdIndetailsDbContext db) : IPortalCo
                   join u in db.Users on s.PublishedById equals u.Id into publishers
                   from publisher in publishers.DefaultIfEmpty()
                   select new PortalSettingsView(
-                      s.HeroFileId, s.PublishedHeroFileId, s.Summary, s.PublishedSummary, s.Revision, s.PublishedAt, s.PublishedById,
+                      s.Summary, s.PublishedSummary, s.Revision, s.PublishedAt, s.PublishedById,
                       publisher == null ? null : (publisher.FirstName + " " + publisher.LastName).Trim()))
             .SingleOrDefaultAsync(cancellationToken) ?? PortalSettingsView.Empty;
+
+    public async Task<PortalHeroes> HeroesAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var rows = await db.PortalHeroImages.AsNoTracking()
+            .Where(h => h.ProjectId == projectId)
+            .OrderBy(h => h.SortOrder).ThenBy(h => h.Id)
+            .Select(h => new { h.FileId, h.IsPublished })
+            .ToListAsync(cancellationToken);
+        return new PortalHeroes(
+            rows.Where(r => !r.IsPublished).Select(r => r.FileId).ToList(),
+            rows.Where(r => r.IsPublished).Select(r => r.FileId).ToList());
+    }
+
+    public async Task<IReadOnlyList<PortalHeroImage>> HeroesToChangeAsync(long projectId, CancellationToken cancellationToken = default)
+        => await db.PortalHeroImages.Include(h => h.File).Where(h => h.ProjectId == projectId).ToListAsync(cancellationToken);
 
     public async Task<PortalSettings> LockSettingsAsync(long projectId, CancellationToken cancellationToken = default)
     {
@@ -56,6 +71,15 @@ public sealed class PortalContentRepository(IdIndetailsDbContext db) : IPortalCo
             .Select(f => new PortalFileView(
                 f.Id, f.StorageKey, f.OriginalName, f.ContentType, f.OriginalSizeBytes, f.StoredSizeBytes, f.CreatedAt, f.UploadedById, null))
             .SingleOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<PortalFileView>> FileViewsAsync(IReadOnlyCollection<long> fileIds, CancellationToken cancellationToken = default)
+        => fileIds.Count == 0
+            ? []
+            : await db.PortalFiles.AsNoTracking()
+                .Where(f => fileIds.Contains(f.Id))
+                .Select(f => new PortalFileView(
+                    f.Id, f.StorageKey, f.OriginalName, f.ContentType, f.OriginalSizeBytes, f.StoredSizeBytes, f.CreatedAt, f.UploadedById, null))
+                .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<PresentationRow>> PresentationAsync(long projectId, bool published, CancellationToken cancellationToken = default)
     {
@@ -97,7 +121,7 @@ public sealed class PortalContentRepository(IdIndetailsDbContext db) : IPortalCo
 
     public async Task<bool> IsReferencedAsync(long fileId, CancellationToken cancellationToken = default)
         => await db.PortalItems.AnyAsync(i => i.FileId == fileId || i.PublishedFileId == fileId, cancellationToken)
-            || await db.PortalSettings.AnyAsync(s => s.HeroFileId == fileId || s.PublishedHeroFileId == fileId, cancellationToken);
+            || await db.PortalHeroImages.AnyAsync(h => h.FileId == fileId, cancellationToken);
 
     private static PortalFileView View(PortalFile f)
         => new(f.Id, f.StorageKey, f.OriginalName, f.ContentType, f.OriginalSizeBytes, f.StoredSizeBytes, f.CreatedAt, f.UploadedById, null);
@@ -192,11 +216,15 @@ public sealed class PortalContentRepository(IdIndetailsDbContext db) : IPortalCo
 
     public void Add(PortalItem item) => db.PortalItems.Add(item);
 
+    public void Add(PortalHeroImage hero) => db.PortalHeroImages.Add(hero);
+
     public void Remove(PortalUpload upload) => db.PortalUploads.Remove(upload);
 
     public void Remove(PortalFile file) => db.PortalFiles.Remove(file);
 
     public void Remove(PortalItem item) => db.PortalItems.Remove(item);
+
+    public void Remove(PortalHeroImage hero) => db.PortalHeroImages.Remove(hero);
 
     private IQueryable<PortalItemView> Views(IQueryable<PortalItem> items)
         => from i in items.AsNoTracking()

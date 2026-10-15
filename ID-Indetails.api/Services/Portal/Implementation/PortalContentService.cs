@@ -65,7 +65,11 @@ public sealed class PortalContentService(
             return await StartedAgainAsync(projectId, existing, now, cancellationToken);
         }
 
-        if (!request.Hero && request.ReplaceItemId is { } replaceItemId)
+        if (request.Hero)
+        {
+            Throw(PortalPublishRules.CheckCanAddHero((await content.HeroesAsync(projectId, cancellationToken)).Draft.Count));
+        }
+        else if (request.ReplaceItemId is { } replaceItemId)
         {
             await RequireReplaceableAsync(access, replaceItemId, cancellationToken);
         }
@@ -266,6 +270,7 @@ public sealed class PortalContentService(
         {
             var settings = await content.LockSettingsAsync(projectId, cancellationToken);
             var items = (await content.ItemsToChangeAsync(projectId, cancellationToken)).ToList();
+            var heroes = await content.HeroesToChangeAsync(projectId, cancellationToken);
             var item = items.SingleOrDefault(i => i.Id == itemId) ?? throw new NotFoundException(ItemNotFound);
             RequireEdit(access, item.File.UploadedById);
             if (item.RemovedAt is not null)
@@ -298,7 +303,7 @@ public sealed class PortalContentService(
                 settings.Revision++;
             }
 
-            released = PortalReferences.Release(candidates, items, settings, now);
+            released = PortalReferences.Release(candidates, items, heroes, now);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -501,10 +506,10 @@ public sealed class PortalContentService(
     }
 
     /// <summary>
-    /// Adds the checked file to its section (not chosen for the client), swaps it in for the replaced item's, or makes it
-    /// the draft hero, in one transaction with the project's content locked. Returns the files nothing points at any
-    /// more, whose objects are deleted once this is saved. If the upload was cancelled in the meantime, nothing is added
-    /// and the object is removed.
+    /// Adds the checked file to its section (not chosen for the client), swaps it in for the replaced item's, or adds it
+    /// to the end of the draft hero images, in one transaction with the project's content locked. Returns the files
+    /// nothing points at any more, whose objects are deleted once this is saved. If the upload was cancelled in the
+    /// meantime, nothing is added and the object is removed.
     /// </summary>
     private async Task<IReadOnlyList<PortalFile>> AddToProjectAsync(
         long projectId, long uploadId, PortalContentRules.FileType type, long storedSize, CancellationToken cancellationToken)
@@ -524,6 +529,7 @@ public sealed class PortalContentService(
             if (upload.Status == PortalUploadStatus.Uploading)
             {
                 var items = await content.ItemsToChangeAsync(projectId, cancellationToken);
+                var heroes = (await content.HeroesToChangeAsync(projectId, cancellationToken)).ToList();
                 var file = new PortalFile
                 {
                     ProjectId = projectId,
@@ -541,14 +547,18 @@ public sealed class PortalContentService(
 
                 if (upload.IsHero)
                 {
-                    // the new file needs its id before the settings can point at it
-                    await unitOfWork.SaveChangesAsync(cancellationToken);
-                    if (settings.HeroFileId is { } oldHero)
+                    // at the end of the draft hero images, if another hasn't taken the last place since the upload started
+                    var drafts = heroes.Where(h => !h.IsPublished).ToList();
+                    Throw(PortalPublishRules.CheckCanAddHero(drafts.Count));
+                    var hero = new PortalHeroImage
                     {
-                        candidates.AddRange(await content.FilesAsync([oldHero], cancellationToken));
-                    }
-
-                    settings.HeroFileId = file.Id;
+                        ProjectId = projectId,
+                        File = file,
+                        SortOrder = PortalContentRules.NextSortOrder(drafts.Max(h => (int?)h.SortOrder)),
+                        IsPublished = false,
+                    };
+                    content.Add(hero);
+                    heroes.Add(hero);
                     clientRelevant = true;
                 }
                 else if (upload.ReplaceItemId is { } replaceItemId)
@@ -583,7 +593,7 @@ public sealed class PortalContentService(
                     settings.Revision++;
                 }
 
-                var released = PortalReferences.Release(candidates, items, settings, now);
+                var released = PortalReferences.Release(candidates, items, heroes, now);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return released;

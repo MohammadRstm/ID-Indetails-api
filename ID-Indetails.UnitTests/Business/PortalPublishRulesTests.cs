@@ -1,4 +1,6 @@
+using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Portal;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using Shouldly;
 
@@ -56,13 +58,13 @@ public class PortalPublishRulesTests
             Item(3, 2048, publishedTitle: "Old", forClient: false),  // no longer chosen: removed for clients
         };
 
-        var changes = PortalPublishRules.ChangesOf(items, null, null, null, null);
+        var changes = PortalPublishRules.ChangesOf(items, [], [], null, null);
 
         changes.Added.ShouldBe(0);
         changes.Updated.ShouldBe(0);
         changes.Removed.ShouldBe(1);
         changes.Reordered.ShouldBeEmpty();
-        PortalPublishRules.ChangesOf([Item(1, 1024), Item(2, 512, published: false, forClient: false)], null, null, null, null).Any.ShouldBeFalse();
+        PortalPublishRules.ChangesOf([Item(1, 1024), Item(2, 512, published: false, forClient: false)], [], [], null, null).Any.ShouldBeFalse();
     }
 
     [Fact]
@@ -109,7 +111,7 @@ public class PortalPublishRulesTests
     {
         var items = new[] { Item(1, 1024, published: false), Item(2, 2048, publishedTitle: "Old"), Item(3, 3072, removed: true), Item(4, 4096) };
 
-        var changes = PortalPublishRules.ChangesOf(items, heroFileId: 5, publishedHeroFileId: null, summary: "Hello", publishedSummary: "Hello");
+        var changes = PortalPublishRules.ChangesOf(items, heroFileIds: [5], publishedHeroFileIds: [], summary: "Hello", publishedSummary: "Hello");
 
         changes.Added.ShouldBe(1);
         changes.Updated.ShouldBe(1);
@@ -123,9 +125,31 @@ public class PortalPublishRulesTests
     [Fact]
     public void Nothing_to_publish_when_the_draft_is_what_clients_see()
     {
-        var changes = PortalPublishRules.ChangesOf([Item(1, 1024)], 5, 5, null, "");
+        var changes = PortalPublishRules.ChangesOf([Item(1, 1024)], [5, 6], [5, 6], null, "");
 
         changes.Any.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_hero_changed_when_the_draft_images_or_their_order_differ_from_the_published_ones()
+    {
+        PortalPublishRules.ChangesOf([], [5, 6], [5, 6], null, null).HeroChanged.ShouldBeFalse();
+        PortalPublishRules.ChangesOf([], [6, 5], [5, 6], null, null).HeroChanged.ShouldBeTrue();
+        PortalPublishRules.ChangesOf([], [5], [5, 6], null, null).HeroChanged.ShouldBeTrue();
+        PortalPublishRules.ChangesOf([], [5, 6, 7], [5, 6], null, null).HeroChanged.ShouldBeTrue();
+        PortalPublishRules.ChangesOf([], [], [5], null, null).Any.ShouldBeTrue();
+        PortalPublishRules.ChangesOf([], [], [], null, null).Any.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void There_are_at_most_twelve_hero_images()
+    {
+        PortalPublishRules.CheckCanAddHero(0).ShouldBeNull();
+        PortalPublishRules.CheckCanAddHero(11).ShouldBeNull();
+
+        var full = PortalPublishRules.CheckCanAddHero(12)!;
+        full.Kind.ShouldBe(DenialKind.BusinessRule);
+        full.Code.ShouldBe(ErrorCodes.PortalHeroLimit);
     }
 
     [Fact]
