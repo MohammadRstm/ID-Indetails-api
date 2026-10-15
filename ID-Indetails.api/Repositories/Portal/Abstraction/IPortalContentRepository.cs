@@ -4,7 +4,7 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Portal.Abstraction;
 
-/// <summary>Client portal content: uploads on their way, the files in the store, and the items that show them.</summary>
+/// <summary>A project's files and its client portal: uploads on their way, the files in the store, the items that show them, and the portal's settings.</summary>
 public interface IPortalContentRepository
 {
     Task<PortalContentProject?> GetProjectAsync(long projectId, CancellationToken cancellationToken = default);
@@ -30,8 +30,8 @@ public interface IPortalContentRepository
     Task<PortalFileView?> FileViewAsync(long fileId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// What a presentation shows: the draft (live items, by section and order) or the published copy (by published
-    /// section and order, removed items included until the next publish).
+    /// What a presentation shows: the draft (live items chosen for the client, by section and order) or the published
+    /// copy (by published section and order, removed items included until the next publish).
     /// </summary>
     Task<IReadOnlyList<PresentationRow>> PresentationAsync(long projectId, bool published, CancellationToken cancellationToken = default);
 

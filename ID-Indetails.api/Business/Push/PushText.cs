@@ -107,6 +107,10 @@ public static class PushText
                 : $"{Named(Text(payload, "authorName"), Someone)} commented on {Text(payload, "itemTitle") ?? "a file"} in {project}."),
             NotificationKinds.PortalMention => new("Mentioned", $"{Named(Text(payload, "authorName"), Someone)} mentioned you in {project}'s client portal."),
 
+            // the team's comments on project files: who and which file, never the text
+            NotificationKinds.ProjectFileComment => new("File comment",
+                $"{Named(Text(payload, "authorName"), actor)} commented on {Named(Text(payload, "fileTitle"), "a file")} in {project}."),
+
             _ => new("ID InDetails", "You have a new notification."),
         };
     }

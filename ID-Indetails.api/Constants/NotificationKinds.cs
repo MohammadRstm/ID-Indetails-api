@@ -131,4 +131,10 @@ public static class NotificationKinds
 
     /// <summary>Someone mentioned you in a client portal chat message or comment (subject type <c>message</c> or <c>comment</c>; once each).</summary>
     public const string PortalMention = "portal_mention";
+
+    /// <summary>
+    /// Someone commented on a project file (subject: the item; digest key <c>file_comments:{itemId}</c>). To the file's
+    /// uploader and its earlier commenters; never the text.
+    /// </summary>
+    public const string ProjectFileComment = "project_file_comment";
 }

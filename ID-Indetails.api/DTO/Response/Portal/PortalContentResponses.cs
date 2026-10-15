@@ -3,7 +3,7 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Portal;
 
-/// <summary>A project's client portal content, every section, as staff manage it. Everything is a draft for now.</summary>
+/// <summary>A project's client portal, every section, as staff arrange and publish it: the draft and how it differs from what clients see.</summary>
 public sealed record PortalContentResponse
 {
     public required long ProjectId { get; init; }
@@ -11,17 +11,24 @@ public sealed record PortalContentResponse
     /// <summary>False when no content store is configured: nothing can be uploaded or opened.</summary>
     public required bool StorageReady { get; init; }
 
-    /// <summary>False when the content can't change now (an archived project); it can still be viewed and downloaded.</summary>
+    /// <summary>The caller holds client_portal:manage: they arrange and publish the portal. Others see it read-only.</summary>
+    public required bool CanManage { get; init; }
+
+    /// <summary>False when the caller can't change it (<see cref="CanManage"/>), or nobody can now (an archived project); it can still be viewed and downloaded.</summary>
     public required bool CanEdit { get; init; }
 
     public required string? ReadOnlyReason { get; init; }
 
+    /// <summary>All of the project's files, not only the client's.</summary>
     public required PortalUsageResponse Usage { get; init; }
 
-    /// <summary>The extensions the client portal takes, lower case and without the dot.</summary>
+    /// <summary>The extensions taken, lower case and without the dot.</summary>
     public required IReadOnlyList<string> AcceptedExtensions { get; init; }
 
-    /// <summary>By section, then order. Removed items are included until the next publish.</summary>
+    /// <summary>
+    /// The client-relevant files (chosen for the client, or still published), by section, then order. Removed ones are
+    /// included until the next publish.
+    /// </summary>
     public required IReadOnlyList<PortalContentItemResponse> Items { get; init; }
 
     /// <summary>Moves on with every draft change; publishing and discarding send it back.</summary>
@@ -89,6 +96,9 @@ public sealed record PortalContentItemResponse
     public required DateTime UpdatedAt { get; init; }
 
     public required PersonRefResponse? UpdatedBy { get; init; }
+
+    /// <summary>Who uploaded the current file.</summary>
+    public required PersonRefResponse? UploadedBy { get; init; }
 }
 
 public sealed record PortalContentFileResponse
@@ -117,9 +127,6 @@ public sealed record PortalPartLinksResponse(IReadOnlyList<PortalPartLinkRespons
 
 /// <summary>PUT the part's raw bytes to <see cref="Url"/>, with no other header.</summary>
 public sealed record PortalPartLinkResponse(int PartNumber, string Url);
-
-/// <summary><see cref="Item"/> is null for a hero image, which belongs to no section.</summary>
-public sealed record PortalUploadCompletedResponse(PortalContentItemResponse? Item, PortalUsageResponse Usage);
 
 public sealed record PortalUsageChangedResponse(PortalUsageResponse Usage);
 

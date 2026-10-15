@@ -20,40 +20,61 @@ public sealed class PortalContentViews(
     ICurrentUser currentUser,
     IPermissionService permissions,
     IPortalContentRepository content,
+    IProjectFileCommentRepository comments,
     IContentStore store,
     IClock clock,
     IOptions<PortalContentOptions> options) : IPortalContentViews
 {
+    /// <summary>What anything needing the content store answers while none is configured (503).</summary>
+    public const string StoreMissing = "Client portal file storage isn't set up yet. Ask your administrator to configure it.";
+
     private static readonly PortalSection[] Sections = [PortalSection.Presentation, PortalSection.Model, PortalSection.Drawing];
 
     public async Task<PortalContentProject> VisibleProjectAsync(long projectId, CancellationToken cancellationToken = default)
     {
-        var actor = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ClientPortalManage);
-        var project = await content.GetProjectAsync(projectId, cancellationToken);
-        return project is not null && project.DomainCode == DomainCodes.Design && actor.CanSee(project.DomainCode)
-            ? project
-            : throw new NotFoundException("Project not found.");
+        var actor = (await AccessAsync(cancellationToken)).Require(PermissionCodes.ClientPortalManage, PermissionCodes.ClientAccessManage);
+        return await DesignProjectAsync(projectId, actor, cancellationToken);
+    }
+
+    public async Task<PortalContentProject> ManagedProjectAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var actor = (await AccessAsync(cancellationToken)).Require(PermissionCodes.ClientPortalManage);
+        return await DesignProjectAsync(projectId, actor, cancellationToken);
+    }
+
+    public async Task<ProjectFilesAccess> FilesAccessAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var actor = (await AccessAsync(cancellationToken)).Require(PermissionCodes.ProjectView);
+        var project = await DesignProjectAsync(projectId, actor, cancellationToken);
+        return new ProjectFilesAccess(
+            project, actor.UserId, actor.Has(PermissionCodes.ProjectFilesManage), actor.Has(PermissionCodes.ClientPortalManage));
     }
 
     public async Task<PortalContentResponse> ContentAsync(PortalContentProject project, CancellationToken cancellationToken = default)
     {
+        var canManage = (await AccessAsync(cancellationToken)).Has(PermissionCodes.ClientPortalManage);
         var items = await content.ItemsAsync(project.Id, cancellationToken);
         var settings = await content.SettingsAsync(project.Id, cancellationToken);
         var denial = PortalContentRules.CheckEditable(project.BillingType, project.ClientId, project.Status);
-        var canEdit = store.IsAvailable && denial is null;
+        var canEdit = canManage && store.IsAvailable && denial is null;
         var changes = PortalPublishRules.ChangesOf(
             items.Select(i => i.Copies).ToList(), settings.HeroFileId, settings.PublishedHeroFileId, settings.Summary, settings.PublishedSummary);
 
-        var described = new List<PortalContentItemResponse>(items.Count);
+        // the client portal shows the client-relevant files only; the others are the team's
+        var described = new List<PortalContentItemResponse>();
         foreach (var item in items)
         {
-            described.Add(await ItemAsync(item, settings.HeroFileId, cancellationToken));
+            if (PortalPublishRules.StateOf(item.Copies) is { } state)
+            {
+                described.Add(await ItemAsync(item, state, settings.HeroFileId, cancellationToken));
+            }
         }
 
         return new PortalContentResponse
         {
             ProjectId = project.Id,
             StorageReady = store.IsAvailable,
+            CanManage = canManage,
             CanEdit = canEdit,
             ReadOnlyReason = denial?.Message,
             Usage = Usage(await content.UsageAsync(project.Id, cancellationToken)),
@@ -73,39 +94,41 @@ public sealed class PortalContentViews(
         };
     }
 
-    public async Task<PortalContentItemResponse> ItemAsync(PortalItemView item, long? heroFileId, CancellationToken cancellationToken = default)
+    public async Task<ProjectFilesResponse> FilesAsync(ProjectFilesAccess access, CancellationToken cancellationToken = default)
     {
-        var preview = PortalContentRules.PreviewOf(item.File.ContentType);
-        var (previewUrl, previewExpiresAt) = await PreviewLinkAsync(item.File, preview, cancellationToken);
-        var state = PortalPublishRules.StateOf(item.Copies);
+        var project = access.Project;
+        var items = await content.ItemsAsync(project.Id, cancellationToken);
+        var heroFileId = (await content.SettingsAsync(project.Id, cancellationToken)).HeroFileId;
+        var counts = await comments.CountsAsync(project.Id, cancellationToken);
+        var denial = ProjectFileRules.CheckEditable(project.Status);
 
-        return new PortalContentItemResponse
+        var described = new List<ProjectFileResponse>(items.Count);
+        foreach (var item in items)
         {
-            Id = item.Id,
-            Section = item.Section,
-            Title = item.Title,
-            SortOrder = item.SortOrder,
-            IsDraft = state != PortalItemState.Unchanged,
-            State = state,
-            IsHero = heroFileId == item.File.Id,
-            CanBeHero = state != PortalItemState.Removed && PortalPublishRules.CanBeHero(item.File.ContentType),
-            File = new PortalContentFileResponse
-            {
-                Id = item.File.Id,
-                Name = item.File.OriginalName,
-                ContentType = item.File.ContentType,
-                Preview = preview,
-                OriginalBytes = item.File.OriginalSizeBytes,
-                StoredBytes = item.File.StoredSizeBytes,
-                UploadedAt = item.File.CreatedAt,
-                UploadedBy = item.File.UploadedByName is null ? null : new PersonRefResponse(item.File.UploadedById, item.File.UploadedByName),
-            },
-            PreviewUrl = previewUrl,
-            PreviewUrlExpiresAt = previewExpiresAt,
-            CreatedAt = item.CreatedAt,
-            UpdatedAt = item.UpdatedAt,
-            UpdatedBy = item.UpdatedByName is null ? null : new PersonRefResponse(item.UpdatedById, item.UpdatedByName),
+            described.Add(await FileAsync(access, item, heroFileId, counts.GetValueOrDefault(item.Id) ?? ProjectFileCommentCounts.None, cancellationToken));
+        }
+
+        return new ProjectFilesResponse
+        {
+            ProjectId = project.Id,
+            StorageReady = store.IsAvailable,
+            CanEdit = store.IsAvailable && denial is null,
+            ReadOnlyReason = denial?.Message,
+            CanManage = access.ManagesFiles,
+            CanChooseForClient = ProjectFileRules.CheckClientPortal(access) is null,
+            IsClientProject = PortalContentRules.CheckEligible(project.BillingType, project.ClientId) is null,
+            Usage = Usage(await content.UsageAsync(project.Id, cancellationToken)),
+            AcceptedExtensions = PortalContentRules.AcceptedExtensions,
+            Items = described,
         };
+    }
+
+    public async Task<ProjectFileResponse> FileAsync(ProjectFilesAccess access, long itemId, CancellationToken cancellationToken = default)
+    {
+        var item = await content.ItemViewAsync(access.Project.Id, itemId, cancellationToken) ?? throw new NotFoundException("File not found.");
+        var heroFileId = (await content.SettingsAsync(access.Project.Id, cancellationToken)).HeroFileId;
+        var counts = (await comments.CountsAsync(access.Project.Id, cancellationToken)).GetValueOrDefault(itemId) ?? ProjectFileCommentCounts.None;
+        return await FileAsync(access, item, heroFileId, counts, cancellationToken);
     }
 
     public async Task<PortalPresentationResponse> PresentationAsync(
@@ -160,6 +183,101 @@ public sealed class PortalContentViews(
             Sections = sections,
         };
     }
+
+    public async Task<PortalContentLinkResponse> LinkAsync(PortalFileView file, bool inline, CancellationToken cancellationToken = default)
+    {
+        if (!store.IsAvailable)
+        {
+            throw new ServiceUnavailableException(ErrorCodes.ContentStorageUnavailable, StoreMissing);
+        }
+
+        var showInline = inline && PortalContentRules.PreviewOf(file.ContentType) != PortalPreview.None;
+        var expiresAt = clock.UtcNow.AddMinutes(options.Value.DownloadLinkMinutes);
+        var url = await store.GetDownloadUrlAsync(file.StorageKey, file.OriginalName, file.ContentType, showInline, expiresAt, cancellationToken);
+        return new PortalContentLinkResponse(url, expiresAt);
+    }
+
+    private Task<UserAccess> AccessAsync(CancellationToken cancellationToken) => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+
+    /// <summary>The project, when it is a Design project the caller can see; anything else reads as not found.</summary>
+    private async Task<PortalContentProject> DesignProjectAsync(long projectId, UserAccess actor, CancellationToken cancellationToken)
+    {
+        var project = await content.GetProjectAsync(projectId, cancellationToken);
+        return project is not null && project.DomainCode == DomainCodes.Design && actor.CanSee(project.DomainCode)
+            ? project
+            : throw new NotFoundException("Project not found.");
+    }
+
+    private async Task<PortalContentItemResponse> ItemAsync(PortalItemView item, PortalItemState state, long? heroFileId, CancellationToken cancellationToken)
+    {
+        var preview = PortalContentRules.PreviewOf(item.File.ContentType);
+        var (previewUrl, previewExpiresAt) = await PreviewLinkAsync(item.File, preview, cancellationToken);
+
+        return new PortalContentItemResponse
+        {
+            Id = item.Id,
+            Section = item.Section,
+            Title = item.Title,
+            SortOrder = item.SortOrder,
+            IsDraft = state != PortalItemState.Unchanged,
+            State = state,
+            IsHero = heroFileId == item.File.Id,
+            CanBeHero = state != PortalItemState.Removed && PortalPublishRules.CanBeHero(item.File.ContentType),
+            File = FileResponse(item.File, preview),
+            PreviewUrl = previewUrl,
+            PreviewUrlExpiresAt = previewExpiresAt,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt,
+            UpdatedBy = item.UpdatedByName is null ? null : new PersonRefResponse(item.UpdatedById, item.UpdatedByName),
+            UploadedBy = Uploader(item.File),
+        };
+    }
+
+    private async Task<ProjectFileResponse> FileAsync(
+        ProjectFilesAccess access, PortalItemView item, long? heroFileId, ProjectFileCommentCounts counts, CancellationToken cancellationToken)
+    {
+        var preview = PortalContentRules.PreviewOf(item.File.ContentType);
+        var (previewUrl, previewExpiresAt) = await PreviewLinkAsync(item.File, preview, cancellationToken);
+        var removed = item.RemovedAt is not null;
+
+        return new ProjectFileResponse
+        {
+            Id = item.Id,
+            Section = item.Section,
+            Title = item.Title,
+            SortOrder = item.SortOrder,
+            ForClient = item.ForClient,
+            Removed = removed,
+            IsHero = heroFileId == item.File.Id,
+            CanBeHero = !removed && PortalPublishRules.CanBeHero(item.File.ContentType),
+            File = FileResponse(item.File, preview),
+            PreviewUrl = previewUrl,
+            PreviewUrlExpiresAt = previewExpiresAt,
+            CreatedAt = item.CreatedAt,
+            UpdatedAt = item.UpdatedAt,
+            UpdatedBy = item.UpdatedByName is null ? null : new PersonRefResponse(item.UpdatedById, item.UpdatedByName),
+            UploadedBy = Uploader(item.File),
+            CanEdit = ProjectFileRules.CheckEditable(access.Project.Status) is null && ProjectFileRules.CanEdit(access, item.File.UploadedById),
+            Comments = new ProjectFileCommentCountsResponse(counts.Total, counts.Open),
+            ClientState = PortalPublishRules.StateOf(item.Copies),
+        };
+    }
+
+    private static PortalContentFileResponse FileResponse(PortalFileView file, PortalPreview preview)
+        => new()
+        {
+            Id = file.Id,
+            Name = file.OriginalName,
+            ContentType = file.ContentType,
+            Preview = preview,
+            OriginalBytes = file.OriginalSizeBytes,
+            StoredBytes = file.StoredSizeBytes,
+            UploadedAt = file.CreatedAt,
+            UploadedBy = Uploader(file),
+        };
+
+    private static PersonRefResponse? Uploader(PortalFileView file)
+        => file.UploadedByName is null ? null : new PersonRefResponse(file.UploadedById, file.UploadedByName);
 
     private async Task<PortalHeroResponse?> HeroAsync(long fileId, CancellationToken cancellationToken)
     {

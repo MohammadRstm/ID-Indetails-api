@@ -9,8 +9,9 @@ public interface IPortalDiscussionRepository
     Task<DiscussionProject?> ProjectAsync(long projectId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Active staff who may take part: super admins, the project's manager, and whoever uploaded a portal file to it or
-    /// logged work on it. Whether the others can see the project's domain is for the caller to check.
+    /// Active staff who may take part: super admins, the project's manager, whoever uploaded the current file of an item
+    /// chosen for the client or published, and whoever logged work on it. Whether the others can see the project's domain
+    /// is for the caller to check.
     /// </summary>
     Task<IReadOnlyList<StaffCandidate>> StaffAsync(DiscussionProject project, CancellationToken cancellationToken = default);
 
