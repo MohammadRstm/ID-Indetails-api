@@ -49,7 +49,7 @@ public static class PermissionCatalog
         new(P.ClientManage, "Edit, archive, restore and delete clients"),
         new(P.ProjectFilesManage, "Manage anyone's project files and start comments on them", DomainCodes.Design),
         new(P.ClientAccessManage, "Invite clients to a project's client portal and end their access", DomainCodes.Design, Sensitivity: Access),
-        new(P.ClientPortalManage, "Upload and manage the files for a project's client portal", DomainCodes.Design),
+        new(P.ClientPortalManage, "Choose which project files a client sees, and publish the client portal", DomainCodes.Design),
 
         new(P.FinancialView, "See revenue, cost, profit, margin and rates", Sensitivity: Money),
         new(P.InvoiceCreate, "Create and edit draft invoices", Sensitivity: Money),
