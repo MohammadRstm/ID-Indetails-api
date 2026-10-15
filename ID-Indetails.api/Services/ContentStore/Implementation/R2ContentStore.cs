@@ -162,6 +162,8 @@ public sealed class R2ContentStore : IContentStore, IDisposable
             {
                 ContentType = contentType,
                 ContentDisposition = ContentDisposition(fileName, inline),
+                // the browser keeps what it loaded for as long as the link lasts at most
+                CacheControl = "private, max-age=3600",
             },
         });
 

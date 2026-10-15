@@ -229,7 +229,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPortalSessionService, PortalSessionService>();
         services.AddScoped<IPortalAuthService, PortalAuthService>();
         services.AddScoped<IPortalAccessService, PortalAccessService>();
+        services.AddScoped<IPortalContentViews, PortalContentViews>();
         services.AddScoped<IPortalContentService, PortalContentService>();
+        services.AddScoped<IPortalPublishingService, PortalPublishingService>();
+        services.AddScoped<IPortalPresentationService, PortalPresentationService>();
         services.AddScoped<IPortalContentMaintenance, PortalContentMaintenance>();
         services.AddHostedService<PortalContentCleanupJob>();
         services.AddScoped<IPermissionManagementService, PermissionManagementService>();

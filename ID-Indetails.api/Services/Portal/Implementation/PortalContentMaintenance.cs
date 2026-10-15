@@ -98,6 +98,31 @@ public sealed class PortalContentMaintenance(
             objects, unknown, unknownBytes, deleted, missing.Count, sizeDifferences);
     }
 
+    public async Task DeleteReleasedAsync(IReadOnlyList<PortalFile> files, CancellationToken cancellationToken = default)
+    {
+        foreach (var file in files)
+        {
+            await TryAsync(file.Id, async () =>
+            {
+                await store.DeleteAsync(file.StorageKey, cancellationToken);
+                content.Remove(file);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            });
+        }
+    }
+
+    public async Task RemoveUploadAsync(PortalUpload upload, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await RemoveFromStoreAsync(upload, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not remove ended upload {UploadId} from the content store; the cleanup will.", upload.Id);
+        }
+    }
+
     /// <summary>Uploads with no request for a day: their parts and any joined object are removed, and they're marked expired.</summary>
     private async Task<int> ExpireAbandonedUploadsAsync(CancellationToken cancellationToken)
     {
@@ -137,6 +162,15 @@ public sealed class PortalContentMaintenance(
         {
             await TryAsync(file.Id, async () =>
             {
+                // never an object something still shows: a file marked by mistake is kept and reported
+                if (await content.IsReferencedAsync(file.Id, cancellationToken))
+                {
+                    logger.LogError("Client portal file {FileId} was marked deleted but is still used; it is kept.", file.Id);
+                    file.DeletedAt = null;
+                    await unitOfWork.SaveChangesAsync(cancellationToken);
+                    return;
+                }
+
                 await store.DeleteAsync(file.StorageKey, cancellationToken);
                 content.Remove(file);
                 await unitOfWork.SaveChangesAsync(cancellationToken);

@@ -41,6 +41,7 @@ public static class ActivityEventKinds
     public const string PortalInvitationAccepted = "portal_invitation_accepted";
     public const string PortalAccessGranted = "portal_access_granted";
     public const string PortalAccessRevoked = "portal_access_revoked";
+    public const string PortalPublished = "portal_published";
 
     // Projects (subject: the project). Money goes in the amount columns, never the payload.
     public const string ProjectCreated = "project_created";

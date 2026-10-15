@@ -4,8 +4,10 @@ A Design project's client can follow the project in a client portal.
 - **Phase 1:** client accounts, invitations, the clients' own sign-in, and access per project.
 - **Phase 2:** staff prepare the portal's files (presentation, 3D, drawings) as drafts in a private content store. See
   [Content (Phase 2)](#content-phase-2).
+- **Phase 3:** the draft is arranged (order, hero image, introduction), previewed, and published project-wide; clients
+  see the published presentation. See [Publishing and the client's page (Phase 3)](#publishing-and-the-clients-page-phase-3).
 
-Publishing, the client's view of the files, comments, chat and notifications to clients come in later phases.
+Comments, chat and notifications to clients come in later phases.
 
 **Execution projects have no client portal.** Their endpoints answer 404, and the permission is limited to Design.
 
@@ -282,6 +284,84 @@ All of them are `Never` for Proton.
 | `JobsEnabled` | true | The hourly cleanup and weekly check (off in integration tests) |
 | `DeleteOrphans` | false | Whether the weekly check deletes objects no row knows about |
 | `OrphanGraceDays` | 7 | How old an unknown object must be before it counts |
+
+## Publishing and the client's page (Phase 3)
+
+Staff with `client_portal:manage` work on a **draft**; clients see the **published copy**, which only **Publish changes**
+replaces, all of it at once.
+
+### Draft and published copies
+- `portal_items` keeps both: the plain columns are the draft, `published_file_id`, `published_title`,
+  `published_section` and `published_sort_order` what clients see (all set or all null; null = never published).
+- `portal_settings` (one row per project) keeps the draft and published hero (`hero_file_id`, `published_hero_file_id`)
+  and introduction (`summary`, `published_summary`), the `revision`, and the last publication (`published_revision`,
+  `published_at`, `published_by_id`).
+- Uploads, renames, moves, new orders, hero and introduction changes touch the draft only. Each one takes the project's
+  content lock (the settings row, `SELECT ... FOR UPDATE`) and moves `revision` on.
+- An item's state: **new** (never published), **changed** (file, title or section differ), **unchanged**, or **removed**:
+  deleting a published item only sets `removed_at`; clients keep it until the next publish, and **restore** undoes it. A
+  never-published item is deleted at once, as in Phase 2.
+- Replacing a published file keeps the old one for clients until the next publish.
+
+### Publishing
+`POST .../content/publish { expectedRevision }`, in one transaction under the content lock:
+1. refused (409 `portal_revision_stale`) when the drafts moved on since the revision the person saw, and (422) on an
+   archived or non-client project;
+2. every item's draft is copied into its published columns, removed items are deleted, the hero and introduction are
+   copied, and the publication recorded;
+3. files nothing points at any more are let go (below), and one `portal_published` activity event is written: the hook
+   for client notifications later (none are sent now).
+
+Clients see the old version or the new one, never a mix: a failed publish rolls back and changes nothing. With nothing
+to publish it just answers the content.
+
+**Discard** (`POST .../discard { expectedRevision }`) puts the draft back to the published copy and deletes items never
+published. It needs a publication to go back to (422 `portal_never_published`).
+
+### Files are let go only when nothing uses them
+A file is marked deleted only when no item's draft or published copy and neither hero points at it, checked inside
+the change that drops the reference (`PortalReferences`). The cleanup checks again before deleting the object, and
+the restricting foreign keys refuse to delete a row still used. So the hero, kept by its file rather than by an item,
+survives its item being deleted or replaced.
+
+### Order and hero
+- `PUT .../sections/{section}/order { itemIds }` takes the section's current (not removed) items, each once; anything
+  else is 409 `portal_order_stale` (someone added, removed or moved a file). Drag and drop is within a section; moving
+  between sections stays the Phase 2 "Move to".
+- `PUT .../hero { itemId }` uses an image item's file; `DELETE .../hero` clears it; a hero can also be uploaded
+  (`POST .../uploads` with `hero: true`, no section). Only JPEG, PNG or WebP (400 `portal_hero_not_image`).
+- `PUT .../summary { summary }`: plain text, up to 2,000 characters.
+
+### Preview and the client's page
+- `GET .../content/preview` (staff) and `GET /api/portal/projects/{id}` (client) answer the same shape, built by the same
+  code (`PortalContentViews.PresentationAsync`): the draft for the preview, the published copy for the client. It holds
+  the project's title and status, the introduction, the hero and the three sections, and nothing about staff,
+  uploaders or storage.
+- `GET /api/portal/projects/{id}/items/{itemId}/link?inline=` gives a five-minute link to a **published** file.
+- A client gets anything only with live access to the Design project; every refusal (no access, access ended, another
+  project, an unpublished file) is the same 404. Before the first publish the page is empty (`isPublished: false`).
+- Completed projects stay published to their clients, and staff can still change and publish them. Archived projects
+  stay visible to clients but can't change or be published.
+- Signed image links carry `Cache-Control: private, max-age=3600`, so the browser keeps what it loaded while the link
+  lasts. There are no thumbnails: the original is loaded, lazily.
+
+### Endpoints added (staff, `client_portal:manage`)
+| Method and path | Purpose |
+|---|---|
+| `PUT .../content/sections/{section}/order` | New order of a section |
+| `PUT` / `DELETE .../content/hero` | Set or clear the draft hero |
+| `PUT .../content/summary` | The draft introduction |
+| `POST .../content/items/{itemId}/restore` | Undo a removal |
+| `POST .../content/publish` | Publish everything |
+| `POST .../content/discard` | Back to what clients see |
+| `GET .../content/preview` | The draft in the client's shape |
+
+All writes are `Never` for Proton. Client endpoints: `GET /api/portal/projects/{id}` and `GET .../items/{itemId}/link`.
+
+### Tables (migration `ClientPortalPublishing`)
+Adds the published columns and `removed_at` to `portal_items` (with a check that the published copy is whole, and an
+index for the client's page), the table `portal_settings`, and `is_hero` to `portal_uploads` (whose `section` becomes
+optional: a hero upload has none). Only adds; the rollback drops them.
 
 ## Known limits (later phases)
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a

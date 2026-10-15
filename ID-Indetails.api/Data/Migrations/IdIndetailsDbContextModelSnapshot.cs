@@ -2542,6 +2542,29 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("project_id");
 
+                    b.Property<long?>("PublishedFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("published_file_id");
+
+                    b.Property<string>("PublishedSection")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("published_section");
+
+                    b.Property<int?>("PublishedSortOrder")
+                        .HasColumnType("int")
+                        .HasColumnName("published_sort_order");
+
+                    b.Property<string>("PublishedTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("published_title");
+
+                    b.Property<DateTime?>("RemovedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("removed_at");
+
                     b.Property<string>("Section")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -2574,14 +2597,26 @@ namespace ID_Indetails.api.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_portal_items_file_id");
 
+                    b.HasIndex("PublishedFileId")
+                        .HasDatabaseName("ix_portal_items_published_file_id");
+
                     b.HasIndex("UpdatedById")
                         .HasDatabaseName("ix_portal_items_updated_by_id");
+
+                    b.HasIndex("ProjectId", "PublishedSection", "PublishedSortOrder")
+                        .HasDatabaseName("ix_portal_items_project_id_published_section_published_sort_ord");
 
                     b.HasIndex("ProjectId", "Section", "SortOrder")
                         .HasDatabaseName("ix_portal_items_project_id_section_sort_order");
 
                     b.ToTable("portal_items", null, t =>
                         {
+                            t.HasCheckConstraint("ck_portal_items_published_section", "`published_section` IN ('presentation', 'model', 'drawing')");
+
+                            t.HasCheckConstraint("ck_portal_items_published_whole", "(`published_file_id` IS NULL AND `published_title` IS NULL AND `published_section` IS NULL AND `published_sort_order` IS NULL) OR (`published_file_id` IS NOT NULL AND `published_title` IS NOT NULL AND `published_section` IS NOT NULL AND `published_sort_order` IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_portal_items_removed_is_published", "`removed_at` IS NULL OR `published_file_id` IS NOT NULL");
+
                             t.HasCheckConstraint("ck_portal_items_section", "`section` IN ('presentation', 'model', 'drawing')");
                         });
                 });
@@ -2756,6 +2791,65 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalSettings", b =>
+                {
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<long?>("HeroFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("hero_file_id");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("published_at");
+
+                    b.Property<long?>("PublishedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("published_by_id");
+
+                    b.Property<long?>("PublishedHeroFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("published_hero_file_id");
+
+                    b.Property<int?>("PublishedRevision")
+                        .HasColumnType("int")
+                        .HasColumnName("published_revision");
+
+                    b.Property<string>("PublishedSummary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("published_summary");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("int")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("summary");
+
+                    b.HasKey("ProjectId")
+                        .HasName("pk_portal_settings");
+
+                    b.HasIndex("HeroFileId")
+                        .HasDatabaseName("ix_portal_settings_hero_file_id");
+
+                    b.HasIndex("PublishedById")
+                        .HasDatabaseName("ix_portal_settings_published_by_id");
+
+                    b.HasIndex("PublishedHeroFileId")
+                        .HasDatabaseName("ix_portal_settings_published_hero_file_id");
+
+                    b.ToTable("portal_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_portal_settings_revision_non_negative", "`revision` >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalUpload", b =>
                 {
                     b.Property<long>("Id")
@@ -2786,6 +2880,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(255)")
                         .HasColumnName("file_name");
 
+                    b.Property<bool>("IsHero")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_hero");
+
                     b.Property<DateTime>("LastActivityAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
@@ -2800,7 +2898,6 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnName("replace_item_id");
 
                     b.Property<string>("Section")
-                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)")
                         .HasColumnName("section");
@@ -2849,6 +2946,8 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("portal_uploads", null, t =>
                         {
+                            t.HasCheckConstraint("ck_portal_uploads_hero_or_section", "(`is_hero` = 1 AND `section` IS NULL AND `replace_item_id` IS NULL) OR (`is_hero` = 0 AND `section` IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_portal_uploads_section", "`section` IN ('presentation', 'model', 'drawing')");
 
                             t.HasCheckConstraint("ck_portal_uploads_size_positive", "`size_bytes` > 0");
@@ -6053,6 +6152,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_portal_items_projects_project_id");
 
+                    b.HasOne("ID_Indetails.api.Models.PortalFile", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_items_portal_files_published_file_id");
+
                     b.HasOne("ID_Indetails.api.Models.User", null)
                         .WithMany()
                         .HasForeignKey("UpdatedById")
@@ -6123,6 +6228,34 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("ReplacedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_portal_refresh_tokens_portal_refresh_tokens_replaced_by_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PortalSettings", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.PortalFile", null)
+                        .WithMany()
+                        .HasForeignKey("HeroFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_settings_portal_files_hero_file_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithOne()
+                        .HasForeignKey("ID_Indetails.api.Models.PortalSettings", "ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_portal_settings_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_settings_users_published_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.PortalFile", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedHeroFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_portal_settings_portal_files_published_hero_file_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.PortalUpload", b =>
