@@ -39,6 +39,11 @@ public sealed class PortalDiscussionController(IPortalDiscussionService discussi
     public Task<PortalChatMessageResponse> EditMessage(long projectId, long messageId, PortalEditRequest request, CancellationToken cancellationToken)
         => discussion.EditMessageAsync(Side, projectId, messageId, request, cancellationToken);
 
+    [HttpDelete("messages/{messageId:long}")]
+    [EnableRateLimiting(RateLimitPolicies.PortalWrite)]
+    public Task<PortalChatMessageResponse> DeleteMessage(long projectId, long messageId, CancellationToken cancellationToken)
+        => discussion.DeleteMessageAsync(Side, projectId, messageId, cancellationToken);
+
     [HttpGet("comments/{itemId:long}")]
     public Task<PortalCommentThreadResponse> Thread(long projectId, long itemId, CancellationToken cancellationToken)
         => discussion.ThreadAsync(Side, projectId, itemId, cancellationToken);

@@ -2,9 +2,10 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Business.Portal;
 
-/// <summary>A chat message as the discussion shows it, with its author's name.</summary>
+/// <summary>A chat message as the discussion shows it, with its author's name. A deleted one has no text.</summary>
 public sealed record DiscussionMessageRow(
-    long Id, long? AuthorUserId, long? AuthorAccountId, string AuthorName, string Body, DateTime CreatedAt, DateTime? EditedAt)
+    long Id, long? AuthorUserId, long? AuthorAccountId, string AuthorName, string? Body, DateTime CreatedAt, DateTime? EditedAt,
+    DateTime? DeletedAt)
 {
     public DiscussionPerson Author => DiscussionRows.Author(AuthorUserId, AuthorAccountId, AuthorName);
 }

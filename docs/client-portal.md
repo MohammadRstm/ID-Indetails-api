@@ -421,8 +421,11 @@ member, or moving them to Execution takes them out at once.
 - Plain text only (rendered escaped by the client), up to 4,000 characters in the chat and 2,000 in a comment.
 - Each message or comment carries a **client token** made by the browser: sending it again returns the first one and
   notifies nobody twice (unique per author and token).
-- **Authors can edit** their messages and comments (shown "edited"; the earlier wording isn't kept) and **delete their
-  own comments** (the comment keeps its place without its text). Chat messages aren't deleted.
+- **Authors can edit** their messages and comments (shown "edited"; the earlier wording isn't kept) and **delete**
+  them for everyone: a deleted message or comment keeps its place without its text and mentions (`body` null,
+  `deleted: true`), can't be edited, and is never unread. Deleting again changes nothing. Only the author may (403
+  otherwise), and not on an archived project (422 `portal_discussion_closed`); editing a deleted one is 422
+  `portal_discussion_closed` too.
 - **Comments are on published files only.** Each keeps the item and file it was written about and their names. When the
   file is replaced and republished, older comments read "on an earlier version"; when the file is unpublished, its
   thread stays readable, closed, and is never attached to another file. Drafts can't be commented on or found.
@@ -465,7 +468,7 @@ Staff: `/api/projects/{id}/portal/discussion`; clients: `/api/portal/projects/{i
 |---|---|
 | `GET {base}` | Summary: whether it can be written in, unread counts, participants (for mentions), comment threads |
 | `GET {base}/messages?before=&limit=` | A page of the chat, oldest first (newest page without `before`) |
-| `POST {base}/messages` / `PUT {base}/messages/{id}` | Send / edit a message |
+| `POST {base}/messages` / `PUT` / `DELETE {base}/messages/{id}` | Send / edit / delete a message (for everyone) |
 | `GET {base}/comments/{itemId}` | A file's thread |
 | `POST {base}/comments` / `PUT` / `DELETE {base}/comments/{id}` | Comment / edit / delete |
 | `POST {base}/read` | Move the read markers |
@@ -475,8 +478,9 @@ All writes are `Never` for Proton.
 
 ### Tables (migration `ClientPortalDiscussion`)
 - `portal_messages`, `portal_comments`: author (a user or a portal account, exactly one), text, client token (unique per
-  author), `edited_at`; comments also the item and file ids (plain columns, not foreign keys: items are unpublished and
-  files replaced later), the item's title and file name, `deleted_at`.
+  author), `edited_at`, `deleted_at` (a check that only a deleted one has no text; messages since migration
+  `PortalUx`); comments also the item and file ids (plain columns, not foreign keys: items are unpublished and files
+  replaced later), the item's title and file name.
 - `portal_mentions`: a message or a comment, and a user or an account (exactly one each).
 - `portal_reads`: one chat marker per person and project.
 - `portal_comment_reads`: one comment marker per person and file (the item id, a plain column as on the comments).

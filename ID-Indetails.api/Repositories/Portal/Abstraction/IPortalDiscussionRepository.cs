@@ -34,7 +34,7 @@ public interface IPortalDiscussionRepository
     /// <summary>The newest comment on a file of the project, deleted ones included.</summary>
     Task<long?> NewestCommentIdAsync(long projectId, long itemId, CancellationToken cancellationToken = default);
 
-    /// <summary>Messages after <paramref name="after"/> not written by <paramref name="reader"/>.</summary>
+    /// <summary>Messages after <paramref name="after"/> not written by <paramref name="reader"/> nor deleted.</summary>
     Task<int> UnreadMessagesAsync(long projectId, long? after, DiscussionPerson reader, CancellationToken cancellationToken = default);
 
     /// <summary>A file's comments (or every comment of the project), oldest first, deleted ones included.</summary>
@@ -72,7 +72,7 @@ public interface IPortalDiscussionRepository
     /// <summary>The reader's marker on a file's comments, if any. Tracked.</summary>
     Task<PortalCommentRead?> GetCommentReadAsync(long projectId, long itemId, DiscussionPerson reader, CancellationToken cancellationToken = default);
 
-    /// <summary>Unread chat messages and comments on each project, for a client.</summary>
+    /// <summary>Unread chat messages and comments on each project, for a client; deleted ones are never unread.</summary>
     Task<IReadOnlyDictionary<long, int>> UnreadForClientAsync(long accountId, IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -38,7 +38,11 @@ public sealed record PortalChatMessageResponse
 
     public required DiscussionPersonResponse Author { get; init; }
 
-    public required string Body { get; init; }
+    /// <summary>Null once deleted.</summary>
+    public required string? Body { get; init; }
+
+    /// <summary>Deleted for everyone by its author: it keeps its place without its text or mentions.</summary>
+    public required bool Deleted { get; init; }
 
     public required IReadOnlyList<string> Mentions { get; init; }
 
@@ -46,6 +50,7 @@ public sealed record PortalChatMessageResponse
 
     public required DateTime? EditedAt { get; init; }
 
+    /// <summary>The caller's own message, not deleted, in a discussion that can be written in: it can be edited or deleted.</summary>
     public required bool CanEdit { get; init; }
 }
 

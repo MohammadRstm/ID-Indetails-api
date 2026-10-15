@@ -107,6 +107,8 @@ public class DatabaseModelTests
         CheckNames<Conversation>().ShouldContain("ck_conversations_shape");
         CheckNames<LabourWeek>().ShouldContain("ck_labour_weeks_starts_on_monday");
         CheckNames<ProjectFileComment>().ShouldContain("ck_project_file_comments_fixed");
+        CheckNames<PortalComment>().ShouldContain("ck_portal_comments_body_unless_deleted");
+        CheckNames<PortalMessage>().ShouldContain("ck_portal_messages_body_unless_deleted");
     }
 
     [Fact]

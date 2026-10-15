@@ -102,11 +102,7 @@ public sealed class PortalDiscussionService(
     {
         var room = await OpenAsync(side, projectId, cancellationToken);
         Throw(PortalDiscussionRules.CheckWritable(room.Project.Status));
-        var message = await discussion.GetMessageAsync(projectId, messageId, cancellationToken) ?? throw new NotFoundException(NotAvailable);
-        if (!IsAuthor(message.AuthorUserId, message.AuthorAccountId, room.Me))
-        {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "Only its author can change a message.");
-        }
+        var message = await OwnMessageAsync(room, messageId, cancellationToken);
 
         var mentioned = Mentioned(request.Mentions, room);
         // a client's mention is written at once: the edit commits with it or not at all
@@ -119,6 +115,28 @@ public sealed class PortalDiscussionService(
             Signal(room);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+        }
+
+        return await MessageAsync(room, messageId, cancellationToken);
+    }
+
+    public async Task<PortalChatMessageResponse> DeleteMessageAsync(
+        DiscussionSide side, long projectId, long messageId, CancellationToken cancellationToken = default)
+    {
+        var room = await OpenAsync(side, projectId, cancellationToken);
+        Throw(PortalDiscussionRules.CheckWritable(room.Project.Status));
+        var message = await OwnMessageAsync(room, messageId, cancellationToken, allowDeleted: true);
+        if (message.DeletedAt is null)
+        {
+            message.Body = null;
+            message.DeletedAt = clock.UtcNow;
+            foreach (var mention in await discussion.MentionsAsync(messageId, null, cancellationToken))
+            {
+                discussion.Remove(mention);
+            }
+
+            Signal(room);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
         return await MessageAsync(room, messageId, cancellationToken);
@@ -430,6 +448,20 @@ public sealed class PortalDiscussionService(
         return Describe(room, row, mentions[commentId], shown);
     }
 
+    /// <summary>The caller's own message in this project; someone else's can't be changed, nor a deleted one edited.</summary>
+    private async Task<PortalMessage> OwnMessageAsync(Room room, long messageId, CancellationToken cancellationToken, bool allowDeleted = false)
+    {
+        var message = await discussion.GetMessageAsync(room.Project.Id, messageId, cancellationToken) ?? throw new NotFoundException(NotAvailable);
+        if (!IsAuthor(message.AuthorUserId, message.AuthorAccountId, room.Me))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Only its author can change a message.");
+        }
+
+        return message.DeletedAt is null || allowDeleted
+            ? message
+            : throw new BusinessRuleException(ErrorCodes.PortalDiscussionClosed, "This message was deleted.");
+    }
+
     /// <summary>The caller's own comment in this project; someone else's can't be changed.</summary>
     private async Task<PortalComment> OwnCommentAsync(Room room, long commentId, CancellationToken cancellationToken, bool allowDeleted = false)
     {
@@ -594,16 +626,20 @@ public sealed class PortalDiscussionService(
         => new { projectTitle = room.Project.Title, authorName = room.Me.Name, itemTitle = what.ItemTitle };
 
     private PortalChatMessageResponse Describe(Room room, DiscussionMessageRow row, IEnumerable<string> mentions)
-        => new()
+    {
+        var deleted = row.DeletedAt is not null;
+        return new PortalChatMessageResponse
         {
             Id = row.Id,
             Author = Person(row.Author, room.Me),
             Body = row.Body,
-            Mentions = mentions.ToList(),
+            Deleted = deleted,
+            Mentions = deleted ? [] : mentions.ToList(),
             CreatedAt = row.CreatedAt,
             EditedAt = row.EditedAt,
-            CanEdit = room.CanWrite && row.Author.Key == room.Me.Key,
+            CanEdit = room.CanWrite && !deleted && row.Author.Key == room.Me.Key,
         };
+    }
 
     private PortalCommentResponse Describe(Room room, DiscussionCommentRow row, IEnumerable<string> mentions, PublishedItemFacts? shown)
     {

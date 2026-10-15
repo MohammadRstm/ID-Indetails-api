@@ -79,7 +79,7 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
     public Task<int> UnreadMessagesAsync(long projectId, long? after, DiscussionPerson reader, CancellationToken cancellationToken = default)
     {
         var from = after ?? 0;
-        var messages = db.PortalMessages.Where(m => m.ProjectId == projectId && m.Id > from);
+        var messages = db.PortalMessages.Where(m => m.ProjectId == projectId && m.Id > from && m.DeletedAt == null);
         messages = reader.Side == DiscussionSide.Staff
             ? messages.Where(m => m.AuthorUserId == null || m.AuthorUserId != reader.Id)
             : messages.Where(m => m.AuthorAccountId == null || m.AuthorAccountId != reader.Id);
@@ -198,7 +198,9 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
                 .Select(r => r.LastMessageId)
                 .SingleOrDefaultAsync(cancellationToken) ?? 0;
             var messages = await db.PortalMessages.CountAsync(
-                m => m.ProjectId == projectId && m.Id > afterMessage && (m.AuthorAccountId == null || m.AuthorAccountId != accountId), cancellationToken);
+                m => m.ProjectId == projectId && m.Id > afterMessage && m.DeletedAt == null
+                    && (m.AuthorAccountId == null || m.AuthorAccountId != accountId),
+                cancellationToken);
             // a comment is unread until the client's marker on its own file reaches it
             var comments = await db.PortalComments.CountAsync(
                 c => c.ProjectId == projectId && c.DeletedAt == null && (c.AuthorAccountId == null || c.AuthorAccountId != accountId)
@@ -296,7 +298,7 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
                           from a in accounts.DefaultIfEmpty()
                           select new
                           {
-                              m.Id, m.AuthorUserId, m.AuthorAccountId, m.Body, m.CreatedAt, m.EditedAt,
+                              m.Id, m.AuthorUserId, m.AuthorAccountId, m.Body, m.CreatedAt, m.EditedAt, m.DeletedAt,
                               UserFirst = u == null ? null : u.FirstName, UserLast = u == null ? null : u.LastName, UserEmail = u == null ? null : u.Email,
                               ClientFirst = a == null ? null : a.FirstName, ClientLast = a == null ? null : a.LastName, ClientEmail = a == null ? null : a.Email,
                           })
@@ -304,7 +306,7 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
         return rows.Select(r => new DiscussionMessageRow(
                 r.Id, r.AuthorUserId, r.AuthorAccountId,
                 r.AuthorUserId is not null ? Name(r.UserFirst, r.UserLast, r.UserEmail) : Name(r.ClientFirst, r.ClientLast, r.ClientEmail),
-                r.Body, r.CreatedAt, r.EditedAt))
+                r.Body, r.CreatedAt, r.EditedAt, r.DeletedAt))
             .ToList();
     }
 
