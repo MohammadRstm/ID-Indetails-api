@@ -14,7 +14,7 @@ The catalogue is seeded into `permissions` and `role_permissions`. Role defaults
 | Role | Defaults |
 |---|---|
 | Super admin | Every permission, in both domains and at company level, except logging their own hours |
-| Admin | Everything except the company permissions (`company:view`, `overhead:manage`, `salary:view`, `company_settings:manage`, `working_time:manage`, `schedule:manage`, `hours:excuse`, `employee:invite_super_admin`, `permission:manage`, `exchange_rate:manage`, `overhead_category:manage`, `session:manage`, `employee:change_email`, `proton_budget:manage`), money and hiring (`financial:view`, `invoice:create`, `invoice:send`, `invoice:void`, `payment:record`, `payment:void`, `billing_settings:manage`, `expense:manage`, `project:pricing_manage`, `statement:create`, `statement:send`, `employee:invite`, `employee:pay_manage`), and logging their own hours. They run their domain's projects, clients, requirements, materials, labour and people without seeing any money; a super admin can grant any of these to one admin by hand |
+| Admin | Everything except the company permissions (`company:view`, `overhead:manage`, `salary:view`, `company_settings:manage`, `working_time:manage`, `schedule:manage`, `hours:excuse`, `employee:invite_super_admin`, `permission:manage`, `exchange_rate:manage`, `overhead_category:manage`, `session:manage`, `employee:change_email`, `proton_budget:manage`), money and hiring (`financial:view`, `invoice:create`, `invoice:send`, `invoice:void`, `payment:record`, `payment:void`, `billing_settings:manage`, `expense:manage`, `project:pricing_manage`, `statement:create`, `statement:send`, `employee:invite`, `employee:pay_manage`), choosing and publishing what clients see (`client_portal:manage`), and logging their own hours. They run their domain's projects, clients, requirements, project files, materials, labour and people without seeing any money; a super admin can grant any of these to one admin by hand |
 | Employee | `project:view`, `requirement:view`, `requirement:complete_own`, `meeting:create`, `work_entry:create`, `work_entry:view_own`, `material:create`, `labour_report:create` |
 
 A permission limited to a domain (for example `material:create` for Execution) is only part of a role's defaults for people of that domain.
@@ -102,5 +102,13 @@ The cache is in-process. Running more than one API instance would need a shared 
 
 Client portal endpoints (`/api/portal/*`) use their own token scheme and the `Portal` policy; staff permissions never
 apply to them, and client tokens never pass a staff endpoint. Inviting clients and ending their access needs
-`client_access:manage` (Design only); preparing the portal's files needs `client_portal:manage` (Design only). See
-[client-portal.md](client-portal.md).
+`client_access:manage` (Design only), which also shows the client portal and its preview. Choosing which project files
+the client sees, the hero, the introduction and publishing need `client_portal:manage` (Design only; super admins by
+default). See [client-portal.md](client-portal.md).
+
+## Project files
+
+Every Design project's files are open to anyone with `project:view` who can see Design: they see them, add more and
+reply to comments. Changing a file is for whoever uploaded its current file, or for holders of `project_files:manage`
+(Design only; admins and super admins by default), who also reorder sections and start a file's comments. See
+[client-portal.md](client-portal.md#project-files).

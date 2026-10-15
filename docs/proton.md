@@ -57,12 +57,12 @@ POST /api/proton/messages
   - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
-  170 write endpoints:
+  175 write endpoints:
   - a built action (73);
   - a prefilled form (2), or a place opened for the user (25);
-  - a read-only POST (3), never (57: passwords, tokens, the phone app's own sign-in, devices and push settings, and the
-    client portal's invitations, clients' own sign-in, its files, publishing and discussion among them), or Proton's own
-    controls (10).
+  - a read-only POST (3), never (62: passwords, tokens, the phone app's own sign-in, devices and push settings, a
+    project's files and their comments, and the client portal's invitations, clients' own sign-in, publishing and
+    discussion among them), or Proton's own controls (10).
 
   `ProtonCoverageTests` fails when an endpoint has no entry, when an action and its tool disagree, when an action
   needing a money, pay, access or company-rules permission isn't confirmed strongly in the matching family, when a

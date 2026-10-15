@@ -66,6 +66,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `portal_client_message` | Staff taking part in a project's client portal discussion, when a client writes in its chat. Rolling per project (`portal_chat:{projectId}`) | — | `projectTitle`, `authorName` (never the text) |
 | `portal_client_comment` | The project's manager and the file's uploader (everyone taking part on the staff side when neither does), when a client comments on a file. Rolling per file (`portal_comments:{itemId}`) | the item | `projectTitle`, `authorName`, `itemTitle` |
 | `portal_mention` | Staff mentioned in a client portal message or comment, once each (`portal_mention:m{id}` / `c{id}`) | `message` or `comment` (subject id: the item, for comments) | `projectTitle`, `authorName`, `itemTitle` |
+| `project_file_comment` | The file's uploader and everyone who commented on it before, never the author, when someone comments on a project file. Rolling per file (`file_comments:{itemId}`, counting again from 1 once read). Push: Messages, "File comment" | the item | `projectTitle`, `fileTitle`, `authorName` (never the text) |
 | `project_closed` | Holders of `financial:view`, when a client project with revenue is finalised (completed, or archived without being completed). Each finalisation sends it: a project reopened and completed again reports its new margin | the project | `projectTitle`, `marginPct` (the final margin as a percentage, one decimal; never an amount) |
 
 ## Scheduled notifications
@@ -133,7 +134,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
 | `money` | the `invoice_*` kinds, `payment_recorded`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |
-| `messages` | `message` (mentions and direct messages included) |
+| `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 
 `log_reminder` has no category, so it can't be muted. Each person chooses their own quiet hours and muted categories ([me.md](me.md#my-notification-settings)); until they do, quiet hours are 22:00 to 07:00 in the company's time zone and nothing is muted. A push during quiet hours is still delivered, without sound, on the `quiet` channel (passive on iOS); nothing waits on the server.
 
