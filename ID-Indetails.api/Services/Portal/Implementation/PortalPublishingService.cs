@@ -17,10 +17,12 @@ using ID_Indetails.api.Services.Portal.Abstraction;
 namespace ID_Indetails.api.Services.Portal.Implementation;
 
 /// <summary>
-/// The draft and the published copy of a project's client portal. Every change takes the project's content lock and
-/// moves the revision on. Publishing copies the whole draft (items, order, hero, introduction) into the published
-/// columns in one transaction: clients see the old version or the new one, never a mix, and a publish naming an older
-/// revision than the current one is refused rather than publishing what the person didn't see.
+/// The draft and the published copy of a project's client portal: the files chosen for the client (chosen in Project
+/// files), the hero and the introduction. Holders of client_portal:manage or client_access:manage look at it; only
+/// client_portal:manage changes it. Every change takes the project's content lock and moves the revision on.
+/// Publishing copies the chosen files' drafts, the hero and the introduction into the published columns in one
+/// transaction: clients see the old version or the new one, never a mix, and a publish naming an older revision than
+/// the current one is refused rather than publishing what the person didn't see.
 /// </summary>
 public sealed class PortalPublishingService(
     ICurrentUser currentUser,
@@ -33,25 +35,21 @@ public sealed class PortalPublishingService(
 {
     private const string ItemNotFound = "File not found.";
 
-    public Task<PortalContentResponse> ReorderAsync(
-        long projectId, PortalSection section, PortalOrderRequest request, CancellationToken cancellationToken = default)
-        => ChangeAsync(projectId, (settings, items, _) =>
+    public async Task<PortalContentResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)
+        => await views.ContentAsync(await views.VisibleProjectAsync(projectId, cancellationToken), cancellationToken);
+
+    public async Task<PortalContentLinkResponse> LinkAsync(long projectId, long itemId, bool inline, CancellationToken cancellationToken = default)
+    {
+        await views.VisibleProjectAsync(projectId, cancellationToken);
+        var item = await content.ItemViewAsync(projectId, itemId, cancellationToken);
+        if (item is null || !PortalPublishRules.IsClientRelevant(item.ForClient, item.PublishedFileId))
         {
-            var current = items.Where(i => i.RemovedAt is null && i.Section == section).ToDictionary(i => i.Id);
-            if (!PortalPublishRules.IsWholeOrder(current.Keys, request.ItemIds))
-            {
-                throw new ConflictException(
-                    ErrorCodes.PortalOrderStale,
-                    "This section changed since you looked: a file was added, removed or moved. Your new order wasn't saved.");
-            }
+            // the team's own files are reached through Project files
+            throw new NotFoundException(ItemNotFound);
+        }
 
-            for (var index = 0; index < request.ItemIds.Count; index++)
-            {
-                current[request.ItemIds[index]].SortOrder = PortalPublishRules.SortOrderAt(index);
-            }
-
-            return Task.FromResult<IEnumerable<PortalFile>>([]);
-        }, cancellationToken);
+        return await views.LinkAsync(item.File, inline, cancellationToken);
+    }
 
     public Task<PortalContentResponse> SetHeroAsync(long projectId, PortalHeroRequest request, CancellationToken cancellationToken = default)
         => ChangeAsync(projectId, async (settings, items, _) =>
@@ -82,16 +80,6 @@ public sealed class PortalPublishingService(
             return Task.FromResult<IEnumerable<PortalFile>>([]);
         }, cancellationToken);
 
-    public Task<PortalContentResponse> RestoreAsync(long projectId, long itemId, CancellationToken cancellationToken = default)
-        => ChangeAsync(projectId, (_, items, _) =>
-        {
-            var item = items.SingleOrDefault(i => i.Id == itemId) ?? throw new NotFoundException(ItemNotFound);
-            item.RemovedAt = null;
-            item.UpdatedAt = clock.UtcNow;
-            item.UpdatedById = currentUser.Id;
-            return Task.FromResult<IEnumerable<PortalFile>>([]);
-        }, cancellationToken);
-
     public async Task<PortalContentResponse> PublishAsync(long projectId, PortalRevisionRequest request, CancellationToken cancellationToken = default)
     {
         var project = await EditableProjectAsync(projectId, cancellationToken);
@@ -115,6 +103,7 @@ public sealed class PortalPublishingService(
             var oldPublished = await content.FilesAsync(items.Where(i => i.PublishedFileId is { } p && p != i.FileId).Select(i => i.PublishedFileId!.Value), cancellationToken);
             candidates.AddRange(oldPublished);
 
+            // deleted from Project files: gone for clients too now
             foreach (var item in items.Where(i => i.RemovedAt is not null).ToList())
             {
                 cancelled.AddRange(await StopReplacementsAsync(item.Id, now, cancellationToken));
@@ -125,10 +114,21 @@ public sealed class PortalPublishingService(
 
             foreach (var item in items)
             {
-                item.PublishedFileId = item.FileId;
-                item.PublishedTitle = item.Title;
-                item.PublishedSection = item.Section;
-                item.PublishedSortOrder = item.SortOrder;
+                if (item.ForClient)
+                {
+                    item.PublishedFileId = item.FileId;
+                    item.PublishedTitle = item.Title;
+                    item.PublishedSection = item.Section;
+                    item.PublishedSortOrder = item.SortOrder;
+                }
+                else if (item.PublishedFileId is not null)
+                {
+                    // no longer chosen: clients stop seeing it, and it stays one of the project's files
+                    item.PublishedFileId = null;
+                    item.PublishedTitle = null;
+                    item.PublishedSection = null;
+                    item.PublishedSortOrder = null;
+                }
             }
 
             if (settings.PublishedHeroFileId != settings.HeroFileId)
@@ -159,15 +159,24 @@ public sealed class PortalPublishingService(
             await transaction.CommitAsync(cancellationToken);
         }
 
-        await AfterAsync(cancelled, released, cancellationToken);
+        foreach (var upload in cancelled)
+        {
+            await maintenance.RemoveUploadAsync(upload, cancellationToken);
+        }
+
+        await maintenance.DeleteReleasedAsync(released, cancellationToken);
         return await views.ContentAsync(project, cancellationToken);
     }
 
+    /// <summary>
+    /// Only the client's side goes back: each file is chosen again exactly when clients see it, and the hero and
+    /// introduction are the published ones. Titles, sections, order, replaced files and deletions belong to Project
+    /// files and stay as they are.
+    /// </summary>
     public async Task<PortalContentResponse> DiscardAsync(long projectId, PortalRevisionRequest request, CancellationToken cancellationToken = default)
     {
         var project = await EditableProjectAsync(projectId, cancellationToken);
         var now = clock.UtcNow;
-        List<PortalUpload> cancelled = [];
         List<PortalFile> released;
         await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
         {
@@ -179,37 +188,13 @@ public sealed class PortalPublishingService(
                     ErrorCodes.PortalNeverPublished, "Nothing has been published yet, so there's no version to go back to.");
             }
 
-            var items = (await content.ItemsToChangeAsync(projectId, cancellationToken)).ToList();
-            var published = (await content.FilesAsync(items.Where(i => i.PublishedFileId is not null).Select(i => i.PublishedFileId!.Value), cancellationToken))
-                .ToDictionary(f => f.Id);
-            var candidates = new List<PortalFile>();
-
-            foreach (var item in items.ToList())
+            var items = await content.ItemsToChangeAsync(projectId, cancellationToken);
+            foreach (var item in items.Where(i => i.RemovedAt is null))
             {
-                if (item.PublishedFileId is not { } publishedFileId)
-                {
-                    // never published: it goes
-                    cancelled.AddRange(await StopReplacementsAsync(item.Id, now, cancellationToken));
-                    candidates.Add(item.File);
-                    content.Remove(item);
-                    items.Remove(item);
-                    continue;
-                }
-
-                if (item.FileId != publishedFileId)
-                {
-                    candidates.Add(item.File);
-                    item.File = published[publishedFileId];
-                }
-
-                item.Title = item.PublishedTitle!;
-                item.Section = item.PublishedSection!.Value;
-                item.SortOrder = item.PublishedSortOrder!.Value;
-                item.RemovedAt = null;
-                item.UpdatedAt = now;
-                item.UpdatedById = currentUser.Id;
+                item.ForClient = item.PublishedFileId is not null;
             }
 
+            var candidates = new List<PortalFile>();
             if (settings.HeroFileId != settings.PublishedHeroFileId)
             {
                 candidates.AddRange(await HeroFilesAsync(settings.HeroFileId, cancellationToken));
@@ -223,7 +208,7 @@ public sealed class PortalPublishingService(
             await transaction.CommitAsync(cancellationToken);
         }
 
-        await AfterAsync(cancelled, released, cancellationToken);
+        await maintenance.DeleteReleasedAsync(released, cancellationToken);
         return await views.ContentAsync(project, cancellationToken);
     }
 
@@ -257,9 +242,10 @@ public sealed class PortalPublishingService(
         return await views.ContentAsync(project, cancellationToken);
     }
 
+    /// <summary>A Design client project, not archived, whose client portal the caller manages (client_portal:manage).</summary>
     private async Task<PortalContentProject> EditableProjectAsync(long projectId, CancellationToken cancellationToken)
     {
-        var project = await views.VisibleProjectAsync(projectId, cancellationToken);
+        var project = await views.ManagedProjectAsync(projectId, cancellationToken);
         if (PortalContentRules.CheckEditable(project.BillingType, project.ClientId, project.Status) is { } denial)
         {
             throw denial.ToException();
@@ -299,16 +285,7 @@ public sealed class PortalPublishingService(
         return cancelled;
     }
 
-    private async Task AfterAsync(List<PortalUpload> cancelled, List<PortalFile> released, CancellationToken cancellationToken)
-    {
-        foreach (var upload in cancelled)
-        {
-            await maintenance.RemoveUploadAsync(upload, cancellationToken);
-        }
-
-        await maintenance.DeleteReleasedAsync(released, cancellationToken);
-    }
-
     private static PortalItemCopies Copies(PortalItem i)
-        => new(i.Id, i.FileId, i.Title, i.Section, i.SortOrder, i.PublishedFileId, i.PublishedTitle, i.PublishedSection, i.PublishedSortOrder, i.RemovedAt is not null);
+        => new(i.Id, i.FileId, i.Title, i.Section, i.SortOrder, i.PublishedFileId, i.PublishedTitle, i.PublishedSection, i.PublishedSortOrder,
+            i.RemovedAt is not null, i.ForClient);
 }

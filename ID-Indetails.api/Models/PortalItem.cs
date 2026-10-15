@@ -3,9 +3,9 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Models;
 
 /// <summary>
-/// One entry in a section of a project's client portal. The plain columns are the draft staff work on; the
-/// <c>Published*</c> columns are what clients see, copied from the draft when the project is published. Replacing the
-/// file keeps the item, its title and its place.
+/// One of a Design project's files, in a section of its Project files. The plain columns are the draft staff work on;
+/// <see cref="ForClient"/> says whether the client portal shows it, and the <c>Published*</c> columns are what clients
+/// see, copied from the draft when the project is published. Replacing the file keeps the item, its title and its place.
 /// </summary>
 public class PortalItem
 {
@@ -18,6 +18,9 @@ public class PortalItem
     public long FileId { get; set; }
 
     public string Title { get; set; } = string.Empty;
+
+    /// <summary>Chosen for the client: the next publish shows it to them. Other files stay the team's.</summary>
+    public bool ForClient { get; set; }
 
     /// <summary>Ascending within the section, with gaps of 1024 so an item can later move between two others; ties go by id.</summary>
     public int SortOrder { get; set; }

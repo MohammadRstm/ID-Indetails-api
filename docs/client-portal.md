@@ -8,8 +8,12 @@ A Design project's client can follow the project in a client portal.
   see the published presentation. See [Publishing and the client's page (Phase 3)](#publishing-and-the-clients-page-phase-3).
 - **Phase 4:** the project's discussion: a chat, comments on published files, @mentions, and in-app notifications on
   both sides, live. See [Discussion (Phase 4)](#discussion-phase-4).
+- **Project files:** the files of Phases 2 and 3 became every Design project's files, for its whole team, with
+  comments. The client portal shows only the files chosen for the client (`for_client`). See
+  [Project files](#project-files); it changes some of what Phases 2 and 3 say, as noted there.
 
-**Execution projects have no client portal.** Their endpoints answer 404, and the permission is limited to Design.
+**Execution projects have no client portal and no project files.** Their endpoints answer 404, and the permissions are
+limited to Design.
 
 ## Identity: separate from staff
 
@@ -191,9 +195,13 @@ The email links use `Frontend:PortalInvitationPath` (`/portal/invite`), `PortalL
 
 ## Content (Phase 2)
 
-Staff with `client_portal:manage` (Design only; admins and super admins by default) prepare the files a client will
-see: **Presentation**, **3D** and **Drawings**. Everything is a **draft** until publishing exists: no client endpoint
-reads content, the store is private, and links are only handed out to staff after the permission check.
+> Since [Project files](#project-files), these files are every Design project's files, open to its whole team, and the
+> endpoints below live under `/api/projects/{id}/files`. Who may do what is in that section; how files reach the store,
+> what is accepted and how storage is counted are unchanged.
+
+Staff prepare the files a client will see: **Presentation**, **3D** and **Drawings**. Everything is a **draft** until
+publishing exists: no client endpoint reads content, the store is private, and links are only handed out to staff after
+the permission check.
 
 ### Where the bytes go
 - Files live in the **content store**: Cloudflare R2 in production, a folder on disk in development and tests
@@ -256,20 +264,19 @@ keeps the rows honest. Usage is informational: nothing is refused because of it.
 - Publishing (a later phase) adds published columns to `portal_items`. Every item today then reads as never published.
 
 ### Who can do what
-- `client_portal:manage` and a Design project the person can see: everything above. Without it, 403; Execution
-  projects and other domains' projects answer 404.
+See [Project files](#project-files) for who may change which file. Throughout:
+- Execution projects and other domains' projects answer 404.
 - Only the person who started an upload can carry it on, complete or cancel it.
-- Client projects only: an internal project answers 422 `portal_project_not_eligible`.
 - An archived project is read-only (422 `portal_content_read_only`); its files can still be opened and downloaded.
 - Client tokens are refused by every content endpoint (401). The content store's links are the only way to the bytes,
   minted after these checks and short-lived.
 
-### Content endpoints (`client_portal:manage`)
+### Content endpoints (now under `/api/projects/{id}/files`)
 
 | Method and path | Purpose |
 |---|---|
-| `GET /api/projects/{id}/portal/content` | Every section's items, usage, whether it can change, accepted extensions |
-| `POST /api/projects/{id}/portal/content/uploads` | Start an upload `{ clientToken, section, fileName, size, replaceItemId? }` |
+| `GET /api/projects/{id}/files` | Every section's items, usage, whether it can change, accepted extensions |
+| `POST /api/projects/{id}/files/uploads` | Start an upload `{ clientToken, section, fileName, size, replaceItemId? }` |
 | `POST .../uploads/{uploadId}/parts` | Links for `{ partNumbers }` |
 | `POST .../uploads/{uploadId}/complete` | Join, check and add |
 | `DELETE .../uploads/{uploadId}` | Cancel |
@@ -277,7 +284,7 @@ keeps the rows honest. Usage is informational: nothing is refused because of it.
 | `DELETE .../items/{itemId}` | Delete the item and its file |
 | `GET .../items/{itemId}/link?inline=` | A five-minute link to open or download |
 
-All of them are `Never` for Proton.
+All the writes are `Never` for Proton.
 
 ### Tables (migration `ClientPortalContent`)
 - `portal_uploads`: uploads on their way (project, section, the item replaced, client token, key, store upload id,
@@ -287,7 +294,7 @@ All of them are `Never` for Proton.
   when, `deleted_at`). Unique key; `(project_id, deleted_at)` for usage.
 - `portal_items`: what a section shows (project, section, file, title, sort order, created, updated, updated by).
   Unique file; `(project_id, section, sort_order)`.
-- Seed: the permission `client_portal:manage` (Design) for admins and super admins.
+- Seed: the permission `client_portal:manage` (Design) for admins and super admins (admins lost it in `ProjectFiles`).
 - All foreign keys restrict.
 - **Rollback** drops the three tables and the seed, but not the objects in the store: empty `portal/` in the bucket
   first if the content should go too.
@@ -306,37 +313,45 @@ All of them are `Never` for Proton.
 ## Publishing and the client's page (Phase 3)
 
 Staff with `client_portal:manage` work on a **draft**; clients see the **published copy**, which only **Publish changes**
-replaces, all of it at once.
+replaces, all of it at once. Since [Project files](#project-files), the draft's files are the project files chosen for
+the client.
 
 ### Draft and published copies
 - `portal_items` keeps both: the plain columns are the draft, `published_file_id`, `published_title`,
   `published_section` and `published_sort_order` what clients see (all set or all null; null = never published).
+  `for_client` says whether the file is chosen for the client.
 - `portal_settings` (one row per project) keeps the draft and published hero (`hero_file_id`, `published_hero_file_id`)
   and introduction (`summary`, `published_summary`), the `revision`, and the last publication (`published_revision`,
   `published_at`, `published_by_id`).
-- Uploads, renames, moves, new orders, hero and introduction changes touch the draft only. Each one takes the project's
-  content lock (the settings row, `SELECT ... FOR UPDATE`) and moves `revision` on. The row is made, or locked
-  exclusively at once if it exists, by `INSERT ... ON DUPLICATE KEY UPDATE`, so changes at the same moment wait for
-  each other rather than deadlock.
-- An item's state: **new** (never published), **changed** (file, title or section differ), **unchanged**, or **removed**:
-  deleting a published item only sets `removed_at`; clients keep it until the next publish, and **restore** undoes it. A
-  never-published item is deleted at once, as in Phase 2.
+- Every change to the files, the choices, the hero or the introduction takes the project's content lock (the settings
+  row, `SELECT ... FOR UPDATE`). The row is made, or locked exclusively at once if it exists, by
+  `INSERT ... ON DUPLICATE KEY UPDATE`, so changes at the same moment wait for each other rather than deadlock.
+- `revision` moves on only with what changes the next publish: a change to a **client-relevant** file (chosen for the
+  client, or still published), a choice, the hero or the introduction. Renaming or adding a file the team keeps to
+  itself doesn't make a publish stale.
+- A client-relevant item's state: **new** (chosen, never published), **changed** (file, title or section differ),
+  **unchanged**, or **removed** (published, then deleted or no longer chosen; clients keep it until the next publish).
+  Deleting a published item only sets `removed_at`, and **restore** undoes it. A never-published item is deleted at
+  once, with its comments.
 - Replacing a published file keeps the old one for clients until the next publish.
 
 ### Publishing
 `POST .../content/publish { expectedRevision }`, in one transaction under the content lock:
 1. refused (409 `portal_revision_stale`) when the drafts moved on since the revision the person saw, and (422) on an
    archived or non-client project;
-2. every item's draft is copied into its published columns, removed items are deleted, the hero and introduction are
-   copied, and the publication recorded;
+2. removed items are deleted; each chosen item's draft is copied into its published columns; a published item no
+   longer chosen has its published columns cleared (it stays one of the project's files); the hero and introduction
+   are copied, and the publication recorded;
 3. files nothing points at any more are let go (below), and one `portal_published` activity event is written: the hook
    for client notifications later (none are sent now).
 
 Clients see the old version or the new one, never a mix: a failed publish rolls back and changes nothing. With nothing
 to publish it just answers the content.
 
-**Discard** (`POST .../discard { expectedRevision }`) puts the draft back to the published copy and deletes items never
-published. It needs a publication to go back to (422 `portal_never_published`).
+**Discard** (`POST .../discard { expectedRevision }`) puts back only the client's side: every item not removed is
+chosen again exactly when clients see it now (`for_client = published_file_id IS NOT NULL`), and the hero and
+introduction go back to the published ones. Titles, sections, order, replaced files and deletions belong to Project
+files and stay as they are, and nothing is deleted. It needs a publication to go back to (422 `portal_never_published`).
 
 ### Files are let go only when nothing uses them
 A file is marked deleted only when no item's draft or published copy and neither hero points at it, checked inside
@@ -345,18 +360,19 @@ the restricting foreign keys refuse to delete a row still used. So the hero, kep
 survives its item being deleted or replaced.
 
 ### Order and hero
-- `PUT .../sections/{section}/order { itemIds }` takes the section's current (not removed) items, each once; anything
-  else is 409 `portal_order_stale` (someone added, removed or moved a file). Drag and drop is within a section; moving
-  between sections stays the Phase 2 "Move to".
+- `PUT /api/projects/{id}/files/sections/{section}/order { itemIds }` (`project_files:manage`) takes the section's
+  current (not removed) items, each once; anything else is 409 `portal_order_stale` (someone added, removed or moved a
+  file). Drag and drop is within a section; moving between sections stays the Phase 2 "Move to".
 - `PUT .../hero { itemId }` uses an image item's file; `DELETE .../hero` clears it; a hero can also be uploaded
-  (`POST .../uploads` with `hero: true`, no section). Only JPEG, PNG or WebP (400 `portal_hero_not_image`).
+  (`POST /api/projects/{id}/files/uploads` with `hero: true`, no section; `client_portal:manage`, client projects only).
+  Only JPEG, PNG or WebP (400 `portal_hero_not_image`).
 - `PUT .../summary { summary }`: plain text, up to 2,000 characters.
 
 ### Preview and the client's page
 - `GET .../content/preview` (staff) and `GET /api/portal/projects/{id}` (client) answer the same shape, built by the same
-  code (`PortalContentViews.PresentationAsync`): the draft for the preview, the published copy for the client. It holds
-  the project's title and status, the introduction, the hero and the three sections, and nothing about staff,
-  uploaders or storage.
+  code (`PortalContentViews.PresentationAsync`): the draft (the chosen items not removed) for the preview, the published
+  copy for the client. It holds the project's title and status, the introduction, the hero and the three sections, and
+  nothing about staff, uploaders or storage.
 - `GET /api/portal/projects/{id}/items/{itemId}/link?inline=` gives a five-minute link to a **published** file.
 - A client gets anything only with live access to the Design project; every refusal (no access, access ended, another
   project, an unpublished file) is the same 404. Before the first publish the page is empty (`isPublished: false`).
@@ -366,16 +382,17 @@ survives its item being deleted or replaced.
   when the link is made), so the browser doesn't keep what it loaded much past the link's end: an hour for a preview,
   five minutes for a download. There are no thumbnails: the original is loaded, lazily.
 
-### Endpoints added (staff, `client_portal:manage`)
-| Method and path | Purpose |
-|---|---|
-| `PUT .../content/sections/{section}/order` | New order of a section |
-| `PUT` / `DELETE .../content/hero` | Set or clear the draft hero |
-| `PUT .../content/summary` | The draft introduction |
-| `POST .../content/items/{itemId}/restore` | Undo a removal |
-| `POST .../content/publish` | Publish everything |
-| `POST .../content/discard` | Back to what clients see |
-| `GET .../content/preview` | The draft in the client's shape |
+### Endpoints added (staff)
+The order and restore moved to [Project files](#project-files) (`.../files/sections/{section}/order`,
+`.../files/items/{itemId}/restore`).
+
+| Method and path | Who | Purpose |
+|---|---|---|
+| `PUT` / `DELETE .../content/hero` | `client_portal:manage` | Set or clear the draft hero |
+| `PUT .../content/summary` | `client_portal:manage` | The draft introduction |
+| `POST .../content/publish` | `client_portal:manage` | Publish everything |
+| `POST .../content/discard` | `client_portal:manage` | Back to what clients see |
+| `GET .../content/preview` | `client_portal:manage` or `client_access:manage` | The draft in the client's shape |
 
 All writes are `Never` for Proton. Client endpoints: `GET /api/portal/projects/{id}` and `GET .../items/{itemId}/link`.
 
@@ -391,9 +408,10 @@ published file. The same API serves both sides (`PortalDiscussionService`, with 
 
 ### Who takes part
 Worked out on every request, never stored and never taken from the browser:
-- **staff:** every active super admin; and the project's manager (its owner) and active staff who uploaded a portal file
-  to the project or logged work on it, as long as they can see Design (their home domain, or a Design permission
-  they were granted, as for every other Design record). Nobody else, whatever their permissions;
+- **staff:** every active super admin; and the project's manager (its owner), active staff who uploaded the current
+  file of an item chosen for the client or published, and those who logged work on the project, as long as they can
+  see Design (their home domain, or a Design permission they were granted, as for every other Design record). A file
+  the team keeps to itself doesn't bring its uploader in. Nobody else, whatever their permissions;
 - **clients:** active accounts with live access to the project.
 
 Anyone else gets a 404, the same as for a project that doesn't exist. Ending a client's access, deactivating a staff
@@ -463,6 +481,87 @@ All writes are `Never` for Proton.
 - `portal_reads`: one chat marker per person and project.
 - `portal_comment_reads`: one comment marker per person and file (the item id, a plain column as on the comments).
 - `portal_notifications`: the client's notifications, unique per account and key.
+
+## Project files
+
+Every Design project, for a client or internal, has **Project files**: the presentation, 3D and drawing files its team
+works on, in the same three sections and the same content store as above. They are the project's own; a client sees a
+file only once it is **chosen for the client** (`portal_items.for_client`) and published. The client portal tab shows
+the chosen files, with the hero, the introduction, the preview, publishing, client access and the discussion.
+
+### Who may do what
+Everything is on Design projects only; anything else answers 404. An archived project is read-only (422
+`portal_content_read_only`); its files and comments can still be read, opened and downloaded.
+
+| Action | Who |
+|---|---|
+| See the files, open and download them, read their comments | anyone with `project:view` who can see Design (employees included) |
+| Add a file | the same, on any Design project |
+| Rename, move, replace, delete or restore a file | whoever uploaded its current file (`portal_files.uploaded_by_id` of the item's file), or a holder of `project_files:manage` |
+| Reorder a section | `project_files:manage` |
+| Comment | `project_files:manage` on any file; anyone else only on a file that already has comments (a reply) |
+| Edit or delete a comment (deleting is for good) | its author |
+| Mark a comment fixed, or open again | the file's uploader or `project_files:manage` |
+| Choose a file for the client, or take it back | `client_portal:manage`, on a client project (422 `portal_project_not_eligible` otherwise) |
+| Look at the client portal tab: its files, preview and links | `client_portal:manage` or `client_access:manage` |
+| Hero, introduction, publish, discard, hero uploads | `client_portal:manage`, on a client project |
+
+- `project_files:manage` (Design) is a default for admins and super admins. `client_portal:manage` is the super admins'
+  by default (admins see the client portal through `client_access:manage`), and can be granted like any other.
+- Replacing a file makes whoever replaced it its uploader, and so the one who may change it from then on.
+- Refusals are 403 `forbidden`. Someone else's upload, another project's file or comment, and a project they can't see
+  read as 404.
+
+### What the client portal shows
+A file is **client-relevant** when it is chosen for the client or clients still see it (published). Only those concern
+the client portal: its tab lists them, its link endpoint opens only them, their changes move the revision on, and
+they decide the states and what a publish changes. A file the team keeps to itself never reaches the client, the
+preview or the revision. See [Publishing](#publishing) for what publishing and discarding do with the choices.
+
+Usage (files and bytes) counts all of the project's files.
+
+### Comments
+- Plain text, 1 to 2,000 characters once trimmed; flat, oldest first. Edited ones keep `edited_at`.
+- A comment is **open** until marked fixed (`fixed_at`, `fixed_by_id`); each file shows how many comments it has and
+  how many are open.
+- A new comment notifies the file's uploader and everyone who commented on it before, never its author:
+  `project_file_comment`, rolling per file (`file_comments:{itemId}`, counting from 1 again once read), naming who,
+  which file and which project, never the text. See [notifications.md](notifications.md).
+- Clients never see these comments: the client discussion has its own.
+
+### Endpoints (`/api/projects/{id}/files`, `project:view`; finer rules in the services)
+| Method and path | Purpose |
+|---|---|
+| `GET /` | Every file (removed ones too, marked `removed`, until the next publish), usage, accepted extensions, and what the caller may do: `canEdit`, `canManage`, `canChooseForClient`, `isClientProject` |
+| `POST /uploads` | Start an upload `{ clientToken, section, fileName, size, replaceItemId? }`, or a hero `{ hero: true }` |
+| `POST /uploads/{uploadId}/parts`, `POST .../complete`, `DELETE /uploads/{uploadId}` | As in [Phase 2](#upload-lifecycle); completing answers `{ item, usage }` |
+| `PUT /items/{itemId}` | Rename `{ title }` or move `{ section }` |
+| `DELETE /items/{itemId}` | Delete (a published one is removed until the next publish) |
+| `POST /items/{itemId}/restore` | Undo a removal |
+| `GET /items/{itemId}/link?inline=` | A five-minute link to open or download |
+| `PUT /sections/{section}/order` | A section's new order `{ itemIds }` |
+| `PUT /items/{itemId}/for-client` | Choose for the client or take back `{ forClient }` |
+| `GET /items/{itemId}/comments`, `POST` the same | A file's comments, oldest first; comment `{ body }` |
+| `PUT` / `DELETE /comments/{commentId}` | Edit `{ body }` / delete |
+| `PUT /comments/{commentId}/fixed` | Mark fixed or open again `{ fixed }` |
+
+Each file says its uploader, whether the caller may change it (`canEdit`), its comment counts (`comments: { total,
+open }`), whether it is chosen (`forClient`) and its state for the client (`clientState`, null for a file that isn't
+for the client and never reached them). All the writes are `Never` for Proton.
+
+The client portal tab keeps `GET`, `PUT/DELETE /hero`, `PUT /summary`, `POST /publish`, `POST /discard`, `GET /preview`
+and `GET /items/{itemId}/link` under `/api/projects/{id}/portal/content`; its answer adds `canManage`
+(`client_portal:manage`) and each item's `uploadedBy`, and `canEdit` needs `canManage` too.
+
+### Tables (migration `ProjectFiles`)
+- `portal_items.for_client` (`tinyint(1)`, not null, default 0). Every row there before the migration is set to 1:
+  those files were uploaded for the client.
+- `project_file_comments`: project, item, author, body (up to 2,000), `created_at`, `edited_at`, `fixed_at`,
+  `fixed_by_id`; a check that `fixed_at` and `fixed_by_id` are set together; `(item_id, id)` for a file's thread. The
+  item's foreign key cascades (a never-published file is deleted with its comments); the others restrict.
+- Seed: the permission `project_files:manage` (Design) for admins and super admins; `client_portal:manage` is taken off
+  the admin role.
+- **Rollback** drops the table and the column, and gives admins `client_portal:manage` back.
 
 ## Known limits (later phases)
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a

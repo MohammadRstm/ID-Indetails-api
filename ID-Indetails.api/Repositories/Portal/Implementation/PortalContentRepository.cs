@@ -72,7 +72,7 @@ public sealed class PortalContentRepository(IdIndetailsDbContext db) : IPortalCo
         }
 
         var drafts = await (from i in items
-                            where i.RemovedAt == null
+                            where i.ForClient && i.RemovedAt == null
                             join f in db.PortalFiles on i.FileId equals f.Id
                             orderby i.SortOrder, i.Id
                             select new { i.Id, i.Section, i.Title, File = f })
@@ -212,5 +212,6 @@ public sealed class PortalContentRepository(IdIndetailsDbContext db) : IPortalCo
                new PortalFileView(
                    f.Id, f.StorageKey, f.OriginalName, f.ContentType, f.OriginalSizeBytes, f.StoredSizeBytes, f.CreatedAt, f.UploadedById,
                    uploader == null ? null : (uploader.FirstName + " " + uploader.LastName).Trim()),
+               i.ForClient,
                i.PublishedFileId, i.PublishedTitle, i.PublishedSection, i.PublishedSortOrder, i.RemovedAt);
 }

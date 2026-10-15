@@ -31,9 +31,9 @@ public class PushTextTests
         """).RootElement;
 
     [Fact]
-    public void There_are_41_notification_kinds_and_each_has_its_own_text()
+    public void There_are_42_notification_kinds_and_each_has_its_own_text()
     {
-        AllKinds.Count.ShouldBe(41);
+        AllKinds.Count.ShouldBe(42);
         foreach (var kind in AllKinds)
         {
             var text = PushText.ForNotification(kind, "Rana Haddad", "Villa Haddad", Revealing, 2);
@@ -97,6 +97,18 @@ public class PushTextTests
             .Body.ShouldBe("3 requirements were added to Tower B today.");
         PushText.ForNotification(NotificationKinds.RoleChanged, "Rana", null, JsonDocument.Parse("""{"to":"admin"}""").RootElement, 1)
             .Body.ShouldBe("You're now an admin.");
+    }
+
+    [Fact]
+    public void A_file_comment_names_who_which_file_and_where_but_never_the_text()
+    {
+        var payload = JsonDocument.Parse("""{"projectTitle":"Villa Haddad","fileTitle":"Living room","authorName":"Rana Haddad","text":"Darker sofa?"}""").RootElement;
+
+        PushText.ForNotification(NotificationKinds.ProjectFileComment, "Rana Haddad", "Villa Haddad", payload, 2)
+            .ShouldBe(new PushMessageText("File comment", "Rana Haddad commented on Living room in Villa Haddad."));
+        PushText.ForNotification(NotificationKinds.ProjectFileComment, null, null, null, 1).Body.ShouldBe("Someone commented on a file in a project.");
+        PushCategories.Of(NotificationKinds.ProjectFileComment).ShouldBe(NotificationCategory.Messages);
+        PushTarget.ForNotification(NotificationKinds.ProjectFileComment, 7, DomainCodes.Design, "item", 12, payload).ShouldBe(PushTarget.Notifications);
     }
 
     [Fact]

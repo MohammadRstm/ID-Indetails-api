@@ -9,16 +9,16 @@ public class PortalPublishRulesTests
     private const PortalSection P = PortalSection.Presentation;
     private const PortalSection M = PortalSection.Model;
 
-    /// <summary>An item published as it is now, unless told otherwise.</summary>
+    /// <summary>An item chosen for the client and published as it is now, unless told otherwise.</summary>
     private static PortalItemCopies Item(
         long id, int order, PortalSection section = P, long? file = null, string title = "Title",
         bool published = true, long? publishedFile = null, string? publishedTitle = null, PortalSection? publishedSection = null,
-        int? publishedOrder = null, bool removed = false)
+        int? publishedOrder = null, bool removed = false, bool forClient = true)
     {
         var fileId = file ?? id * 10;
         return published
-            ? new(id, fileId, title, section, order, publishedFile ?? fileId, publishedTitle ?? title, publishedSection ?? section, publishedOrder ?? order, removed)
-            : new(id, fileId, title, section, order, null, null, null, null, false);
+            ? new(id, fileId, title, section, order, publishedFile ?? fileId, publishedTitle ?? title, publishedSection ?? section, publishedOrder ?? order, removed, forClient)
+            : new(id, fileId, title, section, order, null, null, null, null, false, forClient);
     }
 
     [Fact]
@@ -30,6 +30,47 @@ public class PortalPublishRulesTests
         PortalPublishRules.StateOf(Item(1, 1024, publishedTitle: "Old")).ShouldBe(PortalItemState.Changed);
         PortalPublishRules.StateOf(Item(1, 1024, section: M, publishedSection: P)).ShouldBe(PortalItemState.Changed);
         PortalPublishRules.StateOf(Item(1, 1024, removed: true)).ShouldBe(PortalItemState.Removed);
+    }
+
+    [Fact]
+    public void A_file_not_for_the_client_is_nothing_to_them_unless_they_see_it_now_and_then_it_is_removed()
+    {
+        // the team's own file, never shown: no state at all
+        PortalPublishRules.StateOf(Item(1, 1024, published: false, forClient: false)).ShouldBeNull();
+        PortalPublishRules.IsClientRelevant(forClient: false, publishedFileId: null).ShouldBeFalse();
+
+        // shown before and no longer chosen: clients lose it at the next publish, whatever else changed
+        PortalPublishRules.StateOf(Item(1, 1024, forClient: false)).ShouldBe(PortalItemState.Removed);
+        PortalPublishRules.StateOf(Item(1, 1024, publishedTitle: "Old", forClient: false)).ShouldBe(PortalItemState.Removed);
+        PortalPublishRules.IsClientRelevant(forClient: false, publishedFileId: 10).ShouldBeTrue();
+        PortalPublishRules.IsClientRelevant(forClient: true, publishedFileId: null).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void The_teams_own_files_change_nothing_for_clients()
+    {
+        var items = new[]
+        {
+            Item(1, 1024),
+            Item(2, 512, published: false, forClient: false),       // the team's, placed first
+            Item(3, 2048, publishedTitle: "Old", forClient: false),  // no longer chosen: removed for clients
+        };
+
+        var changes = PortalPublishRules.ChangesOf(items, null, null, null, null);
+
+        changes.Added.ShouldBe(0);
+        changes.Updated.ShouldBe(0);
+        changes.Removed.ShouldBe(1);
+        changes.Reordered.ShouldBeEmpty();
+        PortalPublishRules.ChangesOf([Item(1, 1024), Item(2, 512, published: false, forClient: false)], null, null, null, null).Any.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void An_unchosen_file_doesnt_make_its_section_reordered()
+    {
+        var items = new[] { Item(1, 2048, publishedOrder: 1024, forClient: false), Item(2, 1024, publishedOrder: 2048) };
+
+        PortalPublishRules.ReorderedSections(items).ShouldBeEmpty();
     }
 
     [Fact]

@@ -18,7 +18,10 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
 
     public async Task<IReadOnlyList<StaffCandidate>> StaffAsync(DiscussionProject project, CancellationToken cancellationToken = default)
     {
-        var uploaders = db.PortalFiles.Where(f => f.ProjectId == project.Id).Select(f => f.UploadedById);
+        // uploaders of the files the client sees or is to see, not of every project file
+        var uploaders = db.PortalItems
+            .Where(i => i.ProjectId == project.Id && (i.ForClient || i.PublishedFileId != null))
+            .Select(i => i.File.UploadedById);
         var loggers = db.WorkEntries.Where(e => e.ProjectId == project.Id && e.DeletedAt == null).Select(e => e.UserId);
         var people = await db.Users.AsNoTracking()
             .Where(u => u.Status == UserStatus.Active

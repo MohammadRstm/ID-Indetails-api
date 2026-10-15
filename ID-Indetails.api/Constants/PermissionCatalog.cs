@@ -47,8 +47,9 @@ public static class PermissionCatalog
         new(P.ClientView, "View clients"),
         new(P.ClientCreate, "Add clients"),
         new(P.ClientManage, "Edit, archive, restore and delete clients"),
+        new(P.ProjectFilesManage, "Manage anyone's project files and start comments on them", DomainCodes.Design),
         new(P.ClientAccessManage, "Invite clients to a project's client portal and end their access", DomainCodes.Design, Sensitivity: Access),
-        new(P.ClientPortalManage, "Upload and manage the files for a project's client portal", DomainCodes.Design),
+        new(P.ClientPortalManage, "Choose which project files a client sees, and publish the client portal", DomainCodes.Design),
 
         new(P.FinancialView, "See revenue, cost, profit, margin and rates", Sensitivity: Money),
         new(P.InvoiceCreate, "Create and edit draft invoices", Sensitivity: Money),
@@ -107,6 +108,12 @@ public static class PermissionCatalog
         P.EmployeeInvite, P.EmployeePayManage,
     ];
 
+    /// <summary>
+    /// What clients are shown is the super admins' to choose and publish, or whoever they grant it to. Admins still see
+    /// the client portal through client access.
+    /// </summary>
+    private static readonly string[] ClientPublishing = [P.ClientPortalManage];
+
     /// <summary>Logging one's own hours: employees only. Admins and super admins are paid a fixed salary and log no hours.</summary>
     public static readonly IReadOnlyList<string> OwnWork = [P.WorkEntryCreate, P.WorkEntryViewOwn];
 
@@ -129,8 +136,10 @@ public static class PermissionCatalog
         {
             // Everything, in both domains and at company level, except logging their own hours.
             [RoleCodes.SuperAdmin] = Definitions.Select(d => d.Code).Except(OwnWork).ToList(),
-            // Their own domain's work, without its money or hiring; nothing at company level, and no hours of their own.
-            [RoleCodes.Admin] = Definitions.Select(d => d.Code).Except(CompanyOnly).Except(SuperAdminOnly).Except(OwnWork).ToList(),
+            // Their own domain's work, without its money, hiring or client publishing; nothing at company level, and no
+            // hours of their own.
+            [RoleCodes.Admin] = Definitions.Select(d => d.Code)
+                .Except(CompanyOnly).Except(SuperAdminOnly).Except(ClientPublishing).Except(OwnWork).ToList(),
             // Their own work only; never money.
             [RoleCodes.Employee] = EmployeeGrants,
         };

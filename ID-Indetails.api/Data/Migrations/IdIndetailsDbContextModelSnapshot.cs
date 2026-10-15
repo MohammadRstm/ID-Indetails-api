@@ -2123,6 +2123,12 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "project_files:manage",
+                            Description = "Manage anyone's project files and start comments on them",
+                            DomainCode = "design"
+                        },
+                        new
+                        {
                             Code = "client_access:manage",
                             Description = "Invite clients to a project's client portal and end their access",
                             DomainCode = "design"
@@ -2130,7 +2136,7 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             Code = "client_portal:manage",
-                            Description = "Upload and manage the files for a project's client portal",
+                            Description = "Choose which project files a client sees, and publish the client portal",
                             DomainCode = "design"
                         },
                         new
@@ -2689,6 +2695,10 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Property<long>("FileId")
                         .HasColumnType("bigint")
                         .HasColumnName("file_id");
+
+                    b.Property<bool>("ForClient")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("for_client");
 
                     b.Property<long>("ProjectId")
                         .HasColumnType("bigint")
@@ -3588,6 +3598,73 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("project_expenses", null, t =>
                         {
                             t.HasCheckConstraint("ck_project_expenses_amount_non_negative", "`amount` >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectFileComment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AuthorId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("author_id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("EditedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("edited_at");
+
+                    b.Property<DateTime?>("FixedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("fixed_at");
+
+                    b.Property<long?>("FixedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("fixed_by_id");
+
+                    b.Property<long>("ItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("item_id");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_file_comments");
+
+                    b.HasIndex("AuthorId")
+                        .HasDatabaseName("ix_project_file_comments_author_id");
+
+                    b.HasIndex("FixedById")
+                        .HasDatabaseName("ix_project_file_comments_fixed_by_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_project_file_comments_project_id");
+
+                    b.HasIndex("ItemId", "Id")
+                        .HasDatabaseName("ix_project_file_comments_item_id_id");
+
+                    b.ToTable("project_file_comments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_file_comments_fixed", "(`fixed_at` IS NULL) = (`fixed_by_id` IS NULL)");
                         });
                 });
 
@@ -4665,6 +4742,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "project_files:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "client_access:manage"
                         },
                         new
@@ -4915,12 +4997,12 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "admin",
-                            PermissionCode = "client_access:manage"
+                            PermissionCode = "project_files:manage"
                         },
                         new
                         {
                             RoleCode = "admin",
-                            PermissionCode = "client_portal:manage"
+                            PermissionCode = "client_access:manage"
                         },
                         new
                         {
@@ -6864,6 +6946,36 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_project_expenses_projects_project_id");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectFileComment", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_file_comments_users_author_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("FixedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_project_file_comments_users_fixed_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.PortalItem", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_file_comments_portal_items_item_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_file_comments_projects_project_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectLabourDefault", b =>

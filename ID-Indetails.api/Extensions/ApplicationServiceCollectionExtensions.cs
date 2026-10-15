@@ -182,6 +182,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPortalAccessRepository, PortalAccessRepository>();
         services.AddScoped<IPortalSessionRepository, PortalSessionRepository>();
         services.AddScoped<IPortalContentRepository, PortalContentRepository>();
+        services.AddScoped<IProjectFileCommentRepository, ProjectFileCommentRepository>();
         services.AddScoped<IPortalDiscussionRepository, PortalDiscussionRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IMessagingRepository, MessagingRepository>();
@@ -234,6 +235,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPortalContentViews, PortalContentViews>();
         services.AddScoped<IPortalContentService, PortalContentService>();
         services.AddScoped<IPortalPublishingService, PortalPublishingService>();
+        services.AddScoped<IProjectFileCommentService, ProjectFileCommentService>();
         services.AddScoped<IPortalPresentationService, PortalPresentationService>();
         services.AddScoped<IPortalDiscussionService, PortalDiscussionService>();
         services.AddScoped<IPortalNotificationService, PortalNotificationService>();
