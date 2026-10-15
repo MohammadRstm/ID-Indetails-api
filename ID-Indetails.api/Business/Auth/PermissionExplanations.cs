@@ -45,8 +45,9 @@ public static class PermissionExplanations
         [PermissionCodes.ClientView] = "See the business's clients and their contact details.",
         [PermissionCodes.ClientCreate] = "Add new clients, with their contact details, so projects can be made for them.",
         [PermissionCodes.ClientManage] = "Edit clients' details and contacts, archive or restore them, and delete clients with no projects.",
-        [PermissionCodes.ClientAccessManage] = "On Design projects: invite the client's contacts to the client portal by email, resend or cancel invitations, and end a client's access to the project.",
-        [PermissionCodes.ClientPortalManage] = "On Design projects: upload the presentation, 3D and drawing files for the client portal, and rename, move, replace, download or delete them. They stay drafts the client can't see.",
+        [PermissionCodes.ProjectFilesManage] = "On Design projects: rename, move, replace, delete and reorder anyone's project files, start the comments on a file and mark comments fixed. Without it, people add files and change only their own.",
+        [PermissionCodes.ClientAccessManage] = "On Design projects: invite the client's contacts to the client portal by email, resend or cancel invitations, and end a client's access to the project. It also shows the client portal and its preview.",
+        [PermissionCodes.ClientPortalManage] = "On Design client projects: choose which project files the client sees, set the hero image and introduction, and publish the client portal or go back to what the client sees.",
 
         // Money
         [PermissionCodes.FinancialView] = "See the money: projects' revenue, cost, profit and margin, people's cost rates, invoices and payments. Without it, these are hidden everywhere.",

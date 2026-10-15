@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_79_tables_with_snake_case_names()
+    public void Model_has_all_80_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(79);
+        tables.Count.ShouldBe(80);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -35,6 +35,8 @@ public class DatabaseModelTests
             "user_schedule_days", "hour_excuse_days", "client_statement_lines", "client_statement_deliveries",
             // a saved Proton chat's messages are part of it: deleting the chat (by its owner, or for retention) deletes them
             "proton_conversation_messages",
+            // a project file's comments go with it when a file clients never saw is deleted
+            "project_file_comments",
         };
 
         var cascading = Model.GetEntityTypes()
@@ -104,6 +106,7 @@ public class DatabaseModelTests
         CheckNames<Invoice>().ShouldContain("ck_invoices_numbered_when_issued");
         CheckNames<Conversation>().ShouldContain("ck_conversations_shape");
         CheckNames<LabourWeek>().ShouldContain("ck_labour_weeks_starts_on_monday");
+        CheckNames<ProjectFileComment>().ShouldContain("ck_project_file_comments_fixed");
     }
 
     [Fact]

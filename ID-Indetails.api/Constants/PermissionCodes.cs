@@ -38,7 +38,8 @@ public static class PermissionCodes
     public const string ClientCreate = "client:create";
     public const string ClientManage = "client:manage";
 
-    // Client portal (Design only)
+    // Project files and the client portal (Design only)
+    public const string ProjectFilesManage = "project_files:manage";
     public const string ClientAccessManage = "client_access:manage";
     public const string ClientPortalManage = "client_portal:manage";
 

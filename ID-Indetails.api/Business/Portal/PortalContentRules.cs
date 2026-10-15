@@ -8,13 +8,14 @@ namespace ID_Indetails.api.Business.Portal;
 
 /// <summary>
 /// <list type="bullet">
-/// <item>The client portal takes the files a design studio hands its clients: images, videos, PDFs, Office files,
-/// drawings and 3D models. Never web pages, SVG or programs. There is no size limit.</item>
+/// <item>A project's files (and so its client portal) are the files a design studio works on and hands its clients:
+/// images, videos, PDFs, Office files, drawings and 3D models. Never web pages, SVG or programs. There is no size limit.</item>
 /// <item>What a file is comes from its extension, checked against its first bytes once it has arrived; the type the
 /// browser claims is never used.</item>
 /// <item>Files go to the store in parts of one size (the last may be smaller), at least 16 MiB and few enough for the
 /// store's 10,000 parts.</item>
-/// <item>Content can change on any Design client project that isn't archived.</item>
+/// <item>What the client portal shows can change on any Design client project that isn't archived; the files
+/// themselves follow <see cref="ProjectFileRules"/>.</item>
 /// </list>
 /// </summary>
 public static class PortalContentRules
@@ -189,7 +190,7 @@ public static class PortalContentRules
             ? RuleDenial.BusinessRule(ErrorCodes.PortalProjectNotEligible, "Only client projects have a client portal.")
             : null;
 
-    /// <summary>Whether the content can change now: an archived project is read-only (it can still be viewed and downloaded).</summary>
+    /// <summary>Whether what the client portal shows can change now: an archived project is read-only (it can still be viewed and downloaded).</summary>
     public static RuleDenial? CheckEditable(BillingType billingType, long? clientId, ProjectStatus status)
         => CheckEligible(billingType, clientId)
             ?? (status == ProjectStatus.Archived

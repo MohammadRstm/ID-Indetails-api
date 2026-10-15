@@ -80,10 +80,21 @@ public class PermissionCatalogTests
             PermissionCodes.MeetingManage, PermissionCodes.MeetingCreate,
             PermissionCodes.WorkEntryViewAll, PermissionCodes.WorkEntryComment,
             PermissionCodes.MaterialCreate, PermissionCodes.MaterialManage, PermissionCodes.LabourReportCreate, PermissionCodes.LabourReportManage,
-            PermissionCodes.ClientView, PermissionCodes.ClientCreate, PermissionCodes.ClientManage, PermissionCodes.ClientAccessManage, PermissionCodes.ClientPortalManage,
+            PermissionCodes.ClientView, PermissionCodes.ClientCreate, PermissionCodes.ClientManage, PermissionCodes.ClientAccessManage,
+            PermissionCodes.ProjectFilesManage,
             PermissionCodes.EmployeeView, PermissionCodes.EmployeeManage, PermissionCodes.TeamManage,
             PermissionCodes.ActivityView, PermissionCodes.ReportView, PermissionCodes.DomainSettingsManage, PermissionCodes.ProtonUse,
         ], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void Admins_manage_project_files_but_only_super_admins_choose_and_publish_what_clients_see()
+    {
+        GrantsOf(RoleCodes.Admin).ShouldContain(PermissionCodes.ProjectFilesManage);
+        GrantsOf(RoleCodes.Admin).ShouldNotContain(PermissionCodes.ClientPortalManage);
+        GrantsOf(RoleCodes.SuperAdmin).ShouldContain(PermissionCodes.ClientPortalManage);
+        GrantsOf(RoleCodes.Employee).ShouldNotContain(PermissionCodes.ProjectFilesManage);
+        PermissionCatalog.Definitions.Single(d => d.Code == PermissionCodes.ProjectFilesManage).DomainCode.ShouldBe(DomainCodes.Design);
     }
 
     [Fact]
