@@ -19,6 +19,7 @@ using ID_Indetails.api.Services.Common.Implementation;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
 using ID_Indetails.api.Services.Portal.Abstraction;
+using ID_Indetails.api.Services.Realtime.Abstraction;
 using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Services.Portal.Implementation;
@@ -38,6 +39,7 @@ public sealed class PortalAccessService(
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IEmailSender emailSender,
+    ILiveUpdates live,
     IClock clock,
     IOptions<PortalOptions> portalOptions,
     IOptions<FrontendOptions> frontendOptions,
@@ -68,7 +70,9 @@ public sealed class PortalAccessService(
 
         var now = clock.UtcNow;
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
-        var account = await accounts.GetByEmailAsync(email, cancellationToken);
+
+        // Locked, so two invitations at once can't both find nothing pending and send two links.
+        var account = await accounts.GetByEmailForUpdateAsync(email, cancellationToken);
 
         if (account is { Status: PortalAccountStatus.Active })
         {
@@ -137,6 +141,9 @@ public sealed class PortalAccessService(
 
         var now = clock.UtcNow;
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        // Locked as when inviting, so two resends at once leave one link.
+        await accounts.LockAsync(invitation.AccountId, cancellationToken);
         await invitations.RevokePendingAsync(invitation.AccountId, project.Id, now, cancellationToken);
         await StageAndSendInvitationAsync(project, invitation.Account, ActivityEventKinds.PortalInvitationResent, now, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -153,15 +160,18 @@ public sealed class PortalAccessService(
             throw new NotFoundException("Invitation not found.");
         }
 
-        if (invitation.AcceptedAt is not null || invitation.RevokedAt is not null)
+        var now = clock.UtcNow;
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        // Claimed like accepting: if the client accepts at the same moment, only one of the two happens.
+        if (!await invitations.TryRevokeAsync(invitation.Id, now, cancellationToken))
         {
             throw new BusinessRuleException(ErrorCodes.PortalInvitationUsed, "This invitation was already used or cancelled.");
         }
 
-        var now = clock.UtcNow;
-        invitation.RevokedAt = now;
         AddEvent(ActivityEventKinds.PortalInvitationRevoked, project, invitation.Account, now);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(project, cancellationToken);
     }
@@ -200,7 +210,19 @@ public sealed class PortalAccessService(
             row.RevokedAt = now;
             row.RevokedById = actorId;
             await EndSessionsIfNoAccessLeftAsync(row.Account, projectId, now, cancellationToken);
+            live.PortalAccessChanged([row.AccountId]);
             activity.Add(Event(ActivityEventKinds.PortalAccessRevoked, domainCode, projectId, previousClientId, row.Account, actorId, now));
+        }
+    }
+
+    public async Task EndAllForClientAsync(long clientId, string domainCode, long actorId, CancellationToken cancellationToken = default)
+    {
+        foreach (var projectId in await access.ProjectIdsOfClientAsync(clientId, cancellationToken))
+        {
+            await EndAllForProjectAsync(projectId, domainCode, clientId, actorId, cancellationToken);
+
+            // Saved project by project, so the next one sees which accounts have no project left and signs them out.
+            await unitOfWork.SaveChangesAsync(cancellationToken);
         }
     }
 
@@ -245,6 +267,8 @@ public sealed class PortalAccessService(
         row.RevokedById = currentUser.Id;
         await invitations.RevokePendingAsync(row.AccountId, projectId, now, cancellationToken);
         await EndSessionsIfNoAccessLeftAsync(row.Account, projectId, now, cancellationToken);
+        // the client's open pages load again, and find the project gone (or themselves signed out)
+        live.PortalAccessChanged([row.AccountId]);
     }
 
     /// <summary>Signs the account out everywhere when <paramref name="endedProjectId"/> was its last project.</summary>

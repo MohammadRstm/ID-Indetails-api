@@ -76,4 +76,21 @@ public class LiveUpdatesTests
         clients.Sent.ShouldContain(s => s.Signal == LiveSignals.Notifications && s.UserIds.Single() == 10);
         clients.Sent.Count.ShouldBe(2);
     }
+
+    [Fact]
+    public async Task Clients_who_lost_access_are_told_once_through_their_hub()
+    {
+        var staff = new Capturing();
+        var clients = new Capturing();
+        var live = new LiveUpdates(staff, clients);
+
+        live.PortalAccessChanged([10]);
+        live.PortalAccessChanged([10, 11]);
+        await live.FlushAsync();
+
+        staff.Sent.ShouldBeEmpty();
+        clients.Sent.Single().ShouldSatisfyAllConditions(
+            s => s.Signal.ShouldBe(LiveSignals.Access),
+            s => s.UserIds.ShouldBe([10, 11], ignoreOrder: true));
+    }
 }

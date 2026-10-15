@@ -142,6 +142,29 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Someone_moved_to_Execution_no_longer_takes_part_in_a_Design_projects_discussion()
+    {
+        var s = await ProjectWithClientAsync();
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(s.Staff, RoleCodes.Employee, DomainCodes.Design);
+        await _steps.ExecuteAsync(
+            "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) VALUES (@u, @p, 'Concept', '2026-10-01 08:00:00', '2026-10-01 10:00:00', UTC_TIMESTAMP(3))",
+            ("@u", employee.User.Id), ("@p", s.Project.Id));
+        (await Client.GetAsync(Staff(s.Project.Id), employee.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var moved = await Client.PutJsonAsync($"/api/employees/{employee.User.Id}/domain", new { domainCode = DomainCodes.Execution }, s.Staff.AccessToken);
+        moved.IsSuccessStatusCode.ShouldBeTrue(await moved.Content.ReadAsStringAsync());
+
+        // the work they logged stays, but the discussion is gone for them, as for anyone outside it
+        (await Client.GetAsync(Staff(s.Project.Id), employee.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Client.PostJsonAsync($"{Staff(s.Project.Id)}/messages", Message("Still here?"), employee.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var summary = await OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Get, Mine(s.Project.Id)));
+        summary.Participants.ShouldNotContain(p => p.Key == $"u{employee.User.Id}");
+        summary.Participants.ShouldContain(p => p.Key == $"u{s.Staff.User.Id}");
+        await (await AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/messages", Message("@Test employee?", [$"u{employee.User.Id}"])))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
     public async Task The_client_and_the_team_chat_with_rolling_notifications_and_a_retry_is_never_sent_twice()
     {
         var s = await ProjectWithClientAsync();
@@ -289,9 +312,17 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
             $"{Staff(s.Project.Id)}/comments", new { itemId, body, clientToken = Guid.NewGuid().ToString(), mentions = Array.Empty<string>() }, s.Staff.AccessToken));
         await TeamCommentsAsync(living, "Darker sofa?");
         var newest = await TeamCommentsAsync(living, "Or lighter walls?");
-        await TeamCommentsAsync(kitchen, "Marble or wood?");
+        var marble = await TeamCommentsAsync(kitchen, "Marble or wood?");
         Task<DiscussionSummaryResponse> ReadAsync(object request)
             => OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/read", request));
+
+        // each thread's size, its file and how much is new, newest thread first
+        var before = await OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Get, Mine(s.Project.Id)));
+        before.Threads.Select(t => (t.ItemId, t.Title, t.FileName, t.Available, t.Count, t.Unread))
+            .ShouldBe([(kitchen, "Kitchen", "Kitchen.jpg", true, 1, 1), (living, "Living room", "Living room.jpg", true, 2, 2)]);
+        before.Threads[0].LastAt.ShouldBe(marble.CreatedAt);
+        before.UnreadComments.ShouldBe(3);
+        before.LastCommentId.ShouldBe(marble.Id);
 
         // reading one file's comments leaves the other file's new
         var read = await ReadAsync(new { itemId = living, lastCommentId = newest.Id });
@@ -309,6 +340,71 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
         // a comment marker needs its file
         (await AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/read", new { lastCommentId = newest.Id }))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // the reader's own comments and deleted ones are never new, but count in their thread
+        await OkAsync<PortalCommentResponse>(AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/comments",
+            new { itemId = kitchen, body = "Wood, please.", clientToken = Guid.NewGuid().ToString(), mentions = Array.Empty<string>() }));
+        var withdrawn = await TeamCommentsAsync(kitchen, "Or stone?");
+        (await Client.DeleteAsync($"{Staff(s.Project.Id)}/comments/{withdrawn.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var after = await OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Get, Mine(s.Project.Id)));
+        var kitchenThread = after.Threads.Single(t => t.ItemId == kitchen);
+        kitchenThread.Count.ShouldBe(3);
+        kitchenThread.Unread.ShouldBe(1);
+        after.Threads[0].ItemId.ShouldBe(kitchen);
+        after.LastCommentId.ShouldBe(withdrawn.Id);
+        after.UnreadComments.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Reading_in_several_tabs_at_once_keeps_one_marker_each()
+    {
+        var s = await ProjectWithClientAsync();
+        var itemId = await PublishedFileAsync(s);
+        var message = await OkAsync<PortalChatMessageResponse>(Client.PostJsonAsync($"{Staff(s.Project.Id)}/messages", Message("Drawings tomorrow."), s.Staff.AccessToken));
+        var comment = await OkAsync<PortalCommentResponse>(Client.PostJsonAsync($"{Staff(s.Project.Id)}/comments",
+            new { itemId, body = "Darker sofa?", clientToken = Guid.NewGuid().ToString(), mentions = Array.Empty<string>() }, s.Staff.AccessToken));
+
+        // the client's first markers, written by three tabs at the same moment
+        var read = new { lastMessageId = message.Id, itemId, lastCommentId = comment.Id };
+        var tabs = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/read", read)));
+        foreach (var response in tabs)
+        {
+            response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+        }
+
+        var summary = await OkAsync<DiscussionSummaryResponse>(AsClient(s.ClientToken, HttpMethod.Get, Mine(s.Project.Id)));
+        summary.UnreadMessages.ShouldBe(0);
+        summary.UnreadComments.ShouldBe(0);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_reads WHERE project_id = @p AND account_id = @a", ("@p", s.Project.Id), ("@a", s.AccountId)))
+            .ShouldBe(1);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_comment_reads WHERE item_id = @i AND account_id = @a", ("@i", itemId), ("@a", s.AccountId)))
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Team_messages_sent_at_once_make_one_client_notification_counting_them_all()
+    {
+        var s = await ProjectWithClientAsync();
+
+        var sent = await Task.WhenAll(Enumerable.Range(1, 2).Select(i =>
+            Client.PostJsonAsync($"{Staff(s.Project.Id)}/messages", Message($"Update {i}"), s.Staff.AccessToken)));
+        foreach (var response in sent)
+        {
+            response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+        }
+
+        var note = (await OkAsync<PortalNotificationPageResponse>(AsClient(s.ClientToken, HttpMethod.Get, "/api/portal/notifications"))).Items.ShouldHaveSingleItem();
+        note.Kind.ShouldBe(PortalNotificationKind.TeamMessage);
+        note.Count.ShouldBe(2);
+        note.Read.ShouldBeFalse();
+
+        // once read, the next message starts it again at 1
+        await OkAsync<PortalUnreadResponse>(AsClient(s.ClientToken, HttpMethod.Post, "/api/portal/notifications/read", new { all = true }));
+        await OkAsync<PortalChatMessageResponse>(Client.PostJsonAsync($"{Staff(s.Project.Id)}/messages", Message("One more"), s.Staff.AccessToken));
+        var again = (await OkAsync<PortalNotificationPageResponse>(AsClient(s.ClientToken, HttpMethod.Get, "/api/portal/notifications"))).Items.ShouldHaveSingleItem();
+        again.Id.ShouldBe(note.Id);
+        again.Count.ShouldBe(1);
+        again.Read.ShouldBeFalse();
     }
 
     [Fact]

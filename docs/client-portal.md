@@ -52,6 +52,9 @@ because:
 - **Who can be invited:**
   - only an **email contact of the project's client**, so invitations never go to arbitrary addresses;
   - on a Design client project that isn't archived, whose client isn't archived.
+- **Checked again when the link is opened and used** (`PortalRules.CanAccept`): if the project or its client has been
+  archived, or the address is no longer one of the client's contacts, the link reads as cancelled. Moving the project to
+  another client cancels its invitations outright.
 
 ## Invitation flow
 
@@ -64,20 +67,30 @@ because:
    project, or why the link can't be used:
    - `404 portal_invitation_invalid`: no such link;
    - `422 portal_invitation_expired`;
-   - `422 portal_invitation_revoked`: cancelled, or replaced by a resend;
+   - `422 portal_invitation_revoked`: cancelled, replaced by a resend, or no longer allowed (see "Checked again when the
+     link is opened and used" above);
    - `422 portal_invitation_used`: the account is already set up, so sign in.
 3. **The client sets up the account.** `POST /api/portal/invitations/accept { token, firstName, lastName, password }`:
    - The password follows the staff rules (10–128 characters, PBKDF2 hashing).
    - The token is claimed atomically, so it can be used **once**.
-   - The account becomes `active` and gets access to the project, plus any other project it had a pending invitation to.
+   - The account becomes `active` and gets access to the project, plus any other project it had a pending invitation to
+     that still passes the same check. Each project is opened once; every other pending invitation of the account (one
+     that fails the check, or a second one to the same project) is cancelled, so none of its links stays usable.
    - The client is signed in.
 4. **An address that already has an active account** gets access to the new project at once, and an email saying so. No
    second account and no new password.
 5. **Resend** (`…/invitations/{id}/resend`) replaces the link; the old one reads as revoked. **Cancel**
-   (`…/invitations/{id}/revoke`) stops a pending link.
+   (`…/invitations/{id}/revoke`) stops a pending link. Cancelling is a single conditional update, like accepting: an
+   invitation the client has just accepted can't be cancelled (`422 portal_invitation_used`), and their access stays.
 6. **End access** (`…/portal/access/{id}/revoke`): the project disappears from the client's portal at once, and their
    pending invitations to it are cancelled. If it was their last project, they are signed out everywhere.
 7. **Moving the project to another client, or making it internal**, ends every client's access to it.
+8. **Archiving the client** ends every contact's access to all of the client's projects and cancels their pending
+   invitations; anyone left with no project is signed out. **Restoring the client gives nothing back**: staff invite again.
+
+**At the same moment.** Inviting, resending and accepting for one address lock its account row first, so they take
+turns: two invitations sent at once never leave two pending links to one project, and two links of one account used at
+once can't claim each other's invitations.
 
 ## Client sign-in
 
@@ -93,7 +106,8 @@ Errors:
   hash.
 - After **10 wrong passwords** in a row, sign-in pauses for **15 minutes** (`Portal:LockoutAttempts`,
   `Portal:LockoutMinutes`). During the pause even the right password gets the same generic answer, so the pause can't be
-  used to test passwords.
+  used to test passwords. Each wrong password is counted in the database in a single statement, so wrong passwords sent
+  at once all count.
 - Rate limits: the per-IP `auth` limit applies to login, invitations and resets; `refresh` to refresh; staff invitation
   emails use the per-person `email` limit.
 
@@ -120,7 +134,8 @@ Proton never calls any of these: they are `Never` in `ProtonCoverage`.
   `activity_events`, with the project, the client and `subject_type = portal_account`. They appear under Projects in the
   Design activity feed.
   - An acceptance has no staff actor.
-  - These events count as project activity for auto-archive.
+  - These events count as project activity for auto-archive. So do the project's chat messages and (not deleted)
+    comments: a completed project whose discussion went on in the last 90 days isn't archived automatically.
 - **Security log.** Sign-in refusals, pauses and reused refresh tokens go to the security log
   (`ID_Indetails.api.Security`).
 
@@ -193,15 +208,18 @@ reads content, the store is private, and links are only handed out to staff afte
 
 ### Upload lifecycle
 1. `POST .../uploads` writes a `portal_uploads` row with the key **before** anything reaches the store, then starts a
-   multipart upload. The same client token again returns the same upload.
+   multipart upload. The same client token again returns the same upload, once the store has started it; one the
+   store hasn't started yet (two starts at the same moment), or whose start failed, answers 409 `portal_upload_ended`,
+   and the browser starts again with a new token.
 2. `POST .../uploads/{id}/parts` hands out links (about an hour each, up to 100 at a time). The browser PUTs each part.
 3. `POST .../uploads/{id}/complete`:
    - the server lists the parts itself (nothing the browser says about them is trusted);
    - it joins them, checks the size against the one announced, and checks the first bytes against the extension;
    - a file that isn't what its extension says is deleted and the upload marked `rejected`;
    - in one transaction, with the upload locked, it adds the file and the item (or swaps the file into the item it
-     replaces). Repeating the call returns the same item. If the store finished but the database didn't, the retry
-     carries on from the joined object.
+     replaces). Repeating the call, even at the same moment, returns the same item. If the store finished but the
+     database didn't, the retry carries on from the joined object; when the store no longer has the upload (joined
+     already, or abandoned), the object decides: there, it carries on; gone, 409 `portal_upload_ended`.
 4. `DELETE .../uploads/{id}` cancels: the row is marked first, then the parts and any object are dropped.
 
 **Consistency.** The rows lead:
@@ -297,7 +315,9 @@ replaces, all of it at once.
   and introduction (`summary`, `published_summary`), the `revision`, and the last publication (`published_revision`,
   `published_at`, `published_by_id`).
 - Uploads, renames, moves, new orders, hero and introduction changes touch the draft only. Each one takes the project's
-  content lock (the settings row, `SELECT ... FOR UPDATE`) and moves `revision` on.
+  content lock (the settings row, `SELECT ... FOR UPDATE`) and moves `revision` on. The row is made, or locked
+  exclusively at once if it exists, by `INSERT ... ON DUPLICATE KEY UPDATE`, so changes at the same moment wait for
+  each other rather than deadlock.
 - An item's state: **new** (never published), **changed** (file, title or section differ), **unchanged**, or **removed**:
   deleting a published item only sets `removed_at`; clients keep it until the next publish, and **restore** undoes it. A
   never-published item is deleted at once, as in Phase 2.
@@ -342,8 +362,9 @@ survives its item being deleted or replaced.
   project, an unpublished file) is the same 404. Before the first publish the page is empty (`isPublished: false`).
 - Completed projects stay published to their clients, and staff can still change and publish them. Archived projects
   stay visible to clients but can't change or be published.
-- Signed image links carry `Cache-Control: private, max-age=3600`, so the browser keeps what it loaded while the link
-  lasts. There are no thumbnails: the original is loaded, lazily.
+- Signed links carry `Cache-Control: private, max-age=` the whole seconds the link has left (at least 0; for R2, counted
+  when the link is made), so the browser doesn't keep what it loaded much past the link's end: an hour for a preview,
+  five minutes for a download. There are no thumbnails: the original is loaded, lazily.
 
 ### Endpoints added (staff, `client_portal:manage`)
 | Method and path | Purpose |
@@ -370,12 +391,13 @@ published file. The same API serves both sides (`PortalDiscussionService`, with 
 
 ### Who takes part
 Worked out on every request, never stored and never taken from the browser:
-- **staff:** every active super admin; the project's manager (its owner); and active staff who uploaded a portal file
-  to the project or logged work on it. Nobody else, whatever their permissions;
+- **staff:** every active super admin; and the project's manager (its owner) and active staff who uploaded a portal file
+  to the project or logged work on it, as long as they can see Design (their home domain, or a Design permission
+  they were granted, as for every other Design record). Nobody else, whatever their permissions;
 - **clients:** active accounts with live access to the project.
 
-Anyone else gets a 404, the same as for a project that doesn't exist. Ending a client's access, or deactivating a staff
-member, takes them out at once.
+Anyone else gets a 404, the same as for a project that doesn't exist. Ending a client's access, deactivating a staff
+member, or moving them to Execution takes them out at once.
 
 ### Chat and comments
 - Plain text only (rendered escaped by the client), up to 4,000 characters in the chat and 2,000 in a comment.
@@ -391,7 +413,8 @@ member, takes them out at once.
   person gets a mention notification once; an edit that adds someone notifies them.
 - **Read markers** only move forward, and never past what exists: one per person on the project's chat
   (`portal_reads`), and one per person on each file's comments (`portal_comment_reads`), so reading one file's comments
-  leaves the others new. `POST {base}/read` takes `lastMessageId`, and/or `itemId` with `lastCommentId`.
+  leaves the others new. `POST {base}/read` takes `lastMessageId`, and/or `itemId` with `lastCommentId`. Two tabs
+  writing a person's first marker at once keep one: the second finds the first and moves it.
 - **Archived** projects: everything readable, nothing writable (422 `portal_discussion_closed`). **Completed** projects
   work as usual.
 
@@ -401,8 +424,9 @@ member, takes them out at once.
   counts what came since the person last read it (it starts again at 1 once read). See
   [notifications.md](notifications.md).
 - **Clients** have their own (`portal_notifications`): `team_message` (rolling per project), `team_comment` (rolling per
-  file) and `mention` (once). A rolling one adds to its count while unread and starts again at 1 once read. They're shown
-  and counted only while the client has access to the project. `GET /api/portal/me` gives each project's unread count.
+  file) and `mention` (once). A rolling one adds to its count while unread and starts again at 1 once read. Each is
+  written in one statement (`INSERT ... ON DUPLICATE KEY UPDATE`), so messages sent at the same moment still make one
+  notification counting them all. They're shown and counted only while the client has access to the project. `GET /api/portal/me` gives each project's unread count.
 - No notification holds the text written: only who, which project and which file.
 
 ### Live
@@ -444,8 +468,9 @@ All writes are `Never` for Proton.
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a
   signed-in client looks anonymous to the limiter (60 requests a minute per address). Discussion writes also have their
   own per-account limit.
-- **Archived projects** still appear to their clients. Their content is read-only for staff; the client side comes
-  with publishing.
-- **Content activity** (uploads, renames, deletions) isn't in the activity feed: drafts are internal. Publishing will
-  be recorded.
-- **No client notifications yet.** Publishing notifications come in a later phase.
+- **Archived projects** still appear to their clients, read-only on both sides: the published page and the
+  discussion can be read, but nothing can be changed, published or written.
+- **Content activity** (uploads, renames, deletions) isn't in the activity feed: drafts are internal. Publishing is
+  recorded (`portal_published`).
+- **Client notifications** cover the discussion only (team messages, team comments, mentions). Publishing doesn't
+  notify clients yet.

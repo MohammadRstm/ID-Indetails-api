@@ -257,7 +257,9 @@ public sealed class ProposeSetClientArchivedTool(IClientService clients) : Proto
         var preview = new ProtonPreview(
             input.Archived ? $"Archive the client {client.DisplayName}" : $"Restore the client {client.DisplayName}",
             [new ProtonChange("State", client.IsArchived ? "Archived" : "Active", input.Archived ? "Archived" : "Active")],
-            input.Archived && client.ProjectCount > 0 ? $"Its {client.ProjectCount} project(s) stay as they are." : null);
+            input.Archived && client.ProjectCount > 0
+                ? $"Its {client.ProjectCount} project(s) stay as they are, but its contacts lose access to the client portal; restoring it doesn't bring that back."
+                : null);
         return (new SetClientArchivedArgs(client.Id, input.Archived), preview, ClientText.Ref(client));
     }
 

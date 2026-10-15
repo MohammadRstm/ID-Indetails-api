@@ -47,7 +47,7 @@ public sealed class LocalContentStoreController(LocalContentStore? store = null)
             FileNameStar = download.FileName,
         }.ToString();
         Response.Headers.XContentTypeOptions = "nosniff";
-        Response.Headers.CacheControl = "private, max-age=3600";
+        Response.Headers.CacheControl = download.CacheControl;
         return PhysicalFile(download.Path, download.ContentType, enableRangeProcessing: true);
     }
 }

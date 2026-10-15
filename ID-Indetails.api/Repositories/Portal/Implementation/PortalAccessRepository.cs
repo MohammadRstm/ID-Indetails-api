@@ -47,6 +47,13 @@ public sealed class PortalAccessRepository(IdIndetailsDbContext db) : IPortalAcc
             client?.Emails ?? []);
     }
 
+    public async Task<IReadOnlyList<long>> ProjectIdsOfClientAsync(long clientId, CancellationToken cancellationToken = default)
+        => await db.Projects.AsNoTracking()
+            .Where(p => p.ClientId == clientId)
+            .OrderBy(p => p.Id)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+
     public Task<PortalProjectAccess?> GetAsync(long accountId, long projectId, CancellationToken cancellationToken = default)
         => db.PortalProjectAccess.SingleOrDefaultAsync(a => a.AccountId == accountId && a.ProjectId == projectId, cancellationToken);
 

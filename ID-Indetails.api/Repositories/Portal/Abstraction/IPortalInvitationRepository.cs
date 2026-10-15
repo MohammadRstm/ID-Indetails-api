@@ -13,7 +13,7 @@ public interface IPortalInvitationRepository
     /// <summary>The latest invitation of each account to the project, untracked.</summary>
     Task<IReadOnlyList<PortalInvitation>> LatestForProjectAsync(long projectId, CancellationToken cancellationToken = default);
 
-    /// <summary>Tracked, with the project loaded: every invitation of the account that is still pending and unexpired.</summary>
+    /// <summary>Tracked, with the project loaded: every invitation of the account that is still pending and unexpired, oldest first.</summary>
     Task<IReadOnlyList<PortalInvitation>> PendingForAccountAsync(long accountId, DateTime now, CancellationToken cancellationToken = default);
 
     Task<bool> HasPendingAsync(long accountId, long projectId, DateTime now, CancellationToken cancellationToken = default);
@@ -25,6 +25,12 @@ public interface IPortalInvitationRepository
     /// can never be used twice.
     /// </summary>
     Task<bool> TryAcceptAsync(long invitationId, DateTime acceptedAt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Revokes the invitation only if it is neither accepted nor revoked, in a single statement, so it can't be revoked
+    /// after the client accepted it at the same moment.
+    /// </summary>
+    Task<bool> TryRevokeAsync(long invitationId, DateTime revokedAt, CancellationToken cancellationToken = default);
 
     /// <summary>Revokes the account's pending invitations to the project.</summary>
     Task RevokePendingAsync(long accountId, long projectId, DateTime revokedAt, CancellationToken cancellationToken = default);

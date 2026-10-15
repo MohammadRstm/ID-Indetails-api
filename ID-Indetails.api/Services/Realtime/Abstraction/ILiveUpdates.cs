@@ -21,6 +21,9 @@ public interface ILiveUpdates
     /// <summary>These clients' bells changed.</summary>
     void PortalNotificationsChanged(IEnumerable<long> accountIds);
 
+    /// <summary>These clients lost access to a project (or every project): their open pages load again.</summary>
+    void PortalAccessChanged(IEnumerable<long> accountIds);
+
     Task FlushAsync(CancellationToken cancellationToken = default);
 
     void Discard();
@@ -45,4 +48,7 @@ public static class LiveSignals
 
     /// <summary><c>{ projectId }</c>: that project's client portal discussion changed.</summary>
     public const string Portal = "portal";
+
+    /// <summary>A client's access ended somewhere: what their pages show may no longer be theirs to see.</summary>
+    public const string Access = "access";
 }

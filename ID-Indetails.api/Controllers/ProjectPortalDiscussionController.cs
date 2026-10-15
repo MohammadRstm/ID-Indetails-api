@@ -9,8 +9,8 @@ namespace ID_Indetails.api.Controllers;
 
 /// <summary>
 /// The staff side of a Design client project's discussion: the project chat and comments on published files. Only
-/// staff taking part (super admins, the project's manager, whoever uploaded a portal file or logged work on it) get
-/// past the 404; see docs/client-portal.md.
+/// staff taking part (super admins; the project's manager, whoever uploaded a portal file or logged work on it, while
+/// they can see Design) get past the 404; see docs/client-portal.md.
 /// </summary>
 [ApiController]
 [Route("api/projects/{projectId:long}/portal/discussion")]

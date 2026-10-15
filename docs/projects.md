@@ -70,7 +70,7 @@ Every project money figure comes from one place: `Business/Finance/ProjectFinanc
 
 Anything else is `422 invalid_status_change`, and asking for the current status is `422 status_unchanged`.
 
-- **Auto-archive:** while a domain's `autoArchive` setting is on, the scheduler (every hour) archives its completed projects when both the completion and the latest activity event (invoices, payments, edits…) are at least 90 days old. It is a system event: `project_archived` with no actor and `automatic: true` in the payload, and no notification.
+- **Auto-archive:** while a domain's `autoArchive` setting is on, the scheduler (every hour) archives its completed projects when the completion, the latest activity event (invoices, payments, edits…) and the latest client portal message or (not deleted) comment are all at least 90 days old. It is a system event: `project_archived` with no actor and `automatic: true` in the payload, and no notification.
 - **Finalising** happens when a project is completed, or archived without being completed first. Revenue is locked (`revenue_locked_at`, `finalized_at`, `completed_at`), the Execution agreed amount is frozen into `projects.revenue`, and every open requirement is ticked as done with `auto_done` set.
 - **Reopening** clears those dates, returns Execution revenue to being calculated live, and reopens exactly the `auto_done` requirements.
 - Archiving a completed project keeps its finalisation. Resuming from hold changes nothing else.

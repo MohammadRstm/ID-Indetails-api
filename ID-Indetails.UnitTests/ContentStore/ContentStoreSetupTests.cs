@@ -40,6 +40,7 @@ public class ContentStoreSetupTests
             .AddSingleton<IConfiguration>(configuration)
             .AddSingleton(environment.Object)
             .AddSingleton(Mock.Of<IClock>())
+            .AddLogging()
             .AddContentStore(configuration, environment.Object)
             .BuildServiceProvider();
     }

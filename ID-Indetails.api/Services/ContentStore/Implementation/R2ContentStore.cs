@@ -8,6 +8,7 @@ using Amazon.S3.Model;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.ContentStore.Abstraction;
 using Microsoft.Extensions.Options;
 
@@ -15,7 +16,8 @@ namespace ID_Indetails.api.Services.ContentStore.Implementation;
 
 /// <summary>
 /// A private Cloudflare R2 bucket, through its S3 API. The bytes go straight between the browser and R2 on presigned
-/// links; the API only starts, lists, completes and deletes. Network failures and 5xx answers become a 503.
+/// links; the API only starts, lists, completes and deletes. Network failures and 5xx answers become a 503, with the
+/// cause logged here (the 503 itself is logged without it).
 /// </summary>
 public sealed class R2ContentStore : IContentStore, IDisposable
 {
@@ -23,11 +25,15 @@ public sealed class R2ContentStore : IContentStore, IDisposable
 
     private readonly AmazonS3Client _client;
     private readonly string _bucket;
+    private readonly IClock _clock;
+    private readonly ILogger<R2ContentStore> _logger;
 
-    public R2ContentStore(IOptions<ContentStoreOptions> options)
+    public R2ContentStore(IOptions<ContentStoreOptions> options, IClock clock, ILogger<R2ContentStore> logger)
     {
         var r2 = options.Value.R2;
         _bucket = r2.Bucket;
+        _clock = clock;
+        _logger = logger;
         _client = new AmazonS3Client(
             new BasicAWSCredentials(r2.AccessKeyId, r2.SecretAccessKey),
             new AmazonS3Config
@@ -97,7 +103,14 @@ public sealed class R2ContentStore : IContentStore, IDisposable
             UploadId = uploadId,
             PartETags = parts.OrderBy(p => p.PartNumber).Select(p => new PartETag(p.PartNumber, p.ETag)).ToList(),
         };
-        await SendAsync(ct => _client.CompleteMultipartUploadAsync(request, ct), cancellationToken);
+        try
+        {
+            await SendAsync(ct => _client.CompleteMultipartUploadAsync(request, ct), cancellationToken);
+        }
+        catch (AmazonS3Exception ex) when (ex.ErrorCode == NoSuchUpload)
+        {
+            // joined by another attempt a moment ago, or abandoned: whether the object exists tells which
+        }
     }
 
     public async Task AbortUploadAsync(string key, string uploadId, CancellationToken cancellationToken = default)
@@ -162,8 +175,7 @@ public sealed class R2ContentStore : IContentStore, IDisposable
             {
                 ContentType = contentType,
                 ContentDisposition = ContentDisposition(fileName, inline),
-                // the browser keeps what it loaded for as long as the link lasts at most
-                CacheControl = "private, max-age=3600",
+                CacheControl = ContentLinks.CacheControl(expiresAt, _clock.UtcNow),
             },
         });
 
@@ -214,6 +226,7 @@ public sealed class R2ContentStore : IContentStore, IDisposable
         }
         catch (Exception ex) when (IsOutage(ex, cancellationToken))
         {
+            _logger.LogWarning(ex, "The content store couldn't be reached, or failed to answer.");
             throw new ServiceUnavailableException(
                 ErrorCodes.ContentStorageUnavailable, "The file storage can't be reached right now. Try again in a moment.", ex);
         }

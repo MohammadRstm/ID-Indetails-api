@@ -13,6 +13,7 @@ public sealed class LiveUpdates(ILivePublisher publisher, IPortalLivePublisher p
     private readonly HashSet<(long ProjectId, long UserId)> _portalStaff = [];
     private readonly HashSet<(long ProjectId, long AccountId)> _portalClients = [];
     private readonly HashSet<long> _portalNotifications = [];
+    private readonly HashSet<long> _portalAccess = [];
 
     public void NotificationsChanged(IEnumerable<long> userIds) => _notifications.UnionWith(userIds);
 
@@ -25,6 +26,8 @@ public sealed class LiveUpdates(ILivePublisher publisher, IPortalLivePublisher p
     }
 
     public void PortalNotificationsChanged(IEnumerable<long> accountIds) => _portalNotifications.UnionWith(accountIds);
+
+    public void PortalAccessChanged(IEnumerable<long> accountIds) => _portalAccess.UnionWith(accountIds);
 
     public async Task FlushAsync(CancellationToken cancellationToken = default)
     {
@@ -53,6 +56,11 @@ public sealed class LiveUpdates(ILivePublisher publisher, IPortalLivePublisher p
             await portalPublisher.PublishAsync(_portalNotifications.ToList(), LiveSignals.Notifications, null, cancellationToken);
         }
 
+        if (_portalAccess.Count > 0)
+        {
+            await portalPublisher.PublishAsync(_portalAccess.ToList(), LiveSignals.Access, null, cancellationToken);
+        }
+
         Discard();
     }
 
@@ -63,6 +71,7 @@ public sealed class LiveUpdates(ILivePublisher publisher, IPortalLivePublisher p
         _portalStaff.Clear();
         _portalClients.Clear();
         _portalNotifications.Clear();
+        _portalAccess.Clear();
     }
 }
 

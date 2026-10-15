@@ -115,8 +115,13 @@ public sealed class LocalContentStore(IOptions<ContentStoreOptions> options, IHo
 
     public async Task CompleteUploadAsync(string key, string uploadId, IReadOnlyList<StoredPart> parts, CancellationToken cancellationToken = default)
     {
-        var folder = await FindUploadAsync(key, uploadId, cancellationToken)
-            ?? throw new InvalidOperationException("There is no such upload to complete.");
+        var folder = await FindUploadAsync(key, uploadId, cancellationToken);
+        if (folder is null)
+        {
+            // joined by another attempt a moment ago, or aborted, as R2 answers NoSuchUpload
+            return;
+        }
+
         var target = PathOf(key);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 
@@ -178,7 +183,10 @@ public sealed class LocalContentStore(IOptions<ContentStoreOptions> options, IHo
         }
 
         var path = PathOf(link.Key);
-        return File.Exists(path) ? new LocalDownload(path, link.FileName, link.ContentType, link.Inline) : null;
+        var expiresAt = DateTimeOffset.FromUnixTimeSeconds(link.Expires).UtcDateTime;
+        return File.Exists(path)
+            ? new LocalDownload(path, link.FileName, link.ContentType, link.Inline, ContentLinks.CacheControl(expiresAt, clock.UtcNow))
+            : null;
     }
 
     public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
@@ -271,5 +279,5 @@ public sealed class LocalContentStore(IOptions<ContentStoreOptions> options, IHo
     private sealed record UploadMeta(string Key, string ContentType);
 }
 
-/// <summary>A file a signed download link points at, for the controller to stream.</summary>
-public sealed record LocalDownload(string Path, string FileName, string ContentType, bool Inline);
+/// <summary>A file a signed download link points at, for the controller to stream, and how long the browser may keep it.</summary>
+public sealed record LocalDownload(string Path, string FileName, string ContentType, bool Inline, string CacheControl);

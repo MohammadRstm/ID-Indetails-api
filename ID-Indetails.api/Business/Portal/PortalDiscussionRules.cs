@@ -24,8 +24,9 @@ public sealed record DiscussionProject(
 /// <summary>
 /// <list type="bullet">
 /// <item>A Design client project's discussion: a chat for the whole project and comment threads on its published files.</item>
-/// <item>Staff take part when they are active and a super admin, the project's manager, or uploaded a portal file to
-/// it or logged work on it; clients when their account is active with live access. Worked out on every request.</item>
+/// <item>Staff take part when they are active and either a super admin, or the project's manager, an uploader of one
+/// of its portal files or someone who logged work on it, while they can see its domain (someone moved to the other
+/// domain is out). Clients take part when their account is active with live access. Worked out on every request.</item>
 /// <item>Plain text only: a chat message up to 4,000 characters, a comment up to 2,000.</item>
 /// <item>An archived project's discussion can be read, not written.</item>
 /// <item>Only people taking part can be mentioned; mentioning yourself does nothing.</item>

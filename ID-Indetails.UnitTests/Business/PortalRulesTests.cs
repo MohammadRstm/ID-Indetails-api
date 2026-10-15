@@ -48,12 +48,20 @@ public class PortalRulesTests
     }
 
     [Fact]
-    public void Sign_in_pauses_after_the_last_allowed_wrong_password_and_the_count_starts_over()
+    public void An_invitation_is_accepted_only_while_the_project_would_still_take_the_address()
     {
-        PortalRules.AfterWrongPassword(0, Now, attempts: 3, lockoutMinutes: 15).ShouldBe((1, (DateTime?)null));
-        PortalRules.AfterWrongPassword(1, Now, attempts: 3, lockoutMinutes: 15).ShouldBe((2, (DateTime?)null));
-        PortalRules.AfterWrongPassword(2, Now, attempts: 3, lockoutMinutes: 15).ShouldBe((0, (DateTime?)Now.AddMinutes(15)));
+        PortalRules.CanAccept(Project(), "rita@client.test").ShouldBeTrue();
+        PortalRules.CanAccept(Project(status: ProjectStatus.Completed), "rita@client.test").ShouldBeTrue();
+        PortalRules.CanAccept(Project(), "someone@else.test").ShouldBeFalse();
+        PortalRules.CanAccept(Project(status: ProjectStatus.Archived), "rita@client.test").ShouldBeFalse();
+        PortalRules.CanAccept(Project(clientArchived: true), "rita@client.test").ShouldBeFalse();
+        PortalRules.CanAccept(Project(billing: BillingType.Internal, clientId: null), "rita@client.test").ShouldBeFalse();
+        PortalRules.CanAccept(Project() with { DomainCode = DomainCodes.Execution }, "rita@client.test").ShouldBeFalse();
+    }
 
+    [Fact]
+    public void A_paused_sign_in_stays_paused_until_its_time()
+    {
         PortalRules.IsLocked(Now.AddMinutes(1), Now).ShouldBeTrue();
         PortalRules.IsLocked(Now, Now).ShouldBeFalse();
         PortalRules.IsLocked(null, Now).ShouldBeFalse();

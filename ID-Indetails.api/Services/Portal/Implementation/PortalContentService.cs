@@ -59,19 +59,10 @@ public sealed class PortalContentService(
         }
 
         var now = clock.UtcNow;
-
-        // the same file started again (a retried request) carries on with its upload
         var existing = await content.FindUploadAsync(currentUser.Id, request.ClientToken, cancellationToken);
         if (existing is not null)
         {
-            if (existing.ProjectId != projectId || existing.Status is not (PortalUploadStatus.Uploading or PortalUploadStatus.Completed))
-            {
-                throw Ended();
-            }
-
-            existing.LastActivityAt = now;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            return Started(existing);
+            return await StartedAgainAsync(projectId, existing, now, cancellationToken);
         }
 
         if (!request.Hero && request.ReplaceItemId is { } replaceItemId)
@@ -101,7 +92,12 @@ public sealed class PortalContentService(
             LastActivityAt = now,
         };
         content.Add(upload);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        if (!await unitOfWork.TrySaveChangesAsync(cancellationToken))
+        {
+            // the same file started by another request at the same moment
+            var other = await content.FindUploadAsync(currentUser.Id, request.ClientToken, cancellationToken) ?? throw Ended();
+            return await StartedAgainAsync(projectId, other, now, cancellationToken);
+        }
 
         try
         {
@@ -315,6 +311,25 @@ public sealed class PortalContentService(
         var url = await store.GetDownloadUrlAsync(
             item.File.StorageKey, item.File.OriginalName, item.File.ContentType, showInline, expiresAt, cancellationToken);
         return new PortalContentLinkResponse(url, expiresAt);
+    }
+
+    /// <summary>
+    /// The same file started again (a retried request) carries on with its upload, once the store has started it. One
+    /// the store hasn't started (still starting, or its start failed) is ended: the browser starts again with a new token.
+    /// </summary>
+    private async Task<PortalUploadStartedResponse> StartedAgainAsync(
+        long projectId, PortalUpload upload, DateTime now, CancellationToken cancellationToken)
+    {
+        if (upload.ProjectId != projectId
+            || upload.Status is not (PortalUploadStatus.Uploading or PortalUploadStatus.Completed)
+            || upload.StoreUploadId.Length == 0)
+        {
+            throw Ended();
+        }
+
+        upload.LastActivityAt = now;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return Started(upload);
     }
 
     /// <summary>Only the person who started an upload can carry it on, complete or cancel it.</summary>

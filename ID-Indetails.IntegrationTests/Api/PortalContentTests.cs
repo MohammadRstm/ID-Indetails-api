@@ -151,6 +151,11 @@ public class PortalContentTests(ApiFactory api) : IClassFixture<ApiFactory>
         var download = await Client.GetAsync(link.Url);
         download.Content.Headers.ContentDisposition!.DispositionType.ShouldBe("attachment");
         download.Content.Headers.ContentDisposition.FileNameStar.ShouldBe("Living room.jpg");
+
+        // the browser keeps each only while its link lasts: an hour for a preview, five minutes for a download
+        preview.Headers.CacheControl!.Private.ShouldBeTrue();
+        preview.Headers.CacheControl.MaxAge!.Value.TotalSeconds.ShouldBeInRange(3000, 3600);
+        download.Headers.CacheControl!.MaxAge!.Value.TotalSeconds.ShouldBeInRange(200, 300);
     }
 
     [Fact]
@@ -200,6 +205,67 @@ public class PortalContentTests(ApiFactory api) : IClassFixture<ApiFactory>
         var later = await (await CompleteAsync(s.SuperAdmin, s.Project.Id, first.UploadId)).ReadAsync<PortalUploadCompletedResponse>();
         later.Item.Id.ShouldBe(items[0].Item.Id);
         (await ContentAsync(s.SuperAdmin, s.Project.Id)).Items.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_start_repeated_before_the_store_began_the_upload_is_over_and_the_browser_starts_again()
+    {
+        var s = await DesignProjectAsync();
+        var token = Guid.NewGuid().ToString();
+        var first = await StartedAsync(s.SuperAdmin, s.Project.Id, "plan.pdf", Pdf.Length, token: token);
+
+        // as if the first request were still waiting for the store, or its start had failed
+        await _steps.ExecuteAsync("UPDATE portal_uploads SET store_upload_id = '' WHERE id = @id", ("@id", first.UploadId));
+        await (await StartAsync(s.SuperAdmin, s.Project.Id, "plan.pdf", Pdf.Length, token: token)).ShouldFailWithAsync(409, ErrorCodes.PortalUploadEnded);
+
+        var again = await StartedAsync(s.SuperAdmin, s.Project.Id, "plan.pdf", Pdf.Length);
+        again.UploadId.ShouldNotBe(first.UploadId);
+
+        // the same file started twice at the same moment: one upload, and never a server error
+        var sameToken = Guid.NewGuid().ToString();
+        var both = await Task.WhenAll(
+            StartAsync(s.SuperAdmin, s.Project.Id, "plan.pdf", Pdf.Length, token: sameToken),
+            StartAsync(s.SuperAdmin, s.Project.Id, "plan.pdf", Pdf.Length, token: sameToken));
+        both.ShouldAllBe(r => (int)r.StatusCode == 201 || (int)r.StatusCode == 409);
+        var started = await Task.WhenAll(both.Where(r => (int)r.StatusCode == 201).Select(r => r.ReadAsync<PortalUploadStartedResponse>()));
+        started.ShouldNotBeEmpty();
+        started.Select(u => u.UploadId).Distinct().Count().ShouldBe(1);
+        (await _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM portal_uploads WHERE client_token = @t AND created_by_id = @u", ("@t", sameToken), ("@u", s.SuperAdmin.User.Id))).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Changes_at_the_same_moment_wait_for_each_other_instead_of_failing()
+    {
+        var s = await DesignProjectAsync();
+        // the first file makes the content lock's row: every change below finds it there
+        var kitchen = await UploadAsync(s.SuperAdmin, s.Project.Id, "Kitchen.jpg", Jpeg);
+
+        var uploads = new List<PortalUploadStartedResponse>();
+        foreach (var name in new[] { "Bedroom.jpg", "Bathroom.jpg", "Hall.jpg" })
+        {
+            var upload = await StartedAsync(s.SuperAdmin, s.Project.Id, name, Jpeg.Length);
+            await PutPartAsync((await LinksAsync(s.SuperAdmin, s.Project.Id, upload.UploadId, 1)).Parts[0].Url, Jpeg);
+            uploads.Add(upload);
+        }
+
+        var completed = await Task.WhenAll(uploads.Select(u => CompleteAsync(s.SuperAdmin, s.Project.Id, u.UploadId)));
+        foreach (var response in completed)
+        {
+            response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+        }
+
+        var renamed = await Task.WhenAll(Enumerable.Range(1, 4).Select(i =>
+            Client.PutJsonAsync($"{Base(s.Project.Id)}/items/{kitchen.Item.Id}", new { title = $"Kitchen {i}" }, s.SuperAdmin.AccessToken)));
+        foreach (var response in renamed)
+        {
+            response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+        }
+
+        // every change happened, one after the other
+        var content = await ContentAsync(s.SuperAdmin, s.Project.Id);
+        content.Items.Count.ShouldBe(4);
+        content.Revision.ShouldBe(1 + 3 + 4);
     }
 
     [Fact]

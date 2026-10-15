@@ -82,7 +82,9 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
                 && p.Status == ProjectStatus.Completed
                 && p.CompletedAt != null
                 && p.CompletedAt <= beforeUtc
-                && !db.ActivityEvents.Any(e => e.ProjectId == p.Id && e.OccurredAt > beforeUtc))
+                && !db.ActivityEvents.Any(e => e.ProjectId == p.Id && e.OccurredAt > beforeUtc)
+                && !db.PortalMessages.Any(m => m.ProjectId == p.Id && m.CreatedAt > beforeUtc)
+                && !db.PortalComments.Any(c => c.ProjectId == p.Id && c.DeletedAt == null && c.CreatedAt > beforeUtc))
             .Select(p => p.Id)
             .ToListAsync(cancellationToken);
 

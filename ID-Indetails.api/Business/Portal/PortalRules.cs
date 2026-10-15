@@ -60,11 +60,15 @@ public static class PortalRules
     public static bool IsClientContact(IReadOnlyList<PortalClientContact> contacts, string email)
         => contacts.Any(c => c.Email == email);
 
-    public static bool IsLocked(DateTime? lockedUntil, DateTime now) => lockedUntil > now;
+    /// <summary>
+    /// Whether an invitation to the project can still be accepted: what inviting checked, checked again since any of it
+    /// may have changed. A Design client project that isn't archived, of a client that isn't archived, that still has
+    /// the address among its contacts. (Moving the project to another client cancels its invitations.)
+    /// </summary>
+    public static bool CanAccept(PortalProjectFacts project, string email)
+        => project.DomainCode == DomainCodes.Design && CheckInvitable(project) is null && IsClientContact(project.EmailContacts, email);
 
-    /// <summary>After a wrong password: the count goes up, and at <paramref name="attempts"/> sign-in pauses and the count starts over.</summary>
-    public static (int FailedSignIns, DateTime? LockedUntil) AfterWrongPassword(int failedSignIns, DateTime now, int attempts, int lockoutMinutes)
-        => failedSignIns + 1 >= attempts ? (0, now.AddMinutes(lockoutMinutes)) : (failedSignIns + 1, null);
+    public static bool IsLocked(DateTime? lockedUntil, DateTime now) => lockedUntil > now;
 
     /// <summary>Where one email contact stands on the project, for the staff list.</summary>
     public static PortalClientStatus StatusOf(

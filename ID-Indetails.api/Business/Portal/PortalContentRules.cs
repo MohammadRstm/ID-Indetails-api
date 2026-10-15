@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Constants;
@@ -144,18 +145,27 @@ public static class PortalContentRules
     /// <summary>The prefix every client portal key starts with.</summary>
     public const string KeyPrefix = "portal/";
 
-    /// <summary>The browser's file name made safe to keep and show: no path, no control characters, at most 255 characters.</summary>
+    /// <summary>
+    /// The browser's file name made safe to keep and show: no path, no control or invisible formatting characters (such
+    /// as a right-to-left override that makes "gpj.exe" read "exe.jpg"), at most 255 characters.
+    /// </summary>
     public static string SafeName(string fileName)
     {
         var name = Path.GetFileName(fileName.Replace('\\', '/'));
-        var kept = new string(name.Where(c => !char.IsControl(c) && c is not ('"' or '<' or '>' or '|' or '*' or '?' or ':')).ToArray()).Trim();
+        var kept = new string(name
+            .Where(c => char.GetUnicodeCategory(c) is not (UnicodeCategory.Control or UnicodeCategory.Format)
+                && c is not ('"' or '<' or '>' or '|' or '*' or '?' or ':'))
+            .ToArray()).Trim();
         if (kept.Length <= MaxNameLength)
         {
             return kept;
         }
 
+        // the extension is kept, unless it is too long to be a real one
         var extension = Path.GetExtension(kept);
-        return kept[..(MaxNameLength - extension.Length)] + extension;
+        return extension.Length < MaxNameLength
+            ? kept[..(MaxNameLength - extension.Length)] + extension
+            : kept[..MaxNameLength];
     }
 
     /// <summary>A new item's title: the file's name without its extension, shortened to fit.</summary>
