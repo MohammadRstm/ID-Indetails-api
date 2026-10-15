@@ -21,6 +21,16 @@ public sealed class FrontendOptions
     [Required]
     public string ResetPasswordPath { get; init; } = "/reset-password";
 
+    /// <summary>The client portal's invitation page; the token is appended as <c>?token=</c>.</summary>
+    [Required]
+    public string PortalInvitationPath { get; init; } = "/portal/invite";
+
+    [Required]
+    public string PortalLoginPath { get; init; } = "/portal/login";
+
+    [Required]
+    public string PortalResetPasswordPath { get; init; } = "/portal/reset-password";
+
     public string AcceptInvitationUrl(string token)
         => $"{BaseUrl.TrimEnd('/')}{AcceptInvitationPath}?token={Uri.EscapeDataString(token)}";
 
@@ -28,4 +38,12 @@ public sealed class FrontendOptions
 
     public string ResetPasswordUrl(string token)
         => $"{BaseUrl.TrimEnd('/')}{ResetPasswordPath}?token={Uri.EscapeDataString(token)}";
+
+    public string PortalInvitationUrl(string token)
+        => $"{BaseUrl.TrimEnd('/')}{PortalInvitationPath}?token={Uri.EscapeDataString(token)}";
+
+    public string PortalLoginUrl => $"{BaseUrl.TrimEnd('/')}{PortalLoginPath}";
+
+    public string PortalResetPasswordUrl(string token)
+        => $"{BaseUrl.TrimEnd('/')}{PortalResetPasswordPath}?token={Uri.EscapeDataString(token)}";
 }

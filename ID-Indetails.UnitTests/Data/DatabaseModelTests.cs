@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_64_tables_with_snake_case_names()
+    public void Model_has_all_69_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(64);
+        tables.Count.ShouldBe(69);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -120,7 +120,7 @@ public class DatabaseModelTests
     [Fact]
     public void Tokens_are_stored_only_as_unique_hashes()
     {
-        foreach (var type in new[] { typeof(RefreshToken), typeof(UserInvitation), typeof(PasswordResetToken) })
+        foreach (var type in new[] { typeof(RefreshToken), typeof(UserInvitation), typeof(PasswordResetToken), typeof(PortalRefreshToken), typeof(PortalInvitation), typeof(PortalPasswordResetToken) })
         {
             var entity = Model.FindEntityType(type)!;
 

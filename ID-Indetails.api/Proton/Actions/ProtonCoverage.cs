@@ -75,7 +75,8 @@ public static class ProtonCoverage
 
     private static ProtonCoverageEntry ReadOnly(string endpoint, string usedBy) => new(endpoint, ProtonCoverageKind.ReadOnly, Note: usedBy);
 
-    private static ProtonCoverageEntry Never(string endpoint, string reason) => new(endpoint, ProtonCoverageKind.Never, Note: reason);
+    private static ProtonCoverageEntry Never(string endpoint, string reason, bool externalSend = false)
+        => new(endpoint, ProtonCoverageKind.Never, Note: reason, ExternalSend: externalSend);
 
     private static ProtonCoverageEntry Own(string endpoint) => new(endpoint, ProtonCoverageKind.Own);
 
@@ -240,6 +241,18 @@ public static class ProtonCoverage
         Never("Devices.DeleteCurrent", "the phone app stops its own pushes"),
         Never("Devices.Delete", "takes a phone off the person's account: done by the person"),
         Never("NotificationSettings.Save", "the person's quiet hours and muted pushes: set by the person"),
+        // the client portal: who outside the company may see a project is decided by a person, and clients' own sign-in
+        Never("ProjectPortal.Invite", "gives someone outside the company access to a project", externalSend: true),
+        Never("ProjectPortal.Resend", "emails a sign-up link to someone outside the company", externalSend: true),
+        Never("ProjectPortal.RevokeInvitation", "decides who outside the company may see a project"),
+        Never("ProjectPortal.RevokeAccess", "decides who outside the company may see a project"),
+        Never("PortalAuth.Login", "a client's sign-in: takes a password"),
+        Never("PortalAuth.Refresh", "rotates a client's sign-in cookie"),
+        Never("PortalAuth.Logout", "ends a client's session"),
+        Never("PortalAuth.ForgotPassword", "starts a client's account recovery"),
+        Never("PortalAuth.ResetPassword", "takes a secret token and a new password"),
+        Never("PortalInvitations.Validate", "reads a client's secret invitation token"),
+        Never("PortalInvitations.Accept", "takes a secret token and a new password"),
 
         // Proton itself
         Own("Proton.Ask"),

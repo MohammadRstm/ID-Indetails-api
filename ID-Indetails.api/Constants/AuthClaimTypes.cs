@@ -22,4 +22,10 @@ public static class AuthClaimTypes
 
     /// <summary>The phone app's session id. Only on tokens issued to the app; device registration ties a push token to it.</summary>
     public const string SessionId = "sid";
+
+    /// <summary>
+    /// The client portal account id. Portal tokens carry it instead of <see cref="UserId"/>, so nothing that reads a
+    /// staff user id ever finds one in a client's token.
+    /// </summary>
+    public const string PortalAccountId = "portal_account";
 }

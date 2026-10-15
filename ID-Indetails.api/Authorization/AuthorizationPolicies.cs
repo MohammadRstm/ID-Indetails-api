@@ -9,6 +9,12 @@ public static class AuthorizationPolicies
     /// <summary>Signed in, even with a generated password still pending replacement.</summary>
     public const string AllowPendingPasswordChange = "AllowPendingPasswordChange";
 
+    /// <summary>A signed-in client portal account, through the portal's own token scheme. Staff tokens never pass.</summary>
+    public const string Portal = "Portal";
+
+    /// <summary>The client portal's token scheme: its own audience and claims, so its tokens and staff tokens never cross.</summary>
+    public const string PortalScheme = "Portal";
+
     /// <summary>Prefix of the dynamic permission policies built by <see cref="PermissionPolicyProvider"/>.</summary>
     public const string PermissionPrefix = "permission:";
 

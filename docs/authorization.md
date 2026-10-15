@@ -97,3 +97,9 @@ The check runs only when someone's permissions are changed, never on ordinary re
 `PermissionService` caches the catalogue and role defaults (they only change by migration) and each user's access for 10 minutes. A user's cached access is dropped whenever their overrides or role change through the API. Anything that changes a user's role, domain or status must call `IPermissionService.Forget(userId)`; the people-management endpoints already do.
 
 The cache is in-process. Running more than one API instance would need a shared cache or a per-user version stamp.
+
+## Client portal
+
+Client portal endpoints (`/api/portal/*`) use their own token scheme and the `Portal` policy; staff permissions never
+apply to them, and client tokens never pass a staff endpoint. Inviting clients and ending their access needs
+`client_access:manage` (Design only). See [client-portal.md](client-portal.md).

@@ -30,6 +30,7 @@ using ID_Indetails.api.Repositories.Reports.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
+using ID_Indetails.api.Services.Portal.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
@@ -52,6 +53,7 @@ public sealed class ProjectService(
     IReportRepository reports,
     IActivityEventRepository activity,
     IProjectNotifier notifier,
+    IPortalAccessService portalAccess,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectService
 {
@@ -338,6 +340,12 @@ public sealed class ProjectService(
             await EnsureClientAsync(request.ClientId, project.DomainCode, cancellationToken);
             activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectClientSet, actor.UserId,
                 new { clientId = request.ClientId, prevClientId = project.ClientId }));
+
+            // The previous client's contacts no longer follow the project in the client portal.
+            if (project.ClientId is not null)
+            {
+                await portalAccess.EndAllForProjectAsync(project.Id, project.DomainCode, project.ClientId, actor.UserId, cancellationToken);
+            }
         }
 
         var revenue = request.Revenue ?? 0;

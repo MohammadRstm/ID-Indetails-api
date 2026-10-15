@@ -170,4 +170,25 @@ public static class ErrorCodes
 
     /// <summary>Not something Proton may remember: not the person's own words, a full list, or not a preference.</summary>
     public const string ProtonMemoryRefused = "proton_memory_refused";
+
+    // Client portal
+    /// <summary>No invitation matches the link.</summary>
+    public const string PortalInvitationInvalid = "portal_invitation_invalid";
+
+    public const string PortalInvitationExpired = "portal_invitation_expired";
+    public const string PortalInvitationRevoked = "portal_invitation_revoked";
+
+    /// <summary>The link was already used to set up the account: sign in instead.</summary>
+    public const string PortalInvitationUsed = "portal_invitation_used";
+
+    /// <summary>The project can't have a client portal: not a Design client project, or archived.</summary>
+    public const string PortalProjectNotEligible = "portal_project_not_eligible";
+
+    /// <summary>Only an email address among the project client's contacts can be invited.</summary>
+    public const string PortalEmailNotClientContact = "portal_email_not_client_contact";
+
+    /// <summary>The client already has access, or a pending invitation, to this project.</summary>
+    public const string PortalAlreadyInvited = "portal_already_invited";
+
+    public const string PortalAccessAlreadyEnded = "portal_access_already_ended";
 }

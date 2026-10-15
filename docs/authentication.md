@@ -2,6 +2,9 @@
 
 There is **no self-signup**. A developer creates the first super admin. After that, every account is created by invitation.
 
+Clients of Design projects sign in to the client portal with separate accounts, tokens and cookies: see
+[client-portal.md](client-portal.md). Nothing below applies to them.
+
 ## Endpoints
 
 | Method and path | Access | Purpose |

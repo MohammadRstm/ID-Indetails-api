@@ -10,6 +10,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Hubs;
 using ID_Indetails.api.Middlewares;
 using ID_Indetails.api.RateLimiting;
+using ID_Indetails.api.Repositories.Portal.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -32,7 +33,10 @@ public static class AuthServiceCollectionExtensions
         services.AddOptions<SetupOptions>().BindConfiguration(SetupOptions.SectionName);
         services.AddOptions<RateLimitOptions>().BindConfiguration(RateLimitOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
 
+        services.AddOptions<PortalOptions>().BindConfiguration(PortalOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+
         var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+        var portal = configuration.GetSection(PortalOptions.SectionName).Get<PortalOptions>() ?? new PortalOptions();
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -88,6 +92,48 @@ public static class AuthServiceCollectionExtensions
                         }
                     },
                 };
+            })
+            // The client portal: the same issuer and key, its own audience and its own id claim, so a client's token is
+            // refused by every staff endpoint and a staff token by every portal endpoint (docs/client-portal.md).
+            .AddJwtBearer(AuthorizationPolicies.PortalScheme, options =>
+            {
+                options.MapInboundClaims = false;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = jwt.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = portal.Audience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SigningKey)),
+                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.FromMinutes(1),
+                    NameClaimType = AuthClaimTypes.PortalAccountId,
+                    AuthenticationType = AuthorizationPolicies.PortalScheme,
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    // An account that is no longer active, or whose sessions were ended, is refused at once.
+                    OnTokenValidated = async context =>
+                    {
+                        if (!long.TryParse(context.Principal?.FindFirst(AuthClaimTypes.PortalAccountId)?.Value, out var accountId)
+                            || context.Principal?.FindFirst(AuthClaimTypes.UserId) is not null
+                            || context.SecurityToken is not JsonWebToken token)
+                        {
+                            context.Fail("The token has no portal account.");
+                            return;
+                        }
+
+                        var account = await context.HttpContext.RequestServices.GetRequiredService<IPortalAccountRepository>()
+                            .GetSessionStateAsync(accountId, context.HttpContext.RequestAborted);
+                        if (account is not { Status: PortalAccountStatus.Active }
+                            || !SessionRules.Accepts(token.IssuedAt, null, account.SessionsValidFrom))
+                        {
+                            context.Fail("The session was ended.");
+                        }
+                    },
+                };
             });
 
         services.AddAuthorization(options =>
@@ -97,6 +143,10 @@ public static class AuthServiceCollectionExtensions
             // attribute fails closed. Public endpoints opt out with [AllowAnonymous].
             options.FallbackPolicy = AuthorizationPolicies.Default;
             options.AddPolicy(AuthorizationPolicies.AllowPendingPasswordChange, p => p.RequireAuthenticatedUser());
+            options.AddPolicy(AuthorizationPolicies.Portal, p => p
+                .AddAuthenticationSchemes(AuthorizationPolicies.PortalScheme)
+                .RequireAuthenticatedUser()
+                .RequireClaim(AuthClaimTypes.PortalAccountId));
         });
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
         services.AddScoped<IAuthorizationHandler, PermissionHandler>();
@@ -106,6 +156,8 @@ public static class AuthServiceCollectionExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddSingleton<RefreshTokenCookie>();
+        services.AddSingleton<PortalRefreshCookie>();
+        services.AddScoped<ICurrentPortalAccount, CurrentPortalAccount>();
 
         var limits = configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>() ?? new RateLimitOptions();
         services.AddRateLimiter(options =>
