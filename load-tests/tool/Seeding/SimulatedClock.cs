@@ -34,6 +34,8 @@ public sealed class SimulatedClock : IClock
 
     public DateTime CompanyDayStartUtc(DateOnly day) => _zone.CompanyDayStartUtc(day);
 
+    public DateTime FromCompanyTime(DateOnly day, int minutes) => _zone.FromCompanyTime(day, minutes);
+
     /// <summary>The instant of a company-time-zone day and time, in UTC.</summary>
     public DateTime At(DateOnly day, int hour, int minute = 0)
         => CompanyDayStartUtc(day).AddHours(hour).AddMinutes(minute);
