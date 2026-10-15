@@ -16,5 +16,18 @@ public sealed record PortalProjectFacts(
 /// <summary>One email contact of the project's client: its normalised address and its label.</summary>
 public sealed record PortalClientContact(string Email, string? Label);
 
-/// <summary>A project an account may open in the portal.</summary>
-public sealed record PortalProjectSummary(long Id, string Title, ProjectStatus Status);
+/// <summary>
+/// A project an account may open in the portal, with what its card in the project list needs: when the client last
+/// opened it, its last publication, its newest message and comment (deleted ones aside), and the file of its first
+/// published hero image.
+/// </summary>
+public sealed record PortalProjectSummary(
+    long Id,
+    string Title,
+    ProjectStatus Status,
+    DateOnly StartedOn,
+    DateTime? LastOpenedAt,
+    DateTime? PublishedAt,
+    DateTime? LastMessageAt,
+    DateTime? LastCommentAt,
+    long? HeroFileId);

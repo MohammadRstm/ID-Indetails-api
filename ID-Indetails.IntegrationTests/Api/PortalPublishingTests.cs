@@ -434,6 +434,74 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task The_clients_project_list_shows_each_projects_cover_dates_and_news_newest_project_first()
+    {
+        var s = await ProjectWithClientAsync();
+        async Task<IReadOnlyList<PortalProjectResponse>> ListAsync()
+        {
+            var me = await AsClientAsync(s.ClientToken, "/api/portal/me");
+            me.IsSuccessStatusCode.ShouldBeTrue(await me.Content.ReadAsStringAsync());
+            return (await me.ReadAsync<PortalAccountResponse>()).Projects;
+        }
+
+        async Task<PortalProjectResponse> CardAsync() => (await ListAsync()).Single(p => p.Id == s.Project.Id);
+
+        // nothing published or written yet: nothing new, no cover, no activity
+        var fresh = await CardAsync();
+        fresh.StartedOn.ShouldBe(s.Project.StartDate);
+        fresh.HasNews.ShouldBeFalse();
+        fresh.HeroUrl.ShouldBeNull();
+        fresh.HeroUrlExpiresAt.ShouldBeNull();
+        fresh.LastPublishedAt.ShouldBeNull();
+        fresh.LastActivityAt.ShouldBeNull();
+
+        // published and never opened: news, with the first published hero image as the cover
+        var living = await UploadAsync(s.Staff, s.Project.Id, "Living room.jpg", Jpeg);
+        await AddHeroAsync(s.Staff, s.Project.Id, living.Item!.Id);
+        await UploadAsync(s.Staff, s.Project.Id, "Cover.jpg", OtherJpeg, hero: true);
+        var first = await PublishAsync(s.Staff, s.Project.Id);
+        var published = await CardAsync();
+        published.HasNews.ShouldBeTrue();
+        published.Unread.ShouldBe(0);
+        published.LastPublishedAt.ShouldBe(first.Publication.PublishedAt);
+        published.LastActivityAt.ShouldBe(first.Publication.PublishedAt);
+        published.HeroUrlExpiresAt.ShouldNotBeNull();
+        (await (await Client.GetAsync(published.HeroUrl!)).Content.ReadAsByteArrayAsync()).ShouldBe(Jpeg);
+
+        // opened: no longer news, until the next publish
+        await ClientViewAsync(s.ClientToken, s.Project.Id);
+        (await CardAsync()).HasNews.ShouldBeFalse();
+        await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/summary", new { summary = "Welcome" }, s.Staff.AccessToken));
+        var second = await PublishAsync(s.Staff, s.Project.Id);
+        var republished = await CardAsync();
+        republished.HasNews.ShouldBeTrue();
+        republished.LastPublishedAt.ShouldBe(second.Publication.PublishedAt);
+        await ClientViewAsync(s.ClientToken, s.Project.Id);
+        (await CardAsync()).HasNews.ShouldBeFalse();
+
+        // a team message is news while unread, and the latest activity
+        var sent = await Client.PostJsonAsync($"/api/projects/{s.Project.Id}/portal/discussion/messages",
+            new { body = "Have a look", clientToken = Guid.NewGuid().ToString(), mentions = Array.Empty<string>() }, s.Staff.AccessToken);
+        sent.IsSuccessStatusCode.ShouldBeTrue(await sent.Content.ReadAsStringAsync());
+        var message = await sent.ReadAsync<PortalChatMessageResponse>();
+        var written = await CardAsync();
+        written.Unread.ShouldBe(1);
+        written.HasNews.ShouldBeTrue();
+        written.LastActivityAt.ShouldBe(message.CreatedAt);
+        written.LastPublishedAt.ShouldBe(second.Publication.PublishedAt);
+
+        // the newest project first: by start date, then id
+        var other = await ProjectAsync(s.Staff, DomainCodes.Design, s.ClientId);
+        await GrantAsync(s.Staff, other.Id, s.ContactEmail, firstTime: false);
+        await _steps.ExecuteAsync("UPDATE projects SET start_date = '2026-01-10' WHERE id = @p", ("@p", s.Project.Id));
+        var list = await ListAsync();
+        list.Select(p => p.Id).ShouldBe([other.Id, s.Project.Id]);
+        list[1].StartedOn.ShouldBe(new DateOnly(2026, 1, 10));
+        list[0].HasNews.ShouldBeFalse();
+        list[0].LastPublishedAt.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task A_removed_file_stays_for_clients_until_the_next_publish_and_can_be_undone()
     {
         var s = await ProjectWithClientAsync();

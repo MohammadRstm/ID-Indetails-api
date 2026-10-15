@@ -77,8 +77,8 @@ Who may invite whom is decided by permissions (`employee:invite`, `employee:invi
 Client portal accounts are separate tables (`portal_accounts`, `portal_project_access`, `portal_invitations`,
 `portal_refresh_tokens`, `portal_password_reset_tokens`). A Design project's files are in `portal_uploads`,
 `portal_files` and `portal_items` (`for_client` marks the ones chosen for the client), with the team's comments in
-`project_file_comments`; the bytes live in the content store, never in MySQL or on the server's disk. See
-[client-portal.md](client-portal.md).
+`project_file_comments` and the client portal's hero images (draft and published lists) in `portal_hero_images`; the
+bytes live in the content store, never in MySQL or on the server's disk. See [client-portal.md](client-portal.md).
 
 ## Rules the database enforces
 

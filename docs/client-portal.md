@@ -117,7 +117,8 @@ Errors:
 - Rate limits: the per-IP `auth` limit applies to login, invitations and resets; `refresh` to refresh; staff invitation
   emails use the per-person `email` limit.
 
-`GET /api/portal/me` (portal token only) returns the account and the Design projects it may open.
+`GET /api/portal/me` (portal token only) returns the account and the Design projects it may open, newest first, with
+what each project's card shows (see [The client's project list](#the-clients-project-list)).
 
 ## Endpoints
 
@@ -377,6 +378,8 @@ discarded) before it was ever published goes.
   copy for the client. It holds the project's title and status, the introduction, the hero images (`heroes`, in order,
   each `{ url, urlExpiresAt, name }`; `hero` is the first, or null, for the phone app) and the three sections, and
   nothing about staff, uploaders or storage.
+- Opening `GET /api/portal/projects/{id}` records when the client opened the project
+  (`portal_project_access.last_opened_at`, one `UPDATE`), for the project list's news flag.
 - `GET /api/portal/projects/{id}/items/{itemId}/link?inline=` gives a five-minute link to a **published** file.
 - A client gets anything only with live access to the Design project; every refusal (no access, access ended, another
   project, an unpublished file) is the same 404. Before the first publish the page is empty (`isPublished: false`).
@@ -595,6 +598,21 @@ null; the client's page has `heroes` and `hero` likewise (see [Preview and the c
   draft list the published one. Either way, a row whose image stays is kept and only takes its new place.
 - `isHero` on an item (here and in Project files) says its file is one of the draft hero images.
 
+### The client's project list
+`GET /api/portal/me` (and the account in every sign-in answer) lists the projects newest first, by start date, then id.
+Each project has, besides `id`, `title`, `status` and `unread` (unread chat messages and comments):
+
+| Field | What it is |
+|---|---|
+| `heroUrl`, `heroUrlExpiresAt` | An hour-long inline link to the first published hero image, or null |
+| `startedOn` | The project's start date |
+| `lastPublishedAt` | The last publication, or null before the first |
+| `lastActivityAt` | The latest of the last publication, the newest chat message and the newest comment (deleted ones aside), or null |
+| `hasNews` | Something new: a publication since the client last opened the project (any publication, if they never opened it), or anything unread |
+
+The list is read in one query (with the cover files in a second one); the unread counts are counted per project, as
+before. The web client sorts by these fields itself.
+
 ### Tables (migration `PortalUx`)
 - `portal_hero_images`: `project_id`, `file_id` (both restricting foreign keys), `sort_order`, `is_published`; unique
   `(project_id, is_published, file_id)`, and `(project_id, is_published, sort_order)` for each list in order. The
@@ -602,8 +620,9 @@ null; the client's page has `heroes` and `hero` likewise (see [Preview and the c
   published row (both at `sort_order` 0), then drops those two columns and their foreign keys.
 - `portal_messages`: `body` becomes optional and `deleted_at` is added, with the check
   `ck_portal_messages_body_unless_deleted` (only a deleted message has no text).
-- **Rollback** puts the first image of each list back into the two `portal_settings` columns, drops the table, and
-  drops `deleted_at` (a deleted message's text is gone for good: it comes back empty).
+- `portal_project_access.last_opened_at` (`datetime(3)`, null until the client opens the project).
+- **Rollback** puts the first image of each list back into the two `portal_settings` columns, drops the table, drops
+  `deleted_at` and `last_opened_at` (a deleted message's text is gone for good: it comes back empty).
 
 ## Known limits (later phases)
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a

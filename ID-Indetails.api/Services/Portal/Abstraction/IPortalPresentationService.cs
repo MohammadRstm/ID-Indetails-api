@@ -8,6 +8,7 @@ namespace ID_Indetails.api.Services.Portal.Abstraction;
 /// </summary>
 public interface IPortalPresentationService
 {
+    /// <summary>The published presentation. Records when the client opened it, for the project list's news flag.</summary>
     Task<PortalPresentationResponse> GetAsync(long projectId, CancellationToken cancellationToken = default);
 
     /// <summary>A short-lived link to open or download one published file.</summary>

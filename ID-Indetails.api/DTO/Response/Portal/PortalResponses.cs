@@ -29,8 +29,35 @@ public sealed record PortalAccountResponse
     public required IReadOnlyList<PortalProjectResponse> Projects { get; init; }
 }
 
-/// <param name="Unread">Unread chat messages and comments on the project.</param>
-public sealed record PortalProjectResponse(long Id, string Title, ProjectStatus Status, int Unread);
+/// <summary>A project the client may open, as their project list shows it.</summary>
+public sealed record PortalProjectResponse
+{
+    public required long Id { get; init; }
+
+    public required string Title { get; init; }
+
+    public required ProjectStatus Status { get; init; }
+
+    /// <summary>Unread chat messages and comments on the project.</summary>
+    public required int Unread { get; init; }
+
+    /// <summary>A short-lived link to the first published hero image, or null.</summary>
+    public required string? HeroUrl { get; init; }
+
+    public required DateTime? HeroUrlExpiresAt { get; init; }
+
+    /// <summary>The project's start date.</summary>
+    public required DateOnly StartedOn { get; init; }
+
+    /// <summary>The last publication; null before the first.</summary>
+    public required DateTime? LastPublishedAt { get; init; }
+
+    /// <summary>The latest of the last publication, the newest chat message and the newest comment (deleted ones aside).</summary>
+    public required DateTime? LastActivityAt { get; init; }
+
+    /// <summary>Published since the client last opened the project (or published at all, if they never did), or anything unread.</summary>
+    public required bool HasNews { get; init; }
+}
 
 /// <summary>What an invitation link opens, shown before the client sets their password.</summary>
 public sealed record PortalInvitationPreviewResponse
