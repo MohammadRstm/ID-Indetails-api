@@ -10,8 +10,9 @@ using Shouldly;
 namespace ID_Indetails.IntegrationTests.Api;
 
 /// <summary>
-/// Publishing a client portal: staff work on a draft and preview it; clients see only what was published, all of it
-/// at once, on projects they may open; the hero, the order and the introduction follow the same rule.
+/// Publishing a client portal: staff choose project files for the client, arrange the draft and preview it; clients
+/// see only what was published, all of it at once, on projects they may open; the hero, the order and the introduction
+/// follow the same rule.
 /// </summary>
 public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
@@ -74,21 +75,33 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
 
     private static string Base(long projectId) => $"/api/projects/{projectId}/portal/content";
 
-    private async Task<PortalUploadCompletedResponse> UploadAsync(
+    private static string Files(long projectId) => $"/api/projects/{projectId}/files";
+
+    /// <summary>Uploads a file to the project's files and, unless it is a hero, chooses it for the client.</summary>
+    private async Task<ProjectFileUploadCompletedResponse> UploadAsync(
         AuthResponse staff, long projectId, string fileName, byte[] bytes, string? section = "presentation", long? replaceItemId = null, bool hero = false)
     {
-        var start = await Client.PostJsonAsync($"{Base(projectId)}/uploads",
+        var start = await Client.PostJsonAsync($"{Files(projectId)}/uploads",
             new { clientToken = Guid.NewGuid().ToString(), section = hero ? null : section, hero, fileName, size = bytes.Length, replaceItemId },
             staff.AccessToken);
         ((int)start.StatusCode).ShouldBe(201, await start.Content.ReadAsStringAsync());
         var started = await start.ReadAsync<PortalUploadStartedResponse>();
-        var links = await (await Client.PostJsonAsync($"{Base(projectId)}/uploads/{started.UploadId}/parts", new { partNumbers = new[] { 1 } }, staff.AccessToken))
+        var links = await (await Client.PostJsonAsync($"{Files(projectId)}/uploads/{started.UploadId}/parts", new { partNumbers = new[] { 1 } }, staff.AccessToken))
             .ReadAsync<PortalPartLinksResponse>();
         (await Client.PutAsync(links.Parts[0].Url, new ByteArrayContent(bytes))).IsSuccessStatusCode.ShouldBeTrue();
-        var completed = await Client.PostEmptyAsync($"{Base(projectId)}/uploads/{started.UploadId}/complete", staff.AccessToken);
+        var completed = await Client.PostEmptyAsync($"{Files(projectId)}/uploads/{started.UploadId}/complete", staff.AccessToken);
         completed.IsSuccessStatusCode.ShouldBeTrue(await completed.Content.ReadAsStringAsync());
-        return await completed.ReadAsync<PortalUploadCompletedResponse>();
+        var result = await completed.ReadAsync<ProjectFileUploadCompletedResponse>();
+        if (result.Item is { } item)
+        {
+            await ChooseAsync(staff, projectId, item.Id, forClient: true);
+        }
+
+        return result;
     }
+
+    private async Task ChooseAsync(AuthResponse staff, long projectId, long itemId, bool forClient)
+        => await OkAsync(await Client.PutJsonAsync($"{Files(projectId)}/items/{itemId}/for-client", new { forClient }, staff.AccessToken));
 
     private async Task<PortalContentResponse> ContentAsync(AuthResponse staff, long projectId)
     {
@@ -192,10 +205,10 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // a new file for the kitchen, a new title, a new order, a removal and an addition
         await UploadAsync(s.Staff, s.Project.Id, "Kitchen v2.jpg", OtherJpeg, replaceItemId: kitchen.Item!.Id);
-        await OkAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/items/{bedroom.Item!.Id}", new { title = "Main bedroom" }, s.Staff.AccessToken));
-        await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/sections/presentation/order",
+        await OkAsync(await Client.PutJsonAsync($"{Files(s.Project.Id)}/items/{bedroom.Item!.Id}", new { title = "Main bedroom" }, s.Staff.AccessToken));
+        await OkAsync(await Client.PutJsonAsync($"{Files(s.Project.Id)}/sections/presentation/order",
             new { itemIds = new[] { bedroom.Item.Id, kitchen.Item.Id } }, s.Staff.AccessToken));
-        (await Client.DeleteAsync($"{Base(s.Project.Id)}/items/{old.Item!.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.DeleteAsync($"{Files(s.Project.Id)}/items/{old.Item!.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await UploadAsync(s.Staff, s.Project.Id, "New plan.pdf", Pdf, "drawing");
 
         var draft = await ContentAsync(s.Staff, s.Project.Id);
@@ -228,7 +241,7 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await PublishAsync(s.Staff, s.Project.Id);
 
         var seen = (await ContentAsync(s.Staff, s.Project.Id)).Revision;
-        // someone else adds a file after the page was loaded
+        // someone else chooses another file for the client after the page was loaded
         await UploadAsync(s.Staff, s.Project.Id, "Bedroom.jpg", Jpeg);
 
         await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/publish", new { expectedRevision = seen }, s.Staff.AccessToken))
@@ -244,19 +257,19 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         var b = await UploadAsync(s.Staff, s.Project.Id, "B.jpg", Jpeg);
         var c = await UploadAsync(s.Staff, s.Project.Id, "C.jpg", Jpeg);
 
-        await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/sections/presentation/order",
+        await OkAsync(await Client.PutJsonAsync($"{Files(s.Project.Id)}/sections/presentation/order",
             new { itemIds = new[] { c.Item!.Id, a.Item!.Id, b.Item!.Id } }, s.Staff.AccessToken));
         Titles(await PreviewAsync(s.Staff, s.Project.Id), PortalSection.Presentation).ShouldBe(["C", "A", "B"]);
 
         // a page that didn't know about D sends an order without it
         await UploadAsync(s.Staff, s.Project.Id, "D.jpg", Jpeg);
-        await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/sections/presentation/order",
+        await (await Client.PutJsonAsync($"{Files(s.Project.Id)}/sections/presentation/order",
             new { itemIds = new[] { a.Item.Id, b.Item.Id, c.Item.Id } }, s.Staff.AccessToken)).ShouldFailWithAsync(409, ErrorCodes.PortalOrderStale);
         Titles(await PreviewAsync(s.Staff, s.Project.Id), PortalSection.Presentation).ShouldBe(["C", "A", "B", "D"]);
 
         // another section's files can't be ordered here
         var plan = await UploadAsync(s.Staff, s.Project.Id, "Plan.pdf", Pdf, "drawing");
-        await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/sections/presentation/order",
+        await (await Client.PutJsonAsync($"{Files(s.Project.Id)}/sections/presentation/order",
             new { itemIds = new[] { plan.Item!.Id } }, s.Staff.AccessToken)).ShouldFailWithAsync(409, ErrorCodes.PortalOrderStale);
     }
 
@@ -275,12 +288,12 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         chosen.Changes.HeroChanged.ShouldBeTrue();
 
         // deleting the item doesn't take the hero with it: the hero keeps the file
-        (await Client.DeleteAsync($"{Base(s.Project.Id)}/items/{living.Item.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.DeleteAsync($"{Files(s.Project.Id)}/items/{living.Item.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         (await PreviewAsync(s.Staff, s.Project.Id)).Hero.ShouldNotBeNull();
         (await ContentAsync(s.Staff, s.Project.Id)).Hero!.FileId.ShouldBe(living.Item.File.Id);
 
         // an uploaded hero takes its place, and the old one, used by nothing now, goes
-        await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/uploads",
+        await (await Client.PostJsonAsync($"{Files(s.Project.Id)}/uploads",
             new { clientToken = Guid.NewGuid().ToString(), hero = true, fileName = "cover.pdf", size = Pdf.Length }, s.Staff.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.PortalHeroNotImage);
         var uploaded = await UploadAsync(s.Staff, s.Project.Id, "Cover.jpg", OtherJpeg, hero: true);
@@ -308,17 +321,20 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         var kitchen = await UploadAsync(s.Staff, s.Project.Id, "Kitchen.jpg", Jpeg);
         await PublishAsync(s.Staff, s.Project.Id);
 
-        (await Client.DeleteAsync($"{Base(s.Project.Id)}/items/{kitchen.Item!.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.DeleteAsync($"{Files(s.Project.Id)}/items/{kitchen.Item!.Id}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         Titles(await ClientViewAsync(s.ClientToken, s.Project.Id), PortalSection.Presentation).ShouldBe(["Kitchen"]);
         Titles(await PreviewAsync(s.Staff, s.Project.Id), PortalSection.Presentation).ShouldBeEmpty();
 
-        var restored = await ChangeAsync(await Client.PostEmptyAsync($"{Base(s.Project.Id)}/items/{kitchen.Item.Id}/restore", s.Staff.AccessToken));
-        restored.Items.Single().State.ShouldBe(PortalItemState.Unchanged);
-        restored.HasUnpublishedChanges.ShouldBeFalse();
+        var restored = await Client.PostEmptyAsync($"{Files(s.Project.Id)}/items/{kitchen.Item.Id}/restore", s.Staff.AccessToken);
+        restored.IsSuccessStatusCode.ShouldBeTrue(await restored.Content.ReadAsStringAsync());
+        (await restored.ReadAsync<ProjectFilesResponse>()).Items.Single().Removed.ShouldBeFalse();
+        var content = await ContentAsync(s.Staff, s.Project.Id);
+        content.Items.Single().State.ShouldBe(PortalItemState.Unchanged);
+        content.HasUnpublishedChanges.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task Discarding_puts_the_draft_back_to_what_clients_see()
+    public async Task Discarding_puts_back_the_client_choices_hero_and_introduction_but_not_the_files_themselves()
     {
         var s = await ProjectWithClientAsync();
         var kitchen = await UploadAsync(s.Staff, s.Project.Id, "Kitchen.jpg", Jpeg);
@@ -330,7 +346,7 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await PublishAsync(s.Staff, s.Project.Id);
 
         await UploadAsync(s.Staff, s.Project.Id, "Kitchen v2.jpg", OtherJpeg, replaceItemId: kitchen.Item!.Id);
-        await OkAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/items/{kitchen.Item.Id}", new { title = "Renamed", section = "model" }, s.Staff.AccessToken));
+        await OkAsync(await Client.PutJsonAsync($"{Files(s.Project.Id)}/items/{kitchen.Item.Id}", new { title = "Renamed", section = "model" }, s.Staff.AccessToken));
         var extra = await UploadAsync(s.Staff, s.Project.Id, "Extra.jpg", Jpeg);
         await ChangeAsync(await Client.PutJsonAsync($"{Base(s.Project.Id)}/summary", new { summary = "Something else" }, s.Staff.AccessToken));
 
@@ -338,14 +354,18 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
         draft.CanDiscard.ShouldBeTrue();
         var discarded = await ChangeAsync(await Client.PostJsonAsync($"{Base(s.Project.Id)}/discard", new { expectedRevision = draft.Revision }, s.Staff.AccessToken));
 
-        discarded.HasUnpublishedChanges.ShouldBeFalse();
+        // the introduction and the choices are back; the extra file is the team's again, still in Project files
         discarded.Summary.ShouldBe("Welcome to your villa.");
+        discarded.Items.Select(i => i.Id).ShouldBe([kitchen.Item.Id]);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_items WHERE id = @id AND for_client = 0", ("@id", extra.Item!.Id))).ShouldBe(1);
+
+        // the kitchen's new file, title and section belong to Project files: they stay, still waiting to be published
         var item = discarded.Items.Single();
-        item.Id.ShouldBe(kitchen.Item.Id);
-        item.Title.ShouldBe("Kitchen");
-        item.Section.ShouldBe(PortalSection.Presentation);
-        item.File.Id.ShouldBe(kitchen.Item.File.Id);
-        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM portal_items WHERE id = @id", ("@id", extra.Item!.Id))).ShouldBe(0);
+        item.Title.ShouldBe("Renamed");
+        item.Section.ShouldBe(PortalSection.Model);
+        item.File.Id.ShouldNotBe(kitchen.Item.File.Id);
+        item.State.ShouldBe(PortalItemState.Changed);
+        discarded.HasUnpublishedChanges.ShouldBeTrue();
         (await ClientViewAsync(s.ClientToken, s.Project.Id)).Summary.ShouldBe("Welcome to your villa.");
     }
 
@@ -373,7 +393,7 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(422, ErrorCodes.PortalContentReadOnly);
         await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/summary", new { summary = "x" }, s.Staff.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.PortalContentReadOnly);
-        await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/sections/presentation/order", new { itemIds = content.Items.Select(i => i.Id) }, s.Staff.AccessToken))
+        await (await Client.PutJsonAsync($"{Files(s.Project.Id)}/sections/presentation/order", new { itemIds = content.Items.Select(i => i.Id) }, s.Staff.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.PortalContentReadOnly);
 
         var seen = await ClientViewAsync(s.ClientToken, s.Project.Id);
@@ -413,7 +433,7 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Only_people_who_manage_Design_client_portal_files_can_arrange_preview_or_publish()
+    public async Task Admins_look_at_the_client_portal_but_only_client_portal_managers_arrange_or_publish_it()
     {
         var s = await ProjectWithClientAsync();
         var kitchen = await UploadAsync(s.Staff, s.Project.Id, "Kitchen.jpg", Jpeg);
@@ -423,6 +443,7 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         foreach (var outsider in new[] { employee, executionAdmin })
         {
+            await (await Client.GetAsync(Base(s.Project.Id), outsider.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/publish", new { expectedRevision = 0 }, outsider.AccessToken))
                 .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.GetAsync($"{Base(s.Project.Id)}/preview", outsider.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
@@ -430,7 +451,25 @@ public class PortalPublishingTests(ApiFactory api) : IClassFixture<ApiFactory>
                 .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         }
 
-        // a Design admin may: the same rule as every other project change
+        // a Design admin manages client access, so sees the portal and its preview, read-only
+        designAdmin.User.Permissions.ShouldContain(PermissionCodes.ClientAccessManage);
+        designAdmin.User.Permissions.ShouldNotContain(PermissionCodes.ClientPortalManage);
+        var seen = await ContentAsync(designAdmin, s.Project.Id);
+        seen.CanManage.ShouldBeFalse();
+        seen.CanEdit.ShouldBeFalse();
+        seen.CanPublish.ShouldBeFalse();
+        seen.Items.Single().Id.ShouldBe(kitchen.Item!.Id);
+        Titles(await PreviewAsync(designAdmin, s.Project.Id), PortalSection.Presentation).ShouldBe(["Kitchen"]);
+        (await Client.GetAsync($"{Base(s.Project.Id)}/items/{kitchen.Item.Id}/link", designAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"{Base(s.Project.Id)}/publish", new { expectedRevision = seen.Revision }, designAdmin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PutJsonAsync($"{Base(s.Project.Id)}/summary", new { summary = "Hello" }, designAdmin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        // granted client_portal:manage, they may: the same rule as for a super admin
+        await OkAsync(await Client.PutJsonAsync($"/api/users/{designAdmin.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.ClientPortalManage, action = "grant", reason = "Publishes for this client" } } },
+            s.Staff.AccessToken));
         (await PublishAsync(designAdmin, s.Project.Id)).HasUnpublishedChanges.ShouldBeFalse();
 
         // an Execution site has no client portal at all

@@ -57,11 +57,13 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
 
     private static string Content(long projectId) => $"/api/projects/{projectId}/portal/content";
 
+    private static string Files(long projectId) => $"/api/projects/{projectId}/files";
+
     private static string Staff(long projectId) => $"/api/projects/{projectId}/portal/discussion";
 
     private static string Mine(long projectId) => $"/api/portal/projects/{projectId}/discussion";
 
-    /// <summary>Uploads a file and publishes the project, so clients see it.</summary>
+    /// <summary>Uploads a file, chooses it for the client and publishes the project, so clients see it.</summary>
     private async Task<long> PublishedFileAsync(Setup s, string name = "Living room.jpg", byte[]? bytes = null, long? replaceItemId = null)
     {
         var itemId = await DraftFileAsync(s, name, bytes, replaceItemId);
@@ -69,19 +71,21 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
         return itemId;
     }
 
-    /// <summary>Uploads a file to the draft only.</summary>
+    /// <summary>Uploads a file and chooses it for the client, in the draft only.</summary>
     private async Task<long> DraftFileAsync(Setup s, string name, byte[]? bytes = null, long? replaceItemId = null)
     {
         bytes ??= Jpeg;
-        var started = await (await Client.PostJsonAsync($"{Content(s.Project.Id)}/uploads",
+        var started = await (await Client.PostJsonAsync($"{Files(s.Project.Id)}/uploads",
             new { clientToken = Guid.NewGuid().ToString(), section = "presentation", fileName = name, size = bytes.Length, replaceItemId },
             s.Staff.AccessToken)).ReadAsync<PortalUploadStartedResponse>();
-        var links = await (await Client.PostJsonAsync($"{Content(s.Project.Id)}/uploads/{started.UploadId}/parts", new { partNumbers = new[] { 1 } }, s.Staff.AccessToken))
+        var links = await (await Client.PostJsonAsync($"{Files(s.Project.Id)}/uploads/{started.UploadId}/parts", new { partNumbers = new[] { 1 } }, s.Staff.AccessToken))
             .ReadAsync<PortalPartLinksResponse>();
         (await Client.PutAsync(links.Parts[0].Url, new ByteArrayContent(bytes))).IsSuccessStatusCode.ShouldBeTrue();
-        var completed = await (await Client.PostEmptyAsync($"{Content(s.Project.Id)}/uploads/{started.UploadId}/complete", s.Staff.AccessToken))
-            .ReadAsync<PortalUploadCompletedResponse>();
-        return completed.Item!.Id;
+        var completed = await (await Client.PostEmptyAsync($"{Files(s.Project.Id)}/uploads/{started.UploadId}/complete", s.Staff.AccessToken))
+            .ReadAsync<ProjectFileUploadCompletedResponse>();
+        var chosen = await Client.PutJsonAsync($"{Files(s.Project.Id)}/items/{completed.Item!.Id}/for-client", new { forClient = true }, s.Staff.AccessToken);
+        chosen.IsSuccessStatusCode.ShouldBeTrue(await chosen.Content.ReadAsStringAsync());
+        return completed.Item.Id;
     }
 
     private async Task PublishAsync(Setup s)
@@ -291,7 +295,7 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
         thread.Comments.ShouldAllBe(c => c.OnEarlierVersion && c.FileName == "Living room.jpg");
 
         // the file is removed and published: the thread stays readable, closed, and attached to nothing else
-        (await Client.DeleteAsync($"{Content(s.Project.Id)}/items/{itemId}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.DeleteAsync($"{Files(s.Project.Id)}/items/{itemId}", s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await PublishAsync(s);
         var closed = await OkAsync<PortalCommentThreadResponse>(AsClient(s.ClientToken, HttpMethod.Get, $"{Mine(s.Project.Id)}/comments/{itemId}"));
         closed.Available.ShouldBeFalse();
