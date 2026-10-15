@@ -29,4 +29,7 @@ public static class RateLimitPolicies
 
     /// <summary>Questions to Proton, which call a paid model: per signed-in user.</summary>
     public const string Proton = "proton";
+
+    /// <summary>A client's chat messages and comments, per portal account.</summary>
+    public const string PortalWrite = "portal-write";
 }

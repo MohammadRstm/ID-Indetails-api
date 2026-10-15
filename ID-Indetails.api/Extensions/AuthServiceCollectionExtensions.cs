@@ -114,6 +114,18 @@ public static class AuthServiceCollectionExtensions
                 };
                 options.Events = new JwtBearerEvents
                 {
+                    // the portal's live connection passes its token in the query string, like the staff one
+                    OnMessageReceived = context =>
+                    {
+                        if (context.Request.Path.StartsWithSegments(PortalHub.Path)
+                            && context.Request.Query["access_token"] is { Count: > 0 } token)
+                        {
+                            context.Token = token;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+
                     // An account that is no longer active, or whose sessions were ended, is refused at once.
                     OnTokenValidated = async context =>
                     {
@@ -206,6 +218,13 @@ public static class AuthServiceCollectionExtensions
                 "proton:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                 _ => PerMinute(limits.ProtonPermitsPerMinute)));
 
+            // The portal token isn't the default scheme, so it is read here unchecked, only to pick the bucket; the
+            // endpoint checks it. The bucket is the account at an address: a made-up token naming someone else's
+            // account fills its own bucket, never theirs.
+            options.AddPolicy(RateLimitPolicies.PortalWrite, context => RateLimitPartition.GetFixedWindowLimiter(
+                $"portal-write:{PortalAccountOf(context) ?? "anonymous"}@{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+                _ => PerMinute(limits.PortalWritePermitsPerMinute)));
+
             options.AddPolicy(RateLimitPolicies.Setup, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.SetupPermitsPerHour, Window = TimeSpan.FromHours(1) }));
@@ -235,4 +254,24 @@ public static class AuthServiceCollectionExtensions
 
     private static FixedWindowRateLimiterOptions PerMinute(int permits)
         => new() { PermitLimit = permits, Window = TimeSpan.FromMinutes(1) };
+
+    /// <summary>The portal account a bearer token names, read without checking it: only to choose a rate limit bucket.</summary>
+    private static string? PortalAccountOf(HttpContext context)
+    {
+        var header = context.Request.Headers.Authorization.ToString();
+        if (!header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        try
+        {
+            var token = new JsonWebTokenHandler().ReadJsonWebToken(header["Bearer ".Length..].Trim());
+            return token.TryGetClaim(AuthClaimTypes.PortalAccountId, out var claim) ? "account:" + claim.Value : null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
 }

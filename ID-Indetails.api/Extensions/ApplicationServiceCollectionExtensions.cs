@@ -164,6 +164,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSignalR();
         services.AddSingleton<IUserIdProvider, LiveUserIdProvider>();
         services.AddSingleton<ILivePublisher, SignalRLivePublisher>();
+        services.AddSingleton<IPortalLivePublisher, SignalRPortalLivePublisher>();
         services.AddScoped<ILiveUpdates, LiveUpdates>();
         services.AddSingleton<IPresence, Presence>();
         services.AddScoped<IPresenceService, PresenceService>();
@@ -181,6 +182,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPortalAccessRepository, PortalAccessRepository>();
         services.AddScoped<IPortalSessionRepository, PortalSessionRepository>();
         services.AddScoped<IPortalContentRepository, PortalContentRepository>();
+        services.AddScoped<IPortalDiscussionRepository, PortalDiscussionRepository>();
         services.AddScoped<ITeamRepository, TeamRepository>();
         services.AddScoped<IMessagingRepository, MessagingRepository>();
         services.AddScoped<IFileRepository, FileRepository>();
@@ -233,6 +235,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPortalContentService, PortalContentService>();
         services.AddScoped<IPortalPublishingService, PortalPublishingService>();
         services.AddScoped<IPortalPresentationService, PortalPresentationService>();
+        services.AddScoped<IPortalDiscussionService, PortalDiscussionService>();
+        services.AddScoped<IPortalNotificationService, PortalNotificationService>();
         services.AddScoped<IPortalContentMaintenance, PortalContentMaintenance>();
         services.AddHostedService<PortalContentCleanupJob>();
         services.AddScoped<IPermissionManagementService, PermissionManagementService>();

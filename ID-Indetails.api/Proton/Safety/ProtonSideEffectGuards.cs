@@ -123,10 +123,11 @@ public static class ProtonSideEffectGuards
             return inner.SendAsync(draft, recipientIds, cancellationToken);
         }
 
-        public Task SendDigestAsync(NotificationDraft draft, string digestKey, IEnumerable<long> recipientIds, CancellationToken cancellationToken = default)
+        public Task SendDigestAsync(
+            NotificationDraft draft, string digestKey, IEnumerable<long> recipientIds, bool restartOnceRead = false, CancellationToken cancellationToken = default)
         {
             ProtonReadOnly.ThrowIfActive("sending a notification");
-            return inner.SendDigestAsync(draft, digestKey, recipientIds, cancellationToken);
+            return inner.SendDigestAsync(draft, digestKey, recipientIds, restartOnceRead, cancellationToken);
         }
 
         public Task SendOnceAsync(NotificationDraft draft, string key, IEnumerable<long> recipientIds, CancellationToken cancellationToken = default)
@@ -154,6 +155,18 @@ public static class ProtonSideEffectGuards
         {
             ProtonReadOnly.ThrowIfActive("signalling a live update");
             inner.ChatChanged(userId, chat);
+        }
+
+        public void PortalChanged(long projectId, IEnumerable<long> userIds, IEnumerable<long> accountIds)
+        {
+            ProtonReadOnly.ThrowIfActive("signalling a live update");
+            inner.PortalChanged(projectId, userIds, accountIds);
+        }
+
+        public void PortalNotificationsChanged(IEnumerable<long> accountIds)
+        {
+            ProtonReadOnly.ThrowIfActive("signalling a live update");
+            inner.PortalNotificationsChanged(accountIds);
         }
 
         public Task FlushAsync(CancellationToken cancellationToken = default)

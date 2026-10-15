@@ -29,6 +29,12 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<PortalFile> PortalFiles => Set<PortalFile>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
     public DbSet<PortalSettings> PortalSettings => Set<PortalSettings>();
+    public DbSet<PortalMessage> PortalMessages => Set<PortalMessage>();
+    public DbSet<PortalComment> PortalComments => Set<PortalComment>();
+    public DbSet<PortalRead> PortalReads => Set<PortalRead>();
+    public DbSet<PortalCommentRead> PortalCommentReads => Set<PortalCommentRead>();
+    public DbSet<PortalMention> PortalMentions => Set<PortalMention>();
+    public DbSet<PortalNotification> PortalNotifications => Set<PortalNotification>();
 
     // Clients and projects
     public DbSet<Client> Clients => Set<Client>();
@@ -147,6 +153,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<PortalAccountStatus>(configurationBuilder);
         StoreAsSnakeCase<PortalSection>(configurationBuilder);
         StoreAsSnakeCase<PortalUploadStatus>(configurationBuilder);
+        StoreAsSnakeCase<PortalNotificationKind>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

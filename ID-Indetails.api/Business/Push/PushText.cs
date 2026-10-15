@@ -98,6 +98,15 @@ public static class PushText
                 : "You were taken out of your team."),
             NotificationKinds.PermissionsChanged => new("Permissions changed", "Your permissions changed."),
 
+            // the client portal: who and where, never what they wrote
+            NotificationKinds.PortalClientMessage => new("Client message", count > 1
+                ? $"{count} new client messages in {project}."
+                : $"{Named(Text(payload, "authorName"), Someone)} wrote in {project}'s client chat."),
+            NotificationKinds.PortalClientComment => new("Client comment", count > 1
+                ? $"{count} new client comments on {Text(payload, "itemTitle") ?? "a file"} in {project}."
+                : $"{Named(Text(payload, "authorName"), Someone)} commented on {Text(payload, "itemTitle") ?? "a file"} in {project}."),
+            NotificationKinds.PortalMention => new("Mentioned", $"{Named(Text(payload, "authorName"), Someone)} mentioned you in {project}'s client portal."),
+
             _ => new("ID InDetails", "You have a new notification."),
         };
     }

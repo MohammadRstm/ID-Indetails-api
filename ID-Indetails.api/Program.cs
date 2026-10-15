@@ -57,6 +57,7 @@ app.MapControllers();
 app.MapHealthChecks(HostingServiceCollectionExtensions.HealthPath).AllowAnonymous().DisableRateLimiting();
 app.MapHealthChecks(HostingServiceCollectionExtensions.PublicHealthPath).AllowAnonymous();
 app.MapHub<LiveHub>(LiveHub.Path, options => options.CloseOnAuthenticationExpiration = true);
+app.MapHub<PortalHub>(PortalHub.Path, options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

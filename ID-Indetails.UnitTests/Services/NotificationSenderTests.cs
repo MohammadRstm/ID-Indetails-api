@@ -97,6 +97,26 @@ public class NotificationSenderTests
     }
 
     [Fact]
+    public async Task A_digest_that_restarts_once_read_counts_only_what_came_since()
+    {
+        var sender = CreateSender();
+        var read = new Notification { RecipientId = DesignEmployee, DigestKey = "chat", Count = 3, ReadAt = Now.AddHours(-1) };
+        var unread = new Notification { RecipientId = SuperAdmin, DigestKey = "chat", Count = 2 };
+        _repository.Setup(r => r.GetDigestForUpdateAsync(DesignEmployee, "chat", It.IsAny<CancellationToken>())).ReturnsAsync(read);
+        _repository.Setup(r => r.GetDigestForUpdateAsync(SuperAdmin, "chat", It.IsAny<CancellationToken>())).ReturnsAsync(unread);
+
+        await sender.SendDigestAsync(
+            new NotificationDraft(NotificationKinds.PortalClientMessage, null, DomainCodes.Design, 10, null, null, new { }),
+            "chat",
+            [DesignEmployee, SuperAdmin],
+            restartOnceRead: true);
+
+        read.Count.ShouldBe(1);
+        read.ReadAt.ShouldBeNull();
+        unread.Count.ShouldBe(3);
+    }
+
+    [Fact]
     public async Task A_keyed_notification_skips_whoever_already_has_it()
     {
         var sender = CreateSender();
