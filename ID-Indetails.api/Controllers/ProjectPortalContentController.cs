@@ -9,7 +9,7 @@ namespace ID_Indetails.api.Controllers;
 
 /// <summary>
 /// A Design project's client portal as staff see it: the files chosen for the client (chosen in Project files), the
-/// hero and introduction, the preview and publishing. Holders of client_access:manage look at it; changing it needs
+/// hero images and introduction, the preview and publishing. Holders of client_access:manage look at it; changing it needs
 /// client_portal:manage, checked in the service. See docs/client-portal.md.
 /// </summary>
 [ApiController]
@@ -17,7 +17,7 @@ namespace ID_Indetails.api.Controllers;
 [HasAnyPermission(PermissionCodes.ClientPortalManage, PermissionCodes.ClientAccessManage)]
 public sealed class ProjectPortalContentController(IPortalPublishingService publishing) : ControllerBase
 {
-    /// <summary>The client-relevant files with their states, the hero, introduction and publication.</summary>
+    /// <summary>The client-relevant files with their states, the hero images, introduction and publication.</summary>
     [HttpGet]
     public Task<PortalContentResponse> Get(long projectId, CancellationToken cancellationToken)
         => publishing.GetAsync(projectId, cancellationToken);
@@ -27,14 +27,19 @@ public sealed class ProjectPortalContentController(IPortalPublishingService publ
     public Task<PortalContentLinkResponse> Link(long projectId, long itemId, [FromQuery] bool inline, CancellationToken cancellationToken)
         => publishing.LinkAsync(projectId, itemId, inline, cancellationToken);
 
-    /// <summary>Uses an image item's file as the draft hero.</summary>
-    [HttpPut("hero")]
-    public Task<PortalContentResponse> SetHero(long projectId, PortalHeroRequest request, CancellationToken cancellationToken)
-        => publishing.SetHeroAsync(projectId, request, cancellationToken);
+    /// <summary>Adds an image item's file to the end of the draft hero images. 409 when it is one already; at most 12 (422).</summary>
+    [HttpPost("heroes")]
+    public Task<PortalContentResponse> AddHero(long projectId, PortalHeroRequest request, CancellationToken cancellationToken)
+        => publishing.AddHeroAsync(projectId, request, cancellationToken);
 
-    [HttpDelete("hero")]
-    public Task<PortalContentResponse> ClearHero(long projectId, CancellationToken cancellationToken)
-        => publishing.ClearHeroAsync(projectId, cancellationToken);
+    [HttpDelete("heroes/{fileId:long}")]
+    public Task<PortalContentResponse> RemoveHero(long projectId, long fileId, CancellationToken cancellationToken)
+        => publishing.RemoveHeroAsync(projectId, fileId, cancellationToken);
+
+    /// <summary>The draft hero images' new order: exactly their files. 409 when the list changed meanwhile.</summary>
+    [HttpPut("heroes/order")]
+    public Task<PortalContentResponse> OrderHeroes(long projectId, PortalHeroOrderRequest request, CancellationToken cancellationToken)
+        => publishing.OrderHeroesAsync(projectId, request, cancellationToken);
 
     /// <summary>The draft introduction for the client; empty clears it.</summary>
     [HttpPut("summary")]
@@ -46,7 +51,7 @@ public sealed class ProjectPortalContentController(IPortalPublishingService publ
     public Task<PortalContentResponse> Publish(long projectId, PortalRevisionRequest request, CancellationToken cancellationToken)
         => publishing.PublishAsync(projectId, request, cancellationToken);
 
-    /// <summary>Puts the client choices, hero and introduction back to what clients see.</summary>
+    /// <summary>Puts the client choices, hero images and introduction back to what clients see.</summary>
     [HttpPost("discard")]
     public Task<PortalContentResponse> Discard(long projectId, PortalRevisionRequest request, CancellationToken cancellationToken)
         => publishing.DiscardAsync(projectId, request, cancellationToken);

@@ -22,7 +22,11 @@ public sealed record PortalPresentationResponse
 
     public required DateTime? PublishedAt { get; init; }
 
+    /// <summary>The first of <see cref="Heroes"/>, or null (what the phone app shows).</summary>
     public required PresentationHeroResponse? Hero { get; init; }
+
+    /// <summary>Every hero image, in order.</summary>
+    public required IReadOnlyList<PresentationHeroResponse> Heroes { get; init; }
 
     /// <summary>Always the three sections, in order: presentation, 3D, drawings.</summary>
     public required IReadOnlyList<PresentationSectionResponse> Sections { get; init; }

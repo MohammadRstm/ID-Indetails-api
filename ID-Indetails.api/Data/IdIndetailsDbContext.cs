@@ -29,6 +29,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<PortalFile> PortalFiles => Set<PortalFile>();
     public DbSet<PortalItem> PortalItems => Set<PortalItem>();
     public DbSet<PortalSettings> PortalSettings => Set<PortalSettings>();
+    public DbSet<PortalHeroImage> PortalHeroImages => Set<PortalHeroImage>();
     public DbSet<PortalMessage> PortalMessages => Set<PortalMessage>();
     public DbSet<PortalComment> PortalComments => Set<PortalComment>();
     public DbSet<PortalRead> PortalReads => Set<PortalRead>();

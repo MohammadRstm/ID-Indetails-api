@@ -49,7 +49,7 @@ public sealed record ProjectFileResponse
     /// <summary>Deleted, but clients see it until the next publish; it can be restored until then.</summary>
     public required bool Removed { get; init; }
 
-    /// <summary>Its file is the client portal's draft hero.</summary>
+    /// <summary>Its file is one of the client portal's draft hero images.</summary>
     public required bool IsHero { get; init; }
 
     /// <summary>A JPEG, PNG or WebP image, which can be the hero.</summary>

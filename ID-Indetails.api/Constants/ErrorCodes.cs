@@ -216,8 +216,14 @@ public static class ErrorCodes
     /// <summary>409. A new order must list exactly the section's current files; someone added, removed or moved one meanwhile.</summary>
     public const string PortalOrderStale = "portal_order_stale";
 
-    /// <summary>Only a JPEG, PNG or WebP image can be the hero.</summary>
+    /// <summary>Only a JPEG, PNG or WebP image can be a hero image.</summary>
     public const string PortalHeroNotImage = "portal_hero_not_image";
+
+    /// <summary>409. The image is already one of the draft hero images.</summary>
+    public const string PortalHeroAlreadyAdded = "portal_hero_already_added";
+
+    /// <summary>422. The draft already has as many hero images as allowed (12).</summary>
+    public const string PortalHeroLimit = "portal_hero_limit";
 
     /// <summary>Discarding needs a published version to go back to.</summary>
     public const string PortalNeverPublished = "portal_never_published";

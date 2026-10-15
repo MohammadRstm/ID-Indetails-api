@@ -12,8 +12,14 @@ public interface IPortalContentRepository
     /// <summary>Every item of the project (removed ones too), by section, then order, then id.</summary>
     Task<IReadOnlyList<PortalItemView>> ItemsAsync(long projectId, CancellationToken cancellationToken = default);
 
-    /// <summary>The project's hero, introduction, revision and last publication, or the empty values before any change.</summary>
+    /// <summary>The project's introduction, revision and last publication, or the empty values before any change.</summary>
     Task<PortalSettingsView> SettingsAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>The files of the project's draft and published hero images, each list in order.</summary>
+    Task<PortalHeroes> HeroesAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every hero image row of the project, draft and published, with its file. Tracked; take the settings lock first.</summary>
+    Task<IReadOnlyList<PortalHeroImage>> HeroesToChangeAsync(long projectId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The project's settings row, created if missing, and locked until the transaction ends. Every change to the
@@ -29,6 +35,9 @@ public interface IPortalContentRepository
 
     Task<PortalFileView?> FileViewAsync(long fileId, CancellationToken cancellationToken = default);
 
+    /// <summary>The files there are of these, in no particular order.</summary>
+    Task<IReadOnlyList<PortalFileView>> FileViewsAsync(IReadOnlyCollection<long> fileIds, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// What a presentation shows: the draft (live items chosen for the client, by section and order) or the published
     /// copy (by published section and order, removed items included until the next publish).
@@ -41,7 +50,7 @@ public interface IPortalContentRepository
     /// <summary>Whether a client account has live access to the Design project.</summary>
     Task<bool> ClientCanOpenAsync(long accountId, long projectId, CancellationToken cancellationToken = default);
 
-    /// <summary>Whether any draft or published copy, or hero, still points at the file.</summary>
+    /// <summary>Whether any draft or published copy, or hero image, still points at the file.</summary>
     Task<bool> IsReferencedAsync(long fileId, CancellationToken cancellationToken = default);
 
     Task<PortalItemView?> ItemViewAsync(long projectId, long itemId, CancellationToken cancellationToken = default);
@@ -95,9 +104,13 @@ public interface IPortalContentRepository
 
     void Add(PortalItem item);
 
+    void Add(PortalHeroImage hero);
+
     void Remove(PortalUpload upload);
 
     void Remove(PortalFile file);
 
     void Remove(PortalItem item);
+
+    void Remove(PortalHeroImage hero);
 }

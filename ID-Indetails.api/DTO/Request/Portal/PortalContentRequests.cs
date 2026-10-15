@@ -34,10 +34,16 @@ public sealed record PortalOrderRequest
     public IReadOnlyList<long> ItemIds { get; init; } = [];
 }
 
-/// <summary>Makes an image item's file the draft hero.</summary>
+/// <summary>Adds an image item's file to the end of the draft hero images.</summary>
 public sealed record PortalHeroRequest
 {
     public long ItemId { get; init; }
+}
+
+/// <summary>The draft hero images' new order: every one of their files, once.</summary>
+public sealed record PortalHeroOrderRequest
+{
+    public IReadOnlyList<long> FileIds { get; init; } = [];
 }
 
 /// <summary>The draft introduction for the client; empty clears it.</summary>

@@ -45,7 +45,10 @@ public sealed record PortalContentResponse
     /// <summary>Only once something has been published: before that there is nothing to go back to.</summary>
     public required bool CanDiscard { get; init; }
 
-    /// <summary>The draft hero image.</summary>
+    /// <summary>The draft hero images, in order.</summary>
+    public required IReadOnlyList<PortalHeroResponse> Heroes { get; init; }
+
+    /// <summary>The first of <see cref="Heroes"/>, or null.</summary>
     public required PortalHeroResponse? Hero { get; init; }
 
     /// <summary>The draft introduction for the client.</summary>
@@ -78,7 +81,7 @@ public sealed record PortalContentItemResponse
 
     public required PortalItemState State { get; init; }
 
-    /// <summary>Its file is the draft hero.</summary>
+    /// <summary>Its file is one of the draft hero images.</summary>
     public required bool IsHero { get; init; }
 
     /// <summary>A JPEG, PNG or WebP image, which can be the hero.</summary>
