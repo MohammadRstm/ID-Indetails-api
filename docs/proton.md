@@ -296,6 +296,11 @@ Phase 1 of [proton-stage-5-plan.md](proton-stage-5-plan.md) (E1–E3, G6).
   read path, only for users who could ask get_attention. No model call and no question used.
 - **Small talk is free.** A question Proton answered without any tool doesn't count toward the monthly allowance; it
   still costs the budget.
+- **Budget held while answering.** Each text question holds `Proton:QuestionHoldUsd` (0.25 USD) of the month's budget
+  from before the model is called until its real cost is recorded (`Proton/Usage/ProtonBudgetHolds.cs`). A question is
+  refused with `422 proton_budget_used` when the budget left, less what questions being answered hold, can't cover it,
+  so questions asked at once can't together spend past the budget. Voice sessions see the budget less those holds.
+  The holds live in the API's memory, like the permission cache: one API instance.
 - **Turn origin** (decision 33). The server sets each turn's origin from the request's shape: `typed`, `choice` (a
   pick or a quick reply) or `suggestion`. On a turn the user didn't type, the toolbox refuses any proposal in a gated
   family (Deletes, Access, CompanyRules, PayRules, Money, Messaging, or a tool with no coverage entry), with the tool

@@ -31,7 +31,7 @@ public sealed class AuthService(
     ILogger<AuthService> logger,
     ILoggerFactory loggers) : IAuthService
 {
-    private const string InvalidCredentialsMessage = "Email or password is incorrect.";
+    private const string InvalidCredentialsMessage = "Email or password is incorrect. After several wrong attempts, sign-in pauses for a few minutes.";
     private const string SessionExpiredMessage = "Your session has expired. Please sign in again.";
 
     private readonly ILogger _security = loggers.CreateLogger(SecurityLog.Category);
@@ -202,19 +202,31 @@ public sealed class AuthService(
     /// <summary>Checks the email and password of an active account, rehashing the password and recording the sign-in.</summary>
     private async Task<User> AuthenticateAsync(LoginRequest request, CancellationToken cancellationToken)
     {
+        var now = clock.UtcNow;
         var user = await users.GetByEmailAsync(EmailAddress.Normalize(request.Email), cancellationToken);
 
-        // Unknown email, invited-but-not-signed-up and deactivated accounts all get the same
+        // Unknown email, invited-but-not-signed-up, deactivated and paused accounts all get the same
         // answer and the same timing, so the response never reveals which emails exist.
-        if (user is null || user.Status != UserStatus.Active)
+        if (user is null || user.Status != UserStatus.Active || SignInLockout.IsLocked(user.LockedUntil, now))
         {
             passwords.VerifyAgainstDummy(request.Password);
+            if (user is not null && SignInLockout.IsLocked(user.LockedUntil, now))
+            {
+                _security.LogWarning("Sign-in refused for paused user {UserId}.", user.Id);
+            }
+
             throw new UnauthenticatedException(ErrorCodes.InvalidCredentials, InvalidCredentialsMessage);
         }
 
         var check = passwords.Verify(user, request.Password);
         if (check == PasswordCheck.Failed)
         {
+            // Counted in the database, so wrong passwords sent at once all count.
+            if (await users.CountWrongPasswordAsync(user.Id, SignInLockout.Attempts, now.Add(SignInLockout.Pause), cancellationToken))
+            {
+                _security.LogWarning("User {UserId} paused after repeated wrong passwords.", user.Id);
+            }
+
             throw new UnauthenticatedException(ErrorCodes.InvalidCredentials, InvalidCredentialsMessage);
         }
 
@@ -229,7 +241,9 @@ public sealed class AuthService(
             user.PasswordHash = passwords.Hash(user, request.Password);
         }
 
-        user.LastSeenAt = clock.UtcNow;
+        user.FailedSignIns = 0;
+        user.LockedUntil = null;
+        user.LastSeenAt = now;
         return user;
     }
 

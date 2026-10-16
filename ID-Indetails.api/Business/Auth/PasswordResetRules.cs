@@ -6,6 +6,12 @@ namespace ID_Indetails.api.Business.Auth;
 public static class PasswordResetRules
 {
     /// <summary>
+    /// Asking for a link always takes at least this long, whether or not the email has an account, so the answer's
+    /// timing doesn't reveal which emails exist. Comfortably above the time the link takes to create.
+    /// </summary>
+    public static readonly TimeSpan MinimumRequestTime = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
     /// Only active accounts: invited people choose their password through their invitation, and deactivated people
     /// can't sign in at all.
     /// </summary>

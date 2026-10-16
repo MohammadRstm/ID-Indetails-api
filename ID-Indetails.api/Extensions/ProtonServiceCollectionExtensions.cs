@@ -52,6 +52,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddHostedService<Jobs.ProtonHistoryCleanupJob>();
         services.AddScoped<Proton.Memory.ProtonMemoryService>();
         services.AddScoped<ProtonUsageService>();
+        services.AddSingleton<ProtonBudgetHolds>();
         services.AddSingleton<ProtonConversationStore>();
         services.AddScoped<ProtonToolbox>();
         services.AddScoped<ProtonChatAgent>();

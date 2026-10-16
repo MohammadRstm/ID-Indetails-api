@@ -41,6 +41,9 @@ public static class ProtonUsageRules
 
     public static DateOnly MonthOf(DateOnly day) => new(day.Year, day.Month, 1);
 
+    /// <summary>Whether a question may hold <paramref name="amount"/> on top of what questions being answered already hold.</summary>
+    public static bool CanHold(decimal remaining, decimal held, decimal amount) => held + amount <= remaining;
+
     public static ProtonAllowance Budget(decimal monthlyBudget, decimal topUps, decimal spent) => new(monthlyBudget + topUps, spent);
 
     public static ProtonAllowance Questions(int perUser, int asked) => new(perUser, asked);

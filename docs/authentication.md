@@ -147,8 +147,14 @@ A stolen token is still caught: used after the phone moved on, it is "two holder
 Every error has the same shape:
 
 ```json
-{ "type": "authentication", "code": "invalid_credentials", "message": "Email or password is incorrect.", "errors": null, "traceId": "…" }
+{ "type": "authentication", "code": "invalid_credentials", "message": "Email or password is incorrect. After several wrong attempts, sign-in pauses for a few minutes.", "errors": null, "traceId": "…" }
 ```
+
+**Sign-in pause.** After **5 wrong passwords** in a row for one account, website and phone-app sign-in for it pauses
+for **10 minutes** (`Business/Auth/SignInLockout.cs`), whatever IP the attempts come from. While paused, even the right
+password gets the same `invalid_credentials` answer as an unknown email. The count is kept on the user row
+(`users.failed_sign_ins`, `users.locked_until`) and raised in a single statement, so wrong passwords sent at once all
+count; a successful sign-in resets it. Signed-in sessions are not affected. Pauses go to the security log.
 
 `type` decides the HTTP status: `validation` 400, `authentication` 401, `authorization` 403, `not_found` 404, `conflict` 409, `business_rule` 422, `rate_limited` 429, `unavailable` 503, `unexpected` 500. `errors` holds field messages for validation failures. Unexpected errors never include internal details; use `traceId` to find them in the server logs.
 

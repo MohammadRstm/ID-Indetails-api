@@ -5269,6 +5269,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(254)")
                         .HasColumnName("email");
 
+                    b.Property<int>("FailedSignIns")
+                        .HasColumnType("int")
+                        .HasColumnName("failed_sign_ins");
+
                     b.Property<string>("FirstName")
                         .HasMaxLength(100)
                         .HasColumnType("varchar(100)")
@@ -5287,6 +5291,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
                         .HasColumnName("last_seen_at");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("locked_until");
 
                     b.Property<bool>("MustChangePassword")
                         .HasColumnType("tinyint(1)")

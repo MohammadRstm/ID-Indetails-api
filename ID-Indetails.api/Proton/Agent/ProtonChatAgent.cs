@@ -75,8 +75,11 @@ public sealed class ProtonChatAgent(
             throw new ConflictException(ErrorCodes.ProtonBusy, "I'm still answering your last question.");
         }
 
+        ProtonBudgetHold? hold = null;
         try
         {
+            hold = await usage.HoldBudgetAsync(cancellationToken);
+
             // Too long to carry on: the chat starts afresh under the same id, with a recap, instead of ending.
             var rolledOver = conversation.Questions >= options.Value.MaxQuestionsPerConversation
                 || conversation.LastInputTokens > options.Value.MaxConversationInputTokens;
@@ -121,10 +124,11 @@ public sealed class ProtonChatAgent(
             var notes = new ProtonNotes(page, company, tools.Context.Turn == ProtonTurnOrigin.Suggestion, await memories.NoteAsync(userId, cancellationToken),
                 tools.Context.Turn == ProtonTurnOrigin.Spoken,
                 tools.Context.Turn is ProtonTurnOrigin.Typed or ProtonTurnOrigin.Spoken ? ProtonVisualRequest.Detect(text) : null);
-            return new ProtonQuestion(caller, userId, access, conversation, tools, request, text, notes, rolledOver) { Shown = shown };
+            return new ProtonQuestion(caller, userId, access, conversation, tools, request, text, notes, rolledOver, hold) { Shown = shown };
         }
         catch
         {
+            hold?.Dispose();
             conversation.End();
             throw;
         }
@@ -760,11 +764,14 @@ public sealed class ProtonQuestion : IAsyncDisposable
 {
     internal ProtonQuestion(
         ClaimsPrincipal caller, long userId, UserAccess access, ProtonConversation conversation, ProtonToolSession tools,
-        AskProtonRequest request, string text, ProtonNotes notes, bool rolledOver)
+        AskProtonRequest request, string text, ProtonNotes notes, bool rolledOver, ProtonBudgetHold hold)
     {
-        (Caller, UserId, Access, Conversation, Tools, Request, Text, Notes, RolledOver) =
-            (caller, userId, access, conversation, tools, request, text, notes, rolledOver);
+        (Caller, UserId, Access, Conversation, Tools, Request, Text, Notes, RolledOver, _hold) =
+            (caller, userId, access, conversation, tools, request, text, notes, rolledOver, hold);
     }
+
+    /// <summary>Let go when the question is disposed, after its real cost has been recorded.</summary>
+    private readonly ProtonBudgetHold _hold;
 
     internal ClaimsPrincipal Caller { get; }
 
@@ -790,6 +797,7 @@ public sealed class ProtonQuestion : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
+        _hold.Dispose();
         Conversation.End();
         return ValueTask.CompletedTask;
     }

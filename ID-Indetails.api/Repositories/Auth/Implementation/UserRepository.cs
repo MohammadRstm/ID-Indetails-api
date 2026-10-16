@@ -45,6 +45,21 @@ public sealed class UserRepository(IdIndetailsDbContext db) : IUserRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<bool> CountWrongPasswordAsync(long userId, int attempts, DateTime pausedUntil, CancellationToken cancellationToken = default)
+    {
+        await db.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(u => u.FailedSignIns, u => u.FailedSignIns + 1), cancellationToken);
+
+        // Decided on the count in the database: of several wrong passwords at once, only the one that finds it at the
+        // limit pauses sign-in.
+        return await db.Users
+            .Where(u => u.Id == userId && u.FailedSignIns >= attempts)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.FailedSignIns, 0)
+                .SetProperty(u => u.LockedUntil, pausedUntil), cancellationToken) == 1;
+    }
+
     public Task SetLastSeenAsync(long id, DateTime at, CancellationToken cancellationToken = default)
         => db.Users.Where(u => u.Id == id).ExecuteUpdateAsync(s => s.SetProperty(u => u.LastSeenAt, at), cancellationToken);
 

@@ -37,6 +37,13 @@ public sealed class PasswordResetService(
 
     public async Task RequestAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
+        var started = SteadyTiming.Start();
+        await CreateLinkAsync(request, cancellationToken);
+        await SteadyTiming.WaitUntilAsync(started, PasswordResetRules.MinimumRequestTime, cancellationToken);
+    }
+
+    private async Task CreateLinkAsync(ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
         var user = await users.GetByEmailAsync(EmailAddress.Normalize(request.Email), cancellationToken);
         if (user is null || !PasswordResetRules.CanReset(user.Status))
         {

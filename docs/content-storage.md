@@ -11,7 +11,7 @@ Code: `Services/ContentStore/` (`IContentStore` and its three implementations), 
 | Provider | For | What it is |
 |---|---|---|
 | `None` (default) | A server with nothing set up yet | `UnconfiguredContentStore`. The app runs; anything that needs the store answers `503 content_storage_unavailable` ("Client portal file storage isn't set up yet…"). `IContentStore.IsAvailable` is false |
-| `Local` | Development and tests | `LocalContentStore`. A folder on disk. Production refuses to start with it. Because there is no S3 to presign for it, it hands out its own signed links, served by `LocalContentStoreController` |
+| `Local` | Development and tests | `LocalContentStore`. A folder on disk. Only Development, Testing and Seeding may use it; any other environment (Production, Staging) refuses to start with it. Because there is no S3 to presign for it, it hands out its own signed links, served by `LocalContentStoreController` |
 | `R2` | Production | `R2ContentStore`. A private Cloudflare R2 bucket through its S3 API (AWSSDK.S3). A network failure or a 5xx answer from R2 becomes `503 content_storage_unavailable` ("The file storage can't be reached right now…"); `R2ContentStore` logs the cause as a warning, with the exception, before the 503 is answered |
 
 ### The local store
@@ -35,7 +35,7 @@ Code: `Services/ContentStore/` (`IContentStore` and its three implementations), 
 | `ContentStore:Local:RootPath` | `App_Data/portal-content` | A folder, relative to the content root unless absolute. Gitignored. Never a folder the web server serves |
 | `ContentStore:Local:SigningKey` | random per start | Signs the local store's links. Empty, a random 32-byte key is made each time the API starts, so links stop working on restart. Set one only to keep links across restarts |
 
-The API refuses to start when the provider is `R2` and any of the four R2 values is empty (the message names the missing key), when the endpoint isn't https, and in Production when the provider is `Local`.
+The API refuses to start when the provider is `R2` and any of the four R2 values is empty (the message names the missing key), when the endpoint isn't https, and outside Development, Testing and Seeding when the provider is `Local`.
 
 ### Where to set them
 

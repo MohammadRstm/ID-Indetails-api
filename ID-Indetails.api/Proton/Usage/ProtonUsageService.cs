@@ -21,7 +21,8 @@ public sealed class ProtonUsageService(
     IProtonUsageRepository usage,
     IUnitOfWork unitOfWork,
     IClock clock,
-    IOptions<ProtonOptions> options)
+    IOptions<ProtonOptions> options,
+    ProtonBudgetHolds holds)
 {
     private const int TopConversations = 10;
 
@@ -75,9 +76,36 @@ public sealed class ProtonUsageService(
         return mine;
     }
 
-    /// <summary>What is left of this month's budget, in USD: what a running voice session may still spend.</summary>
+    /// <summary>
+    /// Holds this question's estimated cost on the budget until it is recorded. Refused when the budget, less what
+    /// questions being answered already hold, can't cover it.
+    /// </summary>
+    public async Task<ProtonBudgetHold> HoldBudgetAsync(CancellationToken cancellationToken = default)
+    {
+        var amount = options.Value.QuestionHoldUsd;
+        await holds.Deciding.WaitAsync(cancellationToken);
+        try
+        {
+            var budget = await BudgetPositionAsync(Month(), cancellationToken);
+            if (!ProtonUsageRules.CanHold(budget.Remaining, holds.Held, amount))
+            {
+                throw new BusinessRuleException(ErrorCodes.ProtonBudgetUsed, "Proton has used this month's budget. A super admin can top it up.");
+            }
+
+            return holds.Add(amount);
+        }
+        finally
+        {
+            holds.Deciding.Release();
+        }
+    }
+
+    /// <summary>
+    /// What is left of this month's budget, in USD, less what questions being answered hold: what a running voice
+    /// session may still spend.
+    /// </summary>
     public async Task<decimal> BudgetRemainingAsync(CancellationToken cancellationToken = default)
-        => (await BudgetPositionAsync(Month(), cancellationToken)).Remaining;
+        => Math.Max(0, (await BudgetPositionAsync(Month(), cancellationToken)).Remaining - holds.Held);
 
     public async Task RecordAsync(ProtonUsage turn, CancellationToken cancellationToken = default)
     {
