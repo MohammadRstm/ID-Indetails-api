@@ -31,6 +31,12 @@ public interface IUserRepository
     /// <summary>The active people among these, with their domain. Not tracked.</summary>
     Task<IReadOnlyList<UserDomain>> ActiveDomainsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Counts one more wrong password; at <paramref name="attempts"/> the count starts again and sign-in is paused until
+    /// <paramref name="pausedUntil"/>. True when this call paused it.
+    /// </summary>
+    Task<bool> CountWrongPasswordAsync(long userId, int attempts, DateTime pausedUntil, CancellationToken cancellationToken = default);
+
     /// <summary>Records when the person was last seen, straight in the database.</summary>
     Task SetLastSeenAsync(long id, DateTime at, CancellationToken cancellationToken = default);
 

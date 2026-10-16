@@ -56,6 +56,12 @@ public class User
     /// <summary>Set for accounts created with a generated password (the first super admin).</summary>
     public bool MustChangePassword { get; set; }
 
+    /// <summary>Wrong passwords in a row; reset by a successful sign-in.</summary>
+    public int FailedSignIns { get; set; }
+
+    /// <summary>Sign-in is refused until then after too many wrong passwords (<see cref="Business.Auth.SignInLockout"/>).</summary>
+    public DateTime? LockedUntil { get; set; }
+
     public DateOnly? JoinedOn { get; set; }
 
     public DateTime? LastSeenAt { get; set; }
