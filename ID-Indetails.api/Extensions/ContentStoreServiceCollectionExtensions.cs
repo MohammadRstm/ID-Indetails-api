@@ -12,6 +12,12 @@ public static class ContentStoreServiceCollectionExtensions
     /// The settings of the client portal's file storage (docs/content-storage.md), checked at start-up, and the store they
     /// choose. Call it before the services that Proton guards are wrapped.
     /// </summary>
+    /// <summary>
+    /// Where the folder-on-disk store may run: its links are served anonymously and without size or rate limits, so
+    /// anywhere else (production, a staging server) must use R2.
+    /// </summary>
+    private static readonly string[] LocalEnvironments = [Environments.Development, "Testing", "Seeding"];
+
     public static IServiceCollection AddContentStore(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         services.AddOptions<ContentStoreOptions>().BindConfiguration(ContentStoreOptions.SectionName)
@@ -21,8 +27,8 @@ public static class ContentStoreServiceCollectionExtensions
             .RequireForR2("SecretAccessKey", r2 => r2.SecretAccessKey)
             .Validate(o => o.Provider != ContentStoreProvider.R2 || string.IsNullOrWhiteSpace(o.R2.Endpoint) || IsHttps(o.R2.Endpoint),
                 "ContentStore:R2:Endpoint must be an https URL, or empty to use https://{AccountId}.r2.cloudflarestorage.com.")
-            .Validate(o => !environment.IsProduction() || o.Provider != ContentStoreProvider.Local,
-                "ContentStore:Provider can't be Local in production: a folder on disk is for development and tests only. Use R2 (docs/content-storage.md).")
+            .Validate(o => o.Provider != ContentStoreProvider.Local || LocalEnvironments.Contains(environment.EnvironmentName),
+                "ContentStore:Provider can be Local only in Development, Testing and Seeding: a folder on disk is for development and tests only. Use R2 (docs/content-storage.md).")
             .Validate(o => o.Provider != ContentStoreProvider.Local || !string.IsNullOrWhiteSpace(o.Local.RootPath), "ContentStore:Local:RootPath can't be empty.")
             .ValidateOnStart();
 

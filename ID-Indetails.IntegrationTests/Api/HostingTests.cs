@@ -63,6 +63,35 @@ public class ProductionSettingsTests
     }
 }
 
+public class StagingSettingsTests
+{
+    [Fact]
+    public async Task A_staging_server_refuses_to_start_on_the_local_content_store()
+    {
+        // ApiFactory sets ContentStore:Provider to Local
+        var api = new StagingApiFactory();
+        await api.InitializeAsync();
+        try
+        {
+            Should.Throw<OptionsValidationException>(() => api.CreateApiClient());
+        }
+        finally
+        {
+            await api.DisposeAsync();
+        }
+    }
+}
+
+/// <summary>The API in a Staging environment, otherwise with the test settings.</summary>
+public sealed class StagingApiFactory : ApiFactory
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.UseEnvironment("Staging");
+    }
+}
+
 /// <summary>The API in the Production environment, with the given settings on top of the test ones.</summary>
 public sealed class ProductionApiFactory(IReadOnlyDictionary<string, string> settings) : ApiFactory
 {
