@@ -240,6 +240,13 @@ public sealed class PortalAuthService(
 
     public async Task RequestPasswordResetAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
+        var started = SteadyTiming.Start();
+        await CreateResetLinkAsync(request, cancellationToken);
+        await SteadyTiming.WaitUntilAsync(started, PasswordResetRules.MinimumRequestTime, cancellationToken);
+    }
+
+    private async Task CreateResetLinkAsync(ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
         var account = await accounts.GetByEmailAsync(EmailAddress.Normalize(request.Email), cancellationToken);
         if (account is not { Status: PortalAccountStatus.Active })
         {
