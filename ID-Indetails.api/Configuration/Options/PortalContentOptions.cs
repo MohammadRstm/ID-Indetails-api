@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ID_Indetails.api.Configuration.Options;
 
-/// <summary>Client portal content: how long its signed links last, and when its cleanup steps in. No size limits.</summary>
+/// <summary>Client portal content: how long its signed links last, and when its cleanup steps in.</summary>
 public sealed class PortalContentOptions
 {
     public const string SectionName = "PortalContent";

@@ -211,9 +211,9 @@ the permission check.
   (`ContentStore:Provider`; see [content-storage.md](content-storage.md)). Never on the server's disk in production,
   and never through `/api/files`.
 - The browser sends each file **in parts, straight to the store**, through short-lived signed links. The API never
-  carries the bytes, so the server's memory, disk and request limits don't matter, and there is **no size limit**:
-  only R2's own (about 5 TiB a file, 10,000 parts).
-- Parts are all one size but the last: 16 MiB, or more for files over 160 GiB.
+  carries the bytes, so the server's memory, disk and request limits don't matter. Each file can be at most **1 GB**
+  (`PortalContentRules.MaxFileBytes`); a bigger one is refused with `422 validation_failed` when the upload starts.
+- Parts are all one size but the last: 16 MiB.
 - Keys are `portal/{projectId}/{random}`: unguessable, never the file name. The name is kept in the row and sent back
   as the download name.
 
