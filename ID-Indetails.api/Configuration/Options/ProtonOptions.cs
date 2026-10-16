@@ -62,6 +62,13 @@ public sealed class ProtonOptions
     [Range(0, 1_000_000)]
     public decimal MonthlyBudgetUsd { get; init; } = 50m;
 
+    /// <summary>
+    /// What each text question holds of the budget while it is answered, in USD: an estimate above a typical question's
+    /// cost, so questions asked at once can't together spend past the budget. Let go once the real cost is recorded.
+    /// </summary>
+    [Range(0, 100)]
+    public decimal QuestionHoldUsd { get; init; } = 0.25m;
+
     /// <summary>Questions each person may ask a month: the allowance people see instead of costs.</summary>
     [Range(1, 100_000)]
     public int MonthlyQuestionsPerUser { get; init; } = 300;
