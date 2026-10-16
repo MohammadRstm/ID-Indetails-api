@@ -22,8 +22,9 @@ public sealed class StartPortalUploadRequestValidator : AbstractValidator<StartP
             .NotEmpty().WithMessage("The file has no name.")
             .MaximumLength(1000).WithMessage("The file name is too long.");
 
-        // There is no upper limit: the store takes files up to its own maximum.
-        RuleFor(x => x.Size).GreaterThan(0).WithMessage("The file is empty.");
+        RuleFor(x => x.Size)
+            .GreaterThan(0).WithMessage("The file is empty.")
+            .LessThanOrEqualTo(PortalContentRules.MaxFileBytes).WithMessage("Files can be at most 1 GB.");
 
         RuleFor(x => x.ReplaceItemId).GreaterThan(0).When(x => x.ReplaceItemId is not null);
         RuleFor(x => x.ReplaceItemId).Null().WithMessage("A hero image replaces no file.").When(x => x.Hero);

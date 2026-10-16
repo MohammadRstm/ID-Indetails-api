@@ -9,7 +9,7 @@ namespace ID_Indetails.api.Business.Portal;
 /// <summary>
 /// <list type="bullet">
 /// <item>A project's files (and so its client portal) are the files a design studio works on and hands its clients:
-/// images, videos, PDFs, Office files, drawings and 3D models. Never web pages, SVG or programs. There is no size limit.</item>
+/// images, videos, PDFs, Office files, drawings and 3D models. Never web pages, SVG or programs. At most 1 GB a file.</item>
 /// <item>What a file is comes from its extension, checked against its first bytes once it has arrived; the type the
 /// browser claims is never used.</item>
 /// <item>Files go to the store in parts of one size (the last may be smaller), at least 16 MiB and few enough for the
@@ -22,6 +22,7 @@ public static class PortalContentRules
 {
     public const int MinPartSize = 16 * 1024 * 1024;
     public const int MaxParts = 10_000;
+    public const long MaxFileBytes = 1024L * 1024 * 1024;
 
     /// <summary>How many leading bytes <see cref="MatchesContent"/> reads.</summary>
     public const int HeaderLength = 4096;
