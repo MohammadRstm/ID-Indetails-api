@@ -70,14 +70,16 @@ public class ContentStoreSetupTests
         provider.GetRequiredService<IContentStore>().ShouldBeSameAs(provider.GetRequiredService<LocalContentStore>());
     }
 
-    [Fact]
-    public void Local_is_refused_in_production()
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public void Local_is_refused_outside_development_and_tests(string environment)
     {
-        using var provider = Build("Production", ("ContentStore:Provider", "Local"));
+        using var provider = Build(environment, ("ContentStore:Provider", "Local"));
 
         var failures = FailuresOf(provider);
 
-        failures.ShouldHaveSingleItem().ShouldContain("can't be Local in production");
+        failures.ShouldHaveSingleItem().ShouldContain("can be Local only in Development, Testing and Seeding");
     }
 
     [Fact]
