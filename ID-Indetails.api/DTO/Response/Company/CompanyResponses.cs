@@ -12,6 +12,7 @@ public sealed record CompanySettingsResponse(
     string Name,
     string? Address,
     string? Website,
+    string? ContactEmail,
     long? LogoFileId,
     string TimeZone,
     byte WeekStart,

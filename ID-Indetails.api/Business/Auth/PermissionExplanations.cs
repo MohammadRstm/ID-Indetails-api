@@ -85,6 +85,10 @@ public static class PermissionExplanations
         [PermissionCodes.ScheduleManage] = "Set people's personal work schedules, when they differ from the company's working week.",
         [PermissionCodes.HoursExcuse] = "Excuse hours or days off in people's hours balance, so they don't count as missing.",
 
+        // The company website
+        [PermissionCodes.WebsiteView] = "See the Website page: the projects, services, locations, contact details and favicon the company's public website shows. Changing them needs \"Edit the company website\".",
+        [PermissionCodes.WebsiteManage] = "Change what the company's public website shows: add, edit, publish and remove projects, choose the up to 20 in the moving strip, and edit services, locations, social links, the contact email and the favicon. Everything here is public once saved.",
+
         // Proton
         [PermissionCodes.ProtonUse] = "Ask Proton about the company and have it prepare changes. It sees only what this person could see in Hourline themselves, and changes nothing until they confirm.",
         [PermissionCodes.ProtonBudgetManage] = "See what Proton costs and who uses it, and top up its monthly budget.",

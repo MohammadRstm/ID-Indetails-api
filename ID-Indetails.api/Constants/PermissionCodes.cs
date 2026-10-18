@@ -79,6 +79,10 @@ public static class PermissionCodes
     public const string ScheduleManage = "schedule:manage";
     public const string HoursExcuse = "hours:excuse";
 
+    // The company website (its public content)
+    public const string WebsiteView = "website:view";
+    public const string WebsiteManage = "website:manage";
+
     // Proton, the company assistant
     public const string ProtonUse = "proton:use";
     public const string ProtonBudgetManage = "proton_budget:manage";

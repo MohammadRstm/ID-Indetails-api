@@ -20,6 +20,15 @@ public class CompanySettings
 
     public long? LogoFileId { get; set; }
 
+    /// <summary>
+    /// The company's own address: the website shows it, and its contact form sends here. Edited in Company settings or
+    /// on the Website page.
+    /// </summary>
+    public string? ContactEmail { get; set; }
+
+    /// <summary>The website's favicon.</summary>
+    public long? WebsiteFaviconFileId { get; set; }
+
     /// <summary>IANA zone used for overtime, day boundaries and "today" (e.g. Asia/Beirut).</summary>
     public string TimeZone { get; set; } = "Asia/Beirut";
 

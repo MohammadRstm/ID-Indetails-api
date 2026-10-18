@@ -112,7 +112,8 @@ public sealed class FileService(
 
     private async Task<bool> CanReadAsync(UserAccess me, FileUses uses, CancellationToken cancellationToken)
     {
-        if (uses.IsPhoto || uses.IsLogo)
+        // the website's pictures are public anyway
+        if (uses.IsPhoto || uses.IsLogo || uses.IsWebsite)
         {
             return true;
         }

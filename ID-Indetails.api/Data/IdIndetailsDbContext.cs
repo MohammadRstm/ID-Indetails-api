@@ -37,6 +37,11 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<PortalMention> PortalMentions => Set<PortalMention>();
     public DbSet<PortalNotification> PortalNotifications => Set<PortalNotification>();
     public DbSet<ProjectFileComment> ProjectFileComments => Set<ProjectFileComment>();
+    public DbSet<WebsiteProject> WebsiteProjects => Set<WebsiteProject>();
+    public DbSet<WebsiteProjectImage> WebsiteProjectImages => Set<WebsiteProjectImage>();
+    public DbSet<WebsiteOffering> WebsiteServices => Set<WebsiteOffering>();
+    public DbSet<WebsiteLocation> WebsiteLocations => Set<WebsiteLocation>();
+    public DbSet<WebsiteSocialLink> WebsiteSocialLinks => Set<WebsiteSocialLink>();
 
     // Clients and projects
     public DbSet<Client> Clients => Set<Client>();
@@ -156,6 +161,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<PortalSection>(configurationBuilder);
         StoreAsSnakeCase<PortalUploadStatus>(configurationBuilder);
         StoreAsSnakeCase<PortalNotificationKind>(configurationBuilder);
+        StoreAsSnakeCase<WebsiteProjectStatus>(configurationBuilder);
+        StoreAsSnakeCase<WebsiteProjectType>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)
