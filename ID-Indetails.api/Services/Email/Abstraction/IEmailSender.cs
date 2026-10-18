@@ -12,7 +12,9 @@ public sealed record EmailMessage(
     string HtmlBody,
     string TextBody,
     IReadOnlyList<EmailAttachment>? Attachments = null,
-    IReadOnlyList<EmailInlineImage>? InlineImages = null);
+    IReadOnlyList<EmailInlineImage>? InlineImages = null,
+    string? ReplyToAddress = null,
+    string? ReplyToName = null);
 
 public interface IEmailSender
 {

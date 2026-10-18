@@ -6,9 +6,10 @@ namespace ID_Indetails.api.Repositories.Files.Abstraction;
 public sealed record FileView(long Id, string Name, string MimeType, long SizeBytes, DateTime CreatedAt);
 
 /// <summary>Everything a file is attached to, which decides who may download it.</summary>
-public sealed record FileUses(bool IsPhoto, bool IsLogo, IReadOnlyList<long> ConversationIds, IReadOnlyList<long> EntryIds)
+/// <param name="IsWebsite">A picture or the favicon of the company's public website.</param>
+public sealed record FileUses(bool IsPhoto, bool IsLogo, IReadOnlyList<long> ConversationIds, IReadOnlyList<long> EntryIds, bool IsWebsite)
 {
-    public bool IsUsed => IsPhoto || IsLogo || ConversationIds.Count > 0 || EntryIds.Count > 0;
+    public bool IsUsed => IsPhoto || IsLogo || IsWebsite || ConversationIds.Count > 0 || EntryIds.Count > 0;
 }
 
 public interface IFileRepository

@@ -32,4 +32,16 @@ public static class RateLimitPolicies
 
     /// <summary>A client's chat messages and comments, per portal account.</summary>
     public const string PortalWrite = "portal-write";
+
+    /// <summary>The public website's contact form, which emails the company: per IP, per hour.</summary>
+    public const string WebsiteContact = "website-contact";
+}
+
+/// <summary>Where the public website's API lives: no sign-in, read-only apart from the contact form.</summary>
+public static class PublicWebsitePaths
+{
+    public const string Prefix = "/api/public/website";
+
+    /// <summary>The address a website picture is served at.</summary>
+    public static string File(long fileId) => $"{Prefix}/files/{fileId}";
 }

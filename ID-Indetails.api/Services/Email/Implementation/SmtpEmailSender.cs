@@ -17,6 +17,11 @@ public sealed class SmtpEmailSender(IOptions<EmailOptions> options) : IEmailSend
         var mime = new MimeMessage();
         mime.From.Add(new MailboxAddress(_options.FromName, _options.FromAddress));
         mime.To.Add(new MailboxAddress(message.ToName ?? string.Empty, message.ToAddress));
+        if (message.ReplyToAddress is not null)
+        {
+            mime.ReplyTo.Add(new MailboxAddress(message.ReplyToName ?? string.Empty, message.ReplyToAddress));
+        }
+
         mime.Subject = message.Subject;
         var body = new BodyBuilder { HtmlBody = message.HtmlBody, TextBody = message.TextBody };
         foreach (var image in message.InlineImages ?? [])

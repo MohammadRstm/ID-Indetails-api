@@ -537,6 +537,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(300)")
                         .HasColumnName("address");
 
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("varchar(254)")
+                        .HasColumnName("contact_email");
+
                     b.Property<string>("DefaultCurrency")
                         .IsRequired()
                         .HasMaxLength(3)
@@ -578,6 +583,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(200)")
                         .HasColumnName("website");
 
+                    b.Property<long?>("WebsiteFaviconFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("website_favicon_file_id");
+
                     b.Property<byte>("WeekStart")
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("week_start");
@@ -590,6 +599,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("UpdatedById")
                         .HasDatabaseName("ix_company_settings_updated_by_id");
+
+                    b.HasIndex("WebsiteFaviconFileId")
+                        .HasDatabaseName("ix_company_settings_website_favicon_file_id");
 
                     b.ToTable("company_settings", null, t =>
                         {
@@ -2278,6 +2290,16 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "hours:excuse",
                             Description = "Excuse hours and days off in the hours ledger"
+                        },
+                        new
+                        {
+                            Code = "website:view",
+                            Description = "View the company website's content"
+                        },
+                        new
+                        {
+                            Code = "website:manage",
+                            Description = "Edit the company website: projects, services, locations, contact details and favicon"
                         },
                         new
                         {
@@ -4935,6 +4957,16 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "website:view"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "website:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "proton:use"
                         },
                         new
@@ -5791,6 +5823,341 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.WebsiteLocation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("city");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("country");
+
+                    b.Property<decimal>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)")
+                        .HasColumnName("latitude");
+
+                    b.Property<decimal>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("phone");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int")
+                        .HasColumnName("position");
+
+                    b.HasKey("Id")
+                        .HasName("pk_website_locations");
+
+                    b.ToTable("website_locations", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.WebsiteOffering", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int")
+                        .HasColumnName("position");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("varchar(120)")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id")
+                        .HasName("pk_website_services");
+
+                    b.ToTable("website_services", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.WebsiteProject", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("city");
+
+                    b.Property<string>("Client")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("client");
+
+                    b.Property<int?>("ConveyorOrder")
+                        .HasColumnType("int")
+                        .HasColumnName("conveyor_order");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("country");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("HeroAlt")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("hero_alt");
+
+                    b.Property<string>("HeroCreditPhotographer")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("hero_credit_photographer");
+
+                    b.Property<string>("HeroCreditSource")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("hero_credit_source");
+
+                    b.Property<string>("HeroCreditUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("hero_credit_url");
+
+                    b.Property<long?>("HeroFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("hero_file_id");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)")
+                        .HasColumnName("latitude");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)")
+                        .HasColumnName("longitude");
+
+                    b.Property<long?>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<bool>("Published")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("published");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("slug");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<long?>("ThumbnailFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("thumbnail_file_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("type");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long?>("UpdatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("updated_by_id");
+
+                    b.Property<int?>("Year")
+                        .HasColumnType("int")
+                        .HasColumnName("year");
+
+                    b.HasKey("Id")
+                        .HasName("pk_website_projects");
+
+                    b.HasIndex("ConveyorOrder")
+                        .IsUnique()
+                        .HasDatabaseName("ix_website_projects_conveyor_order");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_website_projects_created_by_id");
+
+                    b.HasIndex("HeroFileId")
+                        .HasDatabaseName("ix_website_projects_hero_file_id");
+
+                    b.HasIndex("ProjectId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_website_projects_project_id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_website_projects_slug");
+
+                    b.HasIndex("ThumbnailFileId")
+                        .HasDatabaseName("ix_website_projects_thumbnail_file_id");
+
+                    b.HasIndex("UpdatedById")
+                        .HasDatabaseName("ix_website_projects_updated_by_id");
+
+                    b.ToTable("website_projects", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_website_projects_conveyor", "`conveyor_order` IS NULL OR (`published` AND `conveyor_order` BETWEEN 1 AND 20)");
+
+                            t.HasCheckConstraint("ck_website_projects_follows_link", "`project_id` IS NOT NULL OR (`status` IS NOT NULL AND `year` IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_website_projects_position", "(`latitude` IS NULL) = (`longitude` IS NULL)");
+
+                            t.HasCheckConstraint("ck_website_projects_status", "`status` IN ('in_progress', 'completed')");
+
+                            t.HasCheckConstraint("ck_website_projects_type", "`type` IN ('villa', 'residential', 'hotel')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.WebsiteProjectImage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Alt")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("alt");
+
+                    b.Property<string>("CreditPhotographer")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("credit_photographer");
+
+                    b.Property<string>("CreditSource")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("credit_source");
+
+                    b.Property<string>("CreditUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("credit_url");
+
+                    b.Property<long>("FileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("file_id");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int")
+                        .HasColumnName("position");
+
+                    b.Property<long>("WebsiteProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("website_project_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_website_project_images");
+
+                    b.HasIndex("FileId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_website_project_images_file_id");
+
+                    b.HasIndex("WebsiteProjectId", "Position")
+                        .HasDatabaseName("ix_website_project_images_website_project_id_position");
+
+                    b.ToTable("website_project_images", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.WebsiteSocialLink", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("label");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int")
+                        .HasColumnName("position");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id")
+                        .HasName("pk_website_social_links");
+
+                    b.ToTable("website_social_links", (string)null);
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.WorkEntry", b =>
                 {
                     b.Property<long>("Id")
@@ -6153,6 +6520,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("UpdatedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_company_settings_users_updated_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("WebsiteFaviconFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_company_settings_files_website_favicon_file_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Conversation", b =>
@@ -7454,6 +7827,56 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Schedule");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.WebsiteProject", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_website_projects_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("HeroFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_website_projects_files_hero_file_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_website_projects_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("ThumbnailFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_website_projects_files_thumbnail_file_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_website_projects_users_updated_by_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.WebsiteProjectImage", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_website_project_images_files_file_id");
+
+                    b.HasOne("ID_Indetails.api.Models.WebsiteProject", null)
+                        .WithMany("Images")
+                        .HasForeignKey("WebsiteProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_website_project_images_website_projects_website_project_id");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.WorkEntry", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.StoredFile", "AttachmentFile")
@@ -7611,6 +8034,11 @@ namespace ID_Indetails.api.Data.Migrations
             modelBuilder.Entity("ID_Indetails.api.Models.UserSchedule", b =>
                 {
                     b.Navigation("Days");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.WebsiteProject", b =>
+                {
+                    b.Navigation("Images");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.WorkEntry", b =>

@@ -230,4 +230,22 @@ public static class ErrorCodes
 
     /// <summary>422. The project is archived: its discussion can be read, but nothing new can be written.</summary>
     public const string PortalDiscussionClosed = "portal_discussion_closed";
+
+    /// <summary>409. Another website project already has this address (slug).</summary>
+    public const string WebsiteSlugTaken = "website_slug_taken";
+
+    /// <summary>422. The website project lacks something the public site needs (the message lists what).</summary>
+    public const string WebsiteProjectIncomplete = "website_project_incomplete";
+
+    /// <summary>422. The moving strip on the website shows at most 20 projects, all of them published.</summary>
+    public const string WebsiteConveyorInvalid = "website_conveyor_invalid";
+
+    /// <summary>409. A new order must list exactly the current items; one was added or removed meanwhile.</summary>
+    public const string WebsiteOrderStale = "website_order_stale";
+
+    /// <summary>503. The website's contact form can't send: the company has no contact email yet.</summary>
+    public const string WebsiteContactUnavailable = "website_contact_unavailable";
+
+    /// <summary>422. A website project only links to a system project once.</summary>
+    public const string WebsiteProjectAlreadyLinked = "website_project_already_linked";
 }

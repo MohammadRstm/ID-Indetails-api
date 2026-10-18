@@ -178,6 +178,14 @@ public static class AuthServiceCollectionExtensions
             // Runs after authentication (see Program.cs), so signed-in users get their own bucket.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
+                // The public website's visitors load every picture through the API: their own, roomier bucket.
+                if (context.Request.Path.StartsWithSegments(PublicWebsitePaths.Prefix))
+                {
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        "website:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                        _ => PerMinute(limits.PublicWebsitePermitsPerMinute));
+                }
+
                 var userId = context.User.FindFirst(AuthClaimTypes.UserId)?.Value;
                 return userId is not null
                     ? RateLimitPartition.GetFixedWindowLimiter("user:" + userId, _ => PerMinute(limits.UserPermitsPerMinute))
@@ -224,6 +232,10 @@ public static class AuthServiceCollectionExtensions
             options.AddPolicy(RateLimitPolicies.PortalWrite, context => RateLimitPartition.GetFixedWindowLimiter(
                 $"portal-write:{PortalAccountOf(context) ?? "anonymous"}@{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
                 _ => PerMinute(limits.PortalWritePermitsPerMinute)));
+
+            options.AddPolicy(RateLimitPolicies.WebsiteContact, context => RateLimitPartition.GetFixedWindowLimiter(
+                "website-contact:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.WebsiteContactPermitsPerHour, Window = TimeSpan.FromHours(1) }));
 
             options.AddPolicy(RateLimitPolicies.Setup, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",

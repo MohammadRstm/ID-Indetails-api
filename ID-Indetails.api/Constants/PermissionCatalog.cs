@@ -83,6 +83,9 @@ public static class PermissionCatalog
         new(P.ScheduleManage, "Set personal work schedules", Sensitivity: Pay),
         new(P.HoursExcuse, "Excuse hours and days off in the hours ledger", Sensitivity: Pay),
 
+        new(P.WebsiteView, "View the company website's content"),
+        new(P.WebsiteManage, "Edit the company website: projects, services, locations, contact details and favicon"),
+
         // Admins and super admins only: employees don't get Proton yet.
         new(P.ProtonUse, "Ask Proton, the company assistant, which proposes changes only for the person to confirm"),
         new(P.ProtonBudgetManage, "See Proton's costs and usage, and top up its monthly budget"),
@@ -94,7 +97,7 @@ public static class PermissionCatalog
         P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse,
         P.EmployeeInviteSuperAdmin, P.PermissionManage, P.ExchangeRateManage,
         P.OverheadCategoryManage, P.SessionManage, P.EmployeeChangeEmail,
-        P.ProtonBudgetManage,
+        P.ProtonBudgetManage, P.WebsiteView, P.WebsiteManage,
     ];
 
     /// <summary>

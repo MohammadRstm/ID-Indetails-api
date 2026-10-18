@@ -25,6 +25,12 @@ public sealed class CompanyController(ICompanySettingsService settings, IWorking
     public Task<CompanySettingsResponse> UpdateSettings(UpdateCompanySettingsRequest request, CancellationToken cancellationToken)
         => settings.UpdateAsync(request, cancellationToken);
 
+    /// <summary>The company's own email address: the website shows it, and its contact form sends to it.</summary>
+    [HttpPut("contact-email")]
+    [HasAnyPermission(PermissionCodes.CompanySettingsManage, PermissionCodes.WebsiteManage)]
+    public Task<CompanySettingsResponse> SetContactEmail(CompanyContactEmailRequest request, CancellationToken cancellationToken)
+        => settings.SetContactEmailAsync(request, cancellationToken);
+
     /// <summary>The logo, from the caller's upload.</summary>
     [HttpPut("logo")]
     [HasPermission(PermissionCodes.CompanySettingsManage)]

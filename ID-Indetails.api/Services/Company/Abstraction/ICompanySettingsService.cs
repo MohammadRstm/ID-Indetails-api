@@ -13,6 +13,9 @@ public interface ICompanySettingsService
     Task<CompanySettingsResponse> UpdateAsync(UpdateCompanySettingsRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Sets the logo from the caller's upload; the settings must be saved first.</summary>
+    /// <summary>The company's own address, which the website shows and its contact form sends to. Empty clears it.</summary>
+    Task<CompanySettingsResponse> SetContactEmailAsync(CompanyContactEmailRequest request, CancellationToken cancellationToken = default);
+
     Task<CompanySettingsResponse> SetLogoAsync(AttachFileRequest request, CancellationToken cancellationToken = default);
 
     Task<CompanySettingsResponse> RemoveLogoAsync(CancellationToken cancellationToken = default);

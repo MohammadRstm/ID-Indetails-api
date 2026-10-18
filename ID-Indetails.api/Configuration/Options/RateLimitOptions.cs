@@ -53,6 +53,14 @@ public sealed class RateLimitOptions
     [Range(1, 10_000)]
     public int ProtonPermitsPerMinute { get; init; } = 10;
 
+    /// <summary>Every request to the public website API (/api/public/website), per IP per minute. A page loads each picture.</summary>
+    [Range(1, 100_000)]
+    public int PublicWebsitePermitsPerMinute { get; init; } = 600;
+
+    /// <summary>Messages from the public website's contact form, per IP per hour. Each one sends an email.</summary>
+    [Range(1, 1_000)]
+    public int WebsiteContactPermitsPerHour { get; init; } = 5;
+
     /// <summary>Super-admin setup: requests per IP per hour.</summary>
     [Range(1, 10_000)]
     public int SetupPermitsPerHour { get; init; } = 5;

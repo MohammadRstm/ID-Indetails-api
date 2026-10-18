@@ -30,6 +30,14 @@ public sealed class UpdateCompanySettingsRequestValidator : AbstractValidator<Up
             && uri.Host.Contains('.');
 }
 
+public sealed class CompanyContactEmailRequestValidator : AbstractValidator<CompanyContactEmailRequest>
+{
+    public CompanyContactEmailRequestValidator()
+    {
+        RuleFor(x => x.Email!).ValidEmail().When(x => !string.IsNullOrWhiteSpace(x.Email));
+    }
+}
+
 public sealed class SetWorkingTimeRequestValidator : AbstractValidator<SetWorkingTimeRequest>
 {
     public SetWorkingTimeRequestValidator()

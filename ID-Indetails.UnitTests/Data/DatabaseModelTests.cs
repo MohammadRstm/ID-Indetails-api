@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_81_tables_with_snake_case_names()
+    public void Model_has_all_86_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(81);
+        tables.Count.ShouldBe(86);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -37,6 +37,8 @@ public class DatabaseModelTests
             "proton_conversation_messages",
             // a project file's comments go with it when a file clients never saw is deleted
             "project_file_comments",
+            // a website project's gallery goes with it
+            "website_project_images",
         };
 
         var cascading = Model.GetEntityTypes()

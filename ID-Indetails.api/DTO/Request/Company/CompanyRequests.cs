@@ -22,6 +22,12 @@ public sealed record UpdateCompanySettingsRequest
 }
 
 /// <summary>A new company working week, from <see cref="EffectiveFrom"/> (today when empty).</summary>
+/// <summary>The company's own email address; empty clears it.</summary>
+public sealed record CompanyContactEmailRequest
+{
+    public string? Email { get; init; }
+}
+
 public sealed record SetWorkingTimeRequest
 {
     public DateOnly? EffectiveFrom { get; init; }
