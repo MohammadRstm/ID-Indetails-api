@@ -25,6 +25,10 @@ public class EndpointAuthorizationTests
         "PortalAuthController.Login", "PortalAuthController.Refresh", "PortalAuthController.Logout",
         "PortalAuthController.ForgotPassword", "PortalAuthController.ResetPassword",
         "PortalInvitationsController.Validate", "PortalInvitationsController.Accept",
+        // the company's public website: published content only, and its contact form
+        "PublicWebsiteController.Projects", "PublicWebsiteController.Project", "PublicWebsiteController.Services",
+        "PublicWebsiteController.Locations", "PublicWebsiteController.Contact", "PublicWebsiteController.SocialLinks",
+        "PublicWebsiteController.Settings", "PublicWebsiteController.Picture", "PublicWebsiteController.SendContactMessage",
         "SetupController.CreateSuperAdmin",
     ];
 
