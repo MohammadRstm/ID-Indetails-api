@@ -120,14 +120,11 @@ public sealed class PublicWebsiteService(
             year.Value,
             p.Description,
             PublicWebsitePaths.File(p.ThumbnailFileId.Value),
-            new PublicImage(PublicWebsitePaths.File(p.HeroFileId.Value), p.HeroAlt ?? p.Title, Credit(p.HeroCreditPhotographer, p.HeroCreditSource, p.HeroCreditUrl)),
+            new PublicImage(PublicWebsitePaths.File(p.HeroFileId.Value), p.HeroAlt ?? p.Title),
             p.Images.OrderBy(i => i.Position)
-                .Select(i => new PublicImage(PublicWebsitePaths.File(i.FileId), i.Alt, Credit(i.CreditPhotographer, i.CreditSource, i.CreditUrl)))
+                .Select(i => new PublicImage(PublicWebsitePaths.File(i.FileId), i.Alt))
                 .ToList(),
             p.ConveyorOrder is not null,
             p.ConveyorOrder);
     }
-
-    private static PublicImageCredit? Credit(string? photographer, string? source, string? url)
-        => photographer is null || source is null || url is null ? null : new PublicImageCredit(photographer, source, url);
 }

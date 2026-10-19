@@ -48,19 +48,45 @@ A website project is its own record. Everything on it may be public; nothing int
   - lowercase letters, digits and single dashes, at most 100 characters, unique;
   - left empty, it's made from the title (adding `-2`, `-3` … if taken) and then kept;
   - typing one that's taken gives `409 website_slug_taken`.
-- **Publishing.** Only published projects reach the website. Publishing needs a status and a year (its own or the linked project's), a city, a country, a map position (both latitude and longitude), a description, a thumbnail and a main picture. Otherwise it's `422 website_project_incomplete`, with what's missing in the message. The form also gets the list as `missingToPublish`.
-- **Pictures.**
-  - Kinds:
-    - the thumbnail: portrait 4:5, used in the strip and the grid;
-    - the main picture (hero): wide, with a description and an optional credit;
-    - a gallery: ordered, each picture with a description and an optional credit.
-  - A credit is all of photographer, source and an https link, or nothing.
+- **Place.** The coordinates, or just the city and country (see [Places](#places)). Either way, a published project always has all four.
+- **Publishing.** Only published projects reach the website. Publishing needs a status and a year (its own or the linked project's), a city, a country, a map position, a description, a thumbnail and a main picture. Otherwise it's `422 website_project_incomplete`, with what's missing in the message, or `422 website_place_not_found` when the place couldn't be found on the map. The form also gets the list as `missingToPublish`.
+- **Pictures.** Each has one use:
+
+  | Picture | Shape | Where the website shows it |
+  |---|---|---|
+  | **Card picture** (`thumbnail`) | Tall 4:5, about 720 × 900 | Only on the project's card: in the moving strip and in the Projects grid |
+  | **Page picture** (`hero`) | Wide 16:9, about 1920 × 1080 | Only across the top of the project's own page, beside the globe |
+  | **Gallery** | Wide 3:2 works best | Further down the project's own page, in order |
+
+  - Each picture has a description (`alt`), read out to people who can't see it.
   - Pictures are uploaded with `POST /api/files` first, and must be photos (JPEG, PNG or WebP).
   - A replaced or removed picture is attached to nothing, so the file cleanup deletes it a day later ([files.md](files.md)).
 - **The moving strip.**
   - `PUT /api/website/conveyor` sets the whole strip, in order: up to 20 projects, all published.
   - More than 20 is a `400`. A draft is `422 website_conveyor_invalid`.
   - Taking a project off the website, or deleting it, takes it out of the strip and closes the gap.
+
+## Places
+
+A project or an office is placed in one of two ways (`WebsitePlaceResolver`):
+
+1. **Coordinates** (more accurate) always win, and go on the globe exactly as typed. A city or country left empty is found from them.
+2. **A city and country alone:** the project gets a random point in that city, near its centre and on land. No other project or office has that exact point. The point is chosen once and kept (`positionApproximate: true`). It's chosen again only if the city or country changes, and replaced as soon as real coordinates are typed in. A form that sends the random point back unchanged keeps it that way.
+
+**The map service: OpenStreetMap's Nominatim** (`Services/Geocoding`):
+- English names, so "Lebanon", not "لبنان". OpenStreetMap's names are used as they are, e.g. "Jbeil" for Byblos; they can be typed over.
+- The city is the first of `city`, `town`, `village`, `municipality`, `county` and `state` in the address.
+- A city's area is its bounding box from `search`. The random point stays in its inner half and within 0.02° (about 2 km) of its centre.
+- The point is checked with a reverse lookup: one in the sea or in another country is picked again, 5 times at most, then the city's own point is used.
+- **Their usage policy:** the API names itself (`Geocoding:UserAgent`) and makes at most one request a second. It looks up only what's missing: a project typed with its city, country and coordinates never calls it.
+- **Settings:** `Geocoding:Enabled` (off: nothing is looked up), `Geocoding:BaseUrl`, `Geocoding:UserAgent` and `Geocoding:TimeoutSeconds` (5 by default).
+
+**When the place can't be found** (an unknown city, a point in the sea, or the service down):
+- A project draft still saves, with what could be found.
+- Publishing is `422 website_place_not_found`, with a message saying what to type in.
+- An office is public once saved, so it's refused the same way.
+
+The integration tests use `FakeGeocoder`, which never calls the internet.
 
 ## Dashboard API (signed in)
 
@@ -69,13 +95,13 @@ A website project is its own record. Everything on it may be public; nothing int
 | `GET /api/website/projects`, `GET …/{id}` | view or manage | Every project, newest first, as `{ projects, conveyorLimit, canManage }`. Each one has its own `status` and `year` (null while following), plus `shownStatus` and `shownYear`, `linkedProject`, `gallery` and `missingToPublish` |
 | `POST /api/website/projects`, `PUT …/{id}`, `DELETE …/{id}` | manage | The whole form each time. Pictures are `thumbnailFileId` and `heroFileId`: the current id keeps it, a new upload replaces it, `null` clears it |
 | `PUT /api/website/conveyor` | manage | `{ projectIds }` in order |
-| `POST /api/website/projects/{id}/images` | manage | `{ fileId, alt, credit? }`, added at the end |
-| `PUT …/images/{imageId}`, `DELETE …/images/{imageId}` | manage | `{ alt, credit? }` |
+| `POST /api/website/projects/{id}/images` | manage | `{ fileId, alt }`, added at the end |
+| `PUT …/images/{imageId}`, `DELETE …/images/{imageId}` | manage | `{ alt }` |
 | `PUT …/images/order` | manage | `{ ids }`: every picture once. If one was added or removed meanwhile: `409 website_order_stale` |
 | `GET /api/website/link-candidates?search=` | manage | Up to 20 system projects of both businesses, with what the form fills in and `websiteProjectId` if one is already shown |
 | `GET /api/website/content` | view or manage | `{ services, locations, socialLinks, contactEmail, faviconFileId, canManage }` |
 | `POST /api/website/services`, `PUT …/{id}`, `DELETE …/{id}`, `PUT …/order` | manage | `{ title, description }`, plain text. Each answers with the whole content |
-| `POST /api/website/locations`, `PUT …`, `DELETE …`, `PUT …/order` | manage | `{ city, country, latitude, longitude, address, phone }` |
+| `POST /api/website/locations`, `PUT …`, `DELETE …`, `PUT …/order` | manage | `{ city?, country?, latitude?, longitude?, address, phone }`: the coordinates, or the city and country ([Places](#places)) |
 | `POST /api/website/social-links`, `PUT …`, `DELETE …`, `PUT …/order` | manage | `{ label, url }`. The URL must be https |
 | `PUT /api/website/favicon`, `DELETE …` | manage | `{ fileId }`: PNG, JPEG or WebP (no SVG: it can carry scripts) |
 | `PUT /api/company/contact-email` | `company_settings:manage` or `website:manage` | `{ email }`. Empty clears it. It is also `contactEmail` on `GET /api/company/settings` |
@@ -105,15 +131,14 @@ A project:
   "location": { "city": "Beirut", "country": "Lebanon", "lat": 33.8938, "lng": 35.5018 },
   "year": 2022, "description": "Plain text.",
   "thumbnail": "/api/public/website/files/40",
-  "hero": { "src": "/api/public/website/files/41", "alt": "The villa at dusk",
-            "credit": { "photographer": "…", "source": "…", "url": "https://…" } },
-  "gallery": [{ "src": "/api/public/website/files/42", "alt": "The pool", "credit": null }],
+  "hero": { "src": "/api/public/website/files/41", "alt": "The villa at dusk" },
+  "gallery": [{ "src": "/api/public/website/files/42", "alt": "The pool" }],
   "showInConveyor": true, "conveyorOrder": 1
 }
 ```
 
 - `client` is `""` when none is named.
-- `credit` is `null` when the picture has none.
+- `location` is always complete: the coordinates may be a random point in the city ([Places](#places)).
 - `conveyorOrder` is `null` outside the strip.
 
 **Caching.** Answers may be cached for a minute (`Cache-Control: public, max-age=60`), and pictures for a day: a picture's address never changes its content, since a new picture is a new file.

@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Website;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Company;
@@ -40,7 +41,6 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
             thumbnailFileId = thumbnail,
             heroFileId = hero,
             heroAlt = "The villa at dusk",
-            heroCredit = new { photographer = "A. Photographer", source = "Unsplash", url = "https://unsplash.com/photos/abc" },
             published,
         };
 
@@ -129,7 +129,6 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         shown.Thumbnail.ShouldBe($"{Public}/files/{thumbnail}");
         shown.Hero.Src.ShouldBe($"{Public}/files/{hero}");
         shown.Hero.Alt.ShouldBe("The villa at dusk");
-        shown.Hero.Credit!.Source.ShouldBe("Unsplash");
         shown.ShowInConveyor.ShouldBeFalse();
         (await (await Client.GetAsync($"{Public}/projects/{draft.Slug}")).ReadAsync<PublicWebsiteProject>()).Id.ShouldBe(draft.Id);
 
@@ -222,10 +221,9 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         ((int)withOne.StatusCode).ShouldBe(200, await withOne.Content.ReadAsStringAsync());
         var withTwo = await (await Client.PostJsonAsync(
             $"/api/website/projects/{project.Id}/images",
-            new { fileId = await PngAsync(superAdmin), alt = "The terrace", credit = new { photographer = "B. Lens", source = "Pexels", url = "https://pexels.com/p/1" } },
+            new { fileId = await PngAsync(superAdmin), alt = "The terrace" },
             superAdmin.AccessToken)).ReadAsync<WebsiteProjectResponse>();
         var (pool, terrace) = (withTwo.Gallery[0], withTwo.Gallery[1]);
-        terrace.Credit!.Photographer.ShouldBe("B. Lens");
 
         var ordered = await (await Client.PutJsonAsync($"/api/website/projects/{project.Id}/images/order", new { ids = new[] { terrace.Id, pool.Id } }, superAdmin.AccessToken))
             .ReadAsync<WebsiteProjectResponse>();
@@ -343,5 +341,121 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         email.TextBody.ShouldContain("We'd like a villa in Batroun.");
     }
 
-    private static string WebsiteSlug(string title) => ID_Indetails.api.Business.Website.WebsiteRules.SlugOf(title);
+    /// <summary>A draft with only the place given: coordinates, or a city and country, or both.</summary>
+    private static object Placed(string title, string? city, string? country, decimal? latitude = null, decimal? longitude = null, bool published = false)
+        => new { title, type = "villa", status = "completed", year = 2022, city, country, latitude, longitude, published };
+
+    [Fact]
+    public async Task Coordinates_find_their_city_and_a_city_alone_gets_its_own_random_point_kept_until_the_city_changes()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+
+        // coordinates win: the city and country are found from them
+        var exact = await CreateAsync(superAdmin, Placed(Unique("Byblos villa"), null, null, 34.121000m, 35.648000m));
+        (exact.City, exact.Country, exact.Latitude, exact.Longitude, exact.PositionApproximate).ShouldBe(("Byblos", "Lebanon", 34.121000m, 35.648000m, false));
+
+        // a city alone: a random point near its centre, a different one for each project
+        var first = await CreateAsync(superAdmin, Placed(Unique("Beirut loft"), "Beirut", "Lebanon"));
+        var second = await CreateAsync(superAdmin, Placed(Unique("Beirut flat"), "beirut", "Lebanon"));
+        foreach (var p in new[] { first, second })
+        {
+            p.PositionApproximate.ShouldBeTrue();
+            Math.Abs(p.Latitude!.Value - FakeGeocoder.Beirut.Latitude).ShouldBeLessThanOrEqualTo(WebsitePlaces.MaxSpread);
+            Math.Abs(p.Longitude!.Value - FakeGeocoder.Beirut.Longitude).ShouldBeLessThanOrEqualTo(WebsitePlaces.MaxSpread);
+        }
+
+        (first.Latitude, first.Longitude).ShouldNotBe((second.Latitude, second.Longitude));
+
+        // sent back unchanged with the same city, the point stays, and nothing is looked up
+        var lookups = api.Geocoder.Lookups;
+        var kept = await UpdateAsync(superAdmin, first.Id, Placed(first.Title, "Beirut", "Lebanon", first.Latitude, first.Longitude));
+        (kept.Latitude, kept.Longitude, kept.PositionApproximate).ShouldBe((first.Latitude, first.Longitude, true));
+        api.Geocoder.Lookups.ShouldBe(lookups);
+
+        // another city: a new point there
+        var moved = await UpdateAsync(superAdmin, first.Id, Placed(first.Title, "Byblos", "Lebanon", first.Latitude, first.Longitude));
+        moved.PositionApproximate.ShouldBeTrue();
+        FakeGeocoder.Inside(FakeGeocoder.Byblos, moved.Latitude!.Value, moved.Longitude!.Value).ShouldBeTrue();
+
+        // real coordinates typed in replace the random point
+        var typed = await UpdateAsync(superAdmin, first.Id, Placed(first.Title, "Byblos", "Lebanon", 34.122500m, 35.650100m));
+        (typed.Latitude, typed.Longitude, typed.PositionApproximate).ShouldBe((34.122500m, 35.650100m, false));
+
+        // the website only ever sees the finished place
+        var thumbnail = await PngAsync(superAdmin);
+        var hero = await PngAsync(superAdmin);
+        var published = await UpdateAsync(superAdmin, second.Id, new
+        {
+            title = second.Title, type = "villa", status = "completed", year = 2022, city = "Beirut", country = "Lebanon",
+            latitude = second.Latitude, longitude = second.Longitude, description = "A flat.", thumbnailFileId = thumbnail, heroFileId = hero, published = true,
+        });
+        var shown = (await PublicProjectsAsync()).Single(p => p.Id == published.Id);
+        shown.Location.ShouldBe(new PublicPlace("Beirut", "Lebanon", second.Latitude!.Value, second.Longitude!.Value));
+    }
+
+    [Fact]
+    public async Task A_place_the_map_can_t_find_keeps_a_draft_but_is_never_published()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var thumbnail = await PngAsync(superAdmin);
+        var hero = await PngAsync(superAdmin);
+        var pictures = (Thumbnail: thumbnail, Hero: hero);
+        object Ready(string title, string? city, string? country, decimal? latitude, decimal? longitude, bool published) => new
+        {
+            title, type = "villa", status = "completed", year = 2022, city, country, latitude, longitude,
+            description = "A villa.", thumbnailFileId = pictures.Thumbnail, heroFileId = pictures.Hero, published,
+        };
+
+        // a city the map doesn't know
+        var unknown = await CreateAsync(superAdmin, Ready(Unique("Atlantis"), "Atlantis", "Lebanon", null, null, published: false));
+        unknown.Latitude.ShouldBeNull();
+        unknown.PositionApproximate.ShouldBeFalse();
+        (await (await Client.PutJsonAsync($"/api/website/projects/{unknown.Id}", Ready(unknown.Title, "Atlantis", "Lebanon", null, null, published: true), superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.WebsitePlaceNotFound)).Message.ShouldContain("Atlantis, Lebanon");
+
+        // the map service down: the draft still saves, publishing says what to type
+        // a picture belongs to one project: the next one gets its own
+        pictures = (await PngAsync(superAdmin), await PngAsync(superAdmin));
+        api.Geocoder.Down = true;
+        try
+        {
+            var draft = await CreateAsync(superAdmin, Ready(Unique("Offline"), null, null, 33.900000m, 35.500000m, published: false));
+            draft.City.ShouldBeNull();
+            draft.Latitude.ShouldBe(33.900000m);
+            await (await Client.PutJsonAsync($"/api/website/projects/{draft.Id}", Ready(draft.Title, null, null, 33.900000m, 35.500000m, published: true), superAdmin.AccessToken))
+                .ShouldFailWithAsync(422, ErrorCodes.WebsitePlaceNotFound);
+            // typed in by hand, it publishes without the map
+            var done = await UpdateAsync(superAdmin, draft.Id, Ready(draft.Title, "Beirut", "Lebanon", 33.900000m, 35.500000m, published: true));
+            done.Published.ShouldBeTrue();
+        }
+        finally
+        {
+            api.Geocoder.Down = false;
+        }
+    }
+
+    [Fact]
+    public async Task An_office_takes_its_coordinates_or_its_city()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var address = Unique("Gemmayze");
+
+        var byCity = await (await Client.PostJsonAsync("/api/website/locations", new { city = "Beirut", country = "Lebanon", address, phone = "+961 1 234 567" }, token))
+            .ReadAsync<WebsiteContentResponse>();
+        var office = byCity.Locations.Single(l => l.Address == address);
+        office.PositionApproximate.ShouldBeTrue();
+        FakeGeocoder.Inside(FakeGeocoder.Beirut, office.Latitude, office.Longitude).ShouldBeTrue();
+
+        var byPoint = await (await Client.PutJsonAsync($"/api/website/locations/{office.Id}",
+            new { latitude = 34.121000m, longitude = 35.648000m, address, phone = "+961 9 540 000" }, token)).ReadAsync<WebsiteContentResponse>();
+        var moved = byPoint.Locations.Single(l => l.Id == office.Id);
+        (moved.City, moved.Country, moved.PositionApproximate).ShouldBe(("Byblos", "Lebanon", false));
+
+        await (await Client.PostJsonAsync("/api/website/locations", new { address, phone = "1" }, token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.PostJsonAsync("/api/website/locations", new { city = "Atlantis", country = "Lebanon", address, phone = "1" }, token))
+            .ShouldFailWithAsync(422, ErrorCodes.WebsitePlaceNotFound);
+    }
+
+    private static string WebsiteSlug(string title) => WebsiteRules.SlugOf(title);
 }

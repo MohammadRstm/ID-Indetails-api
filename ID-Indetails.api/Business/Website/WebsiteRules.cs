@@ -20,7 +20,6 @@ public static partial class WebsiteRules
     public const int MaxPlaceLength = 100;
     public const int MaxDescriptionLength = 4000;
     public const int MaxAltLength = 200;
-    public const int MaxCreditLength = 150;
     public const int MaxUrlLength = 500;
     public const int MaxServiceTitleLength = 120;
     public const int MaxServiceDescriptionLength = 1000;

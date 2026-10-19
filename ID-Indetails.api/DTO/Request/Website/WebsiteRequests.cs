@@ -2,16 +2,6 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Request.Website;
 
-/// <summary>Who took a stock photo and where it came from; all three together, or none.</summary>
-public sealed record WebsiteImageCreditRequest
-{
-    public string Photographer { get; init; } = string.Empty;
-
-    public string Source { get; init; } = string.Empty;
-
-    public string Url { get; init; } = string.Empty;
-}
-
 /// <summary>
 /// A website project, new or changed: every field, as the form shows it. A picture is a file the caller uploaded
 /// (<c>POST /api/files</c>), or the one it already has.
@@ -33,10 +23,16 @@ public sealed record WebsiteProjectRequest
 
     public string? Client { get; init; }
 
+    /// <summary>Found from the coordinates when left out.</summary>
     public string? City { get; init; }
 
+    /// <summary>Found from the coordinates when left out.</summary>
     public string? Country { get; init; }
 
+    /// <summary>
+    /// The exact point. Left out with a city and country, the project gets a random point in that city, kept until
+    /// the city changes; sending that point back unchanged keeps it that way.
+    /// </summary>
     public decimal? Latitude { get; init; }
 
     public decimal? Longitude { get; init; }
@@ -52,8 +48,6 @@ public sealed record WebsiteProjectRequest
 
     public string? HeroAlt { get; init; }
 
-    public WebsiteImageCreditRequest? HeroCredit { get; init; }
-
     /// <summary>Shown on the website. Publishing needs everything the website shows.</summary>
     public bool Published { get; init; }
 }
@@ -64,16 +58,12 @@ public sealed record WebsiteImageRequest
     public long FileId { get; init; }
 
     public string Alt { get; init; } = string.Empty;
-
-    public WebsiteImageCreditRequest? Credit { get; init; }
 }
 
-/// <summary>A gallery picture's description and credit.</summary>
+/// <summary>A gallery picture's description.</summary>
 public sealed record WebsiteImageEditRequest
 {
     public string Alt { get; init; } = string.Empty;
-
-    public WebsiteImageCreditRequest? Credit { get; init; }
 }
 
 /// <summary>A list's new order: every one of its current items, once.</summary>
@@ -96,16 +86,19 @@ public sealed record WebsiteServiceRequest
     public string Description { get; init; } = string.Empty;
 }
 
-/// <summary>One of the company's offices.</summary>
+/// <summary>
+/// One of the company's offices: its coordinates, or its city and country (it then gets a random point in that city).
+/// A city or country left out is found from the coordinates.
+/// </summary>
 public sealed record WebsiteLocationRequest
 {
-    public string City { get; init; } = string.Empty;
+    public string? City { get; init; }
 
-    public string Country { get; init; } = string.Empty;
+    public string? Country { get; init; }
 
-    public decimal Latitude { get; init; }
+    public decimal? Latitude { get; init; }
 
-    public decimal Longitude { get; init; }
+    public decimal? Longitude { get; init; }
 
     public string Address { get; init; } = string.Empty;
 

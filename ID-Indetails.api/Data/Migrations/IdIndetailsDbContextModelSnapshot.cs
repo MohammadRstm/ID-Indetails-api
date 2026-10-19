@@ -5870,6 +5870,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("position");
 
+                    b.Property<bool>("PositionApproximate")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("position_approximate");
+
                     b.HasKey("Id")
                         .HasName("pk_website_locations");
 
@@ -5954,21 +5958,6 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(200)")
                         .HasColumnName("hero_alt");
 
-                    b.Property<string>("HeroCreditPhotographer")
-                        .HasMaxLength(150)
-                        .HasColumnType("varchar(150)")
-                        .HasColumnName("hero_credit_photographer");
-
-                    b.Property<string>("HeroCreditSource")
-                        .HasMaxLength(150)
-                        .HasColumnType("varchar(150)")
-                        .HasColumnName("hero_credit_source");
-
-                    b.Property<string>("HeroCreditUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
-                        .HasColumnName("hero_credit_url");
-
                     b.Property<long?>("HeroFileId")
                         .HasColumnType("bigint")
                         .HasColumnName("hero_file_id");
@@ -5982,6 +5971,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasPrecision(9, 6)
                         .HasColumnType("decimal(9,6)")
                         .HasColumnName("longitude");
+
+                    b.Property<bool>("PositionApproximate")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("position_approximate");
 
                     b.Property<long?>("ProjectId")
                         .HasColumnType("bigint")
@@ -6086,21 +6079,6 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)")
                         .HasColumnName("alt");
-
-                    b.Property<string>("CreditPhotographer")
-                        .HasMaxLength(150)
-                        .HasColumnType("varchar(150)")
-                        .HasColumnName("credit_photographer");
-
-                    b.Property<string>("CreditSource")
-                        .HasMaxLength(150)
-                        .HasColumnType("varchar(150)")
-                        .HasColumnName("credit_source");
-
-                    b.Property<string>("CreditUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
-                        .HasColumnName("credit_url");
 
                     b.Property<long>("FileId")
                         .HasColumnType("bigint")

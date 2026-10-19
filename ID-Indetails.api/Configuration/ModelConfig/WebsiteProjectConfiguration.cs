@@ -34,9 +34,6 @@ public class WebsiteProjectConfiguration : IEntityTypeConfiguration<WebsiteProje
         builder.Property(x => x.Longitude).HasPrecision(9, 6);
         builder.Property(x => x.Description).HasColumnType("text");
         builder.Property(x => x.HeroAlt).HasMaxLength(WebsiteRules.MaxAltLength);
-        builder.Property(x => x.HeroCreditPhotographer).HasMaxLength(WebsiteRules.MaxCreditLength);
-        builder.Property(x => x.HeroCreditSource).HasMaxLength(WebsiteRules.MaxCreditLength);
-        builder.Property(x => x.HeroCreditUrl).HasMaxLength(WebsiteRules.MaxUrlLength);
 
         builder.HasIndex(x => x.Slug).IsUnique();
         // one website project per system project
