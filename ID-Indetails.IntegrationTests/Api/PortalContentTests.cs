@@ -199,12 +199,15 @@ public class PortalContentTests(ApiFactory api) : IClassFixture<ApiFactory>
         var links = await LinksAsync(s.SuperAdmin, s.Project.Id, first.UploadId, 1);
         await PutPartAsync(links.Parts[0].Url, Pdf);
 
-        // two completions at once: one item, the same answer
-        var both = await Task.WhenAll(
-            CompleteAsync(s.SuperAdmin, s.Project.Id, first.UploadId),
-            CompleteAsync(s.SuperAdmin, s.Project.Id, first.UploadId));
-        var items = await Task.WhenAll(both.Select(r => r.ReadAsync<ProjectFileUploadCompletedResponse>()));
-        items[0].Item!.Id.ShouldBe(items[1].Item!.Id);
+        // completions at once (a double click, a retried request): each waits its turn, and all get the one item
+        var together = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => CompleteAsync(s.SuperAdmin, s.Project.Id, first.UploadId)));
+        foreach (var response in together)
+        {
+            response.StatusCode.ShouldBe(System.Net.HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        }
+
+        var items = await Task.WhenAll(together.Select(r => r.ReadAsync<ProjectFileUploadCompletedResponse>()));
+        items.Select(i => i.Item!.Id).Distinct().ShouldHaveSingleItem();
 
         var later = await (await CompleteAsync(s.SuperAdmin, s.Project.Id, first.UploadId)).ReadAsync<ProjectFileUploadCompletedResponse>();
         later.Item!.Id.ShouldBe(items[0].Item!.Id);
