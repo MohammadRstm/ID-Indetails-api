@@ -3,9 +3,7 @@ namespace ID_Indetails.api.DTO.Response.Website;
 // What the public website reads (docs/website.md). The shapes are the website's own; picture addresses are paths on
 // this API (/api/public/website/files/{id}).
 
-public sealed record PublicImageCredit(string Photographer, string Source, string Url);
-
-public sealed record PublicImage(string Src, string Alt, PublicImageCredit? Credit);
+public sealed record PublicImage(string Src, string Alt);
 
 public sealed record PublicPlace(string City, string Country, decimal Lat, decimal Lng);
 

@@ -20,7 +20,6 @@ public static partial class WebsiteRules
     public const int MaxPlaceLength = 100;
     public const int MaxDescriptionLength = 4000;
     public const int MaxAltLength = 200;
-    public const int MaxCreditLength = 150;
     public const int MaxUrlLength = 500;
     public const int MaxServiceTitleLength = 120;
     public const int MaxServiceDescriptionLength = 1000;
@@ -74,8 +73,8 @@ public static partial class WebsiteRules
         if (string.IsNullOrWhiteSpace(country)) missing.Add("a country");
         if (latitude is null || longitude is null) missing.Add("a position on the map");
         if (string.IsNullOrWhiteSpace(description)) missing.Add("a description");
-        if (thumbnailFileId is null) missing.Add("a thumbnail");
-        if (heroFileId is null) missing.Add("a main picture");
+        if (thumbnailFileId is null) missing.Add("a card picture");
+        if (heroFileId is null) missing.Add("a page picture");
         return missing;
     }
 

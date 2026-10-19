@@ -17,7 +17,7 @@ namespace ID_Indetails.api.Services.Website.Implementation;
 
 /// <summary>
 /// The website's projects (<see cref="WebsiteRules"/>). A project linked to a system project follows its status and
-/// year until they are typed in here. Only published projects reach the website, and only they can be in the moving
+/// year until they are typed in here. Its place is worked out by <see cref="WebsitePlaceResolver"/>. Only published projects reach the website, and only they can be in the moving
 /// strip, which holds at most 20.
 /// </summary>
 public sealed class WebsiteProjectService(
@@ -25,6 +25,7 @@ public sealed class WebsiteProjectService(
     IPermissionService permissions,
     IWebsiteRepository website,
     IFileClaims fileClaims,
+    WebsitePlaceResolver places,
     IUnitOfWork unitOfWork,
     IClock clock) : IWebsiteProjectService
 {
@@ -100,7 +101,7 @@ public sealed class WebsiteProjectService(
             FileId = file.Id,
             Position = project.Images.Select(i => i.Position).DefaultIfEmpty(0).Max() + 1,
         };
-        SetImage(image, request.Alt, request.Credit);
+        image.Alt = request.Alt.Trim();
         project.Images.Add(image);
         Touch(project);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -112,7 +113,7 @@ public sealed class WebsiteProjectService(
         long id, long imageId, WebsiteImageEditRequest request, CancellationToken cancellationToken = default)
     {
         var project = await website.ProjectAsync(id, cancellationToken) ?? throw new NotFoundException(NotFound);
-        SetImage(ImageOf(project, imageId), request.Alt, request.Credit);
+        ImageOf(project, imageId).Alt = request.Alt.Trim();
         Touch(project);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await DescribeAsync(project, cancellationToken);
@@ -157,10 +158,17 @@ public sealed class WebsiteProjectService(
 
     private async Task<WebsiteProject> SaveAsync(long? id, WebsiteProjectRequest request, CancellationToken cancellationToken)
     {
-        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = id is { } existing
             ? await website.ProjectAsync(existing, cancellationToken) ?? throw new NotFoundException(NotFound)
             : new WebsiteProject { CreatedAt = clock.UtcNow, CreatedById = currentUser.Id };
+
+        // the map lookups come first, outside the transaction: they can take seconds
+        var place = await places.ResolveAsync(
+            request.City, request.Country, request.Latitude, request.Longitude,
+            id is null ? null : new StoredPlace(project.City, project.Country, project.Latitude, project.Longitude, project.PositionApproximate),
+            new PlaceOwner(id, null), cancellationToken);
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
         SystemProjectFacts? linked = null;
         if (request.ProjectId is { } projectId)
@@ -179,22 +187,25 @@ public sealed class WebsiteProjectService(
         project.Status = request.Status;
         project.Year = request.Year;
         project.Client = Clean(request.Client);
-        project.City = Clean(request.City);
-        project.Country = Clean(request.Country);
-        project.Latitude = request.Latitude;
-        project.Longitude = request.Longitude;
+        project.City = place.City;
+        project.Country = place.Country;
+        project.Latitude = place.Latitude;
+        project.Longitude = place.Longitude;
+        project.PositionApproximate = place.Approximate;
         project.Description = Clean(request.Description);
         project.ProjectId = request.ProjectId;
         project.ThumbnailFileId = await PictureAsync(project.ThumbnailFileId, request.ThumbnailFileId, cancellationToken);
         project.HeroFileId = await PictureAsync(project.HeroFileId, request.HeroFileId, cancellationToken);
         project.HeroAlt = Clean(request.HeroAlt);
-        project.HeroCreditPhotographer = Clean(request.HeroCredit?.Photographer);
-        project.HeroCreditSource = Clean(request.HeroCredit?.Source);
-        project.HeroCreditUrl = Clean(request.HeroCredit?.Url);
         project.Published = request.Published;
 
         if (project.Published)
         {
+            if (place.Problem is not null)
+            {
+                throw new BusinessRuleException(ErrorCodes.WebsitePlaceNotFound, place.Problem);
+            }
+
             var missing = MissingToPublish(project, linked);
             if (missing.Count > 0)
             {
@@ -280,11 +291,11 @@ public sealed class WebsiteProjectService(
         var link = p.ProjectId is { } id ? linked.GetValueOrDefault(id) : null;
         var (status, year) = Shown(p, link);
         return new WebsiteProjectResponse(
-            p.Id, p.Slug, p.Title, p.Type, p.Status, p.Year, status, year, p.Client, p.City, p.Country, p.Latitude, p.Longitude,
-            p.Description, p.ThumbnailFileId, p.HeroFileId, p.HeroAlt, Credit(p.HeroCreditPhotographer, p.HeroCreditSource, p.HeroCreditUrl),
+            p.Id, p.Slug, p.Title, p.Type, p.Status, p.Year, status, year, p.Client, p.City, p.Country, p.Latitude, p.Longitude, p.PositionApproximate,
+            p.Description, p.ThumbnailFileId, p.HeroFileId, p.HeroAlt,
             link is null ? null : new WebsiteLinkedProjectResponse(link.Id, link.Title, link.DomainCode, WebsiteRules.StatusOf(link.Status), YearOf(link)),
             p.Published, p.ConveyorOrder,
-            p.Images.OrderBy(i => i.Position).Select(i => new WebsiteImageResponse(i.Id, i.FileId, i.Alt, Credit(i.CreditPhotographer, i.CreditSource, i.CreditUrl))).ToList(),
+            p.Images.OrderBy(i => i.Position).Select(i => new WebsiteImageResponse(i.Id, i.FileId, i.Alt)).ToList(),
             MissingToPublish(p, link), p.CreatedAt, p.UpdatedAt);
     }
 
@@ -300,22 +311,11 @@ public sealed class WebsiteProjectService(
 
     internal static int YearOf(SystemProjectFacts p) => WebsiteRules.YearOf(p.CompletedAt, p.TargetDate, p.StartDate);
 
-    internal static WebsiteImageCreditResponse? Credit(string? photographer, string? source, string? url)
-        => photographer is null || source is null || url is null ? null : new WebsiteImageCreditResponse(photographer, source, url);
-
     private static IReadOnlyCollection<long> LinkIds(IEnumerable<WebsiteProject> projects)
         => projects.Where(p => p.ProjectId is not null).Select(p => p.ProjectId!.Value).ToList();
 
     private static WebsiteProjectImage ImageOf(WebsiteProject project, long imageId)
         => project.Images.SingleOrDefault(i => i.Id == imageId) ?? throw new NotFoundException("Picture not found.");
-
-    private static void SetImage(WebsiteProjectImage image, string alt, WebsiteImageCreditRequest? credit)
-    {
-        image.Alt = alt.Trim();
-        image.CreditPhotographer = Clean(credit?.Photographer);
-        image.CreditSource = Clean(credit?.Source);
-        image.CreditUrl = Clean(credit?.Url);
-    }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

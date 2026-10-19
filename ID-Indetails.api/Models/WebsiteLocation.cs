@@ -13,6 +13,9 @@ public class WebsiteLocation : IWebsiteListItem
 
     public decimal Longitude { get; set; }
 
+    /// <summary>The point was picked at random in <see cref="City"/>, as only the city and country were given.</summary>
+    public bool PositionApproximate { get; set; }
+
     public string Address { get; set; } = string.Empty;
 
     /// <summary>Free text in international format.</summary>

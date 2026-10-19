@@ -7,6 +7,10 @@ namespace ID_Indetails.api.Repositories.Website.Implementation;
 
 public sealed class WebsiteRepository(IdIndetailsDbContext db) : IWebsiteRepository
 {
+    public async Task<bool> PositionTakenAsync(decimal latitude, decimal longitude, PlaceOwner owner, CancellationToken cancellationToken = default)
+        => await db.WebsiteProjects.AnyAsync(p => p.Latitude == latitude && p.Longitude == longitude && p.Id != owner.ProjectId, cancellationToken)
+            || await db.WebsiteLocations.AnyAsync(l => l.Latitude == latitude && l.Longitude == longitude && l.Id != owner.LocationId, cancellationToken);
+
     public async Task<IReadOnlyList<WebsiteProject>> ProjectsAsync(bool publishedOnly, CancellationToken cancellationToken = default)
         => await db.WebsiteProjects.AsNoTracking()
             .Include(p => p.Images)

@@ -16,8 +16,14 @@ public sealed record SystemProjectFacts(
     string? Description,
     long? WebsiteProjectId);
 
+/// <summary>The website project or office whose place is being worked out, so its own point doesn't count as taken.</summary>
+public sealed record PlaceOwner(long? ProjectId, long? LocationId);
+
 public interface IWebsiteRepository
 {
+    /// <summary>Whether another website project or office already sits at exactly this point.</summary>
+    Task<bool> PositionTakenAsync(decimal latitude, decimal longitude, PlaceOwner owner, CancellationToken cancellationToken = default);
+
     /// <summary>Every website project with its gallery, newest first; only the published ones when asked. Untracked.</summary>
     Task<IReadOnlyList<WebsiteProject>> ProjectsAsync(bool publishedOnly, CancellationToken cancellationToken = default);
 

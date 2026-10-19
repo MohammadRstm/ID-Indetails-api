@@ -2,10 +2,8 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Website;
 
-public sealed record WebsiteImageCreditResponse(string Photographer, string Source, string Url);
-
 /// <summary>A gallery picture; <paramref name="FileId"/> opens it through <c>GET /api/files/{id}</c>.</summary>
-public sealed record WebsiteImageResponse(long Id, long FileId, string Alt, WebsiteImageCreditResponse? Credit);
+public sealed record WebsiteImageResponse(long Id, long FileId, string Alt);
 
 /// <summary>The system project a website project shows, with the status and year the website takes from it.</summary>
 public sealed record WebsiteLinkedProjectResponse(long Id, string Title, string DomainCode, WebsiteProjectStatus Status, int Year);
@@ -14,6 +12,7 @@ public sealed record WebsiteLinkedProjectResponse(long Id, string Title, string 
 /// <param name="Year">Its own year; null while it follows the linked project's.</param>
 /// <param name="ShownStatus">What the website shows.</param>
 /// <param name="ShownYear">What the website shows.</param>
+/// <param name="PositionApproximate">The point is a random one in the city, as only the city and country were given.</param>
 /// <param name="MissingToPublish">What it still needs before it can be published; empty when it can be.</param>
 public sealed record WebsiteProjectResponse(
     long Id,
@@ -29,11 +28,11 @@ public sealed record WebsiteProjectResponse(
     string? Country,
     decimal? Latitude,
     decimal? Longitude,
+    bool PositionApproximate,
     string? Description,
     long? ThumbnailFileId,
     long? HeroFileId,
     string? HeroAlt,
-    WebsiteImageCreditResponse? HeroCredit,
     WebsiteLinkedProjectResponse? LinkedProject,
     bool Published,
     int? ConveyorOrder,
@@ -60,7 +59,9 @@ public sealed record WebsiteLinkCandidateResponse(
 
 public sealed record WebsiteServiceResponse(long Id, string Title, string Description);
 
-public sealed record WebsiteLocationResponse(long Id, string City, string Country, decimal Latitude, decimal Longitude, string Address, string Phone);
+/// <param name="PositionApproximate">The point is a random one in the city, as only the city and country were given.</param>
+public sealed record WebsiteLocationResponse(
+    long Id, string City, string Country, decimal Latitude, decimal Longitude, bool PositionApproximate, string Address, string Phone);
 
 public sealed record WebsiteSocialLinkResponse(long Id, string Label, string Url);
 

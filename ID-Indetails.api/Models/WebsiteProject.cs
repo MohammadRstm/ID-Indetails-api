@@ -36,6 +36,9 @@ public class WebsiteProject
 
     public decimal? Longitude { get; set; }
 
+    /// <summary>The point was picked at random in <see cref="City"/>, as only the city and country were given.</summary>
+    public bool PositionApproximate { get; set; }
+
     /// <summary>Plain text.</summary>
     public string? Description { get; set; }
 
@@ -46,12 +49,6 @@ public class WebsiteProject
     public long? HeroFileId { get; set; }
 
     public string? HeroAlt { get; set; }
-
-    public string? HeroCreditPhotographer { get; set; }
-
-    public string? HeroCreditSource { get; set; }
-
-    public string? HeroCreditUrl { get; set; }
 
     /// <summary>The system project it shows, if any. One website project per system project.</summary>
     public long? ProjectId { get; set; }

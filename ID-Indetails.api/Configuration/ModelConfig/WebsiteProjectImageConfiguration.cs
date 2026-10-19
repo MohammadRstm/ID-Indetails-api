@@ -14,9 +14,6 @@ public class WebsiteProjectImageConfiguration : IEntityTypeConfiguration<Website
         builder.HasKey(x => x.Id);
 
         builder.Property(x => x.Alt).IsRequired().HasMaxLength(WebsiteRules.MaxAltLength);
-        builder.Property(x => x.CreditPhotographer).HasMaxLength(WebsiteRules.MaxCreditLength);
-        builder.Property(x => x.CreditSource).HasMaxLength(WebsiteRules.MaxCreditLength);
-        builder.Property(x => x.CreditUrl).HasMaxLength(WebsiteRules.MaxUrlLength);
 
         // a gallery in order
         builder.HasIndex(x => new { x.WebsiteProjectId, x.Position });

@@ -28,6 +28,7 @@ public sealed class WebsiteContentService(
     IWebsiteRepository website,
     ICompanyRepository company,
     IFileClaims fileClaims,
+    WebsitePlaceResolver places,
     IUnitOfWork unitOfWork,
     IOptions<CompanyOptions> companyOptions) : IWebsiteContentService
 {
@@ -40,7 +41,7 @@ public sealed class WebsiteContentService(
         var canManage = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Has(PermissionCodes.WebsiteManage);
         return new WebsiteContentResponse(
             services.Select(s => new WebsiteServiceResponse(s.Id, s.Title, s.Description)).ToList(),
-            locations.Select(l => new WebsiteLocationResponse(l.Id, l.City, l.Country, l.Latitude, l.Longitude, l.Address, l.Phone)).ToList(),
+            locations.Select(l => new WebsiteLocationResponse(l.Id, l.City, l.Country, l.Latitude, l.Longitude, l.PositionApproximate, l.Address, l.Phone)).ToList(),
             links.Select(l => new WebsiteSocialLinkResponse(l.Id, l.Label, l.Url)).ToList(),
             settings?.ContactEmail,
             settings?.WebsiteFaviconFileId,
@@ -59,11 +60,16 @@ public sealed class WebsiteContentService(
     public Task<WebsiteContentResponse> OrderServicesAsync(WebsiteOrderRequest request, CancellationToken cancellationToken = default)
         => OrderAsync<WebsiteOffering>(request, "services", cancellationToken);
 
-    public Task<WebsiteContentResponse> AddLocationAsync(WebsiteLocationRequest request, CancellationToken cancellationToken = default)
-        => AddAsync(Set(new WebsiteLocation(), request), cancellationToken);
+    public async Task<WebsiteContentResponse> AddLocationAsync(WebsiteLocationRequest request, CancellationToken cancellationToken = default)
+        => await AddAsync(await PlaceAsync(new WebsiteLocation(), request, cancellationToken), cancellationToken);
 
-    public Task<WebsiteContentResponse> UpdateLocationAsync(long id, WebsiteLocationRequest request, CancellationToken cancellationToken = default)
-        => ChangeAsync<WebsiteLocation>(id, "Location", l => Set(l, request), cancellationToken);
+    public async Task<WebsiteContentResponse> UpdateLocationAsync(long id, WebsiteLocationRequest request, CancellationToken cancellationToken = default)
+    {
+        var location = await website.FindAsync<WebsiteLocation>(id, cancellationToken) ?? throw new NotFoundException("Location not found.");
+        await PlaceAsync(location, request, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await GetAsync(cancellationToken);
+    }
 
     public Task<WebsiteContentResponse> DeleteLocationAsync(long id, CancellationToken cancellationToken = default)
         => DeleteAsync<WebsiteLocation>(id, "Location", cancellationToken);
@@ -160,12 +166,25 @@ public sealed class WebsiteContentService(
         return service;
     }
 
-    private static WebsiteLocation Set(WebsiteLocation location, WebsiteLocationRequest request)
+    /// <summary>
+    /// The office's details and place (<see cref="WebsitePlaceResolver"/>). An office is public as soon as it's saved,
+    /// so a place that can't be found is refused rather than kept half-done.
+    /// </summary>
+    private async Task<WebsiteLocation> PlaceAsync(WebsiteLocation location, WebsiteLocationRequest request, CancellationToken cancellationToken)
     {
-        location.City = request.City.Trim();
-        location.Country = request.Country.Trim();
-        location.Latitude = request.Latitude;
-        location.Longitude = request.Longitude;
+        long? self = location.Id == 0 ? null : location.Id;
+        var stored = self is null ? null : new StoredPlace(location.City, location.Country, location.Latitude, location.Longitude, location.PositionApproximate);
+        var place = await places.ResolveAsync(request.City, request.Country, request.Latitude, request.Longitude, stored, new PlaceOwner(null, self), cancellationToken);
+        if (place.Problem is not null || place.City is null || place.Country is null || place.Latitude is null || place.Longitude is null)
+        {
+            throw new BusinessRuleException(ErrorCodes.WebsitePlaceNotFound, place.Problem ?? "Give the office's coordinates, or its city and country.");
+        }
+
+        location.City = place.City;
+        location.Country = place.Country;
+        location.Latitude = place.Latitude.Value;
+        location.Longitude = place.Longitude.Value;
+        location.PositionApproximate = place.Approximate;
         location.Address = request.Address.Trim();
         location.Phone = request.Phone.Trim();
         return location;

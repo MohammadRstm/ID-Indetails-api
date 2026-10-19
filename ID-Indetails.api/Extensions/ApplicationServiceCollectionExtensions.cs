@@ -92,6 +92,8 @@ using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Files.Implementation;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Finance.Implementation;
+using ID_Indetails.api.Services.Geocoding.Abstraction;
+using ID_Indetails.api.Services.Geocoding.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Invitations.Implementation;
 using ID_Indetails.api.Services.Labour.Abstraction;
@@ -139,6 +141,7 @@ using ID_Indetails.api.Services.Website.Implementation;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 using System.Net;
 
 namespace ID_Indetails.api.Extensions;
@@ -244,6 +247,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IWebsiteProjectService, WebsiteProjectService>();
         services.AddScoped<IWebsiteContentService, WebsiteContentService>();
         services.AddScoped<IPublicWebsiteService, PublicWebsiteService>();
+        services.AddScoped<WebsitePlaceResolver>();
+        services.AddOptions<GeocodingOptions>().BindConfiguration(GeocodingOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddHttpClient<IGeocoder, NominatimGeocoder>((provider, client) =>
+            client.Timeout = TimeSpan.FromSeconds(provider.GetRequiredService<IOptions<GeocodingOptions>>().Value.TimeoutSeconds));
         services.AddScoped<IPortalPresentationService, PortalPresentationService>();
         services.AddScoped<IPortalDiscussionService, PortalDiscussionService>();
         services.AddScoped<IPortalNotificationService, PortalNotificationService>();

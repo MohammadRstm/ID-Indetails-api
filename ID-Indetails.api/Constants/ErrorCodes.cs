@@ -246,6 +246,9 @@ public static class ErrorCodes
     /// <summary>503. The website's contact form can't send: the company has no contact email yet.</summary>
     public const string WebsiteContactUnavailable = "website_contact_unavailable";
 
+    /// <summary>422. A website place couldn't be found on the map: the message says what to type in.</summary>
+    public const string WebsitePlaceNotFound = "website_place_not_found";
+
     /// <summary>422. A website project only links to a system project once.</summary>
     public const string WebsiteProjectAlreadyLinked = "website_project_already_linked";
 }

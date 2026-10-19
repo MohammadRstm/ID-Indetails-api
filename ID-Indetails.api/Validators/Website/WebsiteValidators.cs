@@ -32,16 +32,6 @@ internal static class WebsiteText
         => !value.Any(char.IsWhiteSpace) && Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps && uri.Host.Contains('.');
 }
 
-public sealed class WebsiteImageCreditRequestValidator : AbstractValidator<WebsiteImageCreditRequest>
-{
-    public WebsiteImageCreditRequestValidator()
-    {
-        RuleFor(x => x.Photographer).Required("The photographer", WebsiteRules.MaxCreditLength);
-        RuleFor(x => x.Source).Required("The source", WebsiteRules.MaxCreditLength);
-        RuleFor(x => x.Url).SecureLink("The credit link");
-    }
-}
-
 public sealed class WebsiteProjectRequestValidator : AbstractValidator<WebsiteProjectRequest>
 {
     public WebsiteProjectRequestValidator()
@@ -67,7 +57,6 @@ public sealed class WebsiteProjectRequestValidator : AbstractValidator<WebsitePr
             .WithMessage("Give both the latitude and the longitude, or neither.");
         RuleFor(x => x.ProjectId).GreaterThan(0).When(x => x.ProjectId is not null).WithMessage("That project doesn't exist.");
         RuleFor(x => x.HeroAlt).Optional("The main picture's description", WebsiteRules.MaxAltLength);
-        RuleFor(x => x.HeroCredit!).SetValidator(new WebsiteImageCreditRequestValidator()).When(x => x.HeroCredit is not null);
     }
 }
 
@@ -77,7 +66,6 @@ public sealed class WebsiteImageRequestValidator : AbstractValidator<WebsiteImag
     {
         RuleFor(x => x.FileId).GreaterThan(0).WithMessage("Upload a picture first.");
         RuleFor(x => x.Alt).Required("The picture's description", WebsiteRules.MaxAltLength);
-        RuleFor(x => x.Credit!).SetValidator(new WebsiteImageCreditRequestValidator()).When(x => x.Credit is not null);
     }
 }
 
@@ -86,7 +74,6 @@ public sealed class WebsiteImageEditRequestValidator : AbstractValidator<Website
     public WebsiteImageEditRequestValidator()
     {
         RuleFor(x => x.Alt).Required("The picture's description", WebsiteRules.MaxAltLength);
-        RuleFor(x => x.Credit!).SetValidator(new WebsiteImageCreditRequestValidator()).When(x => x.Credit is not null);
     }
 }
 
@@ -122,10 +109,16 @@ public sealed class WebsiteLocationRequestValidator : AbstractValidator<WebsiteL
 {
     public WebsiteLocationRequestValidator()
     {
-        RuleFor(x => x.City).Required("The city", WebsiteRules.MaxPlaceLength);
-        RuleFor(x => x.Country).Required("The country", WebsiteRules.MaxPlaceLength);
-        RuleFor(x => x.Latitude).Latitude();
-        RuleFor(x => x.Longitude).Longitude();
+        RuleFor(x => x.City).Optional("The city", WebsiteRules.MaxPlaceLength);
+        RuleFor(x => x.Country).Optional("The country", WebsiteRules.MaxPlaceLength);
+        RuleFor(x => x.Latitude!.Value).Latitude().OverridePropertyName("latitude").When(x => x.Latitude is not null);
+        RuleFor(x => x.Longitude!.Value).Longitude().OverridePropertyName("longitude").When(x => x.Longitude is not null);
+        RuleFor(x => x.Longitude)
+            .Must((x, lng) => (x.Latitude is null) == (lng is null))
+            .WithMessage("Give both the latitude and the longitude, or neither.");
+        RuleFor(x => x.City)
+            .Must((x, city) => x.Latitude is not null || (!string.IsNullOrWhiteSpace(city) && !string.IsNullOrWhiteSpace(x.Country)))
+            .WithMessage("Give the office's coordinates, or its city and country.");
         RuleFor(x => x.Address).Required("The address", WebsiteRules.MaxAddressLength);
         RuleFor(x => x.Phone).Required("The phone number", WebsiteRules.MaxPhoneLength);
     }

@@ -1,6 +1,6 @@
 namespace ID_Indetails.api.Models;
 
-/// <summary>One picture in a website project's gallery, in order. Credits are for stock photos and are optional.</summary>
+/// <summary>One picture in a website project's gallery, in order.</summary>
 public class WebsiteProjectImage
 {
     public long Id { get; set; }
@@ -10,12 +10,6 @@ public class WebsiteProjectImage
     public long FileId { get; set; }
 
     public string Alt { get; set; } = string.Empty;
-
-    public string? CreditPhotographer { get; set; }
-
-    public string? CreditSource { get; set; }
-
-    public string? CreditUrl { get; set; }
 
     public int Position { get; set; }
 }

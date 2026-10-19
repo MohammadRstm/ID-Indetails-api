@@ -1,5 +1,6 @@
 using ID_Indetails.api.Proton.Safety;
 using ID_Indetails.api.Services.Email.Abstraction;
+using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.IntegrationTests.Data;
@@ -23,6 +24,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly MigratedDatabaseFixture _database = new();
 
     public CapturingEmailSender Emails { get; } = new();
+
+    /// <summary>The map service the website's places are looked up with: a few known places, never the internet.</summary>
+    public FakeGeocoder Geocoder { get; } = new();
 
     public CapturingLivePublisher Live { get; } = new();
 
@@ -89,6 +93,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         {
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(Emails);
+            services.RemoveAll<IGeocoder>();
+            services.AddSingleton<IGeocoder>(Geocoder);
             services.RemoveAll<ILivePublisher>();
             services.AddSingleton<ILivePublisher>(Live);
             services.RemoveAll<IPushProvider>();
