@@ -289,7 +289,7 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
 
         await Should.ThrowAsync<ProtonWriteRefusedException>(() => ProtonReadOnly.RunAsync(
             () => db.Database.ExecuteSqlRawAsync("UPDATE domains SET name = name")));
-        (await ProtonReadOnly.RunAsync(() => db.Domains.CountAsync())).ShouldBe(2);
+        (await ProtonReadOnly.RunAsync(() => db.Domains.CountAsync())).ShouldBe(DomainCodes.All.Count);
         (await db.Database.ExecuteSqlRawAsync("UPDATE domains SET name = name")).ShouldBeGreaterThanOrEqualTo(0);
     }
 }
