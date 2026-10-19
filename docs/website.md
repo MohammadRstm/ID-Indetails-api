@@ -49,7 +49,7 @@ A website project is its own record. Everything on it may be public; nothing int
   - left empty, it's made from the title (adding `-2`, `-3` … if taken) and then kept;
   - typing one that's taken gives `409 website_slug_taken`.
 - **Place.** The coordinates, or just the city and country (see [Places](#places)). Either way, a published project always has all four.
-- **Publishing.** Only published projects reach the website. Publishing needs a status and a year (its own or the linked project's), a city, a country, a map position, a description, a thumbnail and a main picture. Otherwise it's `422 website_project_incomplete`, with what's missing in the message, or `422 website_place_not_found` when the place couldn't be found on the map. The form also gets the list as `missingToPublish`.
+- **Publishing.** Only published projects reach the website. Publishing needs a status and a year (its own or the linked project's), a city, a country, a map position, a description, a card picture and a page picture. Otherwise it's `422 website_project_incomplete`, with what's missing in the message, or `422 website_place_not_found` when the place couldn't be found on the map. The form also gets the list as `missingToPublish`.
 - **Pictures.** Each has one use:
 
   | Picture | Shape | Where the website shows it |

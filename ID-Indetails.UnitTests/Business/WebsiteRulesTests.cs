@@ -57,7 +57,7 @@ public class WebsiteRulesTests
     {
         WebsiteRules.MissingToPublish(WebsiteProjectStatus.Completed, 2022, "Beirut", "Lebanon", 33.9m, 35.5m, "A villa.", 1, 2).ShouldBeEmpty();
         WebsiteRules.MissingToPublish(null, null, " ", null, 33.9m, null, null, null, null).ShouldBe(
-            ["a status", "a year", "a city", "a country", "a position on the map", "a description", "a thumbnail", "a main picture"]);
+            ["a status", "a year", "a city", "a country", "a position on the map", "a description", "a card picture", "a page picture"]);
     }
 
     [Fact]

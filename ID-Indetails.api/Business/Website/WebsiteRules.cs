@@ -73,8 +73,8 @@ public static partial class WebsiteRules
         if (string.IsNullOrWhiteSpace(country)) missing.Add("a country");
         if (latitude is null || longitude is null) missing.Add("a position on the map");
         if (string.IsNullOrWhiteSpace(description)) missing.Add("a description");
-        if (thumbnailFileId is null) missing.Add("a thumbnail");
-        if (heroFileId is null) missing.Add("a main picture");
+        if (thumbnailFileId is null) missing.Add("a card picture");
+        if (heroFileId is null) missing.Add("a page picture");
         return missing;
     }
 

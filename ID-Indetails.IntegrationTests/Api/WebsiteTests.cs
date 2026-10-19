@@ -104,7 +104,7 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         var draft = await CreateAsync(superAdmin, new { title, type = "hotel", status = "in_progress", year = 2026, published = false });
         draft.Slug.ShouldBe(WebsiteSlug(title));
         draft.Published.ShouldBeFalse();
-        draft.MissingToPublish.ShouldContain("a thumbnail");
+        draft.MissingToPublish.ShouldContain("a card picture");
         draft.MissingToPublish.ShouldContain("a position on the map");
 
         await (await Client.PutJsonAsync($"/api/website/projects/{draft.Id}", new { title, type = "hotel", status = "in_progress", year = 2026, published = true }, superAdmin.AccessToken))
