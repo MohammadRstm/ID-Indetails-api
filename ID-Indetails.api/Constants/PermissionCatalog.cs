@@ -12,8 +12,8 @@ namespace ID_Indetails.api.Constants;
 public static class PermissionCatalog
 {
     /// <param name="DomainCode">
-    /// Null when the permission applies in either domain. Otherwise the permission only
-    /// takes effect for users of that domain (and for super admins inside it).
+    /// Null when the permission applies in either business. Otherwise it is a default only for users of that domain, and
+    /// holding it opens that domain to anyone else.
     /// </param>
     /// <param name="Sensitivity">What harm its actions could do (Proton confirms those strongly). Code only: not seeded.</param>
     public sealed record Definition(string Code, string Description, string? DomainCode = null, PermissionSensitivity Sensitivity = PermissionSensitivity.None);
@@ -83,8 +83,9 @@ public static class PermissionCatalog
         new(P.ScheduleManage, "Set personal work schedules", Sensitivity: Pay),
         new(P.HoursExcuse, "Excuse hours and days off in the hours ledger", Sensitivity: Pay),
 
-        new(P.WebsiteView, "View the company website's content"),
-        new(P.WebsiteManage, "Edit the company website: projects, services, locations, contact details and favicon"),
+        // the website's own: its staff hold them, and anyone given one reaches the Website area
+        new(P.WebsiteView, "View the company website's content", DomainCodes.Website),
+        new(P.WebsiteManage, "Edit the company website: projects, services, locations, contact details and favicon", DomainCodes.Website),
 
         // Admins and super admins only: employees don't get Proton yet.
         new(P.ProtonUse, "Ask Proton, the company assistant, which proposes changes only for the person to confirm"),
@@ -97,7 +98,7 @@ public static class PermissionCatalog
         P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse,
         P.EmployeeInviteSuperAdmin, P.PermissionManage, P.ExchangeRateManage,
         P.OverheadCategoryManage, P.SessionManage, P.EmployeeChangeEmail,
-        P.ProtonBudgetManage, P.WebsiteView, P.WebsiteManage,
+        P.ProtonBudgetManage,
     ];
 
     /// <summary>
@@ -140,7 +141,7 @@ public static class PermissionCatalog
             // Everything, in both domains and at company level, except logging their own hours.
             [RoleCodes.SuperAdmin] = Definitions.Select(d => d.Code).Except(OwnWork).ToList(),
             // Their own domain's work, without its money, hiring or client publishing; nothing at company level, and no
-            // hours of their own.
+            // hours of their own. The website's admins hold only the website's permissions (EffectivePermissions.RoleDefaults).
             [RoleCodes.Admin] = Definitions.Select(d => d.Code)
                 .Except(CompanyOnly).Except(SuperAdminOnly).Except(ClientPublishing).Except(OwnWork).ToList(),
             // Their own work only; never money.

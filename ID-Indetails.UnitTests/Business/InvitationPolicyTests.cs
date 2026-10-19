@@ -110,4 +110,19 @@ public class InvitationPolicyTests
         InvitationPolicy.Evaluate(SuperAdmin, "owner", Design).Allowed.ShouldBeFalse();
         InvitationPolicy.Evaluate(SuperAdmin, RoleCodes.Employee, "marketing").Allowed.ShouldBeFalse();
     }
+
+    [Fact]
+    public void Website_staff_are_invited_as_admins_only()
+    {
+        InvitationPolicy.Evaluate(SuperAdmin, RoleCodes.Admin, DomainCodes.Website).DomainCode.ShouldBe(DomainCodes.Website);
+        InvitationPolicy.Evaluate(SuperAdmin, RoleCodes.Employee, DomainCodes.Website).DenialReason.ShouldBe("Website staff are admins.");
+    }
+
+    [Fact]
+    public void Seeing_the_website_too_does_not_make_an_admin_choose_a_domain()
+    {
+        var inviter = Inviter(RoleCodes.Admin, Design, [Design, DomainCodes.Website], PermissionCodes.EmployeeInvite);
+
+        InvitationPolicy.Evaluate(inviter, RoleCodes.Employee, null).DomainCode.ShouldBe(Design);
+    }
 }

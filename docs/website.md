@@ -7,7 +7,7 @@ The company has a public website, a separate app on its own domain. It shows:
 - its contact email and social links;
 - a favicon.
 
-All of it is edited on the **Website** page in the company area. The website reads it through a public API that needs no sign-in, and its contact form emails the company.
+All of it is edited in the app's **Website** area. The website reads it through a public API that needs no sign-in, and its contact form emails the company.
 
 Code:
 - `Controllers/WebsiteController.cs` and `Controllers/PublicWebsiteController.cs`;
@@ -20,10 +20,21 @@ Code:
 
 | Permission | Lets you |
 |---|---|
-| `website:view` | See the Website page, read-only |
-| `website:manage` | Change everything on it. Everything is public once saved |
+| `website:view` | See the Website area, read-only |
+| `website:manage` | Change everything in it. Everything is public once saved |
 
-Both are company permissions: super admins hold them, and admins don't unless granted one by hand.
+## The Website domain
+
+The website is a domain of its own, beside Design and Execution, but a **service, not a business**: it has no projects, clients or money (`DomainCodes.Website`; `DomainCodes.Businesses` are the other two).
+- **Its staff** are admins whose home domain is `website` (it has no employees: inviting one, or making a website admin an employee, is refused with `403 invitation_not_allowed` or `422 not_for_this_domain`).
+  - Their defaults are only the permissions limited to the website: `website:view` and `website:manage`. No project, client, team or Proton permission.
+  - They see only the website (`visibleDomains: ["website"]`), and the app opens the Website area for them straight after sign-in.
+  - They are paid a fixed salary like any admin, so their pay is a company cost in the company overview.
+  - They aren't moved: moving is between Design and Execution only.
+- **Anyone else** given `website:view` or `website:manage` keeps their business and also sees the website (`visibleDomains` gains `website`), the way one permission of the other business opens it. Their "only one business, so no need to choose" shortcuts (new projects, clients, teams, invitations) still look at their businesses only.
+- **Super admins** hold both, as ever.
+- The businesses' pages (dashboard, finance, billing settings, domain settings) answer `404` for `website`, and projects and clients can't be created in it.
+- **Linking a project** (`GET /api/website/link-candidates`) searches only the projects of the businesses the caller can see: the website's own staff type their projects in.
 
 The company email can also be changed with `company_settings:manage`, from Company settings.
 

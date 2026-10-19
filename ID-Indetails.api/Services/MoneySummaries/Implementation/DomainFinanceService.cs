@@ -436,7 +436,7 @@ public sealed class DomainFinanceService(
     private async Task CheckDomainAsync(string domain, CancellationToken cancellationToken)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
-        if (!DomainCodes.All.Contains(domain) || !actor.CanSee(domain))
+        if (!DomainCodes.IsBusiness(domain) || !actor.CanSee(domain))
         {
             throw new NotFoundException("Domain not found.");
         }

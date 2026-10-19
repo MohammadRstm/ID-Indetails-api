@@ -29,7 +29,7 @@ public sealed class ProjectAutoArchive(
     {
         var now = clock.UtcNow;
         var archived = 0;
-        foreach (var domain in DomainCodes.All)
+        foreach (var domain in DomainCodes.Businesses)
         {
             if (!(await domainSettings.CurrentAsync(domain, cancellationToken)).AutoArchive)
             {

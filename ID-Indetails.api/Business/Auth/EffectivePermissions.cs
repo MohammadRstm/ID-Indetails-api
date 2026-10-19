@@ -13,7 +13,8 @@ namespace ID_Indetails.api.Business.Auth;
 /// <see cref="PermissionEffect.Revoke"/> overrides.</item>
 /// </list>
 /// Only employees log hours: admins and super admins never hold <see cref="PermissionCatalog.OwnWork"/>, whatever the
-/// overrides say. Holding a permission of the other domain opens that domain's data to the user.
+/// overrides say. Holding a permission of another domain opens that domain's data to the user. Someone whose home is a
+/// service (the website) holds only that service's permissions by default.
 /// </summary>
 public static class EffectivePermissions
 {
@@ -27,7 +28,7 @@ public static class EffectivePermissions
     {
         var applicable = roleCode == RoleCodes.SuperAdmin
             ? roleGrants
-            : roleGrants.Where(g => g.DomainCode is null || g.DomainCode == userDomain);
+            : roleGrants.Where(g => g.DomainCode == userDomain || (g.DomainCode is null && DomainCodes.IsBusiness(userDomain)));
 
         return applicable
             .Select(g => g.Code)

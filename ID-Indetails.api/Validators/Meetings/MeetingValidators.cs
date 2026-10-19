@@ -26,7 +26,7 @@ public sealed class MeetingListQueryValidator : AbstractValidator<MeetingListQue
 {
     public MeetingListQueryValidator()
     {
-        RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
+        RuleFor(x => x.Domain).ValidBusiness().When(x => x.Domain is not null);
         RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
             .WithMessage("The range must end on or after its start.");
     }

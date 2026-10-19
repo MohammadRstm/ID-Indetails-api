@@ -71,7 +71,7 @@ public sealed class WebsiteController(IWebsiteProjectService projects, IWebsiteC
     public Task<WebsiteProjectResponse> OrderImages(long id, WebsiteOrderRequest request, CancellationToken cancellationToken)
         => projects.OrderImagesAsync(id, request, cancellationToken);
 
-    /// <summary>System projects of both businesses to link a website project to, with what the form fills in.</summary>
+    /// <summary>System projects of the businesses the caller can see to link a website project to, with what the form fills in.</summary>
     [HttpGet("link-candidates")]
     [HasPermission(PermissionCodes.WebsiteManage)]
     public Task<IReadOnlyList<WebsiteLinkCandidateResponse>> LinkCandidates([FromQuery] string? search, CancellationToken cancellationToken)

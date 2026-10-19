@@ -84,8 +84,14 @@ public class PermissionCatalogTests
             PermissionCodes.ProjectFilesManage,
             PermissionCodes.EmployeeView, PermissionCodes.EmployeeManage, PermissionCodes.TeamManage,
             PermissionCodes.ActivityView, PermissionCodes.ReportView, PermissionCodes.DomainSettingsManage, PermissionCodes.ProtonUse,
+            // limited to the website: only its own admins hold them by default
+            PermissionCodes.WebsiteView, PermissionCodes.WebsiteManage,
         ], ignoreOrder: true);
     }
+
+    [Fact]
+    public void The_website_s_permissions_belong_to_the_website()
+        => PermissionCatalog.Definitions.Where(d => d.Code.StartsWith("website:")).ShouldAllBe(d => d.DomainCode == DomainCodes.Website);
 
     [Fact]
     public void Admins_manage_project_files_but_only_super_admins_choose_and_publish_what_clients_see()

@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Constants;
 
 namespace ID_Indetails.api.Business.Auth;
@@ -7,7 +8,8 @@ namespace ID_Indetails.api.Business.Auth;
 /// <list type="bullet">
 /// <item><c>employee:invite_super_admin</c> invites super admins, who get no domain.</item>
 /// <item><c>employee:invite</c> invites admins and employees into a domain the inviter can
-/// see. With only one visible domain it is used when none is given; otherwise one must be chosen.</item>
+/// see. With only one visible business it is used when none is given; otherwise one must be chosen.
+/// Website staff are admins.</item>
 /// </list>
 /// </summary>
 public static class InvitationPolicy
@@ -49,10 +51,15 @@ public static class InvitationPolicy
             return Decision.Deny("You are not allowed to invite people.");
         }
 
-        var domain = requestedDomain ?? (inviter.VisibleDomains.Count == 1 ? inviter.VisibleDomains[0] : null);
+        var domain = requestedDomain ?? (inviter.VisibleBusinesses.Count == 1 ? inviter.VisibleBusinesses[0] : null);
         if (domain is null)
         {
             return Decision.Deny("Choose the domain the person will belong to.");
+        }
+
+        if (EmployeeRules.CheckRoleFitsDomain(targetRole, domain) is { } unfit)
+        {
+            return Decision.Deny(unfit.Message);
         }
 
         return inviter.CanSee(domain)

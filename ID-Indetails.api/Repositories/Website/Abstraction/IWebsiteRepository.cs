@@ -47,7 +47,8 @@ public interface IWebsiteRepository
     Task<IReadOnlyDictionary<long, SystemProjectFacts>> SystemProjectsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
 
     /// <summary>Up to <paramref name="take"/> system projects whose title contains <paramref name="search"/>, newest first.</summary>
-    Task<IReadOnlyList<SystemProjectFacts>> CandidatesAsync(string? search, int take, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SystemProjectFacts>> CandidatesAsync(
+        IReadOnlyCollection<string> domains, string? search, int take, CancellationToken cancellationToken = default);
 
     /// <summary>Whether the file is one the public website shows: the favicon, or a picture of a published project.</summary>
     Task<bool> IsPublicFileAsync(long fileId, CancellationToken cancellationToken = default);

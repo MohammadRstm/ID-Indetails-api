@@ -69,7 +69,7 @@ public sealed class CompanyOverviewService(
         var invoices = await company.IssuedInvoicesAsync(cancellationToken);
         var payments = await company.PaymentsAsync(cancellationToken);
 
-        var domains = DomainCodes.All.Select(domain =>
+        var domains = DomainCodes.Businesses.Select(domain =>
         {
             var projects = data.Projects.Where(p => p.DomainCode == domain).ToList();
             var history = projects.Select(p => (Project: p, History: data.History[p.Id])).ToList();

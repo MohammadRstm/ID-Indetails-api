@@ -158,4 +158,22 @@ public class EmployeeRulesTests
         EmployeeRules.CheckEmailChange(DesignAdmin, Employee()).ShouldBeNull();
         EmployeeRules.CheckEmailChange(DesignAdmin, SuperAdminTarget())!.Code.ShouldBe(ErrorCodes.EmployeeChangeNotAllowed);
     }
+
+    [Fact]
+    public void Website_staff_stay_admins_and_are_not_moved()
+    {
+        var websiteAdmin = new Target(12, RoleCodes.Admin, DomainCodes.Website, UserStatus.Active);
+
+        EmployeeRules.CheckRoleChange(SuperAdmin, websiteAdmin, RoleCodes.Employee, null, 2).Denial!.Code.ShouldBe(ErrorCodes.NotForThisDomain);
+        EmployeeRules.CheckRoleChange(SuperAdmin, SuperAdminTarget(), RoleCodes.Employee, DomainCodes.Website, 2).Denial!.Code
+            .ShouldBe(ErrorCodes.NotForThisDomain);
+        EmployeeRules.CheckRoleChange(SuperAdmin, SuperAdminTarget(), RoleCodes.Admin, DomainCodes.Website, 2).Decision!.Domain
+            .ShouldBe(DomainCodes.Website);
+        EmployeeRules.CheckMove(SuperAdmin, websiteAdmin, Design)!.Code.ShouldBe(ErrorCodes.NotForThisDomain);
+        EmployeeRules.CheckMove(SuperAdmin, Employee(), DomainCodes.Website)!.Code.ShouldBe(ErrorCodes.NotForThisDomain);
+    }
+
+    [Fact]
+    public void Seeing_both_businesses_is_enough_to_see_super_admins_without_the_website()
+        => EmployeeRules.CanSee(CrossDomainAdmin, null).ShouldBeTrue();
 }

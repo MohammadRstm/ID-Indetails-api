@@ -19,6 +19,7 @@ public class DomainConfiguration : IEntityTypeConfiguration<Domain>
 
         builder.HasData(
             new Domain { Code = DomainCodes.Design, Name = "Design" },
-            new Domain { Code = DomainCodes.Execution, Name = "Execution" });
+            new Domain { Code = DomainCodes.Execution, Name = "Execution" },
+            new Domain { Code = DomainCodes.Website, Name = "Website" });
     }
 }

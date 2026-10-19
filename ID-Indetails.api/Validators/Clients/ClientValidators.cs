@@ -13,7 +13,7 @@ public sealed class ClientListQueryValidator : AbstractValidator<ClientListQuery
         RuleFor(x => x.IncludeArchived).Must((q, include) => !(include && q.Archived == true))
             .WithMessage("Ask for archived clients only, or for them alongside the others, not both.");
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
-        RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
+        RuleFor(x => x.Domain).ValidBusiness().When(x => x.Domain is not null);
         RuleFor(x => x.Filter).IsInEnum().WithMessage("Filter must be active, owing or empty.");
         RuleFor(x => x.Sort).IsInEnum()
             .WithMessage("Sort must be name, projects, hours, activity, revenue, profit, margin or outstanding.");
@@ -31,7 +31,7 @@ public sealed class CreateClientRequestValidator : AbstractValidator<CreateClien
         RuleFor(x => x.Organisation).ClientText("Organisation", 200);
         RuleFor(x => x.Label).ClientText("Label", 60, required: true);
         RuleFor(x => x.Note).ClientText("Note", 500);
-        RuleFor(x => x.DomainCode).ValidDomain().When(x => x.DomainCode is not null);
+        RuleFor(x => x.DomainCode).ValidBusiness().When(x => x.DomainCode is not null);
         RuleFor(x => x.Contacts).ValidContacts();
     }
 }

@@ -9,8 +9,8 @@ namespace ID_Indetails.api.Business.Auth;
 /// </summary>
 /// <param name="IsJoker">True when an admin or employee holds a different set from their role defaults.</param>
 /// <param name="VisibleDomains">
-/// Their home domain, plus the other domain once they hold one of its permissions. Super
-/// admins see both.
+/// Their home domain, plus any other domain once they hold one of its permissions. Super
+/// admins see them all.
 /// </param>
 public sealed record UserAccess(
     long UserId,
@@ -35,6 +35,12 @@ public sealed record UserAccess(
     /// (<c>null</c>) are visible to everyone; what they may do with them is up to permissions.
     /// </summary>
     public bool CanSee(string? domain) => domain is null || VisibleDomains.Contains(domain);
+
+    /// <summary>The businesses (design, execution) among <see cref="VisibleDomains"/>: where their projects, clients and money are.</summary>
+    public IReadOnlyList<string> VisibleBusinesses => VisibleDomains.Where(DomainCodes.IsBusiness).ToList();
+
+    /// <summary>They see both businesses (super admins always do).</summary>
+    public bool SeesEveryBusiness => DomainCodes.Businesses.All(VisibleDomains.Contains);
 
     /// <summary>A deactivated or missing account: nothing at all.</summary>
     public static UserAccess None(long userId, string role, string? domain) => new(userId, role, domain, [], false, []);

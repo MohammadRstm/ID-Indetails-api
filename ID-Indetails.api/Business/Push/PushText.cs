@@ -188,6 +188,7 @@ public static class PushText
     {
         DomainCodes.Design => "Design",
         DomainCodes.Execution => "Execution",
+        DomainCodes.Website => "Website",
         _ => null,
     };
 

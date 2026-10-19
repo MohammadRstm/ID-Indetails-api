@@ -13,7 +13,7 @@ public sealed record CurrentUserResponse
     /// <summary>super_admin, admin or employee.</summary>
     public required string Role { get; init; }
 
-    /// <summary>design or execution; null for super admins.</summary>
+    /// <summary>design, execution or website; null for super admins.</summary>
     public string? Domain { get; init; }
 
     public TeamSummaryResponse? Team { get; init; }
@@ -40,7 +40,7 @@ public sealed record CurrentUserResponse
     /// <summary>True when an admin or employee has been given or denied permissions beyond their role defaults.</summary>
     public required bool IsJoker { get; init; }
 
-    /// <summary>Domains whose data the user may see: their own, plus the other once they hold one of its permissions.</summary>
+    /// <summary>Domains the user may enter: their own, plus any other once they hold one of its permissions ("website" opens the Website area).</summary>
     public required IReadOnlyList<string> VisibleDomains { get; init; }
 }
 

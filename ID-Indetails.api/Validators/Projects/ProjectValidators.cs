@@ -15,7 +15,7 @@ public sealed class ProjectListQueryValidator : AbstractValidator<ProjectListQue
         RuleFor(x => x.Status).IsInEnum().WithMessage("Status must be active, hold, completed or archived.");
         RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
         RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
-        RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
+        RuleFor(x => x.Domain).ValidBusiness().When(x => x.Domain is not null);
         RuleFor(x => x.OwnerId).GreaterThan(0).When(x => x.OwnerId is not null).WithMessage("Owner is invalid.");
         RuleFor(x => x.Year).InclusiveBetween(2000, 2100).When(x => x.Year is not null).WithMessage("Year must be between 2000 and 2100.");
         RuleFor(x => x.Quarter).InclusiveBetween(1, 4).When(x => x.Quarter is not null).WithMessage("Quarter must be between 1 and 4.");
@@ -38,7 +38,7 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         // the client looks the icon up by name: only names, nothing a lookup could turn into something else
         RuleFor(x => x.Icon).Matches("^[A-Za-z0-9_-]+$").WithMessage("Icon must be one of the app's icon names.");
         RuleFor(x => x.Tint).ProjectTint();
-        RuleFor(x => x.DomainCode).ValidDomain().When(x => x.DomainCode is not null);
+        RuleFor(x => x.DomainCode).ValidBusiness().When(x => x.DomainCode is not null);
         RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
         RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
         RuleFor(x => x.OwnerId).GreaterThan(0).When(x => x.OwnerId is not null).WithMessage("Owner is invalid.");

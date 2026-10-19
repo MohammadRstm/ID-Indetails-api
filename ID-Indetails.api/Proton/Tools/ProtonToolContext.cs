@@ -48,7 +48,7 @@ public sealed class ProtonToolContext(
     /// </summary>
     public string DomainOf(ProtonDomain? asked)
         => asked.Code()
-           ?? (access.VisibleDomains.Count == 1 ? access.VisibleDomains.First()
+           ?? (access.VisibleBusinesses.Count == 1 ? access.VisibleBusinesses.First()
                : throw new ProtonToolInputException("Which business: design or execution? Ask the user if it isn't clear."));
 
     public DayOfWeek FirstDayOfWeek => firstDayOfWeek;

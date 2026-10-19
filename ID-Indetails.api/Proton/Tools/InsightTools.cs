@@ -310,7 +310,7 @@ public sealed class GetCompanySummaryTool(
         var refs = new List<ProtonRef>();
         var domains = new List<DomainSummary>();
 
-        foreach (var domain in context.Access.VisibleDomains)
+        foreach (var domain in context.Access.VisibleBusinesses)
         {
             var rows = await analysis.ProjectsAsync(domain, cancellationToken);
             var signals = rows.SelectMany(p => analysis.ProjectSignals(p, context.Today, t)).ToList();
@@ -416,7 +416,7 @@ public sealed class GetCompanySummaryTool(
         return new ProtonToolOutput(new CompanySummary(domains, company, attention, more), refs.DistinctBy(r => (r.Type, r.Id)).ToList(), pair.Current)
         {
             Basis = ProtonAnalysis.Basis(
-                "Company summary", pair, string.Join(" and ", context.Access.VisibleDomains), rules.Concat(scan.Rules), omitted.Concat(scan.Omitted)),
+                "Company summary", pair, string.Join(" and ", context.Access.VisibleBusinesses), rules.Concat(scan.Rules), omitted.Concat(scan.Omitted)),
         };
     }
 
@@ -589,7 +589,7 @@ public sealed class GetAttentionTool(ProtonAnalysisService analysis) : ProtonToo
         return new ProtonToolOutput(new AttentionList(items, more), ProtonAttention.Refs(items).ToList())
         {
             Basis = ProtonAnalysis.Basis(
-                "What may need attention", today, input.Domain?.Code() ?? string.Join(" and ", context.Access.VisibleDomains), scan.Rules, scan.Omitted),
+                "What may need attention", today, input.Domain?.Code() ?? string.Join(" and ", context.Access.VisibleBusinesses), scan.Rules, scan.Omitted),
         };
     }
 }

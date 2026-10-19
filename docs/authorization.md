@@ -14,10 +14,12 @@ The catalogue is seeded into `permissions` and `role_permissions`. Role defaults
 | Role | Defaults |
 |---|---|
 | Super admin | Every permission, in both domains and at company level, except logging their own hours |
-| Admin | Everything except the company permissions (`company:view`, `overhead:manage`, `salary:view`, `company_settings:manage`, `working_time:manage`, `schedule:manage`, `hours:excuse`, `employee:invite_super_admin`, `permission:manage`, `exchange_rate:manage`, `overhead_category:manage`, `session:manage`, `employee:change_email`, `proton_budget:manage`, `website:view`, `website:manage`), money and hiring (`financial:view`, `invoice:create`, `invoice:send`, `invoice:void`, `payment:record`, `payment:void`, `billing_settings:manage`, `expense:manage`, `project:pricing_manage`, `statement:create`, `statement:send`, `employee:invite`, `employee:pay_manage`), choosing and publishing what clients see (`client_portal:manage`), and logging their own hours. They run their domain's projects, clients, requirements, project files, materials, labour and people without seeing any money; a super admin can grant any of these to one admin by hand |
+| Admin | Everything except the company permissions (`company:view`, `overhead:manage`, `salary:view`, `company_settings:manage`, `working_time:manage`, `schedule:manage`, `hours:excuse`, `employee:invite_super_admin`, `permission:manage`, `exchange_rate:manage`, `overhead_category:manage`, `session:manage`, `employee:change_email`, `proton_budget:manage`), money and hiring (`financial:view`, `invoice:create`, `invoice:send`, `invoice:void`, `payment:record`, `payment:void`, `billing_settings:manage`, `expense:manage`, `project:pricing_manage`, `statement:create`, `statement:send`, `employee:invite`, `employee:pay_manage`), choosing and publishing what clients see (`client_portal:manage`), and logging their own hours. They run their domain's projects, clients, requirements, project files, materials, labour and people without seeing any money; a super admin can grant any of these to one admin by hand |
 | Employee | `project:view`, `requirement:view`, `requirement:complete_own`, `meeting:create`, `work_entry:create`, `work_entry:view_own`, `material:create`, `labour_report:create` |
 
 A permission limited to a domain (for example `material:create` for Execution) is only part of a role's defaults for people of that domain.
+
+**The website** is a domain too, but not a business. `website:view` and `website:manage` are limited to it: only its own staff (admins whose home domain is `website`) hold them by default, and those staff hold nothing else: the permissions that apply in either business aren't theirs ([website.md](website.md#the-website-domain)).
 
 **Only employees log hours.** Admins and super admins are paid a fixed salary, so they never hold `work_entry:create` or `work_entry:view_own` (`PermissionCatalog.OwnWork`), whatever their personal changes say: the role defaults leave them out, `EffectivePermissions` drops them, and granting them to an admin changes nothing. They come with the employee role, so they don't count when the automatic role change compares someone's permissions with the other role's defaults.
 
@@ -32,7 +34,7 @@ A permission limited to a domain (for example `material:create` for Execution) i
 The result is a `UserAccess`: the permissions, whether the user is a joker, and the domains they can see.
 
 - **Joker:** an admin or employee whose permissions differ from their role defaults. Calculated, never stored.
-- **Visible domains:** the user's home domain, plus the other domain as soon as they hold one of its domain-limited permissions (for example a Design admin granted `project:pricing_manage`). From then on their data is no longer limited to one domain; *what* they can do in it is still decided by the permissions they hold. The other domain's role defaults are **not** switched on; each permission must be granted.
+- **Visible domains:** the user's home domain, plus any other domain as soon as they hold one of its domain-limited permissions (for example a Design admin granted `project:pricing_manage`, or `website:manage`, which opens the website). `UserAccess.VisibleBusinesses` is the same list without the website. From then on their data is no longer limited to one domain; *what* they can do in it is still decided by the permissions they hold. The other domain's role defaults are **not** switched on; each permission must be granted.
 - **Deactivated accounts** hold nothing.
 
 ## Changing someone's permissions
