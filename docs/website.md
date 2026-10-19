@@ -78,7 +78,9 @@ A website project is its own record. Everything on it may be public; nothing int
 - `GET /api/website/places/countries` returns `[{ code, name }]`: ISO 3166-1 codes, with the English names .NET knows.
 - `GET /api/website/places/cities?country=LB&search=jb` returns up to 50 of the country's cities, biggest first. Those starting with the typed text come first, then those containing it, with accents and case ignored. Each has `{ name, latitude, longitude, population }`.
 - Both read GeoNames' places of 1,000 people or more (https://www.geonames.org, **CC BY 4.0**), trimmed into `Assets/geonames-cities.tsv.gz` and built into the API (`GeoNamesDirectory`).
-- To refresh it, run `python -I Assets/build-geonames-cities.py cities1000.zip` with GeoNames' `cities1000.zip`. A checkout without the file still builds and runs, with empty lists.
+- **Lebanon has every village:** its places come from GeoNames' own Lebanon file (`LB.zip`), about 3,700 villages, towns and neighbourhoods. Abandoned, historical and destroyed places are left out.
+- Those places can also be found by the other names people use: "Jbeil" finds Byblos, and "Gemmayze" finds Ej Jimmaïze. Up to 24 Latin-script names are kept per place, and a place is always shown by its main name.
+- To refresh it, run `python -I Assets/build-geonames-cities.py cities1000.zip LB.zip` with GeoNames' files. Any other country's file can be added the same way. A checkout without the list still builds and runs, with empty lists.
 - Names are matched whatever the case and accents ("saida" finds "Saïda") and kept as the list spells them. When a country has two places of the same name, the bigger one is meant.
 
 **Placing a project or an office** (`WebsitePlaceResolver`):

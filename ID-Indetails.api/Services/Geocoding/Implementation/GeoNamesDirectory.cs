@@ -6,9 +6,11 @@ using ID_Indetails.api.Services.Geocoding.Abstraction;
 namespace ID_Indetails.api.Services.Geocoding.Implementation;
 
 /// <summary>
-/// GeoNames' places of 1,000 people or more (https://www.geonames.org, CC BY 4.0), trimmed to one line per place,
-/// "name, country code, latitude, longitude, population" separated by tabs, gzipped, and built into the assembly as
-/// <c>geonames-cities.tsv.gz</c>. Read once, on first use. Without the file the lists are empty, and the API still runs.
+/// GeoNames' places of 1,000 people or more, and every village of the countries added from their own file
+/// (https://www.geonames.org, CC BY 4.0), trimmed to one line per place: "name, country code, latitude, longitude,
+/// population" and optionally the place's other names joined by "|", separated by tabs, gzipped, and built into the
+/// assembly as <c>geonames-cities.tsv.gz</c> (Assets/build-geonames-cities.py). Read once, on first use. A place is found
+/// by any of its names, and always shown by its main one. Without the file the lists are empty, and the API still runs.
 /// </summary>
 public sealed class GeoNamesDirectory : IPlaceDirectory
 {
@@ -34,8 +36,9 @@ public sealed class GeoNamesDirectory : IPlaceDirectory
         }
 
         var term = Key(search);
-        return cities.Where(c => c.Key.StartsWith(term, StringComparison.Ordinal))
-            .Concat(cities.Where(c => !c.Key.StartsWith(term, StringComparison.Ordinal) && c.Key.Contains(term, StringComparison.Ordinal)))
+        bool Starts(Entry c) => c.Keys.Any(k => k.StartsWith(term, StringComparison.Ordinal));
+        return cities.Where(Starts)
+            .Concat(cities.Where(c => !Starts(c) && c.Keys.Any(k => k.Contains(term, StringComparison.Ordinal))))
             .Take(take)
             .Select(c => c.City)
             .ToList();
@@ -44,8 +47,9 @@ public sealed class GeoNamesDirectory : IPlaceDirectory
     public DirectoryCity? City(string countryCode, string name)
     {
         var key = Key(name);
-        // biggest first, so the first match is the one most people mean
-        return _data.Value.CitiesOf(countryCode).FirstOrDefault(c => c.Key == key)?.City;
+        // its main name first, then any other; biggest first, so the first match is the one most people mean
+        var cities = _data.Value.CitiesOf(countryCode);
+        return (cities.FirstOrDefault(c => c.Keys[0] == key) ?? cities.FirstOrDefault(c => c.Keys.Contains(key)))?.City;
     }
 
     public DirectoryCity? Nearest(decimal latitude, decimal longitude, double maxKilometres)
@@ -126,13 +130,15 @@ public sealed class GeoNamesDirectory : IPlaceDirectory
 
             int.TryParse(parts[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out var population);
             var city = new DirectoryCity(parts[0], parts[1].ToUpperInvariant(), latitude, longitude, population);
-            cities.Add(new Entry(city, Key(city.Name)));
+            var others = parts.Length > 5 ? parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries).Select(Key) : [];
+            cities.Add(new Entry(city, [Key(city.Name), .. others.Distinct()]));
         }
 
         return new Data(cities);
     }
 
-    private sealed record Entry(DirectoryCity City, string Key);
+    /// <summary>A place and its names as compared: the main one first, then the others.</summary>
+    private sealed record Entry(DirectoryCity City, string[] Keys);
 
     private sealed class Data
     {
