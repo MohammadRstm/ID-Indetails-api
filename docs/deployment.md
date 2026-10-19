@@ -11,15 +11,25 @@ One server running Docker, with the stack in `deploy/docker-compose.prod.yml`:
 ```
 Visitor ──HTTPS :443──▶ caddy (certificate, HSTS) ──▶ web: the client's nginx ──/api, /hubs──▶ api :8080 ──▶ db (MySQL 8.4)
                         (proxy network 172.30.0.0/24)                                    (data network: no route outside)
+Website visitor ──HTTPS :443──▶ caddy ──▶ website: the website's nginx ──/api/public/website/ only──▶ api :8080
 ```
 
 | Service | Image | What it does |
 |---|---|---|
-| `caddy` | `caddy:2.11-alpine` | HTTPS for `PUBLIC_DOMAIN`. It gets and renews the certificate by itself, redirects HTTP to HTTPS, sends HSTS and keeps no access log. The only service with published ports (80 and 443). Config: `deploy/Caddyfile`. |
+| `caddy` | `caddy:2.11-alpine` | HTTPS for `PUBLIC_DOMAIN` and `WEBSITE_DOMAIN` (and `www.` of it, redirected to the bare domain). It gets and renews the certificates by itself, redirects HTTP to HTTPS, sends HSTS and keeps no access log. The only service with published ports (80 and 443). Config: `deploy/Caddyfile`. |
+| `website` | `ghcr.io/mohammadrstm/id-indetails-website` | The company's public website (its own repo): nginx serving the static site and passing only `/api/public/website/` to the API, so it needs no CORS. Deployed by the website's own Publish workflow, not by `deploy.sh` (see below). |
 | `web` | `ghcr.io/mohammadrstm/id-indetails-client` | Serves the app and proxies `/api` and `/hubs` to the API, so the browser sees one origin (the refresh cookie is `SameSite=Strict`). |
 | `api` | `ghcr.io/mohammadrstm/id-indetails-api` | The API: Production environment, plain HTTP on 8080, an unprivileged user, a read-only filesystem, uploads on the `files` volume. |
 | `migrations` | `ghcr.io/mohammadrstm/id-indetails-migrations` | The EF Core migrations of that API version as one executable. The deploy runs it before starting the new API. |
 | `db` | `mysql:8.4` | The database, on the `db_data` volume, reachable only from the API and the migrations. |
+
+### The public website
+
+- **Its own domain:** `WEBSITE_DOMAIN` in the server's `.env` is the bare domain. Its DNS, and `www.`'s, point at this server like the app's; Caddy gets both certificates once they resolve.
+- **Off until set:** while `WEBSITE_DOMAIN` is empty, Caddy uses `localhost` for it (signed by Caddy itself, reachable only inside the server), so deploys work before the website exists.
+- **Its own deploys:** the website's Publish workflow builds its image (`sha-<7>`), writes `WEBSITE_TAG` into the server's `.env`, then pulls and starts the `website` service alone (`up -d --no-deps website`). It logs in to GHCR with that run's token and logs out again. `deploy.sh` never pulls or restarts it, and works with `WEBSITE_TAG` empty.
+- **Turning it on:** with DNS in place, set `WEBSITE_DOMAIN` (and `WEBSITE_TAG`, if the website workflow hasn't yet), then run the Deploy workflow, which reloads Caddy with the new domain.
+- **The visitor's address:** the chain (Caddy, then the website's nginx, then the API) is as deep as the app's. Both proxies are on the proxy network the API trusts, so rate limits and the contact form see the visitor's address.
 
 No access logs carry query strings: Caddy keeps none, and nginx logs paths only. The live connection carries the
 access token as `?access_token=`, and sign-up and reset links carry theirs in the URL.

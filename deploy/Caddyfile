@@ -1,9 +1,11 @@
 # The TLS proxy in front of the stack (the caddy service in docker-compose.prod.yml). Caddy gets and renews the
-# certificate for the domain by itself, redirects http to https and forwards everything to the client's nginx,
-# which serves the app and proxies the API.
+# certificates by itself and redirects http to https. The app's domain goes to the client's nginx, which serves the app
+# and proxies the API; the website's domain goes to the website's nginx, which proxies only its public API.
 {
 	# Let's Encrypt writes here about certificates that are about to expire.
 	email {$ACME_EMAIL}
+	# The website's domain is "localhost" until it is set: Caddy then signs it itself, with no root to install.
+	skip_install_trust
 }
 
 {$PUBLIC_DOMAIN} {
@@ -19,4 +21,22 @@
 	reverse_proxy web:8080
 
 	# No access log: request URLs can hold tokens (the live connection's ?access_token=, sign-up and reset links).
+}
+
+# The company's public website, on its own domain (WEBSITE_DOMAIN, the bare domain); www is sent to it.
+{$WEBSITE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# X-Forwarded-For and X-Forwarded-Proto go to the website's nginx, which passes them to the API on
+	# /api/public/website/ (Proxy:KnownNetworks), so rate limits and the contact form see the visitor's address.
+	reverse_proxy website:8080
+}
+
+www.{$WEBSITE_DOMAIN} {
+	redir https://{$WEBSITE_DOMAIN}{uri} permanent
 }

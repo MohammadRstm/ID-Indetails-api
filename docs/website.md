@@ -197,6 +197,7 @@ The website's form sends its fields to `POST /contact-messages`. The rules are c
 
 ## Not done yet
 
-- **Deployment.** Serving the website and its domain isn't set up.
-- **CORS.** A website on another origin needs its origin allowed. Same-origin needs nothing.
+- **Going live.** The website is in the production stack ([deployment.md](deployment.md#the-public-website)); it goes
+  live once its domain resolves and `WEBSITE_DOMAIN` is set. Its nginx proxies `/api/public/website/` on the same
+  origin, so no CORS is needed.
 - **Editable project types.** They would become `{ key, label }`.
