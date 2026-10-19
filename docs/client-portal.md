@@ -228,7 +228,8 @@ the permission check.
    - it joins them, checks the size against the one announced, and checks the first bytes against the extension;
    - a file that isn't what its extension says is deleted and the upload marked `rejected`;
    - in one transaction, with the upload locked, it adds the file and the item (or swaps the file into the item it
-     replaces). Repeating the call, even at the same moment, returns the same item. If the store finished but the
+     replaces). Repeating the call, even at the same moment, returns the same item: completions of one upload run one
+     at a time, so a repeat waits for the join in progress and then finds the upload completed. If the store finished but the
      database didn't, the retry carries on from the joined object; when the store no longer has the upload (joined
      already, or abandoned), the object decides: there, it carries on; gone, 409 `portal_upload_ended`.
 4. `DELETE .../uploads/{id}` cancels: the row is marked first, then the parts and any object are dropped.
