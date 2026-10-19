@@ -12,7 +12,7 @@ public sealed record WebsiteLinkedProjectResponse(long Id, string Title, string 
 /// <param name="Year">Its own year; null while it follows the linked project's.</param>
 /// <param name="ShownStatus">What the website shows.</param>
 /// <param name="ShownYear">What the website shows.</param>
-/// <param name="PositionApproximate">The point is a random one in the city, as only the city and country were given.</param>
+/// <param name="PositionApproximate">The point was picked near the city or a town of the country, as no coordinates were given.</param>
 /// <param name="MissingToPublish">What it still needs before it can be published; empty when it can be.</param>
 public sealed record WebsiteProjectResponse(
     long Id,
@@ -26,6 +26,7 @@ public sealed record WebsiteProjectResponse(
     string? Client,
     string? City,
     string? Country,
+    string? CountryCode,
     decimal? Latitude,
     decimal? Longitude,
     bool PositionApproximate,
@@ -61,7 +62,13 @@ public sealed record WebsiteServiceResponse(long Id, string Title, string Descri
 
 /// <param name="PositionApproximate">The point is a random one in the city, as only the city and country were given.</param>
 public sealed record WebsiteLocationResponse(
-    long Id, string City, string Country, decimal Latitude, decimal Longitude, bool PositionApproximate, string Address, string Phone);
+    long Id, string City, string Country, string? CountryCode, decimal Latitude, decimal Longitude, bool PositionApproximate, string Address, string Phone);
+
+/// <summary>A country of the place lists: its ISO 3166-1 code and English name.</summary>
+public sealed record WebsiteCountryResponse(string Code, string Name);
+
+/// <summary>A city of the place lists, with its point and how many people live there.</summary>
+public sealed record WebsiteCityResponse(string Name, decimal Latitude, decimal Longitude, int Population);
 
 public sealed record WebsiteSocialLinkResponse(long Id, string Label, string Url);
 

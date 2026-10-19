@@ -10,8 +10,6 @@ public sealed record WebsiteProjectRequest
 {
     public string Title { get; init; } = string.Empty;
 
-    /// <summary>The page address; empty makes one from the title (or keeps the current one).</summary>
-    public string? Slug { get; init; }
 
     public WebsiteProjectType Type { get; init; }
 
@@ -23,15 +21,15 @@ public sealed record WebsiteProjectRequest
 
     public string? Client { get; init; }
 
-    /// <summary>Found from the coordinates when left out.</summary>
+    /// <summary>One of the country's cities in the list (<c>GET /api/website/places/cities</c>), or none.</summary>
     public string? City { get; init; }
 
-    /// <summary>Found from the coordinates when left out.</summary>
+    /// <summary>One of the list's countries (<c>GET /api/website/places/countries</c>); found from the coordinates when left out.</summary>
     public string? Country { get; init; }
 
     /// <summary>
-    /// The exact point. Left out with a city and country, the project gets a random point in that city, kept until
-    /// the city changes; sending that point back unchanged keeps it that way.
+    /// The exact point. Left out, the project gets a point near its city, or near one of its country's towns, kept
+    /// until the city or country changes; sending that point back unchanged keeps it that way.
     /// </summary>
     public decimal? Latitude { get; init; }
 

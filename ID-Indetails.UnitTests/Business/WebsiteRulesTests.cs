@@ -27,11 +27,11 @@ public class WebsiteRulesTests
     [InlineData("Villa Rizk", "villa-rizk")]
     [InlineData("  Hôtel   Le Gray — Beirut! ", "hotel-le-gray-beirut")]
     [InlineData("B&B 2024", "b-b-2024")]
-    [InlineData("مشروع", "project")]
+    [InlineData("مشروع", "")]
     public void A_slug_is_made_from_the_title(string title, string slug)
     {
         WebsiteRules.SlugOf(title).ShouldBe(slug);
-        WebsiteRules.IsSlug(WebsiteRules.SlugOf(title)).ShouldBeTrue();
+        if (slug.Length > 0) WebsiteRules.IsSlug(WebsiteRules.SlugOf(title)).ShouldBeTrue();
     }
 
     [Fact]
@@ -55,9 +55,10 @@ public class WebsiteRulesTests
     [Fact]
     public void Publishing_needs_everything_the_website_shows()
     {
-        WebsiteRules.MissingToPublish(WebsiteProjectStatus.Completed, 2022, "Beirut", "Lebanon", 33.9m, 35.5m, "A villa.", 1, 2).ShouldBeEmpty();
-        WebsiteRules.MissingToPublish(null, null, " ", null, 33.9m, null, null, null, null).ShouldBe(
-            ["a status", "a year", "a city", "a country", "a position on the map", "a description", "a card picture", "a page picture"]);
+        WebsiteRules.MissingToPublish(WebsiteProjectStatus.Completed, 2022, "Lebanon", 33.9m, 35.5m, "A villa.", 1, 2).ShouldBeEmpty();
+        // the city is optional: a country alone places a project
+        WebsiteRules.MissingToPublish(null, null, null, 33.9m, null, null, null, null).ShouldBe(
+            ["a status", "a year", "a country", "a position on the map", "a description", "a card picture", "a page picture"]);
     }
 
     [Fact]

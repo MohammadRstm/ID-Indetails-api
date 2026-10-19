@@ -63,6 +63,12 @@ public interface IWebsiteContentService
 
     Task<WebsiteContentResponse> OrderSocialLinksAsync(WebsiteOrderRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>The countries a place is chosen from.</summary>
+    IReadOnlyList<WebsiteCountryResponse> Countries();
+
+    /// <summary>The country's cities (by English name or code), biggest first, narrowed by what was typed. 404 for an unknown country.</summary>
+    IReadOnlyList<WebsiteCityResponse> Cities(string country, string? search);
+
     Task<WebsiteContentResponse> SetFaviconAsync(AttachFileRequest request, CancellationToken cancellationToken = default);
 
     Task<WebsiteContentResponse> RemoveFaviconAsync(CancellationToken cancellationToken = default);

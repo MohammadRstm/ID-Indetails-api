@@ -23,11 +23,10 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
     /// <summary>A project with everything the website shows.</summary>
     private static object Full(
         string title, long? thumbnail, long? hero, bool published = true, long? projectId = null, string? status = "completed",
-        int? year = 2022, string? slug = null)
+        int? year = 2022)
         => new
         {
             title,
-            slug,
             type = "villa",
             status,
             year,
@@ -125,18 +124,20 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         shown.Status.ShouldBe("completed");
         shown.Year.ShouldBe(2022);
         shown.Client.ShouldBe("The Rizk family");
-        shown.Location.ShouldBe(new PublicPlace("Beirut", "Lebanon", 33.893800m, 35.501800m));
+        shown.Location.ShouldBe(new PublicPlace("Beirut", "Lebanon", "LB", 33.893800m, 35.501800m, false));
         shown.Thumbnail.ShouldBe($"{Public}/files/{thumbnail}");
         shown.Hero.Src.ShouldBe($"{Public}/files/{hero}");
         shown.Hero.Alt.ShouldBe("The villa at dusk");
         shown.ShowInConveyor.ShouldBeFalse();
         (await (await Client.GetAsync($"{Public}/projects/{draft.Slug}")).ReadAsync<PublicWebsiteProject>()).Id.ShouldBe(draft.Id);
 
-        // the address is the project's own
-        await (await Client.PostJsonAsync("/api/website/projects", Full(Unique("Other"), null, null, published: false, slug: draft.Slug), superAdmin.AccessToken))
-            .ShouldFailWithAsync(409, ErrorCodes.WebsiteSlugTaken);
-        await (await Client.PostJsonAsync("/api/website/projects", Full(Unique("Other"), null, null, published: false, slug: "Not A Slug"), superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        // the address comes from the name: the same name is numbered, a rename moves it, and a name needs Latin letters
+        var twin = await CreateAsync(superAdmin, Full(title, null, null, published: false));
+        twin.Slug.ShouldBe($"{draft.Slug}-2");
+        var renamed = await UpdateAsync(superAdmin, twin.Id, Full(title + " Annex", null, null, published: false));
+        renamed.Slug.ShouldBe(WebsiteSlug(title + " Annex"));
+        (await (await Client.PostJsonAsync("/api/website/projects", Full("فيلا", null, null, published: false), superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("title");
 
         // taken off the website
         await UpdateAsync(superAdmin, draft.Id, Full(title, thumbnail, hero, published: false));
@@ -284,14 +285,14 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         ordered.Services.Select(s => s.Id).ShouldBe(reversed);
         (await (await Client.GetAsync($"{Public}/services")).ReadAsync<List<PublicWebsiteOffering>>()).Select(s => s.Id).ShouldBe(reversed);
 
-        var city = Unique("Beirut");
+        var address = Unique("Gemmayze, Beirut");
         var located = await (await Client.PostJsonAsync(
             "/api/website/locations",
-            new { city, country = "Lebanon", latitude = 33.8938m, longitude = 35.5018m, address = "Gemmayze, Beirut", phone = "+961 1 234 567" },
+            new { city = "Beirut", country = "Lebanon", latitude = 33.8938m, longitude = 35.5018m, address, phone = "+961 1 234 567" },
             token)).ReadAsync<WebsiteContentResponse>();
-        var office = located.Locations.Single(l => l.City == city);
+        var office = located.Locations.Single(l => l.Address == address);
         (await (await Client.GetAsync($"{Public}/locations")).ReadAsync<List<PublicWebsiteLocation>>()).ShouldContain(l => l.Id == office.Id && l.Lat == 33.8938m);
-        await (await Client.PostJsonAsync("/api/website/locations", new { city, country = "Lebanon", latitude = 95m, longitude = 0m, address = "x", phone = "1" }, token))
+        await (await Client.PostJsonAsync("/api/website/locations", new { city = "Beirut", country = "Lebanon", latitude = 95m, longitude = 0m, address = "x", phone = "1" }, token))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
 
         var label = Unique("Instagram");
@@ -345,88 +346,103 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
     private static object Placed(string title, string? city, string? country, decimal? latitude = null, decimal? longitude = null, bool published = false)
         => new { title, type = "villa", status = "completed", year = 2022, city, country, latitude, longitude, published };
 
+    private static bool Near(TestPlaces.Town town, decimal? latitude, decimal? longitude)
+        => Math.Abs(latitude!.Value - town.Latitude) <= WebsitePlaces.Spread && Math.Abs(longitude!.Value - town.Longitude) <= WebsitePlaces.Spread;
+
     [Fact]
-    public async Task Coordinates_find_their_city_and_a_city_alone_gets_its_own_random_point_kept_until_the_city_changes()
+    public async Task The_country_and_city_come_from_the_lists()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var countries = await (await Client.GetAsync("/api/website/places/countries", superAdmin.AccessToken)).ReadAsync<List<WebsiteCountryResponse>>();
+        countries.ShouldContain(new WebsiteCountryResponse("LB", "Lebanon"));
+        var cities = await (await Client.GetAsync("/api/website/places/cities?country=LB&search=jb", superAdmin.AccessToken)).ReadAsync<List<WebsiteCityResponse>>();
+        cities.Select(c => c.Name).ShouldBe(["Jbeil"]);
+        var biggestFirst = await (await Client.GetAsync("/api/website/places/cities?country=Lebanon", superAdmin.AccessToken)).ReadAsync<List<WebsiteCityResponse>>();
+        biggestFirst[0].Name.ShouldBe("Beirut");
+        await (await Client.GetAsync("/api/website/places/cities?country=Atlantis", superAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+
+        // a place not in the lists saves as a draft, but is never published
+        var thumbnail = await PngAsync(superAdmin);
+        var hero = await PngAsync(superAdmin);
+        object Ready(string title, string? city, string? country, bool published) => new
+        {
+            title, type = "villa", status = "completed", year = 2022, city, country, description = "A villa.", thumbnailFileId = thumbnail, heroFileId = hero, published,
+        };
+        var unknown = await CreateAsync(superAdmin, Ready(Unique("Gotham"), "Gotham", "Lebanon", published: false));
+        unknown.Latitude.ShouldBeNull();
+        (await (await Client.PutJsonAsync($"/api/website/projects/{unknown.Id}", Ready(unknown.Title, "Gotham", "Lebanon", published: true), superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.WebsitePlaceNotFound)).Message.ShouldContain("Lebanon's list");
+        (await (await Client.PutJsonAsync($"/api/website/projects/{unknown.Id}", Ready(unknown.Title, null, "Atlantis", published: true), superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.WebsitePlaceNotFound)).Message.ShouldContain("country from the list");
+        // spelt any way, a name is kept as the list has it
+        var spelt = await UpdateAsync(superAdmin, unknown.Id, Ready(unknown.Title, "  BEIRUT ", "lebanon", published: true));
+        (spelt.City, spelt.Country, spelt.CountryCode).ShouldBe(("Beirut", "Lebanon", "LB"));
+    }
+
+    [Fact]
+    public async Task Coordinates_find_their_place_and_a_city_or_country_alone_gets_a_point_kept_until_it_changes()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
 
-        // coordinates win: the city and country are found from them
-        var exact = await CreateAsync(superAdmin, Placed(Unique("Byblos villa"), null, null, 34.121000m, 35.648000m));
-        (exact.City, exact.Country, exact.Latitude, exact.Longitude, exact.PositionApproximate).ShouldBe(("Byblos", "Lebanon", 34.121000m, 35.648000m, false));
+        // coordinates win: the country and the nearby city are found from them
+        var exact = await CreateAsync(superAdmin, Placed(Unique("Jbeil villa"), null, null, 34.121000m, 35.649000m));
+        (exact.City, exact.Country, exact.CountryCode, exact.Latitude, exact.PositionApproximate).ShouldBe(("Jbeil", "Lebanon", "LB", 34.121000m, false));
+        // far from any town: the country, and no city
+        var remote = await CreateAsync(superAdmin, Placed(Unique("Cedars cabin"), null, null, 34.700000m, 36.300000m));
+        (remote.City, remote.Country).ShouldBe((null, "Lebanon"));
 
-        // a city alone: a random point near its centre, a different one for each project
+        // a city alone: a point near it, a different one for each project
         var first = await CreateAsync(superAdmin, Placed(Unique("Beirut loft"), "Beirut", "Lebanon"));
-        var second = await CreateAsync(superAdmin, Placed(Unique("Beirut flat"), "beirut", "Lebanon"));
+        var second = await CreateAsync(superAdmin, Placed(Unique("Beirut flat"), "Beirut", "Lebanon"));
         foreach (var p in new[] { first, second })
         {
             p.PositionApproximate.ShouldBeTrue();
-            Math.Abs(p.Latitude!.Value - FakeGeocoder.Beirut.Latitude).ShouldBeLessThanOrEqualTo(WebsitePlaces.MaxSpread);
-            Math.Abs(p.Longitude!.Value - FakeGeocoder.Beirut.Longitude).ShouldBeLessThanOrEqualTo(WebsitePlaces.MaxSpread);
+            Near(TestPlaces.Beirut, p.Latitude, p.Longitude).ShouldBeTrue();
         }
 
         (first.Latitude, first.Longitude).ShouldNotBe((second.Latitude, second.Longitude));
 
-        // sent back unchanged with the same city, the point stays, and nothing is looked up
+        // sent back unchanged with the same city, the point stays, and the map isn't asked
         var lookups = api.Geocoder.Lookups;
         var kept = await UpdateAsync(superAdmin, first.Id, Placed(first.Title, "Beirut", "Lebanon", first.Latitude, first.Longitude));
         (kept.Latitude, kept.Longitude, kept.PositionApproximate).ShouldBe((first.Latitude, first.Longitude, true));
         api.Geocoder.Lookups.ShouldBe(lookups);
 
-        // another city: a new point there
-        var moved = await UpdateAsync(superAdmin, first.Id, Placed(first.Title, "Byblos", "Lebanon", first.Latitude, first.Longitude));
-        moved.PositionApproximate.ShouldBeTrue();
-        FakeGeocoder.Inside(FakeGeocoder.Byblos, moved.Latitude!.Value, moved.Longitude!.Value).ShouldBeTrue();
+        // another city: a point near it
+        var moved = await UpdateAsync(superAdmin, first.Id, Placed(first.Title, "Jbeil", "Lebanon", first.Latitude, first.Longitude));
+        Near(TestPlaces.Jbeil, moved.Latitude, moved.Longitude).ShouldBeTrue();
 
-        // real coordinates typed in replace the random point
-        var typed = await UpdateAsync(superAdmin, first.Id, Placed(first.Title, "Byblos", "Lebanon", 34.122500m, 35.650100m));
-        (typed.Latitude, typed.Longitude, typed.PositionApproximate).ShouldBe((34.122500m, 35.650100m, false));
+        // a country alone: a point near one of its towns, and no city
+        var country = await CreateAsync(superAdmin, Placed(Unique("Somewhere"), null, "Lebanon"));
+        country.City.ShouldBeNull();
+        country.PositionApproximate.ShouldBeTrue();
+        TestPlaces.Lebanese.ShouldContain(t => Near(t, country.Latitude, country.Longitude));
 
-        // the website only ever sees the finished place
+        // real coordinates replace the picked point
+        var typed = await UpdateAsync(superAdmin, country.Id, Placed(country.Title, null, "Lebanon", 34.255000m, 35.659000m));
+        (typed.City, typed.Latitude, typed.PositionApproximate).ShouldBe(("Batroun", 34.255000m, false));
+
+        // published, the website reads the country alone and that the point is picked
         var thumbnail = await PngAsync(superAdmin);
         var hero = await PngAsync(superAdmin);
         var published = await UpdateAsync(superAdmin, second.Id, new
         {
-            title = second.Title, type = "villa", status = "completed", year = 2022, city = "Beirut", country = "Lebanon",
-            latitude = second.Latitude, longitude = second.Longitude, description = "A flat.", thumbnailFileId = thumbnail, heroFileId = hero, published = true,
+            title = second.Title, type = "villa", status = "completed", year = 2022, city = (string?)null, country = "Lebanon",
+            description = "A flat.", thumbnailFileId = thumbnail, heroFileId = hero, published = true,
         });
-        var shown = (await PublicProjectsAsync()).Single(p => p.Id == published.Id);
-        shown.Location.ShouldBe(new PublicPlace("Beirut", "Lebanon", second.Latitude!.Value, second.Longitude!.Value));
+        var shown = (await PublicProjectsAsync()).Single(p => p.Id == published.Id).Location;
+        (shown.City, shown.Country, shown.CountryCode, shown.Approximate).ShouldBe((null, "Lebanon", "LB", true));
     }
 
     [Fact]
-    public async Task A_place_the_map_can_t_find_keeps_a_draft_but_is_never_published()
+    public async Task With_the_map_service_down_a_picked_point_is_its_town_s_own()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var thumbnail = await PngAsync(superAdmin);
-        var hero = await PngAsync(superAdmin);
-        var pictures = (Thumbnail: thumbnail, Hero: hero);
-        object Ready(string title, string? city, string? country, decimal? latitude, decimal? longitude, bool published) => new
-        {
-            title, type = "villa", status = "completed", year = 2022, city, country, latitude, longitude,
-            description = "A villa.", thumbnailFileId = pictures.Thumbnail, heroFileId = pictures.Hero, published,
-        };
-
-        // a city the map doesn't know
-        var unknown = await CreateAsync(superAdmin, Ready(Unique("Atlantis"), "Atlantis", "Lebanon", null, null, published: false));
-        unknown.Latitude.ShouldBeNull();
-        unknown.PositionApproximate.ShouldBeFalse();
-        (await (await Client.PutJsonAsync($"/api/website/projects/{unknown.Id}", Ready(unknown.Title, "Atlantis", "Lebanon", null, null, published: true), superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.WebsitePlaceNotFound)).Message.ShouldContain("Atlantis, Lebanon");
-
-        // the map service down: the draft still saves, publishing says what to type
-        // a picture belongs to one project: the next one gets its own
-        pictures = (await PngAsync(superAdmin), await PngAsync(superAdmin));
         api.Geocoder.Down = true;
         try
         {
-            var draft = await CreateAsync(superAdmin, Ready(Unique("Offline"), null, null, 33.900000m, 35.500000m, published: false));
-            draft.City.ShouldBeNull();
-            draft.Latitude.ShouldBe(33.900000m);
-            await (await Client.PutJsonAsync($"/api/website/projects/{draft.Id}", Ready(draft.Title, null, null, 33.900000m, 35.500000m, published: true), superAdmin.AccessToken))
-                .ShouldFailWithAsync(422, ErrorCodes.WebsitePlaceNotFound);
-            // typed in by hand, it publishes without the map
-            var done = await UpdateAsync(superAdmin, draft.Id, Ready(draft.Title, "Beirut", "Lebanon", 33.900000m, 35.500000m, published: true));
-            done.Published.ShouldBeTrue();
+            var project = await CreateAsync(superAdmin, Placed(Unique("Offline"), "Tripoli", "Lebanon"));
+            (project.Latitude, project.Longitude, project.PositionApproximate).ShouldBe((TestPlaces.Tripoli.Latitude, TestPlaces.Tripoli.Longitude, true));
         }
         finally
         {
@@ -444,17 +460,20 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         var byCity = await (await Client.PostJsonAsync("/api/website/locations", new { city = "Beirut", country = "Lebanon", address, phone = "+961 1 234 567" }, token))
             .ReadAsync<WebsiteContentResponse>();
         var office = byCity.Locations.Single(l => l.Address == address);
-        office.PositionApproximate.ShouldBeTrue();
-        FakeGeocoder.Inside(FakeGeocoder.Beirut, office.Latitude, office.Longitude).ShouldBeTrue();
+        (office.CountryCode, office.PositionApproximate).ShouldBe(("LB", true));
+        Near(TestPlaces.Beirut, office.Latitude, office.Longitude).ShouldBeTrue();
 
         var byPoint = await (await Client.PutJsonAsync($"/api/website/locations/{office.Id}",
-            new { latitude = 34.121000m, longitude = 35.648000m, address, phone = "+961 9 540 000" }, token)).ReadAsync<WebsiteContentResponse>();
+            new { latitude = 34.121000m, longitude = 35.649000m, address, phone = "+961 9 540 000" }, token)).ReadAsync<WebsiteContentResponse>();
         var moved = byPoint.Locations.Single(l => l.Id == office.Id);
-        (moved.City, moved.Country, moved.PositionApproximate).ShouldBe(("Byblos", "Lebanon", false));
+        (moved.City, moved.Country, moved.PositionApproximate).ShouldBe(("Jbeil", "Lebanon", false));
 
         await (await Client.PostJsonAsync("/api/website/locations", new { address, phone = "1" }, token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
-        await (await Client.PostJsonAsync("/api/website/locations", new { city = "Atlantis", country = "Lebanon", address, phone = "1" }, token))
+        await (await Client.PostJsonAsync("/api/website/locations", new { city = "Gotham", country = "Lebanon", address, phone = "1" }, token))
             .ShouldFailWithAsync(422, ErrorCodes.WebsitePlaceNotFound);
+        // an office is a real address: a country alone isn't enough
+        await (await Client.PostJsonAsync("/api/website/locations", new { country = "Lebanon", address, phone = "1" }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
     private static string WebsiteSlug(string title) => WebsiteRules.SlugOf(title);

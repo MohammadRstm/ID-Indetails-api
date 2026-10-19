@@ -248,6 +248,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IWebsiteContentService, WebsiteContentService>();
         services.AddScoped<IPublicWebsiteService, PublicWebsiteService>();
         services.AddScoped<WebsitePlaceResolver>();
+        services.AddSingleton<IPlaceDirectory, GeoNamesDirectory>();
         services.AddOptions<GeocodingOptions>().BindConfiguration(GeocodingOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddHttpClient<IGeocoder, NominatimGeocoder>((provider, client) =>
             client.Timeout = TimeSpan.FromSeconds(provider.GetRequiredService<IOptions<GeocodingOptions>>().Value.TimeoutSeconds));

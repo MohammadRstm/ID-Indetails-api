@@ -45,11 +45,17 @@ A website project is its own record. Everything on it may be public; nothing int
 - **Year.** The completion year, else the target date's year, else the start year.
 - **Type.** `villa`, `residential` or `hotel`, a fixed list for now.
 - **Slug** (the page address, `/projects/{slug}`):
-  - lowercase letters, digits and single dashes, at most 100 characters, unique;
-  - left empty, it's made from the title (adding `-2`, `-3` … if taken) and then kept;
-  - typing one that's taken gives `409 website_slug_taken`.
-- **Place.** The coordinates, or just the city and country (see [Places](#places)). Either way, a published project always has all four.
-- **Publishing.** Only published projects reach the website. Publishing needs a status and a year (its own or the linked project's), a city, a country, a map position, a description, a card picture and a page picture. Otherwise it's `422 website_project_incomplete`, with what's missing in the message, or `422 website_place_not_found` when the place couldn't be found on the map. The form also gets the list as `missingToPublish`.
+  - Always made from the project's name: accents dropped, lowercase ASCII letters and digits joined by single dashes, at most 100 characters.
+  - A name must have at least one Latin letter or digit (`400`).
+  - The same name again is numbered: `villa-rizk`, then `villa-rizk-2`.
+  - It follows the name: a rename gives a new address, and the old one answers `404`.
+- **Place.** Coordinates, or a country with or without a city, from the lists (see [Places](#places)). A published project always has a country and a point; the city may be null.
+- **Publishing.** Only published projects reach the website. Publishing needs:
+  - a status and a year (its own or the linked project's);
+  - a country and a map position;
+  - a description, a card picture and a page picture.
+
+  Otherwise it's `422 website_project_incomplete`, with what's missing in the message, or `422 website_place_not_found` when the place isn't one of the lists'. The form also gets the list as `missingToPublish`.
 - **Pictures.** Each has one use:
 
   | Picture | Shape | Where the website shows it |
@@ -68,25 +74,35 @@ A website project is its own record. Everything on it may be public; nothing int
 
 ## Places
 
-A project or an office is placed in one of two ways (`WebsitePlaceResolver`):
+**The lists.** The country and city are chosen from lists, so a place is never misspelt and always has a point:
+- `GET /api/website/places/countries` returns `[{ code, name }]`: ISO 3166-1 codes, with the English names .NET knows.
+- `GET /api/website/places/cities?country=LB&search=jb` returns up to 50 of the country's cities, biggest first. Those starting with the typed text come first, then those containing it, with accents and case ignored. Each has `{ name, latitude, longitude, population }`.
+- Both read GeoNames' places of 1,000 people or more (https://www.geonames.org, **CC BY 4.0**), trimmed into `Assets/geonames-cities.tsv.gz` and built into the API (`GeoNamesDirectory`).
+- To refresh it, run `python -I Assets/build-geonames-cities.py cities1000.zip` with GeoNames' `cities1000.zip`. A checkout without the file still builds and runs, with empty lists.
+- Names are matched whatever the case and accents ("saida" finds "Saïda") and kept as the list spells them. When a country has two places of the same name, the bigger one is meant.
 
-1. **Coordinates** (more accurate) always win, and go on the globe exactly as typed. A city or country left empty is found from them.
-2. **A city and country alone:** the project gets a random point in that city, near its centre and on land. No other project or office has that exact point. The point is chosen once and kept (`positionApproximate: true`). It's chosen again only if the city or country changes, and replaced as soon as real coordinates are typed in. A form that sends the random point back unchanged keeps it that way.
+**Placing a project or an office** (`WebsitePlaceResolver`):
+1. **Coordinates** (more accurate) always win, and go on the globe exactly as typed. A missing country is the nearest town's (within 150 km). A missing city is the nearest town's in that country, when one is within 30 km; otherwise there's no city.
+2. **A city:** the point is picked within about 1 km of it.
+3. **A country alone** (projects only; an office needs its city): the point is picked within about 1 km of one of the country's towns, at random, and the city stays null.
+
+A picked point (`positionApproximate: true`):
+- No other project or office has that exact point.
+- It's checked with the map service: one that falls in the sea or another country is picked again, up to 5 times. After that the town's own point is used.
+- It's chosen once and kept. It's chosen again only when the city or country changes, and replaced as soon as real coordinates are typed in. A form that sends the point back unchanged keeps it.
 
 **The map service: OpenStreetMap's Nominatim** (`Services/Geocoding`):
-- English names, so "Lebanon", not "لبنان". OpenStreetMap's names are used as they are, e.g. "Jbeil" for Byblos; they can be typed over.
-- The city is the first of `city`, `town`, `village`, `municipality`, `county` and `state` in the address.
-- A city's area is its bounding box from `search`. The random point stays in its inner half and within 0.02° (about 2 km) of its centre.
-- The point is checked with a reverse lookup: one in the sea or in another country is picked again, 5 times at most, then the city's own point is used.
-- **Their usage policy:** the API names itself (`Geocoding:UserAgent`) and makes at most one request a second. It looks up only what's missing: a project typed with its city, country and coordinates never calls it.
-- **Settings:** `Geocoding:Enabled` (off: nothing is looked up), `Geocoding:BaseUrl`, `Geocoding:UserAgent` and `Geocoding:TimeoutSeconds` (5 by default).
+- It's only asked which country a picked point is in.
+- **Their usage policy:** the API names itself (`Geocoding:UserAgent`), makes at most one request a second, and never uses it for search-as-you-type.
+- **Settings:** `Geocoding:Enabled`, `Geocoding:BaseUrl`, `Geocoding:UserAgent` and `Geocoding:TimeoutSeconds` (5 by default).
+- When the service is down, the town's own point is used.
 
-**When the place can't be found** (an unknown city, a point in the sea, or the service down):
-- A project draft still saves, with what could be found.
-- Publishing is `422 website_place_not_found`, with a message saying what to type in.
+**When a place isn't one of the lists':**
+- A project draft still saves, with what could be worked out.
+- Publishing is `422 website_place_not_found`, with a message saying what to choose.
 - An office is public once saved, so it's refused the same way.
 
-The integration tests use `FakeGeocoder`, which never calls the internet.
+The integration tests use `FakeGeocoder` and a few towns (`TestPlaces`), and never call the internet.
 
 ## Dashboard API (signed in)
 
@@ -101,7 +117,8 @@ The integration tests use `FakeGeocoder`, which never calls the internet.
 | `GET /api/website/link-candidates?search=` | manage | Up to 20 system projects of both businesses, with what the form fills in and `websiteProjectId` if one is already shown |
 | `GET /api/website/content` | view or manage | `{ services, locations, socialLinks, contactEmail, faviconFileId, canManage }` |
 | `POST /api/website/services`, `PUT …/{id}`, `DELETE …/{id}`, `PUT …/order` | manage | `{ title, description }`, plain text. Each answers with the whole content |
-| `POST /api/website/locations`, `PUT …`, `DELETE …`, `PUT …/order` | manage | `{ city?, country?, latitude?, longitude?, address, phone }`: the coordinates, or the city and country ([Places](#places)) |
+| `POST /api/website/locations`, `PUT …`, `DELETE …`, `PUT …/order` | manage | `{ city?, country?, latitude?, longitude?, address, phone }`: the coordinates, or the country and city from the lists ([Places](#places)) |
+| `GET /api/website/places/countries`, `GET /api/website/places/cities?country=&search=` | view or manage | The lists ([Places](#places)) |
 | `POST /api/website/social-links`, `PUT …`, `DELETE …`, `PUT …/order` | manage | `{ label, url }`. The URL must be https |
 | `PUT /api/website/favicon`, `DELETE …` | manage | `{ fileId }`: PNG, JPEG or WebP (no SVG: it can carry scripts) |
 | `PUT /api/company/contact-email` | `company_settings:manage` or `website:manage` | `{ email }`. Empty clears it. It is also `contactEmail` on `GET /api/company/settings` |
@@ -115,7 +132,7 @@ Under `/api/public/website`. JSON is camelCase, and lists come in display order.
 | `GET /projects` | Every published project (the website filters the grid itself) |
 | `GET /projects/{slug}` | One published project, else `404` |
 | `GET /services` | `[{ id, title, description }]` |
-| `GET /locations` | `[{ id, city, country, lat, lng, address, phone }]` |
+| `GET /locations` | `[{ id, city, country, countryCode, lat, lng, address, phone }]` |
 | `GET /contact` | `{ email }`: null until the company sets one |
 | `GET /social-links` | `[{ id, label, url }]` |
 | `GET /settings` | `{ faviconUrl }`: null until one is chosen |
@@ -128,7 +145,7 @@ A project:
 {
   "id": 12, "slug": "villa-rizk", "title": "Villa Rizk",
   "type": "villa", "status": "completed", "client": "The Rizk family",
-  "location": { "city": "Beirut", "country": "Lebanon", "lat": 33.8938, "lng": 35.5018 },
+  "location": { "city": "Beirut", "country": "Lebanon", "countryCode": "LB", "lat": 33.8938, "lng": 35.5018, "approximate": false },
   "year": 2022, "description": "Plain text.",
   "thumbnail": "/api/public/website/files/40",
   "hero": { "src": "/api/public/website/files/41", "alt": "The villa at dusk" },
@@ -138,7 +155,7 @@ A project:
 ```
 
 - `client` is `""` when none is named.
-- `location` is always complete: the coordinates may be a random point in the city ([Places](#places)).
+- `location.city` is null for a project placed in its country alone. `lat` and `lng` are always set; `approximate` is true when the point was picked ([Places](#places)).
 - `conveyorOrder` is `null` outside the strip.
 
 **Caching.** Answers may be cached for a minute (`Cache-Control: public, max-age=60`), and pictures for a day: a picture's address never changes its content, since a new picture is a new file.

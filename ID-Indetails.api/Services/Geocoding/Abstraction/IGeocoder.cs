@@ -1,14 +1,11 @@
-using ID_Indetails.api.Business.Website;
-
 namespace ID_Indetails.api.Services.Geocoding.Abstraction;
 
 /// <summary>
-/// Finds places on the map for the company website: the city and country at a point, and where a city is. Answers
-/// null when the place can't be found or the map service doesn't answer; callers decide what that means.
+/// Asks a map service which country a point is in, to keep a point the website picks on land: one near a coast can
+/// fall in the sea. Answers null when the point is in no country (the sea) or the service doesn't answer.
 /// </summary>
 public interface IGeocoder
 {
-    Task<GeoPlace?> PlaceAtAsync(decimal latitude, decimal longitude, CancellationToken cancellationToken = default);
-
-    Task<GeoArea?> AreaOfAsync(string city, string country, CancellationToken cancellationToken = default);
+    /// <summary>The ISO 3166-1 code of the country at the point, in upper case ("LB").</summary>
+    Task<string?> CountryCodeAtAsync(decimal latitude, decimal longitude, CancellationToken cancellationToken = default);
 }

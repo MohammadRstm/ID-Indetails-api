@@ -36,11 +36,10 @@ public sealed class WebsiteProjectRequestValidator : AbstractValidator<WebsitePr
 {
     public WebsiteProjectRequestValidator()
     {
-        RuleFor(x => x.Title).Required("The title", WebsiteRules.MaxTitleLength);
-        RuleFor(x => x.Slug)
-            .Must(s => WebsiteRules.IsSlug(s!.Trim()))
-            .When(x => !string.IsNullOrWhiteSpace(x.Slug))
-            .WithMessage($"The page address can only use lowercase letters, digits and single dashes, up to {WebsiteRules.MaxSlugLength} characters.");
+        RuleFor(x => x.Title)
+            .Required("The title", WebsiteRules.MaxTitleLength)
+            .Must(t => t is null || WebsiteRules.SlugOf(t).Length > 0)
+            .WithMessage("The name needs at least one Latin letter or digit: the project's page address is made from it.");
         RuleFor(x => x.Type).IsInEnum().WithMessage("Choose villa, residential or hotel.");
         RuleFor(x => x.Status).IsInEnum().WithMessage("Choose in progress or completed.");
         RuleFor(x => x.Status).NotNull().When(x => x.ProjectId is null).WithMessage("Choose a status, or link a system project to follow its status.");

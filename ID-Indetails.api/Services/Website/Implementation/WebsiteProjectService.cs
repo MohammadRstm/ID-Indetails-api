@@ -11,6 +11,7 @@ using ID_Indetails.api.Repositories.Website.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
+using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Website.Abstraction;
 
 namespace ID_Indetails.api.Services.Website.Implementation;
@@ -26,6 +27,7 @@ public sealed class WebsiteProjectService(
     IWebsiteRepository website,
     IFileClaims fileClaims,
     WebsitePlaceResolver places,
+    IPlaceDirectory directory,
     IUnitOfWork unitOfWork,
     IClock clock) : IWebsiteProjectService
 {
@@ -181,7 +183,7 @@ public sealed class WebsiteProjectService(
             }
         }
 
-        project.Slug = await SlugAsync(project, request, cancellationToken);
+        project.Slug = await SlugAsync(project, request.Title.Trim(), cancellationToken);
         project.Title = request.Title.Trim();
         project.Type = request.Type;
         project.Status = request.Status;
@@ -232,29 +234,24 @@ public sealed class WebsiteProjectService(
         return project;
     }
 
-    /// <summary>The address typed in, or the current one, or one made from the title that no other project has.</summary>
-    private async Task<string> SlugAsync(WebsiteProject project, WebsiteProjectRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// The page address from the name: kept while the name makes the same one, otherwise the next free one
+    /// ("villa-rizk", then "villa-rizk-2").
+    /// </summary>
+    private async Task<string> SlugAsync(WebsiteProject project, string title, CancellationToken cancellationToken)
     {
         long? self = project.Id == 0 ? null : project.Id;
-        if (!string.IsNullOrWhiteSpace(request.Slug))
-        {
-            var slug = request.Slug.Trim();
-            return await website.SlugTakenAsync(slug, self, cancellationToken)
-                ? throw new ConflictException(ErrorCodes.WebsiteSlugTaken, "Another project already uses this page address.")
-                : slug;
-        }
-
-        if (project.Slug.Length > 0)
+        var start = WebsiteRules.SlugOf(title);
+        if (project.Slug.Length > 0 && WebsiteRules.SlugOf(project.Title) == start)
         {
             return project.Slug;
         }
 
-        var start = WebsiteRules.SlugOf(request.Title);
         var candidate = start;
         for (var n = 2; await website.SlugTakenAsync(candidate, self, cancellationToken); n++)
         {
             var suffix = $"-{n}";
-            candidate = start[..Math.Min(start.Length, WebsiteRules.MaxSlugLength - suffix.Length)] + suffix;
+            candidate = start[..Math.Min(start.Length, WebsiteRules.MaxSlugLength - suffix.Length)].TrimEnd('-') + suffix;
         }
 
         return candidate;
@@ -286,12 +283,12 @@ public sealed class WebsiteProjectService(
     private async Task<WebsiteProjectResponse> DescribeAsync(WebsiteProject project, CancellationToken cancellationToken)
         => Describe(project, await website.SystemProjectsAsync(LinkIds([project]), cancellationToken));
 
-    private static WebsiteProjectResponse Describe(WebsiteProject p, IReadOnlyDictionary<long, SystemProjectFacts> linked)
+    private WebsiteProjectResponse Describe(WebsiteProject p, IReadOnlyDictionary<long, SystemProjectFacts> linked)
     {
         var link = p.ProjectId is { } id ? linked.GetValueOrDefault(id) : null;
         var (status, year) = Shown(p, link);
         return new WebsiteProjectResponse(
-            p.Id, p.Slug, p.Title, p.Type, p.Status, p.Year, status, year, p.Client, p.City, p.Country, p.Latitude, p.Longitude, p.PositionApproximate,
+            p.Id, p.Slug, p.Title, p.Type, p.Status, p.Year, status, year, p.Client, p.City, p.Country, CodeOf(p.Country), p.Latitude, p.Longitude, p.PositionApproximate,
             p.Description, p.ThumbnailFileId, p.HeroFileId, p.HeroAlt,
             link is null ? null : new WebsiteLinkedProjectResponse(link.Id, link.Title, link.DomainCode, WebsiteRules.StatusOf(link.Status), YearOf(link)),
             p.Published, p.ConveyorOrder,
@@ -303,10 +300,12 @@ public sealed class WebsiteProjectService(
     internal static (WebsiteProjectStatus? Status, int? Year) Shown(WebsiteProject project, SystemProjectFacts? link)
         => (project.Status ?? (link is null ? null : WebsiteRules.StatusOf(link.Status)), project.Year ?? (link is null ? null : YearOf(link)));
 
+    private string? CodeOf(string? country) => country is null ? null : directory.Country(country)?.Code;
+
     private static IReadOnlyList<string> MissingToPublish(WebsiteProject p, SystemProjectFacts? link)
     {
         var (status, year) = Shown(p, link);
-        return WebsiteRules.MissingToPublish(status, year, p.City, p.Country, p.Latitude, p.Longitude, p.Description, p.ThumbnailFileId, p.HeroFileId);
+        return WebsiteRules.MissingToPublish(status, year, p.Country, p.Latitude, p.Longitude, p.Description, p.ThumbnailFileId, p.HeroFileId);
     }
 
     internal static int YearOf(SystemProjectFacts p) => WebsiteRules.YearOf(p.CompletedAt, p.TargetDate, p.StartDate);
