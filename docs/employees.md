@@ -5,7 +5,8 @@ People management covers everyone with an account: super admins, admins and empl
 ## Who can see whom
 
 - Callers see people whose home domain is one of their **visible domains** (their own, plus the other once they hold one of its permissions; see [authorization.md](authorization.md)).
-- **Super admins** belong to no domain. They are visible only to callers who see both domains.
+- **Super admins** belong to no domain. They are visible only to callers who see both businesses.
+- **Website staff** belong to the website domain and are admins only ([website.md](website.md#the-website-domain)).
 - Anyone else reads as `404`, for every endpoint below.
 
 ## Endpoints
@@ -91,7 +92,7 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 
 `PUT /api/employees/{id}/domain` with `{ "domainCode": "execution", "teamId": 7 }`:
 
-- Only callers who see both domains can move people.
+- Only callers who see both domains can move people, and only between Design and Execution: the website's staff aren't moved.
 - The team is replaced (it must belong to the new domain, or be empty).
 - Personal permission changes are cleared, because they were made for the old domain.
 - Super admins have no domain and can't be moved.
@@ -113,7 +114,7 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
   - Design: Engineering, Design, Data, Marketing, Operations, Platform.
   - Execution: Site Operations, Procurement, Quantity Surveying, Safety, Project Management.
 - A team can only be deleted while nobody is in it, including deactivated people (`422 team_not_empty`), and while its group chat has no messages (`422 team_has_chat`), so chat history is never lost. Rename it instead.
-- `POST /api/teams` may leave out `domainCode` when the caller works in only one domain.
+- `POST /api/teams` may leave out `domainCode` when the caller works in only one business.
 
 ## Not built yet
 

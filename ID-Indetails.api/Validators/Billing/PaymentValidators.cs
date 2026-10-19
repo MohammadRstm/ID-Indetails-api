@@ -10,7 +10,7 @@ public sealed class PaymentListQueryValidator : AbstractValidator<PaymentListQue
 {
     public PaymentListQueryValidator()
     {
-        RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
+        RuleFor(x => x.Domain).ValidBusiness().When(x => x.Domain is not null);
         RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");

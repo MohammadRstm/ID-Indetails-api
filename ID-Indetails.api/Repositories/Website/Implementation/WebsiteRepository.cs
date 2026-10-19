@@ -42,9 +42,10 @@ public sealed class WebsiteRepository(IdIndetailsDbContext db) : IWebsiteReposit
             ? new Dictionary<long, SystemProjectFacts>()
             : await Facts(db.Projects.Where(p => ids.Contains(p.Id))).ToDictionaryAsync(f => f.Id, cancellationToken);
 
-    public async Task<IReadOnlyList<SystemProjectFacts>> CandidatesAsync(string? search, int take, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<SystemProjectFacts>> CandidatesAsync(
+        IReadOnlyCollection<string> domains, string? search, int take, CancellationToken cancellationToken = default)
     {
-        var projects = db.Projects.AsQueryable();
+        var projects = db.Projects.Where(p => domains.Contains(p.DomainCode));
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();

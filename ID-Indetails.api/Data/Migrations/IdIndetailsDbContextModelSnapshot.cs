@@ -732,6 +732,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "execution",
                             Name = "Execution"
+                        },
+                        new
+                        {
+                            Code = "website",
+                            Name = "Website"
                         });
                 });
 
@@ -2294,12 +2299,14 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             Code = "website:view",
-                            Description = "View the company website's content"
+                            Description = "View the company website's content",
+                            DomainCode = "website"
                         },
                         new
                         {
                             Code = "website:manage",
-                            Description = "Edit the company website: projects, services, locations, contact details and favicon"
+                            Description = "Edit the company website: projects, services, locations, contact details and favicon",
+                            DomainCode = "website"
                         },
                         new
                         {
@@ -5103,6 +5110,16 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "admin",
                             PermissionCode = "domain_settings:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
+                            PermissionCode = "website:view"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
+                            PermissionCode = "website:manage"
                         },
                         new
                         {

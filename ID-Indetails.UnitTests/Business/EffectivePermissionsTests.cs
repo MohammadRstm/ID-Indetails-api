@@ -123,4 +123,30 @@ public class EffectivePermissionsTests
         design.Permissions.ShouldNotContain(PermissionCodes.MaterialCreate);
         design.Permissions.ShouldNotContain(PermissionCodes.LabourReportCreate);
     }
+
+    [Fact]
+    public void Website_staff_hold_only_the_website_s_permissions_and_see_only_the_website()
+    {
+        Grant[] catalog = [new("project:view", null), new("proton:use", null), new("work_entry:create", DomainCodes.Design), new("website:manage", DomainCodes.Website)];
+
+        var access = EffectivePermissions.Resolve(1, RoleCodes.Admin, DomainCodes.Website, catalog, catalog, []);
+
+        access.Permissions.ShouldBe(["website:manage"]);
+        access.VisibleDomains.ShouldBe([DomainCodes.Website]);
+        access.VisibleBusinesses.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_website_permission_opens_the_website_to_a_design_admin_without_making_it_a_business_of_theirs()
+    {
+        Grant[] catalog = [new("project:view", null), new("website:manage", DomainCodes.Website)];
+
+        var access = EffectivePermissions.Resolve(
+            1, RoleCodes.Admin, DomainCodes.Design, catalog, [catalog[0]], [new Override("website:manage", PermissionEffect.Grant)]);
+
+        access.Permissions.ShouldBe(["project:view", "website:manage"]);
+        access.VisibleDomains.ShouldBe([DomainCodes.Design, DomainCodes.Website]);
+        access.VisibleBusinesses.ShouldBe([DomainCodes.Design]);
+        access.SeesEveryBusiness.ShouldBeFalse();
+    }
 }

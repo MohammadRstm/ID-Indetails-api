@@ -283,7 +283,7 @@ internal static class ClientText
     /// <summary>The domain a new record goes to: the one asked for, or the only one the user works in.</summary>
     public static string DomainOf(string? asked, ProtonToolContext context)
     {
-        var visible = context.Access.VisibleDomains;
+        var visible = context.Access.VisibleBusinesses;
         if (asked is { Length: > 0 })
         {
             var domain = asked.Trim().ToLowerInvariant();

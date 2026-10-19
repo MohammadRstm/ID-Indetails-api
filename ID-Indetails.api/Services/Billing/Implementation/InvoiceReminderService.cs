@@ -28,7 +28,7 @@ public sealed class InvoiceReminderService(
         var today = clock.CompanyToday;
         var dueBy = clock.ToCompanyTime(clock.UtcNow).Hour >= InvoiceScheduleService.SendFromHour ? today : today.AddDays(-1);
         var domains = new List<string>();
-        foreach (var domain in DomainCodes.All)
+        foreach (var domain in DomainCodes.Businesses)
         {
             if (await billingSettings.GetAsync(domain, cancellationToken) is { RemindersEnabled: true })
             {

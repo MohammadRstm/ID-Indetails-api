@@ -296,6 +296,7 @@ public sealed class InvitationService(
     {
         DomainCodes.Design => "Design",
         DomainCodes.Execution => "Execution",
+        DomainCodes.Website => "the Website",
         _ => "the company",
     };
 

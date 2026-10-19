@@ -152,8 +152,10 @@ public sealed class WebsiteProjectService(
         return await DescribeAsync(project, cancellationToken);
     }
 
+    /// <summary>Only projects of the businesses they can see: the website's own staff type theirs in.</summary>
     public async Task<IReadOnlyList<WebsiteLinkCandidateResponse>> CandidatesAsync(string? search, CancellationToken cancellationToken = default)
-        => (await website.CandidatesAsync(search, CandidateCount, cancellationToken))
+        => (await website.CandidatesAsync(
+                (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).VisibleBusinesses, search, CandidateCount, cancellationToken))
             .Select(p => new WebsiteLinkCandidateResponse(
                 p.Id, p.Title, p.DomainCode, WebsiteRules.StatusOf(p.Status), YearOf(p), p.ClientName, p.Description, p.WebsiteProjectId))
             .ToList();

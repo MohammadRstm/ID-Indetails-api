@@ -24,7 +24,7 @@ public class TeamTests(ApiFactory api) : IClassFixture<ApiFactory>
         mine.Select(t => t.Name).ShouldContain(siteOperations.Name);
 
         var all = await (await Client.GetAsync("/api/teams", superAdmin.AccessToken)).ReadAsync<List<TeamResponse>>();
-        all.Select(t => t.Domain).Distinct().ShouldBe(DomainCodes.All, ignoreOrder: true);
+        all.Select(t => t.Domain).Distinct().ShouldBe(DomainCodes.Businesses, ignoreOrder: true);
     }
 
     [Fact]

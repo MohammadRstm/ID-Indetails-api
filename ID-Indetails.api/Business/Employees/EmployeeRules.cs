@@ -27,8 +27,14 @@ public static class EmployeeRules
     /// <summary>Whether <paramref name="viewer"/> may see a person whose home domain is <paramref name="targetDomain"/>.</summary>
     public static bool CanSee(UserAccess viewer, string? targetDomain)
         => targetDomain is null
-            ? DomainCodes.All.All(viewer.VisibleDomains.Contains)
+            ? viewer.SeesEveryBusiness
             : viewer.CanSee(targetDomain);
+
+    /// <summary>The website's staff are admins: it has no employees.</summary>
+    public static RuleDenial? CheckRoleFitsDomain(string role, string? domain)
+        => domain == DomainCodes.Website && role != RoleCodes.Admin
+            ? RuleDenial.BusinessRule(ErrorCodes.NotForThisDomain, "Website staff are admins.")
+            : null;
 
     /// <summary>Any change to someone's account (profile, pay, status, role, domain).</summary>
     public static RuleDenial? CheckCanChange(UserAccess actor, Target target)
@@ -115,6 +121,7 @@ public static class EmployeeRules
     /// <item>Becoming a super admin removes the domain (and team).</item>
     /// <item>A super admin becoming an admin or employee must be given a domain the caller can see.</item>
     /// <item>Between admin and employee the domain stays; moving domains is a separate operation.</item>
+    /// <item>Website staff stay admins.</item>
     /// </list>
     /// </summary>
     public static (RoleDecision? Decision, RuleDenial? Denial) CheckRoleChange(
@@ -166,15 +173,25 @@ public static class EmployeeRules
                 return Deny(RuleDenial.Invalid(ErrorCodes.ValidationFailed, "domainCode", "Choose the domain the person will belong to."));
             }
 
+            if (CheckRoleFitsDomain(newRole, requestedDomain) is { } unfit)
+            {
+                return Deny(unfit);
+            }
+
             return actor.CanSee(requestedDomain)
                 ? (new RoleDecision(newRole, requestedDomain), null)
                 : Deny(RuleDenial.Forbidden(ErrorCodes.EmployeeChangeNotAllowed, "You can only place people in a domain you work in."));
         }
 
-        return requestedDomain is null || requestedDomain == target.Domain
-            ? (new RoleDecision(newRole, target.Domain), null)
-            : Deny(RuleDenial.Invalid(
+        if (requestedDomain is not null && requestedDomain != target.Domain)
+        {
+            return Deny(RuleDenial.Invalid(
                 ErrorCodes.ValidationFailed, "domainCode", "Changing the role keeps the domain. Move the person to the other domain separately."));
+        }
+
+        return CheckRoleFitsDomain(newRole, target.Domain) is { } denial
+            ? Deny(denial)
+            : (new RoleDecision(newRole, target.Domain), null);
     }
 
     /// <summary>
@@ -197,7 +214,7 @@ public static class EmployeeRules
             : null;
     }
 
-    /// <summary>Moving someone to the other domain. Only callers who see both domains can.</summary>
+    /// <summary>Moving someone to the other business. Only callers who see both businesses can; website staff aren't moved.</summary>
     public static RuleDenial? CheckMove(UserAccess actor, Target target, string newDomain)
     {
         if (target.Id == actor.UserId)
@@ -210,7 +227,12 @@ public static class EmployeeRules
             return RuleDenial.BusinessRule(ErrorCodes.SuperAdminHasNoDomain, "Super admins do not belong to a domain.");
         }
 
-        if (!DomainCodes.All.All(actor.VisibleDomains.Contains))
+        if (!DomainCodes.IsBusiness(target.Domain) || !DomainCodes.IsBusiness(newDomain))
+        {
+            return RuleDenial.BusinessRule(ErrorCodes.NotForThisDomain, "People are only moved between Design and Execution.");
+        }
+
+        if (!actor.SeesEveryBusiness)
         {
             return RuleDenial.Forbidden(
                 ErrorCodes.EmployeeChangeNotAllowed, "Only someone who works in both domains can move people between them.");

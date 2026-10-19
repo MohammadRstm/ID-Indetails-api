@@ -161,7 +161,7 @@ public sealed class ProjectService(
     public async Task<ProjectResponse> CreateAsync(CreateProjectRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        var domain = request.DomainCode ?? (actor.VisibleDomains.Count == 1 ? actor.VisibleDomains[0] : null)
+        var domain = request.DomainCode ?? (actor.VisibleBusinesses.Count == 1 ? actor.VisibleBusinesses[0] : null)
             ?? throw new RequestValidationException(ErrorCodes.ValidationFailed, "domainCode", "Choose the domain the project belongs to.");
 
         if (!actor.CanSee(domain))

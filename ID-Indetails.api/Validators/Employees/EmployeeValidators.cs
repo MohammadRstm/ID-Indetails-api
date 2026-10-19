@@ -106,6 +106,11 @@ internal static class EmployeeRuleExtensions
         => rule.Must(d => d is not null && DomainCodes.All.Contains(d))
             .WithMessage($"Domain must be one of: {string.Join(", ", DomainCodes.All)}.");
 
+    /// <summary>A domain with projects, clients and money (not the website).</summary>
+    public static IRuleBuilderOptions<T, string?> ValidBusiness<T>(this IRuleBuilder<T, string?> rule)
+        => rule.Must(DomainCodes.IsBusiness)
+            .WithMessage($"Domain must be one of: {string.Join(", ", DomainCodes.Businesses)}.");
+
     public static IRuleBuilderOptions<T, string?> Phone<T>(this IRuleBuilder<T, string?> rule)
         => rule.MaximumLength(32).WithMessage("Phone must be at most 32 characters.");
 }

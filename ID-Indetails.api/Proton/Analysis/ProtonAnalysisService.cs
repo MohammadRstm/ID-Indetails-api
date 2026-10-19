@@ -137,7 +137,7 @@ public sealed class ProtonAnalysisService(
         {
             ProtonSignals.OverdueRule, ProtonSignals.TargetSoonRule(t), ProtonSignals.CloseoutRule(t),
         };
-        var domains = domain is null ? context.Access.VisibleDomains.ToList() : [domain];
+        var domains = domain is null ? context.Access.VisibleBusinesses.ToList() : [domain];
 
         foreach (var code in domains)
         {

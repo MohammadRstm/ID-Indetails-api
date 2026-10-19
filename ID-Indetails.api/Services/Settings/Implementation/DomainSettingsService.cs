@@ -82,7 +82,7 @@ public sealed class DomainSettingsService(
     private async Task<long> EnsureVisibleAsync(string domainCode, CancellationToken cancellationToken)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
-        if (!DomainCodes.All.Contains(domainCode) || !actor.CanSee(domainCode))
+        if (!DomainCodes.IsBusiness(domainCode) || !actor.CanSee(domainCode))
         {
             throw new NotFoundException("Domain not found.");
         }
