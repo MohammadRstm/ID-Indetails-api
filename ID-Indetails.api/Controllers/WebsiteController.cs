@@ -77,6 +77,16 @@ public sealed class WebsiteController(IWebsiteProjectService projects, IWebsiteC
     public Task<IReadOnlyList<WebsiteLinkCandidateResponse>> LinkCandidates([FromQuery] string? search, CancellationToken cancellationToken)
         => projects.CandidatesAsync(search, cancellationToken);
 
+    /// <summary>The countries a project's or office's place is chosen from (GeoNames).</summary>
+    [HttpGet("places/countries")]
+    [HasAnyPermission(PermissionCodes.WebsiteView, PermissionCodes.WebsiteManage)]
+    public IReadOnlyList<WebsiteCountryResponse> Countries() => content.Countries();
+
+    /// <summary>A country's cities, biggest first, narrowed by what was typed: at most 50.</summary>
+    [HttpGet("places/cities")]
+    [HasAnyPermission(PermissionCodes.WebsiteView, PermissionCodes.WebsiteManage)]
+    public IReadOnlyList<WebsiteCityResponse> Cities([FromQuery] string country, [FromQuery] string? search) => content.Cities(country, search);
+
     /// <summary>Services, locations, social links, the contact email and the favicon.</summary>
     [HttpGet("content")]
     [HasAnyPermission(PermissionCodes.WebsiteView, PermissionCodes.WebsiteManage)]

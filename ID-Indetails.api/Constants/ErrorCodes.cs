@@ -231,9 +231,6 @@ public static class ErrorCodes
     /// <summary>422. The project is archived: its discussion can be read, but nothing new can be written.</summary>
     public const string PortalDiscussionClosed = "portal_discussion_closed";
 
-    /// <summary>409. Another website project already has this address (slug).</summary>
-    public const string WebsiteSlugTaken = "website_slug_taken";
-
     /// <summary>422. The website project lacks something the public site needs (the message lists what).</summary>
     public const string WebsiteProjectIncomplete = "website_project_incomplete";
 

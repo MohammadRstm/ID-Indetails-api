@@ -12,6 +12,7 @@ using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Website.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
+using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Website.Abstraction;
 using Microsoft.Extensions.Options;
 using ID_Indetails.api.Configuration.Options;
@@ -29,9 +30,13 @@ public sealed class WebsiteContentService(
     ICompanyRepository company,
     IFileClaims fileClaims,
     WebsitePlaceResolver places,
+    IPlaceDirectory directory,
     IUnitOfWork unitOfWork,
     IOptions<CompanyOptions> companyOptions) : IWebsiteContentService
 {
+    /// <summary>A city list shows at most this many, biggest first: typing narrows it.</summary>
+    private const int CityCount = 50;
+
     public async Task<WebsiteContentResponse> GetAsync(CancellationToken cancellationToken = default)
     {
         var services = await website.ListAsync<WebsiteOffering>(cancellationToken: cancellationToken);
@@ -41,7 +46,7 @@ public sealed class WebsiteContentService(
         var canManage = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Has(PermissionCodes.WebsiteManage);
         return new WebsiteContentResponse(
             services.Select(s => new WebsiteServiceResponse(s.Id, s.Title, s.Description)).ToList(),
-            locations.Select(l => new WebsiteLocationResponse(l.Id, l.City, l.Country, l.Latitude, l.Longitude, l.PositionApproximate, l.Address, l.Phone)).ToList(),
+            locations.Select(l => new WebsiteLocationResponse(l.Id, l.City, l.Country, directory.Country(l.Country)?.Code, l.Latitude, l.Longitude, l.PositionApproximate, l.Address, l.Phone)).ToList(),
             links.Select(l => new WebsiteSocialLinkResponse(l.Id, l.Label, l.Url)).ToList(),
             settings?.ContactEmail,
             settings?.WebsiteFaviconFileId,
@@ -88,6 +93,15 @@ public sealed class WebsiteContentService(
 
     public Task<WebsiteContentResponse> OrderSocialLinksAsync(WebsiteOrderRequest request, CancellationToken cancellationToken = default)
         => OrderAsync<WebsiteSocialLink>(request, "links", cancellationToken);
+
+    public IReadOnlyList<WebsiteCountryResponse> Countries()
+        => directory.Countries.Select(c => new WebsiteCountryResponse(c.Code, c.Name)).ToList();
+
+    public IReadOnlyList<WebsiteCityResponse> Cities(string country, string? search)
+    {
+        var code = directory.Country(country)?.Code ?? throw new NotFoundException("That country isn't in the list.");
+        return directory.Cities(code, search, CityCount).Select(c => new WebsiteCityResponse(c.Name, c.Latitude, c.Longitude, c.Population)).ToList();
+    }
 
     public Task<WebsiteContentResponse> SetFaviconAsync(AttachFileRequest request, CancellationToken cancellationToken = default)
         => ChangeFaviconAsync(request.FileId, cancellationToken);
@@ -177,7 +191,8 @@ public sealed class WebsiteContentService(
         var place = await places.ResolveAsync(request.City, request.Country, request.Latitude, request.Longitude, stored, new PlaceOwner(null, self), cancellationToken);
         if (place.Problem is not null || place.City is null || place.Country is null || place.Latitude is null || place.Longitude is null)
         {
-            throw new BusinessRuleException(ErrorCodes.WebsitePlaceNotFound, place.Problem ?? "Give the office's coordinates, or its city and country.");
+            // an office is a real address: it needs its city, which a far-off point doesn't name
+            throw new BusinessRuleException(ErrorCodes.WebsitePlaceNotFound, place.Problem ?? "Choose the office's country and city from the lists.");
         }
 
         location.City = place.City;

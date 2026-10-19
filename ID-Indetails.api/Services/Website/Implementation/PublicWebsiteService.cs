@@ -13,6 +13,7 @@ using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
 using ID_Indetails.api.Services.Files.Abstraction;
+using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Website.Abstraction;
 using Microsoft.Extensions.Options;
 
@@ -28,6 +29,7 @@ public sealed class PublicWebsiteService(
     IFileRepository files,
     IFileStorage storage,
     IEmailSender emailSender,
+    IPlaceDirectory directory,
     IOptions<EmailOptions> emailOptions,
     IClock clock,
     ILogger<PublicWebsiteService> logger) : IPublicWebsiteService
@@ -53,7 +55,7 @@ public sealed class PublicWebsiteService(
 
     public async Task<IReadOnlyList<PublicWebsiteLocation>> LocationsAsync(CancellationToken cancellationToken = default)
         => (await website.ListAsync<WebsiteLocation>(cancellationToken: cancellationToken))
-            .Select(l => new PublicWebsiteLocation(l.Id, l.City, l.Country, l.Latitude, l.Longitude, l.Address, l.Phone)).ToList();
+            .Select(l => new PublicWebsiteLocation(l.Id, l.City, l.Country, CodeOf(l.Country), l.Latitude, l.Longitude, l.Address, l.Phone)).ToList();
 
     public async Task<PublicWebsiteContact> ContactAsync(CancellationToken cancellationToken = default)
         => new((await company.GetSettingsAsync(cancellationToken: cancellationToken))?.ContactEmail);
@@ -96,14 +98,17 @@ public sealed class PublicWebsiteService(
         }
     }
 
+    /// <summary>The country's ISO code; names are always ones of the lists, so it is found.</summary>
+    private string CodeOf(string country) => directory.Country(country)?.Code ?? string.Empty;
+
     private Task<IReadOnlyDictionary<long, SystemProjectFacts>> LinkedAsync(IEnumerable<WebsiteProject> projects, CancellationToken cancellationToken)
         => website.SystemProjectsAsync(projects.Where(p => p.ProjectId is not null).Select(p => p.ProjectId!.Value).ToList(), cancellationToken);
 
     /// <summary>The project as the website reads it, or null when it lacks something the website needs.</summary>
-    private static PublicWebsiteProject? Public(WebsiteProject p, IReadOnlyDictionary<long, SystemProjectFacts> linked)
+    private PublicWebsiteProject? Public(WebsiteProject p, IReadOnlyDictionary<long, SystemProjectFacts> linked)
     {
         var (status, year) = WebsiteProjectService.Shown(p, p.ProjectId is { } id ? linked.GetValueOrDefault(id) : null);
-        if (status is null || year is null || p.City is null || p.Country is null || p.Latitude is null || p.Longitude is null
+        if (status is null || year is null || p.Country is null || p.Latitude is null || p.Longitude is null
             || p.Description is null || p.ThumbnailFileId is null || p.HeroFileId is null)
         {
             return null;
@@ -116,7 +121,7 @@ public sealed class PublicWebsiteService(
             WebsiteRules.PublicType(p.Type),
             WebsiteRules.PublicStatus(status.Value),
             p.Client ?? string.Empty,
-            new PublicPlace(p.City, p.Country, p.Latitude.Value, p.Longitude.Value),
+            new PublicPlace(p.City, p.Country, CodeOf(p.Country), p.Latitude.Value, p.Longitude.Value, p.PositionApproximate),
             year.Value,
             p.Description,
             PublicWebsitePaths.File(p.ThumbnailFileId.Value),

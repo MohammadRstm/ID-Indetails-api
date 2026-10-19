@@ -35,7 +35,10 @@ public static partial class WebsiteRules
     public static int YearOf(DateTime? completedAt, DateOnly? targetDate, DateOnly startDate)
         => completedAt?.Year ?? targetDate?.Year ?? startDate.Year;
 
-    /// <summary>A slug from a title: lowercase ASCII letters and digits joined by single dashes, accents dropped.</summary>
+    /// <summary>
+    /// A project's page address from its name: lowercase ASCII letters and digits joined by single dashes, accents
+    /// dropped. Empty when the name has no Latin letter or digit.
+    /// </summary>
     public static string SlugOf(string title)
     {
         var plain = new StringBuilder();
@@ -53,23 +56,23 @@ public static partial class WebsiteRules
             slug = slug[..MaxSlugLength].TrimEnd('-');
         }
 
-        return slug.Length == 0 ? "project" : slug;
+        return slug;
     }
 
     public static bool IsSlug(string value) => value.Length <= MaxSlugLength && Slug().IsMatch(value);
 
     /// <summary>
     /// What a project still lacks before the website can show it: its page, the globe and the strip need all of these.
+    /// The city is optional: a project may be placed in a country alone.
     /// Empty when it can be published.
     /// </summary>
     public static IReadOnlyList<string> MissingToPublish(
-        WebsiteProjectStatus? status, int? year, string? city, string? country, decimal? latitude, decimal? longitude,
+        WebsiteProjectStatus? status, int? year, string? country, decimal? latitude, decimal? longitude,
         string? description, long? thumbnailFileId, long? heroFileId)
     {
         var missing = new List<string>();
         if (status is null) missing.Add("a status");
         if (year is null) missing.Add("a year");
-        if (string.IsNullOrWhiteSpace(city)) missing.Add("a city");
         if (string.IsNullOrWhiteSpace(country)) missing.Add("a country");
         if (latitude is null || longitude is null) missing.Add("a position on the map");
         if (string.IsNullOrWhiteSpace(description)) missing.Add("a description");

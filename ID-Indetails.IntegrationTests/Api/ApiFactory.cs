@@ -95,6 +95,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton<IEmailSender>(Emails);
             services.RemoveAll<IGeocoder>();
             services.AddSingleton<IGeocoder>(Geocoder);
+            services.RemoveAll<IPlaceDirectory>();
+            services.AddSingleton<IPlaceDirectory>(TestPlaces.Directory());
             services.RemoveAll<ILivePublisher>();
             services.AddSingleton<ILivePublisher>(Live);
             services.RemoveAll<IPushProvider>();

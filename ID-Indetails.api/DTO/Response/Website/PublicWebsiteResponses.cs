@@ -5,7 +5,10 @@ namespace ID_Indetails.api.DTO.Response.Website;
 
 public sealed record PublicImage(string Src, string Alt);
 
-public sealed record PublicPlace(string City, string Country, decimal Lat, decimal Lng);
+/// <param name="City">Null when the project is placed in its country alone.</param>
+/// <param name="CountryCode">ISO 3166-1 alpha-2, upper case ("LB").</param>
+/// <param name="Approximate">The point was picked near the city or a town of the country, as no coordinates were given.</param>
+public sealed record PublicPlace(string? City, string Country, string CountryCode, decimal Lat, decimal Lng, bool Approximate);
 
 /// <param name="Type">"villa", "residential" or "hotel".</param>
 /// <param name="Status">"in-progress" or "completed".</param>
@@ -29,7 +32,7 @@ public sealed record PublicWebsiteProject(
 
 public sealed record PublicWebsiteOffering(long Id, string Title, string Description);
 
-public sealed record PublicWebsiteLocation(long Id, string City, string Country, decimal Lat, decimal Lng, string Address, string Phone);
+public sealed record PublicWebsiteLocation(long Id, string City, string Country, string CountryCode, decimal Lat, decimal Lng, string Address, string Phone);
 
 /// <param name="Email">Null until the company sets one.</param>
 public sealed record PublicWebsiteContact(string? Email);

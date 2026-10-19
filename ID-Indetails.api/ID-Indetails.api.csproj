@@ -36,6 +36,9 @@
   <ItemGroup>
     <!-- the logo at the top of every email, built into the assembly so no deployment has to copy it -->
     <EmbeddedResource Include="Assets\email-logo.png" LogicalName="email-logo.png" />
+    <!-- GeoNames' places of 1,000 people or more (CC BY 4.0), trimmed: the website's country and city lists. Only when present, so
+         a checkout without it still builds (the lists are then empty). See docs/website.md. -->
+    <EmbeddedResource Include="Assets\geonames-cities.tsv.gz" LogicalName="geonames-cities.tsv.gz" Condition="Exists('Assets\geonames-cities.tsv.gz')" />
     <!-- Proton's prompts: Markdown kept apart from the code, read by Proton/Prompts/ProtonPrompts.cs -->
     <EmbeddedResource Include="Proton\Prompts\*.md" LogicalName="ID_Indetails.api.Proton.Prompts.%(Filename)%(Extension)" />
   </ItemGroup>

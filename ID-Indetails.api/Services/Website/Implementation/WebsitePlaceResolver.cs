@@ -8,21 +8,22 @@ namespace ID_Indetails.api.Services.Website.Implementation;
 public sealed record StoredPlace(string? City, string? Country, decimal? Latitude, decimal? Longitude, bool Approximate);
 
 /// <summary>
-/// The place to keep. <paramref name="Problem"/> says what couldn't be found, for the person to type in; the rest is
-/// what could be.
+/// The place to keep: the names as the lists spell them. <paramref name="Problem"/> says what is wrong, for the person
+/// to fix; the rest is what could be worked out.
 /// </summary>
 public sealed record ResolvedPlace(string? City, string? Country, decimal? Latitude, decimal? Longitude, bool Approximate, string? Problem);
 
 /// <summary>
 /// Works out a website project's or office's place (<see cref="WebsitePlaces"/>):
 /// <list type="bullet">
-/// <item>Coordinates typed in win; a missing city or country is found from them.</item>
-/// <item>A city and country alone get a random point in that city, on land (a point near a coast can fall in the
-/// sea), which no other project or office has, and which is kept until the city or country changes.</item>
+/// <item>The country and city must be ones of the lists (<see cref="IPlaceDirectory"/>); the city is optional.</item>
+/// <item>Coordinates typed in win; a missing country, and city when one is near, are found from them.</item>
+/// <item>Without coordinates, the point is picked near the city, or near one of the country's towns when there is no
+/// city: on land (a point near a coast can fall in the sea), never another project's or office's point, and kept
+/// until the city or country changes.</item>
 /// </list>
-/// Lookups happen before anything is saved, outside any transaction.
 /// </summary>
-public sealed class WebsitePlaceResolver(IGeocoder geocoder, IWebsiteRepository website)
+public sealed class WebsitePlaceResolver(IPlaceDirectory directory, IGeocoder geocoder, IWebsiteRepository website)
 {
     /// <summary>Each attempt asks the map service once, which answers at most once a second.</summary>
     private const int Attempts = 5;
@@ -33,60 +34,88 @@ public sealed class WebsitePlaceResolver(IGeocoder geocoder, IWebsiteRepository 
     {
         city = Clean(city);
         country = Clean(country);
+        ResolvedPlace Problem(string message) => new(city, country, latitude, longitude, false, message);
 
-        // the random point sent back unchanged isn't typed in: it follows the city
+        var land = country is null ? null : directory.Country(country);
+        if (country is not null && land is null)
+        {
+            return Problem("Choose the country from the list.");
+        }
+
+        if (city is not null)
+        {
+            if (land is null)
+            {
+                return Problem("Choose the country first, then the city.");
+            }
+
+            var known = directory.City(land.Code, city);
+            if (known is null)
+            {
+                return Problem($"Choose the city from {land.Name}'s list, or leave it empty.");
+            }
+
+            city = known.Name;
+        }
+
+        // the picked point sent back unchanged isn't typed in: it follows the city and country
         var echoed = stored is { Approximate: true } && latitude == stored.Latitude && longitude == stored.Longitude;
         if (latitude is { } lat && longitude is { } lng && !echoed)
         {
-            if (city is not null && country is not null)
+            if (land is null)
             {
-                return new ResolvedPlace(city, country, lat, lng, false, null);
+                var town = directory.Nearest(lat, lng, WebsitePlaces.NearestCountryKilometres);
+                land = town is null ? null : directory.Country(town.CountryCode);
+                if (land is null)
+                {
+                    return Problem("We couldn't tell which country these coordinates are in: choose it from the list.");
+                }
             }
 
-            var found = await geocoder.PlaceAtAsync(lat, lng, cancellationToken);
-            city ??= found?.City;
-            country ??= found?.Country;
-            return new ResolvedPlace(city, country, lat, lng, false,
-                city is null || country is null ? "We couldn't find the city and country of these coordinates: type them in." : null);
+            // the city is named only when one of the country's is close
+            var near = directory.Nearest(lat, lng, WebsitePlaces.NearestCityKilometres);
+            city ??= near?.CountryCode == land.Code ? near.Name : null;
+            return new ResolvedPlace(city, land.Name, lat, lng, false, null);
         }
 
-        if (city is null || country is null)
+        if (land is null)
         {
-            return new ResolvedPlace(city, country, null, null, false, null);
+            return new ResolvedPlace(null, null, null, null, false, null);
         }
 
         if (stored is { Approximate: true, Latitude: not null, Longitude: not null }
-            && WebsitePlaces.SamePlace(stored.City, city) && WebsitePlaces.SamePlace(stored.Country, country))
+            && WebsitePlaces.SamePlace(stored.City, city) && WebsitePlaces.SamePlace(stored.Country, land.Name))
         {
-            return new ResolvedPlace(city, country, stored.Latitude, stored.Longitude, true, null);
+            return new ResolvedPlace(city, land.Name, stored.Latitude, stored.Longitude, true, null);
         }
 
-        var area = await geocoder.AreaOfAsync(city, country, cancellationToken);
-        if (area is null)
+        DirectoryCity? Anchor() => city is not null ? directory.City(land.Code, city) : directory.RandomCity(land.Code, Random.Shared);
+        var anchor = Anchor();
+        if (anchor is null)
         {
-            return new ResolvedPlace(city, country, null, null, false,
-                $"We couldn't find {city}, {country} on the map: check the spelling, or type the coordinates.");
+            return Problem($"The list has no towns in {land.Name}: type the coordinates.");
         }
 
         for (var attempt = 0; attempt < Attempts; attempt++)
         {
-            var point = WebsitePlaces.RandomPointIn(area, Random.Shared);
+            var point = WebsitePlaces.RandomPointNear(anchor.Latitude, anchor.Longitude, Random.Shared);
             if (!await website.PositionTakenAsync(point.Latitude, point.Longitude, owner, cancellationToken)
-                && await OnLandInAsync(point, country, cancellationToken))
+                && await geocoder.CountryCodeAtAsync(point.Latitude, point.Longitude, cancellationToken) == land.Code)
             {
-                return new ResolvedPlace(city, country, point.Latitude, point.Longitude, true, null);
+                return new ResolvedPlace(city, land.Name, point.Latitude, point.Longitude, true, null);
             }
+
+            // a country alone: try near another of its towns
+            anchor = city is null ? Anchor() ?? anchor : anchor;
         }
 
-        // the city's own point is on land; failing that, the map service is down and any point near it will do
-        var centre = (Latitude: Math.Round(area.Latitude, WebsitePlaces.Decimals), Longitude: Math.Round(area.Longitude, WebsitePlaces.Decimals));
-        var fallback = await website.PositionTakenAsync(centre.Latitude, centre.Longitude, owner, cancellationToken) ? WebsitePlaces.RandomPointIn(area, Random.Shared) : centre;
-        return new ResolvedPlace(city, country, fallback.Latitude, fallback.Longitude, true, null);
+        // the town's own point is on land; when it's taken (or the map service is down), a point near it will do
+        var own = (Latitude: Math.Round(anchor.Latitude, WebsitePlaces.Decimals), Longitude: Math.Round(anchor.Longitude, WebsitePlaces.Decimals));
+        var fallback = await website.PositionTakenAsync(own.Latitude, own.Longitude, owner, cancellationToken)
+            ? WebsitePlaces.RandomPointNear(anchor.Latitude, anchor.Longitude, Random.Shared)
+            : own;
+        return new ResolvedPlace(city, land.Name, fallback.Latitude, fallback.Longitude, true, null);
     }
-
-    /// <summary>A random point near a coast can fall in the sea: the map then names no country there, or another one.</summary>
-    private async Task<bool> OnLandInAsync((decimal Latitude, decimal Longitude) point, string country, CancellationToken cancellationToken)
-        => WebsitePlaces.SamePlace((await geocoder.PlaceAtAsync(point.Latitude, point.Longitude, cancellationToken))?.Country, country);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
