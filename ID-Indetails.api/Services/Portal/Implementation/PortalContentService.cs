@@ -38,6 +38,14 @@ public sealed class PortalContentService(
     private const string UploadNotFound = "Upload not found.";
     private const string ItemNotFound = "File not found.";
 
+    /// <summary>
+    /// One completion of an upload at a time: a repeat that arrives while the parts are being joined waits, then finds
+    /// the upload completed and answers with the same item. Joining the same parts twice at once would fail, or would
+    /// find neither the parts nor the joined object and end the upload. Uploads share 64 gates, so this needs no
+    /// cleanup; the API runs as one process.
+    /// </summary>
+    private static readonly SemaphoreSlim[] CompletionGates = Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
+
     public async Task<ProjectFilesResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)
         => await views.FilesAsync(await views.FilesAccessAsync(projectId, cancellationToken), cancellationToken);
 
@@ -149,6 +157,22 @@ public sealed class PortalContentService(
     {
         var access = await views.FilesAccessAsync(projectId, cancellationToken);
         RequireStore();
+        var gate = CompletionGates[uploadId % CompletionGates.Length];
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            return await CompleteAsync(access, projectId, uploadId, cancellationToken);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<ProjectFileUploadCompletedResponse> CompleteAsync(
+        ProjectFilesAccess access, long projectId, long uploadId, CancellationToken cancellationToken)
+    {
+        // read only now, so a repeat that waited sees what the completion before it did
         var upload = await OwnUploadAsync(projectId, uploadId, cancellationToken);
         if (upload.Status == PortalUploadStatus.Completed)
         {
