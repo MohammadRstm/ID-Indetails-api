@@ -24,6 +24,7 @@ public class WebsitePlacesTests
     private static readonly GeoNamesDirectory Lebanon = Directory(
         "Beirut\tLB\t33.88894\t35.49442\t1916100",
         "Jbeil\tLB\t34.12111\t35.64806\t40000",
+        "Ej Jimmaïze\tLB\t33.89425\t35.51297\t0\tGemmayze|Al Jumayzah",
         "Batroun\tLB\t34.25528\t35.65806\t9000",
         "Saïda\tLB\t33.56306\t35.36889\t163554",
         "Batroun\tLB\t34.20000\t35.70000\t1200",
@@ -49,6 +50,14 @@ public class WebsitePlacesTests
         Lebanon.Cities("LB", "ou", 10).Select(c => c.Name).ShouldBe(["Batroun", "Batroun"]);
         Lebanon.Cities("LB", "ei", 10).Select(c => c.Name).ShouldBe(["Beirut", "Jbeil"]);
         Lebanon.Cities("FR", "beirut", 10).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_place_is_found_by_its_other_names_and_shown_by_its_own()
+    {
+        Lebanon.Cities("LB", "gemm", 10).Select(c => c.Name).ShouldBe(["Ej Jimmaïze"]);
+        Lebanon.City("LB", "gemmayze")!.Name.ShouldBe("Ej Jimmaïze");
+        Lebanon.City("LB", "Al Jumayzah")!.Latitude.ShouldBe(33.89425m);
     }
 
     [Fact]
@@ -87,7 +96,11 @@ public class WebsitePlacesTests
         world.Country("Lebanon")!.Code.ShouldBe("LB");
         world.Cities("LB", null, 1).Single().Name.ShouldBe("Beirut");
         world.City("LB", "batroun")!.Name.ShouldBe("Batroûn");
-        world.Nearest(34.1212m, 35.6481m, 10)!.Name.ShouldBe("Byblos");
+        world.Nearest(34.1212m, 35.6481m, 10)!.CountryCode.ShouldBe("LB");
+        // every village, and the names people use for them
+        world.Cities("LB", null, 10_000).Count.ShouldBeGreaterThan(3_000);
+        world.City("LB", "Jbeil")!.Name.ShouldBe("Byblos");
+        world.Cities("LB", "gemmayze", 5).Select(c => c.Name).ShouldContain("Ej Jimmaïze");
     }
 
     [Fact]
