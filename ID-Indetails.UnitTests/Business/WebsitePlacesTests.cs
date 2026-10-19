@@ -80,6 +80,17 @@ public class WebsitePlacesTests
     }
 
     [Fact]
+    public void The_bundled_list_has_the_world_s_countries_and_Lebanon_s_towns()
+    {
+        var world = new GeoNamesDirectory();
+        world.Countries.Count.ShouldBeGreaterThan(200);
+        world.Country("Lebanon")!.Code.ShouldBe("LB");
+        world.Cities("LB", null, 1).Single().Name.ShouldBe("Beirut");
+        world.City("LB", "batroun")!.Name.ShouldBe("Batroûn");
+        world.Nearest(34.1212m, 35.6481m, 10)!.Name.ShouldBe("Byblos");
+    }
+
+    [Fact]
     public void Without_the_list_the_lists_are_empty_and_nothing_breaks()
     {
         var none = new GeoNamesDirectory(() => null);
