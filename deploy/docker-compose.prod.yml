@@ -77,6 +77,8 @@ services:
       Email__Password: ${SMTP_PASSWORD:-}
       Email__FromAddress: ${SMTP_FROM:?}
       BugReports__ToAddress: ${BUG_REPORTS_TO:-mohammadrstm2004@gmail.com}
+      # The website's contact form, until the company sets its contact email in the Website area (docs/website.md).
+      WebsiteContact__FallbackAddress: ${WEBSITE_CONTACT_FALLBACK_TO:-mohammadrstm2004@gmail.com}
       # Proton, the read-only assistant: off unless switched on with an Anthropic API key (docs/proton.md).
       Proton__Enabled: ${PROTON_ENABLED:-false}
       Proton__ApiKey: ${PROTON_API_KEY:-}

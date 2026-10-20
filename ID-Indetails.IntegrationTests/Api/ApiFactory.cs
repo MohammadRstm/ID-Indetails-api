@@ -50,6 +50,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>Off by default, so the other tests don't queue pushes.</summary>
     protected virtual bool PushEnabled => false;
 
+    /// <summary>None by default, so a contact form with no company address set answers 503.</summary>
+    protected virtual string ContactFallbackAddress => string.Empty;
+
     public Task InitializeAsync() => _database.InitializeAsync();
 
     public new async Task DisposeAsync()
@@ -88,6 +91,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("PortalContent:JobsEnabled", "false");
         builder.UseSetting("Push:DeviceCleanupEnabled", "false");
         builder.UseSetting("Push:Enabled", PushEnabled ? "true" : "false");
+        builder.UseSetting("WebsiteContact:FallbackAddress", ContactFallbackAddress);
 
         builder.ConfigureTestServices(services =>
         {

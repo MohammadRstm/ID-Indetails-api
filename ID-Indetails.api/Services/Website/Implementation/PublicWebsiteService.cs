@@ -21,7 +21,7 @@ namespace ID_Indetails.api.Services.Website.Implementation;
 
 /// <summary>
 /// The public website's reads: only published projects, and only what the website shows, never anything internal.
-/// Its contact form emails the company's own address.
+/// Its contact form emails the company's own address, else the fallback address of the settings.
 /// </summary>
 public sealed class PublicWebsiteService(
     IWebsiteRepository website,
@@ -31,6 +31,7 @@ public sealed class PublicWebsiteService(
     IEmailSender emailSender,
     IPlaceDirectory directory,
     IOptions<EmailOptions> emailOptions,
+    IOptions<WebsiteContactOptions> contactOptions,
     IClock clock,
     ILogger<PublicWebsiteService> logger) : IPublicWebsiteService
 {
@@ -82,7 +83,9 @@ public sealed class PublicWebsiteService(
             return;
         }
 
+        var fallback = contactOptions.Value.FallbackAddress;
         var to = (await company.GetSettingsAsync(cancellationToken: cancellationToken))?.ContactEmail
+            ?? (fallback.Length > 0 ? fallback : null)
             ?? throw new ServiceUnavailableException(ErrorCodes.WebsiteContactUnavailable, "Messages can't be sent right now. Please email us instead.");
         var message = new WebsiteContactMessage(
             request.Name.Trim(), request.Email.Trim(), string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(), request.Message.Trim(), clock.UtcNow);
