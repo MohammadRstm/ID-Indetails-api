@@ -35,6 +35,9 @@ public static class RateLimitPolicies
 
     /// <summary>The public website's contact form, which emails the company: per IP, per hour.</summary>
     public const string WebsiteContact = "website-contact";
+
+    /// <summary>The Website area's analytics, each new period of which asks Google Analytics: per signed-in user.</summary>
+    public const string WebsiteAnalytics = "website-analytics";
 }
 
 /// <summary>Where the public website's API lives: no sign-in, read-only apart from the contact form.</summary>

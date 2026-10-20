@@ -240,7 +240,7 @@ public static class ErrorCodes
     /// <summary>409. A new order must list exactly the current items; one was added or removed meanwhile.</summary>
     public const string WebsiteOrderStale = "website_order_stale";
 
-    /// <summary>503. The website's contact form can't send: the company has no contact email yet.</summary>
+    /// <summary>503. The website's contact form can't send: the company has no contact email yet, and there is no fallback address.</summary>
     public const string WebsiteContactUnavailable = "website_contact_unavailable";
 
     /// <summary>422. A website place couldn't be found on the map: the message says what to type in.</summary>
@@ -248,4 +248,10 @@ public static class ErrorCodes
 
     /// <summary>422. A website project only links to a system project once.</summary>
     public const string WebsiteProjectAlreadyLinked = "website_project_already_linked";
+
+    /// <summary>503. Google Analytics isn't connected: it is switched off, or its property or key is missing.</summary>
+    public const string WebsiteAnalyticsNotConfigured = "website_analytics_not_configured";
+
+    /// <summary>503. Google Analytics didn't answer, refused the request or is out of quota; the reason is in the server log.</summary>
+    public const string WebsiteAnalyticsUnavailable = "website_analytics_unavailable";
 }

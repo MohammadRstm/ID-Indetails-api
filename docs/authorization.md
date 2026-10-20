@@ -19,7 +19,7 @@ The catalogue is seeded into `permissions` and `role_permissions`. Role defaults
 
 A permission limited to a domain (for example `material:create` for Execution) is only part of a role's defaults for people of that domain.
 
-**The website** is a domain too, but not a business. `website:view` and `website:manage` are limited to it: only its own staff (admins whose home domain is `website`) hold them by default, and those staff hold nothing else: the permissions that apply in either business aren't theirs ([website.md](website.md#the-website-domain)).
+**The website** is a domain too, but not a business. `website:view`, `website:manage` and `website_analytics:view` are limited to it: only its own staff (admins whose home domain is `website`) hold them by default, and those staff hold nothing else: the permissions that apply in either business aren't theirs ([website.md](website.md#the-website-domain)).
 
 **Only employees log hours.** Admins and super admins are paid a fixed salary, so they never hold `work_entry:create` or `work_entry:view_own` (`PermissionCatalog.OwnWork`), whatever their personal changes say: the role defaults leave them out, `EffectivePermissions` drops them, and granting them to an admin changes nothing. They come with the employee role, so they don't count when the automatic role change compares someone's permissions with the other role's defaults.
 

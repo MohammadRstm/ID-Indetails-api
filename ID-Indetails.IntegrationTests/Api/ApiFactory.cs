@@ -1,6 +1,7 @@
 using ID_Indetails.api.Proton.Safety;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Geocoding.Abstraction;
+using ID_Indetails.api.Services.GoogleAnalytics.Abstraction;
 using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.IntegrationTests.Data;
@@ -27,6 +28,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     /// <summary>The map service the website's places are looked up with: a few known places, never the internet.</summary>
     public FakeGeocoder Geocoder { get; } = new();
+
+    /// <summary>Google Analytics, answered by the tests: the website's analytics never reach Google.</summary>
+    public FakeGoogleAnalytics Analytics { get; } = new();
 
     public CapturingLivePublisher Live { get; } = new();
 
@@ -99,6 +103,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton<IEmailSender>(Emails);
             services.RemoveAll<IGeocoder>();
             services.AddSingleton<IGeocoder>(Geocoder);
+            services.RemoveAll<IGoogleAnalyticsClient>();
+            services.AddSingleton<IGoogleAnalyticsClient>(Analytics);
             services.RemoveAll<IPlaceDirectory>();
             services.AddSingleton<IPlaceDirectory>(TestPlaces.Directory());
             services.RemoveAll<ILivePublisher>();

@@ -151,3 +151,18 @@ public sealed class WebsiteContactMessageRequestValidator : AbstractValidator<We
             .WithMessage($"A message must be {WebsiteContactRules.MinMessageLength} to {WebsiteContactRules.MaxMessageLength} characters.");
     }
 }
+
+public sealed class WebsiteAnalyticsQueryValidator : AbstractValidator<WebsiteAnalyticsQuery>
+{
+    public WebsiteAnalyticsQueryValidator()
+    {
+        RuleFor(x => x.To).NotNull().When(x => x.From is not null).WithMessage("Choose the last day of the period.");
+        RuleFor(x => x.From).NotNull().When(x => x.To is not null).WithMessage("Choose the first day of the period.");
+        RuleFor(x => x.From).GreaterThanOrEqualTo(WebsiteAnalyticsRules.FirstDay).When(x => x.From is not null)
+            .WithMessage("Google Analytics has no data before 14 August 2015.");
+        RuleFor(x => x.To).Must((q, to) => q.From is null || to is null || to >= q.From)
+            .WithMessage("The period must end on or after the day it starts.");
+        RuleFor(x => x.To).Must((q, to) => q.From is null || to is null || to.Value.DayNumber - q.From.Value.DayNumber < WebsiteAnalyticsRules.MaxDays)
+            .WithMessage($"A period covers at most {WebsiteAnalyticsRules.MaxDays} days.");
+    }
+}

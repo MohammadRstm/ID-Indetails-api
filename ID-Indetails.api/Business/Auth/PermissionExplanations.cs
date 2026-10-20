@@ -88,6 +88,7 @@ public static class PermissionExplanations
         // The company website
         [PermissionCodes.WebsiteView] = "See the Website page: the projects, services, locations, contact details and favicon the company's public website shows. Changing them needs \"Edit the company website\".",
         [PermissionCodes.WebsiteManage] = "Change what the company's public website shows: add, edit, publish and remove projects, choose the up to 20 in the moving strip, and edit services, locations, social links, the contact email and the favicon. Everything here is public once saved.",
+        [PermissionCodes.WebsiteAnalyticsView] = "See the company website's visitor statistics from Google Analytics: visitors, where they come from, the pages they read, contact requests, and who is on the website right now.",
 
         // Proton
         [PermissionCodes.ProtonUse] = "Ask Proton about the company and have it prepare changes. It sees only what this person could see in Hourline themselves, and changes nothing until they confirm.",

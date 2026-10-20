@@ -2310,6 +2310,12 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "website_analytics:view",
+                            Description = "See the company website's visitor statistics from Google Analytics",
+                            DomainCode = "website"
+                        },
+                        new
+                        {
                             Code = "proton:use",
                             Description = "Ask Proton, the company assistant, which proposes changes only for the person to confirm"
                         },
@@ -4974,6 +4980,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "website_analytics:view"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "proton:use"
                         },
                         new
@@ -5120,6 +5131,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "admin",
                             PermissionCode = "website:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
+                            PermissionCode = "website_analytics:view"
                         },
                         new
                         {

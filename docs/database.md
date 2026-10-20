@@ -167,6 +167,8 @@ The phone app's migrations (8 Oct 2026), all additive:
 - `NotificationSettings` adds `user_notification_settings` (one row per person, quiet hours in minutes after midnight, company time) and `user_notification_mutes` (one row per person and muted category). No row means the defaults ([me.md](me.md#my-notification-settings)).
 - `MaterialClientRef` adds `project_materials.client_ref` with a unique index on (`added_by_id`, `client_ref`), so a batch the phone sends twice adds each material once ([execution.md](execution.md#materials)). Existing rows stay `NULL`, which the index allows any number of.
 
+The `WebsiteAnalyticsPermission` migration seeds the `website_analytics:view` permission, limited to the website: super admins and the website's own staff hold it ([website.md](website.md#analytics)) (20 Oct 2026).
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Who connects

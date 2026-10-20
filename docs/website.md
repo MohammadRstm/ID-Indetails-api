@@ -7,11 +7,11 @@ The company has a public website, a separate app on its own domain. It shows:
 - its contact email and social links;
 - a favicon.
 
-All of it is edited in the app's **Website** area. The website reads it through a public API that needs no sign-in, and its contact form emails the company.
+All of it is edited in the app's **Website** area. The website reads it through a public API that needs no sign-in, and its contact form emails the company. The Website area also shows the website's visitors, read from Google Analytics ([Analytics](#analytics)).
 
 Code:
-- `Controllers/WebsiteController.cs` and `Controllers/PublicWebsiteController.cs`;
-- `Services/Website/`;
+- `Controllers/WebsiteController.cs`, `Controllers/PublicWebsiteController.cs` and `Controllers/WebsiteAnalyticsController.cs`;
+- `Services/Website/`, and `Services/GoogleAnalytics/` for Google Analytics;
 - `Business/Website/`;
 - the tables `website_projects`, `website_project_images`, `website_services`, `website_locations` and `website_social_links`;
 - the columns `contact_email` and `website_favicon_file_id` on `company_settings`.
@@ -22,17 +22,18 @@ Code:
 |---|---|
 | `website:view` | See the Website area, read-only |
 | `website:manage` | Change everything in it. Everything is public once saved |
+| `website_analytics:view` | See the website's visitors, from Google Analytics ([Analytics](#analytics)) |
 
 ## The Website domain
 
 The website is a domain of its own, beside Design and Execution, but a **service, not a business**: it has no projects, clients or money (`DomainCodes.Website`; `DomainCodes.Businesses` are the other two).
 - **Its staff** are admins whose home domain is `website` (it has no employees: inviting one, or making a website admin an employee, is refused with `403 invitation_not_allowed` or `422 not_for_this_domain`).
-  - Their defaults are only the permissions limited to the website: `website:view` and `website:manage`. No project, client, team or Proton permission.
+  - Their defaults are only the permissions limited to the website: `website:view`, `website:manage` and `website_analytics:view`. No project, client, team or Proton permission.
   - They see only the website (`visibleDomains: ["website"]`), and the app opens the Website area for them straight after sign-in.
   - They are paid a fixed salary like any admin, so their pay is a company cost in the company overview.
   - They aren't moved: moving is between Design and Execution only.
-- **Anyone else** given `website:view` or `website:manage` keeps their business and also sees the website (`visibleDomains` gains `website`), the way one permission of the other business opens it. Their "only one business, so no need to choose" shortcuts (new projects, clients, teams, invitations) still look at their businesses only.
-- **Super admins** hold both, as ever.
+- **Anyone else** given `website:view`, `website:manage` or `website_analytics:view` keeps their business and also sees the website (`visibleDomains` gains `website`), the way one permission of the other business opens it. Their "only one business, so no need to choose" shortcuts (new projects, clients, teams, invitations) still look at their businesses only.
+- **Super admins** hold all three, as ever.
 - The businesses' pages (dashboard, finance, billing settings, domain settings) answer `404` for `website`, and projects and clients can't be created in it.
 - **Linking a project** (`GET /api/website/link-candidates`) searches only the projects of the businesses the caller can see: the website's own staff type their projects in.
 
@@ -195,6 +196,44 @@ The website's form sends its fields to `POST /contact-messages`. The rules are c
 - **Failures:**
   - With neither set, the answer is `503 website_contact_unavailable`.
   - If the mail server fails, it's `503 email_delivery_failed`, and the failure is logged.
+
+## Analytics
+
+The website sends its visits to Google Analytics 4, only for visitors who accept its cookie question (the website's README, "Analytics"). The API reads them back with Google's **Data API** for the Website area's Analytics page. Only totals are read, never anything about one visitor.
+
+**Who:** `website_analytics:view`. By default the website's staff and super admins hold it; anyone else is given it from their profile. `website:view` alone doesn't show the analytics.
+
+**How the API reads them** (`Services/GoogleAnalytics/`):
+- As a Google Cloud **service account** with **Viewer** access to the GA4 property and the read-only scope (`analytics.readonly`), through Google's `Google.Apis.AnalyticsData.v1beta` package. Only `GoogleAnalyticsClient` talks to Google; the tests use `FakeGoogleAnalytics` and never call it.
+- A period is two batches of reports (Google takes at most five per batch): totals, days, channels, sources and pages; then countries, devices, new and returning visitors, and events. Each is one of Google Analytics' own standard reports, and columns are read by name.
+- The answers are the same for everyone allowed to see them and hold nothing of any one user, so they are cached for all alike: **15 minutes** for a period ending in the last week (Google may still add to those days), **6 hours** for an older one, **1 minute** for the last 30 minutes.
+- **Nothing is retried.** Google counts server errors against a quota of 10 an hour, so after any failure the API leaves Google alone for a minute and answers `503 website_analytics_unavailable`. The reason is in the log: no Viewer access or the API not enabled (`403`), out of quota (`429`), a deleted key, or no answer within `GoogleAnalytics:TimeoutSeconds` (10). A low hourly quota is logged too.
+- Days follow the **property's time zone**: set it to the company's (Asia/Beirut), so that "yesterday" is the same day in both. The answer carries `timeZone`.
+
+| Endpoint | What |
+|---|---|
+| `GET /api/website/analytics?from=&to=&compare=` | The period's `totals` (`visitors` are GA's active users, `engagementRate` a fraction, `averageEngagementSeconds` per visitor, `contactRequests` the `generate_lead` events), every day of it, `channels`, `sources` (top 25), `pages` (top 50; a `/projects/{slug}` page has its website project's `projectTitle` while it has that address), `countries`, `devices`, `visitorTypes` (new, returning) and `events`. Both dates or neither: the 28 days ending yesterday by default, at most 366 days, ending today at the latest. With `compare` (the default), `previousTotals`, each day's `previous…` and each event's `previousCount` are for the period of the same length before. `hasData` is false until Google has recorded something; `thresholded` is true when Google left out rows with very few visitors |
+| `GET /api/website/analytics/realtime` | The last 30 minutes, a few minutes behind at most: `visitorsNow`, `visitorsPerMinute` (30, oldest first), the `pages` being read (by title: realtime reports have no addresses) and the `countries` |
+
+Both answer `503 website_analytics_not_configured` while Google Analytics isn't switched on, and allow 30 requests a minute per person (`RateLimiting:WebsiteAnalyticsPermitsPerMinute`).
+
+**Not in Google Analytics' Data API, so not here:** Search Console's search queries (they need its own API), Google Ads costs (they need an Ads account linked), and anything about one visitor.
+
+### Setting it up
+
+1. **Google Analytics** (Admin):
+   - Property details: the **property ID** (a number), and the reporting time zone, **Asia/Beirut**.
+   - Data streams, the website's stream: its **measurement ID** (`G-…`) goes to the website's build (its README). In Enhanced measurement, Page views, Show advanced settings: **untick "Page changes based on browser history events"**. The website sends its own page views; left on, every search typed on the grid would count as page views. Also untick "Site search" and "Form interactions", and keep "Outbound clicks" and "Scrolls".
+   - The same stream, Redact data: email addresses, and the query parameter `q`.
+   - Data collection: Google signals off. Data retention: 14 months.
+   - Events: mark `generate_lead`, `email_click` and `phone_click` as **key events** once each has happened, or create them as key events by name.
+2. **Google Cloud:** in a project, enable the **Google Analytics Data API**. Create a **service account** (it needs no role in the project) and a **JSON key** for it. If key creation is refused, the organisation's policy `iam.managed.disableServiceAccountKeyCreation` is blocking it; an organisation admin can lift it.
+3. **Google Analytics again** (Admin, Property access management): add the service account's email as a **Viewer**.
+4. **The API:** base64 the key on one line, then delete the key file.
+   - Locally (cmd): `powershell -NoProfile -Command "[Convert]::ToBase64String([IO.File]::ReadAllBytes('key.json'))"`, then `dotnet user-secrets set "GoogleAnalytics:ServiceAccountKeyBase64" "<that>" --project ID-Indetails.api`, and the same for `GoogleAnalytics:PropertyId` (the number) and `GoogleAnalytics:Enabled` (`true`).
+   - On the server: `base64 -w0 key.json` into `GA_SERVICE_ACCOUNT_KEY_BASE64` in `.env`, with `GA_PROPERTY_ID` and `GA_ENABLED=true`, then `docker compose -f docker-compose.prod.yml up -d api` (or run Deploy).
+   - With `Enabled` true, the API doesn't start without a numeric property ID and a service account's key.
+5. **Changing the key:** create a new one, put it in `.env`, restart the API as above, then delete the old key in Google Cloud.
 
 ## Not done yet
 
