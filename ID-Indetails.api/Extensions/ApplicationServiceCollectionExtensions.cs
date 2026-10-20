@@ -142,6 +142,7 @@ using ID_Indetails.api.Services.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
+using System.ComponentModel.DataAnnotations;
 using System.Net;
 
 namespace ID_Indetails.api.Extensions;
@@ -160,6 +161,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddOptions<FrontendOptions>().BindConfiguration(FrontendOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<EmailOptions>().BindConfiguration(EmailOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<BugReportOptions>().BindConfiguration(BugReportOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<WebsiteContactOptions>().BindConfiguration(WebsiteContactOptions.SectionName)
+            .Validate(o => o.FallbackAddress.Length == 0 || new EmailAddressAttribute().IsValid(o.FallbackAddress), "WebsiteContact:FallbackAddress is not an email address.")
+            .ValidateOnStart();
         services.AddOptions<FileStorageOptions>().BindConfiguration(FileStorageOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<PortalContentOptions>().BindConfiguration(PortalContentOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
         services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)

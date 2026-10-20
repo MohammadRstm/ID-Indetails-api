@@ -191,8 +191,9 @@ The website's form sends its fields to `POST /contact-messages`. The rules are c
 - **Validation errors** come back as `400 validation_failed`, keyed `name`, `email`, `phone` and `message`.
 - **`website`** is a field visitors never see. Anything in it means a robot filled the form: the answer is still `202`, and nothing is sent.
 - **The email** goes to the company's contact email. Replying answers the visitor, because the email's reply-to is their address. Everything they wrote is HTML-encoded, and nothing is stored or echoed back.
+- **Until a contact email is set**, it goes to `WebsiteContact:FallbackAddress` instead (`WEBSITE_CONTACT_FALLBACK_TO` in the server's `.env`; the developer's address by default). That address is never shown on the website: `GET /contact` stays `null`.
 - **Failures:**
-  - With no contact email set, the answer is `503 website_contact_unavailable`.
+  - With neither set, the answer is `503 website_contact_unavailable`.
   - If the mail server fails, it's `503 email_delivery_failed`, and the failure is logged.
 
 ## Not done yet
