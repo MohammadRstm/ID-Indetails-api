@@ -127,3 +127,16 @@ public sealed record WebsiteContactMessageRequest
 
     public string? Website { get; init; }
 }
+
+/// <summary>
+/// The Website area's analytics: company-time-zone days, both inclusive (both or neither). Defaults to the 28 days
+/// ending yesterday; compared with the period of the same length before it unless <see cref="Compare"/> is false.
+/// </summary>
+public sealed record WebsiteAnalyticsQuery
+{
+    public DateOnly? From { get; init; }
+
+    public DateOnly? To { get; init; }
+
+    public bool Compare { get; init; } = true;
+}

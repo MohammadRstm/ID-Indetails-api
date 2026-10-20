@@ -79,6 +79,11 @@ services:
       BugReports__ToAddress: ${BUG_REPORTS_TO:-mohammadrstm2004@gmail.com}
       # The website's contact form, until the company sets its contact email in the Website area (docs/website.md).
       WebsiteContact__FallbackAddress: ${WEBSITE_CONTACT_FALLBACK_TO:-mohammadrstm2004@gmail.com}
+      # The website's analytics, read from Google Analytics: off unless switched on with a property and a service
+      # account's key (docs/website.md, "Analytics").
+      GoogleAnalytics__Enabled: ${GA_ENABLED:-false}
+      GoogleAnalytics__PropertyId: ${GA_PROPERTY_ID:-}
+      GoogleAnalytics__ServiceAccountKeyBase64: ${GA_SERVICE_ACCOUNT_KEY_BASE64:-}
       # Proton, the read-only assistant: off unless switched on with an Anthropic API key (docs/proton.md).
       Proton__Enabled: ${PROTON_ENABLED:-false}
       Proton__ApiKey: ${PROTON_API_KEY:-}

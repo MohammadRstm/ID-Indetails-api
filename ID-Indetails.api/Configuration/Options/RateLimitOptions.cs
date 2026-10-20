@@ -61,6 +61,10 @@ public sealed class RateLimitOptions
     [Range(1, 1_000)]
     public int WebsiteContactPermitsPerHour { get; init; } = 5;
 
+    /// <summary>The Website area's analytics, per signed-in user per minute. Answers are cached, but each new period asks Google.</summary>
+    [Range(1, 10_000)]
+    public int WebsiteAnalyticsPermitsPerMinute { get; init; } = 30;
+
     /// <summary>Super-admin setup: requests per IP per hour.</summary>
     [Range(1, 10_000)]
     public int SetupPermitsPerHour { get; init; } = 5;

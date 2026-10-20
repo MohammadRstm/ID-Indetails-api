@@ -82,6 +82,7 @@ public static class PermissionCodes
     // The company website (its public content)
     public const string WebsiteView = "website:view";
     public const string WebsiteManage = "website:manage";
+    public const string WebsiteAnalyticsView = "website_analytics:view";
 
     // Proton, the company assistant
     public const string ProtonUse = "proton:use";

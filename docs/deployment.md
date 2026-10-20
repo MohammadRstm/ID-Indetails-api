@@ -57,6 +57,9 @@ The API refuses to start in Production with development settings:
   so the rate limits and logs see the visitor, not nginx. The compose file sets the proxy network
   `172.30.0.0/24`.
 - As in development, the connection string and a JWT signing key of at least 32 characters are required.
+- With `GoogleAnalytics:Enabled` true, a numeric `GoogleAnalytics:PropertyId` and a service account's JSON key in
+  `GoogleAnalytics:ServiceAccountKeyBase64` are required (`GA_ENABLED`, `GA_PROPERTY_ID`, `GA_SERVICE_ACCOUNT_KEY_BASE64`;
+  off by default, see [website.md](website.md#analytics)).
 - With `Proton:Enabled` true, `Proton:ApiKey` is required (`PROTON_ENABLED`, `PROTON_API_KEY` and
   `PROTON_MONTHLY_BUDGET_USD` in the server's `.env`; Proton is off by default, see [proton.md](proton.md)).
 - With `Proton:Voice:Enabled` true, `Proton:Voice:ApiKey` (an OpenAI project key) is required

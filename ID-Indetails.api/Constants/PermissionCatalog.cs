@@ -86,6 +86,7 @@ public static class PermissionCatalog
         // the website's own: its staff hold them, and anyone given one reaches the Website area
         new(P.WebsiteView, "View the company website's content", DomainCodes.Website),
         new(P.WebsiteManage, "Edit the company website: projects, services, locations, contact details and favicon", DomainCodes.Website),
+        new(P.WebsiteAnalyticsView, "See the company website's visitor statistics from Google Analytics", DomainCodes.Website),
 
         // Admins and super admins only: employees don't get Proton yet.
         new(P.ProtonUse, "Ask Proton, the company assistant, which proposes changes only for the person to confirm"),

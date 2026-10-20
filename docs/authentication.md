@@ -34,6 +34,7 @@ Every request counts against a global limit: 300 a minute per signed-in user, or
 - Change password (on either) and change sign-in address, which check the current password: 10 a minute per person (`credential`).
 - Requests that email an address the caller chooses (invoice and statement emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
 - Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Bug reports: 5 an hour per person. Setup: 5 an hour per IP.
+- The Website area's analytics, which ask Google Analytics: 30 a minute per person (`website-analytics`).
 
 All limits are in the `RateLimiting` configuration section. Going over answers `429 too_many_requests` with a `Retry-After` header, and is logged as a warning under the `ID_Indetails.api.Security` category with the caller (user id, or IP when signed out). Refused sign-ins are logged there too, with the IP only.
 

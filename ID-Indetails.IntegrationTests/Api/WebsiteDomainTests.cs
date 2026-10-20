@@ -37,7 +37,7 @@ public class WebsiteDomainTests(ApiFactory api) : IClassFixture<ApiFactory>
         var me = await MeAsync(staff);
         me.Domain.ShouldBe(DomainCodes.Website);
         me.VisibleDomains.ShouldBe([DomainCodes.Website]);
-        me.Permissions.ShouldBe([PermissionCodes.WebsiteManage, PermissionCodes.WebsiteView], ignoreOrder: true);
+        me.Permissions.ShouldBe([PermissionCodes.WebsiteManage, PermissionCodes.WebsiteView, PermissionCodes.WebsiteAnalyticsView], ignoreOrder: true);
 
         (await Client.GetAsync("/api/website/projects", staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.GetAsync("/api/projects", staff.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);

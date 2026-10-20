@@ -94,6 +94,8 @@ using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Finance.Implementation;
 using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Geocoding.Implementation;
+using ID_Indetails.api.Services.GoogleAnalytics.Abstraction;
+using ID_Indetails.api.Services.GoogleAnalytics.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Invitations.Implementation;
 using ID_Indetails.api.Services.Labour.Abstraction;
@@ -251,6 +253,15 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IWebsiteProjectService, WebsiteProjectService>();
         services.AddScoped<IWebsiteContentService, WebsiteContentService>();
         services.AddScoped<IPublicWebsiteService, PublicWebsiteService>();
+        services.AddScoped<IWebsiteAnalyticsService, WebsiteAnalyticsService>();
+        services.AddOptions<GoogleAnalyticsOptions>().BindConfiguration(GoogleAnalyticsOptions.SectionName)
+            .ValidateDataAnnotations()
+            .Validate(o => !o.Enabled || (o.PropertyId.Length > 0 && o.PropertyId.All(char.IsAsciiDigit)),
+                "GoogleAnalytics:PropertyId must be the property's number when Google Analytics is enabled.")
+            .Validate(o => !o.Enabled || GoogleAnalyticsClient.KeyJson(o.ServiceAccountKeyBase64) is not null,
+                "GoogleAnalytics:ServiceAccountKeyBase64 must be a service account's JSON key, base64-encoded, when Google Analytics is enabled.")
+            .ValidateOnStart();
+        services.AddSingleton<IGoogleAnalyticsClient, GoogleAnalyticsClient>();
         services.AddScoped<WebsitePlaceResolver>();
         services.AddSingleton<IPlaceDirectory, GeoNamesDirectory>();
         services.AddOptions<GeocodingOptions>().BindConfiguration(GeocodingOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();

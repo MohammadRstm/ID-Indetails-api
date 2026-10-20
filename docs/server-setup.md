@@ -97,6 +97,8 @@ chmod 600 .env
   `WEBSITE_TAG` ([deployment.md](deployment.md#the-public-website)).
 - **The `SMTP_*` lines:** your mail provider's details.
 - **The `R2_*` lines:** the Cloudflare R2 bucket for the client portal's files, and the API token for it (setup in [content-storage.md](content-storage.md)). All four are required: without them the stack stops at the start with "required variable R2_ACCOUNT_ID is missing".
+- **`WEBSITE_CONTACT_FALLBACK_TO`:** where the website's contact form goes until a contact email is set in the app's Website area. Empty, it's the developer's address.
+- **The `GA_*` lines:** the website's analytics from Google Analytics. Leave `GA_ENABLED=false` until the property and the service account are ready (setup in [website.md](website.md#setting-it-up)).
 
 This file is the only place the secrets live. Keep a copy in your password manager.
 

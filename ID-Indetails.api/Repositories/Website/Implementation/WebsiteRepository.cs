@@ -18,6 +18,9 @@ public sealed class WebsiteRepository(IdIndetailsDbContext db) : IWebsiteReposit
             .OrderByDescending(p => p.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyDictionary<string, string>> ProjectTitlesBySlugAsync(CancellationToken cancellationToken = default)
+        => await db.WebsiteProjects.Select(p => new { p.Slug, p.Title }).ToDictionaryAsync(p => p.Slug, p => p.Title, cancellationToken);
+
     public Task<WebsiteProject?> ProjectAsync(long id, CancellationToken cancellationToken = default)
         => db.WebsiteProjects.Include(p => p.Images).SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
 

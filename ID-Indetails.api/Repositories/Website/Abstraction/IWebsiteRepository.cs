@@ -27,6 +27,9 @@ public interface IWebsiteRepository
     /// <summary>Every website project with its gallery, newest first; only the published ones when asked. Untracked.</summary>
     Task<IReadOnlyList<WebsiteProject>> ProjectsAsync(bool publishedOnly, CancellationToken cancellationToken = default);
 
+    /// <summary>Every website project's title by its page address (slug), published or not, to name the pages of the analytics.</summary>
+    Task<IReadOnlyDictionary<string, string>> ProjectTitlesBySlugAsync(CancellationToken cancellationToken = default);
+
     /// <summary>One project with its gallery. Tracked.</summary>
     Task<WebsiteProject?> ProjectAsync(long id, CancellationToken cancellationToken = default);
 

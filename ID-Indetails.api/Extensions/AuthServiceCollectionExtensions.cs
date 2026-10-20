@@ -237,6 +237,10 @@ public static class AuthServiceCollectionExtensions
                 "website-contact:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.WebsiteContactPermitsPerHour, Window = TimeSpan.FromHours(1) }));
 
+            options.AddPolicy(RateLimitPolicies.WebsiteAnalytics, context => RateLimitPartition.GetFixedWindowLimiter(
+                "website-analytics:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => PerMinute(limits.WebsiteAnalyticsPermitsPerMinute)));
+
             options.AddPolicy(RateLimitPolicies.Setup, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.SetupPermitsPerHour, Window = TimeSpan.FromHours(1) }));

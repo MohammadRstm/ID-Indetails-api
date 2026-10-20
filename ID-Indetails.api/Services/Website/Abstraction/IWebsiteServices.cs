@@ -97,3 +97,17 @@ public interface IPublicWebsiteService
     /// <summary>Emails the message to the company's own address. A robot's message is dropped without a word.</summary>
     Task SendContactMessageAsync(WebsiteContactMessageRequest request, CancellationToken cancellationToken = default);
 }
+
+/// <summary>The Website area's analytics, from Google Analytics (docs/website.md, "Analytics").</summary>
+public interface IWebsiteAnalyticsService
+{
+    /// <summary>
+    /// The period's reports, compared with the period before unless asked not to. 503
+    /// <c>website_analytics_not_configured</c> while Google Analytics isn't connected; 503
+    /// <c>website_analytics_unavailable</c> when Google fails.
+    /// </summary>
+    Task<WebsiteAnalyticsResponse> ReportAsync(WebsiteAnalyticsQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>The last 30 minutes, at most a minute old.</summary>
+    Task<WebsiteAnalyticsRealtimeResponse> RealtimeAsync(CancellationToken cancellationToken = default);
+}
