@@ -122,7 +122,20 @@ services:
         condition: service_healthy
         restart: true
 
-  # HTTPS: the certificate for PUBLIC_DOMAIN, renewed by itself, kept on the caddy_data volume.
+  # The company's public website (its own repo), on its own domain: nginx serving the static site, passing only
+  # /api/public/website/ on to the API (looked up per request, so it needs no depends_on). It is deployed by the website's
+  # own Publish workflow, which sets WEBSITE_TAG here and starts this service alone; deploy.sh leaves it be.
+  website:
+    image: ghcr.io/mohammadrstm/id-indetails-website:${WEBSITE_TAG:-none}
+    restart: unless-stopped
+    logging: *logging
+    read_only: true
+    tmpfs: ["/tmp:uid=101,gid=101"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [proxy]
+
+  # HTTPS: the certificates for PUBLIC_DOMAIN and WEBSITE_DOMAIN, renewed by themselves, kept on the caddy_data volume.
   caddy:
     image: caddy:2.11-alpine
     restart: unless-stopped
@@ -132,6 +145,8 @@ services:
     security_opt: [no-new-privileges:true]
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?}
+      # Until the website's domain is set, its site answers only on localhost inside the server (Caddyfile).
+      WEBSITE_DOMAIN: ${WEBSITE_DOMAIN:-localhost}
       ACME_EMAIL: ${ACME_EMAIL:?}
     ports:
       - "80:80"

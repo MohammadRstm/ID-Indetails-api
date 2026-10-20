@@ -11,6 +11,7 @@ are typed in **cmd** on your Windows machine, which has `ssh`, `scp`, `ssh-keyge
   and the root (or sudo) login the provider gave you.
 - **A domain:** add an **A record** for the app's name (e.g. `app.example.com`) pointing at the server's IP. Caddy
   can only get the certificate once this resolves.
+- **The website's domain** (optional, any time later): A records for it and for `www.` of it, pointing at the same IP.
 - **An SMTP account** for outgoing mail. You need its host, port 587, username and password, and a sender address on
   your domain. Add the **SPF and DKIM** records the provider gives you (and ideally DMARC), or mail lands in spam.
 
@@ -91,6 +92,9 @@ chmod 600 .env
   (`openssl rand -hex 32`). On a server set up before this existed, add both lines before the next deployment, or
   it stops at the start with "required variable MYSQL_API_USER is missing".
 - **`PUBLIC_DOMAIN`:** the domain from the A record, without `https://`. Set `ACME_EMAIL` to your email.
+- **`WEBSITE_DOMAIN` and `WEBSITE_TAG`:** leave them empty until the website's domain resolves to the server. Then set
+  `WEBSITE_DOMAIN` to its bare domain (no `www`) and run the Deploy workflow. The website's own Publish workflow sets
+  `WEBSITE_TAG` ([deployment.md](deployment.md#the-public-website)).
 - **The `SMTP_*` lines:** your mail provider's details.
 - **The `R2_*` lines:** the Cloudflare R2 bucket for the client portal's files, and the API token for it (setup in [content-storage.md](content-storage.md)). All four are required: without them the stack stops at the start with "required variable R2_ACCOUNT_ID is missing".
 
