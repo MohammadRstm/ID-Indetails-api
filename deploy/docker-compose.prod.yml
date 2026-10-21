@@ -61,6 +61,9 @@ services:
     logging: *logging
     read_only: true
     tmpfs: [/tmp]
+    # Half of the 4 GB server, /tmp's uploads included: whatever goes wrong in the API, it is the API that restarts,
+    # never MySQL beside it. Photos over 50 MP are refused before they are read (Pictures.MaxPixels).
+    mem_limit: 2g
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     environment:

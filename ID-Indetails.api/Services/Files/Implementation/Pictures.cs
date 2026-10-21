@@ -26,20 +26,44 @@ public static class Pictures
     private const int Quality = 75;
     private const int CopyQuality = 70;
 
+    /// <summary>
+    /// The most pixels a photo may have. Reading one takes 4 bytes a pixel (twice that while it is turned upright), so
+    /// a file of a few KB that declares a huge picture could otherwise take the server's memory: 50 MP is at most about
+    /// 400 MB while it is made small, and more than a phone camera takes by default.
+    /// </summary>
+    public const long MaxPixels = 50_000_000;
+
     /// <summary>The smallest of <see cref="Sizes"/> at least <paramref name="wanted"/>; the largest when none is.</summary>
     public static int SizeFor(int wanted) => Sizes.FirstOrDefault(s => s >= wanted, Sizes[^1]);
 
+    /// <summary>The photo's size in pixels, from its header alone (nothing is decoded); null when it can't be read.</summary>
+    public static long? PixelsOf(byte[] photo)
+    {
+        using var codec = SKCodec.Create(new MemoryStream(photo));
+        return codec is null ? null : (long)codec.Info.Width * codec.Info.Height;
+    }
+
+    public static bool IsTooLarge(byte[] photo) => PixelsOf(photo) > MaxPixels;
+
+    /// <summary>Whether smaller copies can be made of the photo: it can be read, within <see cref="MaxPixels"/>.</summary>
+    public static bool CanCopy(byte[] photo) => PixelsOf(photo) is { } pixels && pixels <= MaxPixels;
+
     /// <summary>
-    /// The photo upright, its longest side at most <paramref name="maxEdge"/>, as WebP. Null when it can't be read, or
-    /// when it is already that small and the WebP isn't smaller than <paramref name="photo"/>: the original is kept then.
-    /// <paramref name="mark"/> changes the pixels before they are saved (the <see cref="Watermark"/>); a marked photo
-    /// always comes back as a new WebP.
+    /// The photo upright, its longest side at most <paramref name="maxEdge"/>, as WebP. Null when it can't be read (or
+    /// is over <see cref="MaxPixels"/>), or when it is already that small and the WebP isn't smaller than
+    /// <paramref name="photo"/>: the original is kept then. <paramref name="mark"/> changes the pixels before they are
+    /// saved (the <see cref="Watermark"/>); a photo with a mark, even one that does nothing, always comes back as a new WebP.
     /// </summary>
     public static byte[]? Shrink(byte[] photo, int maxEdge, Action<SKBitmap>? mark = null)
     {
         using var codec = SKCodec.Create(new MemoryStream(photo));
-        using var decoded = codec is null ? null : SKBitmap.Decode(codec);
-        if (codec is null || decoded is null)
+        if (codec is null || (long)codec.Info.Width * codec.Info.Height > MaxPixels)
+        {
+            return null;
+        }
+
+        using var decoded = SKBitmap.Decode(codec);
+        if (decoded is null)
         {
             return null;
         }

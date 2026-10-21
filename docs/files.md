@@ -40,11 +40,21 @@ Photos are stored small (`Services/Files/Implementation/Pictures.cs`, SkiaSharp)
 - **What's kept as it came:**
   - a photo already that small whose WebP wouldn't be smaller;
   - a photo SkiaSharp can't read (HEIC on Linux).
+- **Too many pixels:** a photo whose header says it is over **50 megapixels** (`Pictures.MaxPixels`) is refused
+  (`422 file_too_large`) before anything is decoded. Reading a photo takes 4 bytes a pixel, so a few-KB file declaring
+  a huge picture could otherwise take the server's memory; 50 MP is more than a phone camera takes by default. The
+  watermark check refuses one too, and the API container is limited to 2 GB (`mem_limit` in
+  `deploy/docker-compose.prod.yml`), so whatever goes wrong there restarts the API, never MySQL.
 - **Never cropped:** the website shows a card at two shapes (3:2 and 4:5), the page picture at a shape that follows the window, and gallery photos whole. Cropping would cut what one of them shows.
 - **Smaller copies:** `?size=` on `GET /api/files/{id}` and on the public `/api/public/website/files/{id}`.
   - The size is the longest side wanted, rounded up to 160, 480, 960 or 1920 px. A 160 px preview is a few KB.
   - A copy is made the first time it is asked for, at WebP quality 70, and kept beside the photo as `{key}.{size}.webp`.
-  - It is deleted with the photo. A photo already that small comes as it is.
+  - It is deleted with the photo. A photo already that small comes as it is, except to the public website.
+- **The public website only ever gets a copy** (`IPictureSizes.OpenCopyAsync`): always re-encoded, so nothing of the
+  uploaded file (such as the place a photo was taken) goes with it, even when the photo is already small. A photo no
+  copy can be made of is `404` there, never its original. So a picture is taken for the website (a project's
+  pictures, its gallery, the favicon) only if the server can read it: an iPhone HEIC photo is refused
+  (`422 file_type_not_allowed`), with a note to save it as JPEG or PNG.
 - **Videos** are stored as they come, written to disk as they arrive. One over 100 MB is removed and refused.
 
 ## The invisible watermark

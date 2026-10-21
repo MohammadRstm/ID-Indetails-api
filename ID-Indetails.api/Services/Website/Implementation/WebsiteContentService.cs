@@ -104,6 +104,11 @@ public sealed class WebsiteContentService(
     {
         using var buffer = new MemoryStream();
         await picture.CopyToAsync(buffer, cancellationToken);
+        if (Pictures.IsTooLarge(buffer.ToArray()))
+        {
+            throw new RequestValidationException(ErrorCodes.ValidationFailed, "file", "That picture has too many pixels to check (over 50 megapixels).");
+        }
+
         buffer.Position = 0;
         using var bitmap = SKBitmap.Decode(buffer)
             ?? throw new RequestValidationException(ErrorCodes.ValidationFailed, "file", "That isn't a picture that can be read (JPEG, PNG or WebP).");
@@ -147,7 +152,7 @@ public sealed class WebsiteContentService(
 
     private Task<WebsiteContentResponse> ChangeFaviconAsync(long? fileId, CancellationToken cancellationToken)
         => ChangeSettingsAsync(async settings =>
-            settings.WebsiteFaviconFileId = fileId is { } id ? (await fileClaims.ClaimAsync(id, FileKind.Image, cancellationToken)).Id : null,
+            settings.WebsiteFaviconFileId = fileId is { } id ? (await fileClaims.ClaimWebsitePictureAsync(id, cancellationToken)).Id : null,
             cancellationToken);
 
     /// <summary>Changes the company settings row the website's settings live on, creating it if it doesn't exist yet.</summary>

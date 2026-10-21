@@ -16,7 +16,15 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
 
-    private async Task<long> PngAsync(AuthResponse who) => (await FileTests.UploadPngAsync(Client, who.AccessToken)).Id;
+    /// <summary>A real photo: the website takes only pictures the server can make copies of.</summary>
+    private async Task<long> PngAsync(AuthResponse who) => (await UploadAsync(who, FileTests.Photo, "plan.png")).Id;
+
+    private async Task<ID_Indetails.api.DTO.Response.Files.FileResponse> UploadAsync(AuthResponse who, byte[] bytes, string name)
+    {
+        var response = await FileTests.UploadAsync(Client, bytes, name, who.AccessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        return await response.ReadAsync<ID_Indetails.api.DTO.Response.Files.FileResponse>();
+    }
 
     private static string Unique(string title) => $"{title} {Guid.NewGuid().ToString("N")[..6]}";
 
@@ -294,7 +302,9 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var picture = await Client.GetAsync($"{Public}/files/{published.ThumbnailFileId}");
         ((int)picture.StatusCode).ShouldBe(200);
-        (await picture.Content.ReadAsByteArrayAsync()).ShouldBe(FileTests.Png);
+        // never the file as it was uploaded: always a new copy
+        picture.Content.Headers.ContentType!.MediaType.ShouldBe("image/webp");
+        (await picture.Content.ReadAsByteArrayAsync()).ShouldNotBe(FileTests.Photo);
         picture.Headers.CacheControl!.Public.ShouldBeTrue();
 
         await (await Client.GetAsync($"{Public}/files/{draft.ThumbnailFileId}")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
@@ -307,6 +317,26 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         ((int)set.StatusCode).ShouldBe(200, await set.Content.ReadAsStringAsync());
         (await (await Client.GetAsync($"{Public}/settings")).ReadAsync<PublicWebsiteSettings>()).FaviconUrl.ShouldBe($"{Public}/files/{favicon}");
         ((int)(await Client.GetAsync($"{Public}/files/{favicon}")).StatusCode).ShouldBe(200);
+    }
+
+    [Fact]
+    public async Task A_picture_the_server_cant_copy_is_never_put_on_the_website_nor_served_as_it_was_uploaded()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await PublishedAsync(superAdmin, "Unreadable");
+
+        // an iPhone photo (HEIC) can't be read here, so no copy of it could be made: it is refused for the website
+        var heic = await UploadAsync(superAdmin, FileTests.Heic, "IMG_0001.HEIC");
+        heic.MimeType.ShouldBe("image/heic");
+        await (await Client.PostJsonAsync($"/api/website/projects/{project.Id}/images", new { fileId = heic.Id, alt = "The pool" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+        await (await Client.PutJsonAsync("/api/website/favicon", new { fileId = heic.Id }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+
+        // one put there before this rule (straight in the database here) is not found, never sent as it was uploaded
+        await _steps.ExecuteAsync("UPDATE website_projects SET thumbnail_file_id = @f WHERE id = @p", ("@f", heic.Id), ("@p", project.Id));
+        await (await Client.GetAsync($"{Public}/files/{heic.Id}")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.GetAsync($"{Public}/files/{heic.Id}?size=160")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }
 
     [Fact]

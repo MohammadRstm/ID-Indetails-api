@@ -77,10 +77,9 @@ public sealed class PublicWebsiteService(
     public async Task<FileContent> OpenFileAsync(long fileId, int? size = null, CancellationToken cancellationToken = default)
     {
         var file = await website.IsPublicFileAsync(fileId, cancellationToken) ? await files.GetAsync(fileId, cancellationToken) : null;
-        return file is null
-            ? throw new NotFoundException("Picture not found.")
-            // never the original: the website gets a reduced copy, the largest it shows at most
-            : await sizes.OpenAsync(file, Math.Min(size ?? Pictures.MaxEdge, Pictures.MaxEdge), cancellationToken);
+        // never the original: the website gets a re-encoded copy, the largest it shows at most, or nothing at all
+        return (file is null ? null : await sizes.OpenCopyAsync(file, Math.Min(size ?? Pictures.MaxEdge, Pictures.MaxEdge), cancellationToken))
+            ?? throw new NotFoundException("Picture not found.");
     }
 
     public async Task SendContactMessageAsync(WebsiteContactMessageRequest request, CancellationToken cancellationToken = default)
