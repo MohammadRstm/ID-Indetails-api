@@ -47,10 +47,13 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
         return people.Select(a => new DiscussionPerson(DiscussionSide.Client, a.Id, Name(a.FirstName, a.LastName, a.Email))).ToList();
     }
 
+    public Task<DateTime?> DiscussionVisibleFromAsync(long projectId, CancellationToken cancellationToken = default)
+        => db.PortalSettings.AsNoTracking().Where(s => s.ProjectId == projectId).Select(s => s.DiscussionVisibleFrom).SingleOrDefaultAsync(cancellationToken);
+
     public async Task<IReadOnlyList<DiscussionMessageRow>> MessagesAsync(
-        long projectId, long? before, int take, CancellationToken cancellationToken = default)
+        long projectId, long? before, int take, DateTime? visibleFrom, CancellationToken cancellationToken = default)
     {
-        var messages = db.PortalMessages.Where(m => m.ProjectId == projectId);
+        var messages = From(db.PortalMessages.Where(m => m.ProjectId == projectId), visibleFrom);
         if (before is { } cursor)
         {
             messages = messages.Where(m => m.Id < cursor);
@@ -70,25 +73,27 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
             ? db.PortalMessages.SingleOrDefaultAsync(m => m.AuthorUserId == author.Id && m.ClientToken == clientToken, cancellationToken)
             : db.PortalMessages.SingleOrDefaultAsync(m => m.AuthorAccountId == author.Id && m.ClientToken == clientToken, cancellationToken);
 
-    public Task<long?> NewestMessageIdAsync(long projectId, CancellationToken cancellationToken = default)
-        => db.PortalMessages.Where(m => m.ProjectId == projectId).MaxAsync(m => (long?)m.Id, cancellationToken);
+    public Task<long?> NewestMessageIdAsync(long projectId, DateTime? visibleFrom, CancellationToken cancellationToken = default)
+        => From(db.PortalMessages.Where(m => m.ProjectId == projectId), visibleFrom).MaxAsync(m => (long?)m.Id, cancellationToken);
 
-    public Task<long?> NewestCommentIdAsync(long projectId, long itemId, CancellationToken cancellationToken = default)
-        => db.PortalComments.Where(c => c.ProjectId == projectId && c.ItemId == itemId).MaxAsync(c => (long?)c.Id, cancellationToken);
+    public Task<long?> NewestCommentIdAsync(long projectId, long itemId, DateTime? visibleFrom, CancellationToken cancellationToken = default)
+        => From(db.PortalComments.Where(c => c.ProjectId == projectId && c.ItemId == itemId), visibleFrom).MaxAsync(c => (long?)c.Id, cancellationToken);
 
-    public Task<int> UnreadMessagesAsync(long projectId, long? after, DiscussionPerson reader, CancellationToken cancellationToken = default)
+    public Task<int> UnreadMessagesAsync(
+        long projectId, long? after, DiscussionPerson reader, DateTime? visibleFrom, CancellationToken cancellationToken = default)
     {
         var from = after ?? 0;
-        var messages = db.PortalMessages.Where(m => m.ProjectId == projectId && m.Id > from && m.DeletedAt == null);
+        var messages = From(db.PortalMessages.Where(m => m.ProjectId == projectId && m.Id > from && m.DeletedAt == null), visibleFrom);
         messages = reader.Side == DiscussionSide.Staff
             ? messages.Where(m => m.AuthorUserId == null || m.AuthorUserId != reader.Id)
             : messages.Where(m => m.AuthorAccountId == null || m.AuthorAccountId != reader.Id);
         return messages.CountAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<DiscussionCommentRow>> CommentsAsync(long projectId, long? itemId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<DiscussionCommentRow>> CommentsAsync(
+        long projectId, long? itemId, DateTime? visibleFrom, CancellationToken cancellationToken = default)
     {
-        var comments = db.PortalComments.Where(c => c.ProjectId == projectId);
+        var comments = From(db.PortalComments.Where(c => c.ProjectId == projectId), visibleFrom);
         if (itemId is { } item)
         {
             comments = comments.Where(c => c.ItemId == item);
@@ -98,9 +103,9 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
     }
 
     public async Task<IReadOnlyList<CommentThreadFacts>> CommentThreadsAsync(
-        long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default)
+        long projectId, DiscussionPerson reader, DateTime? visibleFrom, CancellationToken cancellationToken = default)
     {
-        var comments = db.PortalComments.AsNoTracking().Where(c => c.ProjectId == projectId);
+        var comments = From(db.PortalComments.AsNoTracking().Where(c => c.ProjectId == projectId), visibleFrom);
         var threads = await comments
             .GroupBy(c => c.ItemId)
             .Select(g => new { ItemId = g.Key, Count = g.Count(), LastId = g.Max(c => c.Id) })
@@ -197,12 +202,13 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
                 .Where(r => r.ProjectId == projectId && r.AccountId == accountId)
                 .Select(r => r.LastMessageId)
                 .SingleOrDefaultAsync(cancellationToken) ?? 0;
-            var messages = await db.PortalMessages.CountAsync(
+            var visibleFrom = await DiscussionVisibleFromAsync(projectId, cancellationToken);
+            var messages = await From(db.PortalMessages, visibleFrom).CountAsync(
                 m => m.ProjectId == projectId && m.Id > afterMessage && m.DeletedAt == null
                     && (m.AuthorAccountId == null || m.AuthorAccountId != accountId),
                 cancellationToken);
             // a comment is unread until the client's marker on its own file reaches it
-            var comments = await db.PortalComments.CountAsync(
+            var comments = await From(db.PortalComments, visibleFrom).CountAsync(
                 c => c.ProjectId == projectId && c.DeletedAt == null && (c.AuthorAccountId == null || c.AuthorAccountId != accountId)
                     && !db.PortalCommentReads.Any(r => r.ItemId == c.ItemId && r.AccountId == accountId && r.LastCommentId >= c.Id),
                 cancellationToken);
@@ -283,11 +289,22 @@ public sealed class PortalDiscussionRepository(IdIndetailsDbContext db) : IPorta
 
     public void Remove(PortalMention mention) => db.PortalMentions.Remove(mention);
 
-    /// <summary>A client's notifications on projects they still have live access to: ended access hides them at once.</summary>
+    /// <summary>
+    /// A client's notifications on projects they still have live access to (ended access hides them at once), and none
+    /// from before the project moved to another client.
+    /// </summary>
     private IQueryable<PortalNotification> Visible(long accountId)
         => db.PortalNotifications.AsNoTracking()
             .Where(n => n.AccountId == accountId
-                && db.PortalProjectAccess.Any(a => a.AccountId == accountId && a.ProjectId == n.ProjectId && a.RevokedAt == null));
+                && db.PortalProjectAccess.Any(a => a.AccountId == accountId && a.ProjectId == n.ProjectId && a.RevokedAt == null)
+                && !db.PortalSettings.Any(s => s.ProjectId == n.ProjectId && s.DiscussionVisibleFrom != null && n.CreatedAt < s.DiscussionVisibleFrom));
+
+    /// <summary>Only what was written from <paramref name="visibleFrom"/> on, when there is a cut-off.</summary>
+    private static IQueryable<PortalMessage> From(IQueryable<PortalMessage> messages, DateTime? visibleFrom)
+        => visibleFrom is { } from ? messages.Where(m => m.CreatedAt >= from) : messages;
+
+    private static IQueryable<PortalComment> From(IQueryable<PortalComment> comments, DateTime? visibleFrom)
+        => visibleFrom is { } from ? comments.Where(c => c.CreatedAt >= from) : comments;
 
     private async Task<IReadOnlyList<DiscussionMessageRow>> MessageRows(IQueryable<PortalMessage> messages, CancellationToken cancellationToken)
     {

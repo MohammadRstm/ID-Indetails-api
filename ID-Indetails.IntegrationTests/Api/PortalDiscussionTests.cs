@@ -538,4 +538,50 @@ public class PortalDiscussionTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync($"{Staff(s.Project.Id)}/messages", Message("@Rita", [$"c{s.AccountId}"]), s.Staff.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
+
+    [Fact]
+    public async Task A_project_moved_to_another_client_shows_the_new_client_nothing_of_the_old_one()
+    {
+        var s = await ProjectWithClientAsync();
+        // the first client and the team talk, about a file published for them
+        var itemId = await PublishedFileAsync(s);
+        await OkAsync<PortalChatMessageResponse>(AsClient(s.ClientToken, HttpMethod.Post, $"{Mine(s.Project.Id)}/messages", Message("Our budget is 300k")));
+        await OkAsync<PortalChatMessageResponse>(Client.PostJsonAsync($"{Staff(s.Project.Id)}/messages", Message("Noted, Rita"), s.Staff.AccessToken));
+        await OkAsync<PortalCommentResponse>(Client.PostJsonAsync(
+            $"{Staff(s.Project.Id)}/comments", new { itemId, body = "Rita prefers oak", clientToken = Guid.NewGuid().ToString(), mentions = Array.Empty<string>() }, s.Staff.AccessToken));
+
+        // the project was the wrong client's: it moves to another, whose contact is invited
+        var contact = AuthTestSteps.NewEmail("next");
+        var next = await (await Client.PostJsonAsync("/api/clients", new
+        {
+            name = "Omar Saad", label = "Client", domainCode = DomainCodes.Design,
+            contacts = new[] { new { kind = "email", value = contact, label = "Office" } },
+        }, s.Staff.AccessToken)).ReadAsync<IdOnly>();
+        var moved = await Client.PutJsonAsync($"/api/projects/{s.Project.Id}/billing", new { billingType = "client", clientId = next.Id }, s.Staff.AccessToken);
+        moved.IsSuccessStatusCode.ShouldBeTrue(await moved.Content.ReadAsStringAsync());
+        (await Client.PostJsonAsync($"/api/projects/{s.Project.Id}/portal/invitations", new { email = contact }, s.Staff.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var omar = (await (await Client.PostJsonAsync("/api/portal/invitations/accept", new
+        {
+            token = api.Emails.InvitationTokenFor(contact), firstName = "Omar", lastName = "Saad", password = "client-own-passphrase",
+        })).ReadAsync<PortalAuthResponse>()).AccessToken;
+
+        // the new client sees nothing published for the old one, nor anything said with them
+        (await OkAsync<PortalPresentationResponse>(AsClient(omar, HttpMethod.Get, $"/api/portal/projects/{s.Project.Id}"))).IsPublished.ShouldBeFalse();
+        (await OkAsync<PortalMessagePageResponse>(AsClient(omar, HttpMethod.Get, $"{Mine(s.Project.Id)}/messages"))).Messages.ShouldBeEmpty();
+        var summary = await OkAsync<DiscussionSummaryResponse>(AsClient(omar, HttpMethod.Get, Mine(s.Project.Id)));
+        summary.UnreadMessages.ShouldBe(0);
+        summary.LastMessageId.ShouldBeNull();
+        summary.Threads.ShouldBeEmpty();
+        await (await AsClient(omar, HttpMethod.Get, $"{Mine(s.Project.Id)}/comments/{itemId}")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        (await OkAsync<PortalAccountResponse>(AsClient(omar, HttpMethod.Get, "/api/portal/me"))).Projects.Single().Unread.ShouldBe(0);
+
+        // the team still has the whole discussion
+        (await OkAsync<PortalMessagePageResponse>(Client.GetAsync($"{Staff(s.Project.Id)}/messages", s.Staff.AccessToken))).Messages.Count.ShouldBe(2);
+
+        // and what is said from now on reaches the new client
+        await OkAsync<PortalChatMessageResponse>(Client.PostJsonAsync($"{Staff(s.Project.Id)}/messages", Message("Welcome, Omar"), s.Staff.AccessToken));
+        (await OkAsync<PortalMessagePageResponse>(AsClient(omar, HttpMethod.Get, $"{Mine(s.Project.Id)}/messages"))).Messages
+            .Select(m => m.Body).ShouldBe(["Welcome, Omar"]);
+        (await OkAsync<DiscussionSummaryResponse>(AsClient(omar, HttpMethod.Get, Mine(s.Project.Id)))).UnreadMessages.ShouldBe(1);
+    }
 }

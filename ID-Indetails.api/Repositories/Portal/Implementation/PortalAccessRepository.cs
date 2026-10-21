@@ -85,8 +85,13 @@ public sealed class PortalAccessRepository(IdIndetailsDbContext db) : IPortalAcc
                 a.Project.StartDate,
                 a.LastOpenedAt,
                 db.PortalSettings.Where(s => s.ProjectId == a.ProjectId).Max(s => s.PublishedAt),
-                db.PortalMessages.Where(m => m.ProjectId == a.ProjectId && m.DeletedAt == null).Max(m => (DateTime?)m.CreatedAt),
-                db.PortalComments.Where(c => c.ProjectId == a.ProjectId && c.DeletedAt == null).Max(c => (DateTime?)c.CreatedAt),
+                // only what this project's clients may read: nothing from before it moved to another client
+                db.PortalMessages.Where(m => m.ProjectId == a.ProjectId && m.DeletedAt == null
+                        && !db.PortalSettings.Any(s => s.ProjectId == a.ProjectId && s.DiscussionVisibleFrom != null && m.CreatedAt < s.DiscussionVisibleFrom))
+                    .Max(m => (DateTime?)m.CreatedAt),
+                db.PortalComments.Where(c => c.ProjectId == a.ProjectId && c.DeletedAt == null
+                        && !db.PortalSettings.Any(s => s.ProjectId == a.ProjectId && s.DiscussionVisibleFrom != null && c.CreatedAt < s.DiscussionVisibleFrom))
+                    .Max(c => (DateTime?)c.CreatedAt),
                 db.PortalHeroImages
                     .Where(h => h.ProjectId == a.ProjectId && h.IsPublished)
                     .OrderBy(h => h.SortOrder).ThenBy(h => h.Id)

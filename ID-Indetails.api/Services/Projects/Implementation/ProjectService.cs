@@ -54,6 +54,7 @@ public sealed class ProjectService(
     IActivityEventRepository activity,
     IProjectNotifier notifier,
     IPortalAccessService portalAccess,
+    IPortalPublishingService portalPublishing,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectService
 {
@@ -341,10 +342,12 @@ public sealed class ProjectService(
             activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectClientSet, actor.UserId,
                 new { clientId = request.ClientId, prevClientId = project.ClientId }));
 
-            // The previous client's contacts no longer follow the project in the client portal.
+            // The previous client's contacts no longer follow the project in the client portal, and whoever follows it
+            // next sees nothing published for them nor what was said with them.
             if (project.ClientId is not null)
             {
                 await portalAccess.EndAllForProjectAsync(project.Id, project.DomainCode, project.ClientId, actor.UserId, cancellationToken);
+                await portalPublishing.WithdrawForNewClientAsync(project.Id, clock.UtcNow, cancellationToken);
             }
         }
 

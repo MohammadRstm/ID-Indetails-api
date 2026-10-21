@@ -90,7 +90,10 @@ because:
    invitation the client has just accepted can't be cancelled (`422 portal_invitation_used`), and their access stays.
 6. **End access** (`…/portal/access/{id}/revoke`): the project disappears from the client's portal at once, and their
    pending invitations to it are cancelled. If it was their last project, they are signed out everywhere.
-7. **Moving the project to another client, or making it internal**, ends every client's access to it.
+7. **Moving the project to another client, or making it internal**, ends every client's access to it. Nothing
+   published for the previous client stays published (the drafts stay, for staff to publish again), and the next
+   client sees only the discussion written after the move (`portal_settings.discussion_visible_from`): no earlier
+   message, comment, unread count, notification or "last activity". Staff still see the whole discussion.
 8. **Archiving the client** ends every contact's access to all of the client's projects and cancels their pending
    invitations; anyone left with no project is signed out. **Restoring the client gives nothing back**: staff invite again.
 9. **Taking an email address off the client** (removing the contact, or changing its address) ends that address's
@@ -627,6 +630,11 @@ before. The web client sorts by these fields itself.
 - `portal_project_access.last_opened_at` (`datetime(3)`, null until the client opens the project).
 - **Rollback** puts the first image of each list back into the two `portal_settings` columns, drops the table, drops
   `deleted_at` and `last_opened_at` (a deleted message's text is gone for good: it comes back empty).
+
+### Tables (migration `PortalDiscussionCutoff`)
+- `portal_settings.discussion_visible_from` (`datetime(3)`, nullable): set when the project moves to another client.
+  Clients read only messages and comments created from then on; null (every project before its first move) means no
+  cut-off. Only adds; the rollback drops it.
 
 ## Known limits (later phases)
 - **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a
