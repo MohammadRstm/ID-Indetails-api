@@ -93,6 +93,9 @@ because:
 7. **Moving the project to another client, or making it internal**, ends every client's access to it.
 8. **Archiving the client** ends every contact's access to all of the client's projects and cancels their pending
    invitations; anyone left with no project is signed out. **Restoring the client gives nothing back**: staff invite again.
+9. **Taking an email address off the client** (removing the contact, or changing its address) ends that address's
+   access to all of the client's projects and cancels its pending invitations, in the same save; if it had no other
+   project, it is signed out everywhere. The client's other contacts keep theirs.
 
 **At the same moment.** Inviting, resending and accepting for one address lock its account row first, so they take
 turns: two invitations sent at once never leave two pending links to one project, and two links of one account used at

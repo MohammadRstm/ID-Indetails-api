@@ -349,6 +349,40 @@ public class PortalTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Taking_an_email_off_the_client_ends_that_contacts_access_and_invitations_only()
+    {
+        var (client, cookie, s) = await ActiveClientAsync();
+        var colleague = AuthTestSteps.NewEmail("colleague");
+        Task<HttpResponseMessage> ContactsAsync(params string[] emails) => Client.PutJsonAsync($"/api/clients/{s.ClientId}", new
+        {
+            name = "Rita Frem",
+            label = "Client",
+            contacts = emails.Select(e => new { kind = "email", value = e, label = "Office" }).ToArray(),
+        }, s.SuperAdmin.AccessToken);
+        (await ContactsAsync(s.ContactEmail, colleague)).IsSuccessStatusCode.ShouldBeTrue();
+        (await InviteAsync(s, colleague)).IsSuccessStatusCode.ShouldBeTrue();
+        var colleagueLink = api.Emails.InvitationTokenFor(colleague);
+
+        await Task.Delay(1100); // the session cut-off keeps tokens of the same second
+        // the first contact left the client's company: their address is taken off the client
+        (await ContactsAsync(colleague)).IsSuccessStatusCode.ShouldBeTrue();
+
+        (await _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM portal_project_access a JOIN portal_accounts p ON p.id = a.account_id " +
+            "WHERE a.project_id = @p AND a.revoked_at IS NULL AND p.email = @e",
+            ("@p", s.Project.Id), ("@e", s.ContactEmail))).ShouldBe(0);
+        await (await MeAsync(client.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
+        await (await PortalRefreshAsync(cookie)).ShouldFailWithAsync(401, ErrorCodes.RefreshTokenInvalid);
+        // the colleague is still a contact: their link still works
+        (await Client.PostJsonAsync("/api/portal/invitations/validate", new { token = colleagueLink })).IsSuccessStatusCode.ShouldBeTrue();
+
+        // a changed address is taken off too
+        (await ContactsAsync(AuthTestSteps.NewEmail("colleague-new"))).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync("/api/portal/invitations/validate", new { token = colleagueLink }))
+            .ShouldFailWithAsync(422, ErrorCodes.PortalInvitationRevoked);
+    }
+
+    [Fact]
     public async Task A_link_is_refused_once_its_project_is_archived_and_accepting_another_link_cancels_it()
     {
         var s = await DesignProjectAsync();
