@@ -155,7 +155,9 @@ Every error has the same shape:
 for **10 minutes** (`Business/Auth/SignInLockout.cs`), whatever IP the attempts come from. While paused, even the right
 password gets the same `invalid_credentials` answer as an unknown email. The count is kept on the user row
 (`users.failed_sign_ins`, `users.locked_until`) and raised in a single statement, so wrong passwords sent at once all
-count; a successful sign-in resets it. Signed-in sessions are not affected. Pauses go to the security log.
+count; a successful sign-in resets it, and so does a password reset: whoever keeps guessing an address can't keep its
+owner out, since the reset from their email lets them in at once. Signed-in sessions are not affected. Pauses go to the
+security log. What to do about a pause is in [security-runbook.md](security-runbook.md).
 
 `type` decides the HTTP status: `validation` 400, `authentication` 401, `authorization` 403, `not_found` 404, `conflict` 409, `business_rule` 422, `rate_limited` 429, `unavailable` 503, `unexpected` 500. `errors` holds field messages for validation failures. Unexpected errors never include internal details; use `traceId` to find them in the server logs.
 
