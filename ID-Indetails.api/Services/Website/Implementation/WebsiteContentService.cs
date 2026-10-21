@@ -11,6 +11,7 @@ using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Website.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
+using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Website.Abstraction;
@@ -32,6 +33,7 @@ public sealed class WebsiteContentService(
     WebsitePlaceResolver places,
     IPlaceDirectory directory,
     IUnitOfWork unitOfWork,
+    IClock clock,
     IOptions<CompanyOptions> companyOptions) : IWebsiteContentService
 {
     /// <summary>A city list shows at most this many, biggest first: typing narrows it.</summary>
@@ -50,6 +52,7 @@ public sealed class WebsiteContentService(
             links.Select(l => new WebsiteSocialLinkResponse(l.Id, l.Label, l.Url)).ToList(),
             settings?.ContactEmail,
             settings?.WebsiteFaviconFileId,
+            settings?.WebsiteUnderConstructionSince,
             canManage);
     }
 
@@ -110,7 +113,21 @@ public sealed class WebsiteContentService(
     public Task<WebsiteContentResponse> RemoveFaviconAsync(CancellationToken cancellationToken = default)
         => ChangeFaviconAsync(null, cancellationToken);
 
-    private async Task<WebsiteContentResponse> ChangeFaviconAsync(long? fileId, CancellationToken cancellationToken)
+    public Task<WebsiteContentResponse> SetUnderConstructionAsync(WebsiteUnderConstructionRequest request, CancellationToken cancellationToken = default)
+        => ChangeSettingsAsync(settings =>
+        {
+            // switching it on again keeps the day it started
+            settings.WebsiteUnderConstructionSince = request.UnderConstruction ? settings.WebsiteUnderConstructionSince ?? clock.UtcNow : null;
+            return Task.CompletedTask;
+        }, cancellationToken);
+
+    private Task<WebsiteContentResponse> ChangeFaviconAsync(long? fileId, CancellationToken cancellationToken)
+        => ChangeSettingsAsync(async settings =>
+            settings.WebsiteFaviconFileId = fileId is { } id ? (await fileClaims.ClaimAsync(id, FileKind.Image, cancellationToken)).Id : null,
+            cancellationToken);
+
+    /// <summary>Changes the company settings row the website's settings live on, creating it if it doesn't exist yet.</summary>
+    private async Task<WebsiteContentResponse> ChangeSettingsAsync(Func<CompanySettings, Task> change, CancellationToken cancellationToken)
     {
         await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
         {
@@ -122,7 +139,7 @@ public sealed class WebsiteContentService(
                 company.AddSettings(settings);
             }
 
-            settings.WebsiteFaviconFileId = fileId is { } id ? (await fileClaims.ClaimAsync(id, FileKind.Image, cancellationToken)).Id : null;
+            await change(settings);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }

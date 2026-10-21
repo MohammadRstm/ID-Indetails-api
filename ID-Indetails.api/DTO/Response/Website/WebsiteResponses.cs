@@ -81,4 +81,5 @@ public sealed record WebsiteContentResponse(
     IReadOnlyList<WebsiteSocialLinkResponse> SocialLinks,
     string? ContactEmail,
     long? FaviconFileId,
+    DateTime? UnderConstructionSince,
     bool CanManage);

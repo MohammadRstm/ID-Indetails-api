@@ -40,4 +40,5 @@ public sealed record PublicWebsiteContact(string? Email);
 public sealed record PublicWebsiteSocialLink(long Id, string Label, string Url);
 
 /// <param name="FaviconUrl">Null until a favicon is chosen.</param>
-public sealed record PublicWebsiteSettings(string? FaviconUrl);
+/// <param name="UnderConstruction">The website shows only its construction page, Contact and Privacy.</param>
+public sealed record PublicWebsiteSettings(string? FaviconUrl, bool UnderConstruction);

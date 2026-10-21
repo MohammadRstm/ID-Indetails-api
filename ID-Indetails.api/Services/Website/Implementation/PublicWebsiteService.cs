@@ -66,7 +66,12 @@ public sealed class PublicWebsiteService(
             .Select(l => new PublicWebsiteSocialLink(l.Id, l.Label, l.Url)).ToList();
 
     public async Task<PublicWebsiteSettings> SettingsAsync(CancellationToken cancellationToken = default)
-        => new((await company.GetSettingsAsync(cancellationToken: cancellationToken))?.WebsiteFaviconFileId is { } id ? PublicWebsitePaths.File(id) : null);
+    {
+        var settings = await company.GetSettingsAsync(cancellationToken: cancellationToken);
+        return new(
+            settings?.WebsiteFaviconFileId is { } id ? PublicWebsitePaths.File(id) : null,
+            settings?.WebsiteUnderConstructionSince is not null);
+    }
 
     public async Task<FileContent> OpenFileAsync(long fileId, CancellationToken cancellationToken = default)
     {

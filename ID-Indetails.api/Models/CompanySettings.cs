@@ -29,6 +29,12 @@ public class CompanySettings
     /// <summary>The website's favicon.</summary>
     public long? WebsiteFaviconFileId { get; set; }
 
+    /// <summary>
+    /// When the website was put under construction (it then shows only its construction page, Contact and Privacy);
+    /// null while it is live. Switched on the Website area's Site page.
+    /// </summary>
+    public DateTime? WebsiteUnderConstructionSince { get; set; }
+
     /// <summary>IANA zone used for overtime, day boundaries and "today" (e.g. Asia/Beirut).</summary>
     public string TimeZone { get; set; } = "Asia/Beirut";
 

@@ -292,6 +292,7 @@ public static class ProtonCoverage
         Never("Website.OrderSocialLinks", "changes the company's public website"),
         Never("Website.SetFavicon", "the favicon comes from the person's own device"),
         Never("Website.RemoveFavicon", "changes the company's public website"),
+        Never("Website.SetUnderConstruction", "takes the company's public website down or brings it back"),
         Never("PublicWebsite.SendContactMessage", "a website visitor's message, sent without signing in", externalSend: true),
         Never("ProjectPortalContent.AddHero", "decides what the client portal shows"),
         Never("ProjectPortalContent.RemoveHero", "decides what the client portal shows"),

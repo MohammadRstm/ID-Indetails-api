@@ -342,6 +342,45 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         email.TextBody.ShouldContain("We'd like a villa in Batroun.");
     }
 
+    [Fact]
+    public async Task The_website_goes_under_construction_and_back_with_its_contact_form_still_open()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, viewer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var grant = await Client.PutJsonAsync($"/api/users/{viewer.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.WebsiteView, action = "grant", reason = "Integration test" } } }, superAdmin.AccessToken);
+        grant.IsSuccessStatusCode.ShouldBeTrue(await grant.Content.ReadAsStringAsync());
+        async Task<PublicWebsiteSettings> PublicSettingsAsync() => await (await Client.GetAsync($"{Public}/settings")).ReadAsync<PublicWebsiteSettings>();
+
+        (await PublicSettingsAsync()).UnderConstruction.ShouldBeFalse();
+        // looking at the website doesn't let them take it down
+        await (await Client.PutJsonAsync("/api/website/under-construction", new { underConstruction = true }, viewer.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        var down = await (await Client.PutJsonAsync("/api/website/under-construction", new { underConstruction = true }, superAdmin.AccessToken))
+            .ReadAsync<WebsiteContentResponse>();
+        down.UnderConstructionSince.ShouldNotBeNull();
+        (await PublicSettingsAsync()).UnderConstruction.ShouldBeTrue();
+        // switching it on again keeps the day it started
+        (await (await Client.PutJsonAsync("/api/website/under-construction", new { underConstruction = true }, superAdmin.AccessToken))
+            .ReadAsync<WebsiteContentResponse>()).UnderConstructionSince.ShouldBe(down.UnderConstructionSince);
+        (await (await Client.GetAsync("/api/website/content", viewer.AccessToken)).ReadAsync<WebsiteContentResponse>()).UnderConstructionSince
+            .ShouldBe(down.UnderConstructionSince);
+
+        // the construction page sends visitors to the contact form, which keeps working
+        var address = AuthTestSteps.NewEmail("studio");
+        (await Client.PutJsonAsync("/api/company/contact-email", new { email = address }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var sent = await Client.PostJsonAsync($"{Public}/contact-messages",
+            new { name = "Nadine Haddad", email = "nadine@example.com", phone = (string?)null, message = "When is the website back?", website = "" });
+        ((int)sent.StatusCode).ShouldBe(202, await sent.Content.ReadAsStringAsync());
+        api.Emails.CountTo(address).ShouldBe(1);
+
+        var back = await (await Client.PutJsonAsync("/api/website/under-construction", new { underConstruction = false }, superAdmin.AccessToken))
+            .ReadAsync<WebsiteContentResponse>();
+        back.UnderConstructionSince.ShouldBeNull();
+        (await PublicSettingsAsync()).UnderConstruction.ShouldBeFalse();
+    }
+
     /// <summary>A draft with only the place given: coordinates, or a city and country, or both.</summary>
     private static object Placed(string title, string? city, string? country, decimal? latitude = null, decimal? longitude = null, bool published = false)
         => new { title, type = "villa", status = "completed", year = 2022, city, country, latitude, longitude, published };

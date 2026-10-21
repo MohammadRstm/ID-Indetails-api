@@ -14,7 +14,7 @@ Code:
 - `Services/Website/`, and `Services/GoogleAnalytics/` for Google Analytics;
 - `Business/Website/`;
 - the tables `website_projects`, `website_project_images`, `website_services`, `website_locations` and `website_social_links`;
-- the columns `contact_email` and `website_favicon_file_id` on `company_settings`.
+- the columns `contact_email`, `website_favicon_file_id` and `website_under_construction_since` on `company_settings`.
 
 ## Who
 
@@ -129,12 +129,13 @@ The integration tests use `FakeGeocoder` and a few towns (`TestPlaces`), and nev
 | `PUT …/images/{imageId}`, `DELETE …/images/{imageId}` | manage | `{ alt }` |
 | `PUT …/images/order` | manage | `{ ids }`: every picture once. If one was added or removed meanwhile: `409 website_order_stale` |
 | `GET /api/website/link-candidates?search=` | manage | Up to 20 system projects of both businesses, with what the form fills in and `websiteProjectId` if one is already shown |
-| `GET /api/website/content` | view or manage | `{ services, locations, socialLinks, contactEmail, faviconFileId, canManage }` |
+| `GET /api/website/content` | view or manage | `{ services, locations, socialLinks, contactEmail, faviconFileId, underConstructionSince, canManage }` |
 | `POST /api/website/services`, `PUT …/{id}`, `DELETE …/{id}`, `PUT …/order` | manage | `{ title, description }`, plain text. Each answers with the whole content |
 | `POST /api/website/locations`, `PUT …`, `DELETE …`, `PUT …/order` | manage | `{ city?, country?, latitude?, longitude?, address, phone }`: the coordinates, or the country and city from the lists ([Places](#places)) |
 | `GET /api/website/places/countries`, `GET /api/website/places/cities?country=&search=` | view or manage | The lists ([Places](#places)) |
 | `POST /api/website/social-links`, `PUT …`, `DELETE …`, `PUT …/order` | manage | `{ label, url }`. The URL must be https |
 | `PUT /api/website/favicon`, `DELETE …` | manage | `{ fileId }`: PNG, JPEG or WebP (no SVG: it can carry scripts) |
+| `PUT /api/website/under-construction` | manage | `{ underConstruction }`. Puts the website under construction or brings it back ([below](#under-construction)) |
 | `PUT /api/company/contact-email` | `company_settings:manage` or `website:manage` | `{ email }`. Empty clears it. It is also `contactEmail` on `GET /api/company/settings` |
 
 ## Public API (no sign-in)
@@ -149,7 +150,7 @@ Under `/api/public/website`. JSON is camelCase, and lists come in display order.
 | `GET /locations` | `[{ id, city, country, countryCode, lat, lng, address, phone }]` |
 | `GET /contact` | `{ email }`: null until the company sets one |
 | `GET /social-links` | `[{ id, label, url }]` |
-| `GET /settings` | `{ faviconUrl }`: null until one is chosen |
+| `GET /settings` | `{ faviconUrl, underConstruction }`: `faviconUrl` is null until one is chosen |
 | `GET /files/{id}` | A picture the website shows: a published project's, or the favicon. Anything else is `404` |
 | `POST /contact-messages` | `{ name, email, phone?, message, website }`. `202` once emailed |
 
@@ -177,6 +178,14 @@ A project:
 **Rate limits.**
 - Every request under `/api/public/website` has its own bucket: 600 a minute per IP address (`RateLimiting:PublicWebsitePermitsPerMinute`). A page loads every picture through the API, so the 60-a-minute anonymous limit would be too tight.
 - The contact form is also limited to 5 messages an hour per IP address (`RateLimiting:WebsiteContactPermitsPerHour`), failed ones included.
+
+## Under construction
+
+The Website area's **Site** page can put the website under construction, after a confirmation, and bring it back the same way.
+- **While it's on,** the public settings answer `underConstruction: true`. The website then shows only its construction page, which links to Contact, and its Contact and Privacy pages.
+- **The API keeps answering:** every public endpoint still works, and the contact form most of all, since the construction page sends visitors to it. Which pages to show is the website's decision.
+- **Since when:** `company_settings.website_under_construction_since` holds when it was switched on; null means the website is live. Switching it on again keeps the first date.
+- **Timing:** the settings answer is cached for 60 seconds, so a switch shows on the website within a minute.
 
 ## The contact form
 
