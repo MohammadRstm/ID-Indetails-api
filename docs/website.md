@@ -75,6 +75,7 @@ A website project is its own record. Everything on it may be public; nothing int
   | **Card picture** (`thumbnail`) | Tall 4:5, about 720 × 900 | Only on the project's card: in the moving strip and in the Projects grid |
   | **Page picture** (`hero`) | Wide 16:9, about 1920 × 1080 | Only across the top of the project's own page, beside the globe |
   | **Gallery** | Wide 3:2 works best | Further down the project's own page, in order |
+  | **Concept pictures** (up to 5) | Any; shown cropped in a grid, then whole in the viewer | The project page's Concept row, beside the concept description; the first is the main one |
 
   - Each picture has a description (`alt`), read out to people who can't see it.
   - Pictures are uploaded with `POST /api/files` first, and must be photos (JPEG, PNG or WebP).
@@ -125,9 +126,9 @@ The integration tests use `FakeGeocoder` and a few towns (`TestPlaces`), and nev
 | `GET /api/website/projects`, `GET …/{id}` | view or manage | Every project, newest first, as `{ projects, conveyorLimit, canManage }`. Each one has its own `status` and `year` (null while following), plus `shownStatus` and `shownYear`, `linkedProject`, `gallery` and `missingToPublish` |
 | `POST /api/website/projects`, `PUT …/{id}`, `DELETE …/{id}` | manage | The whole form each time. Pictures are `thumbnailFileId` and `heroFileId`: the current id keeps it, a new upload replaces it, `null` clears it |
 | `PUT /api/website/conveyor` | manage | `{ projectIds }` in order |
-| `POST /api/website/projects/{id}/images` | manage | `{ fileId, alt }`, added at the end |
+| `POST /api/website/projects/{id}/images` | manage | `{ fileId, alt, concept }`, added at the end of the gallery, or of the concept pictures with `concept: true` (at most 5: `422 website_concept_full`) |
 | `PUT …/images/{imageId}`, `DELETE …/images/{imageId}` | manage | `{ alt }` |
-| `PUT …/images/order` | manage | `{ ids }`: every picture once. If one was added or removed meanwhile: `409 website_order_stale` |
+| `PUT …/images/order` | manage | `{ ids }`: every gallery picture once, or every concept picture once (the gallery and the concept pictures are ordered apart). If one was added or removed meanwhile: `409 website_order_stale` |
 | `GET /api/website/link-candidates?search=` | manage | Up to 20 system projects of both businesses, with what the form fills in and `websiteProjectId` if one is already shown |
 | `GET /api/website/content` | view or manage | `{ services, locations, socialLinks, contactEmail, faviconFileId, underConstructionSince, canManage }` |
 | `POST /api/website/services`, `PUT …/{id}`, `DELETE …/{id}`, `PUT …/order` | manage | `{ title, description }`, plain text. Each answers with the whole content |
@@ -165,6 +166,8 @@ A project:
   "thumbnail": "/api/public/website/files/40",
   "hero": { "src": "/api/public/website/files/41", "alt": "The villa at dusk" },
   "gallery": [{ "src": "/api/public/website/files/42", "alt": "The pool" }],
+  "conceptDescription": "Light first: every room faces the sea.",
+  "conceptImages": [{ "src": "/api/public/website/files/51", "alt": "First sketch" }],
   "showInConveyor": true, "conveyorOrder": 1
 }
 ```

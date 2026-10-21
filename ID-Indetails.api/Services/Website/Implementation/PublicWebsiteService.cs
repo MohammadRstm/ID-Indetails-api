@@ -134,7 +134,11 @@ public sealed class PublicWebsiteService(
             p.Description,
             PublicWebsitePaths.File(p.ThumbnailFileId.Value),
             new PublicImage(PublicWebsitePaths.File(p.HeroFileId.Value), p.HeroAlt ?? p.Title),
-            p.Images.OrderBy(i => i.Position)
+            p.Images.Where(i => !i.Concept).OrderBy(i => i.Position)
+                .Select(i => new PublicImage(PublicWebsitePaths.File(i.FileId), i.Alt))
+                .ToList(),
+            p.ConceptDescription,
+            p.Images.Where(i => i.Concept).OrderBy(i => i.Position).Take(WebsiteRules.MaxConceptImages)
                 .Select(i => new PublicImage(PublicWebsitePaths.File(i.FileId), i.Alt))
                 .ToList(),
             p.ConveyorOrder is not null,

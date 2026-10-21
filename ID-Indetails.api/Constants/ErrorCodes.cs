@@ -237,6 +237,9 @@ public static class ErrorCodes
     /// <summary>422. The moving strip on the website shows at most 20 projects, all of them published.</summary>
     public const string WebsiteConveyorInvalid = "website_conveyor_invalid";
 
+    /// <summary>422. A website project has at most five concept pictures.</summary>
+    public const string WebsiteConceptFull = "website_concept_full";
+
     /// <summary>409. A new order must list exactly the current items; one was added or removed meanwhile.</summary>
     public const string WebsiteOrderStale = "website_order_stale";
 

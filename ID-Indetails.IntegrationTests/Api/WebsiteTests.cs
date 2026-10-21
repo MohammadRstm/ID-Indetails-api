@@ -242,6 +242,49 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_project_has_a_concept_up_to_five_pictures_and_a_text_kept_apart_from_its_gallery()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await PublishedAsync(superAdmin, "Concept villa");
+        await UpdateAsync(superAdmin, project.Id, new
+        {
+            title = project.Title, type = "villa", status = "completed", year = 2022, client = "The Rizk family", city = "Beirut", country = "Lebanon",
+            latitude = 33.893800m, longitude = 35.501800m, description = "A family villa above the sea.",
+            conceptDescription = "Light first: every room faces the sea.", thumbnailFileId = project.ThumbnailFileId, heroFileId = project.HeroFileId,
+            heroAlt = "The villa at dusk", published = true,
+        });
+        var gallery = await (await Client.PostJsonAsync($"/api/website/projects/{project.Id}/images", new { fileId = await PngAsync(superAdmin), alt = "The pool" }, superAdmin.AccessToken))
+            .ReadAsync<WebsiteProjectResponse>();
+
+        WebsiteProjectResponse current = gallery;
+        foreach (var sketch in new[] { "Sketch 1", "Sketch 2", "Sketch 3", "Sketch 4", "Sketch 5" })
+        {
+            var added = await Client.PostJsonAsync($"/api/website/projects/{project.Id}/images", new { fileId = await PngAsync(superAdmin), alt = sketch, concept = true }, superAdmin.AccessToken);
+            ((int)added.StatusCode).ShouldBe(200, await added.Content.ReadAsStringAsync());
+            current = await added.ReadAsync<WebsiteProjectResponse>();
+        }
+
+        current.ConceptImages.Select(i => i.Alt).ShouldBe(["Sketch 1", "Sketch 2", "Sketch 3", "Sketch 4", "Sketch 5"]);
+        current.Gallery.ShouldHaveSingleItem().Alt.ShouldBe("The pool");
+        current.ConceptDescription.ShouldBe("Light first: every room faces the sea.");
+        await (await Client.PostJsonAsync($"/api/website/projects/{project.Id}/images", new { fileId = await PngAsync(superAdmin), alt = "Sketch 6", concept = true }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.WebsiteConceptFull);
+
+        // ordered apart from the gallery: the last sketch becomes the main one
+        var ids = current.ConceptImages.Select(i => i.Id).ToList();
+        var ordered = await (await Client.PutJsonAsync($"/api/website/projects/{project.Id}/images/order", new { ids = ids.Skip(4).Concat(ids.Take(4)) }, superAdmin.AccessToken))
+            .ReadAsync<WebsiteProjectResponse>();
+        ordered.ConceptImages[0].Alt.ShouldBe("Sketch 5");
+
+        var shown = (await PublicProjectsAsync()).Single(p => p.Id == project.Id);
+        shown.ConceptDescription.ShouldBe("Light first: every room faces the sea.");
+        shown.ConceptImages.Select(i => i.Alt).ShouldBe(["Sketch 5", "Sketch 1", "Sketch 2", "Sketch 3", "Sketch 4"]);
+        shown.ConceptImages[0].Src.ShouldBe($"{Public}/files/{ordered.ConceptImages[0].FileId}");
+        shown.Gallery.ShouldHaveSingleItem().Alt.ShouldBe("The pool");
+        (await Client.GetAsync($"{Public}/files/{ordered.ConceptImages[0].FileId}")).StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task The_public_site_serves_only_its_own_pictures()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

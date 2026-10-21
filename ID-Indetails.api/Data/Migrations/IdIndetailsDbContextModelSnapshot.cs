@@ -5968,6 +5968,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(150)")
                         .HasColumnName("client");
 
+                    b.Property<string>("ConceptDescription")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("concept_description");
+
                     b.Property<int?>("ConveyorOrder")
                         .HasColumnType("int")
                         .HasColumnName("conveyor_order");
@@ -6117,6 +6122,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("varchar(200)")
                         .HasColumnName("alt");
+
+                    b.Property<bool>("Concept")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("concept");
 
                     b.Property<long>("FileId")
                         .HasColumnType("bigint")

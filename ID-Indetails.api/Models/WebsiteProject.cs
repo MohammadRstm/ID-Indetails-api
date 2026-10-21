@@ -42,6 +42,9 @@ public class WebsiteProject
     /// <summary>Plain text.</summary>
     public string? Description { get; set; }
 
+    /// <summary>The Concept row's text, beside the concept pictures; optional.</summary>
+    public string? ConceptDescription { get; set; }
+
     /// <summary>The portrait picture (4:5) in the moving strip and the grid.</summary>
     public long? ThumbnailFileId { get; set; }
 

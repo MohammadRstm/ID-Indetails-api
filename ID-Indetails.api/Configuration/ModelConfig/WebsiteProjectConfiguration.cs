@@ -33,6 +33,7 @@ public class WebsiteProjectConfiguration : IEntityTypeConfiguration<WebsiteProje
         builder.Property(x => x.Latitude).HasPrecision(9, 6);
         builder.Property(x => x.Longitude).HasPrecision(9, 6);
         builder.Property(x => x.Description).HasColumnType("text");
+        builder.Property(x => x.ConceptDescription).HasColumnType("text");
         builder.Property(x => x.HeroAlt).HasMaxLength(WebsiteRules.MaxAltLength);
 
         builder.HasIndex(x => x.Slug).IsUnique();
