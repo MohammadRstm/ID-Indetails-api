@@ -13,4 +13,12 @@ public sealed class FileStorageOptions
 
     /// <summary>Whether the job that deletes uploads never attached to anything runs.</summary>
     public bool CleanupEnabled { get; init; } = true;
+
+    /// <summary>
+    /// The secret the invisible watermark is laid and read with (<c>Services/Files/Implementation/Watermark.cs</c>).
+    /// Set your own in production; changing it later means pictures marked before can no longer be read.
+    /// </summary>
+    [Required]
+    [MinLength(16)]
+    public string WatermarkKey { get; init; } = "id-indetails-watermark-default";
 }

@@ -68,6 +68,11 @@ public sealed record WebsiteLocationResponse(
 public sealed record WebsiteCountryResponse(string Code, string Name);
 
 /// <summary>A city of the place lists, with its point and how many people live there.</summary>
+/// <param name="Found">The picture carries the company's invisible mark.</param>
+/// <param name="FileId">The picture it says it is; <paramref name="ProjectTitle"/>, the website project showing it.</param>
+/// <param name="Confidence">How clearly the mark reads, from 0 to 1.</param>
+public sealed record WatermarkCheckResponse(bool Found, long? FileId, string? ProjectTitle, double Confidence);
+
 public sealed record WebsiteCityResponse(string Name, decimal Latitude, decimal Longitude, int Population);
 
 public sealed record WebsiteSocialLinkResponse(long Id, string Label, string Url);

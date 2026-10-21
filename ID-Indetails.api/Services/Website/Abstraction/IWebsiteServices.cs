@@ -66,6 +66,9 @@ public interface IWebsiteContentService
     /// <summary>The countries a place is chosen from.</summary>
     IReadOnlyList<WebsiteCountryResponse> Countries();
 
+    /// <summary>Whether a picture (found anywhere) carries the company's invisible watermark, and which website picture it is.</summary>
+    Task<WatermarkCheckResponse> CheckWatermarkAsync(Stream picture, CancellationToken cancellationToken = default);
+
     /// <summary>The country's cities (by English name or code), biggest first, narrowed by what was typed. 404 for an unknown country.</summary>
     IReadOnlyList<WebsiteCityResponse> Cities(string country, string? search);
 

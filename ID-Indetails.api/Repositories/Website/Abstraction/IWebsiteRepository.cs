@@ -56,6 +56,9 @@ public interface IWebsiteRepository
     /// <summary>Whether the file is one the public website shows: the favicon, or a picture of a published project.</summary>
     Task<bool> IsPublicFileAsync(long fileId, CancellationToken cancellationToken = default);
 
+    /// <summary>The title of the website project that shows this picture (as its card, page picture or in its gallery).</summary>
+    Task<string?> ProjectTitleShowingAsync(long fileId, CancellationToken cancellationToken = default);
+
     /// <summary>A list's rows in order. Tracked when <paramref name="track"/>.</summary>
     Task<List<T>> ListAsync<T>(bool track = false, CancellationToken cancellationToken = default) where T : class, IWebsiteListItem;
 

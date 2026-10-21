@@ -7,6 +7,7 @@ using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Employees;
 using ID_Indetails.api.DTO.Response.Files;
 using ID_Indetails.api.DTO.Response.Messaging;
+using ID_Indetails.api.DTO.Response.Website;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Files.Abstraction;
@@ -113,6 +114,15 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         }
 
         (await (await Client.GetAsync($"/api/files/{file.Id}?size=160", superAdmin.AccessToken)).Content.ReadAsByteArrayAsync()).ShouldBe(small);
+
+        // a copy of 480 px and up carries the invisible mark, and the check finds which picture it is
+        var marked = await (await Client.GetAsync($"/api/files/{file.Id}?size=960", superAdmin.AccessToken)).Content.ReadAsByteArrayAsync();
+        using var form = new MultipartFormDataContent { { new ByteArrayContent(marked), "file", "found online.webp" } };
+        using var check = new HttpRequestMessage(HttpMethod.Post, "/api/website/watermark-check") { Content = form };
+        check.Headers.Authorization = new AuthenticationHeaderValue("Bearer", superAdmin.AccessToken);
+        var reading = await (await Client.SendAsync(check)).ReadAsync<WatermarkCheckResponse>();
+        reading.Found.ShouldBeTrue();
+        reading.FileId.ShouldBe(file.Id);
     }
 
     [Fact]

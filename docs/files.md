@@ -47,6 +47,21 @@ Photos are stored small (`Services/Files/Implementation/Pictures.cs`, SkiaSharp)
   - It is deleted with the photo. A photo already that small comes as it is.
 - **Videos** are stored as they come, written to disk as they arrive. One over 100 MB is removed and refused.
 
+## The invisible watermark
+
+The website's pictures carry a mark in their pixels that says they are the company's, and which picture they are (`Services/Files/Implementation/Watermark.cs`).
+- **What carries it:** every copy of **480 px and up** (`PictureSizes`). That includes all the website gets, since `/api/public/website/files/{id}` never serves an original: without `size`, it serves the 1920 copy. The stored originals and the 160 px previews don't carry it.
+- **How:**
+  - The picture is seen as a 256×256 grid of 16×16 blocks, whatever its size.
+  - Each block carries one bit of a 32-bit code (a company tag, then the picture's id), in the balance of two mid-frequency values. Each bit is spread over 8 blocks, placed and signed by a secret key.
+  - The change is capped so that no pixel moves by more than about 3 levels in 255, smoothly: it can't be seen.
+- **What it survives:** resizing, re-saving as JPEG or WebP, and screenshots, because it is read on the same grid at any size. Heavy cropping, filters, or a tool built to remove it can defeat it.
+- **Checking a picture:** `POST /api/website/watermark-check` (`website:manage`) takes the multipart field `file` (JPEG, PNG or WebP, up to 15 MB). It answers `{ found, fileId, projectTitle, confidence }`.
+  - `confidence` is the share of blocks that agree: about 0.5 by chance, 0.9 or more for a marked picture.
+  - A reading counts as found from 0.7, with the company tag. The dashboard has it on Website › Site.
+- **The key:** `FileStorage:WatermarkKey`, from `WATERMARK_KEY` in the server's `.env`. Set it once: pictures marked with an older key can no longer be read.
+- **Cost:** about 0.1–0.3 s of server time per copy, once, since copies are kept.
+
 ## Storage
 
 - Files are kept on the API's disk, under `FileStorage:RootPath` (`App_Data/files` by default, relative to the content root; gitignored). It must never be a folder the web server serves directly. Back it up together with the database.

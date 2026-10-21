@@ -32,8 +32,10 @@ public static class Pictures
     /// <summary>
     /// The photo upright, its longest side at most <paramref name="maxEdge"/>, as WebP. Null when it can't be read, or
     /// when it is already that small and the WebP isn't smaller than <paramref name="photo"/>: the original is kept then.
+    /// <paramref name="mark"/> changes the pixels before they are saved (the <see cref="Watermark"/>); a marked photo
+    /// always comes back as a new WebP.
     /// </summary>
-    public static byte[]? Shrink(byte[] photo, int maxEdge)
+    public static byte[]? Shrink(byte[] photo, int maxEdge, Action<SKBitmap>? mark = null)
     {
         using var codec = SKCodec.Create(new MemoryStream(photo));
         using var decoded = codec is null ? null : SKBitmap.Decode(codec);
@@ -48,7 +50,9 @@ public static class Pictures
         using var resized = longest > maxEdge
             ? upright.Resize(new SKSizeI(Scaled(upright.Width, maxEdge, longest), Scaled(upright.Height, maxEdge, longest)), new SKSamplingOptions(SKCubicResampler.Mitchell))
             : null;
-        using var pixels = (resized ?? upright).PeekPixels();
+        var shown = resized ?? upright;
+        mark?.Invoke(shown);
+        using var pixels = shown.PeekPixels();
         using var webp = pixels.Encode(SKEncodedImageFormat.Webp, maxEdge < MaxEdge ? CopyQuality : Quality);
         if (webp is null)
         {
@@ -56,7 +60,7 @@ public static class Pictures
         }
 
         // a photo already small and already compressed may not gain anything: keep it, then
-        return resized is null && turned is null && webp.Size >= photo.Length ? null : webp.ToArray();
+        return mark is null && resized is null && turned is null && webp.Size >= photo.Length ? null : webp.ToArray();
     }
 
     private static int Scaled(int side, int maxEdge, int longest) => Math.Max(1, (int)Math.Round(side * (double)maxEdge / longest));

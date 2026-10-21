@@ -64,6 +64,12 @@ public sealed class WebsiteRepository(IdIndetailsDbContext db) : IWebsiteReposit
                 p => p.Published && (p.ThumbnailFileId == fileId || p.HeroFileId == fileId || p.Images.Any(i => i.FileId == fileId)),
                 cancellationToken);
 
+    public Task<string?> ProjectTitleShowingAsync(long fileId, CancellationToken cancellationToken = default)
+        => db.WebsiteProjects
+            .Where(p => p.ThumbnailFileId == fileId || p.HeroFileId == fileId || p.Images.Any(i => i.FileId == fileId))
+            .Select(p => p.Title)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<List<T>> ListAsync<T>(bool track = false, CancellationToken cancellationToken = default) where T : class, IWebsiteListItem
     {
         var rows = track ? db.Set<T>() : db.Set<T>().AsNoTracking();

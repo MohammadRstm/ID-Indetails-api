@@ -99,6 +99,8 @@ services:
       ContentStore__R2__Bucket: ${R2_BUCKET:?}
       ContentStore__R2__AccessKeyId: ${R2_ACCESS_KEY_ID:?}
       ContentStore__R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY:?}
+      # The secret the website pictures' invisible watermark is laid and read with (docs/files.md): set it once, never change it.
+      FileStorage__WatermarkKey: ${WATERMARK_KEY:-id-indetails-watermark-default}
       # The client's nginx, and the TLS proxy before it, are trusted for the visitor's address and scheme.
       Proxy__KnownNetworks__0: 172.30.0.0/24
     volumes:
