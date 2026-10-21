@@ -19,6 +19,8 @@ using ID_Indetails.api.Services.WorkEntries.Implementation;
 namespace ID_Indetails.api.Services.Files.Implementation;
 
 /// <summary>
+/// Photos are stored made small (<see cref="Pictures"/>): upright, at most <see cref="Pictures.MaxEdge"/> px on their
+/// longest side, as WebP. Videos are stored as they come, written straight to disk as they arrive.
 /// Who may download a file: whoever uploaded it; any signed-in person for a profile photo or the company logo; the
 /// chat's people for a message attachment; whoever may read the work entry for its attachment. Anyone else gets
 /// not found. Uploads attached to nothing within a day are deleted.
@@ -28,6 +30,7 @@ public sealed class FileService(
     IPermissionService permissions,
     IFileRepository files,
     IFileStorage storage,
+    IPictureSizes sizes,
     IWorkEntryRepository entries,
     IMessagingService messaging,
     IUnitOfWork unitOfWork,
@@ -37,7 +40,7 @@ public sealed class FileService(
     private const int CleanupBatch = 200;
     private const string NotFound = "File not found.";
 
-    public async Task<FileResponse> UploadAsync(Stream content, string? fileName, long length, CancellationToken cancellationToken = default)
+    public async Task<FileResponse> UploadAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
     {
         var me = await ActiveAsync(cancellationToken);
         var header = new byte[FileRules.HeaderLength];
@@ -45,17 +48,19 @@ public sealed class FileService(
         var detected = FileRules.Detect(header.AsSpan(0, read))
             ?? throw new BusinessRuleException(
                 ErrorCodes.FileTypeNotAllowed, "Only photos (JPEG, PNG, WebP, HEIC) and videos (MP4, MOV, WebM) can be uploaded.");
-        FileRules.CheckSize(detected.Kind, length).ThrowIfDenied();
-        FileRules.CheckDailyQuota(await files.BytesUploadedSinceAsync(me.UserId, clock.UtcNow.AddDays(-1), cancellationToken), length).ThrowIfDenied();
+        // the upload's length (the file and its small envelope) is checked before anything is stored
+        FileRules.CheckDailyQuota(await files.BytesUploadedSinceAsync(me.UserId, clock.UtcNow.AddDays(-1), cancellationToken), uploadLength).ThrowIfDenied();
 
-        content.Position = 0;
-        var key = await storage.SaveAsync(content, detected.Extension, cancellationToken);
+        var whole = new PrefixedStream(header.AsMemory(0, read), content);
+        var (key, stored) = detected.Kind == FileKind.Image
+            ? await SavePhotoAsync(whole, detected, cancellationToken)
+            : await SaveVideoAsync(whole, detected, cancellationToken);
         var file = new StoredFile
         {
             StorageKey = key,
-            OriginalName = FileRules.SafeName(fileName, detected.Extension),
-            MimeType = detected.MimeType,
-            SizeBytes = length,
+            OriginalName = FileRules.SafeName(fileName, stored.Extension),
+            MimeType = stored.MimeType,
+            SizeBytes = storage.SizeOf(key),
             UploadedById = me.UserId,
             CreatedAt = clock.UtcNow,
         };
@@ -73,7 +78,34 @@ public sealed class FileService(
         return FileMapper.ToResponse(file);
     }
 
-    public async Task<FileContent> OpenAsync(long id, CancellationToken cancellationToken = default)
+    /// <summary>A photo, read whole (it is at most 10 MB) and stored made small; as it came when it can't be read.</summary>
+    private async Task<(string Key, FileRules.Detected Stored)> SavePhotoAsync(Stream photo, FileRules.Detected detected, CancellationToken cancellationToken)
+    {
+        using var buffer = new MemoryStream();
+        await photo.CopyToAsync(buffer, cancellationToken);
+        FileRules.CheckSize(detected.Kind, buffer.Length).ThrowIfDenied();
+
+        var original = buffer.ToArray();
+        return Pictures.Shrink(original, Pictures.MaxEdge) is { } small
+            ? (await storage.SaveAsync(new MemoryStream(small), Pictures.WebpExtension, cancellationToken),
+                detected with { MimeType = Pictures.WebpMimeType, Extension = Pictures.WebpExtension })
+            : (await storage.SaveAsync(new MemoryStream(original), detected.Extension, cancellationToken), detected);
+    }
+
+    /// <summary>A video, written to disk as it arrives; refused (and removed) when it turns out too big.</summary>
+    private async Task<(string Key, FileRules.Detected Stored)> SaveVideoAsync(Stream video, FileRules.Detected detected, CancellationToken cancellationToken)
+    {
+        var key = await storage.SaveAsync(video, detected.Extension, cancellationToken);
+        if (FileRules.CheckSize(detected.Kind, storage.SizeOf(key)) is { } tooBig)
+        {
+            storage.Delete(key);
+            tooBig.ThrowIfDenied();
+        }
+
+        return (key, detected);
+    }
+
+    public async Task<FileContent> OpenAsync(long id, int? size = null, CancellationToken cancellationToken = default)
     {
         var me = await ActiveAsync(cancellationToken);
         var file = await files.GetAsync(id, cancellationToken) ?? throw new NotFoundException(NotFound);
@@ -82,7 +114,7 @@ public sealed class FileService(
             throw new NotFoundException(NotFound);
         }
 
-        return new FileContent(storage.OpenRead(file.StorageKey), file.MimeType, file.OriginalName);
+        return await sizes.OpenAsync(file, size, cancellationToken);
     }
 
     public async Task<int> DeleteUnusedAsync(CancellationToken cancellationToken = default)

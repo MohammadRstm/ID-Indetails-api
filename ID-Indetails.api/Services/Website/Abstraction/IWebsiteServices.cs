@@ -95,7 +95,8 @@ public interface IPublicWebsiteService
     Task<PublicWebsiteSettings> SettingsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>A picture the website shows; anything else reads as not found.</summary>
-    Task<FileContent> OpenFileAsync(long fileId, CancellationToken cancellationToken = default);
+    /// <summary>A picture the website shows; with <paramref name="size"/>, its smaller copy (<see cref="IPictureSizes"/>).</summary>
+    Task<FileContent> OpenFileAsync(long fileId, int? size = null, CancellationToken cancellationToken = default);
 
     /// <summary>Emails the message to the company's own address. A robot's message is dropped without a word.</summary>
     Task SendContactMessageAsync(WebsiteContactMessageRequest request, CancellationToken cancellationToken = default);

@@ -12,6 +12,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Files.Abstraction;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SkiaSharp;
 
 namespace ID_Indetails.IntegrationTests.Api;
 
@@ -66,6 +67,52 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.GetAsync($"/api/files/{file.Id}", colleague.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         (await UploadAsync(Client, Png, "plan.png", null)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task A_photo_is_stored_made_small_and_a_smaller_copy_comes_on_request()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        byte[] photo;
+        using (var bitmap = new SKBitmap(3200, 2000))
+        {
+            using (var canvas = new SKCanvas(bitmap))
+            {
+                using var sky = new SKPaint { Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(0, 2000), [new SKColor(90, 140, 210), new SKColor(240, 200, 150)], SKShaderTileMode.Clamp) };
+                canvas.DrawRect(0, 0, 3200, 2000, sky);
+                using var hill = new SKPaint { Color = new SKColor(60, 110, 70), IsAntialias = true };
+                canvas.DrawOval(1600, 2000, 2240, 900, hill);
+            }
+
+            using var png = bitmap.PeekPixels().Encode(SKEncodedImageFormat.Png, 100);
+            photo = png.ToArray();
+        }
+
+        var response = await UploadAsync(Client, photo, "site visit.png", superAdmin.AccessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        var file = await response.ReadAsync<FileResponse>();
+        file.Name.ShouldBe("site visit.webp");
+        file.MimeType.ShouldBe("image/webp");
+        file.SizeBytes.ShouldBeLessThan(photo.Length / 4);
+
+        var stored = await (await Client.GetAsync($"/api/files/{file.Id}", superAdmin.AccessToken)).Content.ReadAsByteArrayAsync();
+        stored.Length.ShouldBe((int)file.SizeBytes);
+        using (var codec = SKCodec.Create(new MemoryStream(stored)))
+        {
+            codec.Info.Size.ShouldBe(new SKSizeI(1920, 1200));
+        }
+
+        // a preview asks for a small copy, made once and kept
+        var preview = await Client.GetAsync($"/api/files/{file.Id}?size=160", superAdmin.AccessToken);
+        preview.Content.Headers.ContentType!.MediaType.ShouldBe("image/webp");
+        var small = await preview.Content.ReadAsByteArrayAsync();
+        small.Length.ShouldBeLessThan(stored.Length / 10);
+        using (var codec = SKCodec.Create(new MemoryStream(small)))
+        {
+            codec.Info.Size.ShouldBe(new SKSizeI(160, 100));
+        }
+
+        (await (await Client.GetAsync($"/api/files/{file.Id}?size=160", superAdmin.AccessToken)).Content.ReadAsByteArrayAsync()).ShouldBe(small);
     }
 
     [Fact]

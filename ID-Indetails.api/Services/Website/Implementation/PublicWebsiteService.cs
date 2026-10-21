@@ -27,7 +27,7 @@ public sealed class PublicWebsiteService(
     IWebsiteRepository website,
     ICompanyRepository company,
     IFileRepository files,
-    IFileStorage storage,
+    IPictureSizes sizes,
     IEmailSender emailSender,
     IPlaceDirectory directory,
     IOptions<EmailOptions> emailOptions,
@@ -73,12 +73,12 @@ public sealed class PublicWebsiteService(
             settings?.WebsiteUnderConstructionSince is not null);
     }
 
-    public async Task<FileContent> OpenFileAsync(long fileId, CancellationToken cancellationToken = default)
+    public async Task<FileContent> OpenFileAsync(long fileId, int? size = null, CancellationToken cancellationToken = default)
     {
         var file = await website.IsPublicFileAsync(fileId, cancellationToken) ? await files.GetAsync(fileId, cancellationToken) : null;
         return file is null
             ? throw new NotFoundException("Picture not found.")
-            : new FileContent(storage.OpenRead(file.StorageKey), file.MimeType, file.OriginalName);
+            : await sizes.OpenAsync(file, size, cancellationToken);
     }
 
     public async Task SendContactMessageAsync(WebsiteContactMessageRequest request, CancellationToken cancellationToken = default)

@@ -50,12 +50,16 @@ public sealed class PublicWebsiteController(IPublicWebsiteService website) : Con
     [ResponseCache(Duration = ContentSeconds, Location = ResponseCacheLocation.Any)]
     public Task<PublicWebsiteSettings> Settings(CancellationToken cancellationToken) => website.SettingsAsync(cancellationToken);
 
-    /// <summary>A picture the website shows. A file's address never changes its content, so it may be cached for a day.</summary>
+    /// <summary>
+    /// A picture the website shows. A file's address never changes its content, so it may be cached for a day.
+    /// <c>?size=</c> asks for a smaller copy (its longest side, rounded up to 160, 480, 960 or 1920 px): a card or a
+    /// thumbnail needn't download the whole photo.
+    /// </summary>
     [HttpGet("files/{id:long}")]
     [ResponseCache(Duration = PictureSeconds, Location = ResponseCacheLocation.Any)]
-    public async Task<IActionResult> Picture(long id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Picture(long id, [FromQuery] int? size, CancellationToken cancellationToken)
     {
-        var file = await website.OpenFileAsync(id, cancellationToken);
+        var file = await website.OpenFileAsync(id, size, cancellationToken);
         Response.Headers.XContentTypeOptions = "nosniff";
         return File(file.Content, file.MimeType);
     }

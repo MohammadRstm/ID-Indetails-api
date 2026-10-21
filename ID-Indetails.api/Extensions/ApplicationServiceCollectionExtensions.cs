@@ -291,6 +291,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddScoped<IFileService, FileService>();
+        services.AddScoped<IPictureSizes, PictureSizes>();
         services.AddScoped<IFileClaims, FileClaims>();
         services.AddHostedService<FileCleanupJob>();
         services.AddScoped<ISetupService, SetupService>();

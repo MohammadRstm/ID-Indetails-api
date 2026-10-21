@@ -12,10 +12,15 @@ public sealed record FileContent(Stream Content, string MimeType, string Name);
 /// </summary>
 public interface IFileService
 {
-    Task<FileResponse> UploadAsync(Stream content, string? fileName, long length, CancellationToken cancellationToken = default);
+    /// <param name="content">The file as it arrives; it is read once, from the start.</param>
+    /// <param name="uploadLength">The request's length, to refuse an upload over the day's allowance before storing it.</param>
+    Task<FileResponse> UploadAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default);
 
-    /// <summary>The file's content, if the caller may read it; otherwise not found.</summary>
-    Task<FileContent> OpenAsync(long id, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// The file's content, if the caller may read it; otherwise not found. A photo with a <paramref name="size"/> comes
+    /// as a smaller copy (<see cref="IPictureSizes"/>).
+    /// </summary>
+    Task<FileContent> OpenAsync(long id, int? size = null, CancellationToken cancellationToken = default);
 
     /// <summary>Deletes uploads that were attached to nothing within a day, and returns how many went.</summary>
     Task<int> DeleteUnusedAsync(CancellationToken cancellationToken = default);
