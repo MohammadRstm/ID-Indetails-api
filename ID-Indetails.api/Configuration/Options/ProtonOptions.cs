@@ -15,7 +15,7 @@ public sealed class ProtonOptions
     public string ApiKey { get; init; } = string.Empty;
 
     [Required]
-    public string Model { get; init; } = "claude-sonnet-5-5";
+    public string Model { get; init; } = "claude-haiku-5-5";
 
     /// <summary>low, medium, high, xhigh or max. Low keeps chat answers fast and cheap.</summary>
     [RegularExpression("^(low|medium|high|xhigh|max)$")]
@@ -246,18 +246,38 @@ public sealed class ProtonInsightOptions
     public int TargetSoonDays { get; init; } = 14;
 }
 
-/// <summary>USD per million tokens of <see cref="ProtonOptions.Model"/>, used to estimate cost.</summary>
+/// <summary>
+/// USD per million tokens of <see cref="ProtonOptions.Model"/>, used to estimate cost. The defaults are Claude Haiku
+/// 5.5's list prices: cache reads at 0.1x the input price, five-minute cache writes at 1.25x, and a second rate card
+/// for a model call whose prompt is longer than 100,000 tokens. Change them with the model.
+/// </summary>
 public sealed class ProtonPrices
 {
     [Range(0, 1_000)]
-    public decimal InputPerMillion { get; init; } = 2m;
+    public decimal InputPerMillion { get; init; } = 0.10m;
 
     [Range(0, 1_000)]
-    public decimal OutputPerMillion { get; init; } = 10m;
+    public decimal OutputPerMillion { get; init; } = 0.50m;
 
     [Range(0, 1_000)]
-    public decimal CacheReadPerMillion { get; init; } = 0.20m;
+    public decimal CacheReadPerMillion { get; init; } = 0.01m;
 
     [Range(0, 1_000)]
-    public decimal CacheWritePerMillion { get; init; } = 2.50m;
+    public decimal CacheWritePerMillion { get; init; } = 0.125m;
+
+    /// <summary>A call whose prompt (cached or not) is longer than this many tokens is priced at the Long… rates; 0 for one rate card.</summary>
+    [Range(0, 10_000_000)]
+    public int LongPromptAboveTokens { get; init; } = 100_000;
+
+    [Range(0, 1_000)]
+    public decimal LongInputPerMillion { get; init; } = 0.50m;
+
+    [Range(0, 1_000)]
+    public decimal LongOutputPerMillion { get; init; } = 2.50m;
+
+    [Range(0, 1_000)]
+    public decimal LongCacheReadPerMillion { get; init; } = 0.05m;
+
+    [Range(0, 1_000)]
+    public decimal LongCacheWritePerMillion { get; init; } = 0.625m;
 }

@@ -28,11 +28,20 @@ public sealed class ProtonUsageService(
 
     public bool IsSwitchedOn => options.Value.Enabled && !string.IsNullOrWhiteSpace(options.Value.ApiKey);
 
-    public ProtonTokenPrices Prices => new(
-        options.Value.Prices.InputPerMillion,
-        options.Value.Prices.OutputPerMillion,
-        options.Value.Prices.CacheReadPerMillion,
-        options.Value.Prices.CacheWritePerMillion);
+    public ProtonTokenPrices Prices
+    {
+        get
+        {
+            var prices = options.Value.Prices;
+            return new ProtonTokenPrices(prices.InputPerMillion, prices.OutputPerMillion, prices.CacheReadPerMillion, prices.CacheWritePerMillion)
+            {
+                LongPromptAbove = prices.LongPromptAboveTokens,
+                LongPrompt = prices.LongPromptAboveTokens > 0
+                    ? new ProtonTokenPrices(prices.LongInputPerMillion, prices.LongOutputPerMillion, prices.LongCacheReadPerMillion, prices.LongCacheWritePerMillion)
+                    : null,
+            };
+        }
+    }
 
     public async Task<ProtonUsageResponse> MineAsync(long userId, CancellationToken cancellationToken = default)
     {
@@ -131,8 +140,9 @@ public sealed class ProtonUsageService(
             options.Value.MonthlyBudgetUsd,
             topUps.Sum(t => t.AmountUsd),
             position.Limit,
-            Math.Round(position.Used, 2),
-            Math.Round(position.Remaining, 2),
+            // to the same 4 places as the breakdowns: a month of Haiku questions can cost less than a cent
+            Math.Round(position.Used, 4),
+            Math.Round(position.Remaining, 4),
             position.UsedPct,
             byUser.Sum(u => u.Questions),
             topUps.Select(t => new ProtonTopUpResponse(t.Id, t.AmountUsd, t.Note, t.AddedBy, t.AddedAt)).ToList(),

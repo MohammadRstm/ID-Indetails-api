@@ -87,6 +87,23 @@ public class ProtonRulesTests
     }
 
     [Fact]
+    public void A_call_whose_prompt_passes_the_threshold_is_priced_on_the_long_prompt_card()
+    {
+        var prices = new ProtonTokenPrices(Input: 0.10m, Output: 0.50m, CacheRead: 0.01m, CacheWrite: 0.125m)
+        {
+            LongPromptAbove = 100_000,
+            LongPrompt = new ProtonTokenPrices(Input: 0.50m, Output: 2.50m, CacheRead: 0.05m, CacheWrite: 0.625m),
+        };
+
+        // the prompt counts cached tokens too: 20,000 + 80,000 is exactly the threshold, still the standard card
+        ProtonUsageRules.CostOf(new ProtonTokens(20_000, 1_000_000, 80_000, 0), prices)
+            .ShouldBe(0.002m + 0.5m + 0.0008m);
+        // past it is the long-prompt card, for the output as well
+        ProtonUsageRules.CostOf(new ProtonTokens(20_002, 1_000_000, 80_000, 0), prices)
+            .ShouldBe(0.010001m + 2.5m + 0.004m);
+    }
+
+    [Fact]
     public void An_allowance_is_used_up_at_its_limit_and_never_shows_negative_remaining()
     {
         var budget = ProtonUsageRules.Budget(monthlyBudget: 50m, topUps: 10m, spent: 45m);
