@@ -358,7 +358,9 @@ submits or sends anything itself.
 - **Time**: `StreamQuestionTimeoutSeconds` (120) for the whole question; the JSON endpoint keeps 55 s.
 - **Stop or a dropped connection**: the question is still recorded with its tokens (outcome `failed`), adds nothing to
   the conversation, and any change it proposed is closed as `superseded`, so no card waits for a Confirm that can't
-  come. The same applies to any question that fails.
+  come. The same applies to any question that fails. The tokens include a streamed model call cut off part way: the
+  provider bills it from its start, so the input it reported in the stream's opening event (and the output, if a
+  closing delta came) is counted. A plain (non-streamed) call stopped before its answer reports nothing to count.
 - **How**: the agent prepares a question (all checks), then answers it. With a listener, each model call is streamed
   (`Messages.CreateStreaming`) and put back together (`ProtonStreamedMessage`) for the same tool loop and echo.
 - **Caching**: the system prompt carries an explicit cache breakpoint (it caches the tools and the prompt for

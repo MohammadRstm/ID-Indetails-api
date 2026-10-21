@@ -149,6 +149,29 @@ public class ProtonStreamTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
         api.Anthropic.Requests.Last()["messages"]!.AsArray().Count.ShouldBe(3);
     }
 
+    [Fact]
+    public async Task An_answer_stopped_part_way_still_records_the_tokens_the_provider_billed()
+    {
+        var superAdmin = await SuperAdminAsync();
+        // the model call has started (the provider reported its input) when the person presses Stop
+        var rest = api.Anthropic.HoldAfterStart(FakeAnthropic.Text("A long answer.", inputTokens: 5000));
+        var response = await StreamAsync(superAdmin, new { text = "Tell me everything" });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        await Eventually(() => Task.FromResult(api.Anthropic.Requests.Count == 1));
+        await Task.Delay(500);
+        response.Dispose();
+
+        await using var scope = api.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdIndetailsDbContext>();
+        await Eventually(() => db.ProtonUsage.AsNoTracking().AnyAsync(u => u.UserId == superAdmin.User.Id && u.Outcome == ProtonOutcome.Failed));
+        var row = await db.ProtonUsage.AsNoTracking().SingleAsync(u => u.UserId == superAdmin.User.Id);
+        row.InputTokens.ShouldBe(5000);
+        row.CacheReadTokens.ShouldBe(400);
+        row.RoundTrips.ShouldBe(1);
+        row.CostUsd.ShouldBeGreaterThan(0m);
+        rest.SetResult();
+    }
+
     private static async Task Eventually(Func<Task<bool>> condition)
     {
         for (var i = 0; i < 100; i++)
