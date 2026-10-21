@@ -451,7 +451,9 @@ public sealed class ProposeLabourDefaultsTool(IProjectService projects, ILabourS
     }
 }
 
-public sealed record StatementArgs(long ProjectId, long? StatementId, CreateStatementRequest? Request, RecordDeliveryRequest? Delivery);
+/// <param name="Total">For a new statement: the total the card showed (the user typed it), and how many materials it held.</param>
+public sealed record StatementArgs(
+    long ProjectId, long? StatementId, CreateStatementRequest? Request, RecordDeliveryRequest? Delivery, decimal? Total = null, int? Count = null);
 
 public sealed record CreateStatementInput : ProtonActionInput
 {
@@ -496,7 +498,7 @@ public sealed class ProposeCreateStatementTool(IStatementService statements) : P
         var changes = preview.Types.Take(10).Select(t => new ProtonChange(t.Label, null, MoneyText.Amount(t.Total, preview.Currency))).ToList();
         changes.Add(new ProtonChange("Total", null, MoneyText.Amount(preview.Total, preview.Currency)));
         changes.Add(new ProtonChange("Remaining after it", null, MoneyText.Amount(preview.Remaining, preview.Currency)));
-        return (new StatementArgs(input.ProjectId, null, request, null),
+        return (new StatementArgs(input.ProjectId, null, request, null, preview.Total, preview.Count),
             new ProtonPreview($"Make a statement for {preview.ProjectTitle}", changes,
                 $"{preview.Count} material(s) for {preview.Client.DisplayName}. It isn't sent until you send it from the app.",
                 Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(preview.Total)),
@@ -507,6 +509,13 @@ public sealed class ProposeCreateStatementTool(IStatementService statements) : P
 
     protected override async Task<ProtonActionDone> ExecuteAsync(StatementArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
+        // the statement bills the materials there are now: they must still add up to the total the user typed
+        var now = await statements.PreviewAsync(args.ProjectId, args.Request!, cancellationToken);
+        if (args.Total is null || now.Total != args.Total || now.Count != args.Count)
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The site's materials changed since Proton proposed this. Ask again.");
+        }
+
         var statement = await statements.CreateAsync(args.ProjectId, args.Request!, cancellationToken);
         return new ProtonActionDone($"Made statement {statement.Number}: {MoneyText.Amount(statement.Total, statement.Currency)}.", "statement", statement.Id ?? 0, []);
     }

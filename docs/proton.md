@@ -567,15 +567,15 @@ no separators: `2500`, `320.5`) or the invoice number, which the server stored w
 
 | Tool | Stands in for | Typed |
 |---|---|---|
-| `propose_create_invoice`, `propose_update_invoice` | `POST /api/projects/{id}/invoices`, `PUT /api/invoices/{id}` | — (a draft is sent to nobody) |
-| `propose_invoice_step` | `…/issue`, `…/void`, `DELETE /api/invoices/{id}` (discard), `DELETE …/schedule` | issue and discard: the total; void: the invoice number (refused while payments are recorded against it) |
+| `propose_create_invoice`, `propose_update_invoice` | `POST /api/projects/{id}/invoices`, `PUT /api/invoices/{id}` | — (a draft is sent to nobody); the card shows every field the draft gets, the lines as one value and the notes printed for the client in full |
+| `propose_invoice_step` | `…/issue`, `…/void`, `DELETE /api/invoices/{id}` (discard), `DELETE …/schedule` | issue and discard: the total, refused at Confirm if the draft changed since the card (the issue card also shows the lines and notes); void: the invoice number (refused while payments are recorded against it) |
 | `propose_record_invoice_delivery`, `propose_record_statement_delivery` | `…/deliveries` | — (WhatsApp or by hand only: emails are sent from the app) |
 | `propose_record_payment` | `POST /api/projects/{id}/payments` | the amount; at the dated exchange rate in force, never one Proton sets; the card gives the invoice's balance before and after |
 | `propose_payment_step` | `PUT /api/payments/{id}/invoice`, `…/void` | void: the amount |
 | `propose_add_expense`, `propose_delete_expense` | project expenses | the amount |
 | `propose_add_materials`, `propose_material_step` | a site's materials (add, correct, delete, client price) | add: the total cost; delete: its cost |
 | `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13) |
-| `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync` |
+| `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync`; refused at Confirm if the preview's total or count changed since the card |
 | `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; bank details are never read into a proposal: they are taken from the database when the change is made |
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate |
 | `propose_project_money` | `PUT /api/projects/{id}/billing` (Design revenue), `…/pricing` (Execution fee and markup) | the new amount |

@@ -67,12 +67,22 @@ public sealed class ProposeCreateInvoiceTool(IProjectService projects, IInvoiceS
         {
             Lines = MoneyText.LinesOf(input.Lines), TermsDays = input.TermsDays, Notes = MoneyText.Clean(input.Notes),
         };
-        var changes = new List<ProtonChange> { new("Project", null, project.Title), new("Bill to", null, project.Client?.DisplayName ?? "the client") };
-        changes.AddRange(request.Lines.Select(l => new ProtonChange(l.Description, null, MoneyText.Amount(l.Amount, null))));
-        changes.Add(new ProtonChange("Total", null, MoneyText.Amount(request.Lines.Sum(l => l.Amount), null)));
+        // Every field the draft gets is on the card, and text the model wrote is only ever a value, never a row's label.
+        var changes = new List<ProtonChange>
+        {
+            new("Project", null, project.Title),
+            new("Bill to", null, project.Client?.DisplayName ?? "the client"),
+            new("Lines", null, MoneyText.Lines(request.Lines, null)),
+            new("Total", null, MoneyText.Amount(request.Lines.Sum(l => l.Amount), null)),
+        };
         if (request.TermsDays is { } days)
         {
             changes.Add(new ProtonChange("Terms", null, $"{days} days"));
+        }
+
+        if (request.Notes is { } notes)
+        {
+            changes.Add(new ProtonChange("Notes printed for the client", null, notes));
         }
 
         return (new InvoiceDraftArgs(project.Id, null, request, null),
@@ -172,7 +182,9 @@ public sealed class ProposeUpdateInvoiceTool(IInvoiceService invoices) : ProtonA
     }
 }
 
-public sealed record InvoiceStepArgs(long InvoiceId, string Step, DateOnly? IssuedOn, string? Reason, RecordDeliveryRequest? Delivery);
+/// <param name="Draft">For issue and discard: the draft as the card showed it. If it changed since, the step is refused.</param>
+public sealed record InvoiceStepArgs(
+    long InvoiceId, string Step, DateOnly? IssuedOn, string? Reason, RecordDeliveryRequest? Delivery, SaveInvoiceRequest? Draft = null);
 
 public enum ProtonInvoiceStep
 {
@@ -235,6 +247,7 @@ public sealed class ProposeInvoiceStepTool(IInvoiceService invoices) : ProtonAct
         var isIssued = invoice.Status is not InvoiceStatus.Draft and not InvoiceStatus.Void;
         var total = MoneyText.Amount(invoice.Total, invoice.Currency);
         var name = invoice.Number ?? $"the draft for {invoice.Project.Title}";
+        var draft = MoneyText.RequestOf(invoice);
         ProtonPreview preview;
         switch (input.Step)
         {
@@ -242,11 +255,23 @@ public sealed class ProposeInvoiceStepTool(IInvoiceService invoices) : ProtonAct
                 InvoiceRules.CheckDraft(isIssued, invoice.Status == InvoiceStatus.Void).ThrowIfDenied();
                 var issuedOn = input.IssuedOn ?? context.Today;
                 InvoiceRules.CheckIssueDate(issuedOn, context.Today).ThrowIfDenied();
-                preview = new ProtonPreview($"Issue {name}",
-                    [new ProtonChange("Status", "Draft", "Issued"), new ProtonChange("Total", null, total), new ProtonChange("Dated", null, ProjectText.Date(issuedOn))],
+                // what goes to the client, in full: the lines and the notes printed on it, not only the total
+                List<ProtonChange> issue =
+                [
+                    new("Status", "Draft", "Issued"),
+                    new("Lines", null, MoneyText.Lines(draft.Lines, invoice.Currency)),
+                    new("Total", null, total),
+                    new("Dated", null, ProjectText.Date(issuedOn)),
+                ];
+                if (draft.Notes is { } notes)
+                {
+                    issue.Add(new ProtonChange("Notes printed for the client", null, notes));
+                }
+
+                preview = new ProtonPreview($"Issue {name}", issue,
                     $"It gets its number and counts as billed to {invoice.Client.DisplayName}. Sending it is a separate step in the app.",
                     Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(invoice.Total), Irreversible: true);
-                return (new InvoiceStepArgs(invoice.Id, "issue", issuedOn, null, null), preview, MoneyText.ProjectRef(invoice));
+                return (new InvoiceStepArgs(invoice.Id, "issue", issuedOn, null, null, draft), preview, MoneyText.ProjectRef(invoice));
             case ProtonInvoiceStep.Void:
                 if (string.IsNullOrWhiteSpace(input.Reason))
                 {
@@ -268,7 +293,7 @@ public sealed class ProposeInvoiceStepTool(IInvoiceService invoices) : ProtonAct
                 InvoiceRules.CheckDraft(isIssued, invoice.Status == InvoiceStatus.Void).ThrowIfDenied();
                 preview = new ProtonPreview($"Discard {name}", [new ProtonChange("Draft", total, "deleted")], null,
                     Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(invoice.Total), Irreversible: true);
-                return (new InvoiceStepArgs(invoice.Id, "discard", null, null, null), preview, MoneyText.ProjectRef(invoice));
+                return (new InvoiceStepArgs(invoice.Id, "discard", null, null, null, draft), preview, MoneyText.ProjectRef(invoice));
             default:
                 if (invoice.SendOn is null)
                 {
@@ -291,6 +316,16 @@ public sealed class ProposeInvoiceStepTool(IInvoiceService invoices) : ProtonAct
     protected override async Task<ProtonActionDone> ExecuteAsync(InvoiceStepArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
         await context.RequireAsync(Steps[Enum.Parse<ProtonInvoiceStep>(args.Step, ignoreCase: true)]);
+        if (args.Step is "issue" or "discard")
+        {
+            // the user typed the total the card showed: the draft must still be that draft
+            var current = await invoices.GetAsync(args.InvoiceId, cancellationToken);
+            if (args.Draft is null || !MoneyText.Same(MoneyText.RequestOf(current), args.Draft))
+            {
+                throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The draft changed since Proton proposed this. Ask again.");
+            }
+        }
+
         switch (args.Step)
         {
             case "issue":
@@ -594,7 +629,7 @@ public static class MoneyText
     public static bool Same(SaveInvoiceRequest a, SaveInvoiceRequest b)
         => SameLines(a.Lines, b.Lines) && a.TermsDays == b.TermsDays && a.Notes == b.Notes && a.BillToName == b.BillToName && a.BillToContact == b.BillToContact;
 
-    public static string Lines(IReadOnlyList<InvoiceLineRequest> lines, string currency)
+    public static string Lines(IReadOnlyList<InvoiceLineRequest> lines, string? currency)
         => string.Join("; ", lines.Select(l => $"{l.Description}: {Amount(l.Amount, currency)}"));
 
     public static ProtonRef ProjectRef(InvoiceSummaryResponse i) => new(ProtonRefType.Project, i.Project.Id, i.Project.Title, i.Domain);
