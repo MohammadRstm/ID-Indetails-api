@@ -108,7 +108,16 @@ public sealed class OpenAiVoiceProvider(IHttpClientFactory clients, IOptions<Pro
                 : "Voice isn't available right now. You can still type your question.");
         }
 
-        var result = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        JsonNode? result;
+        try
+        {
+            result = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        }
+        catch (JsonException)
+        {
+            result = null;
+        }
+
         var id = result?["session"]?["id"]?.GetValue<string>();
         var sdp = result?["transport"]?["sdp"]?.GetValue<string>();
         if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(sdp))

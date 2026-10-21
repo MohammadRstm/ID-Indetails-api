@@ -13,7 +13,10 @@ namespace ID_Indetails.IntegrationTests.Api;
 /// </summary>
 public sealed class FakeVoiceProvider : IProtonVoiceProvider
 {
+    private readonly Lock _lock = new();
     private int _next;
+    private int _attaches;
+    private int _failAttaches;
 
     public ConcurrentQueue<ProtonVoiceStart> Starts { get; } = new();
 
@@ -24,25 +27,69 @@ public sealed class FakeVoiceProvider : IProtonVoiceProvider
 
     public int SecondsAtClose { get; set; } = 42;
 
-    public Task<ProtonVoiceStarted> StartAsync(ProtonVoiceStart start, CancellationToken cancellationToken)
+    /// <summary>When set, the provider starts the session, then answers only once it opens (a slow answer).</summary>
+    public TaskCompletionSource? StartGate { get; set; }
+
+    /// <summary>When set, attaching waits for it to open, or for the attach's own time limit.</summary>
+    public TaskCompletionSource? AttachGate { get; set; }
+
+    /// <summary>How many tries to attach the watch has made.</summary>
+    public int Attaches => Volatile.Read(ref _attaches);
+
+    /// <summary>How many of the next tries to attach fail, as a dropped connection would.</summary>
+    public void FailAttaches(int count)
+    {
+        lock (_lock)
+        {
+            _failAttaches = count;
+        }
+    }
+
+    public async Task<ProtonVoiceStarted> StartAsync(ProtonVoiceStart start, CancellationToken cancellationToken)
     {
         if (Refuse)
         {
             throw new ServiceUnavailableException(ErrorCodes.ProtonVoiceUnavailable, "Voice isn't available right now. You can still type your question.");
         }
 
-        Starts.Enqueue(start);
         var id = $"live_test_{Interlocked.Increment(ref _next)}";
         Links[id] = new FakeVoiceLink(this);
-        return Task.FromResult(new ProtonVoiceStarted(id, "v=0\r\no=- answer\r\n"));
+        Starts.Enqueue(start);
+        if (StartGate is { } gate)
+        {
+            // never longer than a test may wait
+            await gate.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+        }
+
+        return new ProtonVoiceStarted(id, "v=0\r\no=- answer\r\n");
     }
 
-    public Task<IProtonVoiceLink> AttachAsync(string sessionId, CancellationToken cancellationToken)
-        => Task.FromResult<IProtonVoiceLink>(Links[sessionId]);
+    public async Task<IProtonVoiceLink> AttachAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref _attaches);
+        if (AttachGate is { } gate)
+        {
+            await gate.Task.WaitAsync(cancellationToken);
+        }
+
+        lock (_lock)
+        {
+            if (_failAttaches > 0)
+            {
+                _failAttaches--;
+                throw new System.Net.WebSockets.WebSocketException("The provider dropped the connection.");
+            }
+        }
+
+        return Links[sessionId];
+    }
 
     public void Reset()
     {
         Refuse = false;
+        StartGate = null;
+        AttachGate = null;
+        FailAttaches(0);
         Starts.Clear();
     }
 }

@@ -739,6 +739,14 @@ People can talk to Proton through OpenAI's GPT-Live (`gpt-live-1`). It is one as
   session's usage, and closes it when it reaches `MaxSessionMinutes`, when the month's budget runs out, when the
   person ends it, or when the app stops. One session per person (`409 proton_voice_busy`); sessions live in server
   memory, like conversations.
+  - The watch attaches on its own time limit (10 s a try), never on the session's ending, and tries again (after 1,
+    2 and 4 s, then every 5 s) until it is attached or the session's time is up. A session ended before the watch
+    was attached is closed as soon as it is.
+  - An ended session takes no more questions at once, but the person's place stays held until the provider has
+    closed it (or its time is up), so ending early can't open a second live session.
+  - If the watch never attaches, the session is held to its time and its cost estimated from that.
+  - Once the provider has started a session, the server watches it even if the browser left before the answer
+    came back, and closes it at once.
 - **Usage.** A session is one `proton_usage` row: `channel = voice`, the voice model, `voice_seconds` and the
   estimated cost (`PricePerMinuteUsd`, at least the 15 seconds the provider bills at start). Without a final figure from
   the provider, the time is estimated from how long the session was open, and the row's outcome is `failed`. The
