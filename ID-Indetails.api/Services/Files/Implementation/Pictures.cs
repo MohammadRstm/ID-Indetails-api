@@ -86,7 +86,7 @@ public static class Pictures
         canvas.Translate(turned.Width / 2f, turned.Height / 2f);
         canvas.RotateDegrees(degrees);
         canvas.Translate(-photo.Width / 2f, -photo.Height / 2f);
-        canvas.DrawBitmap(photo, 0, 0);
+        canvas.DrawBitmap(photo, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
         return turned;
     }
 }

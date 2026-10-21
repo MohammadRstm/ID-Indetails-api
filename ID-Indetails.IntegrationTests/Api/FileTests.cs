@@ -85,7 +85,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
                 canvas.DrawOval(1600, 2000, 2240, 900, hill);
             }
 
-            using var png = bitmap.PeekPixels().Encode(SKEncodedImageFormat.Png, 100);
+            using var png = bitmap.PeekPixels().Encode(SKEncodedImageFormat.Png, 100)!;
             photo = png.ToArray();
         }
 
@@ -100,7 +100,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         stored.Length.ShouldBe((int)file.SizeBytes);
         using (var codec = SKCodec.Create(new MemoryStream(stored)))
         {
-            codec.Info.Size.ShouldBe(new SKSizeI(1920, 1200));
+            codec!.Info.Size.ShouldBe(new SKSizeI(1920, 1200));
         }
 
         // a preview asks for a small copy, made once and kept
@@ -110,7 +110,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         small.Length.ShouldBeLessThan(stored.Length / 10);
         using (var codec = SKCodec.Create(new MemoryStream(small)))
         {
-            codec.Info.Size.ShouldBe(new SKSizeI(160, 100));
+            codec!.Info.Size.ShouldBe(new SKSizeI(160, 100));
         }
 
         (await (await Client.GetAsync($"/api/files/{file.Id}?size=160", superAdmin.AccessToken)).Content.ReadAsByteArrayAsync()).ShouldBe(small);

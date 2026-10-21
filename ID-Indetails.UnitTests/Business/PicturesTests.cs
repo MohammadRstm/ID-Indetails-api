@@ -24,14 +24,14 @@ public class PicturesTests
             }
         }
 
-        using var png = bitmap.PeekPixels().Encode(SKEncodedImageFormat.Png, 100);
+        using var png = bitmap.PeekPixels().Encode(SKEncodedImageFormat.Png, 100)!;
         return png.ToArray();
     }
 
     private static SKSizeI SizeOf(byte[] picture)
     {
         using var codec = SKCodec.Create(new MemoryStream(picture));
-        return codec.Info.Size;
+        return codec!.Info.Size;
     }
 
     [Fact]
