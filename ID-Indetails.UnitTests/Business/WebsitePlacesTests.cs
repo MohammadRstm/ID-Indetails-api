@@ -61,6 +61,22 @@ public class WebsitePlacesTests
     }
 
     [Fact]
+    public void A_city_looked_for_in_the_wrong_country_is_found_where_it_is()
+    {
+        var africa = Directory(
+            "Kinshasa	CD	-4.32758	15.31357	7785965",
+            "Brazzaville	CG	-4.26613	15.28318	1284609",
+            "Brazzaville	CI	5.41667	-4.08333	0",
+            "Braz	GH	5.6	-0.2	10");
+
+        // an exact name first, then the biggest; never the country it was looked for in
+        africa.Elsewhere("brazzaville", "CD", 5).Select(c => c.CountryCode).ShouldBe(["CG", "CI"]);
+        africa.Elsewhere("Brazza", "CG", 5).Select(c => c.CountryCode).ShouldBe(["CI"]);
+        // too short to mean anything
+        africa.Elsewhere("br", "CD", 5).ShouldBeEmpty();
+    }
+
+    [Fact]
     public void A_name_finds_its_city_the_biggest_when_several_share_it()
     {
         Lebanon.City("LB", "  SAIDA ")!.Name.ShouldBe("Saïda");
@@ -101,6 +117,14 @@ public class WebsitePlacesTests
         world.Cities("LB", null, 10_000).Count.ShouldBeGreaterThan(3_000);
         world.City("LB", "Jbeil")!.Name.ShouldBe("Byblos");
         world.Cities("LB", "gemmayze", 5).Select(c => c.Name).ShouldContain("Ej Jimmaïze");
+        // every village of Ghana, the Republic of the Congo, Liberia and Sierra Leone too
+        foreach (var country in new[] { "GH", "CG", "LR", "SL" })
+        {
+            world.Cities(country, null, 100_000).Count.ShouldBeGreaterThan(5_000, country);
+        }
+
+        world.City("CG", "Brazzaville")!.Population.ShouldBeGreaterThan(1_000_000);
+        world.Elsewhere("Brazzaville", "CD", 5).First().CountryCode.ShouldBe("CG");
     }
 
     [Fact]

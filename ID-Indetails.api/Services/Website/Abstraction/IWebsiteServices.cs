@@ -69,6 +69,9 @@ public interface IWebsiteContentService
     /// <summary>The country's cities (by English name or code), biggest first, narrowed by what was typed. 404 for an unknown country.</summary>
     IReadOnlyList<WebsiteCityResponse> Cities(string country, string? search);
 
+    /// <summary>Cities of that name in other countries than the one given (three letters typed at least), at most five.</summary>
+    IReadOnlyList<WebsiteCityElsewhereResponse> CitiesElsewhere(string country, string search);
+
     Task<WebsiteContentResponse> SetFaviconAsync(AttachFileRequest request, CancellationToken cancellationToken = default);
 
     Task<WebsiteContentResponse> RemoveFaviconAsync(CancellationToken cancellationToken = default);

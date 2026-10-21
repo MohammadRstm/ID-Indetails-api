@@ -70,6 +70,9 @@ public sealed record WebsiteCountryResponse(string Code, string Name);
 /// <summary>A city of the place lists, with its point and how many people live there.</summary>
 public sealed record WebsiteCityResponse(string Name, decimal Latitude, decimal Longitude, int Population);
 
+/// <summary>A city of another country than the one chosen: where to look instead.</summary>
+public sealed record WebsiteCityElsewhereResponse(string Name, string CountryCode, string CountryName);
+
 public sealed record WebsiteSocialLinkResponse(long Id, string Label, string Url);
 
 /// <summary>Everything on the Website page apart from the projects.</summary>

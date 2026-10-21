@@ -8,7 +8,8 @@ public sealed record DirectoryCity(string Name, string CountryCode, decimal Lati
 
 /// <summary>
 /// The countries and cities the website's places are chosen from, so a place is never misspelt and always has a
-/// point. Read from GeoNames' list of places of 1,000 people or more, bundled with the API (docs/website.md).
+/// point. Read from GeoNames' list of places of 1,000 people or more, and every village of a few countries, bundled
+/// with the API (docs/website.md).
 /// </summary>
 public interface IPlaceDirectory
 {
@@ -23,6 +24,12 @@ public interface IPlaceDirectory
     /// name starts with it first, then those containing it, accents and case ignored.
     /// </summary>
     IReadOnlyList<DirectoryCity> Cities(string countryCode, string? search, int take);
+
+    /// <summary>
+    /// Cities of other countries whose name (or another name of theirs) starts with <paramref name="search"/>: an exact
+    /// name first, then the biggest. For telling someone who looked in the wrong country where the city is.
+    /// </summary>
+    IReadOnlyList<DirectoryCity> Elsewhere(string search, string exceptCountryCode, int take);
 
     /// <summary>The country's city of this name, accents and case ignored; the biggest when several share it.</summary>
     DirectoryCity? City(string countryCode, string name);

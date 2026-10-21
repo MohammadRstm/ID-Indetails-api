@@ -87,6 +87,15 @@ public sealed class WebsiteController(IWebsiteProjectService projects, IWebsiteC
     [HasAnyPermission(PermissionCodes.WebsiteView, PermissionCodes.WebsiteManage)]
     public IReadOnlyList<WebsiteCityResponse> Cities([FromQuery] string country, [FromQuery] string? search) => content.Cities(country, search);
 
+    /// <summary>
+    /// Cities of that name in other countries, for a city not found in the one chosen ("Brazzaville is in Congo -
+    /// Brazzaville"): at most five, from three letters typed.
+    /// </summary>
+    [HttpGet("places/cities-elsewhere")]
+    [HasAnyPermission(PermissionCodes.WebsiteView, PermissionCodes.WebsiteManage)]
+    public IReadOnlyList<WebsiteCityElsewhereResponse> CitiesElsewhere([FromQuery] string country, [FromQuery] string search)
+        => content.CitiesElsewhere(country, search);
+
     /// <summary>Services, locations, social links, the contact email and the favicon.</summary>
     [HttpGet("content")]
     [HasAnyPermission(PermissionCodes.WebsiteView, PermissionCodes.WebsiteManage)]

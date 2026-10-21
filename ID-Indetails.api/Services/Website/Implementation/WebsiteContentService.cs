@@ -106,6 +106,14 @@ public sealed class WebsiteContentService(
         return directory.Cities(code, search, CityCount).Select(c => new WebsiteCityResponse(c.Name, c.Latitude, c.Longitude, c.Population)).ToList();
     }
 
+    public IReadOnlyList<WebsiteCityElsewhereResponse> CitiesElsewhere(string country, string search)
+    {
+        var code = directory.Country(country)?.Code ?? throw new NotFoundException("That country isn't in the list.");
+        return directory.Elsewhere(search, code, 5)
+            .Select(c => new WebsiteCityElsewhereResponse(c.Name, c.CountryCode, directory.Country(c.CountryCode)?.Name ?? c.CountryCode))
+            .ToList();
+    }
+
     public Task<WebsiteContentResponse> SetFaviconAsync(AttachFileRequest request, CancellationToken cancellationToken = default)
         => ChangeFaviconAsync(request.FileId, cancellationToken);
 
