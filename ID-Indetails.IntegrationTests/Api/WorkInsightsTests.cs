@@ -146,7 +146,8 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var entry = await Work.LogAsync(employee.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 50);
+        // on one company day: the timeline counts work by day, so 50 minutes across midnight would be two days
+        var entry = await Work.LogAsync(employee.AccessToken, project.Id, WorkEntryTestSteps.HoursAgoOnOneDay(3, 50), 50);
         (await Client.PostEmptyAsync($"/api/projects/{project.Id}/hold", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         var timeline = await (await Client.GetAsync($"/api/projects/{project.Id}/timeline", admin.AccessToken)).ReadAsync<ProjectTimelineResponse>();
