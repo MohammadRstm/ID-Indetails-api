@@ -37,6 +37,9 @@ public sealed record WebsiteProjectRequest
 
     public string? Description { get; init; }
 
+    /// <summary>The Concept row's text, beside the concept pictures; optional.</summary>
+    public string? ConceptDescription { get; init; }
+
     /// <summary>The system project it shows, if any.</summary>
     public long? ProjectId { get; init; }
 
@@ -50,12 +53,15 @@ public sealed record WebsiteProjectRequest
     public bool Published { get; init; }
 }
 
-/// <summary>A picture added to a project's gallery, from the caller's upload.</summary>
+/// <summary>A picture added to a project's gallery, or to its concept pictures, from the caller's upload.</summary>
 public sealed record WebsiteImageRequest
 {
     public long FileId { get; init; }
 
     public string Alt { get; init; } = string.Empty;
+
+    /// <summary>One of the (up to five) concept pictures rather than a gallery picture.</summary>
+    public bool Concept { get; init; }
 }
 
 /// <summary>A gallery picture's description.</summary>

@@ -49,6 +49,7 @@ public sealed class WebsiteProjectRequestValidator : AbstractValidator<WebsitePr
         RuleFor(x => x.City).Optional("The city", WebsiteRules.MaxPlaceLength);
         RuleFor(x => x.Country).Optional("The country", WebsiteRules.MaxPlaceLength);
         RuleFor(x => x.Description).Optional("The description", WebsiteRules.MaxDescriptionLength);
+        RuleFor(x => x.ConceptDescription).Optional("The concept description", WebsiteRules.MaxDescriptionLength);
         RuleFor(x => x.Latitude!.Value).Latitude().OverridePropertyName("latitude").When(x => x.Latitude is not null);
         RuleFor(x => x.Longitude!.Value).Longitude().OverridePropertyName("longitude").When(x => x.Longitude is not null);
         RuleFor(x => x.Longitude)

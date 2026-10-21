@@ -38,6 +38,8 @@ public sealed record WebsiteProjectResponse(
     bool Published,
     int? ConveyorOrder,
     IReadOnlyList<WebsiteImageResponse> Gallery,
+    string? ConceptDescription,
+    IReadOnlyList<WebsiteImageResponse> ConceptImages,
     IReadOnlyList<string> MissingToPublish,
     DateTime CreatedAt,
     DateTime? UpdatedAt);

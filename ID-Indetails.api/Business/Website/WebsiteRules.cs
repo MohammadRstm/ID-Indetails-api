@@ -19,6 +19,9 @@ public static partial class WebsiteRules
     public const int MaxClientLength = 150;
     public const int MaxPlaceLength = 100;
     public const int MaxDescriptionLength = 4000;
+
+    /// <summary>The project page's Concept row shows at most this many pictures.</summary>
+    public const int MaxConceptImages = 5;
     public const int MaxAltLength = 200;
     public const int MaxUrlLength = 500;
     public const int MaxServiceTitleLength = 120;

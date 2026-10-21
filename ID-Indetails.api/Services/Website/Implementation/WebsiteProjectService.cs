@@ -96,12 +96,19 @@ public sealed class WebsiteProjectService(
     {
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await website.ProjectAsync(id, cancellationToken) ?? throw new NotFoundException(NotFound);
+        var siblings = project.Images.Where(i => i.Concept == request.Concept).ToList();
+        if (request.Concept && siblings.Count >= WebsiteRules.MaxConceptImages)
+        {
+            throw new BusinessRuleException(ErrorCodes.WebsiteConceptFull, $"A project has at most {WebsiteRules.MaxConceptImages} concept pictures. Remove one first.");
+        }
+
         var file = await fileClaims.ClaimAsync(request.FileId, FileKind.Image, cancellationToken);
         var image = new WebsiteProjectImage
         {
             WebsiteProjectId = project.Id,
             FileId = file.Id,
-            Position = project.Images.Select(i => i.Position).DefaultIfEmpty(0).Max() + 1,
+            Concept = request.Concept,
+            Position = siblings.Select(i => i.Position).DefaultIfEmpty(0).Max() + 1,
         };
         image.Alt = request.Alt.Trim();
         project.Images.Add(image);
@@ -136,9 +143,11 @@ public sealed class WebsiteProjectService(
     public async Task<WebsiteProjectResponse> OrderImagesAsync(long id, WebsiteOrderRequest request, CancellationToken cancellationToken = default)
     {
         var project = await website.ProjectAsync(id, cancellationToken) ?? throw new NotFoundException(NotFound);
-        if (!WebsiteRules.IsWholeOrder(project.Images.Select(i => i.Id), request.Ids))
+        // the gallery and the concept pictures are ordered apart: the first id says which is being ordered
+        var concept = project.Images.FirstOrDefault(i => request.Ids.Count > 0 && i.Id == request.Ids[0])?.Concept ?? false;
+        if (!WebsiteRules.IsWholeOrder(project.Images.Where(i => i.Concept == concept).Select(i => i.Id), request.Ids))
         {
-            throw new ConflictException(ErrorCodes.WebsiteOrderStale, "The gallery changed since you looked: a picture was added or removed. Your new order wasn't saved.");
+            throw new ConflictException(ErrorCodes.WebsiteOrderStale, "The pictures changed since you looked: one was added or removed. Your new order wasn't saved.");
         }
 
         var images = project.Images.ToDictionary(i => i.Id);
@@ -197,6 +206,7 @@ public sealed class WebsiteProjectService(
         project.Longitude = place.Longitude;
         project.PositionApproximate = place.Approximate;
         project.Description = Clean(request.Description);
+        project.ConceptDescription = Clean(request.ConceptDescription);
         project.ProjectId = request.ProjectId;
         project.ThumbnailFileId = await PictureAsync(project.ThumbnailFileId, request.ThumbnailFileId, cancellationToken);
         project.HeroFileId = await PictureAsync(project.HeroFileId, request.HeroFileId, cancellationToken);
@@ -294,7 +304,9 @@ public sealed class WebsiteProjectService(
             p.Description, p.ThumbnailFileId, p.HeroFileId, p.HeroAlt,
             link is null ? null : new WebsiteLinkedProjectResponse(link.Id, link.Title, link.DomainCode, WebsiteRules.StatusOf(link.Status), YearOf(link)),
             p.Published, p.ConveyorOrder,
-            p.Images.OrderBy(i => i.Position).Select(i => new WebsiteImageResponse(i.Id, i.FileId, i.Alt)).ToList(),
+            p.Images.Where(i => !i.Concept).OrderBy(i => i.Position).Select(i => new WebsiteImageResponse(i.Id, i.FileId, i.Alt)).ToList(),
+            p.ConceptDescription,
+            p.Images.Where(i => i.Concept).OrderBy(i => i.Position).Select(i => new WebsiteImageResponse(i.Id, i.FileId, i.Alt)).ToList(),
             MissingToPublish(p, link), p.CreatedAt, p.UpdatedAt);
     }
 

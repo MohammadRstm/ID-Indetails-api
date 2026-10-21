@@ -27,6 +27,8 @@ public sealed record PublicWebsiteProject(
     string Thumbnail,
     PublicImage Hero,
     IReadOnlyList<PublicImage> Gallery,
+    string? ConceptDescription,
+    IReadOnlyList<PublicImage> ConceptImages,
     bool ShowInConveyor,
     int? ConveyorOrder);
 
