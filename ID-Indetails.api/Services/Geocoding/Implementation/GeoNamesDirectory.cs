@@ -44,6 +44,24 @@ public sealed class GeoNamesDirectory : IPlaceDirectory
             .ToList();
     }
 
+    public IReadOnlyList<DirectoryCity> Elsewhere(string search, string exceptCountryCode, int take)
+    {
+        var term = Key(search);
+        if (term.Length < 3)
+        {
+            return [];
+        }
+
+        var except = exceptCountryCode.ToUpperInvariant();
+        return _data.Value.All
+            .Where(e => e.City.CountryCode != except && e.Keys.Any(k => k.StartsWith(term, StringComparison.Ordinal)))
+            .OrderByDescending(e => e.Keys.Contains(term))
+            .ThenByDescending(e => e.City.Population)
+            .Take(take)
+            .Select(e => e.City)
+            .ToList();
+    }
+
     public DirectoryCity? City(string countryCode, string name)
     {
         var key = Key(name);
