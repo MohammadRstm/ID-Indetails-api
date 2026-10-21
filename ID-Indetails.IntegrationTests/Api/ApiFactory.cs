@@ -85,7 +85,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("RateLimiting:UserPermitsPerMinute", UserPermitsPerMinute.ToString());
         builder.UseSetting("RateLimiting:AnonymousPermitsPerMinute", "100000");
         // the website's contact form is limited by address, and every test here comes from the same one
-        builder.UseSetting("RateLimiting:WebsiteContactPermitsPerHour", "10000");
+        builder.UseSetting("RateLimiting:WebsiteContactPermitsPerHour", "1000");
 
         // Tests run the scheduled checks themselves, once their data is ready.
         builder.UseSetting("NotificationScheduler:Enabled", "false");
