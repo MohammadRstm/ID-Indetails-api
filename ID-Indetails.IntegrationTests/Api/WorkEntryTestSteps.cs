@@ -15,6 +15,16 @@ public sealed class WorkEntryTestSteps(AuthTestSteps steps)
         return new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc).AddHours(-hours);
     }
 
+    /// <summary>
+    /// A start a few hours ago for <paramref name="minutes"/> (under an hour) of work that stays on one company day: an
+    /// hour earlier when the work would run past the company's midnight, as it does when the tests run soon after it.
+    /// </summary>
+    public static DateTime HoursAgoOnOneDay(int hours, int minutes)
+    {
+        var start = HoursAgo(hours);
+        return CompanyDay(start) == CompanyDay(start.AddMinutes(minutes)) ? start : start.AddHours(-1);
+    }
+
     /// <summary>The company day (Asia/Beirut) an instant falls on.</summary>
     public static DateOnly CompanyDay(DateTime utc)
         => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(utc, "Asia/Beirut"));
