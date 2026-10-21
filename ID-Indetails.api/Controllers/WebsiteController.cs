@@ -77,6 +77,16 @@ public sealed class WebsiteController(IWebsiteProjectService projects, IWebsiteC
     public Task<IReadOnlyList<WebsiteLinkCandidateResponse>> LinkCandidates([FromQuery] string? search, CancellationToken cancellationToken)
         => projects.CandidatesAsync(search, cancellationToken);
 
+    /// <summary>
+    /// Whether a picture found anywhere (a download, a screenshot) carries the company's invisible watermark, and which
+    /// website picture it is: the multipart field <c>file</c>, a JPEG, PNG or WebP up to 15 MB.
+    /// </summary>
+    [HttpPost("watermark-check")]
+    [HasPermission(PermissionCodes.WebsiteManage)]
+    [RequestSizeLimit(16 * 1024 * 1024)]
+    public Task<WatermarkCheckResponse> CheckWatermark(IFormFile file, CancellationToken cancellationToken)
+        => content.CheckWatermarkAsync(file.OpenReadStream(), cancellationToken);
+
     /// <summary>The countries a project's or office's place is chosen from (GeoNames).</summary>
     [HttpGet("places/countries")]
     [HasAnyPermission(PermissionCodes.WebsiteView, PermissionCodes.WebsiteManage)]

@@ -66,6 +66,9 @@ public interface IWebsiteContentService
     /// <summary>The countries a place is chosen from.</summary>
     IReadOnlyList<WebsiteCountryResponse> Countries();
 
+    /// <summary>Whether a picture (found anywhere) carries the company's invisible watermark, and which website picture it is.</summary>
+    Task<WatermarkCheckResponse> CheckWatermarkAsync(Stream picture, CancellationToken cancellationToken = default);
+
     /// <summary>The country's cities (by English name or code), biggest first, narrowed by what was typed. 404 for an unknown country.</summary>
     IReadOnlyList<WebsiteCityResponse> Cities(string country, string? search);
 
@@ -98,7 +101,8 @@ public interface IPublicWebsiteService
     Task<PublicWebsiteSettings> SettingsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>A picture the website shows; anything else reads as not found.</summary>
-    Task<FileContent> OpenFileAsync(long fileId, CancellationToken cancellationToken = default);
+    /// <summary>A picture the website shows; with <paramref name="size"/>, its smaller copy (<see cref="IPictureSizes"/>).</summary>
+    Task<FileContent> OpenFileAsync(long fileId, int? size = null, CancellationToken cancellationToken = default);
 
     /// <summary>Emails the message to the company's own address. A robot's message is dropped without a word.</summary>
     Task SendContactMessageAsync(WebsiteContactMessageRequest request, CancellationToken cancellationToken = default);

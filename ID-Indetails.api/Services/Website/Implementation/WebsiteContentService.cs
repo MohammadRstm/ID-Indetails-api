@@ -12,6 +12,8 @@ using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Website.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Files.Implementation;
+using SkiaSharp;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Website.Abstraction;
@@ -34,7 +36,8 @@ public sealed class WebsiteContentService(
     IPlaceDirectory directory,
     IUnitOfWork unitOfWork,
     IClock clock,
-    IOptions<CompanyOptions> companyOptions) : IWebsiteContentService
+    IOptions<CompanyOptions> companyOptions,
+    IOptions<FileStorageOptions> fileStorage) : IWebsiteContentService
 {
     /// <summary>A city list shows at most this many, biggest first: typing narrows it.</summary>
     private const int CityCount = 50;
@@ -96,6 +99,19 @@ public sealed class WebsiteContentService(
 
     public Task<WebsiteContentResponse> OrderSocialLinksAsync(WebsiteOrderRequest request, CancellationToken cancellationToken = default)
         => OrderAsync<WebsiteSocialLink>(request, "links", cancellationToken);
+
+    public async Task<WatermarkCheckResponse> CheckWatermarkAsync(Stream picture, CancellationToken cancellationToken = default)
+    {
+        using var buffer = new MemoryStream();
+        await picture.CopyToAsync(buffer, cancellationToken);
+        buffer.Position = 0;
+        using var bitmap = SKBitmap.Decode(buffer)
+            ?? throw new RequestValidationException(ErrorCodes.ValidationFailed, "file", "That isn't a picture that can be read (JPEG, PNG or WebP).");
+        var reading = Watermark.Read(bitmap, fileStorage.Value.WatermarkKey);
+        return reading.Found
+            ? new WatermarkCheckResponse(true, reading.PictureId, await website.ProjectTitleShowingAsync(reading.PictureId, cancellationToken), reading.Confidence)
+            : new WatermarkCheckResponse(false, null, null, reading.Confidence);
+    }
 
     public IReadOnlyList<WebsiteCountryResponse> Countries()
         => directory.Countries.Select(c => new WebsiteCountryResponse(c.Code, c.Name)).ToList();

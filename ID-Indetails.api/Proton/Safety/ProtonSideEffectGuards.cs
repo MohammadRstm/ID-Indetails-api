@@ -56,10 +56,22 @@ public static class ProtonSideEffectGuards
 
         public Stream OpenRead(string key) => inner.OpenRead(key);
 
+        public long SizeOf(string key) => inner.SizeOf(key);
+
         public void Delete(string key)
         {
             ProtonReadOnly.ThrowIfActive("deleting a file");
             inner.Delete(key);
+        }
+
+        public string SizedKey(string key, int size) => inner.SizedKey(key, size);
+
+        public bool Exists(string key) => inner.Exists(key);
+
+        public Task SaveAsAsync(string key, byte[] content, CancellationToken cancellationToken = default)
+        {
+            ProtonReadOnly.ThrowIfActive("saving a file");
+            return inner.SaveAsAsync(key, content, cancellationToken);
         }
     }
 

@@ -13,6 +13,7 @@ using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
 using ID_Indetails.api.Services.Files.Abstraction;
+using ID_Indetails.api.Services.Files.Implementation;
 using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Website.Abstraction;
 using Microsoft.Extensions.Options;
@@ -27,7 +28,7 @@ public sealed class PublicWebsiteService(
     IWebsiteRepository website,
     ICompanyRepository company,
     IFileRepository files,
-    IFileStorage storage,
+    IPictureSizes sizes,
     IEmailSender emailSender,
     IPlaceDirectory directory,
     IOptions<EmailOptions> emailOptions,
@@ -73,12 +74,13 @@ public sealed class PublicWebsiteService(
             settings?.WebsiteUnderConstructionSince is not null);
     }
 
-    public async Task<FileContent> OpenFileAsync(long fileId, CancellationToken cancellationToken = default)
+    public async Task<FileContent> OpenFileAsync(long fileId, int? size = null, CancellationToken cancellationToken = default)
     {
         var file = await website.IsPublicFileAsync(fileId, cancellationToken) ? await files.GetAsync(fileId, cancellationToken) : null;
         return file is null
             ? throw new NotFoundException("Picture not found.")
-            : new FileContent(storage.OpenRead(file.StorageKey), file.MimeType, file.OriginalName);
+            // never the original: the website gets a reduced copy, the largest it shows at most
+            : await sizes.OpenAsync(file, Math.Min(size ?? Pictures.MaxEdge, Pictures.MaxEdge), cancellationToken);
     }
 
     public async Task SendContactMessageAsync(WebsiteContactMessageRequest request, CancellationToken cancellationToken = default)
