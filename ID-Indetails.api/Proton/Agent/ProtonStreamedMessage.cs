@@ -34,7 +34,7 @@ internal sealed class ProtonStreamedMessage
                 var index = json["index"]!.GetValue<int>();
                 if (_partialJson.Remove(index, out var input))
                 {
-                    _content[index]!["input"] = JsonNode.Parse(input.Length == 0 ? "{}" : input.ToString());
+                    _content[index]!["input"] = InputOf(input);
                 }
 
                 break;
@@ -90,6 +90,27 @@ internal sealed class ProtonStreamedMessage
 
                 citations.Add(delta["citation"]!.DeepClone());
                 break;
+        }
+    }
+
+    /// <summary>
+    /// A tool call's input. One cut off at the output limit arrives half written: it is read as empty, and the agent
+    /// drops the call with the rest of the unfinished reply rather than fail the question.
+    /// </summary>
+    private static JsonNode InputOf(StringBuilder input)
+    {
+        if (input.Length == 0)
+        {
+            return new JsonObject();
+        }
+
+        try
+        {
+            return JsonNode.Parse(input.ToString()) ?? new JsonObject();
+        }
+        catch (JsonException)
+        {
+            return new JsonObject();
         }
     }
 

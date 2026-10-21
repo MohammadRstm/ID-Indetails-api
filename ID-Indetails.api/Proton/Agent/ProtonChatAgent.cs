@@ -456,6 +456,14 @@ public sealed class ProtonChatAgent(
                     continue;
                 }
 
+                // A reply that ends the question unfinished (cut off at the output limit, or paused on the last round)
+                // can hold a tool call nobody will answer or a block cut off half way, and the next question would send
+                // it back and be refused. It stays in the conversation as the text the user was shown.
+                if (response.StopReason != StopReason.EndTurn && response.StopReason != StopReason.Refusal)
+                {
+                    turn.KeepOnlyText(ProtonEcho.TextOf(response));
+                }
+
                 turn.Finish(response, Answer(response, answered), lastTrip);
                 if (turn.Outcome == ProtonOutcome.Refused)
                 {
@@ -689,6 +697,16 @@ internal sealed class ProtonTurn(string model)
         LastInputTokens = (int)(u.InputTokens + (u.CacheReadInputTokens ?? 0) + (u.CacheCreationInputTokens ?? 0));
         _tokens = _tokens.Add(new ProtonTokens(
             (int)u.InputTokens, (int)u.OutputTokens, (int)(u.CacheReadInputTokens ?? 0), (int)(u.CacheCreationInputTokens ?? 0)));
+    }
+
+    /// <summary>Replaces the last reply with its text alone, or drops it when it wrote none (an empty reply can't be sent back).</summary>
+    public void KeepOnlyText(List<ContentBlockParam> text)
+    {
+        Messages.RemoveAt(Messages.Count - 1);
+        if (text.Count > 0)
+        {
+            Messages.Add(new MessageParam { Role = Role.Assistant, Content = text });
+        }
     }
 
     public void Finish(Message response, string answer, bool atLimit)

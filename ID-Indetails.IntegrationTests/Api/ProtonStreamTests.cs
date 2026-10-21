@@ -87,6 +87,30 @@ public class ProtonStreamTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
     }
 
     [Fact]
+    public async Task A_tool_call_cut_off_half_written_still_gives_an_answer_and_leaves_the_chat_usable()
+    {
+        var superAdmin = await SuperAdminAsync();
+        api.Anthropic.Reply(
+            FakeAnthropic.Blocks("max_tokens",
+                new { type = "text", text = "Let me look." },
+                FakeAnthropic.CutToolUse("list_projects", """{"status": "act""")),
+            FakeAnthropic.Text("Here you are."));
+
+        using var response = await StreamAsync(superAdmin, new { text = "Which projects are active?" });
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var events = Parse(await response.Content.ReadAsStringAsync()).ToList();
+        events.Last().Name.ShouldBe("done");
+        var done = events.Last().Data.Deserialize<ProtonReplyResponse>(Json)!;
+        done.Reply.ShouldBe("Let me look.");
+        done.Limited.ShouldBeTrue();
+
+        var next = await Client.PostJsonAsync("/api/proton/messages", new { conversationId = done.ConversationId, text = "And?" }, superAdmin.AccessToken);
+        next.IsSuccessStatusCode.ShouldBeTrue(await next.Content.ReadAsStringAsync());
+        api.Anthropic.Requests[1]["messages"]!.ToJsonString().ShouldNotContain("tool_use");
+    }
+
+    [Fact]
     public async Task A_refusal_before_the_answer_starts_is_an_ordinary_error_response()
     {
         var superAdmin = await SuperAdminAsync();

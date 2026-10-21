@@ -376,7 +376,12 @@ submits or sends anything itself.
   on under the same id instead of ending: the messages are dropped, and the next question gets a recap written by the
   app from the last three questions and answers (400 characters each). The focus, the known records, offered options
   and pending proposals stay. The reply says `rolledOver: true`.
-- The message list is exactly what was sent to the model, append-only. A failed question adds nothing to it.
+- The message list is exactly what was sent to the model, append-only. A failed question adds nothing to it. A
+  reply that ended unfinished (cut off at `MaxOutputTokens`, or paused on the last round) is kept as its text alone,
+  or left out when it wrote none: a tool call cut off half way would otherwise be sent back with no result, and the
+  model would refuse every later question of the chat. A tool call's input cut off half way while streaming is read
+  as empty, so the question still gets its answer. Only the last message changes, so no earlier thinking is
+  invalidated.
 - A **focus** (`ConversationFocus`) is updated from tool results, not guessed from text: the current project, client,
   people and period, and from analytical results what the period was compared with and the last analysis. It is sent with each question in a short context note, with today's date and who is asking, so
   "it", "they" and "the month before" resolve reliably.

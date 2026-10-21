@@ -64,6 +64,10 @@ public sealed class FakeAnthropic : HttpMessageHandler
     /// <summary>A response made of several blocks, in order (for example the server's own tool search before a tool call).</summary>
     public static string Blocks(string stopReason, params object[] blocks) => Message(stopReason, blocks);
 
+    /// <summary>A tool call the output limit cut off: streamed, its input arrives as <paramref name="partialJson"/> only.</summary>
+    public static object CutToolUse(string name, string partialJson, string id = "toolu_cut")
+        => new { type = "tool_use", id, name, input = new { }, partial_json = partialJson };
+
     private static string Message(string stopReason, object content, int inputTokens = 1200) => Message(stopReason, new[] { content }, inputTokens);
 
     private static string Message(string stopReason, object[] content, int inputTokens = 1200) => JsonSerializer.Serialize(new
@@ -137,8 +141,9 @@ public sealed class FakeAnthropic : HttpMessageHandler
                 case "tool_use" or "server_tool_use":
                     var opening = block.DeepClone().AsObject();
                     opening["input"] = new JsonObject();
+                    opening.Remove("partial_json");
                     Event("content_block_start", new JsonObject { ["index"] = i, ["content_block"] = opening });
-                    foreach (var piece in Halves(block["input"]!.ToJsonString()))
+                    foreach (var piece in Halves(block["partial_json"]?.GetValue<string>() ?? block["input"]!.ToJsonString()))
                     {
                         Event("content_block_delta", new JsonObject { ["index"] = i, ["delta"] = new JsonObject { ["type"] = "input_json_delta", ["partial_json"] = piece } });
                     }
