@@ -72,6 +72,9 @@ public interface IWebsiteContentService
     Task<WebsiteContentResponse> SetFaviconAsync(AttachFileRequest request, CancellationToken cancellationToken = default);
 
     Task<WebsiteContentResponse> RemoveFaviconAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Puts the website under construction (kept from the first time) or brings it back.</summary>
+    Task<WebsiteContentResponse> SetUnderConstructionAsync(WebsiteUnderConstructionRequest request, CancellationToken cancellationToken = default);
 }
 
 /// <summary>What the public website reads, with no sign-in, and its contact form.</summary>

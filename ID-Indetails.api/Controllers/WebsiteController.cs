@@ -152,6 +152,15 @@ public sealed class WebsiteController(IWebsiteProjectService projects, IWebsiteC
     public Task<WebsiteContentResponse> OrderSocialLinks(WebsiteOrderRequest request, CancellationToken cancellationToken)
         => content.OrderSocialLinksAsync(request, cancellationToken);
 
+    /// <summary>
+    /// Puts the website under construction (it then shows only its construction page, Contact and Privacy), or brings it
+    /// back. The public settings say so within the minute they are cached for.
+    /// </summary>
+    [HttpPut("under-construction")]
+    [HasPermission(PermissionCodes.WebsiteManage)]
+    public Task<WebsiteContentResponse> SetUnderConstruction(WebsiteUnderConstructionRequest request, CancellationToken cancellationToken)
+        => content.SetUnderConstructionAsync(request, cancellationToken);
+
     /// <summary>The website's favicon, from the caller's upload (PNG, JPEG or WebP).</summary>
     [HttpPut("favicon")]
     [HasPermission(PermissionCodes.WebsiteManage)]

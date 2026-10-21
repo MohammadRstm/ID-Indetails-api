@@ -128,6 +128,12 @@ public sealed record WebsiteContactMessageRequest
     public string? Website { get; init; }
 }
 
+/// <summary>Puts the website under construction, or brings it back.</summary>
+public sealed record WebsiteUnderConstructionRequest
+{
+    public bool UnderConstruction { get; init; }
+}
+
 /// <summary>
 /// The Website area's analytics: company-time-zone days, both inclusive (both or neither). Defaults to the 28 days
 /// ending yesterday; compared with the period of the same length before it unless <see cref="Compare"/> is false.

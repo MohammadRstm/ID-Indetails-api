@@ -587,6 +587,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("website_favicon_file_id");
 
+                    b.Property<DateTime?>("WebsiteUnderConstructionSince")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("website_under_construction_since");
+
                     b.Property<byte>("WeekStart")
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("week_start");
