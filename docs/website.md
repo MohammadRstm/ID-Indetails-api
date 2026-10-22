@@ -55,7 +55,10 @@ A website project is its own record. Everything on it may be public; nothing int
   | `completed`, `archived` | `completed` |
 
 - **Year.** The completion year, else the target date's year, else the start year.
-- **Type.** `villa`, `residential` or `hotel`, a fixed list for now.
+- **Type.** Free text, up to 60 characters: the dashboard suggests architectural types (Villa, Mixed-use, Hotel…) and the ones other projects already have, and any other can be typed in.
+  - It's tidied as it's saved: trimmed, single spaces, a capital first letter ("beach  house" is "Beach house").
+  - Its **key** is made like a slug ("Restaurant & café" is `restaurant-cafe`), and it needs at least one Latin letter or digit. A type with the same key as another project's is saved as that one, so "villa" and "Villa" stay one type.
+  - The public site gets the key as `type` (it filters by it) and the type as shown as `typeLabel`.
 - **Slug** (the page address, `/projects/{slug}`):
   - Always made from the project's name: accents dropped, lowercase ASCII letters and digits joined by single dashes, at most 100 characters.
   - A name must have at least one Latin letter or digit (`400`).
@@ -167,7 +170,7 @@ A project:
 ```json
 {
   "id": 12, "slug": "villa-rizk", "title": "Villa Rizk",
-  "type": "villa", "status": "completed", "client": "The Rizk family",
+  "type": "villa", "typeLabel": "Villa", "status": "completed", "client": "The Rizk family",
   "location": { "city": "Beirut", "country": "Lebanon", "countryCode": "LB", "lat": 33.8938, "lng": 35.5018, "approximate": false },
   "year": 2022, "description": "Plain text.",
   "thumbnail": "/api/public/website/files/40",
@@ -259,4 +262,3 @@ Both answer `503 website_analytics_not_configured` while Google Analytics isn't 
 - **Going live.** The website is in the production stack ([deployment.md](deployment.md#the-public-website)); it goes
   live once its domain resolves and `WEBSITE_DOMAIN` is set. Its nginx proxies `/api/public/website/` on the same
   origin, so no CORS is needed.
-- **Editable project types.** They would become `{ key, label }`.

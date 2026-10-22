@@ -18,7 +18,7 @@ public sealed record WebsiteProjectResponse(
     long Id,
     string Slug,
     string Title,
-    WebsiteProjectType Type,
+    string Type,
     WebsiteProjectStatus? Status,
     int? Year,
     WebsiteProjectStatus? ShownStatus,

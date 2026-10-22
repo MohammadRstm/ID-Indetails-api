@@ -36,6 +36,9 @@ public sealed class WebsiteRepository(IdIndetailsDbContext db) : IWebsiteReposit
     public Task<bool> SlugTakenAsync(string slug, long? exceptId, CancellationToken cancellationToken = default)
         => db.WebsiteProjects.AnyAsync(p => p.Slug == slug && p.Id != exceptId, cancellationToken);
 
+    public Task<List<string>> ProjectTypesAsync(long exceptId, CancellationToken cancellationToken = default)
+        => db.WebsiteProjects.Where(p => p.Id != exceptId).Select(p => p.Type).Distinct().ToListAsync(cancellationToken);
+
     public Task<long?> LinkedToAsync(long projectId, CancellationToken cancellationToken = default)
         => db.WebsiteProjects.Where(p => p.ProjectId == projectId).Select(p => (long?)p.Id).SingleOrDefaultAsync(cancellationToken);
 

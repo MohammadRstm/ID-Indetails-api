@@ -6055,8 +6055,8 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.Property<string>("Type")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)")
                         .HasColumnName("type");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -6108,8 +6108,6 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_website_projects_position", "(`latitude` IS NULL) = (`longitude` IS NULL)");
 
                             t.HasCheckConstraint("ck_website_projects_status", "`status` IN ('in_progress', 'completed')");
-
-                            t.HasCheckConstraint("ck_website_projects_type", "`type` IN ('villa', 'residential', 'hotel')");
                         });
                 });
 
