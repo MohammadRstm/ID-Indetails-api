@@ -10,6 +10,21 @@ namespace ID_Indetails.api.Proton.Agent;
 /// </summary>
 internal static class ProtonEcho
 {
+    /// <summary>Only the reply's text, for a reply that can't be repeated whole: its non-empty text blocks, in order.</summary>
+    public static List<ContentBlockParam> TextOf(Message response)
+    {
+        var text = new List<ContentBlockParam>();
+        foreach (var block in response.Content)
+        {
+            if (block.TryPickText(out var written) && !string.IsNullOrWhiteSpace(written.Text))
+            {
+                text.Add(new TextBlockParam { Text = written.Text });
+            }
+        }
+
+        return text;
+    }
+
     public static (List<ContentBlockParam> Assistant, List<ToolUseBlock> ToolUses) Of(Message response)
     {
         var assistant = new List<ContentBlockParam>();

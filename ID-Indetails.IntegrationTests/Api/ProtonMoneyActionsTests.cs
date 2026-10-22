@@ -174,6 +174,69 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
     }
 
     [Fact]
+    public async Task An_invoice_card_shows_all_it_prints_and_a_total_that_changed_since_the_card_is_refused()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        (await Client.PutJsonAsync("/api/billing-settings/design", new { invoicePrefix = "HN", defaultTermsDays = 30 }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
+        // the notes are printed on the invoice for the client, so the card shows them in full; a line's text is a value, never a label
+        const string notes = "Our bank details changed: pay to IBAN XX00 1234.";
+        var (draft, _) = await ProposeAsync(superAdmin, "propose_create_invoice",
+            new { project_id = project.Id, lines = new[] { new { description = "Total", amount = 1m }, new { description = "Drawings", amount = 2499m } }, notes });
+        var changes = draft.PendingAction!.Preview.Changes;
+        changes.Select(c => c.Label).ShouldBe(["Project", "Bill to", "Lines", "Total", "Notes printed for the client"]);
+        changes.Single(c => c.Label == "Lines").After.ShouldBe("Total: 1; Drawings: 2,499");
+        changes.Single(c => c.Label == "Total").After.ShouldBe("2,500");
+        changes.Single(c => c.Label == "Notes printed for the client").After.ShouldBe(notes);
+        await ConfirmAsync(superAdmin, draft);
+        var invoice = (await GetAsync<PagedResponse<InvoiceSummaryResponse>>(superAdmin, $"/api/invoices?projectId={project.Id}")).Items.ShouldHaveSingleItem();
+
+        // issuing shows what goes to the client too
+        var (issue, _) = await ProposeAsync(superAdmin, "propose_invoice_step", new { invoice_id = invoice.Id, step = "issue" });
+        issue.PendingAction!.Preview.Changes.Single(c => c.Label == "Notes printed for the client").After.ShouldBe(notes);
+        issue.PendingAction.Preview.Changes.Single(c => c.Label == "Lines").After.ShouldContain("Drawings");
+
+        // someone changes the draft before Confirm: the total the user types is the card's, so the step is refused
+        (await Client.PutJsonAsync($"/api/invoices/{invoice.Id}",
+            new { lines = new[] { new { description = "Drawings", amount = 9000m } }, termsDays = 30, notes }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/proton/actions/{issue.PendingAction.Id}/confirm", new { issue.ConversationId, typed = "2500" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
+        (await GetAsync<InvoiceResponse>(superAdmin, $"/api/invoices/{invoice.Id}")).Status.ShouldBe(InvoiceStatus.Draft);
+
+        // a discard is held to the same rule
+        var (discard, _) = await ProposeAsync(superAdmin, "propose_invoice_step", new { invoice_id = invoice.Id, step = "discard" });
+        (await Client.PutJsonAsync($"/api/invoices/{invoice.Id}",
+            new { lines = new[] { new { description = "Drawings", amount = 100m } }, termsDays = 30 }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/proton/actions/{discard.PendingAction!.Id}/confirm", new { discard.ConversationId, typed = "9000" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
+
+        // unchanged, it goes through
+        var (again, _) = await ProposeAsync(superAdmin, "propose_invoice_step", new { invoice_id = invoice.Id, step = "issue" });
+        await ConfirmAsync(superAdmin, again, "100");
+        (await GetAsync<InvoiceResponse>(superAdmin, $"/api/invoices/{invoice.Id}")).Number.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task A_statement_is_refused_when_the_sites_materials_changed_since_the_card()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var (materials, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Sand", amount = 80m } } });
+        await ConfirmAsync(superAdmin, materials, "80");
+
+        var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });
+        statement.PendingAction!.Preview.Phrase.ShouldNotBeNull();
+
+        // more materials arrive before Confirm: the statement would bill more than the total the user typed
+        var (more, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Gravel", amount = 50m } } });
+        await ConfirmAsync(superAdmin, more, "50");
+        await (await Client.PostJsonAsync($"/api/proton/actions/{statement.PendingAction.Id}/confirm",
+                new { statement.ConversationId, typed = statement.PendingAction.Preview.Phrase }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
+    }
+
+    [Fact]
     public async Task A_site_records_materials_and_labour_then_states_them_to_the_client()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

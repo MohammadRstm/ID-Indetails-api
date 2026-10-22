@@ -106,6 +106,88 @@ public class ProtonVoiceTests(ProtonVoiceApiFactory api) : IClassFixture<ProtonV
         await NoSessionsAsync();
     }
 
+    private async Task<ID_Indetails.api.Models.ProtonUsage> VoiceRowAsync(long userId)
+    {
+        await using var scope = api.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdIndetailsDbContext>();
+        await Eventually(() => db.ProtonUsage.AsNoTracking().AnyAsync(u => u.UserId == userId && u.VoiceSeconds != null));
+        return await db.ProtonUsage.AsNoTracking().SingleAsync(u => u.UserId == userId && u.VoiceSeconds != null);
+    }
+
+    private static bool Closed(FakeVoiceLink link) => link.Sent.Any(c => c["type"]!.GetValue<string>() == "session.close");
+
+    [Fact]
+    public async Task A_session_ended_before_the_watch_is_attached_is_still_closed_and_its_place_held_until_then()
+    {
+        var superAdmin = await SuperAdminAsync();
+        var attach = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        api.Voice.AttachGate = attach;
+        var session = await StartAsync(superAdmin);
+
+        // the person ends it at once, while the server is still attaching its watch
+        (await Client.PostJsonAsync($"/api/proton/voice/sessions/{session.SessionId}/end", new { }, superAdmin.AccessToken))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // ended, it takes no more questions; but nothing has closed it with the provider yet, so the place stays held
+        await (await SayAsync(superAdmin, session, "Hello?", "item_1")).ShouldFailWithAsync(404, ErrorCodes.ProtonVoiceUnavailable);
+        await (await Client.PostJsonAsync("/api/proton/voice/sessions", new { sdp = Offer }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(409, ErrorCodes.ProtonVoiceBusy);
+
+        // the watch attaches, closes it, and records the provider's own figure, not the start-up minimum
+        api.Voice.AttachGate = null;
+        attach.SetResult();
+        var row = await VoiceRowAsync(superAdmin.User.Id);
+        row.VoiceSeconds.ShouldBe(42);
+        row.Outcome.ShouldBe(ProtonOutcome.Answered);
+        Closed(api.Voice.Links[session.SessionId]).ShouldBeTrue();
+        await NoSessionsAsync();
+        api.Anthropic.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task The_watch_tries_again_when_it_cannot_attach_and_then_closes_the_session()
+    {
+        var superAdmin = await SuperAdminAsync();
+        api.Voice.FailAttaches(1);
+        var session = await StartAsync(superAdmin);
+
+        await Eventually(() => Task.FromResult(api.Voice.Attaches >= 2));
+        (await Client.PostJsonAsync($"/api/proton/voice/sessions/{session.SessionId}/end", new { }, superAdmin.AccessToken))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await VoiceRowAsync(superAdmin.User.Id)).VoiceSeconds.ShouldBe(42);
+        Closed(api.Voice.Links[session.SessionId]).ShouldBeTrue();
+        await NoSessionsAsync();
+    }
+
+    [Fact]
+    public async Task A_session_the_provider_started_after_the_browser_left_is_watched_and_closed_at_once()
+    {
+        var superAdmin = await SuperAdminAsync();
+        var answer = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        api.Voice.StartGate = answer;
+        var earlier = api.Voice.Links.Keys.ToHashSet();
+
+        using var leaving = new CancellationTokenSource();
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/proton/voice/sessions")
+        {
+            Content = System.Net.Http.Json.JsonContent.Create(new { sdp = Offer }),
+        };
+        request.Headers.Authorization = new("Bearer", superAdmin.AccessToken);
+        var call = Client.SendAsync(request, leaving.Token);
+
+        // the provider has started the session; the browser goes before its answer comes back
+        await Eventually(() => Task.FromResult(!api.Voice.Starts.IsEmpty));
+        await leaving.CancelAsync();
+        answer.SetResult();
+        await Should.ThrowAsync<OperationCanceledException>(call.WaitAsync(TimeSpan.FromSeconds(10)));
+
+        var id = api.Voice.Links.Keys.Except(earlier).ShouldHaveSingleItem();
+        await Eventually(() => Task.FromResult(Closed(api.Voice.Links[id])));
+        (await VoiceRowAsync(superAdmin.User.Id)).VoiceSeconds.ShouldBe(42);
+        await NoSessionsAsync();
+    }
+
     [Fact]
     public async Task A_spoken_question_goes_to_the_same_conversation_once_and_is_marked_as_spoken()
     {

@@ -56,8 +56,11 @@ public sealed class ProtonVoiceService(
             var name = caller.FindFirst(AuthClaimTypes.FirstName)?.Value;
             var instructions = ProtonPrompts.VoiceFor(email.Value.ProductName)
                 + (string.IsNullOrWhiteSpace(name) ? "" : $"\n\nThe person you're talking with is called {name}.");
+            cancellationToken.ThrowIfCancellationRequested();
+            // Not the request's token: a session the provider started is paid for, so the server must learn its id
+            // and watch it, even if the browser has gone in the meantime.
             started = await provider.StartAsync(
-                new ProtonVoiceStart(userId, instructions, conversation.Exchanges, request.Sdp), cancellationToken);
+                new ProtonVoiceStart(userId, instructions, conversation.Exchanges, request.Sdp), CancellationToken.None);
         }
         catch
         {
@@ -67,6 +70,12 @@ public sealed class ProtonVoiceService(
 
         session.Started(started.SessionId);
         watch.Watch(session);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            // the browser left before it got the provider's answer: nobody will talk in this session
+            session.Close();
+        }
+
         return new ProtonVoiceSessionResponse(started.SessionId, started.SdpAnswer, conversation.Id, session.EndsAt);
     }
 
