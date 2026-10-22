@@ -376,7 +376,12 @@ submits or sends anything itself.
   on under the same id instead of ending: the messages are dropped, and the next question gets a recap written by the
   app from the last three questions and answers (400 characters each). The focus, the known records, offered options
   and pending proposals stay. The reply says `rolledOver: true`.
-- The message list is exactly what was sent to the model, append-only. A failed question adds nothing to it.
+- The message list is exactly what was sent to the model, append-only. A failed question adds nothing to it. A
+  reply that ended unfinished (cut off at `MaxOutputTokens`, or paused on the last round) is kept as its text alone,
+  or left out when it wrote none: a tool call cut off half way would otherwise be sent back with no result, and the
+  model would refuse every later question of the chat. A tool call's input cut off half way while streaming is read
+  as empty, so the question still gets its answer. Only the last message changes, so no earlier thinking is
+  invalidated.
 - A **focus** (`ConversationFocus`) is updated from tool results, not guessed from text: the current project, client,
   people and period, and from analytical results what the period was compared with and the last analysis. It is sent with each question in a short context note, with today's date and who is asking, so
   "it", "they" and "the month before" resolve reliably.
@@ -562,15 +567,15 @@ no separators: `2500`, `320.5`) or the invoice number, which the server stored w
 
 | Tool | Stands in for | Typed |
 |---|---|---|
-| `propose_create_invoice`, `propose_update_invoice` | `POST /api/projects/{id}/invoices`, `PUT /api/invoices/{id}` | — (a draft is sent to nobody) |
-| `propose_invoice_step` | `…/issue`, `…/void`, `DELETE /api/invoices/{id}` (discard), `DELETE …/schedule` | issue and discard: the total; void: the invoice number (refused while payments are recorded against it) |
+| `propose_create_invoice`, `propose_update_invoice` | `POST /api/projects/{id}/invoices`, `PUT /api/invoices/{id}` | — (a draft is sent to nobody); the card shows every field the draft gets, the lines as one value and the notes printed for the client in full |
+| `propose_invoice_step` | `…/issue`, `…/void`, `DELETE /api/invoices/{id}` (discard), `DELETE …/schedule` | issue and discard: the total, refused at Confirm if the draft changed since the card (the issue card also shows the lines and notes); void: the invoice number (refused while payments are recorded against it) |
 | `propose_record_invoice_delivery`, `propose_record_statement_delivery` | `…/deliveries` | — (WhatsApp or by hand only: emails are sent from the app) |
 | `propose_record_payment` | `POST /api/projects/{id}/payments` | the amount; at the dated exchange rate in force, never one Proton sets; the card gives the invoice's balance before and after |
 | `propose_payment_step` | `PUT /api/payments/{id}/invoice`, `…/void` | void: the amount |
 | `propose_add_expense`, `propose_delete_expense` | project expenses | the amount |
 | `propose_add_materials`, `propose_material_step` | a site's materials (add, correct, delete, client price) | add: the total cost; delete: its cost |
 | `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13) |
-| `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync` |
+| `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync`; refused at Confirm if the preview's total or count changed since the card |
 | `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; bank details are never read into a proposal: they are taken from the database when the change is made |
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate |
 | `propose_project_money` | `PUT /api/projects/{id}/billing` (Design revenue), `…/pricing` (Execution fee and markup) | the new amount |
@@ -736,6 +741,14 @@ People can talk to Proton through OpenAI's GPT-Live (`gpt-live-1`). It is one as
   session's usage, and closes it when it reaches `MaxSessionMinutes`, when the month's budget runs out, when the
   person ends it, or when the app stops. One session per person (`409 proton_voice_busy`); sessions live in server
   memory, like conversations.
+  - The watch attaches on its own time limit (10 s a try), never on the session's ending, and tries again (after 1,
+    2 and 4 s, then every 5 s) until it is attached or the session's time is up. A session ended before the watch
+    was attached is closed as soon as it is.
+  - An ended session takes no more questions at once, but the person's place stays held until the provider has
+    closed it (or its time is up), so ending early can't open a second live session.
+  - If the watch never attaches, the session is held to its time and its cost estimated from that.
+  - Once the provider has started a session, the server watches it even if the browser left before the answer
+    came back, and closes it at once.
 - **Usage.** A session is one `proton_usage` row: `channel = voice`, the voice model, `voice_seconds` and the
   estimated cost (`PricePerMinuteUsd`, at least the 15 seconds the provider bills at start). Without a final figure from
   the provider, the time is estimated from how long the session was open, and the row's outcome is `failed`. The

@@ -181,6 +181,43 @@ public class ProtonTests(ProtonApiFactory api) : IClassFixture<ProtonApiFactory>
     }
 
     [Fact]
+    public async Task A_reply_cut_off_in_the_middle_of_a_tool_call_leaves_only_its_text_and_the_chat_carries_on()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        api.Anthropic.Reply(
+            // the output limit is reached after some text, half way into a tool call nobody will answer
+            FakeAnthropic.Blocks("max_tokens",
+                new { type = "text", text = "Here is what I have so far." },
+                new { type = "tool_use", id = "toolu_cut", name = "list_projects", input = new { } }),
+            FakeAnthropic.Text("Carrying on."),
+            // and a cut-off reply with no text at all
+            FakeAnthropic.Blocks("max_tokens", new { type = "tool_use", id = "toolu_cut2", name = "list_projects", input = new { } }),
+            FakeAnthropic.Text("Still here."));
+
+        var first = await OkAsync(AskAsync(superAdmin, "What's going on?"));
+        first.Limited.ShouldBeTrue();
+        first.Reply.ShouldBe("Here is what I have so far.");
+        await OkAsync(AskAsync(superAdmin, "Go on", first.ConversationId));
+
+        // the next question sends the cut-off reply back as its text alone: no tool call waits for a result
+        var followUp = api.Anthropic.Requests[1]["messages"]!.AsArray();
+        followUp.Count.ShouldBe(3);
+        followUp[1]!["role"]!.GetValue<string>().ShouldBe("assistant");
+        followUp[1]!["content"]!.AsArray().ShouldHaveSingleItem()!["text"]!.GetValue<string>().ShouldBe("Here is what I have so far.");
+        followUp.ToJsonString().ShouldNotContain("tool_use");
+
+        await OkAsync(AskAsync(superAdmin, "Anything else?", first.ConversationId));
+        await OkAsync(AskAsync(superAdmin, "Thanks", first.ConversationId));
+
+        // a cut-off reply that wrote nothing is left out: the question before it stays, with nothing to answer for
+        var last = api.Anthropic.Requests[3]["messages"]!.AsArray();
+        last.Count.ShouldBe(6);
+        last[4]!["role"]!.GetValue<string>().ShouldBe("user");
+        last.ToJsonString().ShouldNotContain("tool_use");
+    }
+
+    [Fact]
     public async Task Tools_carry_the_users_own_authorization_so_other_domains_and_company_figures_stay_out_of_reach()
     {
         api.Anthropic.Reset();

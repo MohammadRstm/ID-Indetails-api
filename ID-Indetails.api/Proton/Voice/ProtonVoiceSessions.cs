@@ -64,12 +64,18 @@ public sealed class ProtonVoiceSessions
         }
     }
 
-    /// <summary>The person's running session with this id; null for anyone else's, or one that has ended.</summary>
+    /// <summary>
+    /// The person's running session with this id; null for anyone else's, or one that has ended or is closing (its
+    /// place stays held until the provider has closed it, but it takes nothing more).
+    /// </summary>
     public ProtonVoiceSession? Find(long userId, string sessionId)
     {
         lock (_lock)
         {
-            return _byUser.TryGetValue(userId, out var session) && session.SessionId.Length > 0 && session.SessionId == sessionId ? session : null;
+            return _byUser.TryGetValue(userId, out var session) && session.SessionId.Length > 0 && session.SessionId == sessionId
+                   && !session.Closing.IsCancellationRequested
+                ? session
+                : null;
         }
     }
 

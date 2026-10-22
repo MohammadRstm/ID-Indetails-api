@@ -28,9 +28,17 @@ public sealed class ProtonVoiceWatch(
 
     private static readonly TimeSpan BudgetCheckEvery = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long one try to attach may take, and the waits between tries: quick at first, then steady.</summary>
+    private static readonly TimeSpan AttachTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan[] AttachRetries = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4)];
+    private static readonly TimeSpan AttachRetryEvery = TimeSpan.FromSeconds(5);
+
     private readonly ILogger _log = loggers.CreateLogger(Tools.ProtonToolbox.LogCategory);
     private readonly Lock _lock = new();
     private readonly List<Task> _running = [];
+
+    /// <summary>Cancelled when the app stops: no more tries to attach, and no session held to its time.</summary>
+    private readonly CancellationTokenSource _stopping = new();
 
     private ProtonVoiceOptions Voice => options.Value.Voice;
 
@@ -50,6 +58,7 @@ public sealed class ProtonVoiceWatch(
     /// <summary>Closes every session still running, so none is left paid for after the app stops.</summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        await _stopping.CancelAsync();
         foreach (var session in sessions.All())
         {
             session.Close();
@@ -69,7 +78,16 @@ public sealed class ProtonVoiceWatch(
         var tally = new Tally();
         try
         {
-            await using var link = await provider.AttachAsync(session.SessionId, session.Closing);
+            // Attached on the watch's own time, never on the session's closing: a session ended before the watch is
+            // attached still has to be closed with the provider, and the person's place stays held until it is.
+            await using var link = await AttachAsync(session);
+            if (link is null)
+            {
+                // Without the watch the session can't be closed from here: hold it to its time, then estimate.
+                await WaitAsync(session.EndsAt - clock.UtcNow, _stopping.Token);
+                return;
+            }
+
             var reading = ReadAsync(link, session, tally);
             var due = session.EndsAt - clock.UtcNow;
             var closeDue = Task.Delay(due > TimeSpan.Zero ? due : TimeSpan.Zero, session.Closing);
@@ -82,22 +100,49 @@ public sealed class ProtonVoiceWatch(
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            // Without the watch the session can't be closed from here: hold it to its time, then estimate.
-            _log.LogWarning(exception, "Proton voice session {SessionId}: the server couldn't watch it.", session.SessionId);
-            var due = session.EndsAt - clock.UtcNow;
-            try
-            {
-                await Task.Delay(due > TimeSpan.Zero ? due : TimeSpan.Zero, session.Closing);
-            }
-            catch (OperationCanceledException)
-            {
-                // ended earlier
-            }
+            _log.LogWarning(exception, "Proton voice session {SessionId}: the server's watch failed.", session.SessionId);
         }
         finally
         {
             sessions.Release(session);
             await RecordAsync(session, tally);
+        }
+    }
+
+    /// <summary>The watch's connection to the session, tried again until it opens; null once the session's time is up or the app is stopping.</summary>
+    private async Task<IProtonVoiceLink?> AttachAsync(ProtonVoiceSession session)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(AttachTimeout);
+                return await provider.AttachAsync(session.SessionId, timeout.Token);
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                _log.LogWarning(exception, "Proton voice session {SessionId}: the server couldn't attach to it (try {Attempt}).", session.SessionId, attempt + 1);
+            }
+
+            var wait = attempt < AttachRetries.Length ? AttachRetries[attempt] : AttachRetryEvery;
+            if (clock.UtcNow + wait >= session.EndsAt || !await WaitAsync(wait, _stopping.Token))
+            {
+                return null;
+            }
+        }
+    }
+
+    /// <summary>Waits, unless <paramref name="cancellationToken"/> ends the wait first: false then.</summary>
+    private static async Task<bool> WaitAsync(TimeSpan wait, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(wait > TimeSpan.Zero ? wait : TimeSpan.Zero, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
     }
 
