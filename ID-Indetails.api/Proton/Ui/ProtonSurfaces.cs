@@ -49,5 +49,13 @@ public static class ProtonSurfaces
         [ProtonSurface.ReportBug] = new("the report a problem form", null, EmailsSomeone: true),
         [ProtonSurface.SettingsSection] = new("settings", null),
         [ProtonSurface.CompanyOverviewTab] = new("the company overview", ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get)), Company: true),
+        // the Website area: saving there changes the public website, which opening never does
+        [ProtonSurface.NewWebsiteProject] = new("the new website project form", ProtonEndpoint.OfWrite<WebsiteController>(nameof(WebsiteController.CreateProject)), OnlyIn: DomainCodes.Website),
+        [ProtonSurface.EditWebsiteProject] = new("the website project's form", ProtonEndpoint.OfWrite<WebsiteController>(nameof(WebsiteController.UpdateProject)), ProtonRefType.WebsiteProject, DomainCodes.Website),
+        [ProtonSurface.InviteWebsiteStaff] = new("the website's invite form", ProtonEndpoint.OfWrite<InvitationsController>(nameof(InvitationsController.Create)), OnlyIn: DomainCodes.Website, EmailsSomeone: true),
+        // a project's files and client portal (Design client projects)
+        [ProtonSurface.FileComments] = new("the file's comments", ProtonPortalTab.Files, ProtonRefType.Project, DomainCodes.Design),
+        [ProtonSurface.PortalDiscussion] = new("the discussion with the client", null, ProtonRefType.Project, DomainCodes.Design),
+        [ProtonSurface.PortalPreview] = new("the client's view of the portal draft", ProtonEndpoint.Of<ProjectPortalContentController>(nameof(ProjectPortalContentController.Preview)), ProtonRefType.Project, DomainCodes.Design),
     };
 }

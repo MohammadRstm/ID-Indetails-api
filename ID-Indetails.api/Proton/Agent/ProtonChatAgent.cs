@@ -332,11 +332,13 @@ public sealed class ProtonChatAgent(
     private async Task<string> PageNoteAsync(ProtonPageContext page, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var where = page.Page is { } known ? $"the {Words(known)} page" : "a page";
-        var note = $"{where} in {(page.Area == "company" ? "the company area" : page.Area)}";
+        var note = $"{where} in {page.Area switch { "company" => "the company area", DomainCodes.Website => "the Website area", var area => area }}";
         if (page.EntityType is { } type && page.EntityId is { } id
             && await records.FindAsync(type, id, context, cancellationToken) is { } record)
         {
-            note += $", looking at {Describe(record)}" + (page.Section is { } section and not ProtonProjectSection.Overview ? $" ({Words(section)} tab)" : "");
+            note += $", looking at {Describe(record)}" + (page.Section is { } section and not ProtonProjectSection.Overview
+                ? $" ({Words(section)} tab{(page.Part is { } part ? $", {Words(part)}" : "")})"
+                : "");
         }
 
         if (page.Surface is { } surface)

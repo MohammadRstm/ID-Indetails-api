@@ -116,6 +116,7 @@ public static class ProtonServiceCollectionExtensions
 
         // UI tools: they read nothing new, they ask the app to open a page or record the user may already open.
         services.AddScoped<ProtonRecords>();
+        services.AddScoped<ProtonPortalTab>();
         services.AddScoped<IProtonTool, OpenRecordTool>();
         services.AddScoped<IProtonTool, OpenPageTool>();
         services.AddScoped<IProtonTool, OfferChoicesTool>();
