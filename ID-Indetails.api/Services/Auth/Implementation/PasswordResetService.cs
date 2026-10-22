@@ -102,6 +102,10 @@ public sealed class PasswordResetService(
         user.UpdatedAt = now;
         // signed out everywhere: refresh tokens and the access tokens already handed out
         user.SessionsValidFrom = now;
+        // A pause after wrong passwords ends with the reset: whoever set it off kept guessing the old password, and the
+        // person proved who they are through their email. Without this, someone guessing on purpose could keep them out.
+        user.FailedSignIns = 0;
+        user.LockedUntil = null;
 
         await resets.ExpirePendingForUserAsync(user.Id, now, cancellationToken);
         await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);

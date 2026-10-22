@@ -16,6 +16,25 @@ internal sealed class ProtonStreamedMessage
     private readonly JsonArray _content = [];
     private readonly Dictionary<int, StringBuilder> _partialJson = [];
 
+    /// <summary>
+    /// The tokens the provider has reported so far: the input from the opening event, the output once a closing delta
+    /// has come. Null before the stream has started.
+    /// </summary>
+    public Business.Proton.ProtonTokens? UsageSoFar
+    {
+        get
+        {
+            if (_message?["usage"] is not JsonObject usage)
+            {
+                return null;
+            }
+
+            int Count(string key) => usage[key] is JsonValue value && value.TryGetValue<int>(out var count) ? count : 0;
+            return new Business.Proton.ProtonTokens(
+                Count("input_tokens"), Count("output_tokens"), Count("cache_read_input_tokens"), Count("cache_creation_input_tokens"));
+        }
+    }
+
     public void Add(JsonElement streamEvent)
     {
         var json = JsonNode.Parse(streamEvent.GetRawText())!.AsObject();

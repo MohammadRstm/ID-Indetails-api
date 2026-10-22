@@ -226,6 +226,37 @@ public sealed class PortalAccessService(
         }
     }
 
+    public async Task EndForRemovedContactsAsync(
+        long clientId, string domainCode, IReadOnlyCollection<string> emails, long actorId, CancellationToken cancellationToken = default)
+    {
+        var removed = emails.Count == 0 ? [] : (await accounts.GetByEmailsAsync(emails, cancellationToken)).Select(a => a.Id).ToHashSet();
+        if (removed.Count == 0)
+        {
+            return;
+        }
+
+        var now = clock.UtcNow;
+        foreach (var projectId in await access.ProjectIdsOfClientAsync(clientId, cancellationToken))
+        {
+            foreach (var accountId in removed)
+            {
+                await invitations.RevokePendingAsync(accountId, projectId, now, cancellationToken);
+            }
+
+            foreach (var row in (await access.LiveForProjectAsync(projectId, cancellationToken)).Where(r => removed.Contains(r.AccountId)))
+            {
+                row.RevokedAt = now;
+                row.RevokedById = actorId;
+                await EndSessionsIfNoAccessLeftAsync(row.Account, projectId, now, cancellationToken);
+                live.PortalAccessChanged([row.AccountId]);
+                activity.Add(Event(ActivityEventKinds.PortalAccessRevoked, domainCode, projectId, clientId, row.Account, actorId, now));
+            }
+
+            // Saved project by project, as when the client is archived.
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+    }
+
     /// <summary>A Design project the caller manages client access on. Anything else reads as not found.</summary>
     private async Task<PortalProjectFacts> VisibleProjectAsync(long projectId, CancellationToken cancellationToken)
     {

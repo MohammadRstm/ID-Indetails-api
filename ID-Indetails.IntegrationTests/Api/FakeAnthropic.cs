@@ -13,7 +13,7 @@ namespace ID_Indetails.IntegrationTests.Api;
 /// </summary>
 public sealed class FakeAnthropic : HttpMessageHandler
 {
-    private readonly ConcurrentQueue<(HttpStatusCode Status, string Body, TaskCompletionSource? Gate)> _responses = new();
+    private readonly ConcurrentQueue<(HttpStatusCode Status, string Body, TaskCompletionSource? Gate, bool AfterStart)> _responses = new();
 
     public List<JsonNode> Requests { get; } = [];
 
@@ -30,17 +30,28 @@ public sealed class FakeAnthropic : HttpMessageHandler
     {
         foreach (var response in responses)
         {
-            _responses.Enqueue((HttpStatusCode.OK, response, null));
+            _responses.Enqueue((HttpStatusCode.OK, response, null, false));
         }
     }
 
-    public void Fail(HttpStatusCode status) => _responses.Enqueue((status, """{"type":"error","error":{"type":"api_error","message":"boom"}}""", null));
+    public void Fail(HttpStatusCode status) => _responses.Enqueue((status, """{"type":"error","error":{"type":"api_error","message":"boom"}}""", null, false));
 
     /// <summary>A response that waits until the returned gate opens, or the call is cancelled (the person pressed Stop).</summary>
     public TaskCompletionSource Hold(string response)
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _responses.Enqueue((HttpStatusCode.OK, response, gate));
+        _responses.Enqueue((HttpStatusCode.OK, response, gate, false));
+        return gate;
+    }
+
+    /// <summary>
+    /// A streamed response that sends its opening event (with the input usage) at once and the rest only when the
+    /// returned gate opens: an answer stopped part-way, after the provider had started billing it.
+    /// </summary>
+    public TaskCompletionSource HoldAfterStart(string response)
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _responses.Enqueue((HttpStatusCode.OK, response, gate, true));
         return gate;
     }
 
@@ -90,15 +101,22 @@ public sealed class FakeAnthropic : HttpMessageHandler
             Requests.Add(JsonNode.Parse(body)!);
         }
 
-        var (status, response, gate) = _responses.TryDequeue(out var next)
+        var (status, response, gate, afterStart) = _responses.TryDequeue(out var next)
             ? next
-            : (HttpStatusCode.InternalServerError, """{"type":"error","error":{"type":"api_error","message":"no scripted response"}}""", null);
+            : (HttpStatusCode.InternalServerError, """{"type":"error","error":{"type":"api_error","message":"no scripted response"}}""", null, false);
+        var streamed = status == HttpStatusCode.OK && JsonNode.Parse(body)?["stream"]?.GetValue<bool>() == true;
+        if (gate is not null && afterStart && streamed)
+        {
+            var events = Sse(response);
+            var opening = events.IndexOf("\n\n", StringComparison.Ordinal) + 2;
+            return new HttpResponseMessage(status) { Content = new HeldStreamContent(events[..opening], events[opening..], gate) };
+        }
+
         if (gate is not null)
         {
             await gate.Task.WaitAsync(cancellationToken);
         }
 
-        var streamed = status == HttpStatusCode.OK && JsonNode.Parse(body)?["stream"]?.GetValue<bool>() == true;
         return new HttpResponseMessage(status)
         {
             Content = streamed
@@ -169,5 +187,43 @@ public sealed class FakeAnthropic : HttpMessageHandler
         });
         Event("message_stop", new JsonObject());
         return events.ToString();
+    }
+
+    /// <summary>A body read as it arrives: the opening part at once, the rest once the gate opens (or never, past 30 s).</summary>
+    private sealed class HeldStreamContent : HttpContent
+    {
+        private readonly System.IO.Pipelines.Pipe _pipe = new();
+
+        public HeldStreamContent(string opening, string rest, TaskCompletionSource gate)
+        {
+            Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream") { CharSet = "utf-8" };
+            _ = WriteAsync(opening, rest, gate);
+        }
+
+        private async Task WriteAsync(string opening, string rest, TaskCompletionSource gate)
+        {
+            await _pipe.Writer.WriteAsync(Encoding.UTF8.GetBytes(opening));
+            try
+            {
+                await gate.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                await _pipe.Writer.WriteAsync(Encoding.UTF8.GetBytes(rest));
+            }
+            catch (TimeoutException)
+            {
+                // nobody opened it: the reader has long gone
+            }
+
+            await _pipe.Writer.CompleteAsync();
+        }
+
+        protected override Task<Stream> CreateContentReadStreamAsync() => Task.FromResult(_pipe.Reader.AsStream());
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) => _pipe.Reader.AsStream().CopyToAsync(stream);
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 }

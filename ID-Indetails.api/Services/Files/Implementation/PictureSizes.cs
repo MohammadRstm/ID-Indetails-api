@@ -2,6 +2,7 @@ using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Services.Files.Abstraction;
 using Microsoft.Extensions.Options;
+using SkiaSharp;
 
 namespace ID_Indetails.api.Services.Files.Implementation;
 
@@ -17,35 +18,45 @@ public sealed class PictureSizes(IFileStorage storage, IOptions<FileStorageOptio
     public const int MarkedFrom = 480;
 
     public async Task<FileContent> OpenAsync(StoredFile file, int? size, CancellationToken cancellationToken = default)
+        => size is { } wanted && IsPhoto(file) && await CopyAsync(file, Pictures.SizeFor(wanted), alwaysNew: false, cancellationToken) is { } copy
+            ? copy
+            // already that small, or not readable: the original is the copy
+            : new FileContent(storage.OpenRead(file.StorageKey), file.MimeType, file.OriginalName);
+
+    public async Task<FileContent?> OpenCopyAsync(StoredFile file, int size, CancellationToken cancellationToken = default)
+        => IsPhoto(file) ? await CopyAsync(file, Pictures.SizeFor(size), alwaysNew: true, cancellationToken) : null;
+
+    private static bool IsPhoto(StoredFile file) => file.MimeType.StartsWith("image/", StringComparison.Ordinal);
+
+    /// <param name="alwaysNew">A new WebP even when the original is already that small: nothing of the original (such as
+    /// the place a photo was taken) goes with it. A copy that carries the mark is always new.</param>
+    private async Task<FileContent?> CopyAsync(StoredFile file, int kept, bool alwaysNew, CancellationToken cancellationToken)
     {
-        if (size is not { } wanted || !file.MimeType.StartsWith("image/", StringComparison.Ordinal))
-        {
-            return new FileContent(storage.OpenRead(file.StorageKey), file.MimeType, file.OriginalName);
-        }
-
-        var kept = Pictures.SizeFor(wanted);
         var sized = storage.SizedKey(file.StorageKey, kept);
-        if (!storage.Exists(sized))
+        var name = Path.ChangeExtension(file.OriginalName, Pictures.WebpExtension);
+        if (storage.Exists(sized))
         {
-            byte[] original;
-            await using (var content = storage.OpenRead(file.StorageKey))
-            {
-                using var buffer = new MemoryStream();
-                await content.CopyToAsync(buffer, cancellationToken);
-                original = buffer.ToArray();
-            }
-
-            // already that small, or not readable: the original is the copy (a copy that carries the mark is always new)
-            var smaller = Pictures.Shrink(original, kept, kept >= MarkedFrom ? picture => Watermark.Embed(picture, file.Id, options.Value.WatermarkKey) : null);
-            if (smaller is null)
-            {
-                return new FileContent(new MemoryStream(original), file.MimeType, file.OriginalName);
-            }
-
-            await storage.SaveAsAsync(sized, smaller, cancellationToken);
-            return new FileContent(new MemoryStream(smaller), Pictures.WebpMimeType, Path.ChangeExtension(file.OriginalName, Pictures.WebpExtension));
+            return new FileContent(storage.OpenRead(sized), Pictures.WebpMimeType, name);
         }
 
-        return new FileContent(storage.OpenRead(sized), Pictures.WebpMimeType, Path.ChangeExtension(file.OriginalName, Pictures.WebpExtension));
+        byte[] original;
+        await using (var content = storage.OpenRead(file.StorageKey))
+        {
+            using var buffer = new MemoryStream();
+            await content.CopyToAsync(buffer, cancellationToken);
+            original = buffer.ToArray();
+        }
+
+        Action<SKBitmap>? mark = kept >= MarkedFrom ? picture => Watermark.Embed(picture, file.Id, options.Value.WatermarkKey)
+            : alwaysNew ? _ => { }
+            : null;
+        var smaller = Pictures.Shrink(original, kept, mark);
+        if (smaller is null)
+        {
+            return null;
+        }
+
+        await storage.SaveAsAsync(sized, smaller, cancellationToken);
+        return new FileContent(new MemoryStream(smaller), Pictures.WebpMimeType, name);
     }
 }

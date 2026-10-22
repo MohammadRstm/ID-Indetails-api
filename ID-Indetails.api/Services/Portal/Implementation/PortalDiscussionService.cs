@@ -36,13 +36,20 @@ public sealed class PortalDiscussionService(
 {
     private const string NotAvailable = "This discussion isn't available.";
 
-    /// <summary>The project, the caller, and everyone taking part.</summary>
+    /// <summary>
+    /// The project, the caller, and everyone taking part. <see cref="VisibleFrom"/>: for a client, the cut-off from when
+    /// the project moved to another client (nothing written before it is theirs to see); null for staff.
+    /// </summary>
     private sealed record Room(
-        DiscussionProject Project, DiscussionPerson Me, IReadOnlyList<DiscussionPerson> Staff, IReadOnlyList<DiscussionPerson> Clients)
+        DiscussionProject Project, DiscussionPerson Me, IReadOnlyList<DiscussionPerson> Staff, IReadOnlyList<DiscussionPerson> Clients,
+        DateTime? VisibleFrom)
     {
         public IReadOnlyList<DiscussionPerson> Everyone => [.. Staff, .. Clients];
 
         public bool CanWrite => PortalDiscussionRules.CheckWritable(Project.Status) is null;
+
+        /// <summary>Written before this caller may see: for them, it doesn't exist.</summary>
+        public bool Hides(DateTime createdAt) => VisibleFrom is { } from && createdAt < from;
     }
 
     /// <summary>What was written, for its notifications.</summary>
@@ -56,7 +63,7 @@ public sealed class PortalDiscussionService(
     {
         var room = await OpenAsync(side, projectId, cancellationToken);
         var size = PortalDiscussionRules.PageSize(limit);
-        var rows = await discussion.MessagesAsync(projectId, before, size + 1, cancellationToken);
+        var rows = await discussion.MessagesAsync(projectId, before, size + 1, room.VisibleFrom, cancellationToken);
         var page = rows.Take(size).Reverse().ToList();
         var mentions = await discussion.MessageMentionsAsync(page.Select(m => m.Id).ToList(), cancellationToken);
         return new PortalMessagePageResponse(page.Select(m => Describe(room, m, mentions[m.Id])).ToList(), rows.Count > size);
@@ -145,7 +152,7 @@ public sealed class PortalDiscussionService(
     public async Task<PortalCommentThreadResponse> ThreadAsync(DiscussionSide side, long projectId, long itemId, CancellationToken cancellationToken = default)
     {
         var room = await OpenAsync(side, projectId, cancellationToken);
-        var comments = await discussion.CommentsAsync(projectId, itemId, cancellationToken);
+        var comments = await discussion.CommentsAsync(projectId, itemId, room.VisibleFrom, cancellationToken);
         var published = await discussion.PublishedItemsAsync(projectId, cancellationToken);
         var shown = published.GetValueOrDefault(itemId);
         if (shown is null && comments.Count == 0)
@@ -295,7 +302,7 @@ public sealed class PortalDiscussionService(
     private async Task MarkChatReadAsync(Room room, long? seen, CancellationToken cancellationToken)
     {
         var projectId = room.Project.Id;
-        var newest = await discussion.NewestMessageIdAsync(projectId, cancellationToken);
+        var newest = await discussion.NewestMessageIdAsync(projectId, room.VisibleFrom, cancellationToken);
         var read = await discussion.GetReadAsync(projectId, room.Me, cancellationToken);
         if (read is null)
         {
@@ -328,7 +335,7 @@ public sealed class PortalDiscussionService(
     private async Task MarkCommentsReadAsync(Room room, long itemId, long? seen, CancellationToken cancellationToken)
     {
         var projectId = room.Project.Id;
-        var newest = await discussion.NewestCommentIdAsync(projectId, itemId, cancellationToken);
+        var newest = await discussion.NewestCommentIdAsync(projectId, itemId, room.VisibleFrom, cancellationToken);
         if (newest is null)
         {
             return;
@@ -374,7 +381,13 @@ public sealed class PortalDiscussionService(
         var me = side == DiscussionSide.Staff
             ? staff.SingleOrDefault(p => p.Id == currentUser.Id)
             : clients.SingleOrDefault(p => p.Id == currentAccount.Id);
-        return me is null ? throw new NotFoundException(NotAvailable) : new Room(project, me, staff, clients);
+        if (me is null)
+        {
+            throw new NotFoundException(NotAvailable);
+        }
+
+        var visibleFrom = side == DiscussionSide.Client ? await discussion.DiscussionVisibleFromAsync(projectId, cancellationToken) : null;
+        return new Room(project, me, staff, clients, visibleFrom);
     }
 
     /// <summary>
@@ -399,7 +412,7 @@ public sealed class PortalDiscussionService(
     {
         var projectId = room.Project.Id;
         var read = await discussion.GetReadAsync(projectId, room.Me, cancellationToken);
-        var facts = await discussion.CommentThreadsAsync(projectId, room.Me, cancellationToken);
+        var facts = await discussion.CommentThreadsAsync(projectId, room.Me, room.VisibleFrom, cancellationToken);
         var published = await discussion.PublishedItemsAsync(projectId, cancellationToken);
 
         var threads = facts
@@ -424,9 +437,9 @@ public sealed class PortalDiscussionService(
             ProjectId = projectId,
             CanWrite = closed is null,
             ClosedReason = closed?.Message,
-            UnreadMessages = await discussion.UnreadMessagesAsync(projectId, read?.LastMessageId, room.Me, cancellationToken),
+            UnreadMessages = await discussion.UnreadMessagesAsync(projectId, read?.LastMessageId, room.Me, room.VisibleFrom, cancellationToken),
             UnreadComments = threads.Sum(t => t.Unread),
-            LastMessageId = await discussion.NewestMessageIdAsync(projectId, cancellationToken),
+            LastMessageId = await discussion.NewestMessageIdAsync(projectId, room.VisibleFrom, cancellationToken),
             LastCommentId = facts.Count == 0 ? null : facts.Max(t => t.LastCommentId),
             Participants = room.Everyone.Select(p => Person(p, room.Me)).ToList(),
             Threads = threads,
@@ -435,14 +448,24 @@ public sealed class PortalDiscussionService(
 
     private async Task<PortalChatMessageResponse> MessageAsync(Room room, long messageId, CancellationToken cancellationToken)
     {
-        var row = await discussion.MessageRowAsync(room.Project.Id, messageId, cancellationToken) ?? throw new NotFoundException(NotAvailable);
+        var row = await discussion.MessageRowAsync(room.Project.Id, messageId, cancellationToken);
+        if (row is null || room.Hides(row.CreatedAt))
+        {
+            throw new NotFoundException(NotAvailable);
+        }
+
         var mentions = await discussion.MessageMentionsAsync([messageId], cancellationToken);
         return Describe(room, row, mentions[messageId]);
     }
 
     private async Task<PortalCommentResponse> CommentAsync(Room room, long commentId, CancellationToken cancellationToken)
     {
-        var row = await discussion.CommentRowAsync(room.Project.Id, commentId, cancellationToken) ?? throw new NotFoundException(NotAvailable);
+        var row = await discussion.CommentRowAsync(room.Project.Id, commentId, cancellationToken);
+        if (row is null || room.Hides(row.CreatedAt))
+        {
+            throw new NotFoundException(NotAvailable);
+        }
+
         var mentions = await discussion.CommentMentionsAsync([commentId], cancellationToken);
         var shown = (await discussion.PublishedItemsAsync(room.Project.Id, cancellationToken)).GetValueOrDefault(row.ItemId);
         return Describe(room, row, mentions[commentId], shown);
@@ -451,7 +474,12 @@ public sealed class PortalDiscussionService(
     /// <summary>The caller's own message in this project; someone else's can't be changed, nor a deleted one edited.</summary>
     private async Task<PortalMessage> OwnMessageAsync(Room room, long messageId, CancellationToken cancellationToken, bool allowDeleted = false)
     {
-        var message = await discussion.GetMessageAsync(room.Project.Id, messageId, cancellationToken) ?? throw new NotFoundException(NotAvailable);
+        var message = await discussion.GetMessageAsync(room.Project.Id, messageId, cancellationToken);
+        if (message is null || room.Hides(message.CreatedAt))
+        {
+            throw new NotFoundException(NotAvailable);
+        }
+
         if (!IsAuthor(message.AuthorUserId, message.AuthorAccountId, room.Me))
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Only its author can change a message.");
@@ -465,7 +493,12 @@ public sealed class PortalDiscussionService(
     /// <summary>The caller's own comment in this project; someone else's can't be changed.</summary>
     private async Task<PortalComment> OwnCommentAsync(Room room, long commentId, CancellationToken cancellationToken, bool allowDeleted = false)
     {
-        var comment = await discussion.GetCommentAsync(room.Project.Id, commentId, cancellationToken) ?? throw new NotFoundException(NotAvailable);
+        var comment = await discussion.GetCommentAsync(room.Project.Id, commentId, cancellationToken);
+        if (comment is null || room.Hides(comment.CreatedAt))
+        {
+            throw new NotFoundException(NotAvailable);
+        }
+
         if (!IsAuthor(comment.AuthorUserId, comment.AuthorAccountId, room.Me))
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Only its author can change a comment.");

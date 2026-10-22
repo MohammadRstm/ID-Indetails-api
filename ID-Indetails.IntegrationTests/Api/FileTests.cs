@@ -22,6 +22,66 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
     /// <summary>The PNG signature and some bytes: enough to be recognised, which is all the API checks.</summary>
     public static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. Enumerable.Range(0, 64).Select(i => (byte)i)];
 
+    /// <summary>A real photo the server can read and make copies of: a small sky over a hill, as a PNG.</summary>
+    public static readonly byte[] Photo = PhotoOf(64, 48);
+
+    /// <summary>An iPhone photo's opening box (HEIC): recognised as a photo, but the server can't read it.</summary>
+    public static readonly byte[] Heic = [0x00, 0x00, 0x00, 0x18, .. Encoding.ASCII.GetBytes("ftypheic"), .. new byte[32]];
+
+    public static byte[] PhotoOf(int width, int height)
+    {
+        using var bitmap = new SKBitmap(width, height);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            using var sky = new SKPaint { Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(0, height), [new SKColor(90, 140, 210), new SKColor(240, 200, 150)], SKShaderTileMode.Clamp) };
+            canvas.DrawRect(0, 0, width, height, sky);
+            using var hill = new SKPaint { Color = new SKColor(60, 110, 70), IsAntialias = true };
+            canvas.DrawOval(width / 2f, height, width * 0.7f, height * 0.45f, hill);
+        }
+
+        using var png = bitmap.PeekPixels().Encode(SKEncodedImageFormat.Png, 100)!;
+        return png.ToArray();
+    }
+
+    /// <summary>
+    /// A PNG of a few dozen bytes whose header says it is <paramref name="width"/> × <paramref name="height"/>: reading it
+    /// whole would take width × height × 4 bytes of memory.
+    /// </summary>
+    public static byte[] DeclaredPng(int width, int height)
+    {
+        var header = new byte[13];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header, width);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(4), height);
+        header[8] = 1; // one bit a pixel, grey: what makes such a file tiny
+        byte[] emptyDeflate = [0x78, 0x9C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01];
+        return [.. Png[..8], .. Chunk("IHDR", header), .. Chunk("IDAT", emptyDeflate), .. Chunk("IEND", [])];
+
+        static byte[] Chunk(string type, byte[] data)
+        {
+            byte[] typed = [.. Encoding.ASCII.GetBytes(type), .. data];
+            var length = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, data.Length);
+            var crc = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(crc, Crc32(typed));
+            return [.. length, .. typed, .. crc];
+        }
+
+        static uint Crc32(byte[] bytes)
+        {
+            var crc = 0xFFFFFFFFu;
+            foreach (var b in bytes)
+            {
+                crc ^= b;
+                for (var bit = 0; bit < 8; bit++)
+                {
+                    crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+                }
+            }
+
+            return ~crc;
+        }
+    }
+
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
 
@@ -68,6 +128,21 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.GetAsync($"/api/files/{file.Id}", colleague.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         (await UploadAsync(Client, Png, "plan.png", null)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task A_photo_declaring_more_pixels_than_the_server_may_read_is_refused_without_reading_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        // 10,000 × 6,000 is 60 MP: about 240 MB to read whole, in a file of a few dozen bytes
+        var bomb = DeclaredPng(10_000, 6_000);
+        bomb.Length.ShouldBeLessThan(200);
+        ID_Indetails.api.Services.Files.Implementation.Pictures.PixelsOf(bomb).ShouldBe(60_000_000);
+        ID_Indetails.api.Services.Files.Implementation.Pictures.Shrink(bomb, 160).ShouldBeNull();
+
+        await (await UploadAsync(Client, bomb, "huge.png", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.FileTooLarge);
+        // within the limit, the same kind of file is read
+        ID_Indetails.api.Services.Files.Implementation.Pictures.IsTooLarge(DeclaredPng(8_000, 6_000)).ShouldBeFalse();
     }
 
     [Fact]

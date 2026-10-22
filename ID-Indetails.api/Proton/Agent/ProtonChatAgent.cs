@@ -403,7 +403,7 @@ public sealed class ProtonChatAgent(
                 };
                 var response = listener is null
                     ? await anthropic.Messages.Create(request, cancellationToken)
-                    : await StreamAsync(request, listener, trip, cancellationToken);
+                    : await StreamAsync(request, listener, trip, turn, cancellationToken);
                 turn.Count(response);
 
                 var (assistant, toolUses) = ProtonEcho.Of(response);
@@ -532,19 +532,30 @@ public sealed class ProtonChatAgent(
 
     /// <summary>
     /// One model call, streamed: the answer's text goes to the listener as it is written, and the reply is put back
-    /// together for the tool loop. The stream may run as long as the whole question may.
+    /// together for the tool loop. The stream may run as long as the whole question may. A stream cut off before its
+    /// reply is whole (Stop, a dropped connection, the time limit) still counts the tokens the provider reported so far.
     /// </summary>
-    private async Task<Message> StreamAsync(MessageCreateParams request, IProtonListener listener, int trip, CancellationToken cancellationToken)
+    private async Task<Message> StreamAsync(
+        MessageCreateParams request, IProtonListener listener, int trip, ProtonTurn turn, CancellationToken cancellationToken)
     {
         var client = anthropic.WithOptions(o => o with { Timeout = TimeSpan.FromSeconds(options.Value.StreamQuestionTimeoutSeconds) });
         var message = new ProtonStreamedMessage();
-        await foreach (var streamEvent in client.Messages.CreateStreaming(request, cancellationToken))
+        try
         {
-            message.Add(streamEvent.Json);
-            if (streamEvent.TryPickContentBlockDelta(out var block) && block.Delta.TryPickText(out var text))
+            await foreach (var streamEvent in client.Messages.CreateStreaming(request, cancellationToken))
             {
-                await listener.DeltaAsync(trip, text.Text, cancellationToken);
+                message.Add(streamEvent.Json);
+                if (streamEvent.TryPickContentBlockDelta(out var block) && block.Delta.TryPickText(out var text))
+                {
+                    await listener.DeltaAsync(trip, text.Text, cancellationToken);
+                }
             }
+        }
+        catch when (message.UsageSoFar is { } billed)
+        {
+            // the provider bills a call once it has started, whole or not
+            turn.CountUnfinished(billed);
+            throw;
         }
 
         return message.ToMessage();
@@ -700,6 +711,14 @@ internal sealed class ProtonTurn(string model)
         LastInputTokens = (int)(u.InputTokens + (u.CacheReadInputTokens ?? 0) + (u.CacheCreationInputTokens ?? 0));
         var call = new ProtonTokens(
             (int)u.InputTokens, (int)u.OutputTokens, (int)(u.CacheReadInputTokens ?? 0), (int)(u.CacheCreationInputTokens ?? 0));
+        _calls.Add(call);
+        _tokens = _tokens.Add(call);
+    }
+
+    /// <summary>A model call stopped before its reply was whole: the tokens the provider had reported so far.</summary>
+    public void CountUnfinished(ProtonTokens call)
+    {
+        RoundTrips++;
         _calls.Add(call);
         _tokens = _tokens.Add(call);
     }

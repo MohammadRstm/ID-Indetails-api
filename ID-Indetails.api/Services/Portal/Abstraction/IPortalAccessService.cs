@@ -27,4 +27,12 @@ public interface IPortalAccessService
     /// the caller's unit of work, inside its transaction.
     /// </summary>
     Task EndAllForClientAsync(long clientId, string domainCode, long actorId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ends the access, and the pending invitations, of email addresses taken off the client's contacts, on every project
+    /// of the client: the client portal is only for the client's own contacts. Saved in the caller's unit of work, inside
+    /// its transaction.
+    /// </summary>
+    Task EndForRemovedContactsAsync(
+        long clientId, string domainCode, IReadOnlyCollection<string> emails, long actorId, CancellationToken cancellationToken = default);
 }

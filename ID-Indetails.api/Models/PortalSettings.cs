@@ -23,4 +23,10 @@ public class PortalSettings
     public DateTime? PublishedAt { get; set; }
 
     public long? PublishedById { get; set; }
+
+    /// <summary>
+    /// Clients see only the messages and comments written from then on: set when the project moves to another client,
+    /// so the new client never reads what was said with the previous one. Staff see everything. Null: no cut-off.
+    /// </summary>
+    public DateTime? DiscussionVisibleFrom { get; set; }
 }

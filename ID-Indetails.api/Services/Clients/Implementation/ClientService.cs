@@ -219,9 +219,12 @@ public sealed class ClientService(
     public async Task<ClientResponse> UpdateAsync(long clientId, UpdateClientRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var client = await VisibleClientForUpdateAsync(actor, clientId, cancellationToken);
 
         var contacts = await PrepareContactsAsync(client.DomainCode, request.Contacts, client.Id, cancellationToken);
+        // An email address taken off the client (removed or changed) stops following its projects in the client portal.
+        var removedEmails = EmailsOf(client.Contacts).Except(EmailsOf(contacts)).ToList();
         client.Name = request.Name.Trim();
         client.Organisation = Clean(request.Organisation);
         client.Label = Clean(request.Label);
@@ -235,9 +238,14 @@ public sealed class ClientService(
 
         activity.Add(ClientEvent(client, ActivityEventKinds.ClientUpdated, actor.UserId));
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await portalAccess.EndForRemovedContactsAsync(client.Id, client.DomainCode, removedEmails, actor.UserId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, client.Id, cancellationToken);
     }
+
+    private static IEnumerable<string> EmailsOf(IEnumerable<ClientContact> contacts)
+        => contacts.Where(c => c.Kind == ContactKind.Email).Select(c => c.NormalizedValue);
 
     public async Task<ClientResponse> SetArchivedAsync(long clientId, bool archived, CancellationToken cancellationToken = default)
     {

@@ -320,7 +320,9 @@ submits or sends anything itself.
   - It needs the endpoint the form saves through, and any record it names must be visible to the user.
   - `report_bug`, `invite` and `message` fill only on a typed turn. An invitation's email only when the user typed that
     address in this conversation (the conversation keeps the typed questions).
-  - A draft goes only to one of the user's contacts or a team chat they are in.
+  - A draft goes only to one of the user's contacts or a team chat they are in, and only to one the user named in
+    their own words (as `propose_send_message` requires): a name that only appeared in the data is refused, so text
+    in the data can't prepare a message to someone the user didn't ask for.
   - The command `fill_form` runs after the surface that opens the form (`Pick`: place, fill, preferences).
 - **Client** (`formFill.ts`): a form that can be filled registers an adapter while it is open (`useProtonForm`);
   a fill that arrives before the form opens waits up to 10 s. Adapters fill **empty** fields only (`fillEmpty`); the edit
@@ -356,7 +358,9 @@ submits or sends anything itself.
 - **Time**: `StreamQuestionTimeoutSeconds` (120) for the whole question; the JSON endpoint keeps 55 s.
 - **Stop or a dropped connection**: the question is still recorded with its tokens (outcome `failed`), adds nothing to
   the conversation, and any change it proposed is closed as `superseded`, so no card waits for a Confirm that can't
-  come. The same applies to any question that fails.
+  come. The same applies to any question that fails. The tokens include a streamed model call cut off part way: the
+  provider bills it from its start, so the input it reported in the stream's opening event (and the output, if a
+  closing delta came) is counted. A plain (non-streamed) call stopped before its answer reports nothing to count.
 - **How**: the agent prepares a question (all checks), then answers it. With a listener, each model call is streamed
   (`Messages.CreateStreaming`) and put back together (`ProtonStreamedMessage`) for the same tool loop and echo.
 - **Caching**: the system prompt carries an explicit cache breakpoint (it caches the tools and the prompt for

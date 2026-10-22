@@ -102,7 +102,7 @@ public sealed class WebsiteProjectService(
             throw new BusinessRuleException(ErrorCodes.WebsiteConceptFull, $"A project has at most {WebsiteRules.MaxConceptImages} concept pictures. Remove one first.");
         }
 
-        var file = await fileClaims.ClaimAsync(request.FileId, FileKind.Image, cancellationToken);
+        var file = await fileClaims.ClaimWebsitePictureAsync(request.FileId, cancellationToken);
         var image = new WebsiteProjectImage
         {
             WebsiteProjectId = project.Id,
@@ -273,7 +273,7 @@ public sealed class WebsiteProjectService(
     private async Task<long?> PictureAsync(long? current, long? requested, CancellationToken cancellationToken)
         => requested is null || requested == current
             ? requested
-            : (await fileClaims.ClaimAsync(requested.Value, FileKind.Image, cancellationToken)).Id;
+            : (await fileClaims.ClaimWebsitePictureAsync(requested.Value, cancellationToken)).Id;
 
     /// <summary>Takes the project out of the moving strip and closes the gap.</summary>
     private async Task LeaveConveyorAsync(WebsiteProject project, CancellationToken cancellationToken)

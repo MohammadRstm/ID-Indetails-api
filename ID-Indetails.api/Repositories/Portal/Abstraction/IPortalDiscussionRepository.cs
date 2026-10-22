@@ -18,8 +18,16 @@ public interface IPortalDiscussionRepository
     /// <summary>Active client accounts with live access to the project.</summary>
     Task<IReadOnlyList<DiscussionPerson>> ClientsAsync(long projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// When the project's clients see its discussion from (<c>portal_settings.discussion_visible_from</c>): the project
+    /// moved to another client then. Null: they see all of it. The <c>visibleFrom</c> parameters below take it for a
+    /// client reader, and null for staff, who see everything.
+    /// </summary>
+    Task<DateTime?> DiscussionVisibleFromAsync(long projectId, CancellationToken cancellationToken = default);
+
     /// <summary>Up to <paramref name="take"/> messages before <paramref name="before"/> (or the newest), newest first.</summary>
-    Task<IReadOnlyList<DiscussionMessageRow>> MessagesAsync(long projectId, long? before, int take, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DiscussionMessageRow>> MessagesAsync(
+        long projectId, long? before, int take, DateTime? visibleFrom, CancellationToken cancellationToken = default);
 
     Task<DiscussionMessageRow?> MessageRowAsync(long projectId, long messageId, CancellationToken cancellationToken = default);
 
@@ -29,22 +37,25 @@ public interface IPortalDiscussionRepository
     /// <summary>The writer's message sent with this token, if any. Tracked.</summary>
     Task<PortalMessage?> FindMessageAsync(DiscussionPerson author, string clientToken, CancellationToken cancellationToken = default);
 
-    Task<long?> NewestMessageIdAsync(long projectId, CancellationToken cancellationToken = default);
+    Task<long?> NewestMessageIdAsync(long projectId, DateTime? visibleFrom, CancellationToken cancellationToken = default);
 
     /// <summary>The newest comment on a file of the project, deleted ones included.</summary>
-    Task<long?> NewestCommentIdAsync(long projectId, long itemId, CancellationToken cancellationToken = default);
+    Task<long?> NewestCommentIdAsync(long projectId, long itemId, DateTime? visibleFrom, CancellationToken cancellationToken = default);
 
     /// <summary>Messages after <paramref name="after"/> not written by <paramref name="reader"/> nor deleted.</summary>
-    Task<int> UnreadMessagesAsync(long projectId, long? after, DiscussionPerson reader, CancellationToken cancellationToken = default);
+    Task<int> UnreadMessagesAsync(
+        long projectId, long? after, DiscussionPerson reader, DateTime? visibleFrom, CancellationToken cancellationToken = default);
 
     /// <summary>A file's comments (or every comment of the project), oldest first, deleted ones included.</summary>
-    Task<IReadOnlyList<DiscussionCommentRow>> CommentsAsync(long projectId, long? itemId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DiscussionCommentRow>> CommentsAsync(
+        long projectId, long? itemId, DateTime? visibleFrom, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Each of the project's comment threads, without the comments' text. Unread: comments not deleted and not written
     /// by the reader, past the reader's marker on that file.
     /// </summary>
-    Task<IReadOnlyList<CommentThreadFacts>> CommentThreadsAsync(long projectId, DiscussionPerson reader, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CommentThreadFacts>> CommentThreadsAsync(
+        long projectId, DiscussionPerson reader, DateTime? visibleFrom, CancellationToken cancellationToken = default);
 
     Task<DiscussionCommentRow?> CommentRowAsync(long projectId, long commentId, CancellationToken cancellationToken = default);
 

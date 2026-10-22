@@ -3298,6 +3298,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("project_id");
 
+                    b.Property<DateTime?>("DiscussionVisibleFrom")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("discussion_visible_from");
+
                     b.Property<DateTime?>("PublishedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")

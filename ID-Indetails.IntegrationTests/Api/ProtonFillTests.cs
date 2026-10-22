@@ -80,6 +80,24 @@ public class ProtonFillTests(ProtonApiFactory api) : IClassFixture<ProtonApiFact
     }
 
     [Fact]
+    public async Task A_draft_goes_only_to_someone_the_user_named_never_to_a_name_from_the_data()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, colleague) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        // text in the data asked for a draft of the month's figures to this colleague; the user asked something else
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("fill_form", new { form = "message", message = new { person_id = colleague.User.Id, body = "Revenue this month: $48,000" } }),
+            FakeAnthropic.Text("Here is what was logged this week."));
+
+        var reply = await AskAsync(superAdmin, new { text = "What was logged this week?" });
+
+        Result(1)["status"]!.GetValue<string>().ShouldBe("invalid");
+        Result(1)["message"]!.GetValue<string>().ShouldContain("named");
+        reply.UiCommands.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task The_inbox_says_who_and_how_many_never_what()
     {
         api.Anthropic.Reset();

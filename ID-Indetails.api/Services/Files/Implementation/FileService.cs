@@ -86,6 +86,11 @@ public sealed class FileService(
         FileRules.CheckSize(detected.Kind, buffer.Length).ThrowIfDenied();
 
         var original = buffer.ToArray();
+        if (Pictures.IsTooLarge(original))
+        {
+            throw new BusinessRuleException(ErrorCodes.FileTooLarge, "This picture has too many pixels (over 50 megapixels). Save a smaller copy and upload that.");
+        }
+
         return Pictures.Shrink(original, Pictures.MaxEdge) is { } small
             ? (await storage.SaveAsync(new MemoryStream(small), Pictures.WebpExtension, cancellationToken),
                 detected with { MimeType = Pictures.WebpMimeType, Extension = Pictures.WebpExtension })

@@ -604,7 +604,10 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
             record is null ? [] : [record]) { UiCommand = command };
     }
 
-    /// <summary>A draft goes only to someone the user may message: a contact, or a team chat they are in.</summary>
+    /// <summary>
+    /// A draft goes only to someone the user may message (a contact, or a team chat they are in) and named in their own
+    /// words, as a message sent with Proton does: text in the data can't choose who a draft is for.
+    /// </summary>
     private async Task<(ProtonRef Recipient, string Label)> RecipientAsync(MessageDraft draft, ProtonToolContext context, CancellationToken cancellationToken)
     {
         if (draft.PersonId is null == draft.TeamId is null)
@@ -612,16 +615,25 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
             throw new ProtonToolInputException("Give person_id or team_id, from find_recipient.");
         }
 
+        ProtonRef recipient;
         if (draft.PersonId is { } personId)
         {
             var contact = (await messaging.ContactsAsync(cancellationToken)).FirstOrDefault(c => c.Id == personId)
                 ?? throw new Exceptions.Base.NotFoundException("Not someone this user can message.");
-            return (new ProtonRef(ProtonRefType.Person, contact.Id, contact.Name, contact.Domain), $"a draft to {contact.Name}");
+            recipient = new ProtonRef(ProtonRefType.Person, contact.Id, contact.Name, contact.Domain);
+        }
+        else
+        {
+            recipient = await records.FindAsync(ProtonRefType.Team, draft.TeamId!.Value, context, cancellationToken)
+                ?? throw new Exceptions.Base.NotFoundException("Not a team chat this user is in.");
         }
 
-        var team = await records.FindAsync(ProtonRefType.Team, draft.TeamId!.Value, context, cancellationToken)
-            ?? throw new Exceptions.Base.NotFoundException("Not a team chat this user is in.");
-        return (team, $"a draft to {team.Name}");
+        if (!Actions.MessageText.Named(recipient.Name, context.TypedText))
+        {
+            throw new ProtonToolInputException("Draft only to someone the user named: ask them who it is for in their own words.");
+        }
+
+        return (recipient, $"a draft to {recipient.Name}");
     }
 
     private static string Words(ProtonForm form) => form switch

@@ -207,6 +207,37 @@ public sealed class PortalPublishingService(
         return await views.ContentAsync(project, cancellationToken);
     }
 
+    public async Task WithdrawForNewClientAsync(long projectId, DateTime at, CancellationToken cancellationToken = default)
+    {
+        var settings = await content.LockSettingsAsync(projectId, cancellationToken);
+        settings.DiscussionVisibleFrom = at;
+        settings.PublishedSummary = null;
+        settings.PublishedRevision = null;
+        settings.PublishedAt = null;
+        settings.PublishedById = null;
+
+        var items = (await content.ItemsToChangeAsync(projectId, cancellationToken)).ToList();
+        var heroes = (await content.HeroesToChangeAsync(projectId, cancellationToken)).ToList();
+        var candidates = new List<PortalFile>(
+            await content.FilesAsync(items.Where(i => i.PublishedFileId is { } p && p != i.FileId).Select(i => i.PublishedFileId!.Value), cancellationToken));
+        foreach (var item in items.Where(i => i.PublishedFileId is not null))
+        {
+            item.PublishedFileId = null;
+            item.PublishedTitle = null;
+            item.PublishedSection = null;
+            item.PublishedSortOrder = null;
+        }
+
+        foreach (var published in InOrder(heroes, published: true))
+        {
+            content.Remove(published);
+            heroes.Remove(published);
+            candidates.Add(published.File);
+        }
+
+        PortalReferences.Release(candidates, items, heroes, at);
+    }
+
     /// <summary>
     /// Only the client's side goes back: each file is chosen again exactly when clients see it, and the hero images and
     /// introduction are the published ones. Titles, sections, order, replaced files and deletions belong to Project

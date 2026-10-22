@@ -34,4 +34,12 @@ public interface IPortalPublishingService
 
     /// <summary>The draft as the client would see it.</summary>
     Task<PortalPresentationResponse> PreviewAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// When the project moves to another client: nothing published for the previous client stays published, and from
+    /// <paramref name="at"/> on clients see only the discussion written after it. The drafts stay, for staff to publish
+    /// again. Staged in the caller's unit of work and transaction; files nothing uses any more are let go and deleted by
+    /// the content cleanup.
+    /// </summary>
+    Task WithdrawForNewClientAsync(long projectId, DateTime at, CancellationToken cancellationToken = default);
 }

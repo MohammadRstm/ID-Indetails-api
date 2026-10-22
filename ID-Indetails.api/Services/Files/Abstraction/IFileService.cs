@@ -34,4 +34,10 @@ public interface IFileClaims
     /// can't be attached twice. <paramref name="kind"/>, when given, is the kind it must be.
     /// </summary>
     Task<StoredFile> ClaimAsync(long id, FileKind? kind, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// As <see cref="ClaimAsync"/>, for a photo the public website will show: only one the server can make copies of,
+    /// since the website is only ever given copies (<see cref="IPictureSizes.OpenCopyAsync"/>).
+    /// </summary>
+    Task<StoredFile> ClaimWebsitePictureAsync(long id, CancellationToken cancellationToken = default);
 }

@@ -49,4 +49,25 @@ public class SignInLockoutTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync("/api/auth/login", new { email, password }))
             .ShouldFailWithAsync(401, ErrorCodes.InvalidCredentials);
     }
+
+    [Fact]
+    public async Task Resetting_the_password_ends_the_pause_so_nobody_can_keep_a_person_out()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (email, _, _) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+
+        // someone who knows the address keeps guessing: the account is paused
+        for (var i = 0; i < SignInLockout.Attempts; i++)
+        {
+            await (await Client.PostJsonAsync("/api/auth/login", new { email, password = "wrong-password-123" }))
+                .ShouldFailWithAsync(401, ErrorCodes.InvalidCredentials);
+        }
+
+        // the person resets their password from their email, and can sign in with it at once
+        (await Client.PostJsonAsync("/api/auth/forgot-password", new { email })).IsSuccessStatusCode.ShouldBeTrue();
+        const string newPassword = "a-new-long-passphrase";
+        (await Client.PostJsonAsync("/api/auth/reset-password", new { token = api.Emails.ResetTokenFor(email), password = newPassword }))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync("/api/auth/login", new { email, password = newPassword })).ShouldSignInAsync();
+    }
 }
