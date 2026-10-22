@@ -653,8 +653,10 @@ per-question facts go in the context note.
   added by super admins, never edited). Once the month's estimated cost reaches it, nobody can ask until a top-up.
 - **Monthly question allowance per person**: `Proton:MonthlyQuestionsPerUser`. People see this allowance (used,
   remaining, percentage) — never money. Only questions Proton used a tool for count (decision 19).
-- Cost is estimated from `Proton:Prices` (USD per million tokens). The provider's bill is the truth; also set a spend
-  limit on the Anthropic workspace as a backstop.
+- Cost is estimated from `Proton:Prices` (USD per million tokens), one model call at a time: a call whose prompt
+  (cached or not) is longer than `LongPromptAboveTokens` is priced at the `Long…` rates, as Claude Haiku 5.5 bills it.
+  The prices must match `Proton:Model`. The provider's bill is the truth; also set a spend limit on the Anthropic
+  workspace as a backstop.
 
 | Endpoint | Permission | |
 |---|---|---|
@@ -686,7 +688,7 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 |---|---|---|
 | `Enabled` | `false` | must be true, with `ApiKey`, for Proton to answer |
 | `ApiKey` | — | user secrets locally; `Proton__ApiKey` (`PROTON_API_KEY` in the server's `.env`) in production. Required when enabled: the API won't start without it |
-| `Model` | `claude-sonnet-5-5` | |
+| `Model` | `claude-haiku-5-5` | change `Prices` with it |
 | `Effort` | `low` | `low` … `max` |
 | `MaxOutputTokens`, `MaxRoundTrips`, `MaxToolCallsPerQuestion` | 8000, 8, 12 | per question; at the limit the model must answer with what it has |
 | `ModelTimeoutSeconds`, `ToolTimeoutSeconds`, `QuestionTimeoutSeconds` | 40, 20, 55 | the question stays under nginx's 60-second read timeout |
@@ -698,7 +700,7 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 | `MaxConversationInputTokens` | 80000 | a conversation past it rolls over |
 | `Insights` | 30%, 10 h, 1,000 USD, 1.5×, 0.5×, 4 periods, 14 days | `NotablePct`, `NotableHours`, `NotableUsd`, `UnusualHigh`, `UnusualLow`, `BaselinePeriods`, `TargetSoonDays` |
 | `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
-| `Prices` | Sonnet 5.5 list prices | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion` |
+| `Prices` | Claude Haiku 5.5 list prices: 0.10 / 0.50 USD per million input / output tokens, cache reads 0.01, cache writes 0.125; above a 100,000-token prompt 0.50 / 2.50, 0.05, 0.625 | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion`, `LongPromptAboveTokens` (0 for one rate card), `LongInputPerMillion`, `LongOutputPerMillion`, `LongCacheReadPerMillion`, `LongCacheWritePerMillion` |
 
 | `History` | 90 days, cleanup on | `RetentionDays`, `CleanupEnabled` (off in tests) |
 | `Visuals` | on, 3 a reply, 15 minutes | `Enabled` (off: `present_data` stays listed but refuses), `MaxBlocksPerAnswer`, `DatasetMinutes` |
@@ -774,7 +776,8 @@ answer text never go to the logs.
 - Real model, opt-in (`ProtonEvalTests`): 42 golden questions against a seeded company, checked in code (tools used,
   every quoted number found in a tool result, size words only after a rule fired, "why" answers say what the data
   can't establish, nothing judges a person, no money for a user without `financial:view`, charts and tables in the form asked for). Runs only with
-  `PROTON_EVAL_API_KEY` set (optional `PROTON_EVAL_MODEL`), costs about 2–4 USD, never in CI; the answers are written
+  `PROTON_EVAL_API_KEY` set (optional `PROTON_EVAL_MODEL`; the configured model otherwise), costs well under 1 USD on
+  Claude Haiku 5.5 (about 2–4 USD on Claude Sonnet 5.5), never in CI; the answers are written
   to the test output for review. Run it before enabling Proton and after prompt changes:
   `PROTON_EVAL_API_KEY=... dotnet test ID-Indetails.IntegrationTests --filter ProtonEvalTests --logger "console;verbosity=detailed"`.
 - Navigation (`ProtonUiTests`, `ProtonNavigationTests`): the command contract (no address fields), one navigation per

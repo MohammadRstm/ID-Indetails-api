@@ -5,12 +5,23 @@ public sealed record ProtonTokens(int Input, int Output, int CacheRead, int Cach
 {
     public static ProtonTokens None { get; } = new(0, 0, 0, 0);
 
+    /// <summary>The prompt's length, cached or not: what picks the rate card.</summary>
+    public int Prompt => Input + CacheRead + CacheWrite;
+
     public ProtonTokens Add(ProtonTokens other)
         => new(Input + other.Input, Output + other.Output, CacheRead + other.CacheRead, CacheWrite + other.CacheWrite);
 }
 
-/// <summary>USD per million tokens.</summary>
-public sealed record ProtonTokenPrices(decimal Input, decimal Output, decimal CacheRead, decimal CacheWrite);
+/// <summary>
+/// USD per million tokens. A model call whose prompt is longer than <see cref="LongPromptAbove"/> tokens is priced at
+/// <see cref="LongPrompt"/> instead, when the model has a second rate card.
+/// </summary>
+public sealed record ProtonTokenPrices(decimal Input, decimal Output, decimal CacheRead, decimal CacheWrite)
+{
+    public int LongPromptAbove { get; init; }
+
+    public ProtonTokenPrices? LongPrompt { get; init; }
+}
 
 /// <summary>A month's allowance (budget in USD, or questions) against what was used. Never below zero remaining.</summary>
 public sealed record ProtonAllowance(decimal Limit, decimal Used)
@@ -31,13 +42,17 @@ public static class ProtonUsageRules
 {
     private const decimal Million = 1_000_000m;
 
-    public static decimal CostOf(ProtonTokens tokens, ProtonTokenPrices prices)
-        => Math.Round(
-            (tokens.Input * prices.Input
-             + tokens.Output * prices.Output
-             + tokens.CacheRead * prices.CacheRead
-             + tokens.CacheWrite * prices.CacheWrite) / Million,
+    /// <summary>One model call's cost: the call's own prompt length picks the rate card.</summary>
+    public static decimal CostOf(ProtonTokens call, ProtonTokenPrices prices)
+    {
+        var card = prices.LongPrompt is { } longPrompt && call.Prompt > prices.LongPromptAbove ? longPrompt : prices;
+        return Math.Round(
+            (call.Input * card.Input
+             + call.Output * card.Output
+             + call.CacheRead * card.CacheRead
+             + call.CacheWrite * card.CacheWrite) / Million,
             6);
+    }
 
     public static DateOnly MonthOf(DateOnly day) => new(day.Year, day.Month, 1);
 

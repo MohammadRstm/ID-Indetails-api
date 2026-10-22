@@ -71,7 +71,7 @@ public sealed class FakeAnthropic : HttpMessageHandler
         id = "msg_" + Guid.NewGuid().ToString("N")[..12],
         type = "message",
         role = "assistant",
-        model = "claude-sonnet-5-5",
+        model = "claude-haiku-5-5",
         content,
         stop_reason = stopReason,
         stop_sequence = (string?)null,

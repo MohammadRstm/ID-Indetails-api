@@ -663,6 +663,9 @@ internal sealed class ProtonTurn(string model)
 
     private ProtonTokens _tokens = ProtonTokens.None;
 
+    /// <summary>Each model call's tokens: a call's own prompt length picks its rate card.</summary>
+    private readonly List<ProtonTokens> _calls = [];
+
     public List<MessageParam> Messages { get; } = [];
 
     public List<ProtonToolResult> ToolCalls { get; } = [];
@@ -687,8 +690,10 @@ internal sealed class ProtonTurn(string model)
         FirstReplyMs ??= _watch.ElapsedMilliseconds;
         var u = response.Usage;
         LastInputTokens = (int)(u.InputTokens + (u.CacheReadInputTokens ?? 0) + (u.CacheCreationInputTokens ?? 0));
-        _tokens = _tokens.Add(new ProtonTokens(
-            (int)u.InputTokens, (int)u.OutputTokens, (int)(u.CacheReadInputTokens ?? 0), (int)(u.CacheCreationInputTokens ?? 0)));
+        var call = new ProtonTokens(
+            (int)u.InputTokens, (int)u.OutputTokens, (int)(u.CacheReadInputTokens ?? 0), (int)(u.CacheCreationInputTokens ?? 0));
+        _calls.Add(call);
+        _tokens = _tokens.Add(call);
     }
 
     public void Finish(Message response, string answer, bool atLimit)
@@ -749,7 +754,7 @@ internal sealed class ProtonTurn(string model)
         OutputTokens = _tokens.Output,
         CacheReadTokens = _tokens.CacheRead,
         CacheWriteTokens = _tokens.CacheWrite,
-        CostUsd = ProtonUsageRules.CostOf(_tokens, prices),
+        CostUsd = _calls.Sum(call => ProtonUsageRules.CostOf(call, prices)),
         Question = question,
         Answer = ProtonText.Cut(Answer, MaxAnswerLength),
         Tools = JsonSerializer.Serialize(ToolCalls.Select(t => new { tool = t.Tool, input = ProtonInputSummary.Summarize(t.Input), status = t.Status.ToString(), ms = t.ElapsedMs }), ProtonJson.Options),
