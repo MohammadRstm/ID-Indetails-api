@@ -201,8 +201,11 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         var second = await PublishedAsync(superAdmin, "Second");
         var draft = await CreateAsync(superAdmin, Full(Unique("Draft"), null, null, published: false));
 
-        var strip = await Client.PutJsonAsync("/api/website/conveyor", new { projectIds = new[] { second.Id, first.Id } }, superAdmin.AccessToken);
+        var strip = await Client.PutJsonAsync("/api/website/conveyor", new { projectIds = new[] { first.Id, second.Id } }, superAdmin.AccessToken);
         ((int)strip.StatusCode).ShouldBe(200, await strip.Content.ReadAsStringAsync());
+        // swapped: each takes the place the other held
+        var swapped = await Client.PutJsonAsync("/api/website/conveyor", new { projectIds = new[] { second.Id, first.Id } }, superAdmin.AccessToken);
+        ((int)swapped.StatusCode).ShouldBe(200, await swapped.Content.ReadAsStringAsync());
         var shown = (await PublicProjectsAsync()).Where(p => p.ShowInConveyor).OrderBy(p => p.ConveyorOrder).Select(p => p.Id).ToList();
         shown.ShouldBe([second.Id, first.Id]);
 
