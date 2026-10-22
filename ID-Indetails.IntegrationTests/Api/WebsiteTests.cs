@@ -31,11 +31,11 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
     /// <summary>A project with everything the website shows.</summary>
     private static object Full(
         string title, long? thumbnail, long? hero, bool published = true, long? projectId = null, string? status = "completed",
-        int? year = 2022)
+        int? year = 2022, string type = "villa")
         => new
         {
             title,
-            type = "villa",
+            type,
             status,
             year,
             client = "The Rizk family",
@@ -129,6 +129,7 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         var shown = (await PublicProjectsAsync()).Single(p => p.Id == draft.Id);
         shown.Slug.ShouldBe(draft.Slug);
         shown.Type.ShouldBe("villa");
+        shown.TypeLabel.ShouldBe("Villa");
         shown.Status.ShouldBe("completed");
         shown.Year.ShouldBe(2022);
         shown.Client.ShouldBe("The Rizk family");
@@ -152,6 +153,30 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await PublicProjectsAsync()).ShouldNotContain(p => p.Id == draft.Id);
         (await Client.DeleteAsync($"/api/website/projects/{draft.Id}", superAdmin.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
         await (await Client.GetAsync($"/api/website/projects/{draft.Id}", superAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task A_project_takes_any_type_and_one_spelt_differently_is_the_same_type()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var thumbnail = await PngAsync(superAdmin);
+        var hero = await PngAsync(superAdmin);
+        var mark = Guid.NewGuid().ToString("N")[..6];
+
+        var first = await CreateAsync(superAdmin, Full(Unique("Cliff house"), thumbnail, hero, type: $"  beach   house {mark} "));
+        first.Type.ShouldBe($"Beach house {mark}");
+        // typed another way, it's the type already used
+        var second = await CreateAsync(superAdmin, Full(Unique("Dune house"), thumbnail, hero, type: $"BEACH HOUSE {mark}"));
+        second.Type.ShouldBe($"Beach house {mark}");
+
+        var shown = (await PublicProjectsAsync()).Single(p => p.Id == second.Id);
+        shown.Type.ShouldBe($"beach-house-{mark}");
+        shown.TypeLabel.ShouldBe($"Beach house {mark}");
+
+        (await (await Client.PostJsonAsync("/api/website/projects", Full(Unique("Nameless"), null, null, published: false, type: "  "), superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("type");
+        (await (await Client.PostJsonAsync("/api/website/projects", Full(Unique("Arabic"), null, null, published: false, type: "فيلا"), superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("type");
     }
 
     [Fact]

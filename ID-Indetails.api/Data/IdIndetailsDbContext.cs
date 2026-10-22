@@ -162,7 +162,6 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<PortalUploadStatus>(configurationBuilder);
         StoreAsSnakeCase<PortalNotificationKind>(configurationBuilder);
         StoreAsSnakeCase<WebsiteProjectStatus>(configurationBuilder);
-        StoreAsSnakeCase<WebsiteProjectType>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

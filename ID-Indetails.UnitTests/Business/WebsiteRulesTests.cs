@@ -75,7 +75,17 @@ public class WebsiteRulesTests
     {
         WebsiteRules.PublicStatus(WebsiteProjectStatus.InProgress).ShouldBe("in-progress");
         WebsiteRules.PublicStatus(WebsiteProjectStatus.Completed).ShouldBe("completed");
-        WebsiteRules.PublicType(WebsiteProjectType.Residential).ShouldBe("residential");
+    }
+
+    [Theory]
+    [InlineData("villa", "Villa", "villa")]
+    [InlineData("  beach   house ", "Beach house", "beach-house")]
+    [InlineData("Restaurant & café", "Restaurant & café", "restaurant-cafe")]
+    [InlineData("Mixed-use", "Mixed-use", "mixed-use")]
+    public void A_type_is_tidied_and_keyed_like_a_page_address(string typed, string clean, string key)
+    {
+        WebsiteRules.CleanType(typed).ShouldBe(clean);
+        WebsiteRules.TypeKey(WebsiteRules.CleanType(typed)).ShouldBe(key);
     }
 
     [Theory]

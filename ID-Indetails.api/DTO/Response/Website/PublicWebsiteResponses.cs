@@ -10,7 +10,8 @@ public sealed record PublicImage(string Src, string Alt);
 /// <param name="Approximate">The point was picked near the city or a town of the country, as no coordinates were given.</param>
 public sealed record PublicPlace(string? City, string Country, string CountryCode, decimal Lat, decimal Lng, bool Approximate);
 
-/// <param name="Type">"villa", "residential" or "hotel".</param>
+/// <param name="Type">The key the site filters by, like a page address ("villa", "beach-house").</param>
+/// <param name="TypeLabel">The type as shown ("Villa", "Beach house").</param>
 /// <param name="Status">"in-progress" or "completed".</param>
 /// <param name="Client">Empty when the website names no client.</param>
 /// <param name="Thumbnail">The portrait picture's address.</param>
@@ -19,6 +20,7 @@ public sealed record PublicWebsiteProject(
     string Slug,
     string Title,
     string Type,
+    string TypeLabel,
     string Status,
     string Client,
     PublicPlace Location,

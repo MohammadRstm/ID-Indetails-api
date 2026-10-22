@@ -16,7 +16,8 @@ public class WebsiteProject
 
     public string Title { get; set; } = string.Empty;
 
-    public WebsiteProjectType Type { get; set; }
+    /// <summary>What kind of building it is, as shown ("Villa", "Beach house"); the public site filters its projects by it.</summary>
+    public string Type { get; set; } = string.Empty;
 
     /// <summary>Null follows the linked project's status.</summary>
     public WebsiteProjectStatus? Status { get; set; }

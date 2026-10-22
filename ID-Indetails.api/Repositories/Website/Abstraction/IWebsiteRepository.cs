@@ -44,6 +44,9 @@ public interface IWebsiteRepository
 
     Task<bool> SlugTakenAsync(string slug, long? exceptId, CancellationToken cancellationToken = default);
 
+    /// <summary>The types the other projects have, each once.</summary>
+    Task<List<string>> ProjectTypesAsync(long exceptId, CancellationToken cancellationToken = default);
+
     /// <summary>The website project showing this system project, if any.</summary>
     Task<long?> LinkedToAsync(long projectId, CancellationToken cancellationToken = default);
 

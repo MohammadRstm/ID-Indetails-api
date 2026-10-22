@@ -196,7 +196,7 @@ public sealed class WebsiteProjectService(
 
         project.Slug = await SlugAsync(project, request.Title.Trim(), cancellationToken);
         project.Title = request.Title.Trim();
-        project.Type = request.Type;
+        project.Type = await TypeAsync(project, request.Type, cancellationToken);
         project.Status = request.Status;
         project.Year = request.Year;
         project.Client = Clean(request.Client);
@@ -244,6 +244,17 @@ public sealed class WebsiteProjectService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return project;
+    }
+
+    /// <summary>
+    /// The type as typed and tidied, or the one another project already has with the same key, so "villa" and "Villa"
+    /// stay one type on the website.
+    /// </summary>
+    private async Task<string> TypeAsync(WebsiteProject project, string typed, CancellationToken cancellationToken)
+    {
+        var type = WebsiteRules.CleanType(typed);
+        var key = WebsiteRules.TypeKey(type);
+        return (await website.ProjectTypesAsync(project.Id, cancellationToken)).FirstOrDefault(t => WebsiteRules.TypeKey(t) == key) ?? type;
     }
 
     /// <summary>
