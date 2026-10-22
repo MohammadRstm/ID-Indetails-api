@@ -159,14 +159,12 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_project_takes_any_type_and_one_spelt_differently_is_the_same_type()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var thumbnail = await PngAsync(superAdmin);
-        var hero = await PngAsync(superAdmin);
         var mark = Guid.NewGuid().ToString("N")[..6];
 
-        var first = await CreateAsync(superAdmin, Full(Unique("Cliff house"), thumbnail, hero, type: $"  beach   house {mark} "));
+        var first = await CreateAsync(superAdmin, Full(Unique("Cliff house"), null, null, published: false, type: $"  beach   house {mark} "));
         first.Type.ShouldBe($"Beach house {mark}");
         // typed another way, it's the type already used
-        var second = await CreateAsync(superAdmin, Full(Unique("Dune house"), thumbnail, hero, type: $"BEACH HOUSE {mark}"));
+        var second = await CreateAsync(superAdmin, Full(Unique("Dune house"), await PngAsync(superAdmin), await PngAsync(superAdmin), type: $"BEACH HOUSE {mark}"));
         second.Type.ShouldBe($"Beach house {mark}");
 
         var shown = (await PublicProjectsAsync()).Single(p => p.Id == second.Id);
