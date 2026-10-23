@@ -5,6 +5,7 @@ using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Conversation;
 using ID_Indetails.api.Proton.Files;
+using ID_Indetails.api.Proton.Suggestions;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
@@ -53,6 +54,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddHostedService<Jobs.ProtonHistoryCleanupJob>();
         services.AddScoped<Proton.Memory.ProtonMemoryService>();
         services.AddScoped<ProtonUsageService>();
+        services.AddScoped<ProtonReplySuggester>();
         services.AddSingleton<ProtonBudgetHolds>();
         services.AddSingleton<ProtonConversationStore>();
         services.AddScoped<ProtonToolbox>();

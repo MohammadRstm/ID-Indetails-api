@@ -66,6 +66,9 @@ public class User
 
     public DateTime? LastSeenAt { get; set; }
 
+    /// <summary>Whether Proton suggests replies to them in the discussions with clients: their own choice, on by default.</summary>
+    public bool ProtonReplySuggestions { get; set; } = true;
+
     public DateTime CreatedAt { get; set; }
 
     /// <summary>Who invited this person. Null for accounts created by the developer tool.</summary>

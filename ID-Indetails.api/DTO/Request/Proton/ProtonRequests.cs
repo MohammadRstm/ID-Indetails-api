@@ -83,6 +83,12 @@ public sealed record TopUpProtonBudgetRequest
     public string? Note { get; init; }
 }
 
+/// <summary>A reply suggestion for the discussion with a Design client project's client.</summary>
+public sealed record SuggestReplyRequest
+{
+    public long ProjectId { get; init; }
+}
+
 /// <summary>Something to remember: words the user typed in that conversation, checked against what the server kept of it.</summary>
 public sealed record SaveProtonMemoryRequest
 {

@@ -446,6 +446,16 @@ public sealed class EmployeeService(
         return await sessions.DescribeAsync(user, cancellationToken);
     }
 
+    public async Task<CurrentUserResponse> SetMyProtonSuggestionsAsync(MyProtonSuggestionsRequest request, CancellationToken cancellationToken = default)
+    {
+        var user = await ActiveSelfAsync(cancellationToken);
+        user.ProtonReplySuggestions = request.Enabled;
+        user.UpdatedAt = clock.UtcNow;
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await sessions.DescribeAsync(user, cancellationToken);
+    }
+
     public Task<EmployeeResponse> SetPhotoAsync(long userId, AttachFileRequest request, CancellationToken cancellationToken = default)
         => ChangePhotoAsync(userId, request.FileId, cancellationToken);
 

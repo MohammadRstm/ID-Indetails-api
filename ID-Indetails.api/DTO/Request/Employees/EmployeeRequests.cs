@@ -85,6 +85,12 @@ public sealed record UpdateMyProfileRequest
     public string? Phone { get; init; }
 }
 
+/// <summary>Whether Proton suggests replies to the person in the discussions with clients.</summary>
+public sealed record MyProtonSuggestionsRequest
+{
+    public bool Enabled { get; init; }
+}
+
 /// <summary>A new sign-in address, set by a super admin.</summary>
 public sealed record ChangeEmailRequest
 {

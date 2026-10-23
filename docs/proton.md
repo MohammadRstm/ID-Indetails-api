@@ -182,6 +182,31 @@ Proton reads the newer features as the person would see them on their pages.
 The Website family is off until `Proton:Actions:Website` is turned on. Like every family outside Core and
 Lifecycle, it is proposed only on a turn the user typed. Pictures, the favicon, social links and orders stay `Never`.
 
+## Reply suggestions in the discussion with a client (Proton Phase 5)
+
+- **What it does.** In a project's discussion with its client, the team composer shows a reply Proton suggests to the
+  latest client message, as its placeholder. Tab writes it in and Escape dismisses it. The person edits it and presses
+  Send: nothing is ever sent for them.
+- **The call.** `POST /api/proton/reply-suggestions` with `{ projectId }`, using `ProtonReplySuggester`. It makes one
+  model call with no tools, from the latest `Suggestions:MessagesRead` (20) chat messages. Its own prompt says the
+  messages are data, and that it never promises dates, prices or deliverables the team hasn't stated, nor adds links
+  or contact details. The answer is `{ text, unavailable }`. When there is no suggestion, `unavailable` says why:
+  - suggestions are off for the company or the person;
+  - the project is closed;
+  - the last message isn't a client's;
+  - the day's `Suggestions:MaxPerDay` (40) are used.
+- **Who.** Only people taking part in the discussion; anyone else gets 404, as the discussion does. It needs
+  `proton:use` and the Proton rate limit.
+- **Switches.** Both default to on, and a suggestion is made only when both are on.
+  - `company_settings.proton_reply_suggestions`, set with `PUT /api/company/proton-suggestions` by
+    `company_settings:manage`, turns it off for everyone.
+  - `users.proton_reply_suggestions`, set with `PUT /api/me/proton-suggestions`, is each person's own choice. It
+    comes back as `protonReplySuggestions` on `/me`.
+- **Cost.** Each suggestion is a `suggestion` row in `proton_usage` (the channel's check constraint allows it). It
+  holds `Suggestions:HoldUsd` (0.02) while it is written and counts against the monthly budget. It never counts against
+  a person's questions, and it belongs to no conversation. The ledger keeps the project and the suggestion, never what
+  the client wrote.
+
 ## Analysis (Stage 3)
 
 Six analytical tools answer comparative and broad questions ("how is Villa Mounir doing compared with last month?",
@@ -782,6 +807,7 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 | `Prices` | Claude Haiku 5.5 list prices: 0.10 / 0.50 USD per million input / output tokens, cache reads 0.01, cache writes 0.125; above a 100,000-token prompt 0.50 / 2.50, 0.05, 0.625 | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion`, `LongPromptAboveTokens` (0 for one rate card), `LongInputPerMillion`, `LongOutputPerMillion`, `LongCacheReadPerMillion`, `LongCacheWritePerMillion` |
 
 | `Files` | 25 MB, 20 pages, 16 pictures, 60,000 characters, 2 a question; ffmpeg on the PATH | `MaxBytes`, `MaxPdfPages`, `MaxVideoFrames`, `MaxTextCharacters`, `MaxReadsPerQuestion`, `FfmpegPath` / `FfprobePath` (empty turns video reading off), `VideoTimeoutSeconds` (30). `read_project_file` has 45 seconds rather than `ToolTimeoutSeconds` |
+| `Suggestions` | 40 a day, 20 messages read, 400 tokens, 0.02 USD held | `MaxPerDay`, `MessagesRead`, `MaxOutputTokens`, `HoldUsd` |
 | `History` | 90 days, cleanup on | `RetentionDays`, `CleanupEnabled` (off in tests) |
 | `Visuals` | on, 3 a reply, 15 minutes | `Enabled` (off: `present_data` stays listed but refuses), `MaxBlocksPerAnswer`, `DatasetMinutes` |
 | `Voice` | off | `Enabled`, `ApiKey` (an OpenAI project key: user secrets locally, `Proton__Voice__ApiKey` / `PROTON_VOICE_API_KEY` in production; required when enabled), `Model` (`gpt-live-1`), `Voice` (`marin`), `BaseUrl` (`https://api.openai.com/v1/`), `PricePerMinuteUsd` (0.05), `MaxSessionMinutes` (10), `CloseWaitSeconds` (15) |
