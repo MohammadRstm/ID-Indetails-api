@@ -66,6 +66,8 @@ public sealed record ReviewRequirements(int Total, int Done, int Open, int Overd
 /// <param name="AllTimeAgreedRevenue">The contract value, not cash.</param>
 /// <param name="AllTimeAgreedProfit">Agreed revenue less the cost so far.</param>
 /// <param name="AllTimeCostOfAgreedPct">All-time cost as a whole percentage of the agreed revenue, while there is one.</param>
+/// <param name="HasUnconverted">A cost (or, all time, an invoice) is left out of these USD figures for want of an exchange rate.</param>
+/// <param name="UnpricedLabourHours">All time: hours of people with no pay record, left out of the labour cost.</param>
 public sealed record ReviewMoney(
     ProtonFigure Received,
     ProtonFigure Cost,
@@ -75,7 +77,9 @@ public sealed record ReviewMoney(
     decimal AllTimeCost,
     decimal AllTimeAgreedProfit,
     int? AllTimeAgreedMarginPct,
-    int? AllTimeCostOfAgreedPct);
+    int? AllTimeCostOfAgreedPct,
+    bool HasUnconverted,
+    decimal? UnpricedLabourHours);
 
 /// <param name="DaysSinceLastWork">Design: days since work was last logged on it (since it started, if never).</param>
 public sealed record ProjectReview(
@@ -182,7 +186,13 @@ public sealed class ReviewProjectTool(ProtonAnalysisService analysis, IProjectSe
                 allTime?.Cost ?? 0,
                 allTime?.Profit ?? 0,
                 allTime?.MarginKnown == true ? ProtonAnalysis.Pct(allTime.Margin) : null,
-                allTime is { Revenue: > 0 } ? Business.Finance.MoneyAttention.UsedPct(allTime.Revenue, allTime.Cost) : null);
+                allTime is { Revenue: > 0 } ? Business.Finance.MoneyAttention.UsedPct(allTime.Revenue, allTime.Cost) : null,
+                a.HasUnconverted || (b?.HasUnconverted ?? false) || allTime?.HasUnconverted == true,
+                allTime is { UnpricedLabourMinutes: > 0 } ? ProtonText.Hours(allTime.UnpricedLabourMinutes) : null);
+            if (money.HasUnconverted)
+            {
+                omitted.Add(ProtonAnalysis.UnconvertedLeftOut);
+            }
             if (await context.CanCallAsync(ProtonAnalysisService.MoneyAttention))
             {
                 var followUps = await analysis.MoneyAttentionAsync(project.Domain, cancellationToken);
@@ -269,7 +279,11 @@ public sealed record RequirementsBlock(int DueSoon, int Overdue);
 
 /// <summary>A domain's money in the period, cash basis.</summary>
 /// <param name="CashProfit">Received less cost.</param>
-public sealed record MoneyBlock(ProtonFigure Received, ProtonFigure Cost, ProtonFigure CashProfit, int? CashMarginPct, bool CostNotable);
+/// <param name="Unconverted">Costs of the period left out of the USD figures for want of an exchange rate, in their own currency.</param>
+/// <param name="PreviousUnconverted">The same, in the period compared with.</param>
+public sealed record MoneyBlock(
+    ProtonFigure Received, ProtonFigure Cost, ProtonFigure CashProfit, int? CashMarginPct, bool CostNotable,
+    IReadOnlyList<string>? Unconverted, IReadOnlyList<string>? PreviousUnconverted);
 
 /// <summary>A domain's part of the summary: each block only when the user may see it (see basis.omitted).</summary>
 public sealed record DomainSummary(string Domain, ProjectsBlock? Projects, WorkBlock? Work, RequirementsBlock? Requirements, MoneyBlock? Money);
@@ -394,8 +408,14 @@ public sealed class GetCompanySummaryTool(
                     ProtonFigure.Of(a.Cost.Total, b?.Cost.Total),
                     ProtonFigure.Of(a.Profit, b?.Profit),
                     ProtonAnalysis.Pct(a.Margin),
-                    b is not null && ProtonSignals.IsNotable(ProtonTrends.Change(a.Cost.Total, b.Cost.Total), t.NotableUsd, t));
+                    b is not null && ProtonSignals.IsNotable(ProtonTrends.Change(a.Cost.Total, b.Cost.Total), t.NotableUsd, t),
+                    a.Unconverted.Count > 0 ? ProtonAnalysis.Unconverted(a.Unconverted) : null,
+                    b is { Unconverted.Count: > 0 } ? ProtonAnalysis.Unconverted(b.Unconverted) : null);
                 rules.Add(ProtonSignals.NotableMoneyRule(t));
+                if (money.Unconverted is not null || money.PreviousUnconverted is not null)
+                {
+                    omitted.Add(ProtonAnalysis.UnconvertedLeftOut);
+                }
             }
             else
             {

@@ -34,8 +34,17 @@ public sealed record ListClientsInput
 
 /// <param name="AgreedRevenue">Their projects' contract value, not cash; <paramref name="Received"/> is the cash in.</param>
 /// <param name="AgreedProfit">Agreed revenue less the cost so far.</param>
+/// <param name="HasUnconverted">A cost or an invoice is left out of these USD figures for want of an exchange rate.</param>
+/// <param name="UnpricedLabourHours">Hours of people with no pay record, left out of the cost.</param>
 public sealed record ClientMoneyRow(
-    decimal AgreedRevenue, decimal Cost, decimal AgreedProfit, int? AgreedMarginPct, decimal Received, decimal Outstanding, decimal Overdue);
+    decimal AgreedRevenue, decimal Cost, decimal AgreedProfit, int? AgreedMarginPct, decimal Received, decimal Outstanding, decimal Overdue,
+    bool HasUnconverted, decimal? UnpricedLabourHours)
+{
+    public static ClientMoneyRow Of(ClientMoneyResponse m) => new(
+        m.Revenue, m.Cost.Total, m.Profit, ProtonAnalysis.Pct(m.Margin), m.Billing.Received, m.Billing.Outstanding, m.Billing.Overdue,
+        m.Cost.Unconverted.Count > 0 || m.UnconvertedInvoices.Count > 0,
+        m.Cost.UnpricedLabourMinutes > 0 ? ProtonText.Hours(m.Cost.UnpricedLabourMinutes) : null);
+}
 
 public sealed record ClientRow(
     long Id,
@@ -82,9 +91,7 @@ public sealed class ListClientsTool(IClientService clients) : ProtonTool<ListCli
             c.PrimaryContact?.Value,
             c.Work is { } w ? ProtonText.Hours(w.TotalMinutes) : null,
             c.Work?.LastStartedAt,
-            c.Money is { } m
-                ? new ClientMoneyRow(m.Revenue, m.Cost.Total, m.Profit, ProtonAnalysis.Pct(m.Margin), m.Billing.Received, m.Billing.Outstanding, m.Billing.Overdue)
-                : null))
+            c.Money is { } m ? ClientMoneyRow.Of(m) : null))
             .ToList();
         return new ProtonToolOutput(
             new ClientList(page.TotalCount, rows.Count, rows),
@@ -103,9 +110,15 @@ public sealed record ClientPersonHours(long Id, string Name, decimal Hours);
 
 public sealed record ClientWork(decimal Hours, int Entries, int People, IReadOnlyList<ClientPersonHours> TopPeople);
 
+/// <param name="HasUnconverted">A cost or an invoice is left out of these USD figures for want of an exchange rate.</param>
 public sealed record ClientProjectRow(
     long ProjectId, string Title, ProjectStatus Status, decimal Hours, decimal AgreedRevenue, decimal Cost, decimal AgreedProfit, int? AgreedMarginPct,
-    BillingTotalsResponse Billing);
+    BillingTotalsResponse Billing, bool HasUnconverted, decimal? UnpricedLabourHours)
+{
+    public static ClientProjectRow Of(ClientProjectMoneyResponse p) => new(
+        p.ProjectId, p.Title, p.Status, ProtonText.Hours(p.Hours), p.Revenue, p.Cost, p.Profit, ProtonAnalysis.Pct(p.Margin), p.Billing, p.HasUnconverted,
+        p.UnpricedLabourMinutes > 0 ? ProtonText.Hours(p.UnpricedLabourMinutes) : null);
+}
 
 /// <summary>A client's money across their projects, all time, against the agreed revenue; billing has the cash.</summary>
 /// <param name="CompletedMarginPct">Margin of the completed and archived projects only.</param>
@@ -171,8 +184,7 @@ public sealed class GetClientTool(IClientService clients) : ProtonTool<ClientIdI
                     w.People.Select(p => new ClientPersonHours(p.Id, p.Name, ProtonText.Hours(p.Minutes))).ToList())
                 : null,
             c.Money is { } money ? ClientMoney.Of(money) : null,
-            c.ProjectMoney?.Select(p => new ClientProjectRow(
-                p.ProjectId, p.Title, p.Status, ProtonText.Hours(p.Hours), p.Revenue, p.Cost, p.Profit, ProtonAnalysis.Pct(p.Margin), p.Billing)).ToList(),
+            c.ProjectMoney?.Select(ClientProjectRow.Of).ToList(),
             "Money is all time, in USD, against the agreed revenue; billing.received is what they actually paid.");
         return new ProtonToolOutput(
             card,
@@ -199,7 +211,8 @@ public sealed class GetClientTool(IClientService clients) : ProtonTool<ClientIdI
                 ProtonCell.Of(p.Title), ProtonDatasets.Status(p.Status), ProtonCell.Of(p.AgreedRevenue), ProtonCell.Of(p.Cost), ProtonCell.Of(p.AgreedProfit),
                 ProtonCell.Of(p.AgreedMarginPct))).ToList(),
             "All time",
-            projects.Count);
+            projects.Count,
+            Notes: projects.Any(p => p.HasUnconverted) ? ["Some projects have costs in another currency with no exchange rate on their day: they're left out."] : null);
         return ProtonDatasets.WithRows(monthly, money);
     }
 }

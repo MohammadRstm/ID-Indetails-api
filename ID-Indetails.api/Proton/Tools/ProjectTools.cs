@@ -56,8 +56,11 @@ public sealed record ListProjectsInput
 
 /// <param name="AgreedRevenue">The contract value, not cash.</param>
 /// <param name="AgreedProfit">Agreed revenue less the cost so far.</param>
+/// <param name="HasUnconverted">A cost or an invoice is left out of these USD figures for want of an exchange rate.</param>
+/// <param name="UnpricedLabourHours">Hours of people with no pay record, left out of the cost.</param>
 public sealed record ProjectMoneyRow(
-    decimal AgreedRevenue, decimal Cost, decimal AgreedProfit, int? AgreedMarginPct, bool MarginKnown, decimal Invoiced, decimal Outstanding, bool HasUnconverted);
+    decimal AgreedRevenue, decimal Cost, decimal AgreedProfit, int? AgreedMarginPct, bool MarginKnown, decimal Invoiced, decimal Outstanding,
+    bool HasUnconverted, decimal? UnpricedLabourHours);
 
 public sealed record ProjectWorkRow(decimal Hours, decimal HoursLast14Days, int Contributors, DateTime? LastWorkAt);
 
@@ -233,7 +236,8 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
         p.Location,
         p.Work is { } w ? new ProjectWorkRow(ProtonText.Hours(w.TotalMinutes), ProtonText.Hours(w.MinutesLast14Days), w.ContributorCount, w.LastStartedAt) : null,
         p.Money is { } m
-            ? new ProjectMoneyRow(m.Revenue, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.MarginKnown, m.Invoiced, m.Outstanding, m.HasUnconverted)
+            ? new ProjectMoneyRow(m.Revenue, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.MarginKnown, m.Invoiced, m.Outstanding, m.HasUnconverted,
+                m.UnpricedLabourMinutes > 0 ? ProtonText.Hours(m.UnpricedLabourMinutes) : null)
             : null);
 }
 

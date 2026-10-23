@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using ID_Indetails.api.Business.Proton;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
@@ -78,8 +79,14 @@ public static class ProtonAnalysis
 
     public static int? Pct(decimal? fraction) => fraction is { } f ? (int)Math.Round(f * 100, MidpointRounding.AwayFromZero) : null;
 
+    /// <summary>Costs left out of USD figures for want of an exchange rate, as "4500000.00 LBP (expenses)".</summary>
     public static IReadOnlyList<string> Unconverted(IEnumerable<UnconvertedCostResponse> costs)
-        => costs.Select(c => $"{c.Amount:0.00} {c.Currency}").ToList();
+        => costs.Select(c => $"{c.Amount.ToString("0.00", CultureInfo.InvariantCulture)} {c.Currency} ({SourceName(c.Source)})").ToList();
+
+    /// <summary>Said in basis.omitted when a figure leaves out costs it couldn't convert, so a total isn't read as complete.</summary>
+    public const string UnconvertedLeftOut = "costs in another currency with no exchange rate on their day: left out of these USD figures";
+
+    private static string SourceName(CostSource source) => source == CostSource.GroundLabour ? "ground labour" : source.ToString().ToLowerInvariant();
 
     /// <summary>
     /// Compared groups as a table: the figure now, and when compared the figure before and the change. Every group is
@@ -355,6 +362,7 @@ public sealed record CompareMoneyInput
 /// <param name="CashMarginPct">Cash profit as a whole percentage of what was received, while anything was.</param>
 /// <param name="ProjectsWithMoney">Projects with money received or costs in either period; <paramref name="Projects"/> holds the first ones.</param>
 /// <param name="Unconverted">Costs left out of the USD figures for want of an exchange rate, this period.</param>
+/// <param name="PreviousUnconverted">The same, in the period compared with: a change can come from what each left out.</param>
 public sealed record MoneyComparison(
     ProtonFigure Received,
     ProtonFigure ExpectedRevenue,
@@ -368,7 +376,8 @@ public sealed record MoneyComparison(
     int ProjectsWithMoney,
     IReadOnlyList<MoneyProjectRow>? Projects,
     IReadOnlyList<ProtonGroupRow>? BiggestCostIncreases,
-    IReadOnlyList<string> Unconverted);
+    IReadOnlyList<string> Unconverted,
+    IReadOnlyList<string>? PreviousUnconverted);
 
 public sealed record MoneyProjectRow(
     long ProjectId, string Title, ProjectStatus Status, ProtonFigure Received, ProtonFigure Cost, ProtonFigure CashProfit, bool CostNotable, bool HasUnconverted);
@@ -462,7 +471,8 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
             withMoney.Count,
             projects,
             increases,
-            ProtonAnalysis.Unconverted(now.Unconverted));
+            ProtonAnalysis.Unconverted(now.Unconverted),
+            before is { Unconverted.Count: > 0 } ? ProtonAnalysis.Unconverted(before.Unconverted) : null);
 
         var refs = (projects?.Select(p => (p.ProjectId, p.Title)) ?? [])
             .Concat(increases?.Select(r => (r.Id!.Value, r.Name)) ?? [])
@@ -480,7 +490,7 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
                     "received: payments on the day they arrived; cost: every cost dated in the period, in USD at the rate of its day; " +
                     "cash profit: received − cost",
                 ],
-                comparison.Unconverted.Count > 0 ? ["costs with no exchange rate on their day are listed apart, not in the totals"] : []),
+                comparison.Unconverted.Count > 0 || comparison.PreviousUnconverted is not null ? [ProtonAnalysis.UnconvertedLeftOut] : []),
             Datasets = Datasets(pair, money, bySource, ranked, domain),
         };
     }
@@ -491,9 +501,16 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
     {
         var now = money.Totals[0];
         var before = money.Totals.Count > 1 ? money.Totals[1] : null;
-        IReadOnlyList<string> unconverted = now.Unconverted.Count > 0
-            ? [$"Left out of these USD figures for want of an exchange rate on their day: {string.Join(", ", ProtonAnalysis.Unconverted(now.Unconverted))}."]
-            : [];
+        var unconverted = new List<string>();
+        if (now.Unconverted.Count > 0)
+        {
+            unconverted.Add($"Left out of these USD figures for want of an exchange rate on their day: {string.Join(", ", ProtonAnalysis.Unconverted(now.Unconverted))}.");
+        }
+
+        if (before is { Unconverted.Count: > 0 })
+        {
+            unconverted.Add($"Left out of the earlier period's figures the same way: {string.Join(", ", ProtonAnalysis.Unconverted(before.Unconverted))}.");
+        }
         var usd = (string key, string label) => ProtonDatasets.Figure(key, label, ProtonUnit.Usd);
         var totals = ProtonDatasets.Compared(
             "Money compared",

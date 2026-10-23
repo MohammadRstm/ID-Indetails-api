@@ -283,15 +283,7 @@ public sealed class GetFinanceProjectsTool(IDomainFinanceService finance) : Prot
         var matching = all.Projects
             .Where(p => input.ProjectIds is not { Count: > 0 } || input.ProjectIds.Contains(p.ProjectId))
             .ToList();
-        Func<FinanceProjectResponse, decimal> key = (input.Sort ?? FinanceProjectSort.Revenue) switch
-        {
-            FinanceProjectSort.Cost => p => p.Cost.Total,
-            FinanceProjectSort.Profit => p => p.Profit,
-            FinanceProjectSort.Margin => p => p.Margin ?? decimal.MinValue,
-            FinanceProjectSort.Hours => p => p.Hours,
-            _ => p => p.Revenue,
-        };
-        var ranked = (input.Ascending ? matching.OrderBy(key) : matching.OrderByDescending(key))
+        var ranked = Rank(matching, input.Sort ?? FinanceProjectSort.Revenue, input.Ascending)
             .Take(ProtonText.Limit(input.Limit, 10, 25))
             .Select(p => new FinanceProjectRow(
                 p.ProjectId, p.Title, p.ClientName, p.Status, p.BillingType, p.Revenue, p.RecognisedToDate,
@@ -307,6 +299,24 @@ public sealed class GetFinanceProjectsTool(IDomainFinanceService finance) : Prot
                 "All-time figures in USD, against the agreed revenue, not cash: get_project_financials has what each received. " +
                 "Margins that aren't known yet rank last. Internal projects have cost but no revenue."),
             ranked.Select(p => new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, domain)).ToList());
+    }
+
+    /// <summary>
+    /// Ranked by <paramref name="sort"/>. Projects with no margin yet (too early, or internal) rank last either way:
+    /// "the lowest margins" means the projects that have one.
+    /// </summary>
+    public static IEnumerable<FinanceProjectResponse> Rank(IEnumerable<FinanceProjectResponse> projects, FinanceProjectSort sort, bool ascending)
+    {
+        Func<FinanceProjectResponse, decimal> key = sort switch
+        {
+            FinanceProjectSort.Cost => p => p.Cost.Total,
+            FinanceProjectSort.Profit => p => p.Profit,
+            FinanceProjectSort.Margin => p => p.Margin ?? 0,
+            FinanceProjectSort.Hours => p => p.Hours,
+            _ => p => p.Revenue,
+        };
+        var unknownLast = projects.OrderBy(p => sort == FinanceProjectSort.Margin && p.Margin is null);
+        return ascending ? unknownLast.ThenBy(key) : unknownLast.ThenByDescending(key);
     }
 }
 

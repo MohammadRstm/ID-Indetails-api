@@ -353,4 +353,26 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         fresh.ShouldContain("The user asked: \"How did hours change?\" You answered: \"Hours were flat.\"");
         fresh.ShouldContain("And the month before?");
     }
+
+    /// <summary>A cost with no exchange rate is left out of the USD figures: the review says so instead of reading as complete.</summary>
+    [Fact]
+    public async Task A_review_says_when_a_cost_could_not_be_converted()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        // no LBP rate reaches back to 2001, so this expense stays in LBP, outside every USD figure
+        (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+                new { label = "Permit stamps", amount = 4_500_000m, currency = "LBP", spentOn = "2001-01-15" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("review_project", new { project_id = project.Id }),
+            FakeAnthropic.Text("Some of its cost couldn't be converted."));
+
+        await OkAsync(AskAsync(superAdmin, $"How is {project.Title} doing?"));
+
+        var review = Result(1);
+        review["data"]!["money"]!["has_unconverted"]!.GetValue<bool>().ShouldBeTrue();
+        review["basis"]!["omitted"]!.ToJsonString().ShouldContain("no exchange rate");
+    }
 }
