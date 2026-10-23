@@ -28,14 +28,66 @@ public sealed record DomainFinanceInput
     public DateOnly? To { get; init; }
 }
 
-/// <summary>A domain's money for a period, as GET /api/finance/{domain}/summary returns it.</summary>
+/// <summary>The billing position as of today, in USD.</summary>
+/// <param name="AgreedRevenue">The agreed revenue of the client projects it covers.</param>
+public sealed record BillingPosition(
+    decimal AgreedRevenue,
+    decimal Invoiced,
+    int IssuedCount,
+    decimal Received,
+    decimal OnAccount,
+    decimal Outstanding,
+    decimal Overdue,
+    int OverdueCount,
+    int? OldestOverdueDays,
+    decimal NotYetInvoiced,
+    decimal Drafts,
+    int PaymentCount)
+{
+    public static BillingPosition Of(BillingPositionResponse b) => new(
+        b.Value, b.Invoiced, b.IssuedCount, b.Received, b.OnAccount, b.Outstanding, b.Overdue, b.OverdueCount, b.OldestOverdueDays,
+        b.NotYetInvoiced, b.Drafts, b.PaymentCount);
+}
+
+/// <summary>The period's money, cash basis.</summary>
+/// <param name="SoFar">The period runs to today: its figures are so far.</param>
+/// <param name="ExpectedRevenue">Agreed in the period (a contract set or raised, an Execution material first sent), not a forecast.</param>
+/// <param name="CashProfit">Received less the period's cost.</param>
+/// <param name="Unconverted">Costs of the period left out of the USD figures for want of an exchange rate, in their own currency.</param>
+public sealed record DomainFinancePeriod(
+    DateOnly From,
+    DateOnly To,
+    bool SoFar,
+    decimal Received,
+    decimal ExpectedRevenue,
+    PeriodCostResponse Cost,
+    decimal CashProfit,
+    int? CashMarginPct,
+    IReadOnlyList<string>? Unconverted,
+    decimal LabourHours);
+
+/// <param name="StillToEarn">Client projects' agreed revenue not received yet, each project's never below zero.</param>
+/// <param name="UnpricedLabourHours">All time: hours of people with no pay record, left out of the labour cost.</param>
+public sealed record DomainFinanceToday(BillingPosition Billing, decimal StillToEarn, decimal UnpricedLabourHours);
+
+/// <summary>All time, against the agreed amounts.</summary>
+/// <param name="AgreedProfit">Client projects' agreed revenue less their cost so far.</param>
+public sealed record DomainFinanceAllTime(int ClientProjects, int InternalProjects, decimal AgreedRevenue, decimal AgreedProfit, decimal InternalCost);
+
+public sealed record DomainFinance(string Domain, DomainFinancePeriod Period, DomainFinanceToday AsOfToday, DomainFinanceAllTime AllTime, string Note);
+
+/// <summary>
+/// A domain's money for a period, as GET /api/finance/{domain}/summary returns it, split into what belongs to the period
+/// (cash), what is true today, and the all-time agreed figures, so the model never reads one for another.
+/// </summary>
 public sealed class GetDomainFinanceTool(IDomainFinanceService finance) : ProtonTool<DomainFinanceInput>
 {
     public override string Name => "get_domain_finance";
 
     public override string Description =>
-        "A domain's money for a period, in USD: revenue received, expected revenue, cost by source, profit, margin, " +
-        "and the billing position (invoiced, received, outstanding, overdue, not yet invoiced).";
+        "A domain's money for a period, in USD. The period is cash: money received, expected revenue (agreed in the " +
+        "period), cost by source and cash profit (received − cost). Also today's billing position (invoiced, received, " +
+        "outstanding, overdue, not yet invoiced) and the all-time agreed revenue and profit against it.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<FinanceController>(nameof(FinanceController.Summary));
 
@@ -44,8 +96,17 @@ public sealed class GetDomainFinanceTool(IDomainFinanceService finance) : Proton
         var range = context.Period(input.Period, input.From, input.To, ProtonPeriod.ThisQuarter, maxDays: 3 * 366);
         var query = new FinancePeriodQuery { From = range.From, To = range.To };
         await context.ValidateAsync(query, cancellationToken);
-        var summary = await finance.SummaryAsync(input.Domain.Code(), query, cancellationToken);
-        return new ProtonToolOutput(summary, [], new DayRange(summary.From, summary.To));
+        var s = await finance.SummaryAsync(input.Domain.Code(), query, cancellationToken);
+        var result = new DomainFinance(
+            s.Domain,
+            new DomainFinancePeriod(
+                s.From, s.To, s.To >= context.Today, s.Revenue, s.ExpectedRevenue, s.Cost, s.Profit, ProtonAnalysis.Pct(s.Margin),
+                s.Unconverted.Count > 0 ? ProtonAnalysis.Unconverted(s.Unconverted) : null, ProtonText.Hours(s.LabourMinutes)),
+            new DomainFinanceToday(BillingPosition.Of(s.Billing), s.StillToEarn, ProtonText.Hours(s.UnpricedLabourMinutes)),
+            new DomainFinanceAllTime(s.ClientProjects, s.InternalProjects, s.AllTimeClientRevenue, s.AllTimeClientProfit, s.AllTimeInternalCost),
+            "period is cash: what arrived and what was spent in it. as_of_today is today's position whatever the period. " +
+            "all_time is against the agreed amounts, not cash.");
+        return new ProtonToolOutput(result, [], new DayRange(s.From, s.To));
     }
 }
 
@@ -59,6 +120,7 @@ public sealed record MoneyByMonthInput
 }
 
 /// <param name="SoFar">The month isn't over: its figures are so far.</param>
+/// <param name="CashProfit">Received less the month's cost.</param>
 /// <param name="Unconverted">Costs of the month left out of the USD figures for want of an exchange rate, in their own currency.</param>
 public sealed record MoneyMonthRow(
     DateOnly Month,
@@ -70,7 +132,7 @@ public sealed record MoneyMonthRow(
     decimal Materials,
     decimal GroundLabour,
     decimal Cost,
-    decimal Profit,
+    decimal CashProfit,
     IReadOnlyList<string>? Unconverted);
 
 public sealed record MoneyByMonth(string Domain, IReadOnlyList<MoneyMonthRow> Months, string Note);
@@ -86,9 +148,9 @@ public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonT
     public override string Name => "get_money_by_month";
 
     public override string Description =>
-        "A domain's money month by month, oldest first, in USD: money received, expected revenue, cost by source " +
-        "(labour, expenses, materials, ground labour) and profit (received less cost). Use it for monthly trends of " +
-        "revenue, cost or profit, and for money charts by month.";
+        "A domain's money month by month, oldest first, in USD: money received, expected revenue (agreed in the month), " +
+        "cost by source (labour, expenses, materials, ground labour) and cash profit (received − cost). Use it for monthly " +
+        "trends of money received, cost or profit, and for money charts by month.";
 
     public override bool Heavy => true;
 
@@ -107,8 +169,9 @@ public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonT
         var period = rows.Count == 0 ? null : new DayRange(rows[0].Month, rows[^1].SoFar ? context.Today : rows[^1].Month.AddMonths(1).AddDays(-1));
         return new ProtonToolOutput(
             new MoneyByMonth(domain, rows,
-                "Received: payments on the day they arrived. Cost: every cost dated in the month, in USD at the rate of its day; costs with no " +
-                "rate are listed apart, not counted. Profit is received less cost, so it swings with when clients pay."),
+                "Received: payments on the day they arrived. Expected revenue: what was agreed in the month, not a forecast. Cost: every " +
+                "cost dated in the month, in USD at the rate of its day; costs with no rate are listed apart, not counted. Cash profit is " +
+                "received less cost, so it swings with when clients pay."),
             [],
             period)
         {
@@ -126,9 +189,9 @@ public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonT
             : null;
         var money = new Ui.ProtonDataset(
             "Money by month",
-            [month, usd("received", "Received"), usd("expected_revenue", "Expected revenue"), usd("cost", "Cost"), usd("profit", "Profit")],
+            [month, usd("received", "Received"), usd("expected_revenue", "Expected revenue"), usd("cost", "Cost"), usd("cash_profit", "Profit (received − cost)")],
             rows.Select(r => new Ui.ProtonDataRow(
-                [Ui.ProtonCell.Of(r.Month), Ui.ProtonCell.Of(r.Received), Ui.ProtonCell.Of(r.ExpectedRevenue), Ui.ProtonCell.Of(r.Cost), Ui.ProtonCell.Of(r.Profit)],
+                [Ui.ProtonCell.Of(r.Month), Ui.ProtonCell.Of(r.Received), Ui.ProtonCell.Of(r.ExpectedRevenue), Ui.ProtonCell.Of(r.Cost), Ui.ProtonCell.Of(r.CashProfit)],
                 Partial: r.SoFar)).ToList(),
             words,
             Notes: notes);
@@ -157,7 +220,7 @@ public sealed record FinanceProjectsInput
 {
     public required ProtonDomain Domain { get; init; }
 
-    [Description("What to rank by, highest first. Default revenue.")]
+    [Description("What to rank by, highest first: revenue (agreed), cost, profit (against the agreed revenue), margin or hours. Default revenue.")]
     public FinanceProjectSort? Sort { get; init; }
 
     [Description("Lowest first instead.")]
@@ -170,22 +233,35 @@ public sealed record FinanceProjectsInput
     public int? Limit { get; init; }
 }
 
+/// <summary>Where an open project's cost and profit are heading at its current progress.</summary>
+public sealed record ProtonProjection(decimal Cost, decimal AgreedProfit, int? AgreedMarginPct)
+{
+    public static ProtonProjection? Of(ProjectProjectionResponse? p) => p is null ? null : new(p.Cost, p.Profit, ProtonAnalysis.Pct(p.Margin));
+}
+
+/// <param name="AgreedProfit">Agreed revenue less the cost so far.</param>
+/// <param name="AgreedMarginPct">Agreed profit as a whole percentage of the agreed revenue; empty until known.</param>
 public sealed record FinanceProjectRow(
     long ProjectId,
     string Title,
     string? Client,
     ProjectStatus Status,
     BillingType BillingType,
-    decimal Revenue,
+    decimal AgreedRevenue,
     decimal RecognisedToDate,
     decimal Hours,
     ProjectCostResponse Cost,
-    decimal Profit,
-    decimal? Margin,
+    decimal AgreedProfit,
+    int? AgreedMarginPct,
     bool MarginKnown,
-    ProjectProjectionResponse? Projected);
+    ProtonProjection? Projected);
 
-public sealed record FinanceProjects(int Total, IReadOnlyList<FinanceProjectRow> Projects, FinanceProjectTotalsResponse AllProjects, string Note);
+/// <summary>Every project of the domain together: client projects against their agreed revenue, internal ones cost only.</summary>
+public sealed record FinanceProjectTotals(
+    int ClientProjects, int InternalProjects, decimal AgreedRevenue, decimal ClientCost, decimal AgreedProfit, decimal InternalCost, decimal Cost,
+    IReadOnlyList<string>? Unconverted);
+
+public sealed record FinanceProjects(int Total, IReadOnlyList<FinanceProjectRow> Projects, FinanceProjectTotals AllProjects, string Note);
 
 /// <summary>
 /// Every project's money, as GET /api/finance/{domain}/projects returns it, ranked here. Cost per hour is left out:
@@ -196,8 +272,8 @@ public sealed class GetFinanceProjectsTool(IDomainFinanceService finance) : Prot
     public override string Name => "get_finance_projects";
 
     public override string Description =>
-        "Rank a domain's projects by revenue, cost, profit, margin or hours (all time, USD): 'most profitable', " +
-        "'highest cost', 'compare these projects'.";
+        "Rank a domain's projects, all time in USD, by agreed revenue (the contract value, not cash), cost, profit " +
+        "against the agreed revenue, margin or hours: 'most profitable', 'highest cost', 'compare these projects'.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<FinanceController>(nameof(FinanceController.Projects));
 
@@ -219,17 +295,29 @@ public sealed class GetFinanceProjectsTool(IDomainFinanceService finance) : Prot
             .Take(ProtonText.Limit(input.Limit, 10, 25))
             .Select(p => new FinanceProjectRow(
                 p.ProjectId, p.Title, p.ClientName, p.Status, p.BillingType, p.Revenue, p.RecognisedToDate,
-                ProtonText.Hours(p.Hours), p.Cost, p.Profit, p.Margin, p.MarginKnown, p.Projected))
+                ProtonText.Hours(p.Hours), p.Cost, p.Profit, ProtonAnalysis.Pct(p.Margin), p.MarginKnown, ProtonProjection.Of(p.Projected)))
             .ToList();
         var domain = input.Domain.Code();
+        var t = all.Totals;
+        var totals = new FinanceProjectTotals(
+            t.ClientProjects, t.InternalProjects, t.ClientRevenue, t.ClientCost, t.ClientProfit, t.InternalCost, t.Cost,
+            t.Unconverted.Count > 0 ? ProtonAnalysis.Unconverted(t.Unconverted) : null);
         return new ProtonToolOutput(
-            new FinanceProjects(matching.Count, ranked, all.Totals,
-                "All-time figures in USD. Margins that aren't known yet rank last. Internal projects have cost but no revenue."),
+            new FinanceProjects(matching.Count, ranked, totals,
+                "All-time figures in USD, against the agreed revenue, not cash: get_project_financials has what each received. " +
+                "Margins that aren't known yet rank last. Internal projects have cost but no revenue."),
             ranked.Select(p => new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, domain)).ToList());
     }
 }
 
-public sealed record MoneyAttention(IReadOnlyList<MoneyAttentionResponse> Items, string Note);
+/// <param name="Amount">Overdue invoice: its balance. Finished but owed: what is outstanding. Cost warning: the cost.</param>
+/// <param name="AgreedRevenue">Cost warning: the project's agreed revenue.</param>
+/// <param name="CostOfAgreedPct">Cost warning: the cost as a whole percentage of the agreed revenue.</param>
+public sealed record MoneyFollowUp(
+    MoneyAttentionKind Kind, long ProjectId, string ProjectTitle, string? ClientName, string? InvoiceNumber, int? DaysOverdue,
+    decimal? Amount, decimal? AgreedRevenue, int? CostOfAgreedPct);
+
+public sealed record MoneyAttention(IReadOnlyList<MoneyFollowUp> Items, string Note);
 
 /// <summary>The money follow-ups of a domain, as GET /api/finance/{domain}/attention returns them.</summary>
 public sealed class GetMoneyAttentionTool(IDomainFinanceService finance) : ProtonTool<DomainInput>
@@ -237,8 +325,8 @@ public sealed class GetMoneyAttentionTool(IDomainFinanceService finance) : Proto
     public override string Name => "get_money_attention";
 
     public override string Description =>
-        "Money that needs attention in a domain: overdue invoices, finished projects still owed money, projects with " +
-        "no payment yet, and (Design) projects whose cost is close to their revenue.";
+        "Money that needs attention in a domain: overdue invoices, finished projects still owed money, active client " +
+        "projects with no agreed revenue set yet, and (Design) projects whose cost is close to their agreed revenue.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<FinanceController>(nameof(FinanceController.Attention));
 
@@ -246,8 +334,10 @@ public sealed class GetMoneyAttentionTool(IDomainFinanceService finance) : Proto
     {
         var domain = input.Domain.Code();
         var items = await finance.AttentionAsync(domain, cancellationToken);
+        var followUps = items.Select(i => new MoneyFollowUp(
+            i.Kind, i.ProjectId, i.ProjectTitle, i.ClientName, i.InvoiceNumber, i.DaysOverdue, i.Amount, i.Revenue, i.UsedPct)).ToList();
         return new ProtonToolOutput(
-            new MoneyAttention(items, "At most six items, most urgent first."),
+            new MoneyAttention(followUps, "At most six items, most urgent first. Amounts in USD."),
             items.Select(i => new ProtonRef(ProtonRefType.Project, i.ProjectId, i.ProjectTitle, domain)).Distinct().ToList());
     }
 }
@@ -279,7 +369,7 @@ public sealed record InvoiceRow(
     bool? Overdue,
     string Currency,
     decimal Total,
-    decimal? Paid,
+    decimal? PaidUsd,
     decimal? Balance,
     DateTime? IssuedAt,
     DateOnly? DueOn,
@@ -294,7 +384,9 @@ public sealed class ListInvoicesTool(IInvoiceService invoices) : ProtonTool<Invo
 {
     public override string Name => "list_invoices";
 
-    public override string Description => "Invoices with their status, totals, paid amount, balance and due dates, filtered by project, client, status or overdue.";
+    public override string Description =>
+        "Invoices with their status, totals, paid amount, balance and due dates, filtered by project, client, status or " +
+        "overdue. Total and balance are in the invoice's currency; paid_usd is in USD.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<InvoicesController>(nameof(InvoicesController.List));
 
@@ -405,20 +497,50 @@ public sealed record CompanyOverviewInput
     public DateOnly? To { get; init; }
 }
 
+/// <summary>One domain in the overview's period, cash basis, in USD.</summary>
+/// <param name="CashProfit">Received less the period's project cost.</param>
+/// <param name="Invoiced">Issued in the period.</param>
+/// <param name="Outstanding">Unpaid on issued invoices today, whatever the period.</param>
+public sealed record DomainOverview(
+    string Domain,
+    decimal Received,
+    decimal Cost,
+    decimal CashProfit,
+    int? CashMarginPct,
+    int ProjectsWithActivity,
+    int ActiveProjects,
+    int People,
+    int Loggers,
+    int ClientsServed,
+    int AllClients,
+    decimal Invoiced,
+    decimal Outstanding,
+    IReadOnlyList<string>? UnconvertedCosts,
+    IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices)
+{
+    public static DomainOverview Of(DomainOverviewResponse d) => new(
+        d.Domain, d.Revenue, d.Cost, d.Profit, ProtonAnalysis.Pct(d.Margin), d.ProjectsWithActivity, d.ActiveProjects, d.People, d.Loggers,
+        d.ClientsServed, d.AllClients, d.Invoiced, d.Outstanding,
+        d.UnconvertedCosts.Count > 0 ? ProtonAnalysis.Unconverted(d.UnconvertedCosts) : null, d.UnconvertedInvoices);
+}
+
+/// <param name="SoFar">The period runs to today: its figures are so far.</param>
+/// <param name="CashProfit">Received less project cost, before overhead (the overview's gross profit).</param>
+/// <param name="Overhead">Company expenses charged to the period by calendar days, in USD.</param>
 public sealed record CompanyOverview(
     DateOnly From,
     DateOnly To,
-    decimal Revenue,
+    bool SoFar,
+    decimal Received,
     decimal ProjectCost,
-    decimal GrossProfit,
+    decimal CashProfit,
     decimal Overhead,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedOverhead,
     decimal Invoiced,
-    decimal Collected,
     decimal Outstanding,
     int ProjectsWithActivity,
     int ClientsServed,
-    IReadOnlyList<DomainOverviewResponse> Domains,
+    IReadOnlyList<DomainOverview> Domains,
     string Note);
 
 /// <summary>
@@ -430,8 +552,9 @@ public sealed class GetCompanyOverviewTool(ICompanyOverviewService overview) : P
     public override string Name => "get_company_overview";
 
     public override string Description =>
-        "The whole company's money for a period, in USD: revenue, project cost, gross profit, overhead, invoiced, " +
-        "collected and outstanding, per domain and in total. Net profit isn't available here.";
+        "The whole company's money for a period, in USD, per domain and in total: money received, project cost, cash " +
+        "profit (received − project cost, the overview's gross profit), the overhead charged to the period, invoiced, " +
+        "and outstanding today. Net profit isn't available here.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get));
 
@@ -441,9 +564,10 @@ public sealed class GetCompanyOverviewTool(ICompanyOverviewService overview) : P
         var o = await overview.GetAsync(range.From, range.To, cancellationToken);
         return new ProtonToolOutput(
             new CompanyOverview(
-                o.From, o.To, o.Revenue, o.Cost, o.GrossProfit, o.Overhead, o.UnconvertedOverhead, o.Invoiced, o.Collected,
-                o.Outstanding, o.ProjectsWithActivity, o.ClientsServed, o.Domains,
-                "Admin salaries and net profit are not available to Proton; the Company overview page shows them."),
+                o.From, o.To, o.To >= context.Today, o.Revenue, o.Cost, o.GrossProfit, o.Overhead, o.UnconvertedOverhead, o.Invoiced,
+                o.Outstanding, o.ProjectsWithActivity, o.ClientsServed, o.Domains.Select(DomainOverview.Of).ToList(),
+                "The Company overview page calls received \"revenue\" and \"collected\", and cash profit \"gross profit\". " +
+                "Admin salaries and net profit are not available to Proton; that page shows them."),
             [],
             new DayRange(o.From, o.To));
     }

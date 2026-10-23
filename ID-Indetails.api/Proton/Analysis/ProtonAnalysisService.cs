@@ -295,10 +295,10 @@ public sealed class ProtonAnalysisService(
                 $"finished, with {i.Amount:0.00} USD still owed on its invoices", "a completed or archived project still owed on its invoices"),
             MoneyAttentionKind.NoPayment => new ProtonSignal(
                 ProtonSignalKind.NoPayment, i.ProjectId, i.ProjectTitle, domain, 0,
-                "an active client project with no payment agreed", "an active client project with no payment agreed"),
+                "an active client project with no agreed revenue set", "an active client project with no agreed revenue set"),
             _ => new ProtonSignal(
                 ProtonSignalKind.CostHigh, i.ProjectId, i.ProjectTitle, domain, i.UsedPct ?? 0,
-                $"cost {i.Amount:0.00} USD is {i.UsedPct}% of the {i.Revenue:0.00} USD payment", ProtonSignals.CostHighRule),
+                $"cost {i.Amount:0.00} USD is {i.UsedPct}% of the {i.Revenue:0.00} USD agreed revenue", ProtonSignals.CostHighRule),
         });
 
     private async Task<IEnumerable<ProtonSignal>> CostChangeSignalsAsync(string domain, DateOnly today, CancellationToken cancellationToken)
