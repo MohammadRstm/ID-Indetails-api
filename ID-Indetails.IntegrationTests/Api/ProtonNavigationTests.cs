@@ -4,6 +4,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Proton;
+using ID_Indetails.api.DTO.Response.Website;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using Shouldly;
@@ -294,6 +295,96 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
 
         var typed = await AskAsync(superAdmin, new { conversationId = offered.ConversationId, text = "Invite someone and turn the sounds off" });
         typed.UiCommands.Select(c => c.Surface ?? (object?)c.Sounds).ShouldBe([ProtonSurface.InvitePerson, false]);
+    }
+
+    /// <summary>One tool call on its own question: what the app is told to open, if anything, and the tool's result.</summary>
+    private async Task<(ProtonUiCommand? Opened, JsonNode Result)> CallAsync(AuthResponse who, string tool, object input, object? page = null)
+    {
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse(tool, input), FakeAnthropic.Text("Done."));
+        var reply = await AskAsync(who, new { text = "Open it", page });
+        return (reply.UiCommands.SingleOrDefault(), Result(1));
+    }
+
+    private static string Status(JsonNode result) => result["status"]!.GetValue<string>();
+
+    /// <summary>
+    /// The Website area for those who see it: its pages, its project form and a website project found by name. A Design
+    /// admin without the website's permissions opens none of it, and isn't told its projects' names.
+    /// </summary>
+    [Fact]
+    public async Task The_website_area_opens_only_for_those_who_see_it()
+    {
+        var (superAdmin, designAdmin) = await PeopleAsync();
+        var title = $"Sea house {Guid.NewGuid().ToString("N")[..6]}";
+        var created = await Client.PostJsonAsync("/api/website/projects", new { title, type = "villa", status = "in_progress", year = 2026, published = false }, superAdmin.AccessToken);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        var shown = await created.ReadAsync<WebsiteProjectResponse>();
+
+        var found = await CallAsync(superAdmin, "find", new { text = title, types = new[] { "website_project" } });
+        found.Result["data"]!["matches"]!.AsArray().Single()!["id"]!.GetValue<long>().ShouldBe(shown.Id);
+        (await CallAsync(superAdmin, "open_record", new { type = "website_project", id = shown.Id })).Opened.ShouldBe(new ProtonUiCommand(
+            ProtonUiCommandType.OpenSurface, title, shown.Id, DomainCodes.Website, Surface: ProtonSurface.EditWebsiteProject));
+        (await CallAsync(superAdmin, "open_page", new { page = "website_analytics" })).Opened.ShouldBe(new ProtonUiCommand(
+            ProtonUiCommandType.OpenPage, "the website's analytics", Page: ProtonPage.WebsiteAnalytics));
+        (await CallAsync(superAdmin, "open_surface", new { surface = "new_website_project" })).Opened.ShouldBe(new ProtonUiCommand(
+            ProtonUiCommandType.OpenSurface, "the new website project form", Domain: DomainCodes.Website, Surface: ProtonSurface.NewWebsiteProject));
+
+        var hidden = await CallAsync(designAdmin, "find", new { text = title, types = new[] { "website_project" } });
+        hidden.Result["data"]!["not_allowed"]!.AsArray().Select(t => t!.GetValue<string>()).ShouldBe(["website_project"]);
+        hidden.Result.ToJsonString().ShouldNotContain(title);
+        Status((await CallAsync(designAdmin, "open_record", new { type = "website_project", id = shown.Id })).Result).ShouldBe("not_found");
+        Status((await CallAsync(designAdmin, "open_page", new { page = "website_projects" })).Result).ShouldBe("forbidden");
+        Status((await CallAsync(designAdmin, "open_surface", new { surface = "new_website_project" })).Result).ShouldBe("forbidden");
+
+        // the page the user is on can be in the Website area
+        await CallAsync(superAdmin, "open_page", new { page = "website_projects" }, new { area = "website", page = "website_projects" });
+        api.Anthropic.Requests[0]["messages"]!.AsArray().Last()!.ToJsonString().ShouldContain("the Website area");
+    }
+
+    /// <summary>
+    /// A project's files and client portal tabs, and the surfaces on them, as the page shows them: files on a Design
+    /// project, the portal on a Design client project, the discussion only to those taking part in it, and a file's
+    /// comments only for a file of that project.
+    /// </summary>
+    [Fact]
+    public async Task A_projects_files_and_portal_open_only_where_the_page_shows_them()
+    {
+        var (superAdmin, designAdmin) = await PeopleAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var internalResponse = await Client.PostJsonAsync("/api/projects",
+            new { title = "Studio " + Guid.NewGuid().ToString("N")[..8], domainCode = DomainCodes.Design, billingType = "internal" }, superAdmin.AccessToken);
+        ((int)internalResponse.StatusCode).ShouldBe(201, await internalResponse.Content.ReadAsStringAsync());
+        var studio = await internalResponse.ReadAsync<ProjectResponse>();
+
+        (await CallAsync(superAdmin, "open_record", new { type = "project", id = project.Id, section = "files", part = "drawing" })).Opened.ShouldBe(
+            new ProtonUiCommand(ProtonUiCommandType.OpenProject, project.Title, project.Id, DomainCodes.Design, ProtonProjectSection.Files, Part: ProtonProjectPart.Drawing));
+        (await CallAsync(superAdmin, "open_record", new { type = "project", id = project.Id, section = "portal", part = "access" })).Opened!.Part
+            .ShouldBe(ProtonProjectPart.Access);
+        // an internal project has no portal, a site no files: each opens on its first tab
+        (await CallAsync(superAdmin, "open_record", new { type = "project", id = studio.Id, section = "portal" })).Opened!.Section.ShouldBeNull();
+        (await CallAsync(superAdmin, "open_record", new { type = "project", id = site.Id, section = "files" })).Opened!.Section.ShouldBeNull();
+
+        (await CallAsync(superAdmin, "open_surface", new { surface = "portal_discussion", id = project.Id })).Opened.ShouldBe(new ProtonUiCommand(
+            ProtonUiCommandType.OpenSurface, $"the discussion with the client for {project.Title}", project.Id, DomainCodes.Design,
+            Surface: ProtonSurface.PortalDiscussion));
+        // the design admin isn't in this project's discussion; the studio has none
+        Status((await CallAsync(designAdmin, "open_surface", new { surface = "portal_discussion", id = project.Id })).Result).ShouldBe("not_found");
+        Status((await CallAsync(superAdmin, "open_surface", new { surface = "portal_discussion", id = studio.Id })).Result).ShouldBe("not_found");
+        Status((await CallAsync(superAdmin, "open_surface", new { surface = "portal_preview", id = studio.Id })).Result).ShouldBe("not_found");
+
+        // a file's comments need a file of that project
+        Status((await CallAsync(superAdmin, "open_surface", new { surface = "file_comments", id = project.Id })).Result).ShouldBe("invalid");
+        Status((await CallAsync(superAdmin, "open_surface", new { surface = "file_comments", id = project.Id, item_id = 9_999_999 })).Result).ShouldBe("not_found");
+        // and so does opening one to look at
+        Status((await CallAsync(superAdmin, "open_surface", new { surface = "view_project_file", id = project.Id })).Result).ShouldBe("invalid");
+        Status((await CallAsync(superAdmin, "open_surface", new { surface = "view_project_file", id = project.Id, item_id = 9_999_999 })).Result).ShouldBe("not_found");
+
+        // the page the user is on names the tab's part
+        await CallAsync(superAdmin, "open_page", new { page = "projects" },
+            new { area = "design", page = "projects", entityType = "project", entityId = project.Id, section = "portal", part = "discussion" });
+        api.Anthropic.Requests[0]["messages"]!.AsArray().Last()!.ToJsonString().ShouldContain("portal tab, discussion");
     }
 
     private async Task<ProtonActionOutcomeResponse> ConfirmAsync(AuthResponse who, ProtonReplyResponse reply)

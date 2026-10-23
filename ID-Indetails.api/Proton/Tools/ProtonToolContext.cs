@@ -97,6 +97,9 @@ public sealed class ProtonToolContext(
     /// <summary>Charts, tables and figures shown in this question's answer so far.</summary>
     public int BlocksShown { get; set; }
 
+    /// <summary>Project files read for this question so far: each can be tens of thousands of tokens.</summary>
+    public int FilesRead { get; set; }
+
     /// <summary>The datasets the conversation holds from earlier questions.</summary>
     public void Hold(IEnumerable<Ui.ProtonHeldDataset> datasets, int next)
     {

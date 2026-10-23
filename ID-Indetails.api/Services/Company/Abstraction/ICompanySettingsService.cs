@@ -16,6 +16,9 @@ public interface ICompanySettingsService
     /// <summary>The company's own address, which the website shows and its contact form sends to. Empty clears it.</summary>
     Task<CompanySettingsResponse> SetContactEmailAsync(CompanyContactEmailRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Lets Proton read project files, or stops it: reading one sends its content to Anthropic.</summary>
+    Task<CompanySettingsResponse> SetProtonFilesAsync(CompanyProtonFilesRequest request, CancellationToken cancellationToken = default);
+
     Task<CompanySettingsResponse> SetLogoAsync(AttachFileRequest request, CancellationToken cancellationToken = default);
 
     Task<CompanySettingsResponse> RemoveLogoAsync(CancellationToken cancellationToken = default);

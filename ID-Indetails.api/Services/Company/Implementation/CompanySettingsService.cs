@@ -98,6 +98,30 @@ public sealed class CompanySettingsService(
         return Describe(settings);
     }
 
+    public async Task<CompanySettingsResponse> SetProtonFilesAsync(CompanyProtonFilesRequest request, CancellationToken cancellationToken = default)
+    {
+        var settings = await company.GetSettingsAsync(forUpdate: true, cancellationToken);
+        if (settings is null)
+        {
+            settings = new CompanySettings { TimeZone = options.Value.TimeZone };
+            company.AddSettings(settings);
+        }
+
+        settings.ProtonReadsFiles = request.Enabled;
+        settings.UpdatedAt = clock.UtcNow;
+        settings.UpdatedById = currentUser.Id;
+        activity.Add(new ActivityEvent
+        {
+            Kind = ActivityEventKinds.CompanySettingsUpdated,
+            OccurredAt = clock.UtcNow,
+            ActorId = currentUser.Id,
+            SubjectType = "company_settings",
+        });
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        cache.Remove(CacheKey);
+        return Describe(settings);
+    }
+
     public Task<CompanySettingsResponse> SetLogoAsync(AttachFileRequest request, CancellationToken cancellationToken = default)
         => ChangeLogoAsync(request.FileId, cancellationToken);
 
@@ -152,6 +176,7 @@ public sealed class CompanySettingsService(
         var s = settings ?? new CompanySettings();
         var named = !string.IsNullOrWhiteSpace(s.Name);
         return new CompanySettingsResponse(
-            named, named ? s.Name : options.Value.DefaultName, s.Address, s.Website, s.ContactEmail, s.LogoFileId, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt);
+            named, named ? s.Name : options.Value.DefaultName, s.Address, s.Website, s.ContactEmail, s.LogoFileId, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt,
+            s.ProtonReadsFiles);
     }
 }

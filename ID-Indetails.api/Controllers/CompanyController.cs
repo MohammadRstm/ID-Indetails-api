@@ -31,6 +31,12 @@ public sealed class CompanyController(ICompanySettingsService settings, IWorking
     public Task<CompanySettingsResponse> SetContactEmail(CompanyContactEmailRequest request, CancellationToken cancellationToken)
         => settings.SetContactEmailAsync(request, cancellationToken);
 
+    /// <summary>Whether Proton may read project files: reading one sends its content to Anthropic, Proton's model provider.</summary>
+    [HttpPut("proton-files")]
+    [HasPermission(PermissionCodes.CompanySettingsManage)]
+    public Task<CompanySettingsResponse> SetProtonFiles(CompanyProtonFilesRequest request, CancellationToken cancellationToken)
+        => settings.SetProtonFilesAsync(request, cancellationToken);
+
     /// <summary>The logo, from the caller's upload.</summary>
     [HttpPut("logo")]
     [HasPermission(PermissionCodes.CompanySettingsManage)]
