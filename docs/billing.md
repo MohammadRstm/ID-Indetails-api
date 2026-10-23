@@ -1,6 +1,6 @@
 # Billing
 
-Billing is a cash ledger kept apart from profitability: invoices and payments never change a project's revenue, cost or profit. Every amount has its currency beside it and nothing is converted silently. Invoice and payment status and balances are always calculated, never stored.
+Billing is a cash ledger kept apart from a project's profitability: invoices and payments never change a project's agreed revenue, cost or profit. Payments are the revenue of a period, though: the Financials summary, money by month and the company overview count the money received in the period, so recording or voiding a payment moves that period's revenue and profit. Every amount has its currency beside it and nothing is converted silently. Invoice and payment status and balances are always calculated, never stored.
 
 ## Billing settings
 

@@ -5,7 +5,7 @@ using ID_Indetails.api.DTO.Response.Projects;
 namespace ID_Indetails.api.DTO.Response.Company;
 
 /// <summary>One domain over the period. Money is in USD.</summary>
-/// <param name="Revenue">Revenue recognised in the period (see docs/company.md).</param>
+/// <param name="Revenue">The money received in the period, each payment on the day it arrived (see docs/company.md).</param>
 /// <param name="Margin">Profit ÷ revenue; null without revenue.</param>
 /// <param name="ProjectsWithActivity">Projects with work or costs in the period.</param>
 /// <param name="People">Active employees.</param>
