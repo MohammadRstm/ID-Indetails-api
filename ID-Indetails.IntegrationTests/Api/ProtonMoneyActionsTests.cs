@@ -246,6 +246,31 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         (await GetAsync<InvoiceResponse>(superAdmin, $"/api/invoices/{invoice.Id}")).Number.ShouldNotBeNull();
     }
 
+    /// <summary>
+    /// The same amount on the same day is usually the same money asked for twice (after a confirmation that failed late,
+    /// say). It isn't refused, since two equal payments happen, but the card says so.
+    /// </summary>
+    [Fact]
+    public async Task A_payment_or_expense_already_recorded_that_day_is_pointed_out_on_the_card()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 9000m);
+
+        var (first, _) = await ProposeAsync(superAdmin, "propose_record_payment", new { project_id = project.Id, amount = 750m }, "Karim paid 750 today");
+        first.PendingAction!.Preview.Note!.ShouldNotContain("Careful");
+        await ConfirmAsync(superAdmin, first, "750");
+        var (twice, _) = await ProposeAsync(superAdmin, "propose_record_payment", new { project_id = project.Id, amount = 750m }, "Record Karim's 750 payment");
+        twice.PendingAction!.Preview.Note!.ShouldContain("Careful: 1 payment(s) of USD 750 received that day are already recorded");
+        var (other, _) = await ProposeAsync(superAdmin, "propose_record_payment", new { project_id = project.Id, amount = 300m }, "Karim also paid 300");
+        other.PendingAction!.Preview.Note!.ShouldNotContain("Careful");
+
+        var (expense, _) = await ProposeAsync(superAdmin, "propose_add_expense", new { project_id = project.Id, label = "Taxi", amount = 40m }, "Add a 40 taxi expense");
+        expense.PendingAction!.Preview.Note!.ShouldNotContain("Careful");
+        await ConfirmAsync(superAdmin, expense, "40");
+        var (again, _) = await ProposeAsync(superAdmin, "propose_add_expense", new { project_id = project.Id, label = "Taxi", amount = 40m }, "Add the 40 taxi");
+        again.PendingAction!.Preview.Note!.ShouldContain("Careful: 1 expense(s) of USD 40 that day are already recorded");
+    }
+
     [Fact]
     public async Task A_markup_is_said_as_a_percentage_and_kept_as_the_fraction_the_app_prices_with()
     {

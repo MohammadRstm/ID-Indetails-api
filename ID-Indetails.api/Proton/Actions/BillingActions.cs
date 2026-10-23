@@ -440,7 +440,7 @@ public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceS
 
     public override string Description =>
         "Propose recording a payment the client made, against an invoice or on account, at the day's exchange rate. " +
-        "The user confirms by typing the amount.";
+        "The user confirms by typing the amount. The card warns when the same amount was already recorded that day.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -495,9 +495,28 @@ public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceS
 
         return (new RecordPaymentArgs(project.Id, request),
             new ProtonPreview($"Record a payment from {project.Client?.DisplayName ?? project.Title}", changes,
-                $"{note} Converted at the dated exchange rate in force on the day received.",
+                $"{await AlreadyRecordedAsync(project.Id, request, context, cancellationToken)}{note} Converted at the dated exchange rate in force on the day received.",
                 Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(request.Amount)),
             ProjectText.Ref(project));
+    }
+
+    private static readonly ProtonEndpoint PaymentList = ProtonEndpoint.Of<PaymentsController>(nameof(PaymentsController.List));
+
+    /// <summary>
+    /// The same amount already received on the project that day: often the same payment asked for twice. It isn't
+    /// refused (two equal payments happen), but the card says so. Skipped for a user who can't list payments.
+    /// </summary>
+    private async Task<string> AlreadyRecordedAsync(long projectId, RecordPaymentRequest request, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        if (!await context.CanCallAsync(PaymentList))
+        {
+            return "";
+        }
+
+        var day = request.ReceivedOn ?? context.Today;
+        var same = (await payments.ListAsync(new PaymentListQuery { ProjectId = projectId, ReceivedFrom = day, ReceivedTo = day }, cancellationToken)).Items
+            .Count(p => p.Amount == request.Amount && p.Currency == request.Currency);
+        return same == 0 ? "" : $"Careful: {same} payment(s) of {MoneyText.Amount(request.Amount, request.Currency)} received that day are already recorded. Confirm only if this is another one. ";
     }
 
     protected override object RequestOf(RecordPaymentArgs args) => args.Request;

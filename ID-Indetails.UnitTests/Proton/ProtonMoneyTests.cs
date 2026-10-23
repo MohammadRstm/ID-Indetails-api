@@ -6,6 +6,8 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
+using ID_Indetails.api.Exceptions.Base;
+using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -86,6 +88,26 @@ public class ProtonMoneyTests
             .Message.ShouldContain("amount_usd");
         (await Should.ThrowAsync<ProtonToolInputException>(AddUpAsync(Payments(), new { dataset = "d9", column = "amount_usd" })))
             .Message.ShouldContain("no dataset");
+    }
+
+    /// <summary>
+    /// A refusal comes before the service writes anything; any other error may come after its save, so the user and the
+    /// model are never told "nothing changed" then (a payment recorded twice).
+    /// </summary>
+    [Fact]
+    public void A_failed_confirmation_says_nothing_changed_only_when_it_was_refused()
+    {
+        var refused = ProtonActionService.FailureOf(new BusinessRuleException(ErrorCodes.ProtonActionStale, "The draft changed."));
+        refused.MaybeSaved.ShouldBeFalse();
+        refused.Code.ShouldBe(ErrorCodes.ProtonActionStale);
+
+        ProtonActionService.FailureOf(new FluentValidation.ValidationException("Amount must be more than zero.")).MaybeSaved.ShouldBeFalse();
+
+        var unexpected = ProtonActionService.FailureOf(new InvalidOperationException("connection reset after commit"));
+        unexpected.MaybeSaved.ShouldBeTrue();
+        unexpected.Code.ShouldBe(ErrorCodes.ProtonActionUncertain);
+        unexpected.Message.ShouldContain("may have been saved");
+        unexpected.Message.ShouldNotContain("connection");
     }
 
     [Fact]

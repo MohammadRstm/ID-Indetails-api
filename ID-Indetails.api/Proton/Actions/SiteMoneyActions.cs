@@ -63,15 +63,20 @@ public sealed class ProposeAddExpenseTool(IProjectService projects, IExpenseServ
             Label = input.Label.Trim(), Amount = input.Amount, Currency = (input.Currency ?? "USD").Trim().ToUpperInvariant(),
             Category = MoneyText.Clean(input.Category)?.ToLowerInvariant(), SpentOn = input.SpentOn, Note = MoneyText.Clean(input.Note),
         };
+        // the same amount spent the same day: often the same expense asked for twice; not refused, but said
+        var day = request.SpentOn ?? context.Today;
+        var same = (await expenses.ListAsync(project.Id, cancellationToken)).Items
+            .Count(e => e.Amount == request.Amount && e.Currency == request.Currency && e.SpentOn == day);
+        var careful = same == 0 ? "" : $"Careful: {same} expense(s) of {MoneyText.Amount(request.Amount, request.Currency)} that day are already recorded. Confirm only if this is another one. ";
         return (new ExpenseArgs(project.Id, null, request),
             new ProtonPreview($"Record an expense on {project.Title}",
                 [
                     new ProtonChange("Expense", null, request.Label),
                     new ProtonChange("Amount", null, MoneyText.Amount(request.Amount, request.Currency)),
                     new ProtonChange("Category", null, request.Category ?? "other"),
-                    new ProtonChange("Spent on", null, ProjectText.Date(request.SpentOn ?? context.Today)),
+                    new ProtonChange("Spent on", null, ProjectText.Date(day)),
                 ],
-                "It lowers the project's profit.",
+                $"{careful}It lowers the project's profit.",
                 Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(request.Amount)),
             ProjectText.Ref(project));
     }
