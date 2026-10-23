@@ -10,8 +10,8 @@ public sealed class AskProtonRequestValidator : AbstractValidator<AskProtonReque
 {
     public const int MaxTextLength = 2_000;
 
-    /// <summary>The areas a page context can name: the two businesses and the company area.</summary>
-    public static readonly IReadOnlyList<string> Areas = [DomainCodes.Design, DomainCodes.Execution, "company"];
+    /// <summary>The areas a page context can name: the two businesses, the Website area and the company area.</summary>
+    public static readonly IReadOnlyList<string> Areas = [DomainCodes.Design, DomainCodes.Execution, DomainCodes.Website, "company"];
 
     public AskProtonRequestValidator()
     {
@@ -48,6 +48,7 @@ public sealed class ProtonPageContextValidator : AbstractValidator<ProtonPageCon
         RuleFor(x => x.Area).Must(a => AskProtonRequestValidator.Areas.Contains(a)).WithMessage("Unknown area.");
         RuleFor(x => x.Page).IsInEnum();
         RuleFor(x => x.Section).IsInEnum();
+        RuleFor(x => x.Part).IsInEnum();
         RuleFor(x => x.Surface).IsInEnum();
         RuleFor(x => x.EntityType).IsInEnum().NotNull().When(x => x.EntityId is not null).WithMessage("A record needs its kind.");
         RuleFor(x => x.EntityId).NotNull().GreaterThan(0).When(x => x.EntityType is not null).WithMessage("A record needs its id.");

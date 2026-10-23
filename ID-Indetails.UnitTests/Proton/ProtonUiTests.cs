@@ -51,11 +51,22 @@ public class ProtonUiTests
         string[] confirms = ["Complete", "Void", "Delete", "Deactivate", "Discard", "TopUp", "Permission", "Role", "Move", "Session"];
         Enum.GetNames<ProtonSurface>().ShouldAllBe(name => !confirms.Any(name.Contains));
 
-        // what emails someone needs the user's own words: the invite and the bug report
+        // what emails someone needs the user's own words: the invites and the bug report
         ProtonSurfaces.All.Where(s => s.Value.EmailsSomeone).Select(s => s.Key)
-            .ShouldBe([ProtonSurface.InvitePerson, ProtonSurface.ReportBug], ignoreOrder: true);
+            .ShouldBe([ProtonSurface.InvitePerson, ProtonSurface.InviteWebsiteStaff, ProtonSurface.ReportBug], ignoreOrder: true);
         ProtonSurfaces.All.Values.Where(s => s.Endpoint is not null).ShouldAllBe(s => s.Endpoint!.Policies.Count > 0);
     }
+
+    /// <summary>The endpoints the navigation tools name all resolve: a name that doesn't is found here, not on a user's question.</summary>
+    [Theory]
+    [InlineData(typeof(OpenPageTool))]
+    [InlineData(typeof(OpenSurfaceTool))]
+    [InlineData(typeof(OpenRecordTool))]
+    [InlineData(typeof(FindTool))]
+    [InlineData(typeof(ProtonRecords))]
+    [InlineData(typeof(ProtonPortalTab))]
+    public void Every_endpoint_the_navigation_tools_name_resolves(Type tool)
+        => Should.NotThrow(() => System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(tool.TypeHandle));
 
     [Fact]
     public void Opening_a_record_carries_its_id_domain_and_tab_but_never_an_address()
@@ -65,6 +76,13 @@ public class ProtonUiTests
         command.ShouldBe(new ProtonUiCommand(ProtonUiCommandType.OpenProject, "Villa Mounir", 12, "design", ProtonProjectSection.Requirements));
         ProtonUiCommand.Open(Villa, ProtonProjectSection.Overview).Section.ShouldBeNull();
         ProtonUiCommand.Open(new ProtonRef(ProtonRefType.Person, 7, "Rana", null)).Type.ShouldBe(ProtonUiCommandType.OpenPerson);
+        ProtonUiCommand.Open(Villa, ProtonProjectSection.Portal, ProtonProjectPart.Discussion).Part.ShouldBe(ProtonProjectPart.Discussion);
+
+        // a website project has no page of its own: it opens in its form, in the Website area
+        var shown = ProtonUiCommand.Open(new ProtonRef(ProtonRefType.WebsiteProject, 4, "Sea house", "website"));
+        shown.Type.ShouldBe(ProtonUiCommandType.OpenSurface);
+        shown.Surface.ShouldBe(ProtonSurface.EditWebsiteProject);
+        (shown.Id, shown.Domain).ShouldBe((4L, "website"));
 
         // only enums, ids, a domain code and the record's own name: nothing that could hold a URL or a script
         typeof(ProtonUiCommand).GetProperties(BindingFlags.Public | BindingFlags.Instance)

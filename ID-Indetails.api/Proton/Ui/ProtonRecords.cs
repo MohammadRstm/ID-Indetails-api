@@ -5,26 +5,31 @@ using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Messaging.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.Website.Abstraction;
 
 namespace ID_Indetails.api.Proton.Ui;
 
 /// <summary>
-/// Reads one project, client or person exactly as its own GET endpoint would for this user: the endpoint's policies
-/// first, then the service's domain checks. Proton names a record on screen (opens it, offers it, says the user is
-/// looking at it) only after this has found it, so an id the user can't see never turns into a name or a page.
+/// Reads one project, client, person or website project exactly as its own GET endpoint would for this user: the
+/// endpoint's policies first, then the service's domain checks. Proton names a record on screen (opens it, offers it,
+/// says the user is looking at it) only after this has found it, so an id the user can't see never turns into a name
+/// or a page.
 /// </summary>
-public sealed class ProtonRecords(IProjectService projects, IClientService clients, IEmployeeService employees, IMessagingService messaging)
+public sealed class ProtonRecords(
+    IProjectService projects, IClientService clients, IEmployeeService employees, IMessagingService messaging, IWebsiteProjectService websiteProjects)
 {
     public static readonly ProtonEndpoint ProjectGet = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Get));
     public static readonly ProtonEndpoint ClientGet = ProtonEndpoint.Of<ClientsController>(nameof(ClientsController.Get));
     public static readonly ProtonEndpoint PersonGet = ProtonEndpoint.Of<EmployeesController>(nameof(EmployeesController.Get));
     public static readonly ProtonEndpoint Chats = ProtonEndpoint.OfRuleBased<MessagesController>(nameof(MessagesController.Conversations));
+    public static readonly ProtonEndpoint WebsiteProjectGet = ProtonEndpoint.Of<WebsiteController>(nameof(WebsiteController.Project));
 
     public static ProtonEndpoint EndpointOf(ProtonRefType type) => type switch
     {
         ProtonRefType.Project => ProjectGet,
         ProtonRefType.Client => ClientGet,
         ProtonRefType.Team => Chats,
+        ProtonRefType.WebsiteProject => WebsiteProjectGet,
         _ => PersonGet,
     };
 
@@ -50,6 +55,9 @@ public sealed class ProtonRecords(IProjectService projects, IClientService clien
                     // only a team chat the user is in
                     var team = (await messaging.ConversationsAsync(cancellationToken)).Select(c => c.Team).FirstOrDefault(t => t?.Id == id);
                     return team is null ? null : new ProtonRef(ProtonRefType.Team, team.Id, team.Name, team.Domain);
+                case ProtonRefType.WebsiteProject:
+                    var shown = await websiteProjects.GetAsync(id, cancellationToken);
+                    return new ProtonRef(ProtonRefType.WebsiteProject, shown.Id, shown.Title, Constants.DomainCodes.Website);
                 default:
                     var person = await employees.GetAsync(id, cancellationToken);
                     return new ProtonRef(ProtonRefType.Person, person.Id, $"{person.FirstName} {person.LastName}".Trim(), person.Domain);
