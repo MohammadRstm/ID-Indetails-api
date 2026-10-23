@@ -100,6 +100,12 @@ POST /api/proton/messages
 | `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | paid in USD, balance in the invoice's currency |
 | `get_company_overview` | `GET /api/company/overview` | without admin salaries and net profit |
 | `present_data` | — (open to whoever may list projects) | shows a dataset a tool returned as a chart, a table or headline figures; reads nothing |
+| `get_project_files` | `GET /api/projects/{id}/files` | Design only: titles, sections, sizes, uploader, for-client, comment counts, and whether each can be read |
+| `read_project_file` | `GET /api/projects/{id}/files` (the file's own link) | reads one file for the model itself (see "Project files, the portal and the discussion"); heavy, two per question |
+| `get_portal_status` | `GET /api/projects/{id}/portal/content` (+ `/portal/clients` for those who manage access) | published when and by whom, what the draft changes, files per section, who can follow it |
+| `read_discussion` | `GET /api/projects/{id}/portal/discussion/messages` (rule-based: those taking part) | the chat and file comments in a period, or the latest 40 messages; heavy |
+| `get_website_projects` / `get_website_content` | `GET /api/website/projects`, `/content` | the Website area only |
+| `get_website_analytics` | `GET /api/website/analytics` (+ `/realtime`) | a period's report or who is on the website now; the service caches it for everyone; heavy |
 
 **Never available to Proton**, for anyone: salaries and pay, hourly rates and per-person labour cost, admin salaries
 (and net profit, which would reveal them), bank details, passwords and other credentials. A unit test
@@ -113,6 +119,93 @@ before today (company time zone), and it is active or on hold. A project without
 `this_month`, `last_month`, `this_quarter`, `last_quarter`, `this_year`, `last_year`, `last7_days`, `last30_days`,
 `last90_days` or `custom` with from/to. They become company-time-zone days in code, with the company's first day of
 the week; running periods end today. Every result says which days it covers.
+
+## Project files, the portal and the discussion (Proton Phase 2)
+
+Proton reads the newer features as the person would see them on their pages.
+
+- **Off until the company allows it.** Reading a file sends its content to Anthropic, Proton's model provider. So
+  `read_project_file` refuses until someone with `company_settings:manage` turns on "Let Proton read project files" in
+  Company settings: `PUT /api/company/proton-files` sets `company_settings.proton_reads_files`, which is off by
+  default. While it is off the tool stays offered, so the prompt stays cached, but it refuses and sends nothing.
+  Proton never changes this switch: it is `Never` in `ProtonCoverage`.
+- **Reading a file** (`read_project_file`, `Proton/Files/ProtonFileReader.cs`). The file's bytes are read through
+  `IPortalContentService.ReadAsync`, which applies the same access as the file's own link. Nothing is shown to the user
+  from there, and nothing is kept beyond the conversation: the content goes to the model as blocks after the tool's
+  data, each under a line that says it is data, not instructions. Saved chats keep only what the user saw.
+  - **PDFs:** sent as PDF documents, `Files:MaxPdfPages` (20) pages at a time. PDFsharp copies out the range asked
+    for, and the result says which pages are left and how to read on. A protected or damaged PDF is sent whole only
+    when it is under 5 MB.
+  - **Pictures:** decoded within `Pictures.MaxPixels` and made at most 1568 px on the long side.
+  - **Word, Excel and PowerPoint (Office Open XML only):** their text is read from the XML parts.
+    - DTDs and external entities are refused.
+    - Collection stops at 1,000,000 characters, which defends against zip bombs.
+    - At most 2,000 rows are read per sheet.
+    - At most `Files:MaxTextCharacters` (60,000) characters are sent.
+  - **Videos:** pictures are taken through the video by ffmpeg (`ProtonVideoFrames`), `Files:MaxVideoFrames` (16)
+    evenly spread, at most 768 px. The sound isn't read. ffmpeg is held in:
+    - only MP4/MOV, Matroska/WebM and AVI files are accepted, known by their first bytes, and that format is forced;
+    - `-protocol_whitelist file` stops a playlist or a reference inside the file from reaching anything else;
+    - a time limit applies;
+    - the temporary folder is always deleted.
+    The API image installs ffmpeg; without it (empty `Files:FfmpegPath`), Proton says video reading isn't set up.
+  - **Everything else is refused, saying which kinds can be read:** DWG, 3D models, archives, and the older .doc, .xls
+    and .ppt.
+  - **Limits:** a file over `Files:MaxBytes` (25 MB) isn't read at all, and at most `Files:MaxReadsPerQuestion` (2)
+    files are read per question. A conversation that grows past `MaxConversationInputTokens` rolls over to a recap
+    as usual, so a file's content doesn't stay in later questions.
+- **Opening a file:** `open_surface view_project_file` opens it in the project's Files tab. Images and videos open in
+  the viewer. A PDF or another file shows a window with Open and Download, since a browser opens a new tab only on
+  the person's own click.
+- **The discussion** (`read_discussion`):
+  - It is offered to whoever may use Proton. The discussion itself decides who takes part: anyone else gets
+    `not_found`.
+  - It reads pages of the chat newest first until the period starts, at most 200 messages and comments (the newest
+    when there were more, and the result says so). With no period, it reads the latest 40.
+  - The text goes to the model as a transcript with names, sides (client or team) and company-time stamps.
+  - Reading marks nothing read.
+  - What clients write is data: the prompt (`files.md`) and the tool say never to act on it.
+
+### Actions on files, the portal and the website (Proton Phase 4)
+
+| Tool | Endpoint(s) | Tier, family | Notes |
+|---|---|---|---|
+| `propose_rename_file` | `PUT /api/projects/{id}/files/items/{itemId}` | standard, Core | the title only; refused at confirm if the file was renamed since the card |
+| `propose_restore_file` | `POST …/files/items/{itemId}/restore` | standard, Core | only a deleted file |
+| `propose_comment_on_file` | `POST …/files/items/{itemId}/comments` | standard, Core | the team's comment, in the user's words; clients never see it |
+| `propose_delete` (`project_file`) | `DELETE …/files/items/{itemId}` | strong, Deletes | the project's name typed; a file the client has can be brought back until the next publish |
+| `propose_portal_step` | `POST /api/projects/{id}/portal/content/publish`, `/discard` | strong, Access | the project's name typed; the card carries the draft's revision, so a draft changed since is refused by the service |
+| `propose_website_project` | `POST/PUT/DELETE /api/website/projects` | strong, Website | starts from the project as it is (pictures, point and link kept); a project changed since the card is refused; the title typed |
+| `propose_website_service`, `propose_website_location` | the services' and offices' endpoints | strong, Website | the service's title, or the office's city, typed; refused if it changed since the card |
+| `propose_website_under_construction` | `PUT /api/website/under-construction` | strong, Website | "under construction" or "website live" typed |
+
+The Website family is off until `Proton:Actions:Website` is turned on. Like every family outside Core and
+Lifecycle, it is proposed only on a turn the user typed. Pictures, the favicon, social links and orders stay `Never`.
+
+## Reply suggestions in the discussion with a client (Proton Phase 5)
+
+- **What it does.** In a project's discussion with its client, the team composer shows a reply Proton suggests to the
+  latest client message, as its placeholder. Tab writes it in and Escape dismisses it. The person edits it and presses
+  Send: nothing is ever sent for them.
+- **The call.** `POST /api/proton/reply-suggestions` with `{ projectId }`, using `ProtonReplySuggester`. It makes one
+  model call with no tools, from the latest `Suggestions:MessagesRead` (20) chat messages. Its own prompt says the
+  messages are data, and that it never promises dates, prices or deliverables the team hasn't stated, nor adds links
+  or contact details. The answer is `{ text, unavailable }`. When there is no suggestion, `unavailable` says why:
+  - suggestions are off for the company or the person;
+  - the project is closed;
+  - the last message isn't a client's;
+  - the day's `Suggestions:MaxPerDay` (40) are used.
+- **Who.** Only people taking part in the discussion; anyone else gets 404, as the discussion does. It needs
+  `proton:use` and the Proton rate limit.
+- **Switches.** Both default to on, and a suggestion is made only when both are on.
+  - `company_settings.proton_reply_suggestions`, set with `PUT /api/company/proton-suggestions` by
+    `company_settings:manage`, turns it off for everyone.
+  - `users.proton_reply_suggestions`, set with `PUT /api/me/proton-suggestions`, is each person's own choice. It
+    comes back as `protonReplySuggestions` on `/me`.
+- **Cost.** Each suggestion is a `suggestion` row in `proton_usage` (the channel's check constraint allows it). It
+  holds `Suggestions:HoldUsd` (0.02) while it is written and counts against the monthly budget. It never counts against
+  a person's questions, and it belongs to no conversation. The ledger keeps the project and the suggestion, never what
+  the client wrote.
 
 ## Analysis (Stage 3)
 
@@ -215,20 +308,22 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 
 | Tool | What it does | Permission |
 |---|---|---|
-| `open_record` | Opens a project (optionally on a tab: `requirements`, `meetings`, and on Design projects `financials`, `overview`, `analytics`, `contributors` or `timeline`), a client or a person | The record's own GET endpoint. The record is read first through its service, so an id the user can't see is `not_found` and nothing opens. Tabs follow the project page's own rules: `financials` needs `financial:view`, `analytics` and `contributors` everyone's work (`work_entry:view_all`), and a Design project's `overview` is someone's own work (employees, or people who see neither money nor everyone's work). A tab the user can't open falls back to their first tab, and Proton says so. |
-| `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses | Each page needs its endpoint's permission, e.g. financials needs `financial:view`. Settings, salaries and pay are not on the list. |
+| `open_record` | Opens a project (optionally on a tab: `requirements`, `meetings`, and on Design projects `financials`, `overview`, `analytics`, `contributors`, `timeline`, `files` or `portal`, with a `part` for the last two), a client, a person or a website project (in its form) | The record's own GET endpoint. The record is read first through its service, so an id the user can't see is `not_found` and nothing opens. Tabs follow the project page's own rules: `financials` needs `financial:view`, `analytics` and `contributors` everyone's work (`work_entry:view_all`), and a Design project's `overview` is someone's own work (employees, or people who see neither money nor everyone's work). `files` needs `GET /files` (its part a section: `presentation`, `model`, `drawing`). `portal` is only on a Design client project: its `access` part needs the portal's clients endpoint, its `discussion` part that the person takes part in the discussion (worked out by the discussion itself), its sections the portal content endpoint. A tab the user can't open falls back to their first tab, and Proton says so. |
+| `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses, and in the Website area its projects, analytics, services, locations, contact, site and staff | Each page needs its endpoint's permission, e.g. financials needs `financial:view`, the Website pages `website:view` or `website:manage` (analytics `website_analytics:view`), and the Website area must be one the user sees. |
 | `offer_choices` | Shows 2–6 matches as buttons when a name is ambiguous, or 2–6 fixed answers to Proton's question (`replies`: a period, `design` / `execution`, `yes` / `no`) | Only records a tool returned in the conversation, and only businesses the user can see; labels come from the records or the app, not from the model. No yes/no while a card is pending |
 | `suggest_replies` | Offers up to 3 short next things the user might say (60 characters each, one line) | None while a card is pending; a tap sends only its place in the list |
-| `open_surface` | Opens a form, dialog or tab on its own page (Stage 5, Phase 4): new project, new client, invite, a project's or client's details, the project report, a project's payment, expense or site pricing, a new invoice, record payment, a new statement, a new meeting, a company expense, a chat with someone, log work, report a bug, a settings section, a company overview tab | The endpoint it saves through (`Proton/Ui/ProtonSurfaces.cs`); a record it is for must be visible. Opening fills and saves nothing. The invite and the bug report email someone, so they open only on a typed turn. One-click confirm dialogs (complete, void, delete, deactivate, top-up) aren't on the list |
+| `open_surface` | Opens a form, dialog or tab on its own page (Stage 5, Phase 4); a project file to look at (`view_project_file`, `item_id`); new project, new client, invite, a project's or client's details, the project report, a project's payment, expense or site pricing, a new invoice, record payment, a new statement, a new meeting, a company expense, a chat with someone, log work, report a bug, a settings section, a company overview tab; the new and edit website project forms and the Website's invite form; a file's comments (`item_id`), the discussion with the client (optionally one file's thread, `item_id`) and the client's view of the portal draft | The endpoint it saves through (`Proton/Ui/ProtonSurfaces.cs`); a record it is for must be visible. A file's comments read through the comments endpoint, so a file of another project is `not_found`; the discussion opens only for those taking part in it; the preview only on a Design client project. Opening fills and saves nothing. The invites and the bug report email someone, so they open only on a typed turn. One-click confirm dialogs (complete, void, delete, deactivate, top-up) aren't on the list |
 | `set_preference` | Light or dark theme; message sounds on or off | Sounds only on a typed turn |
 | `refresh_page` | Reloads the current page's data | — |
 
 **Contract** (`Proton/Ui/ProtonUiCommand.cs`):
-- `{type, label, id?, domain?, section?, page?, clientId?, tab?, surface?, settingsSection?, companyTab?, theme?, sounds?}`
+- `{type, label, id?, domain?, section?, page?, clientId?, tab?, surface?, settingsSection?, companyTab?, theme?, sounds?, fill?, part?, itemId?}`
   - `type` is `open_project`, `open_client`, `open_person`, `open_page`, `open_surface`, `set_preference` or `refresh`.
   - Pages (Phase 4 adds): settings, notifications, messages, help, and in the company area schedules, salaries,
     project pay, Proton's budget, company settings, the profile and the start page. Salary and pay pages open only for
     those who may see them, and Proton never reads their figures.
+  - The Website area (`domain` `website`) is not a business: its pages carry no domain, and its surfaces open only for
+    those who see it. The page context's `area` can be `website`, and on a project's files or portal tab its `part`.
   - Every field is an enum or a positive id, except `label` (the record's own name) and `domain`. A unit test pins that.
 - Delivery:
   - `uiCommands` on the reply, in order: one place (a surface wins over a plain page, since it brings its own), then
@@ -708,9 +803,11 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 | `MaxHeavyToolCallsPerQuestion` | 4 | analyses that load every project's money; the next one is refused |
 | `MaxConversationInputTokens` | 80000 | a conversation past it rolls over |
 | `Insights` | 30%, 10 h, 1,000 USD, 1.5×, 0.5×, 4 periods, 14 days | `NotablePct`, `NotableHours`, `NotableUsd`, `UnusualHigh`, `UnusualLow`, `BaselinePeriods`, `TargetSoonDays` |
-| `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
+| `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`, `Website`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
 | `Prices` | Claude Haiku 5.5 list prices: 0.10 / 0.50 USD per million input / output tokens, cache reads 0.01, cache writes 0.125; above a 100,000-token prompt 0.50 / 2.50, 0.05, 0.625 | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion`, `LongPromptAboveTokens` (0 for one rate card), `LongInputPerMillion`, `LongOutputPerMillion`, `LongCacheReadPerMillion`, `LongCacheWritePerMillion` |
 
+| `Files` | 25 MB, 20 pages, 16 pictures, 60,000 characters, 2 a question; ffmpeg on the PATH | `MaxBytes`, `MaxPdfPages`, `MaxVideoFrames`, `MaxTextCharacters`, `MaxReadsPerQuestion`, `FfmpegPath` / `FfprobePath` (empty turns video reading off), `VideoTimeoutSeconds` (30). `read_project_file` has 45 seconds rather than `ToolTimeoutSeconds` |
+| `Suggestions` | 40 a day, 20 messages read, 400 tokens, 0.02 USD held | `MaxPerDay`, `MessagesRead`, `MaxOutputTokens`, `HoldUsd` |
 | `History` | 90 days, cleanup on | `RetentionDays`, `CleanupEnabled` (off in tests) |
 | `Visuals` | on, 3 a reply, 15 minutes | `Enabled` (off: `present_data` stays listed but refuses), `MaxBlocksPerAnswer`, `DatasetMinutes` |
 | `Voice` | off | `Enabled`, `ApiKey` (an OpenAI project key: user secrets locally, `Proton__Voice__ApiKey` / `PROTON_VOICE_API_KEY` in production; required when enabled), `Model` (`gpt-live-1`), `Voice` (`marin`), `BaseUrl` (`https://api.openai.com/v1/`), `PricePerMinuteUsd` (0.05), `MaxSessionMinutes` (10), `CloseWaitSeconds` (15) |

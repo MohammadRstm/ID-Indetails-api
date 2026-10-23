@@ -41,6 +41,9 @@ public interface IEmployeeService
 
     Task<CurrentUserResponse> RemoveMyPhotoAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Their own choice of whether Proton suggests replies to them in the discussions with clients.</summary>
+    Task<CurrentUserResponse> SetMyProtonSuggestionsAsync(MyProtonSuggestionsRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Sets someone's profile photo from the caller's upload.</summary>
     Task<EmployeeResponse> SetPhotoAsync(long userId, AttachFileRequest request, CancellationToken cancellationToken = default);
 

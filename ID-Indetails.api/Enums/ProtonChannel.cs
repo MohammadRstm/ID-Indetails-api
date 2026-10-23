@@ -5,4 +5,6 @@ public enum ProtonChannel
 {
     Text,
     Voice,
+    /// <summary>A reply suggested in a discussion with a client: one model call, no tools, no conversation.</summary>
+    Suggestion,
 }
