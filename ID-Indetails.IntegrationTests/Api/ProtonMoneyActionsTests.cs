@@ -9,6 +9,7 @@ using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Proton;
 using ID_Indetails.api.Proton.Actions;
 using Microsoft.AspNetCore.Hosting;
@@ -40,11 +41,12 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
 
-    private async Task<(ProtonReplyResponse Reply, JsonNode Result)> ProposeAsync(AuthResponse who, string tool, object input)
+    /// <param name="said">What the user typed: money amounts on a card must come from it.</param>
+    private async Task<(ProtonReplyResponse Reply, JsonNode Result)> ProposeAsync(AuthResponse who, string tool, object input, string said = "Please make that change.")
     {
         api.Anthropic.Reset();
         api.Anthropic.Reply(FakeAnthropic.ToolUse(tool, input), FakeAnthropic.Text("Here is the change for you to confirm."));
-        var response = await Client.PostJsonAsync("/api/proton/messages", new { text = "Please make that change." }, who.AccessToken);
+        var response = await Client.PostJsonAsync("/api/proton/messages", new { text = said }, who.AccessToken);
         response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
         var result = JsonNode.Parse(api.Anthropic.ToolResults(1).Single()["content"]!.GetValue<string>())!;
         return (await response.ReadAsync<ProtonReplyResponse>(), result);
@@ -215,6 +217,33 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var (again, _) = await ProposeAsync(superAdmin, "propose_invoice_step", new { invoice_id = invoice.Id, step = "issue" });
         await ConfirmAsync(superAdmin, again, "100");
         (await GetAsync<InvoiceResponse>(superAdmin, $"/api/invoices/{invoice.Id}")).Number.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task A_markup_is_said_as_a_percentage_and_kept_as_the_fraction_the_app_prices_with()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+
+        var (price, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 15m }, "Set the markup to 15%");
+        // the site was made with 0.1, which reads as 10%
+        var markup = price.PendingAction!.Preview.Changes.Single(c => c.Label == "Material markup");
+        markup.Before.ShouldBe("10%");
+        markup.After.ShouldBe("15%");
+        price.PendingAction.Preview.Phrase.ShouldBe("15");
+        await ConfirmAsync(superAdmin, price, "15");
+        (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!.MaterialMarkup.ShouldBe(0.15m);
+
+        // a fee card re-sends the markup it read: if the markup changed in the app since, the card is refused, not put back
+        var (fee, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, project_fee = 500m }, "Set the fee to 500");
+        fee.PendingAction!.Preview.Changes.ShouldNotContain(c => c.Label == "Material markup");
+        fee.PendingAction.Preview.Phrase.ShouldBe("500");
+        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 0m, materialMarkup = 0.2m }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/proton/actions/{fee.PendingAction.Id}/confirm", new { fee.ConversationId, typed = "500" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
+
+        var (_, tooHigh) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 600m }, "Make the markup 600%");
+        tooHigh["message"]!.GetValue<string>().ShouldContain("500%");
     }
 
     [Fact]

@@ -183,7 +183,10 @@ public sealed class ProposeExchangeRateTool(IBillingSettingsService settings) : 
     }
 }
 
-public sealed record ProjectMoneyArgs(long ProjectId, UpdateProjectBillingRequest? Billing, UpdateProjectPricingRequest? Pricing, decimal Before);
+/// <param name="Before">The revenue (Design) or the fee (Execution) when proposed.</param>
+/// <param name="BeforeMarkup">Execution: the markup when proposed, as stored (a fraction).</param>
+public sealed record ProjectMoneyArgs(
+    long ProjectId, UpdateProjectBillingRequest? Billing, UpdateProjectPricingRequest? Pricing, decimal Before, decimal BeforeMarkup = 0);
 
 public sealed record ProjectMoneyInput : ProtonActionInput
 {
@@ -195,7 +198,7 @@ public sealed record ProjectMoneyInput : ProtonActionInput
     [Description("Execution: the project fee.")]
     public decimal? ProjectFee { get; init; }
 
-    [Description("Execution: the default material markup, a percentage (15 for 15%).")]
+    [Description("Execution: the default material markup as a percentage, as the user said it: 15 for 15%.")]
     public decimal? MaterialMarkup { get; init; }
 }
 
@@ -244,21 +247,31 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
         }
 
         await context.RequireAsync(Pricing);
+        if (input.MaterialMarkup is < 0 or > CompanyMoneyText.MaxMarkupPercent)
+        {
+            throw new ProtonToolInputException($"The markup must be between 0% and {CompanyMoneyText.MaxMarkupPercent}%.");
+        }
+
+        var fee = money.ProjectFee ?? 0;
+        var markup = money.MaterialMarkup ?? 0;
+        // the app keeps the markup as a fraction (0.15); people say it as a percentage (15)
         var pricing = new UpdateProjectPricingRequest
         {
-            ProjectFee = input.ProjectFee ?? money.ProjectFee ?? 0, MaterialMarkup = input.MaterialMarkup ?? money.MaterialMarkup ?? 0,
+            ProjectFee = input.ProjectFee ?? fee, MaterialMarkup = input.MaterialMarkup is { } percent ? percent / 100 : markup,
         };
         var changes = new List<ProtonChange>();
-        SettingsText.Compare(changes, "Project fee", MoneyText.Amount(money.ProjectFee ?? 0, money.Currency), MoneyText.Amount(pricing.ProjectFee, money.Currency));
-        SettingsText.Compare(changes, "Material markup", $"{money.MaterialMarkup ?? 0:0.##}%", $"{pricing.MaterialMarkup:0.##}%");
+        SettingsText.Compare(changes, "Project fee", MoneyText.Amount(fee, money.Currency), MoneyText.Amount(pricing.ProjectFee, money.Currency));
+        SettingsText.Compare(changes, "Material markup", CompanyMoneyText.Percent(markup), CompanyMoneyText.Percent(pricing.MaterialMarkup));
         if (changes.Count == 0)
         {
             throw new ProtonToolInputException("Nothing would change: say what should be different.");
         }
 
-        return (new ProjectMoneyArgs(project.Id, null, pricing, money.ProjectFee ?? 0),
+        // the user types the figure that changes: the fee, or the markup when only it changes
+        var phrase = pricing.ProjectFee != fee ? MoneyText.Phrase(pricing.ProjectFee) : MoneyText.Phrase(pricing.MaterialMarkup * 100);
+        return (new ProjectMoneyArgs(project.Id, null, pricing, fee, markup),
             new ProtonPreview($"Price {project.Title}", changes, "Materials not on a statement yet follow the new markup.",
-                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(pricing.ProjectFee)),
+                Confirm: ProtonConfirm.Typed, Phrase: phrase),
             ProjectText.Ref(project));
     }
 
@@ -266,8 +279,13 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
 
     protected override async Task<ProtonActionDone> ExecuteAsync(ProjectMoneyArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var current = (await projects.GetAsync(args.ProjectId, cancellationToken)).Money;
-        if (current is null || (args.Billing is not null ? current.Revenue : current.ProjectFee ?? 0) != args.Before)
+        // what the request sends again unchanged (the client, the markup) must still be what the card was made from
+        var project = await projects.GetAsync(args.ProjectId, cancellationToken);
+        var current = project.Money;
+        var stale = current is null || (args.Billing is { } sent
+            ? current.Revenue != args.Before || project.BillingType != sent.BillingType || project.Client?.Id != sent.ClientId
+            : (current.ProjectFee ?? 0) != args.Before || (current.MaterialMarkup ?? 0) != args.BeforeMarkup);
+        if (stale)
         {
             throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The project's money changed since Proton proposed this. Ask again.");
         }
@@ -502,6 +520,12 @@ public sealed class ProposeOverheadTool(IOverheadService overhead) : ProtonActio
 
 internal static class CompanyMoneyText
 {
+    /// <summary>The highest markup the app takes (its validator's 5, as a fraction).</summary>
+    public const decimal MaxMarkupPercent = 500;
+
+    /// <summary>A stored markup (a fraction: 0.15) as people read it ("15%").</summary>
+    public static string Percent(decimal fraction) => $"{(fraction * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
+
     public static BillingSettingsChange ChangeOf(BillingSettingsResponse s)
         => new(s.InvoicePrefix, s.DefaultTermsDays, s.TermsText, s.Footer, s.RemindersEnabled, s.ReminderFirstAfterDays, s.ReminderEveryDays, s.ReminderMax);
 
