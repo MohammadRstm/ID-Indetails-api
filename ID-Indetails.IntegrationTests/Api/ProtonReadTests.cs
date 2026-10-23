@@ -161,6 +161,9 @@ public class ProtonReadTests(ProtonApiFactory api) : IClassFixture<ProtonApiFact
         // Google Analytics isn't set up in tests: the tool says so rather than failing
         Status(await CallAsync(superAdmin, "get_website_analytics", new { })).ShouldBe("refused");
 
+        // changing the website is a family of its own, off until it is switched on
+        Status(await CallAsync(superAdmin, "propose_website_service", new { step = "add", title = "Gardens", description = "Terraces." })).ShouldBe("refused");
+
         // the Design admin has no Website area: these tools aren't even offered
         api.Anthropic.Reset();
         api.Anthropic.Reply(FakeAnthropic.Text("I can't see the website."));
