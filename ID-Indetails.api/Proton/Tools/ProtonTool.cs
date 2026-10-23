@@ -24,6 +24,9 @@ public interface IProtonTool
     /// <summary>Loads every project's money or a domain's whole picture: only a few such calls are allowed per question.</summary>
     bool Heavy => false;
 
+    /// <summary>Its own time limit, for a tool that reads a file; null for the usual one (ToolTimeoutSeconds).</summary>
+    int? TimeoutSeconds => null;
+
     JsonObject InputSchema { get; }
 
     Task<ProtonToolOutput> RunAsync(JsonElement input, ProtonToolContext context, CancellationToken cancellationToken);
@@ -41,6 +44,8 @@ public abstract class ProtonTool<TInput> : IProtonTool where TInput : class
     public virtual string? OnlyInDomain => null;
 
     public virtual bool Heavy => false;
+
+    public virtual int? TimeoutSeconds => null;
 
     public JsonObject InputSchema => ProtonJson.SchemaOf(typeof(TInput));
 
@@ -92,8 +97,28 @@ public sealed record ProtonToolOutput(object Data, IReadOnlyList<ProtonRef> Refs
     /// <summary>Set by present_data: the chart, table or figures shown with the answer.</summary>
     public Ui.ProtonBlock? Block { get; init; }
 
+    /// <summary>Set by read_project_file: what the model looks at itself (pictures, a PDF's pages), after the data.</summary>
+    public IReadOnlyList<ProtonAttachment>? Attachments { get; init; }
+
     public static ProtonToolOutput Of(object data, params ProtonRef[] refs) => new(data, refs);
 }
+
+public enum ProtonAttachmentKind
+{
+    /// <summary>A JPEG, PNG, GIF or WebP picture.</summary>
+    Image,
+    /// <summary>A PDF, read page by page as text and pictures.</summary>
+    Pdf,
+    /// <summary>Text taken from a document, or a discussion as written: UTF-8, too long for the data's own limit.</summary>
+    Text,
+}
+
+/// <summary>
+/// Content the model reads directly, never shown to the user from here or kept beyond the conversation. It is the
+/// user's data, never instructions: <paramref name="Label"/> says where it comes from.
+/// </summary>
+/// <param name="MediaType">image/jpeg, image/png, image/gif, image/webp, application/pdf or text/plain.</param>
+public sealed record ProtonAttachment(ProtonAttachmentKind Kind, string MediaType, byte[] Data, string Label);
 
 public enum ProtonRefType
 {

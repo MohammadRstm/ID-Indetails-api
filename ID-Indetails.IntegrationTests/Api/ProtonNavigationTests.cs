@@ -377,6 +377,9 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         // a file's comments need a file of that project
         Status((await CallAsync(superAdmin, "open_surface", new { surface = "file_comments", id = project.Id })).Result).ShouldBe("invalid");
         Status((await CallAsync(superAdmin, "open_surface", new { surface = "file_comments", id = project.Id, item_id = 9_999_999 })).Result).ShouldBe("not_found");
+        // and so does opening one to look at
+        Status((await CallAsync(superAdmin, "open_surface", new { surface = "view_project_file", id = project.Id })).Result).ShouldBe("invalid");
+        Status((await CallAsync(superAdmin, "open_surface", new { surface = "view_project_file", id = project.Id, item_id = 9_999_999 })).Result).ShouldBe("not_found");
 
         // the page the user is on names the tab's part
         await CallAsync(superAdmin, "open_page", new { page = "projects" },
