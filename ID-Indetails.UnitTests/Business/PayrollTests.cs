@@ -1,7 +1,5 @@
-using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
-using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using Shouldly;
 using Work = ID_Indetails.api.Business.Payroll.Overtime.Work;
@@ -189,23 +187,16 @@ public class PayrollTests
     }
 
     [Fact]
-    public void Only_the_days_as_an_admin_or_super_admin_are_a_fixed_salary()
+    public void A_fixed_salary_month_pays_the_salary_whatever_was_logged()
     {
-        // Promoted on Monday 15 June: 12 of June's 22 working days as an admin.
-        var input = new SalaryCalculator.Input(June, July10, new(2026, 1, 1), false, [Monthly], Calendar(), [], []);
-        var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 6, 15), RoleCodes.Employee, RoleCodes.Admin)]);
-        var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new(2026, 6, 15), RoleCodes.SuperAdmin, RoleCodes.Employee)]);
+        // An admin on a day of June: the whole month is a fixed salary, so 8 hours on Saturday 6 June earn no overtime.
+        Work[] saturday = [At(1, 6, 9, 8)];
+        var input = new SalaryCalculator.Input(June, July10, new(2026, 1, 1), false, [Monthly], Calendar(), saturday, [], FixedSalary: true);
 
-        SalaryCalculator.FixedSalaryShare(input, new RoleHistory(RoleCodes.Admin, [])).ShouldBe(1m);
-        SalaryCalculator.FixedSalaryShare(input, new RoleHistory(RoleCodes.Employee, [])).ShouldBe(0m);
-        SalaryCalculator.FixedSalaryShare(input, promoted).ShouldBe(12m / 22m);
-        SalaryCalculator.FixedSalaryShare(input, demoted).ShouldBe(10m / 22m);
-
-        // Projects carry the 10 days as an employee (worked in full: 8 paid hours at 10 an hour) and the company the
-        // rest, so the salary counts once.
-        (10 * 8 * 10m + Math.Round(Monthly.Amount * SalaryCalculator.FixedSalaryShare(input, promoted), 2)).ShouldBe(1760m);
-
-        // Joining on Monday 8 June, it is a share of the days they were employed: 12 of 17.
-        SalaryCalculator.FixedSalaryShare(input with { JoinedOn = new(2026, 6, 8) }, promoted).ShouldBe(12m / 17m);
+        var pay = SalaryCalculator.Calculate(input)!;
+        pay.OvertimePay.ShouldBe(0m);
+        pay.OvertimeMinutes.ShouldBe(0);
+        pay.Total.ShouldBe(1760m);
+        SalaryCalculator.Calculate(input with { FixedSalary = false })!.OvertimePay.ShouldBeGreaterThan(0m);
     }
 }

@@ -127,9 +127,9 @@ public static class ProjectFinance
     /// <summary>
     /// One person's pay history as hourly costs over time: hourly pay at its rate, and a monthly salary at its rate in each
     /// month (<see cref="PayRules.HourlyRate"/>), one rate a month up to <paramref name="until"/>. Ordered by date.
-    /// The days they were an admin or super admin cost nothing: that salary is a company cost, counted once on the company
-    /// overview, and pricing their hours would also give it away. So a role change starts a new rate on its day, and
-    /// changing someone's role later never changes what their earlier days cost.
+    /// Months paid as a fixed salary (<see cref="RoleHistory.FixedSalaryMonth"/>) cost nothing: that salary is a company
+    /// cost, counted once on the company overview, and pricing their hours would also give it away. A role change only
+    /// touches the months it falls in and after, so promoting someone never changes what their earlier months cost.
     /// </summary>
     public static IReadOnlyList<PayRate> RatesOf(IEnumerable<PayRecord> history, PersonCalendar calendar, DateOnly until, RoleHistory roles)
     {
@@ -152,7 +152,7 @@ public static class ProjectFinance
         return ByRole(rates, roles);
     }
 
-    /// <summary>The rates with a new one on each day the role changed, at 0 while they held a fixed-salary role.</summary>
+    /// <summary>The rates at 0 in fixed-salary months, with a new rate where the month of a role change starts and ends.</summary>
     private static IReadOnlyList<PayRate> ByRole(IReadOnlyList<PayRate> rates, RoleHistory roles)
     {
         if (rates.Count == 0)
@@ -160,18 +160,19 @@ public static class ProjectFinance
             return rates;
         }
 
-        var days = rates.Select(r => r.EffectiveFrom).Concat(roles.Changes.Select(c => c.Day)).ToList();
-        // time before the first rate is priced at it, so when a role change comes first, the role held before it gets a
-        // rate of its own, from the day before the change
-        if (roles.Changes.Count > 0 && roles.Changes[0].Day <= rates[0].EffectiveFrom)
+        var changeMonths = roles.Changes.Select(c => new DateOnly(c.Day.Year, c.Day.Month, 1)).ToList();
+        var days = rates.Select(r => r.EffectiveFrom).Concat(changeMonths).Concat(changeMonths.Select(m => m.AddMonths(1))).ToList();
+        // time before the first rate is priced at it, so when a role change comes first, the months before it get a rate
+        // of their own
+        if (changeMonths.Count > 0 && changeMonths[0] <= rates[0].EffectiveFrom)
         {
-            days.Add(roles.Changes[0].Day.AddDays(-1));
+            days.Add(changeMonths[0].AddDays(-1));
         }
 
         return days.Distinct().Order().Select(day =>
         {
             var rate = RateOn(rates, day);
-            return rate with { EffectiveFrom = day, HourlyCost = roles.HasFixedSalaryOn(day) ? 0 : rate.HourlyCost };
+            return rate with { EffectiveFrom = day, HourlyCost = roles.FixedSalaryMonth(day) ? 0 : rate.HourlyCost };
         }).ToList();
     }
 

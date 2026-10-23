@@ -230,9 +230,8 @@ public sealed class CompanyOverviewService(
     }
 
     /// <summary>
-    /// The admins' and super admins' pay in each month (fixed salaries: they log no hours, so no project carries it), as
-    /// Salaries works out a fixed salary, for the share of the month they held that role (their days as an employee cost
-    /// their projects instead; see <see cref="SalaryCalculator.FixedSalaryShare"/>), times the share of the month's
+    /// The admins' and super admins' pay in each month they were paid a fixed salary (any month they held that role on a
+    /// day: they log no hours, so no project carries it), as Salaries works it out, times the share of the month's
     /// calendar days the period covers (like overhead), converted at the rate on the first of the month.
     /// </summary>
     private async Task<(IReadOnlyDictionary<DateOnly, decimal> Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted)> FixedSalariesAsync(
@@ -242,21 +241,19 @@ public sealed class CompanyOverviewService(
     {
         var months = shares.Select(s => s.Month).ToList();
         var people = await payroll.PeopleAsync(DomainCodes.All, includeSuperAdmins: true, domain: null, search: null, months.Min(), cancellationToken);
-        var roles = await finance.RoleHistoriesAsync(people.Select(p => p.Id).ToList(), cancellationToken);
+        var roles = await payrollInputs.RoleHistoriesAsync(people.Select(p => p.Id).ToList(), cancellationToken);
         var salaried = people.Where(p => roles[p.Id].HadFixedSalary(months.Min(), months.Max().AddMonths(1).AddDays(-1))).ToList();
         var usd = new Dictionary<DateOnly, decimal>();
         var unconverted = new Dictionary<string, decimal>();
 
-        foreach (var month in await payrollInputs.ForAsync(salaried, months, cancellationToken))
+        foreach (var month in (await payrollInputs.ForAsync(salaried, months, cancellationToken)).Where(m => m.Input.FixedSalary))
         {
-            // a fixed salary doesn't depend on hours, whatever their role is now
-            var input = month.Input with { LedgerApplies = false, Work = [] };
-            if (SalaryCalculator.Calculate(input) is not { } pay)
+            if (SalaryCalculator.Calculate(month.Input) is not { } pay)
             {
                 continue;
             }
 
-            var amount = pay.Total * SalaryCalculator.FixedSalaryShare(input, roles[month.User.Id]) * shares.Single(s => s.Month == input.Month).Calendar;
+            var amount = pay.Total * shares.Single(s => s.Month == month.Input.Month).Calendar;
             if (rates.ToUsd(amount, pay.Terms.Currency, month.Input.Month) is { } converted)
             {
                 usd[month.Input.Month] = usd.GetValueOrDefault(month.Input.Month) + converted;

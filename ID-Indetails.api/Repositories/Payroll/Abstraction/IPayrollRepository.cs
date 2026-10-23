@@ -19,6 +19,11 @@ public interface IPayrollRepository
 
     Task<IReadOnlyList<UserPayHistory>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyDictionary<long, string>> RolesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Every recorded role change of the people, manual or automatic, oldest first.</summary>
+    Task<IReadOnlyList<RoleChangeRow>> RoleChangesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<WorkEntryTime>> WorkAsync(
         IReadOnlyCollection<long> userIds,
         DateTime fromUtc,
@@ -46,6 +51,8 @@ public interface IPayrollRepository
 }
 
 public sealed record WorkEntryTime(long Id, long UserId, long ProjectId, DateTime StartedAt, int Minutes);
+
+public sealed record RoleChangeRow(long UserId, DateTime OccurredAt, string From, string To);
 
 public sealed record ProjectLabel(long Id, string Title, string? ClientName, string? ClientOrganisation);
 

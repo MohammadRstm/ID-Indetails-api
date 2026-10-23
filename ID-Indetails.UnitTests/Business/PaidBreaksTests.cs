@@ -60,13 +60,14 @@ public class PaidBreaksTests
     }
 
     [Fact]
-    public void A_break_on_a_day_as_an_admin_costs_nothing()
+    public void A_break_in_a_month_as_an_admin_costs_nothing()
     {
-        // 3,200 a month is 20 an hour in February 2026 (160 paid hours); promoted to admin on Wednesday 11 February.
-        var roles = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 2, 11), RoleCodes.Employee, RoleCodes.Admin)]);
+        // 3,200 a month is 20 an hour in February 2026 (160 paid hours); promoted to admin on Wednesday 11 March, so all
+        // of March is a fixed salary.
+        var roles = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 3, 11), RoleCodes.Employee, RoleCodes.Admin)]);
         var history = ProjectFinance.RatesOf(
-            [new ProjectFinance.PayRecord(1, new(2026, 1, 1), PayBasis.Monthly, 3200m, "USD")], Calendar, until: new(2026, 2, 20), roles);
-        var shares = new[] { new PaidBreaks.Share(10, Tuesday, 60m), new PaidBreaks.Share(10, new(2026, 2, 12), 60m) };
+            [new ProjectFinance.PayRecord(1, new(2026, 1, 1), PayBasis.Monthly, 3200m, "USD")], Calendar, until: new(2026, 3, 20), roles);
+        var shares = new[] { new PaidBreaks.Share(10, Tuesday, 60m), new PaidBreaks.Share(10, new(2026, 3, 3), 60m) };
 
         PaidBreaks.Price(shares, history).Select(p => p.Cost.Amount).ShouldBe([20m, 0m]);
     }

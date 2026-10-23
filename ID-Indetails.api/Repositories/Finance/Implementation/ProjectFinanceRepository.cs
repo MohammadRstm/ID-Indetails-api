@@ -1,6 +1,4 @@
-using System.Text.Json;
 using ID_Indetails.api.Business.Finance;
-using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using Microsoft.EntityFrameworkCore;
@@ -28,32 +26,6 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
             .Where(p => userIds.Contains(p.UserId))
             .Select(p => new ProjectFinance.PayRecord(p.UserId, p.EffectiveFrom, p.Basis, p.Amount, p.Currency))
             .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyDictionary<long, string>> RolesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
-        => await db.Users
-            .AsNoTracking()
-            .Where(u => userIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u.RoleCode, cancellationToken);
-
-    public async Task<IReadOnlyList<RoleChangeRow>> RoleChangesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
-    {
-        string[] kinds = [ActivityEventKinds.RoleChanged, ActivityEventKinds.RoleAutoPromoted, ActivityEventKinds.RoleAutoDemoted];
-        var events = await db.ActivityEvents
-            .AsNoTracking()
-            .Where(e => kinds.Contains(e.Kind) && e.SubjectType == "user" && e.SubjectId != null && userIds.Contains(e.SubjectId.Value) && e.Payload != null)
-            .OrderBy(e => e.OccurredAt)
-            .ThenBy(e => e.Id)
-            .Select(e => new { UserId = e.SubjectId!.Value, e.OccurredAt, e.Payload })
-            .ToListAsync(cancellationToken);
-
-        return events
-            .Select(e => (e.UserId, e.OccurredAt, Roles: JsonSerializer.Deserialize<RolePayload>(e.Payload!, JsonSerializerOptions.Web)))
-            .Where(e => e.Roles is { From: not null, To: not null })
-            .Select(e => new RoleChangeRow(e.UserId, e.OccurredAt, e.Roles!.From!, e.Roles.To!))
-            .ToList();
-    }
-
-    private sealed record RolePayload(string? From, string? To);
 
     public async Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
         => await db.ProjectExpenses

@@ -28,7 +28,7 @@ public class ProjectFinanceTests
     private static Costs CostOf(decimal labour = 0, decimal expenses = 0, decimal materials = 0, decimal ground = 0)
         => new(labour, expenses, materials, ground, []);
 
-    /// <summary>One hour on each day, priced at 1,760 a month from 1 January 2026 (10 an hour in June, 9.5652 in July).</summary>
+    /// <summary>One hour on each day, priced at 1,760 a month from 1 January 2026 (10.4762 an hour in May, 10 in June, 9.5652 in July).</summary>
     private static IEnumerable<decimal> HourOn(RoleHistory roles, params DateOnly[] days)
         => PriceLabour(
                 days.Select(d => new WorkedTime(7, d, 60)),
@@ -66,20 +66,22 @@ public class ProjectFinanceTests
     }
 
     [Fact]
-    public void A_promotion_mid_month_stops_the_cost_from_its_day_and_leaves_the_days_before_alone()
+    public void A_promotion_makes_its_whole_month_free_and_leaves_the_months_before_alone()
     {
         var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new DateOnly(2026, 6, 15), RoleCodes.Employee, RoleCodes.Admin)]);
 
-        HourOn(promoted, new DateOnly(2026, 6, 12), new DateOnly(2026, 6, 15), new DateOnly(2026, 7, 1)).ShouldBe([10m, 0m, 0m]);
-        HourOn(promoted, new DateOnly(2026, 6, 12)).ShouldBe(HourOn(AnEmployee, new DateOnly(2026, 6, 12)));
+        HourOn(promoted, new DateOnly(2026, 5, 29), new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 15), new DateOnly(2026, 7, 1))
+            .ShouldBe([10.4762m, 0m, 0m, 0m]);
+        HourOn(promoted, new DateOnly(2026, 5, 29)).ShouldBe(HourOn(AnEmployee, new DateOnly(2026, 5, 29)));
     }
 
     [Fact]
-    public void A_demotion_costs_the_rate_from_its_day_and_the_days_as_an_admin_stay_free()
+    public void A_demoted_admin_costs_nothing_until_the_month_ends_then_their_rate()
     {
         var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new DateOnly(2026, 6, 15), RoleCodes.Admin, RoleCodes.Employee)]);
 
-        HourOn(demoted, new DateOnly(2026, 6, 12), new DateOnly(2026, 6, 15), new DateOnly(2026, 7, 1)).ShouldBe([0m, 10m, 9.5652m]);
+        HourOn(demoted, new DateOnly(2026, 5, 29), new DateOnly(2026, 6, 15), new DateOnly(2026, 6, 30), new DateOnly(2026, 7, 1))
+            .ShouldBe([0m, 0m, 0m, 9.5652m]);
     }
 
     [Fact]
@@ -98,11 +100,11 @@ public class ProjectFinanceTests
     {
         // Paid by the hour from 1 March; an admin until becoming an employee on 10 February, and the other way round.
         PayRecord[] pay = [new(7, Mar1, PayBasis.Hourly, 12m, "USD")];
-        WorkedTime[] work = [new(7, new DateOnly(2026, 2, 2), 60), new(7, new DateOnly(2026, 2, 10), 60), new(7, new DateOnly(2026, 3, 5), 60)];
+        WorkedTime[] work = [new(7, new DateOnly(2026, 1, 20), 60), new(7, new DateOnly(2026, 2, 2), 60), new(7, new DateOnly(2026, 3, 5), 60)];
         var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new DateOnly(2026, 2, 10), RoleCodes.Admin, RoleCodes.Employee)]);
         var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new DateOnly(2026, 2, 10), RoleCodes.Employee, RoleCodes.Admin)]);
 
-        PriceLabour(work, RatesOf(pay, NineToFive, until: new DateOnly(2026, 3, 20), demoted)).Items.Select(i => i.Amount).ShouldBe([0m, 12m, 12m]);
+        PriceLabour(work, RatesOf(pay, NineToFive, until: new DateOnly(2026, 3, 20), demoted)).Items.Select(i => i.Amount).ShouldBe([0m, 0m, 12m]);
         PriceLabour(work, RatesOf(pay, NineToFive, until: new DateOnly(2026, 3, 20), promoted)).Items.Select(i => i.Amount).ShouldBe([12m, 0m, 0m]);
     }
 

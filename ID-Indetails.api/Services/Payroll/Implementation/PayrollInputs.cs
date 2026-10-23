@@ -18,14 +18,8 @@ public sealed class PayrollInputs(
     IWorkingTimeService workingTime,
     IClock clock) : IPayrollInputs
 {
-    /// <summary>The hours ledger applies to Design employees only.</summary>
+    /// <summary>The hours ledger applies to Design employees only: whether it applies to them today.</summary>
     public static bool LedgerApplies(User person) => person.DomainCode == DomainCodes.Design && person.RoleCode == RoleCodes.Employee;
-
-    /// <summary>
-    /// Admins and super admins are paid their fixed salary: they log no hours, and any logged before that rule earn no
-    /// overtime or paid breaks.
-    /// </summary>
-    public static bool PaidForHours(User person) => !PayRules.HasFixedSalary(person.RoleCode);
 
     public Employment EmploymentOf(User person)
         => person.EmploymentPeriods.Count > 0
@@ -51,6 +45,16 @@ public sealed class PayrollInputs(
             s.EffectiveFrom, s.FollowsDefault, s.Days.ToDictionary(d => (int)d.Weekday, d => ((int)d.StartMinute, (int)d.EndMinute))))));
     }
 
+    public async Task<IReadOnlyDictionary<long, RoleHistory>> RoleHistoriesAsync(
+        IReadOnlyCollection<long> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var changes = (await payroll.RoleChangesAsync(userIds, cancellationToken)).ToLookup(c => c.UserId);
+        return (await payroll.RolesAsync(userIds, cancellationToken)).ToDictionary(
+            r => r.Key,
+            r => new RoleHistory(r.Value, changes[r.Key].Select(c => new RoleHistory.Change(clock.ToCompanyDate(c.OccurredAt), c.From, c.To)).ToList()));
+    }
+
     public async Task<IReadOnlyList<PersonMonth>> ForAsync(
         IReadOnlyList<User> people,
         IReadOnlyList<DateOnly> months,
@@ -65,6 +69,7 @@ public sealed class PayrollInputs(
         var today = clock.CompanyToday;
         var pay = (await payroll.PayHistoryAsync(ids, cancellationToken)).ToLookup(p => p.UserId);
         var calendars = await CalendarsAsync(ids, cancellationToken);
+        var roles = await RoleHistoriesAsync(ids, cancellationToken);
 
         var excuses = new Dictionary<DateOnly, ILookup<long, HourExcuse>>();
         foreach (var month in months.Distinct())
@@ -92,20 +97,22 @@ public sealed class PayrollInputs(
             {
                 var next = month.AddMonths(1);
                 var monthExcuses = excuses[month][person.Id].ToList();
+                var fixedSalary = roles[person.Id].FixedSalaryMonth(month);
                 result.Add(new PersonMonth(person, new SalaryCalculator.Input(
                     month,
                     today,
                     employment.JoinedOn,
-                    LedgerApplies(person),
+                    person.DomainCode == DomainCodes.Design && !fixedSalary,
                     terms,
                     calendar,
                     work[person.Id]
-                        .Where(e => PaidForHours(person) && DateOnly.FromDateTime(e.Local) >= month && DateOnly.FromDateTime(e.Local) < next)
+                        .Where(e => DateOnly.FromDateTime(e.Local) >= month && DateOnly.FromDateTime(e.Local) < next)
                         .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes))
                         .ToList(),
                     monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
                     employment.LeftOn,
-                    employment.Gaps),
+                    employment.Gaps,
+                    fixedSalary),
                     monthExcuses));
             }
         }

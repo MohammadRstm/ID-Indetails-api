@@ -39,7 +39,8 @@ public static class SalaryCalculator
         IReadOnlyList<Overtime.Work> Work,
         IReadOnlyList<Excuse> Excuses,
         DateOnly? LeftOn = null,
-        IReadOnlyList<Employment.Gap>? Gaps = null);
+        IReadOnlyList<Employment.Gap>? Gaps = null,
+        bool FixedSalary = false);
 
     /// <param name="HourlyRate">What an hour of <paramref name="Terms"/> is worth this month: it prices deductions.</param>
     /// <param name="StandardHourlyRate">The true hourly rate of <paramref name="Terms"/>: overtime is paid at it × the multiplier.</param>
@@ -82,7 +83,8 @@ public static class SalaryCalculator
         }
 
         var rate = terms.HourlyRateOn(input.Month, input.Calendar);
-        var work = Overtime.Of(input.Work, input.Calendar);
+        // a fixed salary doesn't depend on hours: logged time earns no overtime or paid breaks
+        IReadOnlyList<Overtime.Split> work = input.FixedSalary ? [] : Overtime.Of(input.Work, input.Calendar);
         var ledger = input.LedgerApplies ? LedgerOf(input, work) : null;
         int MadeUp(Overtime.Split w) => ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
         decimal OvertimePay(Overtime.Split w, PayTerms t)
@@ -160,28 +162,6 @@ public static class SalaryCalculator
             input.Excuses.SelectMany(e => e.Days).ToHashSet()),
             input.LeftOn,
             input.Gaps);
-
-    /// <summary>
-    /// The part of the month's pay that is a fixed salary: the paid hours (break included) of the working days they were
-    /// employed as an admin or super admin ÷ those of every working day they were employed. Their days as an employee are
-    /// priced on projects instead, by their hours. A month with no paid hours to share goes by their role on its last day.
-    /// </summary>
-    public static decimal FixedSalaryShare(Input input, RoleHistory roles)
-    {
-        var next = input.Month.AddMonths(1);
-        var lastDay = input.LeftOn is { } left && left < next ? left : next.AddDays(-1);
-        var days = HoursLedger.Days(input.Month, next)
-            .Where(d => d >= input.JoinedOn && d <= lastDay && !Employment.InGap(input.Gaps, d))
-            .Select(d => (Day: d, Minutes: input.Calendar.HoursOn(d)?.Span ?? 0))
-            .ToList();
-        var all = days.Sum(d => d.Minutes);
-        if (all == 0)
-        {
-            return roles.HasFixedSalaryOn(lastDay) ? 1 : 0;
-        }
-
-        return (decimal)days.Where(d => roles.HasFixedSalaryOn(d.Day)).Sum(d => d.Minutes) / all;
-    }
 
     public static PayTerms? TermsOn(IEnumerable<PayTerms> history, DateOnly day)
         => history.Where(t => t.EffectiveFrom <= day).OrderBy(t => t.EffectiveFrom).LastOrDefault();

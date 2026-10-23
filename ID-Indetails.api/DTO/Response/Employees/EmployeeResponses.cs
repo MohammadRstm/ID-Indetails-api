@@ -55,6 +55,12 @@ public sealed record EmployeeResponse : EmployeeSummaryResponse
 
     /// <summary>The pay in force today. Only for callers who may see financials or manage pay.</summary>
     public PayResponse? CurrentPay { get; init; }
+
+    /// <summary>
+    /// Set after a role change that made an employee an admin or super admin: from this day (the first of this month)
+    /// their pay is a fixed monthly salary, so the client asks the caller to confirm it, starting from <see cref="CurrentPay"/>.
+    /// </summary>
+    public DateOnly? FixedPayFrom { get; init; }
 }
 
 /// <summary>One dated pay change.</summary>

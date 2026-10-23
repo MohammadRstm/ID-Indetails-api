@@ -19,4 +19,15 @@ public sealed record RoleHistory(string CurrentRole, IReadOnlyList<RoleHistory.C
     /// <summary>Whether they were an admin or super admin on any day from <paramref name="from"/> to <paramref name="to"/>.</summary>
     public bool HadFixedSalary(DateOnly from, DateOnly to)
         => HasFixedSalaryOn(from) || Changes.Any(c => c.Day > from && c.Day <= to && PayRules.HasFixedSalary(c.To));
+
+    /// <summary>
+    /// Whether the month containing <paramref name="day"/> is paid as a fixed salary: they were an admin or super admin on
+    /// at least one of its days. So a promotion makes its whole month fixed, a demoted admin keeps the fixed salary until
+    /// the month ends, and the months before and after keep their own role.
+    /// </summary>
+    public bool FixedSalaryMonth(DateOnly day)
+    {
+        var month = new DateOnly(day.Year, day.Month, 1);
+        return HadFixedSalary(month, month.AddMonths(1).AddDays(-1));
+    }
 }

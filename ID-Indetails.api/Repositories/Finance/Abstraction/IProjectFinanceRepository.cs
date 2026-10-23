@@ -11,11 +11,6 @@ public interface IProjectFinanceRepository
 
     Task<IReadOnlyList<ProjectFinance.PayRecord>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyDictionary<long, string>> RolesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
-
-    /// <summary>Every recorded role change of the people, manual or automatic, oldest first.</summary>
-    Task<IReadOnlyList<RoleChangeRow>> RoleChangesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
-
     Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<MaterialRow>> MaterialsAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
@@ -37,5 +32,3 @@ public sealed record ExpenseRow(long ProjectId, string Currency, decimal Amount,
 public sealed record MaterialRow(long ProjectId, string Currency, decimal Total, decimal? ClientPrice, DateTime AddedAt, DateTime? SentAt);
 
 public sealed record GroundLabourRow(long ProjectId, DateOnly WorkDate, decimal Cost);
-
-public sealed record RoleChangeRow(long UserId, DateTime OccurredAt, string From, string To);

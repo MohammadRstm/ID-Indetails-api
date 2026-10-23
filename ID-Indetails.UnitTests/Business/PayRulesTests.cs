@@ -120,4 +120,26 @@ public class PayRulesTests
         demoted.HadFixedSalary(new(2026, 6, 1), new(2026, 6, 30)).ShouldBeTrue();
         demoted.HadFixedSalary(new(2026, 6, 15), new(2026, 6, 30)).ShouldBeFalse();
     }
+
+    [Fact]
+    public void A_month_with_any_day_as_an_admin_is_a_fixed_salary_and_the_months_around_it_keep_their_role()
+    {
+        var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 6, 15), RoleCodes.Employee, RoleCodes.Admin)]);
+        var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new(2026, 6, 15), RoleCodes.Admin, RoleCodes.Employee)]);
+
+        promoted.FixedSalaryMonth(new(2026, 5, 31)).ShouldBeFalse();
+        promoted.FixedSalaryMonth(new(2026, 6, 1)).ShouldBeTrue();
+        promoted.FixedSalaryMonth(new(2026, 7, 10)).ShouldBeTrue();
+        demoted.FixedSalaryMonth(new(2026, 5, 31)).ShouldBeTrue();
+        demoted.FixedSalaryMonth(new(2026, 6, 30)).ShouldBeTrue();
+        demoted.FixedSalaryMonth(new(2026, 7, 1)).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData(RoleCodes.Employee, RoleCodes.Admin, true)]
+    [InlineData(RoleCodes.Employee, RoleCodes.SuperAdmin, true)]
+    [InlineData(RoleCodes.Admin, RoleCodes.SuperAdmin, false)]
+    [InlineData(RoleCodes.Admin, RoleCodes.Employee, false)]
+    public void Becoming_an_admin_makes_pay_fixed_from_the_first_of_the_month(string from, string to, bool asked)
+        => PayRules.FixedPayFrom(from, to, new(2026, 10, 23)).ShouldBe(asked ? new DateOnly(2026, 10, 1) : (DateOnly?)null);
 }
