@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using ID_Indetails.api.Business.Proton;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
@@ -39,6 +40,8 @@ public sealed record RecentActivityInput
     public int? Limit { get; init; }
 }
 
+/// <param name="AmountUnit">What <paramref name="Amount"/> and <paramref name="PreviousAmount"/> are in: a currency, "LBP per USD" for an
+/// exchange rate, or "percent" for progress.</param>
 public sealed record ActivityRow(
     string When,
     string Kind,
@@ -49,8 +52,33 @@ public sealed record ActivityRow(
     ProtonNamed? Client,
     decimal? Amount,
     decimal? PreviousAmount,
+    string? AmountUnit,
     int? WorkMinutes,
-    string? WorkDescription);
+    string? WorkDescription)
+{
+    /// <summary>
+    /// The feed keeps an event's amount without its unit: progress is a percentage, an exchange rate is units per US dollar,
+    /// and expenses and company expenses keep their currency in the details. Every other amount is in USD.
+    /// </summary>
+    public static string? UnitOf(string kind, decimal? amount, JsonElement? payload)
+    {
+        if (amount is null)
+        {
+            return null;
+        }
+
+        if (kind == ActivityEventKinds.ProgressSet)
+        {
+            return "percent";
+        }
+
+        var currency = payload is { ValueKind: JsonValueKind.Object } details
+                       && details.TryGetProperty("currency", out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+        return kind == ActivityEventKinds.ExchangeRateSet ? $"{currency} per USD" : currency ?? "USD";
+    }
+}
 
 /// <param name="Total">Every event in the period that the user may see; <paramref name="Events"/> are the newest of them.</param>
 public sealed record ActivityList(DateOnly From, DateOnly To, int Total, bool MoreThanShown, IReadOnlyList<ActivityRow> Events);
@@ -65,7 +93,8 @@ public sealed class GetRecentActivityTool(IActivityFeedService activity, IClock 
 
     public override string Description =>
         "What happened: the activity feed (projects created or changed, requirements, meetings, work logged, " +
-        "invoices, payments, people changes), newest first, for a period, domain, project, client or person.";
+        "invoices, payments, people changes), newest first, for a period, domain, project, client or person. An " +
+        "event's amount comes with its unit (a currency, an exchange rate, or a percentage for progress).";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ActivityController>(nameof(ActivityController.List));
 
@@ -105,6 +134,7 @@ public sealed class GetRecentActivityTool(IActivityFeedService activity, IClock 
             e.Client is { } c ? new ProtonNamed(c.Id, c.Name) : null,
             e.Amount,
             e.PrevAmount,
+            ActivityRow.UnitOf(e.Kind, e.Amount ?? e.PrevAmount, e.Payload),
             e.WorkEntry?.Minutes,
             ProtonText.Cut(e.WorkEntry?.Description, 200))).ToList();
         var refs = events.Take(limit)
