@@ -11,6 +11,7 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Files;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Portal.Abstraction;
 using Microsoft.Extensions.Options;
 
@@ -85,7 +86,8 @@ public sealed record ProjectFileReadResult(long ItemId, string Title, string Fil
 /// Reads one project file for the model to look at: a PDF's pages, a picture, a video's pictures, or a document's text.
 /// The same access as opening the file on its page; nothing is shown to the user or kept beyond the conversation.
 /// </summary>
-public sealed class ReadProjectFileTool(IPortalContentService files, ProtonFileReader reader, IOptions<ProtonOptions> options) : ProtonTool<ReadProjectFileInput>
+public sealed class ReadProjectFileTool(
+    IPortalContentService files, ProtonFileReader reader, ICompanySettingsService company, IOptions<ProtonOptions> options) : ProtonTool<ReadProjectFileInput>
 {
     public override string Name => "read_project_file";
 
@@ -106,6 +108,13 @@ public sealed class ReadProjectFileTool(IPortalContentService files, ProtonFileR
 
     protected override async Task<ProtonToolOutput> RunAsync(ReadProjectFileInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
+        // off, the tool stays listed (so the prompt cache holds) but refuses: nothing is sent to the model provider
+        if (!(await company.GetAsync(cancellationToken)).ProtonReadsFiles)
+        {
+            throw new ProtonToolInputException(
+                "Reading files is turned off for this company: someone who manages the company settings can turn it on in Company settings, under Proton. Offer to open the file for the user instead.");
+        }
+
         var limits = options.Value.Files;
         if (context.FilesRead >= limits.MaxReadsPerQuestion)
         {

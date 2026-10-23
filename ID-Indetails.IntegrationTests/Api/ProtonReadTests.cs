@@ -38,6 +38,13 @@ public class ProtonReadTests(ProtonApiFactory api) : IClassFixture<ProtonApiFact
         return content is JsonArray blocks ? blocks : [new JsonObject { ["type"] = "text", ["text"] = content.GetValue<string>() }];
     }
 
+    /// <summary>Lets Proton read files, as someone who manages the company settings does in Company settings.</summary>
+    private async Task AllowFilesAsync(AuthResponse superAdmin, bool enabled = true)
+    {
+        var response = await Client.PutJsonAsync("/api/company/proton-files", new { enabled }, superAdmin.AccessToken);
+        response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+    }
+
     private static JsonNode Data(JsonArray blocks) => JsonNode.Parse(blocks[0]!["text"]!.GetValue<string>())!;
 
     private static string Status(JsonArray blocks) => Data(blocks)["status"]!.GetValue<string>();
@@ -48,6 +55,7 @@ public class ProtonReadTests(ProtonApiFactory api) : IClassFixture<ProtonApiFact
         var (superAdmin, _) = await PeopleAsync();
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var plan = await UploadAsync(superAdmin, project.Id, "Floor plan.pdf", Pdf(3), "drawing");
+        await AllowFilesAsync(superAdmin);
 
         var listed = Data(await CallAsync(superAdmin, "get_project_files", new { project_id = project.Id }))["data"]!;
         var row = listed["files"]!.AsArray().Single()!;
@@ -65,12 +73,39 @@ public class ProtonReadTests(ProtonApiFactory api) : IClassFixture<ProtonApiFact
         Status(await CallAsync(superAdmin, "read_project_file", new { project_id = other.Id, item_id = plan.Id })).ShouldBe("not_found");
     }
 
+    /// <summary>
+    /// Reading a file sends it to Anthropic, so it is off until someone who manages the company settings turns it on;
+    /// off, the tool stays offered (the prompt stays cached) but refuses, and nothing of the file reaches the model.
+    /// </summary>
+    [Fact]
+    public async Task Files_are_read_only_once_the_company_allows_it()
+    {
+        var (superAdmin, designAdmin) = await PeopleAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var plan = await UploadAsync(superAdmin, project.Id, "Plan.pdf", Pdf(1), "drawing");
+        await AllowFilesAsync(superAdmin, enabled: false);
+
+        var settings = await (await Client.GetAsync("/api/company/settings", superAdmin.AccessToken)).ReadAsync<JsonObject>();
+        settings["protonReadsFiles"]!.GetValue<bool>().ShouldBeFalse();
+        var refused = await CallAsync(superAdmin, "read_project_file", new { project_id = project.Id, item_id = plan.Id });
+        Status(refused).ShouldBe("invalid");
+        Data(refused)["message"]!.GetValue<string>().ShouldContain("turned off");
+        refused.Count.ShouldBe(1);
+
+        // only those who manage the company settings switch it
+        await (await Client.PutJsonAsync("/api/company/proton-files", new { enabled = true }, designAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        await AllowFilesAsync(superAdmin);
+        (await CallAsync(superAdmin, "read_project_file", new { project_id = project.Id, item_id = plan.Id }))[2]!["type"]!.GetValue<string>().ShouldBe("document");
+    }
+
     [Fact]
     public async Task Reads_at_most_two_files_for_one_question()
     {
         var (superAdmin, _) = await PeopleAsync();
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var plan = await UploadAsync(superAdmin, project.Id, "Plan.pdf", Pdf(1), "drawing");
+        await AllowFilesAsync(superAdmin);
         api.Anthropic.Reply(
             FakeAnthropic.ToolUse("read_project_file", new { project_id = project.Id, item_id = plan.Id }),
             FakeAnthropic.ToolUse("read_project_file", new { project_id = project.Id, item_id = plan.Id }),

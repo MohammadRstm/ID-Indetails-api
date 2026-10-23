@@ -10,6 +10,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row. Address (up to 300 characters) and website (a web address such as `indetails.com`) are optional; leaving one out clears it |
 | `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, from the caller's upload, whether or not the rest of the settings were saved ([files.md](files.md)) |
 | `PUT /api/company/contact-email` | `company_settings:manage` or `website:manage` | `{ email }`: the company's own address, which the website shows and its contact form sends to ([website.md](website.md)). Empty clears it; it comes back as `contactEmail` on the settings |
+| `PUT /api/company/proton-files` | `company_settings:manage` | `{ enabled }`: whether Proton may read project files, which sends their content to Anthropic, its model provider. It is off until someone turns it on, and comes back as `protonReadsFiles` on the settings ([proton.md](proton.md)) |
 | `GET /api/company/branding`, `GET /api/company/logo` | Anyone | The name and whether there is a logo, and the logo's image, for the sign-in page |
 | `GET /api/company/working-time` | Signed in | The policy in force today and every dated policy, newest first |
 | `POST /api/company/working-time` | `working_time:manage` | A new working week, break and overtime multiplier from a date |

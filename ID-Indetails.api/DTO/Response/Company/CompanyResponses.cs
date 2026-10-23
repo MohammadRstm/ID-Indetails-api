@@ -18,7 +18,8 @@ public sealed record CompanySettingsResponse(
     byte WeekStart,
     bool Use24HourTime,
     string DefaultCurrency,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    bool ProtonReadsFiles);
 
 /// <summary>What the sign-in page shows before anyone signs in.</summary>
 /// <param name="Name">Null until the company settings are saved.</param>

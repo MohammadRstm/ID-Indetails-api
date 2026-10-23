@@ -124,6 +124,11 @@ the week; running periods end today. Every result says which days it covers.
 
 Proton reads the newer features as the person would see them on their pages.
 
+- **Off until the company allows it.** Reading a file sends its content to Anthropic, Proton's model provider. So
+  `read_project_file` refuses until someone with `company_settings:manage` turns on "Let Proton read project files" in
+  Company settings: `PUT /api/company/proton-files` sets `company_settings.proton_reads_files`, which is off by
+  default. While it is off the tool stays offered, so the prompt stays cached, but it refuses and sends nothing.
+  Proton never changes this switch: it is `Never` in `ProtonCoverage`.
 - **Reading a file** (`read_project_file`, `Proton/Files/ProtonFileReader.cs`). The file's bytes are read through
   `IPortalContentService.ReadAsync`, which applies the same access as the file's own link. Nothing is shown to the user
   from there, and nothing is kept beyond the conversation: the content goes to the model as blocks after the tool's
