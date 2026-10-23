@@ -71,6 +71,10 @@ jobs:
       - name: Build
         run: dotnet build ID-Indetails.slnx -c Release --no-restore -warnaserror
 
+      # Proton reads a video through pictures ffmpeg takes, as the API's image does (its test is skipped without it).
+      - name: Install ffmpeg
+        run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
+
       - name: Unit tests
         run: dotnet test ID-Indetails.UnitTests -c Release --no-build
 

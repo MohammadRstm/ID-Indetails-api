@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Clients;
 using ID_Indetails.api.DTO.Request.Employees;
@@ -6,6 +7,7 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.Website.Abstraction;
 
 namespace ID_Indetails.api.Proton.Tools;
 
@@ -14,7 +16,7 @@ public sealed record FindInput
     [Description("The name or part of it, as the user said it: \"Alpha\", \"the CRM project\", \"John\".")]
     public required string Text { get; init; }
 
-    [Description("What to look for. Leave out to look for projects, clients and people.")]
+    [Description("What to look for. Leave out to look for projects, clients and people; website_project only when the user means a project on the company's public website.")]
     public IReadOnlyList<ProtonRefType>? Types { get; init; }
 }
 
@@ -26,7 +28,7 @@ public sealed record FindResult(IReadOnlyList<FoundRecord> Matches, IReadOnlyLis
 /// Turns a name into ids through the same list endpoints the app's search boxes use. Filler words are dropped, and
 /// when the whole phrase matches nothing each significant word is tried on its own.
 /// </summary>
-public sealed class FindTool(IProjectService projects, IClientService clients, IEmployeeService employees)
+public sealed class FindTool(IProjectService projects, IClientService clients, IEmployeeService employees, IWebsiteProjectService websiteProjects)
     : ProtonTool<FindInput>
 {
     private const int PerType = 8;
@@ -34,18 +36,23 @@ public sealed class FindTool(IProjectService projects, IClientService clients, I
     private static readonly HashSet<string> Filler = new(StringComparer.OrdinalIgnoreCase)
     {
         "the", "a", "an", "our", "my", "his", "her", "their", "of", "for", "and", "project", "projects",
-        "client", "clients", "person", "employee", "called", "named", "site",
+        "client", "clients", "person", "employee", "called", "named", "site", "website",
     };
 
     private static readonly ProtonEndpoint ProjectList = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
     private static readonly ProtonEndpoint ClientList = ProtonEndpoint.Of<ClientsController>(nameof(ClientsController.List));
     private static readonly ProtonEndpoint PeopleList = ProtonEndpoint.Of<EmployeesController>(nameof(EmployeesController.List));
+    private static readonly ProtonEndpoint WebsiteProjectList = ProtonEndpoint.Of<WebsiteController>(nameof(WebsiteController.Projects));
+
+    /// <summary>Looked for unless the call says otherwise: website projects only when asked for by name.</summary>
+    private static readonly ProtonRefType[] ByDefault = [ProtonRefType.Project, ProtonRefType.Client, ProtonRefType.Person];
 
     public override string Name => "find";
 
     public override string Description =>
-        "Find projects, clients or people by name and get their ids. Use it before any other tool whenever the user " +
-        "names something. Several matches: ask the user which one. No match: say so.";
+        "Find projects, clients or people by name and get their ids, or a project on the company's website (type " +
+        "website_project). Use it before any other tool whenever the user names something. Several matches: ask the " +
+        "user which one. No match: say so.";
 
     public override ProtonEndpoint Endpoint => ProjectList;
 
@@ -62,7 +69,7 @@ public sealed class FindTool(IProjectService projects, IClientService clients, I
         }
 
         // teams are found among the user's own chats, by find_recipient
-        var types = (input.Types is { Count: > 0 } ? input.Types.Distinct() : Enum.GetValues<ProtonRefType>()).Where(t => t != ProtonRefType.Team);
+        var types = (input.Types is { Count: > 0 } ? input.Types.Distinct() : ByDefault).Where(t => t != ProtonRefType.Team);
         var matches = new List<FoundRecord>();
         var notAllowed = new List<ProtonRefType>();
         foreach (var type in types)
@@ -102,6 +109,7 @@ public sealed class FindTool(IProjectService projects, IClientService clients, I
     {
         ProtonRefType.Project => ProjectList,
         ProtonRefType.Client => ClientList,
+        ProtonRefType.WebsiteProject => WebsiteProjectList,
         _ => PeopleList,
     };
 
@@ -132,6 +140,16 @@ public sealed class FindTool(IProjectService projects, IClientService clients, I
                 var page = await clients.ListAsync(query, cancellationToken);
                 return page.Items
                     .Select(c => new FoundRecord(type, c.Id, c.DisplayName, c.Domain, c.IsArchived ? "archived" : $"{c.ProjectCount} projects"))
+                    .ToList();
+            }
+            case ProtonRefType.WebsiteProject:
+            {
+                // the website's projects are few: the list is read whole and matched here, as its page does
+                var list = await websiteProjects.ListAsync(cancellationToken);
+                return list.Projects
+                    .Where(p => p.Title.Contains(search, StringComparison.OrdinalIgnoreCase))
+                    .Take(PerType)
+                    .Select(p => new FoundRecord(type, p.Id, p.Title, DomainCodes.Website, p.Published ? "website project, published" : "website project, draft"))
                     .ToList();
             }
             default:

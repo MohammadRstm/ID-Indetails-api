@@ -28,6 +28,8 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
     {
         "Messages.Contacts", "Messages.Conversations", "Notifications.List", "Teams.List",
         "Company.GetSettings", "DomainSettings.Get",
+        // the discussion with a client decides who takes part in it, from the project, never from a permission
+        "ProjectPortalDiscussion.Messages",
     };
 
     /// <summary>

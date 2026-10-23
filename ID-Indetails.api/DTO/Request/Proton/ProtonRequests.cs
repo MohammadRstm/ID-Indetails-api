@@ -49,7 +49,7 @@ public sealed record StartProtonVoiceRequest
 /// <summary>The page the user is on, by meaning. <see cref="EntityId"/> comes with <see cref="EntityType"/>.</summary>
 public sealed record ProtonPageContext
 {
-    /// <summary>design, execution or company.</summary>
+    /// <summary>design, execution, website or company.</summary>
     public string Area { get; init; } = string.Empty;
 
     public ProtonPage? Page { get; init; }
@@ -60,6 +60,9 @@ public sealed record ProtonPageContext
 
     /// <summary>The project tab, on a project page.</summary>
     public ProtonProjectSection? Section { get; init; }
+
+    /// <summary>The part of the files or client portal tab: a section, the client's access or the discussion.</summary>
+    public ProtonProjectPart? Part { get; init; }
 
     /// <summary>The form, dialog or drawer open on the page, if it is one Proton knows.</summary>
     public ProtonSurface? Surface { get; init; }

@@ -559,6 +559,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(150)")
                         .HasColumnName("name");
 
+                    b.Property<bool>("ProtonReadsFiles")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("proton_reads_files");
+
                     b.Property<string>("TimeZone")
                         .IsRequired()
                         .HasMaxLength(64)

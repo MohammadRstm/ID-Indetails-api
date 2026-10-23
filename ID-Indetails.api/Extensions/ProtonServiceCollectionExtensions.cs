@@ -4,6 +4,7 @@ using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Conversation;
+using ID_Indetails.api.Proton.Files;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
@@ -112,10 +113,24 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, FindRecipientTool>();
         services.AddScoped<IProtonTool, GetMyInboxTool>();
         services.AddScoped<IProtonTool, GetMyNotificationsTool>();
+
+        // A Design project's files and client portal, and the discussion with its client, read as the person (Phase 2).
+        services.AddSingleton<ProtonVideoFrames>();
+        services.AddSingleton<ProtonFileReader>();
+        services.AddScoped<IProtonTool, GetProjectFilesTool>();
+        services.AddScoped<IProtonTool, ReadProjectFileTool>();
+        services.AddScoped<IProtonTool, GetPortalStatusTool>();
+        services.AddScoped<IProtonTool, ReadDiscussionTool>();
+
+        // The company's public website: its projects, what it says, and its visitors.
+        services.AddScoped<IProtonTool, GetWebsiteProjectsTool>();
+        services.AddScoped<IProtonTool, GetWebsiteContentTool>();
+        services.AddScoped<IProtonTool, GetWebsiteAnalyticsTool>();
         services.AddScoped<ProtonBriefingService>();
 
         // UI tools: they read nothing new, they ask the app to open a page or record the user may already open.
         services.AddScoped<ProtonRecords>();
+        services.AddScoped<ProtonPortalTab>();
         services.AddScoped<IProtonTool, OpenRecordTool>();
         services.AddScoped<IProtonTool, OpenPageTool>();
         services.AddScoped<IProtonTool, OfferChoicesTool>();
