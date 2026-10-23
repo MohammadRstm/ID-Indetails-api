@@ -9,6 +9,9 @@ public interface ICompanyOverviewService
     /// <param name="to">Last day; today when empty, and never after today.</param>
     Task<CompanyOverviewResponse> GetAsync(DateOnly? from, DateOnly? to, CancellationToken cancellationToken = default);
 
+    /// <summary>The overhead <see cref="GetAsync"/> charges to the same period, without the rest of the overview.</summary>
+    Task<PeriodOverheadResponse> OverheadAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
     /// <summary>The last <paramref name="months"/> months, this one included.</summary>
     Task<IReadOnlyList<CompanyMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default);
 

@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Proton;
 using ID_Indetails.api.DTO.Response.Reports;
@@ -176,6 +177,36 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         full["company"].ShouldNotBeNull();
         full.ToJsonString().ShouldNotContain("salar", Case.Insensitive);
         (Result(1)["basis"]!["omitted"]?.ToJsonString() ?? "").ShouldNotContain("overhead");
+    }
+
+    /// <summary>
+    /// Regression: the summary showed this month's and last month's whole overhead, unconverted, whatever the period,
+    /// while the company overview charges it by calendar days: a week's profit sat next to a month's rent.
+    /// </summary>
+    [Fact]
+    public async Task A_summarys_overhead_is_the_company_overviews_for_the_same_days()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var group = (await (await Client.GetAsync("/api/company/overhead/groups", superAdmin.AccessToken)).ReadAsync<List<OverheadGroupResponse>>()).First();
+        (await Client.PostJsonAsync("/api/company/overhead",
+                new { name = "Studio rent " + Guid.NewGuid().ToString("N")[..5], groupId = group.Id, currency = "USD", amount = 3100m }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("get_company_summary", new { period = "this_week" }), FakeAnthropic.Text("Here is the week."));
+
+        await OkAsync(AskAsync(superAdmin, "Give me a summary of the week"));
+
+        var summary = Result(1);
+        var week = summary["basis"]!["period"]!;
+        var before = summary["basis"]!["compared_with"]!;
+        var overview = await (await Client.GetAsync($"/api/company/overview?from={week["from"]}&to={week["to"]}".Replace("\"", ""), superAdmin.AccessToken))
+            .ReadAsync<CompanyOverviewResponse>();
+        var previous = await (await Client.GetAsync($"/api/company/overview?from={before["from"]}&to={before["to"]}".Replace("\"", ""), superAdmin.AccessToken))
+            .ReadAsync<CompanyOverviewResponse>();
+        var overhead = summary["data"]!["company"]!["overhead"]!;
+        overview.Overhead.ShouldBeGreaterThan(0m);
+        overhead["current"]!.GetValue<decimal>().ShouldBe(overview.Overhead);
+        overhead["previous"]!.GetValue<decimal>().ShouldBe(previous.Overhead);
     }
 
     /// <summary>

@@ -288,10 +288,12 @@ public sealed record MoneyBlock(
 /// <summary>A domain's part of the summary: each block only when the user may see it (see basis.omitted).</summary>
 public sealed record DomainSummary(string Domain, ProjectsBlock? Projects, WorkBlock? Work, RequirementsBlock? Requirements, MoneyBlock? Money);
 
-/// <summary>Company overhead, this month and last, per currency (no salaries).</summary>
-public sealed record CompanyBlock(IReadOnlyList<OverheadMonth> Overhead);
-
-public sealed record OverheadMonth(DateOnly Month, IReadOnlyList<CurrencyTotalResponse> Totals);
+/// <summary>
+/// Company overhead charged to the period (and the one compared with) by calendar days, in USD, exactly as the Company
+/// overview charges it. No salaries.
+/// </summary>
+/// <param name="Unconverted">Overhead of the period with no exchange rate for its month, in its own currency, left out of the USD figure.</param>
+public sealed record CompanyBlock(ProtonFigure Overhead, IReadOnlyList<CurrencyTotalResponse>? Unconverted);
 
 public sealed record CompanySummary(IReadOnlyList<DomainSummary> Domains, CompanyBlock? Company, IReadOnlyList<AttentionItem> Attention, int MoreAttention);
 
@@ -300,23 +302,24 @@ public sealed class GetCompanySummaryTool(
     ProtonAnalysisService analysis,
     IActivityFeedService activity,
     IDashboardService dashboard,
-    IOverheadService overhead) : ProtonTool<CompanySummaryInput>
+    ICompanyOverviewService overview) : ProtonTool<CompanySummaryInput>
 {
     private const int AttentionItems = 5;
 
     /// <summary>Said when the company's overhead is left out, so a summary without it isn't read as complete.</summary>
-    public const string NoOverhead = "Company overhead isn't included: it needs the company or overhead permission.";
+    public const string NoOverhead = "Company overhead isn't included: it needs the company:view permission.";
 
     private static readonly ProtonEndpoint Activity = ProtonEndpoint.Of<ActivityController>(nameof(ActivityController.List));
-    private static readonly ProtonEndpoint Overhead = ProtonEndpoint.Of<OverheadController>(nameof(OverheadController.Monthly));
+    private static readonly ProtonEndpoint Overhead = ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get));
 
     public override string Name => "get_company_summary";
 
     public override string Description =>
         "A summary of the company for a period (this week by default) against the previous one: per domain the user " +
         "sees, projects (active, on hold, started, completed, overdue, target soon, idle), Design hours with the busiest " +
-        "projects, requirements due and overdue, money received, cost and cash profit (received − cost); company " +
-        "overhead; and the top attention items. Blocks the user may not see are left out and named in basis.omitted.";
+        "projects, requirements due and overdue, money received, cost and cash profit (received − cost); the company " +
+        "overhead charged to the period (by calendar days, as the Company overview charges it); and the top attention " +
+        "items. Blocks the user may not see are left out and named in basis.omitted.";
 
     public override bool Heavy => true;
 
@@ -428,7 +431,9 @@ public sealed class GetCompanySummaryTool(
         CompanyBlock? company = null;
         if (await context.CanCallAsync(Overhead))
         {
-            company = new CompanyBlock((await overhead.MonthlyAsync(2, cancellationToken)).Select(m => new OverheadMonth(m.Month, m.Totals)).ToList());
+            var now = await overview.OverheadAsync(pair.Current.From, pair.Current.To, cancellationToken);
+            var before = pair.Previous is { } previous ? await overview.OverheadAsync(previous.From, previous.To, cancellationToken) : null;
+            company = new CompanyBlock(ProtonFigure.Of(now.Usd, before?.Usd), now.Unconverted.Count > 0 ? now.Unconverted : null);
         }
         else
         {

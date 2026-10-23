@@ -60,6 +60,11 @@ public sealed record CompanyOverviewResponse(
     int ClientsServed,
     IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
+/// <summary>Company overhead charged to a period, as the overview charges it.</summary>
+/// <param name="Usd">By calendar days, converted at the rate of each month.</param>
+/// <param name="Unconverted">Overhead with no exchange rate for its month, left out of <see cref="Usd"/>.</param>
+public sealed record PeriodOverheadResponse(DateOnly From, DateOnly To, decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted);
+
 /// <summary>One month for both domains together, in USD.</summary>
 /// <param name="AdminSalaries">The admins' and super admins' pay for the month, a company cost like overhead.</param>
 /// <param name="ProfitBeforeOverhead">Revenue − project costs.</param>
