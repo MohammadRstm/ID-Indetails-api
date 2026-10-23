@@ -58,6 +58,7 @@ public sealed class ProposeAddExpenseTool(IProjectService projects, IExpenseServ
     protected override async Task<(ExpenseArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         AddExpenseInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
+        MoneyText.RequireTyped(context, input.Amount);
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
         var request = new CreateExpenseRequest
         {
@@ -213,6 +214,7 @@ public sealed class ProposeAddMaterialsTool(IProjectService projects, IMaterialS
             throw new ProtonToolInputException($"Give 1 to {Max} materials.");
         }
 
+        MoneyText.RequireTyped(context, [.. input.Items.SelectMany(i => new[] { i.UnitCost, i.Amount })]);
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
         // the cost is the app's own: quantity × unit cost when both are given, otherwise the total
         var items = input.Items.Select(i => new NewMaterialRequest
@@ -310,6 +312,7 @@ public sealed class ProposeMaterialStepTool(IMaterialService materials) : Proton
         {
             case ProtonMaterialStep.Update:
                 var m = input.Material ?? throw new ProtonToolInputException("Say what changes on the material.");
+                MoneyText.RequireTyped(context, m.UnitCost, m.Amount);
                 // The update replaces the whole material, as the app's form sends it: start from the material as it is, so
                 // a field the user didn't mention keeps its value instead of being cleared.
                 var before = MaterialText.EntryOf(material);
@@ -346,6 +349,7 @@ public sealed class ProposeMaterialStepTool(IMaterialService materials) : Proton
                     null);
             default:
                 await context.RequireAsync(Price);
+                MoneyText.RequireTyped(context, input.ClientPrice);
                 return (new MaterialArgs(input.ProjectId, material.Id, null, null, new SetMaterialPriceRequest { ClientPrice = input.ClientPrice }),
                     new ProtonPreview($"Price {material.Name} for the client",
                         [new ProtonChange("Client price",
@@ -455,6 +459,7 @@ public sealed class ProposeSubmitLabourWeekTool(IProjectService projects, ILabou
         SubmitLabourWeekInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
+        MoneyText.RequireTyped(context, [.. input.Days.Select(d => (decimal?)d.DailyPay)]);
         var current = await labour.GetWeekAsync(project.Id, input.WeekStart, cancellationToken);
         // the week's version as the card read it: the service refuses (409) if the week changed before Confirm
         var week = new SubmitLabourWeekRequest
@@ -512,6 +517,7 @@ public sealed class ProposeLabourDefaultsTool(IProjectService projects, ILabourS
         LabourDefaultsInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
+        MoneyText.RequireTyped(context, input.DailyPay);
         var current = (await labour.GetDefaultsAsync(project.Id, cancellationToken)).Current;
         var defaults = new SetLabourDefaultsRequest { Workers = input.Workers, DailyPay = input.DailyPay };
         return (new LabourArgs(project.Id, null, null, defaults),

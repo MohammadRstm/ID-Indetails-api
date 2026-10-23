@@ -145,6 +145,7 @@ public sealed class ProposeExchangeRateTool(IBillingSettingsService settings) : 
     protected override async Task<(ExchangeRateArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         ExchangeRateInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
+        MoneyText.RequireTyped(context, input.RatePerUsd);
         var currency = input.Currency.Trim().ToUpperInvariant();
         var latest = (await settings.ListExchangeRatesAsync(new ExchangeRateListQuery { Currency = currency }, cancellationToken))
             .OrderByDescending(r => r.EffectiveFrom).FirstOrDefault();
@@ -218,6 +219,7 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
     protected override async Task<(ProjectMoneyArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         ProjectMoneyInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
+        MoneyText.RequireTyped(context, input.Revenue, input.ProjectFee, input.MaterialMarkup);
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
         var money = project.Money ?? throw new ProtonToolInputException("The user can't see this project's money.");
         if (money.IsLocked)
@@ -360,6 +362,7 @@ public sealed class ProposeOverheadTool(IOverheadService overhead) : ProtonActio
     {
         var name = MoneyText.Clean(input.Name);
         var currency = input.Currency?.Trim().ToUpperInvariant();
+        MoneyText.RequireTyped(context, input.Amount);
         switch (input.Step)
         {
             case ProtonOverheadStep.AddGroup or ProtonOverheadStep.RenameGroup or ProtonOverheadStep.RemoveGroup:

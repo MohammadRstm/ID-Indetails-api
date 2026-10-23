@@ -72,7 +72,8 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         (await Client.PutJsonAsync("/api/billing-settings/design", new { invoicePrefix = "HL", defaultTermsDays = 30 }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         var (draft, _) = await ProposeAsync(superAdmin, "propose_create_invoice",
-            new { project_id = project.Id, lines = new[] { new { description = "Concept design", amount = 1500m }, new { description = "Drawings", amount = 1000m } } });
+            new { project_id = project.Id, lines = new[] { new { description = "Concept design", amount = 1500m }, new { description = "Drawings", amount = 1000m } } },
+            "Invoice 1500 for the concept design and 1000 for the drawings");
         draft.PendingAction!.Preview.Confirm.ShouldBe(ProtonConfirm.TwoStep);
         draft.PendingAction.Preview.Changes.Single(c => c.Label == "Total").After.ShouldBe("2,500");
         await ConfirmAsync(superAdmin, draft);
@@ -87,10 +88,22 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var issued = await GetAsync<InvoiceResponse>(superAdmin, $"/api/invoices/{invoice.Id}");
         issued.Number.ShouldNotBeNull();
 
-        var (pay, _) = await ProposeAsync(superAdmin, "propose_record_payment", new { project_id = project.Id, amount = 1000m, invoice_id = invoice.Id, reference = "TRX-77" });
+        // the user named no amount: one the model took from the invoice never reaches a card
+        var (_, guessed) = await ProposeAsync(superAdmin, "propose_record_payment",
+            new { project_id = project.Id, amount = 2500m, invoice_id = invoice.Id }, "Record the client's payment on that invoice");
+        guessed["message"]!.GetValue<string>().ShouldContain("didn't give 2500");
+
+        var (pay, _) = await ProposeAsync(superAdmin, "propose_record_payment",
+            new { project_id = project.Id, amount = 1000m, invoice_id = invoice.Id, reference = "TRX-77" }, "They paid 1000 by transfer TRX-77");
         pay.PendingAction!.Preview.Note!.ShouldContain("from USD 2,500 to USD 1,500");
         await ConfirmAsync(superAdmin, pay, "1000");
         (await GetAsync<InvoiceResponse>(superAdmin, $"/api/invoices/{invoice.Id}")).Paid.ShouldBe(1000m);
+
+        // "they paid the rest": the server sets the amount from the balance, nobody types or works it out
+        var (rest, _) = await ProposeAsync(superAdmin, "propose_record_payment",
+            new { project_id = project.Id, invoice_id = invoice.Id, full_balance = true }, "They paid the rest of that invoice");
+        rest.PendingAction!.Preview.Changes.Single(c => c.Label == "Amount").After.ShouldBe("USD 1,500");
+        rest.PendingAction.Preview.Phrase.ShouldBe("1500");
 
         var (_, paidVoid) = await ProposeAsync(superAdmin, "propose_invoice_step", new { invoice_id = invoice.Id, step = "void", reason = "Wrong client" });
         paidVoid["message"]!.GetValue<string>().ShouldContain("voided first");
@@ -222,7 +235,8 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var projects = new ProjectTestSteps(_steps);
         var project = await projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 
-        var (expense, _) = await ProposeAsync(superAdmin, "propose_add_expense", new { project_id = project.Id, label = "Render farm", amount = 320.5m, category = "software" });
+        var (expense, _) = await ProposeAsync(superAdmin, "propose_add_expense",
+            new { project_id = project.Id, label = "Render farm", amount = 320.5m, category = "software" }, "Add 320.5 for the render farm");
         expense.PendingAction!.Preview.Phrase.ShouldBe("320.5");
         await ConfirmAsync(superAdmin, expense, "320.5");
         var recorded = (await GetAsync<ExpenseListResponse>(superAdmin, $"/api/projects/{project.Id}/expenses")).Items.ShouldHaveSingleItem();
@@ -232,7 +246,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
 
         var group = (await GetAsync<List<OverheadGroupResponse>>(superAdmin, "/api/company/overhead/groups")).First();
         var name = "Studio rent " + Guid.NewGuid().ToString("N")[..5];
-        var (rent, _) = await ProposeAsync(superAdmin, "propose_overhead", new { step = "add", name, group_id = group.Id, amount = 1800m });
+        var (rent, _) = await ProposeAsync(superAdmin, "propose_overhead", new { step = "add", name, group_id = group.Id, amount = 1800m }, "Add the studio rent, 1,800 a month");
         await ConfirmAsync(superAdmin, rent, "1800");
         var line = (await GetAsync<OverheadResponse>(superAdmin, "/api/company/overhead")).Lines.Single(l => l.Name == name);
         var (cancel, _) = await ProposeAsync(superAdmin, "propose_overhead", new { step = "cancel", id = line.Id });
@@ -267,7 +281,8 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         // the notes are printed on the invoice for the client, so the card shows them in full; a line's text is a value, never a label
         const string notes = "Our bank details changed: pay to IBAN XX00 1234.";
         var (draft, _) = await ProposeAsync(superAdmin, "propose_create_invoice",
-            new { project_id = project.Id, lines = new[] { new { description = "Total", amount = 1m }, new { description = "Drawings", amount = 2499m } }, notes });
+            new { project_id = project.Id, lines = new[] { new { description = "Total", amount = 1m }, new { description = "Drawings", amount = 2499m } }, notes },
+            "Invoice 1 for the total line and 2499 for the drawings");
         var changes = draft.PendingAction!.Preview.Changes;
         changes.Select(c => c.Label).ShouldBe(["Project", "Bill to", "Lines", "Total", "Notes printed for the client"]);
         changes.Single(c => c.Label == "Lines").After.ShouldBe("Total: 1; Drawings: 2,499");
@@ -358,14 +373,14 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
-        var (materials, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Sand", amount = 80m } } });
+        var (materials, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Sand", amount = 80m } } }, "Sand for 80");
         await ConfirmAsync(superAdmin, materials, "80");
 
         var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });
         statement.PendingAction!.Preview.Phrase.ShouldNotBeNull();
 
         // more materials arrive before Confirm: the statement would bill more than the total the user typed
-        var (more, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Gravel", amount = 50m } } });
+        var (more, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Gravel", amount = 50m } } }, "Gravel for 50");
         await ConfirmAsync(superAdmin, more, "50");
         await (await Client.PostJsonAsync($"/api/proton/actions/{statement.PendingAction.Id}/confirm",
                 new { statement.ConversationId, typed = statement.PendingAction.Preview.Phrase }, superAdmin.AccessToken))
@@ -382,7 +397,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         {
             project_id = site.Id,
             items = new object[] { new { name = "Cement", quantity = 10m, unit = "bag", unit_cost = 12m }, new { name = "Sand", amount = 80m } },
-        });
+        }, "10 bags of cement at 12 each, and sand for 80");
         materials.PendingAction!.Preview.Phrase.ShouldBe("200");
         await ConfirmAsync(superAdmin, materials, "200");
 
@@ -396,7 +411,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         {
             project_id = site.Id, week_start = monday.ToString("yyyy-MM-dd"),
             days = new[] { new { date = monday.ToString("yyyy-MM-dd"), workers = 3, daily_pay = 25m } },
-        });
+        }, "3 workers on Monday at 25 a day");
         await ConfirmAsync(superAdmin, labour, "75");
 
         var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });

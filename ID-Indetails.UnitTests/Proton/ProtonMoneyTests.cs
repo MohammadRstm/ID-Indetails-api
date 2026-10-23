@@ -111,6 +111,29 @@ public class ProtonMoneyTests
     }
 
     [Fact]
+    public void Typed_amounts_are_read_as_people_write_them()
+        => MoneyText.TypedFigures("Karim paid $1,500 and 2.5k, rent is 4.5m LBP, markup 15%, 2 million later; 10 months on, 320.5 more")
+            .ShouldBe([1500m, 2500m, 4_500_000m, 15m, 2_000_000m, 10m, 320.5m]);
+
+    /// <summary>
+    /// Typing the card's amount only proves it was read: an amount the model took from an invoice or a note, or worked
+    /// out, never reaches a card.
+    /// </summary>
+    [Fact]
+    public void A_money_card_takes_only_amounts_the_user_typed()
+    {
+        var context = new ProtonToolContext(
+            new ClaimsPrincipal(), new UserAccess(1, RoleCodes.SuperAdmin, null, [], false, DomainCodes.All),
+            Mock.Of<IAuthorizationService>(), Mock.Of<IServiceProvider>(), DateOnly.FromDateTime(Now), DayOfWeek.Monday)
+        {
+            TypedText = "Record Karim's payment of 4,000 for the kitchen invoice",
+        };
+
+        Should.NotThrow(() => MoneyText.RequireTyped(context, 4000m, null));
+        Should.Throw<ProtonToolInputException>(() => MoneyText.RequireTyped(context, 12000m)).Message.ShouldContain("didn't give 12000");
+    }
+
+    [Fact]
     public void An_unconverted_cost_says_its_currency_and_source()
         => ProtonAnalysis.Unconverted([new UnconvertedCostResponse(CostSource.GroundLabour, "LBP", 4_500_000m), new UnconvertedCostResponse(CostSource.Expenses, "LBP", 12.5m)])
             .ShouldBe(["4500000.00 LBP (ground labour)", "12.50 LBP (expenses)"]);
