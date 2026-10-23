@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Models;
@@ -22,6 +23,13 @@ public interface IPayrollInputs
     /// <summary>Each person's working days over time: the company policies with their own schedules, by user id.</summary>
     Task<IReadOnlyDictionary<long, PersonCalendar>> CalendarsAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
 
-    /// <summary>One entry per person and month, in that order; each source is loaded once for everyone and every month.</summary>
+    /// <summary>The roles each person held over time (see <c>Business/Pay/RoleHistory</c>), from their recorded role changes.</summary>
+    Task<IReadOnlyDictionary<long, RoleHistory>> RoleHistoriesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One entry per person and month, in that order; each source is loaded once for everyone and every month. A month
+    /// they were an admin or super admin on any day is paid as a fixed salary (<see cref="RoleHistory.FixedSalaryMonth"/>),
+    /// whatever their role is now.
+    /// </summary>
     Task<IReadOnlyList<PersonMonth>> ForAsync(IReadOnlyList<User> people, IReadOnlyList<DateOnly> months, CancellationToken cancellationToken = default);
 }

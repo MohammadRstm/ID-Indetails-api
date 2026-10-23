@@ -28,7 +28,7 @@ to act as another user, no secret in the repositories or their history.
 
 | # | Finding | Status |
 |---|---|---|
-| M1 | A super admin's salary could be worked out from project labour cost (their logged hours were priced), and was counted twice (projects and company overview). | **Fixed:** their time costs projects nothing; their salary stays a company cost. |
+| M1 | A super admin's salary could be worked out from project labour cost (their logged hours were priced), and was counted twice (projects and company overview). | **Fixed:** their time costs projects nothing; their salary stays a company cost. Since 23 Oct 2026 this goes by the role held in the month worked, not the role today. |
 | M2 | Shared task-comment cards showed a colleague's entry length to the whole team chat (breaks "colleagues' hours stay private"). | **Fixed:** length and attachment only for readers who may read the entry. |
 | M3 | One permission of the other domain switches on all of a person's general permissions there. | **Open (kept for launch, your decision):** documented in `authorization.md`; the client never offers other-domain permissions. Plan: domain-aware permissions. |
 | M4 | CSV formula injection in the work-entries export (a description like `=HYPERLINK(...)`). | **Fixed:** the export's CSV helper guards cells like the others. |
@@ -63,7 +63,6 @@ Change password/email checked the current password without a strict limit (now 1
 - Uploaded photos keep EXIF data (location).
 - Framework 404/405/415 bodies aren't in the uniform contract; logs are plain text without scopes.
 - Activity feed counts the whole table for super admins; some dashboards load full history (fine at launch volume).
-- Super admins' work is priced at 0 by their role today, not their role on the day the work was logged: someone promoted to super admin stops costing their past projects (rare; accepted).
 - nginx still resolves the API once at start: `restart: true` covers restarts made by compose, not ones Docker makes by itself after a crash (the API recovers; `docker compose restart web` clears the 502s). Monitoring catches it.
 - Caddy's `encode` compresses API answers too; nothing secret is reflected next to user input, so BREACH-style attacks don't apply today.
 - Sign-in and forgot-password look accounts up by any address with an `@` (not the strict format), so addresses saved before the stricter rule still sign in.

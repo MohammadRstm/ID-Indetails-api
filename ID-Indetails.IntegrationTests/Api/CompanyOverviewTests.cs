@@ -1,8 +1,10 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Company;
+using ID_Indetails.api.DTO.Response.Employees;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Finance;
+using ID_Indetails.api.DTO.Response.Payroll;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using MySqlConnector;
@@ -142,6 +144,63 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // no project carries it: the businesses' costs don't move
         march.Domains.ShouldAllBe(d => d.Cost == 0m);
+    }
+
+    [Fact]
+    public async Task A_promotion_makes_its_month_a_fixed_salary_and_leaves_the_months_before_alone()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await _steps.SetJoinedOnAsync(designer.User.Id, "2026-01-01");
+        // 1,600 a month is 10 an hour in February 2026 (20 working days of 8 paid hours).
+        (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
+        const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
+            "VALUES (@u, @p, 'Drawings', @start, @end, UTC_TIMESTAMP(3))";
+        // 6 hours on Tuesday 10 February (08:00-14:00 in Beirut) cost 60, plus 10 for the paid hour of break.
+        await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", project.Id), ("@start", "2026-02-10 06:00:00"), ("@end", "2026-02-10 12:00:00"));
+
+        async Task<decimal> LabourAsync()
+            => (await OkAsync<ProjectResponse>(Client.GetAsync($"/api/projects/{project.Id}", superAdmin.AccessToken))).Money!.Cost.Labour;
+        Task<CompanyOverviewResponse> FebruaryAsync()
+            => OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-02-01&to=2026-02-28", superAdmin.AccessToken));
+        async Task<SalaryRowResponse> FebruarySalaryAsync()
+            => (await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{designer.User.Id}?month=2026-02", superAdmin.AccessToken))).Salary;
+
+        (await LabourAsync()).ShouldBe(70m);
+        var before = await FebruaryAsync();
+        var salaryBefore = await FebruarySalaryAsync();
+        salaryBefore.TracksHours.ShouldBeTrue();
+
+        // Promoted today: the caller is told their pay is a fixed salary from the first of this month, starting from the
+        // pay in force. February was worked as an employee, so the project, the company and Salaries keep it as it was.
+        var promoted = await OkAsync<EmployeeResponse>(Client.PutJsonAsync($"/api/employees/{designer.User.Id}/role",
+            new { role = RoleCodes.Admin }, superAdmin.AccessToken));
+        promoted.FixedPayFrom.ShouldNotBeNull().Day.ShouldBe(1);
+        promoted.CurrentPay.ShouldNotBeNull().Amount.ShouldBe(1600m);
+        (await LabourAsync()).ShouldBe(70m);
+        var after = await FebruaryAsync();
+        after.AdminSalaries.ShouldBe(before.AdminSalaries);
+        after.Domains.Single(d => d.Domain == DomainCodes.Design).Cost.ShouldBe(70m);
+        var salaryAfter = await FebruarySalaryAsync();
+        salaryAfter.TracksHours.ShouldBeTrue();
+        salaryAfter.Total.ShouldBe(salaryBefore.Total);
+
+        // Promoted on Monday 16 February instead (the change the API recorded, moved back): all of February is a fixed
+        // salary, so its hours cost the project nothing, the whole 1,600 is a company cost, and Salaries pays it without
+        // counting hours.
+        const string moveSql = "UPDATE activity_events SET occurred_at = @at WHERE kind = @kind AND subject_type = 'user' AND subject_id = @u";
+        await ExecuteAsync(moveSql, ("@at", "2026-02-16 08:00:00"), ("@kind", ActivityEventKinds.RoleChanged), ("@u", designer.User.Id));
+        (await LabourAsync()).ShouldBe(0m);
+        (await FebruaryAsync()).AdminSalaries.ShouldBe(before.AdminSalaries + 1600m);
+        var fixedFebruary = await FebruarySalaryAsync();
+        fixedFebruary.TracksHours.ShouldBeFalse();
+        fixedFebruary.Total.ShouldBe(1600m);
+
+        // back to today, so the other tests' months keep only their own admins
+        await ExecuteAsync(moveSql, ("@at", DateTime.UtcNow), ("@kind", ActivityEventKinds.RoleChanged), ("@u", designer.User.Id));
     }
 
     [Fact]
