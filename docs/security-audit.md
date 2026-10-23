@@ -28,7 +28,7 @@ to act as another user, no secret in the repositories or their history.
 
 | # | Finding | Status |
 |---|---|---|
-| M1 | A super admin's salary could be worked out from project labour cost (their logged hours were priced), and was counted twice (projects and company overview). | **Fixed:** their time costs projects nothing; their salary stays a company cost. Since 23 Oct 2026 this goes by the role held on the day worked, not the role today. |
+| M1 | A super admin's salary could be worked out from project labour cost (their logged hours were priced), and was counted twice (projects and company overview). | **Fixed:** their time costs projects nothing; their salary stays a company cost. Since 23 Oct 2026 this goes by the role held in the month worked, not the role today. |
 | M2 | Shared task-comment cards showed a colleague's entry length to the whole team chat (breaks "colleagues' hours stay private"). | **Fixed:** length and attachment only for readers who may read the entry. |
 | M3 | One permission of the other domain switches on all of a person's general permissions there. | **Open (kept for launch, your decision):** documented in `authorization.md`; the client never offers other-domain permissions. Plan: domain-aware permissions. |
 | M4 | CSV formula injection in the work-entries export (a description like `=HYPERLINK(...)`). | **Fixed:** the export's CSV helper guards cells like the others. |
