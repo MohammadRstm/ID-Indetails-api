@@ -9,6 +9,7 @@ using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.DTO.Response.Materials;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Proton;
 using ID_Indetails.api.DTO.Response.Statements;
@@ -143,6 +144,60 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         settings.ReminderFirstAfterDays.ShouldBe(2);
         settings.Iban.ShouldBe(iban);
         settings.BankAccount.ShouldBe("001-77-123456");
+    }
+
+    /// <summary>
+    /// Regression: an update sent only what the model mentioned, and the service (which replaces the whole material, as
+    /// the app's form sends it) cleared the rest. And a change made in the app between the card and Confirm was
+    /// overwritten, for a material as for a labour week.
+    /// </summary>
+    [Fact]
+    public async Task A_correction_changes_only_what_was_said_and_never_overwrites_a_newer_change()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var materials = $"/api/projects/{site.Id}/materials";
+        (await Client.PostJsonAsync(materials,
+                new { items = new[] { new { name = "Cement", quantity = 10m, unit = "bag", unitCost = 12m, supplier = "Holcim", note = "Grey" } } }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var cement = (await GetAsync<MaterialListResponse>(superAdmin, materials)).Items.ShouldHaveSingleItem();
+
+        var (fix, _) = await ProposeAsync(superAdmin, "propose_material_step",
+            new { project_id = site.Id, material_id = cement.Id, step = "update", material = new { quantity = 12m } }, "It was 12 bags");
+        var changes = fix.PendingAction!.Preview.Changes;
+        changes.Select(c => c.Label).ShouldBe(["Quantity", "Cost"]);
+        changes.Single(c => c.Label == "Cost").After.ShouldBe("USD 144");
+        await ConfirmAsync(superAdmin, fix);
+        var corrected = (await GetAsync<MaterialListResponse>(superAdmin, materials)).Items.ShouldHaveSingleItem();
+        corrected.Quantity.ShouldBe(12m);
+        corrected.Cost.ShouldBe(144m);
+        corrected.Unit.ShouldBe("bag");
+        corrected.Supplier.ShouldBe("Holcim");
+        corrected.Note.ShouldBe("Grey");
+
+        // the note changes in the app before Confirm: the card would put the old one back, so it is refused
+        var (supplier, _) = await ProposeAsync(superAdmin, "propose_material_step",
+            new { project_id = site.Id, material_id = cement.Id, step = "update", material = new { supplier = "Sibline" } }, "It came from Sibline");
+        (await Client.PutJsonAsync($"{materials}/{cement.Id}",
+                new { name = "Cement", quantity = 12m, unit = "bag", unitCost = 12m, supplier = "Holcim", note = "White" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/proton/actions/{supplier.PendingAction!.Id}/confirm", new { supplier.ConversationId }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
+
+        // a week reported in the app after the card was made is refused by the labour service's own check, not replaced
+        var monday = WorkEntryTestSteps.CompanyDay(DateTime.UtcNow);
+        while (monday.DayOfWeek != DayOfWeek.Monday)
+        {
+            monday = monday.AddDays(-1);
+        }
+
+        var day = monday.ToString("yyyy-MM-dd");
+        var (week, _) = await ProposeAsync(superAdmin, "propose_submit_labour_week",
+            new { project_id = site.Id, week_start = day, days = new[] { new { date = day, workers = 3, daily_pay = 25m } } }, "3 workers at 25 on Monday");
+        (await Client.PutJsonAsync($"/api/projects/{site.Id}/labour-weeks/{day}", new { days = new[] { new { date = day, workers = 4, dailyPay = 25m } } }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/proton/actions/{week.PendingAction!.Id}/confirm", new { week.ConversationId, typed = "75" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(409, ErrorCodes.LabourWeekChanged);
     }
 
     [Fact]

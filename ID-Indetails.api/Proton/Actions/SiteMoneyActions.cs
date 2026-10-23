@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using ID_Indetails.api.Business.Materials;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Billing;
@@ -149,7 +150,31 @@ public sealed record MaterialInput
     public string? Note { get; init; }
 }
 
-public sealed record MaterialArgs(long ProjectId, long? MaterialId, AddMaterialsRequest? Add, MaterialEntryRequest? Entry, SetMaterialPriceRequest? Price);
+/// <summary>A change to a material: only the fields the user named; the rest stay as they are.</summary>
+public sealed record MaterialChangeInput
+{
+    public string? Name { get; init; }
+
+    public decimal? Quantity { get; init; }
+
+    [Description("An empty string removes it.")]
+    public string? Unit { get; init; }
+
+    public decimal? UnitCost { get; init; }
+
+    [Description("The total cost, when the user gave a total rather than a unit cost.")]
+    public decimal? Amount { get; init; }
+
+    [Description("An empty string removes it.")]
+    public string? Supplier { get; init; }
+
+    [Description("An empty string removes it.")]
+    public string? Note { get; init; }
+}
+
+/// <param name="Before">For an update: the material as the card was made from it. If it changed since, the update is refused.</param>
+public sealed record MaterialArgs(
+    long ProjectId, long? MaterialId, AddMaterialsRequest? Add, MaterialEntryRequest? Entry, SetMaterialPriceRequest? Price, MaterialEntryRequest? Before = null);
 
 public sealed record AddMaterialsInput : ProtonActionInput
 {
@@ -189,19 +214,21 @@ public sealed class ProposeAddMaterialsTool(IProjectService projects, IMaterialS
         }
 
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
+        // the cost is the app's own: quantity × unit cost when both are given, otherwise the total
         var items = input.Items.Select(i => new NewMaterialRequest
         {
             Name = i.Name.Trim(), Quantity = i.Quantity, Unit = MoneyText.Clean(i.Unit), UnitCost = i.UnitCost,
-            Amount = i.Amount ?? (i.Quantity * i.UnitCost), Supplier = MoneyText.Clean(i.Supplier), Note = MoneyText.Clean(i.Note),
+            Amount = i.Amount, Supplier = MoneyText.Clean(i.Supplier), Note = MoneyText.Clean(i.Note),
         }).ToList();
-        if (items.Any(i => i.Amount is null or <= 0))
+        var costs = items.Select(MaterialText.CostOf).ToList();
+        if (costs.Any(c => c <= 0))
         {
             throw new ProtonToolInputException("Each material needs a cost: quantity and unit cost, or a total.");
         }
 
-        var total = items.Sum(i => i.Amount!.Value);
-        var changes = items.Select(i => new ProtonChange(i.Name, null,
-            $"{(i.Quantity is { } q ? $"{q:0.##} {i.Unit} × {MoneyText.Amount(i.UnitCost ?? 0, null)} = " : "")}{MoneyText.Amount(i.Amount!.Value, "USD")}")).ToList();
+        var total = costs.Sum();
+        var changes = items.Select((i, n) => new ProtonChange(i.Name, null,
+            $"{(i.Quantity is { } q && i.UnitCost is { } unit ? $"{q:0.###} {i.Unit} × {MoneyText.Amount(unit, null)} = " : "")}{MoneyText.Amount(costs[n], "USD")}")).ToList();
         changes.Add(new ProtonChange("Total cost", null, MoneyText.Amount(total, "USD")));
         return (new MaterialArgs(project.Id, null, new AddMaterialsRequest { Items = items }, null, null),
             new ProtonPreview($"Record materials for {project.Title}", changes, "Charged to the client at the project's markup.",
@@ -235,8 +262,8 @@ public sealed record MaterialStepInput : ProtonActionInput
     [Description("update its details, delete it, or set_price for the client.")]
     public required ProtonMaterialStep Step { get; init; }
 
-    [Description("For update: the material as it should be.")]
-    public MaterialInput? Material { get; init; }
+    [Description("For update: only what changes; everything left out stays as it is.")]
+    public MaterialChangeInput? Material { get; init; }
 
     [Description("For set_price: the client's price; leave out to go back to the project's markup.")]
     public decimal? ClientPrice { get; init; }
@@ -282,15 +309,34 @@ public sealed class ProposeMaterialStepTool(IMaterialService materials) : Proton
         switch (input.Step)
         {
             case ProtonMaterialStep.Update:
-                var m = input.Material ?? throw new ProtonToolInputException("Give the material as it should be.");
-                var entry = new MaterialEntryRequest
+                var m = input.Material ?? throw new ProtonToolInputException("Say what changes on the material.");
+                // The update replaces the whole material, as the app's form sends it: start from the material as it is, so
+                // a field the user didn't mention keeps its value instead of being cleared.
+                var before = MaterialText.EntryOf(material);
+                var entry = before with
                 {
-                    Name = m.Name.Trim(), Quantity = m.Quantity, Unit = MoneyText.Clean(m.Unit), UnitCost = m.UnitCost,
-                    Amount = m.Amount ?? (m.Quantity * m.UnitCost), Supplier = MoneyText.Clean(m.Supplier), Note = MoneyText.Clean(m.Note),
+                    Name = MoneyText.Clean(m.Name) ?? before.Name,
+                    Quantity = m.Quantity ?? before.Quantity,
+                    Unit = m.Unit is null ? before.Unit : MoneyText.Clean(m.Unit),
+                    UnitCost = m.UnitCost ?? before.UnitCost,
+                    Supplier = m.Supplier is null ? before.Supplier : MoneyText.Clean(m.Supplier),
+                    Note = m.Note is null ? before.Note : MoneyText.Clean(m.Note),
                 };
-                return (new MaterialArgs(input.ProjectId, material.Id, null, entry, null),
-                    new ProtonPreview($"Correct the material {material.Name}",
-                        [new ProtonChange(entry.Name, $"{material.Name}: {cost}", MoneyText.Amount(entry.Amount ?? 0, material.Currency))]),
+                // a total given now counts; otherwise a lump-sum material keeps its total, and quantity × unit cost works out the rest
+                entry = entry with { Amount = m.Amount ?? (entry.Quantity is > 0 && entry.UnitCost is > 0 ? null : before.Amount) };
+                var edits = new List<ProtonChange>();
+                SettingsText.Compare(edits, "Type", before.Name, entry.Name);
+                SettingsText.Compare(edits, "Quantity", MaterialText.Quantity(before), MaterialText.Quantity(entry));
+                SettingsText.Compare(edits, "Cost", cost, MoneyText.Amount(MaterialText.CostOf(entry), material.Currency));
+                SettingsText.Compare(edits, "Supplier", before.Supplier ?? "none", entry.Supplier ?? "none");
+                SettingsText.Compare(edits, "Note", before.Note ?? "none", entry.Note ?? "none");
+                if (edits.Count == 0)
+                {
+                    throw new ProtonToolInputException("Nothing would change: say what should be different.");
+                }
+
+                return (new MaterialArgs(input.ProjectId, material.Id, null, entry, null, before),
+                    new ProtonPreview($"Correct the material {material.Name}", edits),
                     null);
             case ProtonMaterialStep.Delete:
                 await context.RequireAsync(Delete);
@@ -315,6 +361,14 @@ public sealed class ProposeMaterialStepTool(IMaterialService materials) : Proton
     {
         if (args.Entry is { } entry)
         {
+            // the card showed the material as it was: if it changed since, this would put back what someone else changed
+            var current = (await materials.ListAsync(args.ProjectId, new MaterialListQuery { PageSize = 200 }, cancellationToken)).Items
+                .FirstOrDefault(m => m.Id == args.MaterialId);
+            if (current is null || args.Before is null || MaterialText.EntryOf(current) != args.Before)
+            {
+                throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The material changed since Proton proposed this. Ask again.");
+            }
+
             var updated = await materials.UpdateAsync(args.ProjectId, args.MaterialId!.Value, entry, cancellationToken);
             return new ProtonActionDone($"Corrected {updated.Name}.", "material", updated.Id, []);
         }
@@ -330,6 +384,27 @@ public sealed class ProposeMaterialStepTool(IMaterialService materials) : Proton
         await materials.DeleteAsync(args.ProjectId, args.MaterialId!.Value, cancellationToken);
         return new ProtonActionDone("Deleted the material.", "material", args.MaterialId.Value, []);
     }
+}
+
+internal static class MaterialText
+{
+    /// <summary>A material as the update request carries it: quantity and unit cost when it has them, otherwise its total.</summary>
+    public static MaterialEntryRequest EntryOf(MaterialResponse m) => new()
+    {
+        Name = m.Name, Quantity = m.Quantity, Unit = m.Unit, UnitCost = m.UnitCost,
+        Amount = m.Quantity is > 0 && m.UnitCost is > 0 ? null : m.Cost,
+        Supplier = m.Supplier, Note = m.Note,
+    };
+
+    /// <summary>The cost the app will store for it, by its own rule (a total over quantity × unit cost sets the unit cost).</summary>
+    public static decimal CostOf(MaterialEntryRequest e)
+    {
+        var stored = MaterialRules.Normalise(new MaterialRules.Entry(e.Quantity, e.UnitCost, e.Amount));
+        return MaterialRules.Cost(stored.Quantity, stored.UnitCost, stored.Amount);
+    }
+
+    public static string Quantity(MaterialEntryRequest e)
+        => e.Quantity is { } q ? $"{q.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)} {e.Unit}".Trim() : "none";
 }
 
 public sealed record LabourDayInput
@@ -381,10 +456,12 @@ public sealed class ProposeSubmitLabourWeekTool(IProjectService projects, ILabou
     {
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
         var current = await labour.GetWeekAsync(project.Id, input.WeekStart, cancellationToken);
+        // the week's version as the card read it: the service refuses (409) if the week changed before Confirm
         var week = new SubmitLabourWeekRequest
         {
             Days = input.Days.Select(d => new LabourDayRequest { Date = d.Date, Workers = d.Workers, DailyPay = d.DailyPay }).ToList(),
             Note = MoneyText.Clean(input.Note),
+            ExpectedVersion = current.Version,
         };
         var total = week.Days.Sum(d => d.Workers * d.DailyPay);
         var changes = week.Days.Select(d => new ProtonChange(ProjectText.Date(d.Date), null,
