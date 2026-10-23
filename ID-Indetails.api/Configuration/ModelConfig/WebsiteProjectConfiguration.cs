@@ -13,7 +13,6 @@ public class WebsiteProjectConfiguration : IEntityTypeConfiguration<WebsiteProje
     {
         builder.ToTable("website_projects", t =>
         {
-            t.HasCheckConstraint("ck_website_projects_type", SnakeCaseEnum.CheckSql<WebsiteProjectType>("type"));
             t.HasCheckConstraint("ck_website_projects_status", SnakeCaseEnum.CheckSql<WebsiteProjectStatus>("status"));
             // an unlinked project carries its own status and year
             t.HasCheckConstraint("ck_website_projects_follows_link", "`project_id` IS NOT NULL OR (`status` IS NOT NULL AND `year` IS NOT NULL)");
@@ -27,6 +26,7 @@ public class WebsiteProjectConfiguration : IEntityTypeConfiguration<WebsiteProje
 
         builder.Property(x => x.Slug).IsRequired().HasMaxLength(WebsiteRules.MaxSlugLength);
         builder.Property(x => x.Title).IsRequired().HasMaxLength(WebsiteRules.MaxTitleLength);
+        builder.Property(x => x.Type).IsRequired().HasMaxLength(WebsiteRules.MaxTypeLength);
         builder.Property(x => x.Client).HasMaxLength(WebsiteRules.MaxClientLength);
         builder.Property(x => x.City).HasMaxLength(WebsiteRules.MaxPlaceLength);
         builder.Property(x => x.Country).HasMaxLength(WebsiteRules.MaxPlaceLength);

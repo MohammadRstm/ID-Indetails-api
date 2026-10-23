@@ -40,7 +40,10 @@ public sealed class WebsiteProjectRequestValidator : AbstractValidator<WebsitePr
             .Required("The title", WebsiteRules.MaxTitleLength)
             .Must(t => t is null || WebsiteRules.SlugOf(t).Length > 0)
             .WithMessage("The name needs at least one Latin letter or digit: the project's page address is made from it.");
-        RuleFor(x => x.Type).IsInEnum().WithMessage("Choose villa, residential or hotel.");
+        RuleFor(x => x.Type)
+            .Required("The type", WebsiteRules.MaxTypeLength)
+            .Must(t => t is null || WebsiteRules.TypeKey(t).Length > 0)
+            .WithMessage("The type needs at least one Latin letter or digit.");
         RuleFor(x => x.Status).IsInEnum().WithMessage("Choose in progress or completed.");
         RuleFor(x => x.Status).NotNull().When(x => x.ProjectId is null).WithMessage("Choose a status, or link a system project to follow its status.");
         RuleFor(x => x.Year).InclusiveBetween(1900, 2100).WithMessage("The year must be between 1900 and 2100.");

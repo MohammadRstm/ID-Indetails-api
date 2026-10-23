@@ -11,7 +11,8 @@ public sealed record WebsiteProjectRequest
     public string Title { get; init; } = string.Empty;
 
 
-    public WebsiteProjectType Type { get; init; }
+    /// <summary>One of the suggested types or the caller's own; one already used with the same key is reused as it is.</summary>
+    public string Type { get; init; } = string.Empty;
 
     /// <summary>Null follows the linked project's status; required when there is no link.</summary>
     public WebsiteProjectStatus? Status { get; init; }

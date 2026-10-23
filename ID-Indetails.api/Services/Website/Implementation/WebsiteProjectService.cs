@@ -53,6 +53,7 @@ public sealed class WebsiteProjectService(
 
     public async Task DeleteAsync(long id, CancellationToken cancellationToken = default)
     {
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await website.ProjectAsync(id, cancellationToken) ?? throw new NotFoundException(NotFound);
         if (project.ConveyorOrder is not null)
         {
@@ -61,11 +62,12 @@ public sealed class WebsiteProjectService(
 
         website.Remove(project);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<WebsiteProjectsResponse> SetConveyorAsync(WebsiteConveyorRequest request, CancellationToken cancellationToken = default)
     {
-        var strip = await website.ConveyorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var chosen = (await website.ProjectsByIdAsync(request.ProjectIds, cancellationToken)).ToDictionary(p => p.Id);
         if (chosen.Count != request.ProjectIds.Count)
         {
@@ -78,17 +80,9 @@ public sealed class WebsiteProjectService(
                 ErrorCodes.WebsiteConveyorInvalid, $"\"{draft.Title}\" isn't published, so it can't be in the moving strip.");
         }
 
-        foreach (var project in strip)
-        {
-            project.ConveyorOrder = null;
-        }
-
-        for (var index = 0; index < request.ProjectIds.Count; index++)
-        {
-            chosen[request.ProjectIds[index]].ConveyorOrder = index + 1;
-        }
-
+        await ArrangeConveyorAsync(request.ProjectIds.Select(id => chosen[id]).ToList(), cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return await ListAsync(cancellationToken);
     }
 
@@ -196,7 +190,7 @@ public sealed class WebsiteProjectService(
 
         project.Slug = await SlugAsync(project, request.Title.Trim(), cancellationToken);
         project.Title = request.Title.Trim();
-        project.Type = request.Type;
+        project.Type = await TypeAsync(project, request.Type, cancellationToken);
         project.Status = request.Status;
         project.Year = request.Year;
         project.Client = Clean(request.Client);
@@ -247,6 +241,17 @@ public sealed class WebsiteProjectService(
     }
 
     /// <summary>
+    /// The type as typed and tidied, or the one another project already has with the same key, so "villa" and "Villa"
+    /// stay one type on the website.
+    /// </summary>
+    private async Task<string> TypeAsync(WebsiteProject project, string typed, CancellationToken cancellationToken)
+    {
+        var type = WebsiteRules.CleanType(typed);
+        var key = WebsiteRules.TypeKey(type);
+        return (await website.ProjectTypesAsync(project.Id, cancellationToken)).FirstOrDefault(t => WebsiteRules.TypeKey(t) == key) ?? type;
+    }
+
+    /// <summary>
     /// The page address from the name: kept while the name makes the same one, otherwise the next free one
     /// ("villa-rizk", then "villa-rizk-2").
     /// </summary>
@@ -279,10 +284,25 @@ public sealed class WebsiteProjectService(
     private async Task LeaveConveyorAsync(WebsiteProject project, CancellationToken cancellationToken)
     {
         var rest = (await website.ConveyorAsync(cancellationToken)).Where(p => p.Id != project.Id).ToList();
-        project.ConveyorOrder = null;
-        for (var index = 0; index < rest.Count; index++)
+        await ArrangeConveyorAsync(rest, cancellationToken);
+    }
+
+    /// <summary>
+    /// Puts these projects in the strip, in this order, and takes the others out. Each place is held by one project
+    /// at most, so the strip is emptied and saved first: numbered in one save, a project could be given a place another
+    /// still holds (two swapped), which the database refuses. Callers save the numbers, in their transaction.
+    /// </summary>
+    private async Task ArrangeConveyorAsync(IReadOnlyList<WebsiteProject> order, CancellationToken cancellationToken)
+    {
+        foreach (var project in await website.ConveyorAsync(cancellationToken))
         {
-            rest[index].ConveyorOrder = index + 1;
+            project.ConveyorOrder = null;
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        for (var index = 0; index < order.Count; index++)
+        {
+            order[index].ConveyorOrder = index + 1;
         }
     }
 

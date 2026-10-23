@@ -15,6 +15,7 @@ public static partial class WebsiteRules
     public const int MaxConveyor = 20;
 
     public const int MaxTitleLength = 150;
+    public const int MaxTypeLength = 60;
     public const int MaxSlugLength = 100;
     public const int MaxClientLength = 150;
     public const int MaxPlaceLength = 100;
@@ -94,12 +95,25 @@ public static partial class WebsiteRules
     /// <summary>"in-progress" or "completed", as the public website reads it.</summary>
     public static string PublicStatus(WebsiteProjectStatus status) => status == WebsiteProjectStatus.Completed ? "completed" : "in-progress";
 
-    /// <summary>"villa", "residential" or "hotel".</summary>
-    public static string PublicType(WebsiteProjectType type) => type.ToString().ToLowerInvariant();
+    /// <summary>A type as typed, tidied: trimmed, single spaces and a capital first letter ("beach  house" is "Beach house").</summary>
+    public static string CleanType(string type)
+    {
+        var tidy = Spaces().Replace(type.Trim(), " ");
+        return tidy.Length == 0 ? tidy : char.ToUpperInvariant(tidy[0]) + tidy[1..];
+    }
+
+    /// <summary>
+    /// The key the public site filters by, made like a page address ("Restaurant & café" is "restaurant-cafe"). Two
+    /// types with the same key are one type.
+    /// </summary>
+    public static string TypeKey(string type) => SlugOf(type);
 
     [GeneratedRegex("[^a-z0-9]+")]
     private static partial Regex NotSlug();
 
     [GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)*$")]
     private static partial Regex Slug();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Spaces();
 }
