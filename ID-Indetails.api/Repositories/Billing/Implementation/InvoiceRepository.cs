@@ -47,6 +47,16 @@ public sealed class InvoiceRepository(IdIndetailsDbContext db) : IInvoiceReposit
             query = query.Where(r => r.Project.DomainCode == domain);
         }
 
+        if (search.IssuedFrom is { } issuedFrom)
+        {
+            query = query.Where(r => r.Invoice.IssuedAt >= issuedFrom);
+        }
+
+        if (search.IssuedBefore is { } issuedBefore)
+        {
+            query = query.Where(r => r.Invoice.IssuedAt < issuedBefore);
+        }
+
         var open = query.Where(r => r.Invoice.VoidedAt == null && r.Invoice.IssuedAt != null);
         query = search.Status switch
         {

@@ -10,7 +10,9 @@ public sealed record PaymentSearch(
     bool IncludeVoided,
     string? Domain,
     int Page,
-    int PageSize);
+    int PageSize,
+    DateOnly? ReceivedFrom = null,
+    DateOnly? ReceivedTo = null);
 
 public interface IPaymentRepository
 {

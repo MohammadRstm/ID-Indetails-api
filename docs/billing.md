@@ -29,7 +29,7 @@ Rates are append-only, like pay history (`Business/Billing/ExchangeRateRules.cs`
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/invoices?projectId=&clientId=&status=&overdue=&domain=&page=1&pageSize=25` | `financial:view` | Newest first. `status` is `draft`, `sent`, `partial`, `paid` or `void` |
+| `GET /api/invoices?projectId=&clientId=&status=&overdue=&domain=&issuedFrom=&issuedTo=&page=1&pageSize=25` | `financial:view` | Newest first. `status` is `draft`, `sent`, `partial`, `paid` or `void`. `issuedFrom` and `issuedTo` (company days, both included) keep the invoices issued in that range, so drafts drop out |
 | `GET /api/invoices/{id}` | `financial:view` | With lines, deliveries and who drafted it (`createdBy`) |
 | `POST /api/projects/{id}/invoices` | `invoice:create` | A new draft: `{ lines: [{ description, amount }], termsDays, notes, billToName, billToContact }` |
 | `PUT /api/invoices/{id}` | `invoice:create` | Replaces a draft's lines and details |
@@ -83,7 +83,7 @@ In a domain whose billing settings turn them on, the hourly run emails clients r
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/payments?projectId=&clientId=&invoiceId=&includeVoided=&domain=&page=1&pageSize=25` | `financial:view` | Most recently received first. Voided payments only with `includeVoided=true` |
+| `GET /api/payments?projectId=&clientId=&invoiceId=&includeVoided=&domain=&receivedFrom=&receivedTo=&page=1&pageSize=25` | `financial:view` | Most recently received first. Voided payments only with `includeVoided=true`. `receivedFrom` and `receivedTo` (both included) keep the payments received in that range |
 | `GET /api/payments/{id}` | `financial:view` | A payment |
 | `POST /api/projects/{id}/payments` | `payment:record` | `{ amount, currency, fxRate, receivedOn, method, reference, note, invoiceId, isInitial }` |
 | `PUT /api/payments/{id}/invoice` | `payment:record` | `{ invoiceId }` applies a payment on account to an issued invoice |

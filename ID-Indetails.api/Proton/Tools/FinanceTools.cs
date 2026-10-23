@@ -4,12 +4,14 @@ using ID_Indetails.api.Business.Proton;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Finance;
+using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Billing.Abstraction;
+using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Validators.Finance;
@@ -365,7 +367,16 @@ public sealed record InvoicesInput
 
     public ProtonDomain? Domain { get; init; }
 
-    [Description("Rows to return, 1 to 25 (default 15), newest first.")]
+    [Description("Only invoices issued in this period (drafts have no issue date). Leave out for any date.")]
+    public ProtonPeriod? IssuedIn { get; init; }
+
+    [Description("First day, with issued_in custom.")]
+    public DateOnly? From { get; init; }
+
+    [Description("Last day, with issued_in custom.")]
+    public DateOnly? To { get; init; }
+
+    [Description("Rows to return, 1 to 25 (default 15), newest first. The dataset holds up to 100, for add_up and present_data.")]
     public int? Limit { get; init; }
 }
 
@@ -387,21 +398,76 @@ public sealed record InvoiceRow(
 
 public sealed record InvoiceList(int Total, int Shown, IReadOnlyList<InvoiceRow> Invoices);
 
+/// <summary>Invoices and payments as datasets: every matching row up to a table's worth, for add_up and present_data.</summary>
+internal static class BillingDatasets
+{
+    /// <summary>
+    /// The total column is what was invoiced, as the app counts it: a draft or a voided invoice has none, and only USD
+    /// amounts go in a USD column (an invoice in another currency is named in the notes instead).
+    /// </summary>
+    public static Ui.ProtonDataset Invoices(IReadOnlyList<InvoiceSummaryResponse> rows, int total, DayRange? issued, IClock clock)
+    {
+        static bool Invoiced(InvoiceSummaryResponse i) => i.Status is not InvoiceStatus.Draft and not InvoiceStatus.Void && i.Currency == "USD";
+        var other = rows.Count(i => i.Currency != "USD");
+        var notes = new List<string>();
+        if (rows.Any(i => i.Status is InvoiceStatus.Draft or InvoiceStatus.Void))
+        {
+            notes.Add("Drafts and voided invoices aren't invoiced: they have no total or balance here.");
+        }
+
+        if (other > 0)
+        {
+            notes.Add($"{other} invoice(s) in another currency have no total or balance here.");
+        }
+
+        var usd = (string key, string label) => Ui.ProtonDatasets.Figure(key, label, Ui.ProtonUnit.Usd);
+        return new Ui.ProtonDataset(
+            "Invoices",
+            [Ui.ProtonDatasets.Label("invoice", "Invoice"), Ui.ProtonDatasets.Label("project", "Project"), Ui.ProtonDatasets.Label("client", "Client"),
+                Ui.ProtonDatasets.Label("status", "Status"), Ui.ProtonDatasets.Label("issued", "Issued", Ui.ProtonColumnKind.Date),
+                Ui.ProtonDatasets.Label("due", "Due", Ui.ProtonColumnKind.Date), usd("total", "Total"), usd("paid", "Paid"), usd("balance", "Balance")],
+            rows.Take(Ui.ProtonDatasets.MaxRows).Select(i => Ui.ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Project, i.Project.Id, i.Project.Title, i.Domain),
+                Ui.ProtonCell.Of(i.Number ?? "Draft"), Ui.ProtonCell.Of(i.Project.Title), Ui.ProtonCell.Of(i.Client.DisplayName),
+                Ui.ProtonCell.Of(i.Status.ToString()), Ui.ProtonCell.Of(i.IssuedAt is { } at ? clock.ToCompanyDate(at) : null), Ui.ProtonCell.Of(i.DueOn),
+                Ui.ProtonCell.Of(Invoiced(i) ? i.Total : null), Ui.ProtonCell.Of(i.Paid), Ui.ProtonCell.Of(Invoiced(i) ? i.Balance : null))).ToList(),
+            issued is null ? null : Ui.ProtonDatasets.Period(issued),
+            total,
+            Notes: notes.Count > 0 ? notes : null);
+    }
+
+    public static Ui.ProtonDataset Payments(IReadOnlyList<PaymentResponse> rows, int total, DayRange? received)
+        => new(
+            "Payments",
+            [Ui.ProtonDatasets.Label("received", "Received", Ui.ProtonColumnKind.Date), Ui.ProtonDatasets.Label("project", "Project"),
+                Ui.ProtonDatasets.Label("client", "Client"), Ui.ProtonDatasets.Label("invoice", "Invoice"), Ui.ProtonDatasets.Label("method", "Method"),
+                Ui.ProtonDatasets.Figure("amount_usd", "Amount (USD)", Ui.ProtonUnit.Usd)],
+            rows.Take(Ui.ProtonDatasets.MaxRows).Select(p => Ui.ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Project, p.Project.Id, p.Project.Title, p.Domain),
+                Ui.ProtonCell.Of(p.ReceivedOn), Ui.ProtonCell.Of(p.Project.Title), Ui.ProtonCell.Of(p.Client.DisplayName),
+                Ui.ProtonCell.Of(p.InvoiceNumber ?? "On account"), Ui.ProtonCell.Of(p.Method.ToString()), Ui.ProtonCell.Of(p.AmountUsd))).ToList(),
+            received is null ? null : Ui.ProtonDatasets.Period(received),
+            total);
+}
+
 /// <summary>
 /// Invoices, as GET /api/invoices returns them. Paid is in USD; the balance is in the invoice's own currency.
 /// </summary>
-public sealed class ListInvoicesTool(IInvoiceService invoices) : ProtonTool<InvoicesInput>
+public sealed class ListInvoicesTool(IInvoiceService invoices, IClock clock) : ProtonTool<InvoicesInput>
 {
     public override string Name => "list_invoices";
 
     public override string Description =>
-        "Invoices with their status, totals, paid amount, balance and due dates, filtered by project, client, status or " +
-        "overdue. Total and balance are in the invoice's currency; paid_usd is in USD.";
+        "Invoices with their status, totals, paid amount, balance and due dates, filtered by project, client, status, " +
+        "overdue or the period they were issued in. Total and balance are in the invoice's currency; paid_usd is in USD. " +
+        "To total them, use add_up on the dataset.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<InvoicesController>(nameof(InvoicesController.List));
 
     protected override async Task<ProtonToolOutput> RunAsync(InvoicesInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
+        var issued = input.IssuedIn is null ? null : context.Period(input.IssuedIn, input.From, input.To, ProtonPeriod.ThisMonth, maxDays: 3 * 366);
+        // a table's worth is read so add_up can total every match; the model is shown the first few
         var query = new InvoiceListQuery
         {
             ProjectId = input.ProjectId,
@@ -409,12 +475,14 @@ public sealed class ListInvoicesTool(IInvoiceService invoices) : ProtonTool<Invo
             Status = input.Status,
             Overdue = input.Overdue,
             Domain = input.Domain.Code(),
-            PageSize = ProtonText.Limit(input.Limit, 15, 25),
+            IssuedFrom = issued?.From,
+            IssuedTo = issued?.To,
+            PageSize = Ui.ProtonDatasets.MaxRows,
         };
         await context.ValidateAsync(query, cancellationToken);
         var page = await invoices.ListAsync(query, cancellationToken);
 
-        var rows = page.Items.Select(i => new InvoiceRow(
+        var rows = page.Items.Take(ProtonText.Limit(input.Limit, 15, 25)).Select(i => new InvoiceRow(
             i.Id, i.Number, i.Domain,
             new ProtonNamed(i.Project.Id, i.Project.Title),
             new ProtonNamed(i.Client.Id, i.Client.DisplayName),
@@ -426,7 +494,11 @@ public sealed class ListInvoicesTool(IInvoiceService invoices) : ProtonTool<Invo
             rows.Select(r => new ProtonRef(ProtonRefType.Project, r.Project.Id, r.Project.Name, r.Domain))
                 .Concat(rows.Select(r => new ProtonRef(ProtonRefType.Client, r.Client.Id, r.Client.Name, r.Domain)))
                 .Distinct()
-                .ToList());
+                .ToList(),
+            issued)
+        {
+            Datasets = Ui.ProtonDatasets.WithRows(BillingDatasets.Invoices(page.Items, page.TotalCount, issued, clock)),
+        };
     }
 }
 
@@ -442,7 +514,16 @@ public sealed record PaymentsInput
 
     public ProtonDomain? Domain { get; init; }
 
-    [Description("Rows to return, 1 to 25 (default 15), newest first.")]
+    [Description("Only payments received in this period. Leave out for any date.")]
+    public ProtonPeriod? ReceivedIn { get; init; }
+
+    [Description("First day, with received_in custom.")]
+    public DateOnly? From { get; init; }
+
+    [Description("Last day, with received_in custom.")]
+    public DateOnly? To { get; init; }
+
+    [Description("Rows to return, 1 to 25 (default 15), newest first. The dataset holds up to 100, for add_up and present_data.")]
     public int? Limit { get; init; }
 }
 
@@ -467,12 +548,16 @@ public sealed class ListPaymentsTool(IPaymentService payments) : ProtonTool<Paym
 {
     public override string Name => "list_payments";
 
-    public override string Description => "Client payments received, newest first, by project, client or invoice, with their USD value.";
+    public override string Description =>
+        "Client payments received, newest first, by project, client, invoice or the period they arrived in, with their " +
+        "USD value. To total them, use add_up on the dataset.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<PaymentsController>(nameof(PaymentsController.List));
 
     protected override async Task<ProtonToolOutput> RunAsync(PaymentsInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
+        var received = input.ReceivedIn is null ? null : context.Period(input.ReceivedIn, input.From, input.To, ProtonPeriod.ThisMonth, maxDays: 3 * 366);
+        // a table's worth is read so add_up can total every match; the model is shown the first few
         var query = new PaymentListQuery
         {
             ProjectId = input.ProjectId,
@@ -480,20 +565,28 @@ public sealed class ListPaymentsTool(IPaymentService payments) : ProtonTool<Paym
             InvoiceId = input.InvoiceId,
             IncludeVoided = input.IncludeVoided,
             Domain = input.Domain.Code(),
-            PageSize = ProtonText.Limit(input.Limit, 15, 25),
+            ReceivedFrom = received?.From,
+            ReceivedTo = received?.To,
+            PageSize = Ui.ProtonDatasets.MaxRows,
         };
         await context.ValidateAsync(query, cancellationToken);
         var page = await payments.ListAsync(query, cancellationToken);
 
-        var rows = page.Items.Select(p => new PaymentRow(
+        var rows = page.Items.Take(ProtonText.Limit(input.Limit, 15, 25)).Select(p => new PaymentRow(
             p.Id, p.Domain,
             new ProtonNamed(p.Project.Id, p.Project.Title),
             new ProtonNamed(p.Client.Id, p.Client.DisplayName),
             p.InvoiceNumber, p.Amount, p.Currency, p.AmountUsd, p.ReceivedOn, p.Method,
             p.Reference, ProtonText.Cut(p.Note, 200), p.VoidedAt is not null)).ToList();
+        // a voided payment isn't money received: it stays out of what add_up can total
+        var live = page.Items.Where(p => p.VoidedAt is null).ToList();
         return new ProtonToolOutput(
             new PaymentList(page.TotalCount, rows.Count, rows),
-            rows.Select(r => new ProtonRef(ProtonRefType.Project, r.Project.Id, r.Project.Name, r.Domain)).Distinct().ToList());
+            rows.Select(r => new ProtonRef(ProtonRefType.Project, r.Project.Id, r.Project.Name, r.Domain)).Distinct().ToList(),
+            received)
+        {
+            Datasets = Ui.ProtonDatasets.WithRows(BillingDatasets.Payments(live, page.TotalCount - (page.Items.Count - live.Count), received)),
+        };
     }
 }
 

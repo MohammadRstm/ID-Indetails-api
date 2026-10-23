@@ -385,6 +385,33 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         fresh.ShouldContain("And the month before?");
     }
 
+    /// <summary>"What did they pay in March?": the list reads the month's payments and add_up totals them on the server.</summary>
+    [Fact]
+    public async Task A_months_payments_are_totalled_by_add_up_not_by_the_model()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 9000m);
+        foreach (var (amount, day) in new[] { (1200m, "2026-03-02"), (800.5m, "2026-03-31"), (5000m, "2026-04-01") })
+        {
+            (await Client.PostJsonAsync($"/api/projects/{project.Id}/payments", new { amount, currency = "USD", receivedOn = day }, superAdmin.AccessToken))
+                .IsSuccessStatusCode.ShouldBeTrue();
+        }
+
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("list_payments", new { project_id = project.Id, received_in = "custom", from = "2026-03-01", to = "2026-03-31", limit = 1 }),
+            FakeAnthropic.ToolUse("add_up", new { dataset = "d1", column = "amount_usd" }, id: "toolu_2"),
+            FakeAnthropic.Text("2,000.5 USD arrived in March."));
+
+        await OkAsync(AskAsync(superAdmin, "How much did they pay in March 2026?"));
+
+        Result(1)["data"]!["total"]!.GetValue<int>().ShouldBe(2);
+        Result(1)["data"]!["shown"]!.GetValue<int>().ShouldBe(1);
+        var sum = Result(2)["data"]!;
+        sum["total"]!.GetValue<decimal>().ShouldBe(2000.5m);
+        sum["rows"]!.GetValue<int>().ShouldBe(2);
+    }
+
     /// <summary>A cost with no exchange rate is left out of the USD figures: the review says so instead of reading as complete.</summary>
     [Fact]
     public async Task A_review_says_when_a_cost_could_not_be_converted()

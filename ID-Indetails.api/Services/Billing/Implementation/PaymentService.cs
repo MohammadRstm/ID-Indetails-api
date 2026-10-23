@@ -42,7 +42,7 @@ public sealed class PaymentService(
         var (items, total) = await payments.SearchAsync(
             new PaymentSearch(
                 actor.VisibleDomains, query.ProjectId, query.ClientId, query.InvoiceId, query.IncludeVoided == true,
-                query.Domain, query.Page, query.PageSize),
+                query.Domain, query.Page, query.PageSize, query.ReceivedFrom, query.ReceivedTo),
             cancellationToken);
 
         return new PagedResponse<PaymentResponse>(items.Select(ToResponse).ToList(), query.Page, query.PageSize, total);
