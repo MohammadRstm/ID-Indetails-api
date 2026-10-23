@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
@@ -21,18 +22,38 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
             .Select(e => new WorkEntryRow(e.ProjectId, e.UserId, e.StartedAt, e.DurationMinutes))
             .ToListAsync(cancellationToken);
 
-    /// <summary>
-    /// The pay that prices each person's time on projects. A super admin's costs nothing: their salary is a company
-    /// cost, counted once on the company overview, and pricing their hours would also give it away.
-    /// </summary>
     public async Task<IReadOnlyList<ProjectFinance.PayRecord>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
         => await db.UserPayHistory
             .AsNoTracking()
             .Where(p => userIds.Contains(p.UserId))
-            // admins and super admins are paid a fixed salary, a company cost (the company overview's net profit): any hours
-            // they logged cost their projects nothing, so their pay is never counted twice
-            .Select(p => new ProjectFinance.PayRecord(p.UserId, p.EffectiveFrom, p.Basis, p.User.RoleCode != RoleCodes.Employee ? 0m : p.Amount, p.Currency))
+            .Select(p => new ProjectFinance.PayRecord(p.UserId, p.EffectiveFrom, p.Basis, p.Amount, p.Currency))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<long, string>> RolesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
+        => await db.Users
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.RoleCode, cancellationToken);
+
+    public async Task<IReadOnlyList<RoleChangeRow>> RoleChangesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
+    {
+        string[] kinds = [ActivityEventKinds.RoleChanged, ActivityEventKinds.RoleAutoPromoted, ActivityEventKinds.RoleAutoDemoted];
+        var events = await db.ActivityEvents
+            .AsNoTracking()
+            .Where(e => kinds.Contains(e.Kind) && e.SubjectType == "user" && e.SubjectId != null && userIds.Contains(e.SubjectId.Value) && e.Payload != null)
+            .OrderBy(e => e.OccurredAt)
+            .ThenBy(e => e.Id)
+            .Select(e => new { UserId = e.SubjectId!.Value, e.OccurredAt, e.Payload })
+            .ToListAsync(cancellationToken);
+
+        return events
+            .Select(e => (e.UserId, e.OccurredAt, Roles: JsonSerializer.Deserialize<RolePayload>(e.Payload!, JsonSerializerOptions.Web)))
+            .Where(e => e.Roles is { From: not null, To: not null })
+            .Select(e => new RoleChangeRow(e.UserId, e.OccurredAt, e.Roles!.From!, e.Roles.To!))
+            .ToList();
+    }
+
+    private sealed record RolePayload(string? From, string? To);
 
     public async Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
         => await db.ProjectExpenses

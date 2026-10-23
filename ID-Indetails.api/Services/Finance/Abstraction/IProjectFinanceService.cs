@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 
@@ -17,9 +18,12 @@ public interface IProjectFinanceService
 
     /// <summary>
     /// What an hour of each person's time costs, over time (see <c>ProjectFinance.RatesOf</c>): a monthly salary's rate
-    /// month by month, from their schedule.
+    /// month by month, from their schedule, and nothing on the days they were an admin or super admin.
     /// </summary>
     Task<IReadOnlyList<ProjectFinance.PayRate>> PayRatesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>The roles each person held over time (see <c>Business/Pay/RoleHistory</c>), from their recorded role changes.</summary>
+    Task<IReadOnlyDictionary<long, RoleHistory>> RoleHistoriesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// The paid breaks of everyone with a pay record on the days of the given work, as labour cost per project and day

@@ -1,5 +1,7 @@
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using Shouldly;
 using Work = ID_Indetails.api.Business.Payroll.Overtime.Work;
@@ -184,5 +186,26 @@ public class PayrollTests
         // A month spent away entirely isn't paid at all.
         IReadOnlyList<Employment.Gap> allJune = [new(new(2026, 5, 20), new(2026, 7, 5))];
         SalaryCalculator.Calculate(input with { Gaps = allJune }).ShouldBeNull();
+    }
+
+    [Fact]
+    public void Only_the_days_as_an_admin_or_super_admin_are_a_fixed_salary()
+    {
+        // Promoted on Monday 15 June: 12 of June's 22 working days as an admin.
+        var input = new SalaryCalculator.Input(June, July10, new(2026, 1, 1), false, [Monthly], Calendar(), [], []);
+        var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 6, 15), RoleCodes.Employee, RoleCodes.Admin)]);
+        var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new(2026, 6, 15), RoleCodes.SuperAdmin, RoleCodes.Employee)]);
+
+        SalaryCalculator.FixedSalaryShare(input, new RoleHistory(RoleCodes.Admin, [])).ShouldBe(1m);
+        SalaryCalculator.FixedSalaryShare(input, new RoleHistory(RoleCodes.Employee, [])).ShouldBe(0m);
+        SalaryCalculator.FixedSalaryShare(input, promoted).ShouldBe(12m / 22m);
+        SalaryCalculator.FixedSalaryShare(input, demoted).ShouldBe(10m / 22m);
+
+        // Projects carry the 10 days as an employee (worked in full: 8 paid hours at 10 an hour) and the company the
+        // rest, so the salary counts once.
+        (10 * 8 * 10m + Math.Round(Monthly.Amount * SalaryCalculator.FixedSalaryShare(input, promoted), 2)).ShouldBe(1760m);
+
+        // Joining on Monday 8 June, it is a share of the days they were employed: 12 of 17.
+        SalaryCalculator.FixedSalaryShare(input with { JoinedOn = new(2026, 6, 8) }, promoted).ShouldBe(12m / 17m);
     }
 }

@@ -161,6 +161,28 @@ public static class SalaryCalculator
             input.LeftOn,
             input.Gaps);
 
+    /// <summary>
+    /// The part of the month's pay that is a fixed salary: the paid hours (break included) of the working days they were
+    /// employed as an admin or super admin ÷ those of every working day they were employed. Their days as an employee are
+    /// priced on projects instead, by their hours. A month with no paid hours to share goes by their role on its last day.
+    /// </summary>
+    public static decimal FixedSalaryShare(Input input, RoleHistory roles)
+    {
+        var next = input.Month.AddMonths(1);
+        var lastDay = input.LeftOn is { } left && left < next ? left : next.AddDays(-1);
+        var days = HoursLedger.Days(input.Month, next)
+            .Where(d => d >= input.JoinedOn && d <= lastDay && !Employment.InGap(input.Gaps, d))
+            .Select(d => (Day: d, Minutes: input.Calendar.HoursOn(d)?.Span ?? 0))
+            .ToList();
+        var all = days.Sum(d => d.Minutes);
+        if (all == 0)
+        {
+            return roles.HasFixedSalaryOn(lastDay) ? 1 : 0;
+        }
+
+        return (decimal)days.Where(d => roles.HasFixedSalaryOn(d.Day)).Sum(d => d.Minutes) / all;
+    }
+
     public static PayTerms? TermsOn(IEnumerable<PayTerms> history, DateOnly day)
         => history.Where(t => t.EffectiveFrom <= day).OrderBy(t => t.EffectiveFrom).LastOrDefault();
 

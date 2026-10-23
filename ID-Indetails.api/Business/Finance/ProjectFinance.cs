@@ -127,8 +127,11 @@ public static class ProjectFinance
     /// <summary>
     /// One person's pay history as hourly costs over time: hourly pay at its rate, and a monthly salary at its rate in each
     /// month (<see cref="PayRules.HourlyRate"/>), one rate a month up to <paramref name="until"/>. Ordered by date.
+    /// The days they were an admin or super admin cost nothing: that salary is a company cost, counted once on the company
+    /// overview, and pricing their hours would also give it away. So a role change starts a new rate on its day, and
+    /// changing someone's role later never changes what their earlier days cost.
     /// </summary>
-    public static IReadOnlyList<PayRate> RatesOf(IEnumerable<PayRecord> history, PersonCalendar calendar, DateOnly until)
+    public static IReadOnlyList<PayRate> RatesOf(IEnumerable<PayRecord> history, PersonCalendar calendar, DateOnly until, RoleHistory roles)
     {
         var ordered = history.OrderBy(p => p.EffectiveFrom).ToList();
         var rates = new List<PayRate>();
@@ -146,7 +149,30 @@ public static class ProjectFinance
             while (pay.Basis == PayBasis.Monthly && from < end);
         }
 
-        return rates;
+        return ByRole(rates, roles);
+    }
+
+    /// <summary>The rates with a new one on each day the role changed, at 0 while they held a fixed-salary role.</summary>
+    private static IReadOnlyList<PayRate> ByRole(IReadOnlyList<PayRate> rates, RoleHistory roles)
+    {
+        if (rates.Count == 0)
+        {
+            return rates;
+        }
+
+        var days = rates.Select(r => r.EffectiveFrom).Concat(roles.Changes.Select(c => c.Day)).ToList();
+        // time before the first rate is priced at it, so when a role change comes first, the role held before it gets a
+        // rate of its own, from the day before the change
+        if (roles.Changes.Count > 0 && roles.Changes[0].Day <= rates[0].EffectiveFrom)
+        {
+            days.Add(roles.Changes[0].Day.AddDays(-1));
+        }
+
+        return days.Distinct().Order().Select(day =>
+        {
+            var rate = RateOn(rates, day);
+            return rate with { EffectiveFrom = day, HourlyCost = roles.HasFixedSalaryOn(day) ? 0 : rate.HourlyCost };
+        }).ToList();
     }
 
     /// <summary>The rate in force on the day, from a person's history ordered by date; their earliest rate for days before it.</summary>

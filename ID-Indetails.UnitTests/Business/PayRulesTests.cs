@@ -90,4 +90,34 @@ public class PayRulesTests
     [InlineData(RoleCodes.Employee, PayBasis.Hourly, true)]
     public void Someone_paid_hourly_needs_a_monthly_salary_before_becoming_an_admin(string newRole, PayBasis? basis, bool allowed)
         => (PayRules.CheckRoleChange(newRole, basis) is null).ShouldBe(allowed);
+
+    [Fact]
+    public void A_role_counts_from_the_day_it_changed_and_the_last_change_of_a_day_wins()
+    {
+        // Promoted on 10 June, demoted and promoted again on 20 June.
+        var roles = new RoleHistory(RoleCodes.Admin,
+        [
+            new RoleHistory.Change(new(2026, 6, 10), RoleCodes.Employee, RoleCodes.Admin),
+            new RoleHistory.Change(new(2026, 6, 20), RoleCodes.Admin, RoleCodes.Employee),
+            new RoleHistory.Change(new(2026, 6, 20), RoleCodes.Employee, RoleCodes.Admin),
+        ]);
+
+        roles.RoleOn(new(2025, 1, 1)).ShouldBe(RoleCodes.Employee);
+        roles.RoleOn(new(2026, 6, 9)).ShouldBe(RoleCodes.Employee);
+        roles.RoleOn(new(2026, 6, 10)).ShouldBe(RoleCodes.Admin);
+        roles.RoleOn(new(2026, 6, 20)).ShouldBe(RoleCodes.Admin);
+        new RoleHistory(RoleCodes.SuperAdmin, []).RoleOn(new(2025, 1, 1)).ShouldBe(RoleCodes.SuperAdmin);
+    }
+
+    [Fact]
+    public void A_fixed_salary_held_on_any_day_of_a_period_counts()
+    {
+        var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 6, 15), RoleCodes.Employee, RoleCodes.Admin)]);
+        var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new(2026, 6, 15), RoleCodes.Admin, RoleCodes.Employee)]);
+
+        promoted.HadFixedSalary(new(2026, 6, 1), new(2026, 6, 14)).ShouldBeFalse();
+        promoted.HadFixedSalary(new(2026, 6, 1), new(2026, 6, 15)).ShouldBeTrue();
+        demoted.HadFixedSalary(new(2026, 6, 1), new(2026, 6, 30)).ShouldBeTrue();
+        demoted.HadFixedSalary(new(2026, 6, 15), new(2026, 6, 30)).ShouldBeFalse();
+    }
 }

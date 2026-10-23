@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
@@ -126,8 +127,20 @@ public sealed class ProjectFinanceService(
             return [];
         }
 
-        var calendars = await payrollInputs.CalendarsAsync(history.Select(g => g.Key).ToList(), cancellationToken);
-        return history.SelectMany(g => ProjectFinance.RatesOf(g, calendars[g.Key], clock.CompanyToday)).ToList();
+        var ids = history.Select(g => g.Key).ToList();
+        var calendars = await payrollInputs.CalendarsAsync(ids, cancellationToken);
+        var roles = await RoleHistoriesAsync(ids, cancellationToken);
+        return history.SelectMany(g => ProjectFinance.RatesOf(g, calendars[g.Key], clock.CompanyToday, roles[g.Key])).ToList();
+    }
+
+    public async Task<IReadOnlyDictionary<long, RoleHistory>> RoleHistoriesAsync(
+        IReadOnlyCollection<long> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var changes = (await sources.RoleChangesAsync(userIds, cancellationToken)).ToLookup(c => c.UserId);
+        return (await sources.RolesAsync(userIds, cancellationToken)).ToDictionary(
+            r => r.Key,
+            r => new RoleHistory(r.Value, changes[r.Key].Select(c => new RoleHistory.Change(clock.ToCompanyDate(c.OccurredAt), c.From, c.To)).ToList()));
     }
 
     public async Task<IReadOnlyList<BreakCost>> PaidBreaksAsync(
