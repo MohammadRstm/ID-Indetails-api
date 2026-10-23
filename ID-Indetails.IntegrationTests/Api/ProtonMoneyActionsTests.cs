@@ -11,6 +11,7 @@ using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Proton;
+using ID_Indetails.api.DTO.Response.Statements;
 using ID_Indetails.api.Proton.Actions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -104,7 +105,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
     }
 
     [Fact]
-    public async Task Billing_settings_change_without_ever_touching_the_bank_details()
+    public async Task Billing_settings_change_without_ever_touching_the_bank_details_or_the_reminders()
     {
         const string iban = "LB62099900000001001901229114";
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
@@ -114,7 +115,11 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
             remindersEnabled = false, reminderFirstAfterDays = 1, reminderEveryDays = 7, reminderMax = 3,
         }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
-        var (change, result) = await ProposeAsync(superAdmin, "propose_billing_settings", new { domain = "execution", default_terms_days = 45, reminders_enabled = true });
+        // turning reminders on would email clients on its own: Proton has no way to ask for it
+        var (_, refused) = await ProposeAsync(superAdmin, "propose_billing_settings", new { domain = "execution", reminders_enabled = true });
+        refused["status"]!.GetValue<string>().ShouldBe("invalid");
+
+        var (change, result) = await ProposeAsync(superAdmin, "propose_billing_settings", new { domain = "execution", default_terms_days = 45 });
         result.ToJsonString().ShouldNotContain(iban);
         result.ToJsonString().ShouldNotContain("Probe Bank");
         await using (var scope = api.Services.CreateAsyncScope())
@@ -125,12 +130,34 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
             (stored.Arguments + stored.Preview).ShouldNotContain("001-77-123456");
         }
 
+        // reminders switched on in the app after the card was made stay on: they are read again, like the bank details
+        (await Client.PutJsonAsync("/api/billing-settings/execution", new
+        {
+            invoicePrefix = "EX", defaultTermsDays = 30, bankAccount = "001-77-123456", bankName = "Probe Bank", iban, swift = "PROBLBBE",
+            remindersEnabled = true, reminderFirstAfterDays = 2, reminderEveryDays = 7, reminderMax = 3,
+        }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await ConfirmAsync(superAdmin, change);
         var settings = await GetAsync<BillingSettingsResponse>(superAdmin, "/api/billing-settings/execution");
         settings.DefaultTermsDays.ShouldBe(45);
         settings.RemindersEnabled.ShouldBeTrue();
+        settings.ReminderFirstAfterDays.ShouldBe(2);
         settings.Iban.ShouldBe(iban);
         settings.BankAccount.ShouldBe("001-77-123456");
+    }
+
+    [Fact]
+    public async Task A_backdated_exchange_rate_says_it_changes_past_figures_and_cant_be_undone()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var from = WorkEntryTestSteps.CompanyDay(DateTime.UtcNow).AddDays(-10);
+
+        var (rate, _) = await ProposeAsync(superAdmin, "propose_exchange_rate",
+            new { currency = "LBP", rate_per_usd = 89_500m, effective_from = from.ToString("yyyy-MM-dd") }, "Set LBP to 89500 from ten days ago");
+        var card = rate.PendingAction!.Preview;
+        card.Note!.ShouldContain("Backdated");
+        card.Note.ShouldContain("Payments keep the rate they were recorded at");
+        card.Irreversible.ShouldBeTrue();
+        card.Phrase.ShouldBe("89500");
     }
 
     [Fact]
@@ -295,7 +322,18 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });
         var card = statement.PendingAction!;
         card.Preview.Note!.ShouldContain("2 material(s)");
+        card.Preview.Note.ShouldContain("frozen");
+        card.Preview.Irreversible.ShouldBeTrue();
         var outcome = await ConfirmAsync(superAdmin, statement, card.Preview.Phrase);
         outcome.Message.ShouldStartWith("Made statement");
+
+        // its first delivery is what turns its materials into revenue, and the card says so; a second one changes nothing
+        var made = (await GetAsync<PagedResponse<StatementSummaryResponse>>(superAdmin, $"/api/projects/{site.Id}/statements")).Items.ShouldHaveSingleItem();
+        var (first, _) = await ProposeAsync(superAdmin, "propose_record_statement_delivery", new { statement_id = made.Id, channel = "whatsapp" });
+        first.PendingAction!.Preview.Note!.ShouldContain("first delivery");
+        first.PendingAction.Preview.Note.ShouldContain("agreed revenue");
+        await ConfirmAsync(superAdmin, first);
+        var (again, _) = await ProposeAsync(superAdmin, "propose_record_statement_delivery", new { statement_id = made.Id, channel = "download" });
+        again.PendingAction!.Preview.Note!.ShouldContain("delivered before");
     }
 }

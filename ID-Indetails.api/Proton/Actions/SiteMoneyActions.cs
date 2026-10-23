@@ -469,15 +469,17 @@ public sealed record CreateStatementInput : ProtonActionInput
 
 /// <summary>
 /// Makes a site's next statement for the client, through POST /api/projects/{id}/statements once confirmed. The card
-/// is the service's own preview; the user types the statement's total. Sending it is a separate step in the app.
+/// is the service's own preview; the user types the statement's total. It freezes the client prices of its materials
+/// and can't be deleted. Sending it is a separate step in the app.
 /// </summary>
 public sealed class ProposeCreateStatementTool(IStatementService statements) : ProtonActionTool<CreateStatementInput, StatementArgs>
 {
     public override string Name => "propose_create_statement";
 
     public override string Description =>
-        "Propose making a site's next statement of materials for the client, from the server's own preview. The user " +
-        "confirms by typing its total; sending it is done in the app.";
+        "Propose making a site's next statement of materials for the client, from the server's own preview. It freezes " +
+        "the client prices of its materials and can't be deleted. The user confirms by typing its total; sending it is " +
+        "done in the app.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -500,8 +502,9 @@ public sealed class ProposeCreateStatementTool(IStatementService statements) : P
         changes.Add(new ProtonChange("Remaining after it", null, MoneyText.Amount(preview.Remaining, preview.Currency)));
         return (new StatementArgs(input.ProjectId, null, request, null, preview.Total, preview.Count),
             new ProtonPreview($"Make a statement for {preview.ProjectTitle}", changes,
-                $"{preview.Count} material(s) for {preview.Client.DisplayName}. It isn't sent until you send it from the app.",
-                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(preview.Total)),
+                $"{preview.Count} material(s) for {preview.Client.DisplayName}. Their client prices are frozen as shown, and a statement " +
+                "can't be deleted. It isn't sent until you send it from the app.",
+                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(preview.Total), Irreversible: true),
             new ProtonRef(ProtonRefType.Project, preview.ProjectId, preview.ProjectTitle, DomainCodes.Execution));
     }
 
@@ -534,12 +537,17 @@ public sealed record StatementDeliveryInput : ProtonActionInput
     public string? Note { get; init; }
 }
 
-/// <summary>Notes that a statement reached the client outside the app, through POST /api/statements/{id}/deliveries once confirmed.</summary>
+/// <summary>
+/// Notes that a statement reached the client outside the app, through POST /api/statements/{id}/deliveries once
+/// confirmed. Its first delivery is what makes its materials count: their client prices join the site's agreed revenue.
+/// </summary>
 public sealed class ProposeStatementDeliveryTool(IStatementService statements) : ProtonActionTool<StatementDeliveryInput, StatementArgs>
 {
     public override string Name => "propose_record_statement_delivery";
 
-    public override string Description => "Propose noting that a statement was given to the client outside the app (WhatsApp, by hand). It sends nothing.";
+    public override string Description =>
+        "Propose noting that a statement was given to the client outside the app (WhatsApp, by hand). It sends nothing, " +
+        "but a statement's first delivery makes its materials count as sent: their client prices join the site's agreed revenue.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -557,9 +565,15 @@ public sealed class ProposeStatementDeliveryTool(IStatementService statements) :
 
         var statement = await statements.GetAsync(input.StatementId, cancellationToken);
         var delivery = new RecordDeliveryRequest { Channel = input.Channel, Recipient = MoneyText.Clean(input.Recipient), Note = MoneyText.Clean(input.Note) };
+        // the first delivery of a statement is what turns its materials into revenue; a later one only adds to its record
+        var effect = statement.Deliveries.Count == 0
+            ? $"This is its first delivery: its materials now count as sent, so their client prices ({MoneyText.Amount(statement.NewTotal, statement.Currency)} " +
+              $"for the new ones, and any earlier ones not sent before) join {statement.ProjectTitle}'s agreed revenue."
+            : "It was delivered before: this only adds to its record, and the agreed revenue doesn't change.";
         return (new StatementArgs(statement.ProjectId, statement.Id, null, delivery),
             new ProtonPreview($"Note that statement {statement.Number} was delivered",
-                [new ProtonChange("How", null, input.Channel == DeliveryChannel.Whatsapp ? "WhatsApp" : "Handed over"), new ProtonChange("To", null, delivery.Recipient ?? statement.Client.DisplayName)]),
+                [new ProtonChange("How", null, input.Channel == DeliveryChannel.Whatsapp ? "WhatsApp" : "Handed over"), new ProtonChange("To", null, delivery.Recipient ?? statement.Client.DisplayName)],
+                effect),
             new ProtonRef(ProtonRefType.Project, statement.ProjectId, statement.ProjectTitle, DomainCodes.Execution));
     }
 

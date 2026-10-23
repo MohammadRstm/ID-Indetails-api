@@ -16,11 +16,10 @@ namespace ID_Indetails.api.Proton.Actions;
 
 /// <summary>
 /// The billing settings Proton may change. Bank details are not among them: they never reach Proton, are never stored
-/// with a proposal, and are read again from the database when the change is made.
+/// with a proposal, and are read again from the database when the change is made. Overdue reminders aren't either:
+/// turning them on emails clients automatically, which stays in the app (like every automatic email).
 /// </summary>
-public sealed record BillingSettingsChange(
-    string InvoicePrefix, int DefaultTermsDays, string? TermsText, string? Footer, bool RemindersEnabled,
-    int ReminderFirstAfterDays, int ReminderEveryDays, int ReminderMax);
+public sealed record BillingSettingsChange(string InvoicePrefix, int DefaultTermsDays, string? TermsText, string? Footer);
 
 public sealed record BillingSettingsArgs(string DomainCode, BillingSettingsChange Change, BillingSettingsChange Before);
 
@@ -39,28 +38,20 @@ public sealed record BillingSettingsInput : ProtonActionInput
 
     [Description("Printed footer; an empty string removes it.")]
     public string? Footer { get; init; }
-
-    [Description("Email clients reminders of their overdue invoices.")]
-    public bool? RemindersEnabled { get; init; }
-
-    public int? ReminderFirstAfterDays { get; init; }
-
-    public int? ReminderEveryDays { get; init; }
-
-    public int? ReminderMax { get; init; }
 }
 
 /// <summary>
-/// Changes a domain's invoice numbering, terms, footer and overdue reminders, through PUT /api/billing-settings/{domain}
-/// once confirmed. Its bank details stay as they are and are never seen.
+/// Changes a domain's invoice numbering, terms and footer, through PUT /api/billing-settings/{domain} once confirmed.
+/// Its bank details and overdue reminders stay as they are, read again from the database.
 /// </summary>
 public sealed class ProposeBillingSettingsTool(IBillingSettingsService settings) : ProtonActionTool<BillingSettingsInput, BillingSettingsArgs>
 {
     public override string Name => "propose_billing_settings";
 
     public override string Description =>
-        "Propose changing a domain's invoice prefix, default payment terms, printed terms and footer, or its overdue " +
-        "reminders. Bank details are changed in the app only. Nothing changes until the user confirms the card.";
+        "Propose changing a domain's invoice prefix, default payment terms, or printed terms and footer. Overdue " +
+        "reminders (they email clients) and bank details are changed in the app only. Nothing changes until the user " +
+        "confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -77,10 +68,6 @@ public sealed class ProposeBillingSettingsTool(IBillingSettingsService settings)
             DefaultTermsDays = input.DefaultTermsDays ?? before.DefaultTermsDays,
             TermsText = input.TermsText is null ? before.TermsText : MoneyText.Clean(input.TermsText),
             Footer = input.Footer is null ? before.Footer : MoneyText.Clean(input.Footer),
-            RemindersEnabled = input.RemindersEnabled ?? before.RemindersEnabled,
-            ReminderFirstAfterDays = input.ReminderFirstAfterDays ?? before.ReminderFirstAfterDays,
-            ReminderEveryDays = input.ReminderEveryDays ?? before.ReminderEveryDays,
-            ReminderMax = input.ReminderMax ?? before.ReminderMax,
         };
 
         var changes = new List<ProtonChange>();
@@ -88,16 +75,13 @@ public sealed class ProposeBillingSettingsTool(IBillingSettingsService settings)
         SettingsText.Compare(changes, "Payment terms", $"{before.DefaultTermsDays} days", $"{after.DefaultTermsDays} days");
         SettingsText.Compare(changes, "Printed terms", ProtonText.Cut(before.TermsText, 120), ProtonText.Cut(after.TermsText, 120));
         SettingsText.Compare(changes, "Footer", ProtonText.Cut(before.Footer, 120), ProtonText.Cut(after.Footer, 120));
-        SettingsText.Compare(changes, "Overdue reminders", CompanyMoneyText.Reminders(before), CompanyMoneyText.Reminders(after));
         if (changes.Count == 0)
         {
             throw new ProtonToolInputException("Nothing would change: say what should be different.");
         }
 
         return (new BillingSettingsArgs(domain, after, before),
-            new ProtonPreview($"Change the {(domain == DomainCodes.Design ? "Design" : "Execution")} billing settings", changes,
-                after.RemindersEnabled && !before.RemindersEnabled ? "Clients with overdue invoices start getting reminder emails." : null,
-                Area: domain),
+            new ProtonPreview($"Change the {(domain == DomainCodes.Design ? "Design" : "Execution")} billing settings", changes, Area: domain),
             null);
     }
 
@@ -111,13 +95,14 @@ public sealed class ProposeBillingSettingsTool(IBillingSettingsService settings)
             throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The billing settings changed since Proton proposed this. Ask again.");
         }
 
-        // the bank details come from the database now, never from the proposal
+        // the bank details and reminders come from the database now, never from the proposal
         var c = args.Change;
         var request = new SaveBillingSettingsRequest
         {
             InvoicePrefix = c.InvoicePrefix, DefaultTermsDays = c.DefaultTermsDays, TermsText = c.TermsText, Footer = c.Footer,
-            RemindersEnabled = c.RemindersEnabled, ReminderFirstAfterDays = c.ReminderFirstAfterDays, ReminderEveryDays = c.ReminderEveryDays,
-            ReminderMax = c.ReminderMax, BankAccount = current.BankAccount, BankName = current.BankName, Iban = current.Iban, Swift = current.Swift,
+            RemindersEnabled = current.RemindersEnabled, ReminderFirstAfterDays = current.ReminderFirstAfterDays,
+            ReminderEveryDays = current.ReminderEveryDays, ReminderMax = current.ReminderMax,
+            BankAccount = current.BankAccount, BankName = current.BankName, Iban = current.Iban, Swift = current.Swift,
         };
         await context.ValidateAsync(request, cancellationToken);
         await settings.SaveAsync(args.DomainCode, request, cancellationToken);
@@ -140,16 +125,18 @@ public sealed record ExchangeRateInput : ProtonActionInput
 }
 
 /// <summary>
-/// Adds a dated exchange rate, through POST /api/exchange-rates once confirmed: money in that currency from that day
-/// converts at it. The user types the rate.
+/// Adds a dated exchange rate, through POST /api/exchange-rates once confirmed: costs, overhead and invoices in that
+/// currency from that day are converted at it every time they are read, so a backdated rate changes past figures.
+/// Payments keep the rate they were recorded at. Rates can't be edited or deleted. The user types the rate.
 /// </summary>
 public sealed class ProposeExchangeRateTool(IBillingSettingsService settings) : ProtonActionTool<ExchangeRateInput, ExchangeRateArgs>
 {
     public override string Name => "propose_exchange_rate";
 
     public override string Description =>
-        "Propose a new dated exchange rate for a currency against the US dollar. Money in that currency from that day " +
-        "converts at it. The user confirms by typing the rate.";
+        "Propose a new dated exchange rate for a currency against the US dollar. Costs, overhead and invoices in that " +
+        "currency from that day convert at it, so a backdated rate changes past figures; payments keep their own rate. " +
+        "It can't be edited or deleted afterwards. The user confirms by typing the rate.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -162,15 +149,19 @@ public sealed class ProposeExchangeRateTool(IBillingSettingsService settings) : 
         var latest = (await settings.ListExchangeRatesAsync(new ExchangeRateListQuery { Currency = currency }, cancellationToken))
             .OrderByDescending(r => r.EffectiveFrom).FirstOrDefault();
         var request = new AddExchangeRateRequest { Currency = currency, RatePerUsd = input.RatePerUsd, EffectiveFrom = input.EffectiveFrom };
+        var from = request.EffectiveFrom ?? context.Today;
+        var effect = from < context.Today
+            ? $"Backdated: {currency} costs, overhead and invoices from {ProjectText.Date(from)} to today are worked out again at this rate, so past figures change."
+            : $"{currency} costs, overhead and invoices from today convert at it.";
         return (new ExchangeRateArgs(request),
             new ProtonPreview($"Set the {currency} rate",
                 [
                     new ProtonChange("1 USD", latest is null ? null : $"{MoneyText.Amount(latest.RatePerUsd, currency)} (from {ProjectText.Date(latest.EffectiveFrom)})",
                         MoneyText.Amount(request.RatePerUsd, currency)),
-                    new ProtonChange("From", null, ProjectText.Date(request.EffectiveFrom ?? context.Today)),
+                    new ProtonChange("From", null, ProjectText.Date(from)),
                 ],
-                $"Payments and costs in {currency} from that day convert at it.",
-                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(request.RatePerUsd), Area: "company"),
+                $"{effect} Payments keep the rate they were recorded at. A rate can't be edited or deleted: a mistake is corrected by a newer one.",
+                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(request.RatePerUsd), Area: "company", Irreversible: true),
             null);
     }
 
@@ -526,11 +517,7 @@ internal static class CompanyMoneyText
     /// <summary>A stored markup (a fraction: 0.15) as people read it ("15%").</summary>
     public static string Percent(decimal fraction) => $"{(fraction * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
 
-    public static BillingSettingsChange ChangeOf(BillingSettingsResponse s)
-        => new(s.InvoicePrefix, s.DefaultTermsDays, s.TermsText, s.Footer, s.RemindersEnabled, s.ReminderFirstAfterDays, s.ReminderEveryDays, s.ReminderMax);
-
-    public static string Reminders(BillingSettingsChange c)
-        => c.RemindersEnabled ? $"on: {c.ReminderFirstAfterDays} day(s) after due, then every {c.ReminderEveryDays}, at most {c.ReminderMax}" : "off";
+    public static BillingSettingsChange ChangeOf(BillingSettingsResponse s) => new(s.InvoicePrefix, s.DefaultTermsDays, s.TermsText, s.Footer);
 }
 
 internal static class OverheadText
