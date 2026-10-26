@@ -73,14 +73,17 @@ public class PayRulesTests
     }
 
     [Theory]
-    [InlineData(RoleCodes.SuperAdmin, PayBasis.Monthly, true)]
-    [InlineData(RoleCodes.SuperAdmin, PayBasis.Hourly, false)]
-    [InlineData(RoleCodes.Admin, PayBasis.Monthly, true)]
-    [InlineData(RoleCodes.Admin, PayBasis.Hourly, false)]
-    [InlineData(RoleCodes.Employee, PayBasis.Hourly, true)]
-    [InlineData(RoleCodes.Employee, PayBasis.Monthly, true)]
-    public void Admins_and_super_admins_must_be_paid_monthly(string role, PayBasis basis, bool allowed)
-        => (PayRules.CheckBasis(role, basis) is null).ShouldBe(allowed);
+    [InlineData(RoleCodes.SuperAdmin, null, PayBasis.Monthly, true)]
+    [InlineData(RoleCodes.SuperAdmin, null, PayBasis.Hourly, false)]
+    [InlineData(RoleCodes.Admin, DomainCodes.Design, PayBasis.Monthly, true)]
+    [InlineData(RoleCodes.Admin, DomainCodes.Design, PayBasis.Hourly, false)]
+    [InlineData(RoleCodes.Employee, DomainCodes.Design, PayBasis.Hourly, true)]
+    [InlineData(RoleCodes.Employee, DomainCodes.Design, PayBasis.Monthly, true)]
+    // site staff log no hours
+    [InlineData(RoleCodes.Employee, DomainCodes.Execution, PayBasis.Hourly, false)]
+    [InlineData(RoleCodes.Employee, DomainCodes.Execution, PayBasis.Monthly, true)]
+    public void Admins_super_admins_and_site_staff_must_be_paid_monthly(string role, string? domain, PayBasis basis, bool allowed)
+        => (PayRules.CheckBasis(role, domain, basis) is null).ShouldBe(allowed);
 
     [Theory]
     [InlineData(RoleCodes.Admin, PayBasis.Hourly, false)]

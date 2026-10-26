@@ -381,7 +381,7 @@ public sealed class EmployeeService(
 
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckPayChange(actor, TargetOf(user)));
-        Throw(PayRules.CheckBasis(user.RoleCode, request.Basis));
+        Throw(PayRules.CheckBasis(user.RoleCode, user.DomainCode, request.Basis));
 
         var effectiveFrom = request.EffectiveFrom ?? clock.CompanyToday;
         var latest = await employees.GetLatestPayDateAsync(user.Id, cancellationToken);

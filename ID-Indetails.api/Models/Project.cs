@@ -89,4 +89,7 @@ public class Project
     public ICollection<ProjectLabourDefault> LabourDefaults { get; set; } = new List<ProjectLabourDefault>();
 
     public ICollection<ProjectPaymentChange> PaymentChanges { get; set; } = new List<ProjectPaymentChange>();
+
+    /// <summary>Execution only: who oversees the site, now and before.</summary>
+    public ICollection<ProjectStaff> Staff { get; set; } = new List<ProjectStaff>();
 }

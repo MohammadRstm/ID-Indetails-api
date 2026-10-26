@@ -61,7 +61,7 @@ public sealed class InvitationService(
             throw new ForbiddenException(ErrorCodes.InvitationNotAllowed, "Setting someone's pay needs the permission to change pay.");
         }
 
-        if (request.Pay is { } terms && PayRules.CheckBasis(request.Role, terms.Basis) is { } denial)
+        if (request.Pay is { } terms && PayRules.CheckBasis(request.Role, request.DomainCode, terms.Basis) is { } denial)
         {
             throw denial.ToException();
         }

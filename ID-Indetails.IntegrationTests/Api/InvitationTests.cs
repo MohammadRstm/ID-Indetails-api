@@ -103,7 +103,7 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, "employee", "execution");
 
         employee.User.Permissions.ShouldNotContain(PermissionCodes.EmployeeInvite);
-        employee.User.Permissions.ShouldContain(PermissionCodes.MaterialCreate);
+        employee.User.Permissions.ShouldContain(PermissionCodes.LabourReportCreate);
 
         await (await Client.PostJsonAsync("/api/invitations",
                 new { email = AuthTestSteps.NewEmail(), role = "employee", domainCode = "execution" }, employee.AccessToken))

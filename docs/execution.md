@@ -34,7 +34,7 @@ Material cost and client prices feed the shared finance calculator (`Business/Fi
 |---|---|---|
 | `GET /api/projects/{id}/labour-weeks` | `project:view` | Every week from the project's first to the current one (or the one it was finalised in), newest first, reported or not, with the labour total |
 | `GET /api/projects/{id}/labour-weeks/{weekStart}` | `project:view` | One week's days. A week not yet reported comes back filled in from the defaults, up to today (`isReported: false`). `version` is `"0"` until it is reported, then changes whenever it does |
-| `PUT /api/projects/{id}/labour-weeks/{weekStart}` | `labour_report:create` (new or own weeks) or `labour_report:manage` (anyone's) | `{ days: [{ date, workers, dailyPay }], note, expectedVersion }` submits the week, or replaces the days of one already reported. `expectedVersion` is optional |
+| `PUT /api/projects/{id}/labour-weeks/{weekStart}` | `labour_report:create` (new or own weeks, on a site the caller oversees: otherwise `403 not_on_site_team`) or `labour_report:manage` (anyone's, any site) | `{ days: [{ date, workers, dailyPay }], note, expectedVersion }` submits the week, or replaces the days of one already reported. `expectedVersion` is optional |
 | `GET /api/projects/{id}/labour-defaults` | `project:view` | The defaults in force today and every change |
 | `POST /api/projects/{id}/labour-defaults` | `labour_report:manage` (admins) | `{ workers, dailyPay }`, applying from today |
 
@@ -84,9 +84,29 @@ Rules (`Business/Statements/StatementRules.cs`):
 - **The PDF** is made on the server (see [documents.md](documents.md)). It shows the same rows, totals and payment summary, and ends by saying it is not an invoice.
 - Events: `statement_created` and `statement_sent` (the statement's total in the `amount` column; the number, and the mode or channel, in the payload).
 
-## Site staff views
+## Site staff and daily logs
 
-Site staff don't log hours; what they record on site stands in for it.
+Site staff are Execution employees. They log no hours (they are paid monthly: an hourly pay is refused with `400 fixed_salary_paid_monthly`), record no materials by default (`material:create` is no longer an employee default; admins record them, or someone given the permission), and on the sites they oversee they report ground labour and write daily logs.
+
+**Who oversees a site** (`project_staff`):
+- `POST /api/projects` for an Execution site requires `staffIds`: at least one, each an active Execution employee, each once (`400 staffIds`). A Design project takes none.
+- `PUT /api/projects/{id}/staff` (`project:edit`) `{ staffIds }` replaces the list (at least one). Someone taken off keeps their row with `removedAt`, so their past records still say who they were; put back, the same row is used again.
+- The project shows them as `staff` (everyone, in the order they were put on) and as its `team` (the first 5 and the count), Execution only.
+- Sites that existed before got, as their staff, the Execution employees who had recorded their materials or labour.
+
+**Daily logs** (`site_logs`): one thing noted on a day ("the concrete arrived with 3 bags missing"). A day can have many, each its own; the writer changes one only on the company day it was written (`422 site_log_locked`), and none is deleted: losses are analysed from them later.
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `POST /api/projects/{id}/site-logs` | `site_log:create`, on a site the caller oversees (`403 not_on_site_team`), while it is open | `{ body }` (1 to 2000 characters) |
+| `PUT /api/site-logs/{id}` | `site_log:create`, the writer, on the day | `{ body }`. Someone else's log reads as `404` |
+| `GET /api/me/site-logs?projectId=&from=&to=&search=&page=&pageSize=` | `site_log:create` | The caller's logs, newest first. Days are company days, both inclusive; `search` matches the log or the site's title |
+| `GET /api/site-logs?userId=&projectId=&from=&to=&search=&page=&pageSize=` | `site_log:view_all` (Execution admins) | Everyone's logs on sites the caller can see |
+| `GET /api/me/sites` | `site_log:create` or `labour_report:create` | The sites the caller oversees, newest assignment first |
+
+Each log is `{ id, project: { id, title }, person: { id, name }, body, createdAt, updatedAt, canEdit }`.
+
+## Site staff views
 
 | Method and path | Needs | Purpose |
 |---|---|---|

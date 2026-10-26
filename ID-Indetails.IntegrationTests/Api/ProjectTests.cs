@@ -153,7 +153,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         var created = await Client.PostJsonAsync("/api/projects", new
         {
             title = "Apartment fit-out", domainCode = DomainCodes.Execution, clientId = client.Id,
-            location = "  Achrafieh, Beirut  ",
+            location = "  Achrafieh, Beirut  ", staffIds = new[] { await Projects.SiteStaffAsync() },
         }, admin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
         var project = await created.ReadAsync<ProjectResponse>();
@@ -252,14 +252,14 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
         var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
 
-        var created = await Client.PostJsonAsync("/api/projects", new { title = "Lobby", clientId = client.Id }, admin.AccessToken);
+        var created = await Client.PostJsonAsync("/api/projects", new { title = "Lobby", clientId = client.Id, staffIds = new[] { await Projects.SiteStaffAsync() } }, admin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
         var site = await (await Client.GetAsync($"/api/projects/{(await created.ReadAsync<ProjectResponse>()).Id}", superAdmin.AccessToken))
             .ReadAsync<ProjectResponse>();
         site.Money!.ProjectFee.ShouldBe(0m);
         site.Money.MaterialMarkup.ShouldBe(0m);
 
-        await (await Client.PostJsonAsync("/api/projects", new { title = "Priced", clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m }, admin.AccessToken))
+        await (await Client.PostJsonAsync("/api/projects", new { title = "Priced", clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m, staffIds = new[] { await Projects.SiteStaffAsync() } }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 }
