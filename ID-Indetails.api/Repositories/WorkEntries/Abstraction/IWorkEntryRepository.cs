@@ -25,7 +25,8 @@ public sealed record WorkEntryView(
     int CommentCount,
     FileView? Attachment,
     string? ProjectIcon = null,
-    string? ProjectTint = null);
+    string? ProjectTint = null,
+    bool OutsideScope = false);
 
 /// <summary>
 /// Live entries on Design projects. Times are UTC; <paramref name="From"/> is inclusive and <paramref name="To"/>

@@ -72,6 +72,12 @@ public sealed class WorkEntriesController(
     }
 
     /// <summary>Undoes a delete, within the edit window.</summary>
+    /// <summary>An admin's correction of whether someone's entry is outside the project's original scope.</summary>
+    [HttpPut("{id:long}/scope")]
+    [HasPermission(PermissionCodes.WorkEntryViewAll)]
+    public Task<WorkEntryResponse> SetScope(long id, SetWorkEntryScopeRequest request, CancellationToken cancellationToken)
+        => workEntryService.SetScopeAsync(id, request, cancellationToken);
+
     [HttpPost("{id:long}/restore")]
     [HasPermission(PermissionCodes.WorkEntryCreate)]
     public Task<WorkEntryResponse> Restore(long id, CancellationToken cancellationToken)

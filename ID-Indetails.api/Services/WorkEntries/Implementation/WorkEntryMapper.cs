@@ -48,5 +48,6 @@ internal static class WorkEntryMapper
             && WorkEntryRules.AcceptsWork(e.ProjectStatus, settings.HoldLogging)
             && WorkEntryRules.IsInOpenMonth(e.StartedAt, OpenFromUtc(clock)),
         e.CommentCount,
-        e.Attachment is { } file ? FileMapper.ToResponse(file) : null);
+        e.Attachment is { } file ? FileMapper.ToResponse(file) : null,
+        e.OutsideScope);
 }
