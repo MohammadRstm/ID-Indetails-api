@@ -104,6 +104,26 @@ public sealed class ProtonOptions
     public ProtonVisualOptions Visuals { get; init; } = new();
 
     public ProtonFileOptions Files { get; init; } = new();
+
+    public ProtonSuggestionOptions Suggestions { get; init; } = new();
+}
+
+/// <summary>Replies Proton suggests in the discussions with clients: how many a person gets a day, and how much each reads and writes.</summary>
+public sealed class ProtonSuggestionOptions
+{
+    [Range(1, 500)]
+    public int MaxPerDay { get; init; } = 40;
+
+    /// <summary>The latest chat messages the suggestion is written from.</summary>
+    [Range(1, 50)]
+    public int MessagesRead { get; init; } = 20;
+
+    [Range(50, 2_000)]
+    public int MaxOutputTokens { get; init; } = 400;
+
+    /// <summary>The budget held while a suggestion is written: one short call costs far less.</summary>
+    [Range(0.001, 1)]
+    public decimal HoldUsd { get; init; } = 0.02m;
 }
 
 /// <summary>

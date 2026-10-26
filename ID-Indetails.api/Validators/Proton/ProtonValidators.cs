@@ -89,6 +89,14 @@ public sealed class TopUpProtonBudgetRequestValidator : AbstractValidator<TopUpP
     }
 }
 
+public sealed class SuggestReplyRequestValidator : AbstractValidator<SuggestReplyRequest>
+{
+    public SuggestReplyRequestValidator()
+    {
+        RuleFor(x => x.ProjectId).GreaterThan(0).WithMessage("Which project's discussion?");
+    }
+}
+
 public sealed class SaveProtonMemoryRequestValidator : AbstractValidator<SaveProtonMemoryRequest>
 {
     public SaveProtonMemoryRequestValidator()

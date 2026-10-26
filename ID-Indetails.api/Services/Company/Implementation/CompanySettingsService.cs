@@ -98,7 +98,13 @@ public sealed class CompanySettingsService(
         return Describe(settings);
     }
 
-    public async Task<CompanySettingsResponse> SetProtonFilesAsync(CompanyProtonFilesRequest request, CancellationToken cancellationToken = default)
+    public Task<CompanySettingsResponse> SetProtonFilesAsync(CompanyProtonSwitchRequest request, CancellationToken cancellationToken = default)
+        => SetProtonSwitchAsync(s => s.ProtonReadsFiles = request.Enabled, cancellationToken);
+
+    public Task<CompanySettingsResponse> SetProtonSuggestionsAsync(CompanyProtonSwitchRequest request, CancellationToken cancellationToken = default)
+        => SetProtonSwitchAsync(s => s.ProtonReplySuggestions = request.Enabled, cancellationToken);
+
+    private async Task<CompanySettingsResponse> SetProtonSwitchAsync(Action<CompanySettings> change, CancellationToken cancellationToken)
     {
         var settings = await company.GetSettingsAsync(forUpdate: true, cancellationToken);
         if (settings is null)
@@ -107,7 +113,7 @@ public sealed class CompanySettingsService(
             company.AddSettings(settings);
         }
 
-        settings.ProtonReadsFiles = request.Enabled;
+        change(settings);
         settings.UpdatedAt = clock.UtcNow;
         settings.UpdatedById = currentUser.Id;
         activity.Add(new ActivityEvent
@@ -177,6 +183,6 @@ public sealed class CompanySettingsService(
         var named = !string.IsNullOrWhiteSpace(s.Name);
         return new CompanySettingsResponse(
             named, named ? s.Name : options.Value.DefaultName, s.Address, s.Website, s.ContactEmail, s.LogoFileId, options.Value.TimeZone, s.WeekStart, s.Use24HourTime, s.DefaultCurrency, s.UpdatedAt,
-            s.ProtonReadsFiles);
+            s.ProtonReadsFiles, s.ProtonReplySuggestions);
     }
 }

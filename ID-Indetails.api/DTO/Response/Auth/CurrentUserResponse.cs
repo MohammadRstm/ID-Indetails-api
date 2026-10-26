@@ -42,6 +42,9 @@ public sealed record CurrentUserResponse
 
     /// <summary>Domains the user may enter: their own, plus any other once they hold one of its permissions ("website" opens the Website area).</summary>
     public required IReadOnlyList<string> VisibleDomains { get; init; }
+
+    /// <summary>Whether Proton suggests replies to them in the discussions with clients: their own choice.</summary>
+    public required bool ProtonReplySuggestions { get; init; }
 }
 
 public sealed record TeamSummaryResponse(long Id, string Name);

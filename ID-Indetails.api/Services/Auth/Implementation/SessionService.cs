@@ -71,6 +71,7 @@ public sealed class SessionService(
             MustChangePassword = user.MustChangePassword,
             Permissions = access.Permissions,
             IsJoker = access.IsJoker,
+            ProtonReplySuggestions = user.ProtonReplySuggestions,
             VisibleDomains = access.VisibleDomains,
         };
     }

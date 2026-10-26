@@ -24,6 +24,9 @@ public interface IProtonUsageRepository
     /// <summary>Staged; saved with the unit of work.</summary>
     void Add(ProtonBudgetTopUp topUp);
 
+    /// <summary>The replies suggested to one person between the two instants (UTC, end exclusive).</summary>
+    Task<int> SuggestionsAsync(long userId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default);
+
     /// <summary>Estimated cost of every question between the two instants (UTC, end exclusive).</summary>
     Task<decimal> SpentAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default);
 
