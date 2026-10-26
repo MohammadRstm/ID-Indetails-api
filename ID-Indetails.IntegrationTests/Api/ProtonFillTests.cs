@@ -98,6 +98,30 @@ public class ProtonFillTests(ProtonApiFactory api) : IClassFixture<ProtonApiFact
     }
 
     [Fact]
+    public async Task Money_and_pay_stay_out_of_forms_while_their_families_are_off()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("fill_form", new { form = "payment", id = project.Id, payment = new { amount = 300m } }),
+            FakeAnthropic.ToolUse("fill_form", new { form = "project_expense", id = project.Id, project_expense = new { label = "Printing", amount = 300m } }),
+            FakeAnthropic.ToolUse("fill_form", new { form = "project_expense", id = project.Id, project_expense = new { label = "Printing" } }),
+            FakeAnthropic.ToolUse("fill_form", new { form = "schedule", id = superAdmin.User.Id, schedule = new { follows_default = true } }),
+            FakeAnthropic.Text("I've filled what it was; the amount is yours to type."));
+
+        var reply = await AskAsync(superAdmin, new { text = "Add a 300 expense for printing on this project, and put me back on the company week" });
+
+        Result(1)["status"]!.GetValue<string>().ShouldNotBe("ok");
+        Result(2)["status"]!.GetValue<string>().ShouldBe("invalid");
+        Result(2)["message"]!.GetValue<string>().ShouldContain("money");
+        Result(3)["status"]!.GetValue<string>().ShouldBe("ok");
+        Result(4)["status"]!.GetValue<string>().ShouldNotBe("ok");
+        var fill = reply.UiCommands.ShouldHaveSingleItem().Fill!;
+        fill.ProjectExpense!.Amount.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task The_inbox_says_who_and_how_many_never_what()
     {
         api.Anthropic.Reset();
