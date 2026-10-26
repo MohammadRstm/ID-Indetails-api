@@ -41,7 +41,7 @@ public class PortalTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var title = "Project " + Guid.NewGuid().ToString("N")[..8];
         var body = domain == DomainCodes.Execution
-            ? (object)new { title, domainCode = domain, clientId }
+            ? (object)new { title, domainCode = domain, clientId, staffIds = new[] { await new ProjectTestSteps(_steps).SiteStaffAsync() } }
             : clientId is null
                 ? new { title, domainCode = domain, billingType = "internal" }
                 : new { title, domainCode = domain, clientId };
