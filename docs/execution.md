@@ -127,3 +127,20 @@ A site's money (received, cost by source, cash profit, material profit, expected
 
 - **Weeks** run Monday to Sunday, from the project's first week to the current one (or the one it was finalised in). Each has what was received, spent and paid in ground labour up to its end, the profit so far (received − spent), and what that week added in payments and ground labour. They come from the finance calculator (`ProjectFinance.CashByWeek`): costs on their day at that day's rate, payments by the day received.
 - **Projection** (`LabourRules.ProjectZero`): at today's labour defaults (workers × daily pay a working day), how many working days (Monday to Saturday, from tomorrow) until cash profit reaches zero, and until expected profit would, once the client has paid everything agreed. `state` is `done` for a finalised site, `losing` when cash profit is already below zero, `no_defaults` without a crew and day rate, otherwise `ok`. It assumes the crew, their pay and the money received stay as they are, and no new materials.
+
+## The Execution box
+
+The box pools what Execution clients pay, so a site in the red can be kept going from what the others earned. Its ledger is `box_entries`: one signed USD row per movement, never edited; the balance is their sum. Each Execution project has a `box_state` (`in`, `pending` or `removed`; null for Design).
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/execution/box` | `financial:view`, Execution visible | Balance, contributing projects (with their total), projects in the red, projects waiting for a decision |
+| `GET /api/execution/box/entries?projectId=` | `financial:view` | Movements, newest first |
+| `POST /api/execution/box/transfers` | `financial:view` | `{ projectId, amount, note? }` to a project in the red |
+| `POST /api/execution/box/projects/{id}/decision` | `financial:view` | `{ decision: remove \| keep }` for a pending project |
+
+- **In:** a payment of a project that is `in` or `pending` adds a `payment_in` row; voiding a payment the box still holds adds `payment_voided`. A `removed` project's payments stay out.
+- **Out to a project in the red** (`transfer`): only while its cash profit is below zero, at most what brings it back to zero (`400`), and at most the balance (`422 box_short`); otherwise `422 box_project_not_in_red`. The box is locked (`SELECT … FOR UPDATE` on `company_settings`) while it checks and writes. What the box moved shows on the project as `money.fromBox` and counts in its cash profit (received + from the box − cost), and in its weekly cash on the day it was moved. Nothing is moved back by hand.
+- **Closing** (complete, or archive while active or on hold): `?box=remove` takes out what the project put in (`removed`, at most the balance, recorded even when that is 0), `?box=keep` leaves it in and its late payments keep coming. Only `financial:view` holders choose (`403` otherwise); without a choice the project is `pending` and waits on the Box page, its payments still going in. Archiving a completed project, and the automatic archive, change nothing.
+- **Reopening** a removed project: `?box=readd` (`financial:view` only) puts back what its last removal took (`readded`); otherwise it counts afresh from today. Either way it is `in` again.
+- **Backfill:** the migration put every active or on-hold Execution project in the box with its live payments; completed and archived ones started as `removed`.

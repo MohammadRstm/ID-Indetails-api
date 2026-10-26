@@ -237,6 +237,8 @@ public sealed class ProjectService(
             // A site created without its pricing starts at no fee and no markup until someone with pricing sets them.
             ProjectFee = domain == DomainCodes.Execution ? request.ProjectFee ?? 0 : null,
             MaterialMarkup = domain == DomainCodes.Execution ? request.MaterialMarkup ?? 0 : null,
+            // a new site's client payments go into the Execution box
+            BoxState = domain == DomainCodes.Execution ? BoxState.In : null,
             CreatedAt = now,
             CreatedById = actor.UserId,
         };
@@ -645,6 +647,8 @@ public sealed class ProjectService(
             LabourHours = Math.Round(money.LabourMinutes / 60m, 2),
             CostPerHour = summary.CostPerHour,
             CashProfit = money.CashProfit,
+            FromBox = money.FromBox,
+            BoxState = p.BoxState,
             MaterialProfit = money.MaterialProfit,
             UnconvertedMaterials = money.UnconvertedMaterials,
         };

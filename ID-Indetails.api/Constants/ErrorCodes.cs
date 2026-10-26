@@ -126,6 +126,15 @@ public static class ErrorCodes
 
     /// <summary>422. A daily log can only be changed on the day it was written.</summary>
     public const string SiteLogLocked = "site_log_locked";
+
+    /// <summary>422. The Execution box holds less than the money asked for.</summary>
+    public const string BoxShort = "box_short";
+
+    /// <summary>422. The box only sends money to a project in the red.</summary>
+    public const string BoxProjectNotInRed = "box_project_not_in_red";
+
+    /// <summary>422. The project isn't waiting for a decision on its money in the box.</summary>
+    public const string BoxNoDecision = "box_no_decision";
     public const string StatementEmpty = "statement_empty";
 
     // Dependencies

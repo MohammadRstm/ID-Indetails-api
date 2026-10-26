@@ -22,6 +22,12 @@ public interface IProjectFinanceRepository
 
     /// <summary>Live payments per project, in USD.</summary>
     Task<IReadOnlyDictionary<long, decimal>> ReceivedAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Money the Execution box moved to each project, in USD.</summary>
+    Task<IReadOnlyDictionary<long, decimal>> FromBoxAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Money the box moved to one project: when each move was made (UTC) and its USD value.</summary>
+    Task<IReadOnlyList<(DateTime MovedAt, decimal AmountUsd)>> BoxMovesAsync(long projectId, CancellationToken cancellationToken = default);
 }
 
 public sealed record WorkEntryRow(long ProjectId, long UserId, DateTime StartedAt, int Minutes);

@@ -27,7 +27,8 @@ public sealed class ProjectFinanceService(
         ILookup<long, ExpenseRow> Expenses,
         ILookup<long, MaterialRow> Materials,
         ILookup<long, GroundLabourRow> Ground,
-        IReadOnlyDictionary<long, decimal> Received);
+        IReadOnlyDictionary<long, decimal> Received,
+        IReadOnlyDictionary<long, decimal> FromBox);
 
     public async Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default)
         => (await GetAsync([project], cancellationToken))[project.Id];
@@ -71,7 +72,8 @@ public sealed class ProjectFinanceService(
             (await sources.ExpensesAsync(ids, cancellationToken)).ToLookup(x => x.ProjectId),
             (await sources.MaterialsAsync(ids, cancellationToken)).ToLookup(m => m.ProjectId),
             (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId),
-            await sources.ReceivedAsync(ids, cancellationToken));
+            await sources.ReceivedAsync(ids, cancellationToken),
+            await sources.FromBoxAsync(ids, cancellationToken));
     }
 
     private ProjectFinancials Calculate(Project project, Loaded loaded)
@@ -84,6 +86,7 @@ public sealed class ProjectFinanceService(
             loaded.Materials[project.Id].ToList(),
             loaded.Ground[project.Id],
             loaded.Received.GetValueOrDefault(project.Id),
+            loaded.FromBox.GetValueOrDefault(project.Id),
             loaded.Rates);
 
     public async Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(
@@ -105,10 +108,12 @@ public sealed class ProjectFinanceService(
             await sources.MaterialsAsync(ids, cancellationToken),
             await sources.GroundLabourAsync(ids, cancellationToken));
         var payments = await sources.PaymentsAsync(project.Id, cancellationToken);
+        // money the Execution box moved to the site counts as received on the day it was moved
+        var fromBox = await sources.BoxMovesAsync(project.Id, cancellationToken);
 
         return ProjectFinance.CashByWeek(
             items,
-            payments.Select(p => (p.ReceivedOn, p.AmountUsd)),
+            payments.Select(p => (p.ReceivedOn, p.AmountUsd)).Concat(fromBox.Select(m => (clock.ToCompanyDate(m.MovedAt), m.AmountUsd))),
             entries.Select(e => (clock.ToCompanyDate(e.StartedAt), e.Minutes)),
             rates,
             project.StartDate,
@@ -202,6 +207,7 @@ public sealed class ProjectFinanceService(
         IReadOnlyList<MaterialRow> materials,
         IEnumerable<GroundLabourRow> ground,
         decimal received,
+        decimal fromBox,
         ExchangeRateTable rates)
     {
         var (items, unpricedMinutes) = CostItems(entries, payRates, breaks, expenses, materials, ground);
@@ -255,9 +261,10 @@ public sealed class ProjectFinanceService(
             materialCharge,
             unconvertedMaterials,
             received,
-            isExecution ? received - costs.Total : null,
+            isExecution ? received + fromBox - costs.Total : null,
             materialProfit,
             unsentCharge,
-            unsent);
+            unsent,
+            isExecution ? fromBox : null);
     }
 }

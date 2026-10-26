@@ -194,6 +194,71 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.BoxEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long?>("PaymentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("payment_id");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_box_entries");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_box_entries_created_at");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_box_entries_created_by_id");
+
+                    b.HasIndex("PaymentId")
+                        .HasDatabaseName("ix_box_entries_payment_id");
+
+                    b.HasIndex("ProjectId", "Kind")
+                        .HasDatabaseName("ix_box_entries_project_id_kind");
+
+                    b.ToTable("box_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_box_entries_amount_not_zero", "`amount` <> 0 OR `kind` = 'removed'");
+
+                            t.HasCheckConstraint("ck_box_entries_kind", "`kind` IN ('payment_in', 'payment_voided', 'transfer', 'removed', 'readded')");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.Client", b =>
                 {
                     b.Property<long>("Id")
@@ -3483,6 +3548,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(20)")
                         .HasColumnName("billing_type");
 
+                    b.Property<string>("BoxState")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("box_state");
+
                     b.Property<long?>("ClientId")
                         .HasColumnType("bigint")
                         .HasColumnName("client_id");
@@ -3610,6 +3680,10 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("projects", null, t =>
                         {
                             t.HasCheckConstraint("ck_projects_billing_type", "`billing_type` IN ('client', 'internal')");
+
+                            t.HasCheckConstraint("ck_projects_box_state", "`box_state` IS NULL OR `box_state` IN ('in', 'pending', 'removed')");
+
+                            t.HasCheckConstraint("ck_projects_box_state_execution_only", "(`domain_code` = 'execution') = (`box_state` IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_projects_execution_is_client_work", "`domain_code` <> 'execution' OR `billing_type` = 'client'");
 
@@ -6640,6 +6714,30 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_billing_settings_users_updated_by_id");
 
                     b.Navigation("Domain");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.BoxEntry", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_box_entries_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Payment", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_box_entries_payments_payment_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_box_entries_projects_project_id");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Client", b =>
