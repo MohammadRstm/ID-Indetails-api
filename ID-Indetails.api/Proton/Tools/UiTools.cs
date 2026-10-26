@@ -3,6 +3,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Messaging.Abstraction;
+using ID_Indetails.api.Services.Portal.Abstraction;
 
 namespace ID_Indetails.api.Proton.Tools;
 
@@ -18,13 +19,16 @@ public sealed record OpenRecordInput
 
     [Description("Projects only: the tab to open. Leave out for the project's first tab for this user.")]
     public ProtonProjectSection? Section { get; init; }
+
+    [Description("With the files or portal tab only: presentation, model or drawing (a section of the files), and on the portal tab also access (who of the client can see it) or discussion (the chat with the client).")]
+    public ProtonProjectPart? Part { get; init; }
 }
 
 /// <summary>
-/// Opens a project (optionally on a tab), a client or a person in the app. The record is read first exactly as its own
-/// page would read it, so an id the user can't see is "not found" and nothing opens.
+/// Opens a project (optionally on a tab), a client, a person or a website project in the app. The record is read first
+/// exactly as its own page would read it, so an id the user can't see is "not found" and nothing opens.
 /// </summary>
-public sealed class OpenRecordTool(ProtonRecords records) : ProtonTool<OpenRecordInput>
+public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal) : ProtonTool<OpenRecordInput>
 {
     private static readonly ProtonEndpoint Requirements = ProtonEndpoint.Of<RequirementsController>(nameof(RequirementsController.List));
     private static readonly ProtonEndpoint Timeline = ProtonEndpoint.Of<WorkInsightsController>(nameof(WorkInsightsController.Timeline));
@@ -34,10 +38,12 @@ public sealed class OpenRecordTool(ProtonRecords records) : ProtonTool<OpenRecor
     public override string Name => "open_record";
 
     public override string Description =>
-        "Open a project, client or person in the app for the user (\"take me to…\", \"open…\", \"show me its requirements\"). " +
-        "Use the id from find. Projects can open on a tab: requirements or meetings, and on Design projects financials (its " +
-        "money), analytics (charts of its work), contributors (who worked on it and how much) or timeline (its history as a " +
-        "calendar). Opening needs no other lookup; only read data too if the user also asked a question about it.";
+        "Open a project, client, person or website project in the app for the user (\"take me to…\", \"open…\", \"show me " +
+        "its requirements\"). Use the id from find. Projects can open on a tab: requirements or meetings, and on Design " +
+        "projects financials (its money), analytics (charts of its work), contributors (who worked on it and how much), " +
+        "timeline (its history as a calendar), files (the project's files, optionally one section) or portal (what its " +
+        "client sees in the client portal, who of them has access, and the discussion with them). Opening needs no other " +
+        "lookup; only read data too if the user also asked a question about it.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonRecords.ProjectGet;
 
@@ -46,19 +52,22 @@ public sealed class OpenRecordTool(ProtonRecords records) : ProtonTool<OpenRecor
         var record = await records.FindAsync(input.Type, input.Id, context, cancellationToken)
             ?? throw new Exceptions.Base.NotFoundException("Not found.");
         var section = input.Type == ProtonRefType.Project ? input.Section : null;
+        var part = section is ProtonProjectSection.Files or ProtonProjectSection.Portal ? input.Part : null;
         var note = "The app opens it when your answer is shown. Say what you opened in a few words.";
-        if (section is { } asked && !await CanOpenAsync(asked, record, context))
+        if (section is { } asked && !await CanOpenAsync(asked, part, record, context, cancellationToken))
         {
-            note = $"The {asked.ToString().ToLowerInvariant()} tab isn't available to this user here, so the project opens on its first tab. Say so.";
+            note = $"The {asked.ToString().ToLowerInvariant()} tab{(part is { } p ? $" ({p.ToString().ToLowerInvariant()})" : "")} isn't available to this user here, so the project opens on its first tab. Say so.";
             section = null;
+            part = null;
         }
 
-        var command = ProtonUiCommand.Open(record, section);
+        var command = ProtonUiCommand.Open(record, section, part);
         return new ProtonToolOutput(new UiOutcome(Describe(command), note), [record]) { UiCommand = command };
     }
 
     /// <summary>The project page's own rules for its tabs: a tab the person may not open isn't asked for.</summary>
-    private static async Task<bool> CanOpenAsync(ProtonProjectSection section, ProtonRef project, ProtonToolContext context)
+    private async Task<bool> CanOpenAsync(
+        ProtonProjectSection section, ProtonProjectPart? part, ProtonRef project, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var design = project.Domain == DomainCodes.Design;
         var access = context.Access;
@@ -72,12 +81,16 @@ public sealed class OpenRecordTool(ProtonRecords records) : ProtonTool<OpenRecor
             ProtonProjectSection.Requirements => await context.CanCallAsync(Requirements),
             ProtonProjectSection.Timeline => design && await context.CanCallAsync(Timeline),
             ProtonProjectSection.Meetings => await context.CanCallAsync(Meetings),
+            ProtonProjectSection.Files => await portal.CanOpenFilesAsync(project, part, context),
+            ProtonProjectSection.Portal => await portal.CanOpenPortalAsync(project, part, context, cancellationToken),
             _ => false,
         };
     }
 
     internal static string Describe(ProtonUiCommand command)
-        => command.Section is { } section ? $"{command.Label}: {section.ToString().ToLowerInvariant()}" : command.Label;
+        => command.Section is { } section
+            ? $"{command.Label}: {section.ToString().ToLowerInvariant()}{(command.Part is { } part ? $", {part.ToString().ToLowerInvariant()}" : "")}"
+            : command.Label;
 }
 
 public sealed record OpenPageInput
@@ -130,7 +143,26 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
             [ProtonPage.MyWork] = (null, false, false, "your work"),
             [ProtonPage.MyPay] = (ProtonEndpoint.Of<MyWorkController>(nameof(MyWorkController.ListEntries)), true, false, "your pay"),
             [ProtonPage.MyProfile] = (null, false, false, "your profile"),
+            // the Website area: no business of its own, so like the company area it has no domain
+            // its content pages read what its projects page reads, behind the same permission (Content can't be named:
+            // ControllerBase has methods of that name too)
+            [ProtonPage.WebsiteProjects] = (WebsiteRead, false, true, "the website's projects"),
+            [ProtonPage.WebsiteAnalytics] = (ProtonEndpoint.Of<WebsiteAnalyticsController>(nameof(WebsiteAnalyticsController.Report)), false, true, "the website's analytics"),
+            [ProtonPage.WebsiteServices] = (WebsiteRead, false, true, "the website's services"),
+            [ProtonPage.WebsiteLocations] = (WebsiteRead, false, true, "the website's locations"),
+            [ProtonPage.WebsiteContact] = (WebsiteRead, false, true, "the website's contact and social links"),
+            [ProtonPage.WebsiteSite] = (WebsiteRead, false, true, "the website's site settings"),
+            [ProtonPage.WebsiteStaff] = (ProtonEndpoint.Of<EmployeesController>(nameof(EmployeesController.List)), false, true, "the website's staff"),
         };
+
+    private static ProtonEndpoint WebsiteRead => ProtonEndpoint.Of<WebsiteController>(nameof(WebsiteController.Projects));
+
+    /// <summary>The pages of the Website area: only for those who see the website, as its area is.</summary>
+    internal static readonly IReadOnlySet<ProtonPage> WebsiteArea = new HashSet<ProtonPage>
+    {
+        ProtonPage.WebsiteProjects, ProtonPage.WebsiteAnalytics, ProtonPage.WebsiteServices, ProtonPage.WebsiteLocations,
+        ProtonPage.WebsiteContact, ProtonPage.WebsiteSite, ProtonPage.WebsiteStaff,
+    };
 
     public override string Name => "open_page";
 
@@ -138,7 +170,9 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
         "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people, financials " +
         "(optionally a tab), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
         "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
-        "start page; for employees their own my_work, my_pay and my_profile. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
+        "start page; for employees their own my_work, my_pay and my_profile; in the Website area (the company's public " +
+        "website) its projects, analytics, services, locations, contact (email and social links), site (favicon, under " +
+        "construction, watermark check) and staff. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
 
@@ -150,6 +184,10 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
             await context.RequireAsync(endpoint);
         }
 
+        if (WebsiteArea.Contains(input.Page) && !context.Access.VisibleDomains.Contains(DomainCodes.Website))
+        {
+            throw new ProtonToolInputException("This user doesn't have the Website area.");
+        }
 
         string? domain = null;
         if (!company)
@@ -178,9 +216,17 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
             client is null ? [] : [client]) { UiCommand = command };
     }
 
-    /// <summary>The user's own business when they can see it, otherwise the first one they can.</summary>
+    /// <summary>
+    /// The user's own business when they can see it, otherwise the first one they can: Design or Execution, never the
+    /// Website area, which isn't a business.
+    /// </summary>
     internal static string? HomeDomain(ProtonToolContext context)
-        => context.Access.Domain is { } home && context.Access.VisibleDomains.Contains(home) ? home : context.Access.VisibleDomains.FirstOrDefault();
+    {
+        static bool Business(string domain) => domain is DomainCodes.Design or DomainCodes.Execution;
+        return context.Access.Domain is { } home && Business(home) && context.Access.VisibleDomains.Contains(home)
+            ? home
+            : context.Access.VisibleDomains.FirstOrDefault(Business);
+    }
 }
 
 public sealed record ChoiceOption
@@ -278,7 +324,7 @@ public sealed class OfferChoicesTool : ProtonTool<OfferChoicesInput>
 
     private static string Detail(ProtonRef record)
     {
-        var kind = record.Type switch { ProtonRefType.Project => "Project", ProtonRefType.Client => "Client", ProtonRefType.Team => "Team chat", _ => "Person" };
+        var kind = record.Type switch { ProtonRefType.Project => "Project", ProtonRefType.Client => "Client", ProtonRefType.Team => "Team chat", ProtonRefType.WebsiteProject => "Website project", _ => "Person" };
         return record.Domain is { } domain ? $"{kind} · {char.ToUpperInvariant(domain[0])}{domain[1..]}" : kind;
     }
 }
@@ -351,9 +397,13 @@ public sealed record OpenSurfaceInput
     public required ProtonSurface Surface { get; init; }
 
     [Description("The record it is for, from find or another tool: a project for edit_project, project_report, " +
-                 "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment and new_statement; " +
-                 "a client for edit_client; a person for message_person. Leave out for the others.")]
+                 "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment, new_statement, " +
+                 "file_comments, portal_discussion and portal_preview; a client for edit_client; a person for " +
+                 "message_person; a website project for edit_website_project. Leave out for the others.")]
     public long? Id { get; init; }
+
+    [Description("file_comments (required) and portal_discussion (optional, to open one file's thread): the project file's item id, from the project's files.")]
+    public long? ItemId { get; init; }
 
     [Description("Which business, for surfaces not tied to a record (new project, new client, invite, new meeting, settings). " +
                  "Leave out for the user's own.")]
@@ -371,14 +421,17 @@ public sealed record OpenSurfaceInput
 /// it saves through, a record they can see), never a one-click confirm. Opening fills and saves nothing; anything that
 /// emails someone opens only when the user asked in their own words.
 /// </summary>
-public sealed class OpenSurfaceTool(ProtonRecords records) : ProtonTool<OpenSurfaceInput>
+public sealed class OpenSurfaceTool(
+    ProtonRecords records, ProtonPortalTab portal, IProjectFileCommentService fileComments, IPortalDiscussionService discussion)
+    : ProtonTool<OpenSurfaceInput>
 {
     public override string Name => "open_surface";
 
     public override string Description =>
         "Open a form, dialog or tab for the user (\"open the new project form\", \"let me edit Acme's details\", \"take me " +
-        "to the finance settings\", \"I want to message Sara\"). It only opens it: the user fills it in and saves it themselves. " +
-        "Use the record's id from find when the surface is for one. Changes you can propose go on a card instead.";
+        "to the finance settings\", \"I want to message Sara\", \"open the comments on the floor plan\", \"show me the " +
+        "discussion with the client\", \"open the website project form\"). It only opens it: the user fills it in and " +
+        "saves it themselves. Use the record's id from find when the surface is for one. Changes you can propose go on a card instead.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
 
@@ -415,17 +468,52 @@ public sealed class OpenSurfaceTool(ProtonRecords records) : ProtonTool<OpenSurf
 
         if (spec.OnlyIn is { } only && domain != only)
         {
-            throw new ProtonToolInputException($"{spec.Label} is only for {only} projects.");
+            throw new ProtonToolInputException(only == DomainCodes.Website ? $"{spec.Label} is in the Website area." : $"{spec.Label} is only for {only} projects.");
         }
 
+        var itemId = await ItemOfAsync(input, record, context, cancellationToken);
         var label = record is null ? spec.Label : $"{spec.Label} for {record.Name}";
         var command = new ProtonUiCommand(
             ProtonUiCommandType.OpenSurface, label, record?.Id, domain, Surface: input.Surface,
             SettingsSection: input.Surface == ProtonSurface.SettingsSection ? input.Section ?? ProtonSettingsSection.General : null,
-            CompanyTab: input.Surface == ProtonSurface.CompanyOverviewTab ? input.Tab ?? ProtonCompanyTab.Overview : null);
+            CompanyTab: input.Surface == ProtonSurface.CompanyOverviewTab ? input.Tab ?? ProtonCompanyTab.Overview : null,
+            ItemId: itemId);
         return new ProtonToolOutput(
             new UiOutcome(label, "The app opens it when your answer is shown, without filling or saving anything. Say what you opened."),
             record is null ? [] : [record]) { UiCommand = command };
+    }
+
+    /// <summary>
+    /// The project file a surface opens on, read as its page reads it, and the checks of a project's portal surfaces:
+    /// the discussion opens only for those taking part in it, the preview only on a project with a client.
+    /// </summary>
+    private async Task<long?> ItemOfAsync(OpenSurfaceInput input, ProtonRef? project, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        switch (input.Surface)
+        {
+            case ProtonSurface.FileComments:
+                var item = input.ItemId ?? throw new ProtonToolInputException("Which file? Give its item id from the project's files.");
+                await fileComments.ListAsync(project!.Id, item, cancellationToken);
+                return item;
+            case ProtonSurface.PortalDiscussion:
+                if (!await portal.TakesPartAsync(project!.Id, cancellationToken))
+                {
+                    throw new Exceptions.Base.NotFoundException("Not found.");
+                }
+
+                if (input.ItemId is { } thread)
+                {
+                    await discussion.ThreadAsync(Business.Portal.DiscussionSide.Staff, project.Id, thread, cancellationToken);
+                }
+
+                return input.ItemId;
+            case ProtonSurface.PortalPreview:
+                return await portal.CanOpenPortalAsync(project!, ProtonProjectPart.Presentation, context, cancellationToken)
+                    ? null
+                    : throw new Exceptions.Base.NotFoundException("Not found.");
+            default:
+                return null;
+        }
     }
 }
 
