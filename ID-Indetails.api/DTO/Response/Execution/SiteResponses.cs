@@ -62,8 +62,11 @@ public sealed record SiteRecordsResponse
     /// <summary>Most recently recorded first.</summary>
     public IReadOnlyList<SiteRecordsProjectResponse> Projects { get; init; } = [];
 
-    /// <summary>The latest records, newest first.</summary>
+    /// <summary>A page of the records, newest first: the page and its size the query asked for.</summary>
     public IReadOnlyList<SiteRecordResponse> Recent { get; init; } = [];
+
+    /// <summary>How many records there are in all, to page <see cref="Recent"/>.</summary>
+    public int RecentTotal { get; init; }
 }
 
 /// <summary>Where cash stood at the end of a week, in USD. <c>Received</c>, <c>Spent</c> and <c>GroundLabour</c> add up from the start.</summary>

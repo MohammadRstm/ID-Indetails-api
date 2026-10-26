@@ -21,6 +21,8 @@ public static class ApiServiceCollectionExtensions
             .AddControllers(options =>
             {
                 options.Filters.Add<ValidationFilter>();
+                // query and route enums by their snake_case names, as the JSON spells them
+                options.ModelBinderProviders.Insert(0, new SnakeCaseEnumBinderProvider());
                 // FluentValidation owns "required" messages, not MVC's implicit attributes.
                 options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
             })

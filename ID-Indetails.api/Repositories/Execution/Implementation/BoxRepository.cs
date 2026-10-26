@@ -54,17 +54,44 @@ public sealed class BoxRepository(IdIndetailsDbContext db) : IBoxRepository
             -sums.Where(s => s.ProjectId == p.Id && s.IsTransfer).Sum(s => s.Amount))).ToList();
     }
 
-    public async Task<(IReadOnlyList<BoxEntryRow> Items, int TotalCount)> SearchAsync(
-        long? projectId, int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<(IReadOnlyList<BoxEntryRow> Items, int TotalCount)> SearchAsync(BoxEntrySearch search, CancellationToken cancellationToken = default)
     {
         var query = db.BoxEntries.AsNoTracking();
-        if (projectId is { } id)
+        if (search.ProjectId is { } id)
         {
             query = query.Where(e => e.ProjectId == id);
         }
 
+        if (search.Kind is { } kind)
+        {
+            query = query.Where(e => e.Kind == kind);
+        }
+
+        if (search.FromUtc is { } from)
+        {
+            query = query.Where(e => e.CreatedAt >= from);
+        }
+
+        if (search.ToUtc is { } to)
+        {
+            query = query.Where(e => e.CreatedAt < to);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search.Text))
+        {
+            foreach (var word in search.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                query = query.Where(e => e.Project.Title.Contains(word)
+                    || (e.Note != null && e.Note.Contains(word))
+                    || db.Users.Any(u => u.Id == e.CreatedById
+                        && ((u.FirstName != null && u.FirstName.Contains(word)) || (u.LastName != null && u.LastName.Contains(word)) || u.Email.Contains(word))));
+            }
+        }
+
         var total = await query.CountAsync(cancellationToken);
-        var items = await Rows(query.OrderByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id).Skip((page - 1) * pageSize).Take(pageSize), cancellationToken);
+        var items = await Rows(
+            query.OrderByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id).Skip((search.Page - 1) * search.PageSize).Take(search.PageSize),
+            cancellationToken);
         return (items, total);
     }
 

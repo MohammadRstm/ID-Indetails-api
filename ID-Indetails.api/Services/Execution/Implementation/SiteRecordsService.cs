@@ -24,7 +24,6 @@ public sealed class SiteRecordsService(
     IProjectFinanceService finance,
     IClock clock) : ISiteRecordsService
 {
-    private const int RecentShown = 20;
 
     public async Task<IReadOnlyList<SiteSummaryResponse>> SummariesAsync(SiteSummaryQuery query, CancellationToken cancellationToken = default)
     {
@@ -53,22 +52,22 @@ public sealed class SiteRecordsService(
             .ToList();
     }
 
-    public async Task<SiteRecordsResponse> MineAsync(CancellationToken cancellationToken = default)
+    public async Task<SiteRecordsResponse> MineAsync(SiteRecordsQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        return await DescribeAsync(actor, actor.UserId, cancellationToken);
+        return await DescribeAsync(actor, actor.UserId, query, cancellationToken);
     }
 
-    public async Task<SiteRecordsResponse> OfAsync(long userId, CancellationToken cancellationToken = default)
+    public async Task<SiteRecordsResponse> OfAsync(long userId, SiteRecordsQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        return await DescribeAsync(actor, userId, cancellationToken);
+        return await DescribeAsync(actor, userId, query, cancellationToken);
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
 
-    private async Task<SiteRecordsResponse> DescribeAsync(UserAccess actor, long userId, CancellationToken cancellationToken)
+    private async Task<SiteRecordsResponse> DescribeAsync(UserAccess actor, long userId, SiteRecordsQuery query, CancellationToken cancellationToken)
     {
         var person = await employees.GetAsync(userId, cancellationToken);
         if (person is null || (userId != actor.UserId && !EmployeeRules.CanSee(actor, person.Domain)))
@@ -105,9 +104,11 @@ public sealed class SiteRecordsService(
                 .ToList(),
             Recent = all
                 .OrderByDescending(r => r.At)
-                .Take(RecentShown)
+                .Skip((query.RecentPage - 1) * query.RecentPageSize)
+                .Take(query.RecentPageSize)
                 .Select(r => new SiteRecordResponse(r.Kind, r.Id, r.ProjectId, sites[r.ProjectId].Title, r.At, r.Label, r.Amount))
                 .ToList(),
+            RecentTotal = all.Count,
         };
     }
 }
