@@ -34,7 +34,7 @@ public class LabourVersionTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, worker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [worker.User.Id]);
 
         (await (await Client.GetAsync(WeekUrl(site.Id), worker.AccessToken)).ReadAsync<LabourWeekResponse>()).Version.ShouldBe("0");
 
@@ -59,7 +59,7 @@ public class LabourVersionTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, worker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [worker.User.Id]);
         var loaded = await SubmitAsync(site.Id, worker.AccessToken, Week(4));
 
         // a manager changes it meanwhile

@@ -63,6 +63,10 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ProjectLabourDefault> ProjectLabourDefaults => Set<ProjectLabourDefault>();
 
     public DbSet<ProjectPaymentChange> ProjectPaymentChanges => Set<ProjectPaymentChange>();
+
+    public DbSet<ProjectStaff> ProjectStaff => Set<ProjectStaff>();
+
+    public DbSet<SiteLog> SiteLogs => Set<SiteLog>();
     public DbSet<ClientStatement> ClientStatements => Set<ClientStatement>();
     public DbSet<ClientStatementLine> ClientStatementLines => Set<ClientStatementLine>();
     public DbSet<ClientStatementDelivery> ClientStatementDeliveries => Set<ClientStatementDelivery>();

@@ -94,3 +94,18 @@ public sealed record SiteProjectionResponse(
 
 /// <param name="Weeks">From the project's first week to the current one (or the one it was finalised in), oldest first.</param>
 public sealed record SiteMoneyTimelineResponse(IReadOnlyList<CashWeekResponse> Weeks, SiteProjectionResponse Projection, string Currency);
+
+public sealed record SiteLogProjectResponse(long Id, string Title);
+
+/// <param name="CanEdit">The caller wrote it, today (company time): a log is only changed on the day it was written.</param>
+public sealed record SiteLogResponse(
+    long Id,
+    SiteLogProjectResponse Project,
+    PersonRefResponse Person,
+    string Body,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt,
+    bool CanEdit);
+
+/// <summary>A site the caller oversees.</summary>
+public sealed record MySiteResponse(long Id, string Title, string? ClientName, ProjectStatus Status, string? Location, DateTime AssignedAt);

@@ -125,6 +125,24 @@ public class EffectivePermissionsTests
     }
 
     [Fact]
+    public void Real_catalog_site_staff_report_labour_and_write_logs_but_record_no_materials()
+    {
+        var catalog = PermissionCatalog.Definitions.Select(d => new Grant(d.Code, d.DomainCode)).ToList();
+        var grants = (string role) => catalog.Where(g => PermissionCatalog.Grants[role].Contains(g.Code));
+
+        var staff = EffectivePermissions.Resolve(1, RoleCodes.Employee, DomainCodes.Execution, catalog, grants(RoleCodes.Employee), []);
+        staff.Permissions.ShouldContain(PermissionCodes.LabourReportCreate);
+        staff.Permissions.ShouldContain(PermissionCodes.SiteLogCreate);
+        staff.Permissions.ShouldNotContain(PermissionCodes.SiteLogViewAll);
+        staff.Permissions.ShouldNotContain(PermissionCodes.MaterialCreate);
+
+        var admin = EffectivePermissions.Resolve(1, RoleCodes.Admin, DomainCodes.Execution, catalog, grants(RoleCodes.Admin), []);
+        admin.Permissions.ShouldContain(PermissionCodes.SiteLogViewAll);
+        var designAdmin = EffectivePermissions.Resolve(1, RoleCodes.Admin, DomainCodes.Design, catalog, grants(RoleCodes.Admin), []);
+        designAdmin.Permissions.ShouldNotContain(PermissionCodes.SiteLogViewAll);
+    }
+
+    [Fact]
     public void Website_staff_hold_only_the_website_s_permissions_and_see_only_the_website()
     {
         Grant[] catalog = [new("project:view", null), new("proton:use", null), new("work_entry:create", DomainCodes.Design), new("website:manage", DomainCodes.Website)];

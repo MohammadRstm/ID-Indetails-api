@@ -231,6 +231,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ILabourRepository, LabourRepository>();
         services.AddScoped<IStatementRepository, StatementRepository>();
         services.AddScoped<ISiteRecordsRepository, SiteRecordsRepository>();
+        services.AddScoped<ISiteTeamRepository, SiteTeamRepository>();
         services.AddScoped<IBoardLayoutRepository, BoardLayoutRepository>();
         services.AddScoped<IUserDeviceRepository, UserDeviceRepository>();
 
@@ -331,6 +332,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IStatementService, StatementService>();
         services.AddScoped<IDocumentService, DocumentService>();
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
+        services.AddScoped<ISiteLogService, SiteLogService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();
         services.AddScoped<IDeviceService, DeviceService>();

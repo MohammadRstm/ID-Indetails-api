@@ -2138,6 +2138,18 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "site_log:create",
+                            Description = "Write the daily logs of the sites one oversees",
+                            DomainCode = "execution"
+                        },
+                        new
+                        {
+                            Code = "site_log:view_all",
+                            Description = "Read every site's daily logs",
+                            DomainCode = "execution"
+                        },
+                        new
+                        {
                             Code = "client:view",
                             Description = "View clients"
                         },
@@ -4143,6 +4155,53 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectStaff", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<long?>("AssignedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("assigned_by_id");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime?>("RemovedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("removed_at");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_staff");
+
+                    b.HasIndex("AssignedById")
+                        .HasDatabaseName("ix_project_staff_assigned_by_id");
+
+                    b.HasIndex("ProjectId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_project_staff_project_id_user_id");
+
+                    b.HasIndex("UserId", "RemovedAt")
+                        .HasDatabaseName("ix_project_staff_user_id_removed_at");
+
+                    b.ToTable("project_staff", (string)null);
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProtonAction", b =>
                 {
                     b.Property<long>("Id")
@@ -4881,6 +4940,16 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "site_log:create"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "site_log:view_all"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "client:view"
                         },
                         new
@@ -5151,6 +5220,16 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "admin",
+                            PermissionCode = "site_log:create"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
+                            PermissionCode = "site_log:view_all"
+                        },
+                        new
+                        {
+                            RoleCode = "admin",
                             PermissionCode = "client:view"
                         },
                         new
@@ -5256,18 +5335,63 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "employee",
-                            PermissionCode = "material:create"
+                            PermissionCode = "labour_report:create"
                         },
                         new
                         {
                             RoleCode = "employee",
-                            PermissionCode = "labour_report:create"
+                            PermissionCode = "site_log:create"
                         },
                         new
                         {
                             RoleCode = "employee",
                             PermissionCode = "proton:use"
                         });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.SiteLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_site_logs");
+
+                    b.HasIndex("ProjectId", "CreatedAt")
+                        .HasDatabaseName("ix_site_logs_project_id_created_at");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_site_logs_user_id_created_at");
+
+                    b.ToTable("site_logs", (string)null);
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.StatementSequence", b =>
@@ -7615,6 +7739,33 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectStaff", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_project_staff_users_assigned_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany("Staff")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_staff_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_staff_users_user_id");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProtonAction", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", "User")
@@ -7745,6 +7896,27 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Permission");
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.SiteLog", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_site_logs_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_site_logs_users_user_id");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.StoredFile", b =>
@@ -8128,6 +8300,8 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("PaymentChanges");
 
                     b.Navigation("Requirements");
+
+                    b.Navigation("Staff");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>

@@ -73,6 +73,12 @@ public sealed class ProjectsController(
     public Task<ProjectResponse> UpdatePayment(long projectId, UpdateProjectPaymentRequest request, CancellationToken cancellationToken)
         => projectService.UpdatePaymentAsync(projectId, request, cancellationToken);
 
+    /// <summary>Execution: the employees who oversee the site.</summary>
+    [HttpPut("{projectId:long}/staff")]
+    [HasPermission(PermissionCodes.ProjectEdit)]
+    public Task<ProjectResponse> UpdateStaff(long projectId, UpdateProjectStaffRequest request, CancellationToken cancellationToken)
+        => projectService.UpdateStaffAsync(projectId, request, cancellationToken);
+
     /// <summary>Every change of the project's agreed payment, newest first, with why it changed.</summary>
     [HttpGet("{projectId:long}/payment-changes")]
     [HasPermission(PermissionCodes.FinancialView)]

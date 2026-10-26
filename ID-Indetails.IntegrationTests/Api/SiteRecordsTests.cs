@@ -17,9 +17,9 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
-        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id]);
         await Client.PostJsonAsync($"/api/projects/{site.Id}/materials",
             new { items = new[] { new { name = "Cement", amount = 100m }, new { name = "Sand", amount = 50m } } }, employee.AccessToken);
         var week = (await (await Client.GetAsync($"/api/projects/{site.Id}/labour-weeks", employee.AccessToken)).ReadAsync<LabourWeekListResponse>()).Weeks[0].WeekStart;
@@ -51,7 +51,7 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Site_cards_show_what_was_recorded_on_visible_sites_only()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var quiet = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);

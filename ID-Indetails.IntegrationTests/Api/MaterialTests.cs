@@ -17,7 +17,7 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
-        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
 
         var added = await AddAsync(project.Id, employee.AccessToken,
@@ -69,8 +69,8 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
-        var (_, _, first) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var (_, _, second) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, first) = await _steps.MaterialWorkerAsync(superAdmin);
+        var (_, _, second) = await _steps.MaterialWorkerAsync(superAdmin);
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
         var mine = (await AddAsync(project.Id, first.AccessToken, new { name = "Cement", quantity = 40m, unit = "bag", unitCost = 7.5m }))[0];
 
@@ -97,7 +97,7 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Client_prices_need_the_pricing_permission_and_follow_the_markup_unless_set()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
 
         await (await Client.PostJsonAsync($"/api/projects/{project.Id}/materials",

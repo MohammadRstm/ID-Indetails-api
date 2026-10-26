@@ -120,6 +120,12 @@ public static class ErrorCodes
     public const string LabourDayOutsideWeek = "labour_day_outside_week";
     public const string LabourDayInFuture = "labour_day_in_future";
     public const string LabourWeekChanged = "labour_week_changed";
+
+    /// <summary>403. Only a site's own staff report its labour and write its daily logs.</summary>
+    public const string NotOnSiteTeam = "not_on_site_team";
+
+    /// <summary>422. A daily log can only be changed on the day it was written.</summary>
+    public const string SiteLogLocked = "site_log_locked";
     public const string StatementEmpty = "statement_empty";
 
     // Dependencies
