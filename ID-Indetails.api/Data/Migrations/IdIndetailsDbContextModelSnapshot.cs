@@ -6301,6 +6301,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("datetime(3)")
                         .HasColumnName("ended_at");
 
+                    b.Property<bool>("OutsideScope")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("outside_scope");
+
                     b.Property<long>("ProjectId")
                         .HasColumnType("bigint")
                         .HasColumnName("project_id");

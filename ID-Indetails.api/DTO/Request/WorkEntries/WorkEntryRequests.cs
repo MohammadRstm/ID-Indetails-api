@@ -14,6 +14,9 @@ public sealed record SaveWorkEntryRequest
     /// <summary>A photo or video the caller uploaded (<c>POST /api/files</c>). Null removes it.</summary>
     public long? AttachmentFileId { get; init; }
 
+    /// <summary>Work outside the project's original scope. Left out, a new entry is within it and an edited one keeps what it had.</summary>
+    public bool? OutsideScope { get; init; }
+
     /// <summary>
     /// Other entries of the caller moved to make room, saved together with this one (the timeline's swap).
     /// Each must still be changeable.
@@ -25,6 +28,12 @@ public sealed record SaveWorkEntryRequest
     /// their time. Each must still be changeable.
     /// </summary>
     public IReadOnlyList<long> Deletes { get; init; } = [];
+}
+
+/// <summary>An admin's correction of whether an entry is outside the project's original scope.</summary>
+public sealed record SetWorkEntryScopeRequest
+{
+    public bool OutsideScope { get; init; }
 }
 
 public sealed record WorkEntryMoveRequest

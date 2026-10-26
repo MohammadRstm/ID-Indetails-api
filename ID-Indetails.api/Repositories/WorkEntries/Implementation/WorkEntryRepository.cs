@@ -218,7 +218,7 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
         ProjectStatus ProjectStatus, string ProjectDomain, long? ClientId, string? ClientName, string? ClientOrganisation, string Description,
         DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt, DateTime? UpdatedAt, int CommentCount,
         long? AttachmentId, string? AttachmentName, string? AttachmentMimeType, long? AttachmentSize, DateTime? AttachmentCreatedAt,
-        string? ProjectIcon, string? ProjectTint);
+        string? ProjectIcon, string? ProjectTint, bool OutsideScope);
 
     /// <summary>Loads the entries of an already ordered and paged query, with the details shown for each.</summary>
     private static async Task<IReadOnlyList<WorkEntryView>> ViewsAsync(IQueryable<WorkEntry> entries, CancellationToken cancellationToken)
@@ -228,7 +228,7 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             e.Project.Status, e.Project.DomainCode, e.Project.ClientId, e.Project.Client != null ? e.Project.Client.Name : null,
             e.Project.Client != null ? e.Project.Client.Organisation : null, e.Description, e.StartedAt, e.EndedAt, e.DurationMinutes, e.CreatedAt, e.UpdatedAt, e.Comments.Count(),
             e.AttachmentFileId, e.AttachmentFile!.OriginalName, e.AttachmentFile.MimeType, e.AttachmentFile.SizeBytes, e.AttachmentFile.CreatedAt,
-            e.Project.Icon, e.Project.Tint))
+            e.Project.Icon, e.Project.Tint, e.OutsideScope))
             .ToListAsync(cancellationToken);
 
         return rows.Select(r => new WorkEntryView(
@@ -239,6 +239,7 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
                 ? new FileView(fileId, r.AttachmentName!, r.AttachmentMimeType!, r.AttachmentSize ?? 0, r.AttachmentCreatedAt ?? r.CreatedAt)
                 : null,
             r.ProjectIcon,
-            r.ProjectTint)).ToList();
+            r.ProjectTint,
+            r.OutsideScope)).ToList();
     }
 }
