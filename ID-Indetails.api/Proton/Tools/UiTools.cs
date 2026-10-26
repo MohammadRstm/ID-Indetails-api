@@ -712,10 +712,10 @@ public sealed class FillFormTool(
     public override string Name => "fill_form";
 
     public override string Description =>
-        "Fill a form for the user to check and save: open it first with open_surface (or open_record or open_page for a " +
-        "form on a page, in the same answer is fine). Give only the values for that form, from what the user said or a " +
-        "tool returned; leave out anything you don't know. The user presses Save or Send themselves. Money amounts only " +
-        "when the user typed them. For changes you can propose on a card, propose instead unless the user asked for the form.";
+        "Fill a form for the user to check and save: the form opens itself when it isn't open (the record's page, then " +
+        "the form). Give only the values for that form, from what the user said or a tool returned; leave out anything you " +
+        "don't know. The user presses Save or Send themselves. Money amounts only when the user typed them. For changes " +
+        "you can propose on a card, propose instead unless the user asked for the form.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
 
@@ -867,8 +867,11 @@ public sealed class FillFormTool(
                 return project;
             }
             case ProtonForm.WorkEntryComment:
-                _ = await Service<Services.WorkEntries.Abstraction.IWorkEntryQueryService>().GetAsync(fill.Id!.Value, cancellationToken);
-                return null;
+            {
+                // the entry opens on its person's page: the command names them, so the app knows where
+                var entry = (await Service<Services.WorkEntries.Abstraction.IWorkEntryQueryService>().GetAsync(fill.Id!.Value, cancellationToken)).Entry;
+                return new ProtonRef(ProtonRefType.Person, entry.Person.Id, entry.Person.Name, DomainCodes.Design);
+            }
             case ProtonForm.ReportOptions:
                 return await ProjectAsync(fill.Id, context, cancellationToken, DomainCodes.Design);
             case ProtonForm.Team when fill.Id is { } teamId:

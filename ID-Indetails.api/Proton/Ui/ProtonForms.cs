@@ -178,7 +178,7 @@ public sealed record ReportOptionsFill
     public bool? Csv { get; init; }
 }
 
-/// <summary>A team's name: a new team, or the one being renamed (the fill's id).</summary>
+/// <summary>A team's new name (the fill's id is the team): a new team is proposed on a card instead.</summary>
 public sealed record TeamFill
 {
     public string? Name { get; init; }
@@ -409,6 +409,7 @@ public sealed record ScheduleFill
     [Description("Back to the company's working week.")]
     public bool? FollowsDefault { get; init; }
 
+    [Description("Every working day of the week, with its hours; a day left out is a day off.")]
     public IReadOnlyList<ScheduleDayFill>? Days { get; init; }
 }
 
@@ -625,6 +626,7 @@ public static partial class ProtonFormRules
                 break;
             case ProtonForm.Team when fill.Team is { } t:
                 Text("name", t.Name, NameLength);
+                Needs("the team's id (a new team is proposed with propose_create_team)", fill.Id);
                 break;
             case ProtonForm.Profile when fill.Profile is { } me:
                 Text("first_name", me.FirstName, NameLength);
