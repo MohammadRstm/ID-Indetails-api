@@ -333,12 +333,16 @@ internal static class WorkText
     }
 
     public static SaveWorkEntryRequest RequestOf(WorkEntryResponse e)
-        => new() { ProjectId = e.Project.Id, StartedAt = e.StartedAt, EndedAt = e.EndedAt, Description = e.Description, AttachmentFileId = e.Attachment?.Id };
+        => new()
+        {
+            ProjectId = e.Project.Id, StartedAt = e.StartedAt, EndedAt = e.EndedAt, Description = e.Description, AttachmentFileId = e.Attachment?.Id,
+            OutsideScope = e.OutsideScope,
+        };
 
     /// <summary>The fields an entry is saved with (its lists of moves and deletes are only for the timeline's swaps).</summary>
     public static bool Same(SaveWorkEntryRequest a, SaveWorkEntryRequest b)
         => a.ProjectId == b.ProjectId && a.StartedAt == b.StartedAt && a.EndedAt == b.EndedAt && a.Description == b.Description
-            && a.AttachmentFileId == b.AttachmentFileId;
+            && a.AttachmentFileId == b.AttachmentFileId && (a.OutsideScope ?? false) == (b.OutsideScope ?? false);
 
     private static int Minute(string time)
         => TimeOnly.TryParseExact(time.Trim(), "H:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var t)

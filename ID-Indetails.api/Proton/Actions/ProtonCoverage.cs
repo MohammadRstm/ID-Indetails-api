@@ -133,6 +133,7 @@ public static class ProtonCoverage
         Action("WorkEntries.Update", "propose_update_my_work"),
         Action("WorkEntries.Delete", "propose_delete_my_work"),
         Open("WorkEntries.Restore", "a deleted entry is restored from My work, where the person sees what they deleted"),
+        Never("WorkEntries.SetScope", "Marking someone's work as outside the scope is an admin's correction made in the app."),
         Action("WorkEntries.AddComment", "propose_comment_work_entry"),
         Open("BoardLayouts.Save", "the person drags their own board's cards into place"),
         // resets the person's own board layout to the default: a preference, not a record
