@@ -770,8 +770,17 @@ public sealed class FillFormTool(
             case ProtonForm.EditProject:
                 record = await ProjectAsync(input.Id, context, cancellationToken);
                 break;
-            case ProtonForm.Client when input.Id is { } clientId:
-                record = await Visible(ProtonRefType.Client, clientId, context, cancellationToken);
+            case ProtonForm.Client:
+                if (input.Client!.Email is { } clientEmail)
+                {
+                    Typed(clientEmail, context, "an email address");
+                }
+
+                if (input.Id is { } clientId)
+                {
+                    record = await Visible(ProtonRefType.Client, clientId, context, cancellationToken);
+                }
+
                 break;
             case ProtonForm.Meeting when input.Meeting!.ProjectId is { } meetingProject:
                 _ = await ProjectAsync(meetingProject, context, cancellationToken);
