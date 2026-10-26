@@ -6,6 +6,7 @@ using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Memory;
+using ID_Indetails.api.Proton.Suggestions;
 using ID_Indetails.api.Proton.Usage;
 using ID_Indetails.api.Proton.History;
 using ID_Indetails.api.Proton.Voice;
@@ -31,8 +32,19 @@ public sealed class ProtonController(
     ProtonMemoryService memories,
     ProtonVoiceService voice,
     ProtonHistoryService history,
+    ProtonReplySuggester suggester,
     ICurrentUser currentUser) : ControllerBase
 {
+    /// <summary>
+    /// A reply Proton suggests to the latest client message in a project's discussion, for the person to take with Tab
+    /// and send themselves. None, with why, when suggestions are off, there is nothing to reply to, or the day's are used.
+    /// </summary>
+    [HttpPost("reply-suggestions")]
+    [HasPermission(PermissionCodes.ProtonUse)]
+    [EnableRateLimiting(RateLimitPolicies.Proton)]
+    public Task<ProtonReplySuggestion> SuggestReply(SuggestReplyRequest request, CancellationToken cancellationToken)
+        => suggester.SuggestAsync(request.ProjectId, cancellationToken);
+
     [HttpPost("messages")]
     [HasPermission(PermissionCodes.ProtonUse)]
     [EnableRateLimiting(RateLimitPolicies.Proton)]

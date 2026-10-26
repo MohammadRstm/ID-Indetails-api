@@ -32,7 +32,10 @@ public interface IContentStore
     /// <summary>The stored object's size in bytes, as the store reports it, or null when there is no such object.</summary>
     Task<long?> GetSizeAsync(string key, CancellationToken cancellationToken = default);
 
-    /// <summary>Up to <paramref name="count"/> bytes from the start of the object, to check what the file really is.</summary>
+    /// <summary>
+    /// Up to <paramref name="count"/> bytes from the start of the object: to check what the file really is, or to read a
+    /// file small enough to hold in memory whole (for Proton to read it).
+    /// </summary>
     Task<byte[]> ReadStartAsync(string key, int count, CancellationToken cancellationToken = default);
 
     /// <summary>

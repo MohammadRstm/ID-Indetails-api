@@ -22,6 +22,9 @@ public sealed record ProjectSearch(
 
 public sealed record SiteRecorder(long ProjectId, long UserId, string Name, DateTime LastAt);
 
+/// <param name="ChangedByName">Null when nobody is named (the person no longer exists).</param>
+public sealed record PaymentChangeRow(ProjectPaymentChange Change, string? ChangedByName);
+
 public interface IProjectRepository
 {
     /// <summary>Not tracked, with client and owner.</summary>
@@ -44,6 +47,9 @@ public interface IProjectRepository
 
     /// <summary>Tracked, and locked (<c>SELECT … FOR UPDATE</c>) until the transaction ends. Call inside a transaction.</summary>
     Task<Project?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>The project's payment changes, newest first, with who made each. Not tracked.</summary>
+    Task<IReadOnlyList<PaymentChangeRow>> PaymentChangesAsync(long projectId, CancellationToken cancellationToken = default);
 
     /// <summary>Whether any invoice or payment (voided ones included) was made for the project.</summary>
     Task<bool> HasBillingRecordsAsync(long projectId, CancellationToken cancellationToken = default);

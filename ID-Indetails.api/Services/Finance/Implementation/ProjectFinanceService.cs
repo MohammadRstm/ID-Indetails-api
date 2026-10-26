@@ -126,8 +126,10 @@ public sealed class ProjectFinanceService(
             return [];
         }
 
-        var calendars = await payrollInputs.CalendarsAsync(history.Select(g => g.Key).ToList(), cancellationToken);
-        return history.SelectMany(g => ProjectFinance.RatesOf(g, calendars[g.Key], clock.CompanyToday)).ToList();
+        var ids = history.Select(g => g.Key).ToList();
+        var calendars = await payrollInputs.CalendarsAsync(ids, cancellationToken);
+        var roles = await payrollInputs.RoleHistoriesAsync(ids, cancellationToken);
+        return history.SelectMany(g => ProjectFinance.RatesOf(g, calendars[g.Key], clock.CompanyToday, roles[g.Key])).ToList();
     }
 
     public async Task<IReadOnlyList<BreakCost>> PaidBreaksAsync(

@@ -118,7 +118,7 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{added[0].Id}/client-price",
             new { clientPrice = 1m }, employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
-        await Client.PutJsonAsync($"/api/projects/{project.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.20m }, superAdmin.AccessToken);
+        await Client.PutJsonAsync($"/api/projects/{project.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.20m, description = "Priced" }, superAdmin.AccessToken);
         var reset = await (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{added[1].Id}/client-price",
             new { clientPrice = (decimal?)null }, superAdmin.AccessToken)).ReadAsync<MaterialResponse>();
         reset.ClientPrice.ShouldBe(240m);

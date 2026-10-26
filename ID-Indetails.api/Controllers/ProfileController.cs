@@ -29,6 +29,11 @@ public sealed class ProfileController(IEmployeeService employeeService, IPermiss
     public Task<CurrentUserResponse> RemovePhoto(CancellationToken cancellationToken)
         => employeeService.RemoveMyPhotoAsync(cancellationToken);
 
+    /// <summary>Whether Proton suggests replies to them in the discussions with clients: their own choice.</summary>
+    [HttpPut("proton-suggestions")]
+    public Task<CurrentUserResponse> SetProtonSuggestions(MyProtonSuggestionsRequest request, CancellationToken cancellationToken)
+        => employeeService.SetMyProtonSuggestionsAsync(request, cancellationToken);
+
     /// <summary>
     /// Every permission they hold, and every one their role gives that was taken away from them, with what each allows
     /// and where it comes from.

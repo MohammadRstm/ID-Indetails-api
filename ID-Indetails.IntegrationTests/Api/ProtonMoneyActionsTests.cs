@@ -347,7 +347,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
 
-        var (price, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 15m }, "Set the markup to 15%");
+        var (price, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 15m, reason = "New supplier terms" }, "Set the markup to 15% for the new supplier terms");
         // the site was made with 0.1, which reads as 10%
         var markup = price.PendingAction!.Preview.Changes.Single(c => c.Label == "Material markup");
         markup.Before.ShouldBe("10%");
@@ -357,14 +357,14 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!.MaterialMarkup.ShouldBe(0.15m);
 
         // a fee card re-sends the markup it read: if the markup changed in the app since, the card is refused, not put back
-        var (fee, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, project_fee = 500m }, "Set the fee to 500");
+        var (fee, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, project_fee = 500m, reason = "Agreed with the client" }, "Set the fee to 500, agreed with the client");
         fee.PendingAction!.Preview.Changes.ShouldNotContain(c => c.Label == "Material markup");
         fee.PendingAction.Preview.Phrase.ShouldBe("500");
-        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 0m, materialMarkup = 0.2m }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 0m, materialMarkup = 0.2m, description = "Changed in the app" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PostJsonAsync($"/api/proton/actions/{fee.PendingAction.Id}/confirm", new { fee.ConversationId, typed = "500" }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
 
-        var (_, tooHigh) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 600m }, "Make the markup 600%");
+        var (_, tooHigh) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 600m, reason = "Rush order" }, "Make the markup 600% for the rush order");
         tooHigh["message"]!.GetValue<string>().ShouldContain("500%");
     }
 

@@ -12,9 +12,9 @@ public static class ProtonPrompts
     /// <summary>Where the prompts name the app: replaced by the product name users know it by.</summary>
     public const string ProductToken = "{product}";
 
-    /// <summary>For the text chat: who Proton is and how it sounds, the company, what it may see, what its money figures mean, how it analyses, how it moves around the app, how it proposes changes and messages, and how to answer in writing.</summary>
+    /// <summary>For the text chat: who Proton is and how it sounds, the company, what it may see, what its money figures mean, how it analyses, how it moves around the app, how it reads files and the discussion with clients, how it proposes changes and messages, and how to answer in writing.</summary>
     public static string Chat { get; } = string.Join("\n\n",
-        Read("persona.md"), Read("proton.md"), Read("data.md"), Read("money.md"), Read("analysis.md"), Read("navigation.md"), Read("actions.md"),
+        Read("persona.md"), Read("proton.md"), Read("data.md"), Read("money.md"), Read("analysis.md"), Read("navigation.md"), Read("files.md"), Read("actions.md"),
         Read("messages.md"), Read("present.md"), Read("chat.md"));
 
     public static string ChatVersion { get; } = Version(Chat);

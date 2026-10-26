@@ -115,22 +115,30 @@ public sealed record UpdateProjectRequest
     public long OwnerId { get; init; }
 }
 
-/// <summary>Design only: client work or internal, the client and the revenue.</summary>
+/// <summary>Design only: client work or internal, and the client. Becoming internal drops the payment to 0.</summary>
 public sealed record UpdateProjectBillingRequest
 {
     public BillingType BillingType { get; init; }
 
     public long? ClientId { get; init; }
-
-    public decimal? Revenue { get; init; }
 }
 
-/// <summary>Execution only.</summary>
+/// <summary>Design only: a client project's customer payment, and why it changes.</summary>
+public sealed record UpdateProjectPaymentRequest
+{
+    public decimal Revenue { get; init; }
+
+    public string Description { get; init; } = string.Empty;
+}
+
+/// <summary>Execution only: the project fee and default material markup, and why they change.</summary>
 public sealed record UpdateProjectPricingRequest
 {
     public decimal ProjectFee { get; init; }
 
     public decimal MaterialMarkup { get; init; }
+
+    public string Description { get; init; } = string.Empty;
 }
 
 /// <summary>What the project report PDF covers.</summary>

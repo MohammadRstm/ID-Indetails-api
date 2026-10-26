@@ -76,7 +76,7 @@ When a change leaves an admin or employee holding **exactly** the default permis
 - An employee granted every admin default (and nothing else) becomes an **admin**.
 - An admin revoked down to exactly the employee defaults becomes an **employee**.
 
-Their overrides are cleared, because the new role's defaults now describe them, so they are no longer a joker. The change writes `role_auto_promoted` or `role_auto_demoted`, and the response's `previousRole` says what they were. Nobody is ever moved into or out of the super admin role automatically; super admins are only created by invitation.
+Their overrides are cleared, because the new role's defaults now describe them, so they are no longer a joker. The change writes `role_auto_promoted` or `role_auto_demoted`, and the response's `previousRole` says what they were. After a promotion, `fixedPayFrom` is the first of this month: their pay is a fixed salary from then on, so the client asks the caller to confirm it (the pay in force is `GET /api/employees/{id}/pay`; see [employees.md](employees.md#changing-a-role)). Nobody is ever moved into or out of the super admin role automatically; super admins are only created by invitation.
 
 The check runs only when someone's permissions are changed, never on ordinary requests. It compares two small sets in memory inside the same transaction. The person's `users` row is locked (`SELECT … FOR UPDATE`) for the duration, so two simultaneous changes to the same person are applied one after the other and the check always sees the final set.
 

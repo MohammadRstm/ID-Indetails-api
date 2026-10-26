@@ -102,6 +102,61 @@ public sealed class ProtonOptions
     public ProtonHistoryOptions History { get; init; } = new();
 
     public ProtonVisualOptions Visuals { get; init; } = new();
+
+    public ProtonFileOptions Files { get; init; } = new();
+
+    public ProtonSuggestionOptions Suggestions { get; init; } = new();
+}
+
+/// <summary>Replies Proton suggests in the discussions with clients: how many a person gets a day, and how much each reads and writes.</summary>
+public sealed class ProtonSuggestionOptions
+{
+    [Range(1, 500)]
+    public int MaxPerDay { get; init; } = 40;
+
+    /// <summary>The latest chat messages the suggestion is written from.</summary>
+    [Range(1, 50)]
+    public int MessagesRead { get; init; } = 20;
+
+    [Range(50, 2_000)]
+    public int MaxOutputTokens { get; init; } = 400;
+
+    /// <summary>The budget held while a suggestion is written: one short call costs far less.</summary>
+    [Range(0.001, 1)]
+    public decimal HoldUsd { get; init; } = 0.02m;
+}
+
+/// <summary>
+/// What read_project_file may read of a project file, so one file can't take a question's whole budget: its size, a
+/// PDF's pages and a video's pictures at a time, and how much text. Videos need ffmpeg and ffprobe on the server.
+/// </summary>
+public sealed class ProtonFileOptions
+{
+    [Range(1_000_000, 30_000_000)]
+    public long MaxBytes { get; init; } = 25_000_000;
+
+    /// <summary>A PDF's pages read at once; the model can ask for the next ones.</summary>
+    [Range(1, 50)]
+    public int MaxPdfPages { get; init; } = 20;
+
+    /// <summary>Pictures taken evenly through a video. The sound isn't read.</summary>
+    [Range(1, 40)]
+    public int MaxVideoFrames { get; init; } = 16;
+
+    [Range(1_000, 200_000)]
+    public int MaxTextCharacters { get; init; } = 60_000;
+
+    /// <summary>File reads per question: each can be tens of thousands of tokens.</summary>
+    [Range(1, 5)]
+    public int MaxReadsPerQuestion { get; init; } = 2;
+
+    /// <summary>Empty turns video reading off.</summary>
+    public string FfmpegPath { get; init; } = "ffmpeg";
+
+    public string FfprobePath { get; init; } = "ffprobe";
+
+    [Range(5, 120)]
+    public int VideoTimeoutSeconds { get; init; } = 30;
 }
 
 /// <summary>
@@ -194,6 +249,9 @@ public sealed class ProtonActionOptions
     /// <summary>Sending messages as the person.</summary>
     public bool Messaging { get; init; }
 
+    /// <summary>Changing the company's public website: its projects, services, offices, and taking it down.</summary>
+    public bool Website { get; init; }
+
     /// <summary>Proposals waiting for a Confirm at once, per conversation.</summary>
     [Range(1, 10)]
     public int MaxPendingActions { get; init; } = 3;
@@ -214,6 +272,7 @@ public sealed class ProtonActionOptions
         Proton.Actions.ProtonFamily.PayRules => PayRules,
         Proton.Actions.ProtonFamily.Money => Money,
         Proton.Actions.ProtonFamily.Messaging => Messaging,
+        Proton.Actions.ProtonFamily.Website => Website,
         _ => false,
     };
 }

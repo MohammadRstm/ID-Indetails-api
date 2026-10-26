@@ -1,5 +1,4 @@
 using ID_Indetails.api.Business.Finance;
-using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using Microsoft.EntityFrameworkCore;
@@ -21,17 +20,11 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
             .Select(e => new WorkEntryRow(e.ProjectId, e.UserId, e.StartedAt, e.DurationMinutes))
             .ToListAsync(cancellationToken);
 
-    /// <summary>
-    /// The pay that prices each person's time on projects. A super admin's costs nothing: their salary is a company
-    /// cost, counted once on the company overview, and pricing their hours would also give it away.
-    /// </summary>
     public async Task<IReadOnlyList<ProjectFinance.PayRecord>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
         => await db.UserPayHistory
             .AsNoTracking()
             .Where(p => userIds.Contains(p.UserId))
-            // admins and super admins are paid a fixed salary, a company cost (the company overview's net profit): any hours
-            // they logged cost their projects nothing, so their pay is never counted twice
-            .Select(p => new ProjectFinance.PayRecord(p.UserId, p.EffectiveFrom, p.Basis, p.User.RoleCode != RoleCodes.Employee ? 0m : p.Amount, p.Currency))
+            .Select(p => new ProjectFinance.PayRecord(p.UserId, p.EffectiveFrom, p.Basis, p.Amount, p.Currency))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
