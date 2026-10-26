@@ -223,7 +223,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
             new { currency = "LBP", rate_per_usd = 89_500m, effective_from = from.ToString("yyyy-MM-dd") }, "Set LBP to 89500 from ten days ago");
         var card = rate.PendingAction!.Preview;
         card.Note!.ShouldContain("Backdated");
-        card.Note.ShouldContain("Payments keep the rate they were recorded at");
+        card.Note!.ShouldContain("Payments keep the rate they were recorded at");
         card.Irreversible.ShouldBeTrue();
         card.Phrase.ShouldBe("89500");
     }
@@ -417,7 +417,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });
         var card = statement.PendingAction!;
         card.Preview.Note!.ShouldContain("2 material(s)");
-        card.Preview.Note.ShouldContain("frozen");
+        card.Preview.Note!.ShouldContain("frozen");
         card.Preview.Irreversible.ShouldBeTrue();
         var outcome = await ConfirmAsync(superAdmin, statement, card.Preview.Phrase);
         outcome.Message.ShouldStartWith("Made statement");
@@ -426,7 +426,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var made = (await GetAsync<PagedResponse<StatementSummaryResponse>>(superAdmin, $"/api/projects/{site.Id}/statements")).Items.ShouldHaveSingleItem();
         var (first, _) = await ProposeAsync(superAdmin, "propose_record_statement_delivery", new { statement_id = made.Id, channel = "whatsapp" });
         first.PendingAction!.Preview.Note!.ShouldContain("first delivery");
-        first.PendingAction.Preview.Note.ShouldContain("agreed revenue");
+        first.PendingAction.Preview.Note!.ShouldContain("agreed revenue");
         await ConfirmAsync(superAdmin, first);
         var (again, _) = await ProposeAsync(superAdmin, "propose_record_statement_delivery", new { statement_id = made.Id, channel = "download" });
         again.PendingAction!.Preview.Note!.ShouldContain("delivered before");
