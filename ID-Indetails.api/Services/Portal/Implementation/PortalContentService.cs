@@ -422,6 +422,24 @@ public sealed class PortalContentService(
         return await views.LinkAsync(item.File, inline, cancellationToken);
     }
 
+    public async Task<ProjectFileBytes> ReadAsync(long projectId, long itemId, long maxBytes, CancellationToken cancellationToken = default)
+    {
+        await views.FilesAccessAsync(projectId, cancellationToken);
+        var item = await content.ItemViewAsync(projectId, itemId, cancellationToken) ?? throw new NotFoundException(ItemNotFound);
+        if (!store.IsAvailable)
+        {
+            throw new ServiceUnavailableException(ErrorCodes.ContentStorageUnavailable, "File storage isn't set up.");
+        }
+
+        var file = item.File;
+        var size = file.StoredSizeBytes;
+        // one byte more than the limit says whether the store holds more than the record claims
+        var data = size <= maxBytes ? await store.ReadStartAsync(file.StorageKey, (int)maxBytes + 1, cancellationToken) : null;
+        return data is null || data.Length > maxBytes
+            ? new ProjectFileBytes(item.Id, item.Title, file.OriginalName, file.ContentType, Math.Max(size, data?.Length ?? 0), null)
+            : new ProjectFileBytes(item.Id, item.Title, file.OriginalName, file.ContentType, data.Length, data);
+    }
+
     /// <summary>
     /// One change to the project's items under its content lock. <paramref name="change"/> says whether it changed what
     /// clients would get on the next publish; only then does the revision move on.

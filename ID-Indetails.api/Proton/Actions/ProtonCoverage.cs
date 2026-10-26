@@ -184,6 +184,7 @@ public static class ProtonCoverage
         Action("Company.UpdateSettings", "propose_company_settings", T2, ProtonFamily.CompanyRules),
         Action("DomainSettings.Save", "propose_domain_settings", T2, ProtonFamily.CompanyRules),
         Open("Company.SetLogo", "the logo comes from the person's own device"),
+        Never("Company.SetProtonFiles", "decides what Proton itself may send to its model provider: never Proton's to change"),
         Open("Company.SetContactEmail", "changes where the website's messages go: done in settings or on the Website page"),
         Open("Company.RemoveLogo", "changes the branding everyone sees: done in settings"),
         Action("Company.SetWorkingTime", "propose_working_time", T2, ProtonFamily.PayRules),

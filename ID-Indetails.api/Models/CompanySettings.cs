@@ -45,6 +45,12 @@ public class CompanySettings
 
     public string DefaultCurrency { get; set; } = "USD";
 
+    /// <summary>
+    /// Whether Proton may read project files (read_project_file): reading one sends its content to Anthropic, Proton's
+    /// model provider. Off until someone with company_settings:manage turns it on in Company settings.
+    /// </summary>
+    public bool ProtonReadsFiles { get; set; }
+
     // The working week, break and overtime multiplier are dated: see WorkingTimePolicy.
 
     public DateTime? UpdatedAt { get; set; }

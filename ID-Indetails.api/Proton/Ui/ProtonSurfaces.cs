@@ -55,6 +55,7 @@ public static class ProtonSurfaces
         [ProtonSurface.InviteWebsiteStaff] = new("the website's invite form", ProtonEndpoint.OfWrite<InvitationsController>(nameof(InvitationsController.Create)), OnlyIn: DomainCodes.Website, EmailsSomeone: true),
         // a project's files and client portal (Design client projects)
         [ProtonSurface.FileComments] = new("the file's comments", ProtonPortalTab.Files, ProtonRefType.Project, DomainCodes.Design),
+        [ProtonSurface.ViewProjectFile] = new("the file", ProtonPortalTab.Files, ProtonRefType.Project, DomainCodes.Design),
         [ProtonSurface.PortalDiscussion] = new("the discussion with the client", null, ProtonRefType.Project, DomainCodes.Design),
         [ProtonSurface.PortalPreview] = new("the client's view of the portal draft", ProtonEndpoint.Of<ProjectPortalContentController>(nameof(ProjectPortalContentController.Preview)), ProtonRefType.Project, DomainCodes.Design),
     };
