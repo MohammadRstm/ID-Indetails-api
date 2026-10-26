@@ -10,6 +10,7 @@ using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Meetings.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Portal.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Requirements.Abstraction;
 
@@ -234,35 +235,38 @@ public enum ProtonDeleteKind
     Requirement,
     Meeting,
     Client,
+    /// <summary>A Design project's file, by its item id.</summary>
+    ProjectFile,
 }
 
 public sealed record DeleteRecordArgs(ProtonDeleteKind Kind, long Id, long? ProjectId);
 
 public sealed record DeleteRecordInput : ProtonActionInput
 {
-    [Description("requirement, meeting or client.")]
+    [Description("requirement, meeting, client or project_file.")]
     public required ProtonDeleteKind Kind { get; init; }
 
-    [Description("The requirement, meeting or client.")]
+    [Description("The requirement, meeting or client; a project file's item_id.")]
     public required long Id { get; init; }
 
-    [Description("The project, for a requirement or a meeting.")]
+    [Description("The project, for a requirement, a meeting or a project file.")]
     public long? ProjectId { get; init; }
 }
 
 /// <summary>
-/// Deletes a requirement, a meeting, or a client no project uses, through its DELETE endpoint once confirmed. It can't
-/// be undone, so the user types the project's (or the client's) name.
+/// Deletes a requirement, a meeting, a client no project uses, or a project file, through its DELETE endpoint once
+/// confirmed. It can't be undone (a file the client has can be brought back until the portal is published again), so
+/// the user types the project's (or the client's) name.
 /// </summary>
 public sealed class ProposeDeleteRecordTool(
-    IProjectService projects, IRequirementService requirements, IMeetingService meetings, IClientService clients)
+    IProjectService projects, IRequirementService requirements, IMeetingService meetings, IClientService clients, IPortalContentService files)
     : ProtonActionTool<DeleteRecordInput, DeleteRecordArgs>
 {
     public override string Name => "propose_delete";
 
     public override string Description =>
-        "Propose deleting a requirement, a meeting, or a client no project uses (archive a client instead when it has " +
-        "history). It can't be undone; the user types the project's or client's name to confirm.";
+        "Propose deleting a requirement, a meeting, a client no project uses (archive a client instead when it has " +
+        "history), or a Design project's file. It can't be undone; the user types the project's or client's name to confirm.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -274,6 +278,7 @@ public sealed class ProposeDeleteRecordTool(
         [ProtonDeleteKind.Requirement] = ProtonEndpoint.OfWrite<RequirementsController>(nameof(RequirementsController.Delete)),
         [ProtonDeleteKind.Meeting] = ProtonEndpoint.OfWrite<MeetingsController>(nameof(MeetingsController.Delete)),
         [ProtonDeleteKind.Client] = ProtonEndpoint.OfWrite<ClientsController>(nameof(ClientsController.Delete)),
+        [ProtonDeleteKind.ProjectFile] = ProtonEndpoint.OfWrite<ProjectFilesController>(nameof(ProjectFilesController.Delete)),
     };
 
     public override IReadOnlyList<ProtonEndpoint> StepEndpoints { get; } = Kinds.Values.ToList();
@@ -297,6 +302,22 @@ public sealed class ProposeDeleteRecordTool(
                     new ProtonPreview($"Delete the client {client.DisplayName}", [new ProtonChange("Client", client.DisplayName, "deleted")],
                         "Its contacts go with it.", Confirm: ProtonConfirm.Typed, Phrase: client.DisplayName, Irreversible: true),
                     ClientText.Ref(client));
+            case ProtonDeleteKind.ProjectFile:
+            {
+                var project = await projects.GetAsync(input.ProjectId ?? throw new ProtonToolInputException("Give the project."), cancellationToken);
+                var file = await FileText.FindAsync(files, project.Id, input.Id, cancellationToken);
+                if (file.Removed)
+                {
+                    throw new ProtonToolInputException($"{file.Title} is already deleted.");
+                }
+
+                var clientHasIt = file.ClientState is not null;
+                return (new DeleteRecordArgs(input.Kind, file.Id, project.Id),
+                    new ProtonPreview($"Delete a file of {project.Title}", [new ProtonChange("File", $"{file.Title} ({file.File.Name})", "deleted")],
+                        clientHasIt ? "The client still has it until the portal is published again, and it can be brought back until then." : null,
+                        Confirm: ProtonConfirm.Typed, Phrase: project.Title, Irreversible: !clientHasIt),
+                    ProjectText.Ref(project));
+            }
             case ProtonDeleteKind.Requirement:
             {
                 var project = await projects.GetAsync(input.ProjectId ?? throw new ProtonToolInputException("Give the project."), cancellationToken);
@@ -332,6 +353,9 @@ public sealed class ProposeDeleteRecordTool(
             case ProtonDeleteKind.Requirement:
                 await requirements.DeleteAsync(args.ProjectId!.Value, args.Id, cancellationToken);
                 return new ProtonActionDone("Deleted the requirement.", "requirement", args.Id, []);
+            case ProtonDeleteKind.ProjectFile:
+                await files.DeleteItemAsync(args.ProjectId!.Value, args.Id, cancellationToken);
+                return new ProtonActionDone("Deleted the file.", "project_file", args.Id, []);
             default:
                 await meetings.DeleteAsync(args.Id, cancellationToken);
                 return new ProtonActionDone("Deleted the meeting.", "meeting", args.Id, []);

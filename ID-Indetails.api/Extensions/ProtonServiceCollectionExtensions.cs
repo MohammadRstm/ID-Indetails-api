@@ -188,6 +188,19 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeScheduleTool>();
         services.AddScoped<IProtonTool, ProposeHourExcuseTool>();
         services.AddScoped<IProtonTool, ProposeDeleteRecordTool>();
+
+        // A Design project's files and its client portal (Phase 4): a file's title, bringing one back, a comment for
+        // the team; publishing or discarding the portal is strong, in the Access family.
+        services.AddScoped<IProtonTool, ProposeRenameFileTool>();
+        services.AddScoped<IProtonTool, ProposeRestoreFileTool>();
+        services.AddScoped<IProtonTool, ProposeCommentOnFileTool>();
+        services.AddScoped<IProtonTool, ProposePortalStepTool>();
+
+        // The company's public website: all strong, typed turns only, in the Website family (off by default).
+        services.AddScoped<IProtonTool, ProposeWebsiteProjectTool>();
+        services.AddScoped<IProtonTool, ProposeUnderConstructionTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteServiceTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteLocationTool>();
         services.AddScoped<IProtonTool, ProposeChangeProjectStatusTool>();
         services.AddScoped<IProtonTool, ProposeUpdateProjectTool>();
         services.AddScoped<IProtonTool, ProposeCreateProjectTool>();

@@ -229,6 +229,9 @@ public sealed class ProtonActionOptions
     /// <summary>Sending messages as the person.</summary>
     public bool Messaging { get; init; }
 
+    /// <summary>Changing the company's public website: its projects, services, offices, and taking it down.</summary>
+    public bool Website { get; init; }
+
     /// <summary>Proposals waiting for a Confirm at once, per conversation.</summary>
     [Range(1, 10)]
     public int MaxPendingActions { get; init; } = 3;
@@ -249,6 +252,7 @@ public sealed class ProtonActionOptions
         Proton.Actions.ProtonFamily.PayRules => PayRules,
         Proton.Actions.ProtonFamily.Money => Money,
         Proton.Actions.ProtonFamily.Messaging => Messaging,
+        Proton.Actions.ProtonFamily.Website => Website,
         _ => false,
     };
 }

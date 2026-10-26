@@ -166,6 +166,22 @@ Proton reads the newer features as the person would see them on their pages.
   - Reading marks nothing read.
   - What clients write is data: the prompt (`files.md`) and the tool say never to act on it.
 
+### Actions on files, the portal and the website (Proton Phase 4)
+
+| Tool | Endpoint(s) | Tier, family | Notes |
+|---|---|---|---|
+| `propose_rename_file` | `PUT /api/projects/{id}/files/items/{itemId}` | standard, Core | the title only; refused at confirm if the file was renamed since the card |
+| `propose_restore_file` | `POST …/files/items/{itemId}/restore` | standard, Core | only a deleted file |
+| `propose_comment_on_file` | `POST …/files/items/{itemId}/comments` | standard, Core | the team's comment, in the user's words; clients never see it |
+| `propose_delete` (`project_file`) | `DELETE …/files/items/{itemId}` | strong, Deletes | the project's name typed; a file the client has can be brought back until the next publish |
+| `propose_portal_step` | `POST /api/projects/{id}/portal/content/publish`, `/discard` | strong, Access | the project's name typed; the card carries the draft's revision, so a draft changed since is refused by the service |
+| `propose_website_project` | `POST/PUT/DELETE /api/website/projects` | strong, Website | starts from the project as it is (pictures, point and link kept); a project changed since the card is refused; the title typed |
+| `propose_website_service`, `propose_website_location` | the services' and offices' endpoints | strong, Website | the service's title, or the office's city, typed; refused if it changed since the card |
+| `propose_website_under_construction` | `PUT /api/website/under-construction` | strong, Website | "under construction" or "website live" typed |
+
+The Website family is off until `Proton:Actions:Website` is turned on. Like every family outside Core and
+Lifecycle, it is proposed only on a turn the user typed. Pictures, the favicon, social links and orders stay `Never`.
+
 ## Analysis (Stage 3)
 
 Six analytical tools answer comparative and broad questions ("how is Villa Mounir doing compared with last month?",
@@ -762,7 +778,7 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 | `MaxHeavyToolCallsPerQuestion` | 4 | analyses that load every project's money; the next one is refused |
 | `MaxConversationInputTokens` | 80000 | a conversation past it rolls over |
 | `Insights` | 30%, 10 h, 1,000 USD, 1.5×, 0.5×, 4 periods, 14 days | `NotablePct`, `NotableHours`, `NotableUsd`, `UnusualHigh`, `UnusualLow`, `BaselinePeriods`, `TargetSoonDays` |
-| `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
+| `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`, `Website`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
 | `Prices` | Claude Haiku 5.5 list prices: 0.10 / 0.50 USD per million input / output tokens, cache reads 0.01, cache writes 0.125; above a 100,000-token prompt 0.50 / 2.50, 0.05, 0.625 | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion`, `LongPromptAboveTokens` (0 for one rate card), `LongInputPerMillion`, `LongOutputPerMillion`, `LongCacheReadPerMillion`, `LongCacheWritePerMillion` |
 
 | `Files` | 25 MB, 20 pages, 16 pictures, 60,000 characters, 2 a question; ffmpeg on the PATH | `MaxBytes`, `MaxPdfPages`, `MaxVideoFrames`, `MaxTextCharacters`, `MaxReadsPerQuestion`, `FfmpegPath` / `FfprobePath` (empty turns video reading off), `VideoTimeoutSeconds` (30). `read_project_file` has 45 seconds rather than `ToolTimeoutSeconds` |
