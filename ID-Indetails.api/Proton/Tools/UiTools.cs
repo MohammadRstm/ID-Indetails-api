@@ -1,9 +1,13 @@
 using System.ComponentModel;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Controllers;
+using ID_Indetails.api.Enums;
+using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Services.Messaging.Abstraction;
 using ID_Indetails.api.Services.Portal.Abstraction;
+using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Proton.Tools;
 
@@ -562,7 +566,10 @@ public sealed record FillFormInput
 {
     public required ProtonForm Form { get; init; }
 
-    [Description("The record the form is for: the project for edit_project, the client when editing one. Leave out otherwise.")]
+    [Description("The record the form is for: the project for edit_project, report_options, portal_intro, portal_message, materials, " +
+                 "payment, project_expense and labour_week; the client, requirement, team, invoice, company expense, website project, " +
+                 "service, office or social link being edited; the work entry for work_entry_comment; the file's item id for " +
+                 "file_rename and file_comment; the person for schedule and hour_excuse. Leave out for something new.")]
     public long? Id { get; init; }
 
     public ClientFill? Client { get; init; }
@@ -582,6 +589,50 @@ public sealed record FillFormInput
 
     [Description("The user's own work for the log form.")]
     public LogWorkFill? LogWork { get; init; }
+
+    public RequirementFill? Requirement { get; init; }
+
+    public WorkEntryCommentFill? WorkEntryComment { get; init; }
+
+    public ReportOptionsFill? ReportOptions { get; init; }
+
+    public TeamFill? Team { get; init; }
+
+    public ProfileFill? Profile { get; init; }
+
+    public FileRenameFill? FileRename { get; init; }
+
+    public FileCommentFill? FileComment { get; init; }
+
+    public PortalIntroFill? PortalIntro { get; init; }
+
+    public PortalMessageFill? PortalMessage { get; init; }
+
+    public WebsiteProjectFill? WebsiteProject { get; init; }
+
+    public WebsiteServiceFill? WebsiteService { get; init; }
+
+    public WebsiteLocationFill? WebsiteLocation { get; init; }
+
+    public WebsiteSocialLinkFill? WebsiteSocialLink { get; init; }
+
+    public CompanyDetailsFill? CompanyDetails { get; init; }
+
+    public CompanyExpenseFill? CompanyExpense { get; init; }
+
+    public MaterialsFill? Materials { get; init; }
+
+    public InvoiceFill? Invoice { get; init; }
+
+    public PaymentFill? Payment { get; init; }
+
+    public ProjectExpenseFill? ProjectExpense { get; init; }
+
+    public LabourWeekFill? LabourWeek { get; init; }
+
+    public ScheduleFill? Schedule { get; init; }
+
+    public HourExcuseFill? HourExcuse { get; init; }
 }
 
 public sealed record MessageDraft
@@ -594,94 +645,158 @@ public sealed record MessageDraft
     public required string Body { get; init; }
 }
 
+/// <summary>What filling a form needs: the endpoint it saves through (new and edited), the user's own words, a family switched on.</summary>
+/// <param name="TypedOnly">It sends something in the user's name, reaches clients or the public website: only on a turn they typed.</param>
+/// <param name="Family">The whole form is about pay (or money): only while that family of Proton's actions is switched on.</param>
+public sealed record ProtonFormSpec(string Label, ProtonEndpoint? New, ProtonEndpoint? Edit = null, bool TypedOnly = false, ProtonFamily? Family = null);
+
+/// <summary>Every form Proton can fill and what filling it needs; a test checks every <see cref="ProtonForm"/> is here.</summary>
+public static class ProtonFormSpecs
+{
+    private static ProtonEndpoint W<T>(string action) where T : Microsoft.AspNetCore.Mvc.ControllerBase => ProtonEndpoint.OfWrite<T>(action);
+
+    public static readonly IReadOnlyDictionary<ProtonForm, ProtonFormSpec> All = new Dictionary<ProtonForm, ProtonFormSpec>
+    {
+        [ProtonForm.Client] = new("the client form", W<ClientsController>(nameof(ClientsController.Create)), W<ClientsController>(nameof(ClientsController.Update))),
+        [ProtonForm.Meeting] = new("the meeting form", W<MeetingsController>(nameof(MeetingsController.Create))),
+        [ProtonForm.NewProject] = new("the new project form", W<ProjectsController>(nameof(ProjectsController.Create))),
+        [ProtonForm.EditProject] = new("the project details form", W<ProjectsController>(nameof(ProjectsController.Update))),
+        [ProtonForm.ReportBug] = new("the bug report form", null, TypedOnly: true),
+        [ProtonForm.Invite] = new("the invite form", W<InvitationsController>(nameof(InvitationsController.Create)), TypedOnly: true),
+        [ProtonForm.Message] = new("a draft", null, TypedOnly: true),
+        [ProtonForm.LogWork] = new("the log work form", W<WorkEntriesController>(nameof(WorkEntriesController.Create))),
+        [ProtonForm.Requirement] = new("the requirement form", W<RequirementsController>(nameof(RequirementsController.Create)), W<RequirementsController>(nameof(RequirementsController.Update))),
+        [ProtonForm.WorkEntryComment] = new("the work entry's comment", W<WorkEntriesController>(nameof(WorkEntriesController.AddComment)), TypedOnly: true),
+        [ProtonForm.ReportOptions] = new("the report's options", ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Report))),
+        [ProtonForm.Team] = new("the team's name", W<TeamsController>(nameof(TeamsController.Create)), W<TeamsController>(nameof(TeamsController.Rename))),
+        [ProtonForm.Profile] = new("your profile form", ProtonEndpoint.OfRuleBasedWrite<ProfileController>(nameof(ProfileController.UpdateProfile))),
+        [ProtonForm.FileRename] = new("the file's rename form", W<ProjectFilesController>(nameof(ProjectFilesController.Update))),
+        [ProtonForm.FileComment] = new("the file's comment", W<ProjectFilesController>(nameof(ProjectFilesController.Comment)), TypedOnly: true),
+        [ProtonForm.PortalIntro] = new("the client portal's introduction", W<ProjectPortalContentController>(nameof(ProjectPortalContentController.SetSummary)), TypedOnly: true),
+        [ProtonForm.PortalMessage] = new("a draft to the client", null, TypedOnly: true),
+        [ProtonForm.WebsiteProject] = new("the website project form", W<WebsiteController>(nameof(WebsiteController.CreateProject)), W<WebsiteController>(nameof(WebsiteController.UpdateProject)), TypedOnly: true),
+        [ProtonForm.WebsiteService] = new("the website service form", W<WebsiteController>(nameof(WebsiteController.AddService)), W<WebsiteController>(nameof(WebsiteController.UpdateService)), TypedOnly: true),
+        [ProtonForm.WebsiteLocation] = new("the website office form", W<WebsiteController>(nameof(WebsiteController.AddLocation)), W<WebsiteController>(nameof(WebsiteController.UpdateLocation)), TypedOnly: true),
+        [ProtonForm.WebsiteSocialLink] = new("the website link form", W<WebsiteController>(nameof(WebsiteController.AddSocialLink)), W<WebsiteController>(nameof(WebsiteController.UpdateSocialLink)), TypedOnly: true),
+        [ProtonForm.CompanyDetails] = new("the company details form", W<CompanyController>(nameof(CompanyController.UpdateSettings))),
+        [ProtonForm.CompanyExpense] = new("the company expense form", W<OverheadController>(nameof(OverheadController.Create)), W<OverheadController>(nameof(OverheadController.Update))),
+        [ProtonForm.Materials] = new("the materials sheet", W<MaterialsController>(nameof(MaterialsController.Add))),
+        [ProtonForm.Invoice] = new("the invoice form", W<InvoicesController>(nameof(InvoicesController.Create)), W<InvoicesController>(nameof(InvoicesController.Update))),
+        [ProtonForm.Payment] = new("the record payment form", W<PaymentsController>(nameof(PaymentsController.Record)), Family: ProtonFamily.Money),
+        [ProtonForm.ProjectExpense] = new("the project expense form", W<ExpensesController>(nameof(ExpensesController.Create))),
+        [ProtonForm.LabourWeek] = new("the labour week", W<LabourController>(nameof(LabourController.SubmitWeek))),
+        [ProtonForm.Schedule] = new("the person's schedule", W<SchedulesController>(nameof(SchedulesController.Set)), Family: ProtonFamily.PayRules),
+        [ProtonForm.HourExcuse] = new("the excuse hours form", W<HourExcusesController>(nameof(HourExcusesController.Add)), Family: ProtonFamily.PayRules),
+    };
+
+    /// <summary>The forms whose fill id names the record being edited (others name the project or person the form is on).</summary>
+    public static readonly IReadOnlySet<ProtonForm> IdEdits = new HashSet<ProtonForm>
+    {
+        ProtonForm.Client, ProtonForm.Requirement, ProtonForm.Team, ProtonForm.WebsiteProject, ProtonForm.WebsiteService,
+        ProtonForm.WebsiteLocation, ProtonForm.WebsiteSocialLink, ProtonForm.CompanyExpense, ProtonForm.Invoice,
+    };
+}
+
 /// <summary>
 /// Fills a form for the user to review and save themselves: the form opened with open_surface (in the same answer or
 /// before), its values typed per form, checked here first. The app fills empty, visible fields only, marks them, and
-/// never submits; Enter in a filled form waits until the user has touched it. Nothing about money, pay, passwords or
-/// permissions can be expressed. A draft message, an invitation and a bug report need the user's own words.
+/// never submits; Enter in a filled form waits until the user has touched it. Passwords, permissions, roles, bank
+/// details and uploads can't be expressed. Money values only while money actions are on and only amounts the user
+/// typed; the pay forms only while pay-rule actions are on. What reaches clients, the public website or someone's
+/// inbox needs the user's own words.
 /// </summary>
-public sealed class FillFormTool(ProtonRecords records, IMessagingService messaging) : ProtonTool<FillFormInput>
+public sealed class FillFormTool(
+    ProtonRecords records, IMessagingService messaging, ProtonPortalTab portal, IServiceProvider services, IOptions<ProtonOptions> options)
+    : ProtonTool<FillFormInput>
 {
     public override string Name => "fill_form";
 
     public override string Description =>
-        "Fill a form for the user to check and save: open it first with open_surface (in the same answer is fine). " +
-        "Give only the values for that form, from what the user said or a tool returned; leave out anything you don't " +
-        "know. The user presses Save or Send themselves. For changes you can propose on a card, propose instead unless " +
-        "the user asked for the form.";
+        "Fill a form for the user to check and save: open it first with open_surface (or open_record or open_page for a " +
+        "form on a page, in the same answer is fine). Give only the values for that form, from what the user said or a " +
+        "tool returned; leave out anything you don't know. The user presses Save or Send themselves. Money amounts only " +
+        "when the user typed them. For changes you can propose on a card, propose instead unless the user asked for the form.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
 
-    private static readonly IReadOnlyDictionary<ProtonForm, ProtonSurface> SurfaceOf = new Dictionary<ProtonForm, ProtonSurface>
-    {
-        [ProtonForm.Meeting] = ProtonSurface.NewMeeting,
-        [ProtonForm.NewProject] = ProtonSurface.NewProject,
-        [ProtonForm.EditProject] = ProtonSurface.EditProject,
-        [ProtonForm.ReportBug] = ProtonSurface.ReportBug,
-        [ProtonForm.Invite] = ProtonSurface.InvitePerson,
-        [ProtonForm.LogWork] = ProtonSurface.LogWork,
-    };
-
     protected override async Task<ProtonToolOutput> RunAsync(FillFormInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var given = new object?[] { input.Client, input.Meeting, input.NewProject, input.EditProject, input.ReportBug, input.Invite, input.Message, input.LogWork }
-            .Count(v => v is not null);
-        if (given != 1)
+        var fill = new ProtonFormFill(
+            input.Form, input.Id, input.Client, input.Meeting, input.NewProject, input.EditProject, input.ReportBug, input.Invite,
+            input.Message is { } m ? new MessageFill { Body = m.Body } : null, input.LogWork, input.Requirement, input.WorkEntryComment,
+            input.ReportOptions, input.Team, input.Profile, input.FileRename, input.FileComment, input.PortalIntro, input.PortalMessage,
+            input.WebsiteProject, input.WebsiteService, input.WebsiteLocation, input.WebsiteSocialLink, input.CompanyDetails,
+            input.CompanyExpense, input.Materials, input.Invoice, input.Payment, input.ProjectExpense, input.LabourWeek, input.Schedule,
+            input.HourExcuse);
+        try
+        {
+            _ = fill.Values;
+        }
+        catch (InvalidOperationException)
         {
             throw new ProtonToolInputException($"Give the values of the {input.Form} form, and only those.");
         }
 
-        var fill = new ProtonFormFill(input.Form, input.Id, input.Client, input.Meeting, input.NewProject, input.EditProject, input.ReportBug, input.Invite,
-            input.Message is { } m ? new MessageFill { Body = m.Body } : null, input.LogWork);
         var problems = ProtonFormRules.Problems(fill);
         if (problems.Count > 0)
         {
             throw new ProtonToolInputException(string.Join(" ", problems));
         }
 
-        // what the form saves through, as the surface it opens in needs
-        if (input.Form == ProtonForm.Client)
-        {
-            await context.RequireAsync(input.Id is null
-                ? ProtonEndpoint.OfWrite<ClientsController>(nameof(ClientsController.Create))
-                : ProtonEndpoint.OfWrite<ClientsController>(nameof(ClientsController.Update)));
-        }
-        else if (SurfaceOf.TryGetValue(input.Form, out var surface) && ProtonSurfaces.All[surface].Endpoint is { } endpoint)
+        // what the form saves through: a new record's endpoint, or an edited one's
+        var spec = ProtonFormSpecs.All[input.Form];
+        var editing = input.Id is not null && ProtonFormSpecs.IdEdits.Contains(input.Form);
+        if ((editing ? spec.Edit ?? spec.New : spec.New) is { } endpoint)
         {
             await context.RequireAsync(endpoint);
         }
 
-        if (input.Form is ProtonForm.ReportBug or ProtonForm.Invite or ProtonForm.Message && context.Turn != ProtonTurnOrigin.Typed)
+        if (spec.TypedOnly && context.Turn != ProtonTurnOrigin.Typed)
         {
-            throw new ProtonToolInputException("This form sends something in the user's name, so it is filled only when they ask in their own words.");
+            throw new ProtonToolInputException("This form sends something in the user's name or shows it to people outside the company, so it is filled only when they ask in their own words.");
         }
 
-        var label = $"the {Words(input.Form)} form";
+        if (spec.Family is { } family && !options.Value.Actions.IsOn(family))
+        {
+            throw new ProtonToolInputException("This form is about pay or money, which isn't switched on for Proton: the user fills it in themselves. Offer to open it.");
+        }
+
+        CheckMoney(fill, context);
+
+        var label = spec.Label;
         ProtonRef? record = null;
         switch (input.Form)
         {
             case ProtonForm.EditProject:
-                record = (input.Id is { } projectId ? await records.FindAsync(ProtonRefType.Project, projectId, context, cancellationToken) : null)
-                    ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                record = await ProjectAsync(input.Id, context, cancellationToken);
                 break;
             case ProtonForm.Client when input.Id is { } clientId:
-                record = await records.FindAsync(ProtonRefType.Client, clientId, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                record = await Visible(ProtonRefType.Client, clientId, context, cancellationToken);
                 break;
             case ProtonForm.Meeting when input.Meeting!.ProjectId is { } meetingProject:
-                _ = await records.FindAsync(ProtonRefType.Project, meetingProject, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                _ = await ProjectAsync(meetingProject, context, cancellationToken);
                 break;
             case ProtonForm.LogWork when input.LogWork!.ProjectId is { } workProject:
-                _ = await records.FindAsync(ProtonRefType.Project, workProject, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                _ = await ProjectAsync(workProject, context, cancellationToken);
                 break;
             case ProtonForm.NewProject when input.NewProject!.ClientId is { } newClient:
-                _ = await records.FindAsync(ProtonRefType.Client, newClient, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                _ = await Visible(ProtonRefType.Client, newClient, context, cancellationToken);
                 break;
-            case ProtonForm.Invite when input.Invite!.Email is { } email && !context.TypedText.Contains(email, StringComparison.OrdinalIgnoreCase):
-                throw new ProtonToolInputException("Use an email address only when the user typed it in this conversation; leave it out otherwise.");
+            case ProtonForm.Invite when input.Invite!.Email is { } email:
+                Typed(email, context, "an email address");
+                break;
             case ProtonForm.Message:
                 (record, label) = await RecipientAsync(input.Message!, context, cancellationToken);
                 fill = fill with { Id = record.Id };
                 break;
+            default:
+                record = await CheckNewFormAsync(fill, context, cancellationToken);
+                break;
+        }
+
+        if (record is not null && input.Form != ProtonForm.Message)
+        {
+            label = $"{label} for {record.Name}";
         }
 
         var chat = record?.Type == ProtonRefType.Team ? ProtonSurface.MessageTeam : ProtonSurface.MessagePerson;
@@ -690,6 +805,195 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
         return new ProtonToolOutput(
             new UiOutcome(label, "The app fills the empty fields when your answer is shown; the user checks and saves it. Say so, and say what you left out."),
             record is null ? [] : [record]) { UiCommand = command };
+    }
+
+    /// <summary>
+    /// Money values only while the Money family is on, on a typed turn, and each an amount the user typed: a figure in
+    /// the data (an invoice, a message, a file) never becomes an amount in a form.
+    /// </summary>
+    private void CheckMoney(ProtonFormFill fill, ProtonToolContext context)
+    {
+        var money = ProtonFormRules.MoneyIn(fill.Values);
+        if (money.Count == 0)
+        {
+            return;
+        }
+
+        if (!options.Value.Actions.IsOn(ProtonFamily.Money))
+        {
+            throw new ProtonToolInputException("Amounts can't be filled: money isn't switched on for Proton. Fill the rest and leave the amounts to the user.");
+        }
+
+        if (context.Turn != ProtonTurnOrigin.Typed)
+        {
+            throw new ProtonToolInputException("Amounts are filled only when the user types them in their own words.");
+        }
+
+        if (money.FirstOrDefault(m => !ProtonFormRules.Typed(m.Value, context.TypedText)) is { Field: not null } missing)
+        {
+            throw new ProtonToolInputException($"{missing.Field}: use only an amount the user typed in this conversation; leave it out otherwise.");
+        }
+    }
+
+    /// <summary>The records the newer forms name, each read as its own page reads it: not found when the user can't see it.</summary>
+    private async Task<ProtonRef?> CheckNewFormAsync(ProtonFormFill fill, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        T Service<T>() where T : notnull => services.GetRequiredService<T>();
+        switch (fill.Form)
+        {
+            case ProtonForm.Requirement:
+            {
+                var r = fill.Requirement!;
+                var project = await ProjectAsync(r.ProjectId ?? (fill.Id is null ? null : throw new ProtonToolInputException("Give project_id too.")), context, cancellationToken);
+                if (fill.Id is { } requirementId)
+                {
+                    await Actions.RequirementText.FindAsync(Service<Services.Requirements.Abstraction.IRequirementService>(), project.Id, requirementId, cancellationToken);
+                }
+
+                foreach (var person in r.AssigneeIds ?? [])
+                {
+                    _ = await Visible(ProtonRefType.Person, person, context, cancellationToken);
+                }
+
+                return project;
+            }
+            case ProtonForm.WorkEntryComment:
+                _ = await Service<Services.WorkEntries.Abstraction.IWorkEntryQueryService>().GetAsync(fill.Id!.Value, cancellationToken);
+                return null;
+            case ProtonForm.ReportOptions:
+                return await ProjectAsync(fill.Id, context, cancellationToken, DomainCodes.Design);
+            case ProtonForm.Team when fill.Id is { } teamId:
+                var team = (await Service<Services.Teams.Abstraction.ITeamService>().ListAsync(cancellationToken)).FirstOrDefault(t => t.Id == teamId)
+                    ?? throw new Exceptions.Base.NotFoundException("Not found.");
+                return new ProtonRef(ProtonRefType.Team, team.Id, team.Name);
+            case ProtonForm.FileRename or ProtonForm.FileComment:
+            {
+                var projectId = fill.FileRename?.ProjectId ?? fill.FileComment!.ProjectId;
+                var project = await ProjectAsync(projectId, context, cancellationToken, DomainCodes.Design);
+                _ = await Actions.FileText.FindAsync(Service<IPortalContentService>(), project.Id, fill.Id!.Value, cancellationToken);
+                return project;
+            }
+            case ProtonForm.PortalIntro:
+            {
+                var project = await ProjectAsync(fill.Id, context, cancellationToken, DomainCodes.Design);
+                return await portal.CanOpenPortalAsync(project, ProtonProjectPart.Presentation, context, cancellationToken)
+                    ? project
+                    : throw new Exceptions.Base.NotFoundException("Not found.");
+            }
+            case ProtonForm.PortalMessage:
+            {
+                var project = await ProjectAsync(fill.Id, context, cancellationToken, DomainCodes.Design);
+                if (!await portal.TakesPartAsync(project.Id, cancellationToken))
+                {
+                    throw new Exceptions.Base.NotFoundException("Not found.");
+                }
+
+                if (fill.PortalMessage!.ItemId is { } thread)
+                {
+                    await Service<IPortalDiscussionService>().ThreadAsync(Business.Portal.DiscussionSide.Staff, project.Id, thread, cancellationToken);
+                }
+
+                return project;
+            }
+            case ProtonForm.WebsiteProject when fill.Id is { } websiteProjectId:
+                return await Visible(ProtonRefType.WebsiteProject, websiteProjectId, context, cancellationToken);
+            case ProtonForm.WebsiteService or ProtonForm.WebsiteLocation or ProtonForm.WebsiteSocialLink:
+            {
+                if (fill.WebsiteSocialLink?.Url is { } url)
+                {
+                    Typed(url, context, "an address");
+                }
+
+                if (fill.Id is { } rowId)
+                {
+                    var content = await Service<Services.Website.Abstraction.IWebsiteContentService>().GetAsync(cancellationToken);
+                    var exists = fill.Form switch
+                    {
+                        ProtonForm.WebsiteService => content.Services.Any(x => x.Id == rowId),
+                        ProtonForm.WebsiteLocation => content.Locations.Any(x => x.Id == rowId),
+                        _ => content.SocialLinks.Any(x => x.Id == rowId),
+                    };
+                    if (!exists)
+                    {
+                        throw new Exceptions.Base.NotFoundException("Not found.");
+                    }
+                }
+
+                return null;
+            }
+            case ProtonForm.CompanyDetails when fill.CompanyDetails!.ContactEmail is { } contact:
+                await context.RequireAsync(ProtonEndpoint.OfWrite<CompanyController>(nameof(CompanyController.SetContactEmail)));
+                Typed(contact, context, "an email address");
+                return null;
+            case ProtonForm.CompanyExpense:
+            {
+                var expense = fill.CompanyExpense!;
+                var overhead = Service<Services.Company.Abstraction.IOverheadService>();
+                if (fill.Id is { } lineId && (await overhead.GetAsync(cancellationToken)).Lines.All(l => l.Id != lineId))
+                {
+                    throw new Exceptions.Base.NotFoundException("Not found.");
+                }
+
+                if (expense.GroupId is { } groupId && (await overhead.GroupsAsync(cancellationToken)).All(g => g.Id != groupId))
+                {
+                    throw new Exceptions.Base.NotFoundException("That category doesn't exist.");
+                }
+
+                return null;
+            }
+            case ProtonForm.Materials or ProtonForm.LabourWeek:
+                return await ProjectAsync(fill.Id, context, cancellationToken, DomainCodes.Execution);
+            case ProtonForm.Invoice:
+            {
+                if (fill.Id is { } invoiceId)
+                {
+                    var invoice = await Service<Services.Billing.Abstraction.IInvoiceService>().GetAsync(invoiceId, cancellationToken);
+                    if (invoice.Status != Business.Billing.InvoiceStatus.Draft)
+                    {
+                        throw new ProtonToolInputException("Only a draft invoice can be changed.");
+                    }
+
+                    return await ProjectAsync(invoice.Project.Id, context, cancellationToken);
+                }
+
+                return await ProjectAsync(fill.Invoice!.ProjectId, context, cancellationToken);
+            }
+            case ProtonForm.Payment:
+            {
+                var project = await ProjectAsync(fill.Id, context, cancellationToken);
+                if (fill.Payment!.InvoiceId is { } paid
+                    && (await Service<Services.Billing.Abstraction.IInvoiceService>().GetAsync(paid, cancellationToken)).Project.Id != project.Id)
+                {
+                    throw new Exceptions.Base.NotFoundException("That invoice isn't this project's.");
+                }
+
+                return project;
+            }
+            case ProtonForm.ProjectExpense:
+                return await ProjectAsync(fill.Id, context, cancellationToken);
+            case ProtonForm.Schedule or ProtonForm.HourExcuse:
+                return await Visible(ProtonRefType.Person, fill.Id!.Value, context, cancellationToken);
+            default:
+                return null;
+        }
+    }
+
+    private async Task<ProtonRef> ProjectAsync(long? id, ProtonToolContext context, CancellationToken cancellationToken, string? onlyIn = null)
+    {
+        var project = await Visible(ProtonRefType.Project, id ?? throw new ProtonToolInputException("Give the project's id."), context, cancellationToken);
+        return onlyIn is null || project.Domain == onlyIn ? project : throw new ProtonToolInputException($"That form is only on {onlyIn} projects.");
+    }
+
+    private async Task<ProtonRef> Visible(ProtonRefType type, long id, ProtonToolContext context, CancellationToken cancellationToken)
+        => await records.FindAsync(type, id, context, cancellationToken) ?? throw new Exceptions.Base.NotFoundException("Not found.");
+
+    /// <summary>An address or a link reaches outside the company: only one the user typed in this conversation.</summary>
+    private static void Typed(string value, ProtonToolContext context, string what)
+    {
+        if (!context.TypedText.Contains(value.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ProtonToolInputException($"Use {what} only when the user typed it in this conversation; leave it out otherwise.");
+        }
     }
 
     /// <summary>
@@ -723,15 +1027,6 @@ public sealed class FillFormTool(ProtonRecords records, IMessagingService messag
 
         return (recipient, $"a draft to {recipient.Name}");
     }
-
-    private static string Words(ProtonForm form) => form switch
-    {
-        ProtonForm.NewProject => "new project",
-        ProtonForm.EditProject => "project details",
-        ProtonForm.ReportBug => "bug report",
-        ProtonForm.LogWork => "log work",
-        _ => form.ToString().ToLowerInvariant(),
-    };
 }
 
 internal static class ProtonButtons
