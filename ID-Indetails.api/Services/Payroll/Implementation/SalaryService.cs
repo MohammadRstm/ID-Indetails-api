@@ -354,8 +354,9 @@ public sealed class SalaryService(
             Currency = r.Terms.Currency,
             HourlyRate = r.HourlyRate,
             StandardHourlyRate = r.StandardHourlyRate,
-            // Design's employees log hours; Execution staff, admins and super admins are paid their salary
-            TracksHours = user.DomainCode == DomainCodes.Design && PayrollInputs.PaidForHours(user),
+            // Design's employees log hours; Execution staff are paid their salary, and so are admins and super admins, in
+            // any month they held that role
+            TracksHours = c.Input.LedgerApplies,
             ExpectedMinutes = r.Ledger?.Expected,
             NormalMinutes = r.NormalMinutes,
             MadeUpMinutes = r.MadeUpMinutes,
