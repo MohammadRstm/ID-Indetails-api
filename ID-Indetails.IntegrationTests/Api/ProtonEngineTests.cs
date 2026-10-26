@@ -100,7 +100,8 @@ public class ProtonEngineTests(ProtonEngineApiFactory api) : IClassFixture<Proto
         Deferred("find").ShouldBeFalse();
         Deferred("open_page").ShouldBeFalse();
         Deferred("compare_money").ShouldBeFalse();
-        Deferred("list_invoices").ShouldBeTrue();
+        Deferred("list_payments").ShouldBeFalse();
+        Deferred("get_finance_projects").ShouldBeTrue();
         Deferred("propose_add_requirement").ShouldBeTrue();
         // the same list on every call, so it stays in the cached prefix
         api.Anthropic.Requests[1]["tools"]!.ToJsonString().ShouldBe(tools.ToJsonString());
