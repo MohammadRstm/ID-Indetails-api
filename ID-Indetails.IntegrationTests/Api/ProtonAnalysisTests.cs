@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Proton;
 using ID_Indetails.api.DTO.Response.Reports;
@@ -179,6 +180,36 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
     }
 
     /// <summary>
+    /// Regression: the summary showed this month's and last month's whole overhead, unconverted, whatever the period,
+    /// while the company overview charges it by calendar days: a week's profit sat next to a month's rent.
+    /// </summary>
+    [Fact]
+    public async Task A_summarys_overhead_is_the_company_overviews_for_the_same_days()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var group = (await (await Client.GetAsync("/api/company/overhead/groups", superAdmin.AccessToken)).ReadAsync<List<OverheadGroupResponse>>()).First();
+        (await Client.PostJsonAsync("/api/company/overhead",
+                new { name = "Studio rent " + Guid.NewGuid().ToString("N")[..5], groupId = group.Id, currency = "USD", amount = 3100m }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("get_company_summary", new { period = "this_week" }), FakeAnthropic.Text("Here is the week."));
+
+        await OkAsync(AskAsync(superAdmin, "Give me a summary of the week"));
+
+        var summary = Result(1);
+        var week = summary["basis"]!["period"]!;
+        var before = summary["basis"]!["compared_with"]!;
+        var overview = await (await Client.GetAsync($"/api/company/overview?from={week["from"]}&to={week["to"]}".Replace("\"", ""), superAdmin.AccessToken))
+            .ReadAsync<CompanyOverviewResponse>();
+        var previous = await (await Client.GetAsync($"/api/company/overview?from={before["from"]}&to={before["to"]}".Replace("\"", ""), superAdmin.AccessToken))
+            .ReadAsync<CompanyOverviewResponse>();
+        var overhead = summary["data"]!["company"]!["overhead"]!;
+        overview.Overhead.ShouldBeGreaterThan(0m);
+        overhead["current"]!.GetValue<decimal>().ShouldBe(overview.Overhead);
+        overhead["previous"]!.GetValue<decimal>().ShouldBe(previous.Overhead);
+    }
+
+    /// <summary>
     /// Regression: the money follow-ups stop at the dashboard's 6 most urgent, and attention read as if that were
     /// every money problem there is.
     /// </summary>
@@ -352,5 +383,54 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         fresh.ShouldContain("a recap by the app");
         fresh.ShouldContain("The user asked: \"How did hours change?\" You answered: \"Hours were flat.\"");
         fresh.ShouldContain("And the month before?");
+    }
+
+    /// <summary>"What did they pay in March?": the list reads the month's payments and add_up totals them on the server.</summary>
+    [Fact]
+    public async Task A_months_payments_are_totalled_by_add_up_not_by_the_model()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 9000m);
+        foreach (var (amount, day) in new[] { (1200m, "2026-03-02"), (800.5m, "2026-03-31"), (5000m, "2026-04-01") })
+        {
+            (await Client.PostJsonAsync($"/api/projects/{project.Id}/payments", new { amount, currency = "USD", receivedOn = day }, superAdmin.AccessToken))
+                .IsSuccessStatusCode.ShouldBeTrue();
+        }
+
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("list_payments", new { project_id = project.Id, received_in = "custom", from = "2026-03-01", to = "2026-03-31", limit = 1 }),
+            FakeAnthropic.ToolUse("add_up", new { dataset = "d1", column = "amount_usd" }, id: "toolu_2"),
+            FakeAnthropic.Text("2,000.5 USD arrived in March."));
+
+        await OkAsync(AskAsync(superAdmin, "How much did they pay in March 2026?"));
+
+        Result(1)["data"]!["total"]!.GetValue<int>().ShouldBe(2);
+        Result(1)["data"]!["shown"]!.GetValue<int>().ShouldBe(1);
+        var sum = Result(2)["data"]!;
+        sum["total"]!.GetValue<decimal>().ShouldBe(2000.5m);
+        sum["rows"]!.GetValue<int>().ShouldBe(2);
+    }
+
+    /// <summary>A cost with no exchange rate is left out of the USD figures: the review says so instead of reading as complete.</summary>
+    [Fact]
+    public async Task A_review_says_when_a_cost_could_not_be_converted()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        // no LBP rate reaches back to 2001, so this expense stays in LBP, outside every USD figure
+        (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+                new { label = "Permit stamps", amount = 4_500_000m, currency = "LBP", spentOn = "2001-01-15" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("review_project", new { project_id = project.Id }),
+            FakeAnthropic.Text("Some of its cost couldn't be converted."));
+
+        await OkAsync(AskAsync(superAdmin, $"How is {project.Title} doing?"));
+
+        var review = Result(1);
+        review["data"]!["money"]!["has_unconverted"]!.GetValue<bool>().ShouldBeTrue();
+        review["basis"]!["omitted"]!.ToJsonString().ShouldContain("no exchange rate");
     }
 }

@@ -185,4 +185,18 @@ public class PayrollTests
         IReadOnlyList<Employment.Gap> allJune = [new(new(2026, 5, 20), new(2026, 7, 5))];
         SalaryCalculator.Calculate(input with { Gaps = allJune }).ShouldBeNull();
     }
+
+    [Fact]
+    public void A_fixed_salary_month_pays_the_salary_whatever_was_logged()
+    {
+        // An admin on a day of June: the whole month is a fixed salary, so 8 hours on Saturday 6 June earn no overtime.
+        Work[] saturday = [At(1, 6, 9, 8)];
+        var input = new SalaryCalculator.Input(June, July10, new(2026, 1, 1), false, [Monthly], Calendar(), saturday, [], FixedSalary: true);
+
+        var pay = SalaryCalculator.Calculate(input)!;
+        pay.OvertimePay.ShouldBe(0m);
+        pay.OvertimeMinutes.ShouldBe(0);
+        pay.Total.ShouldBe(1760m);
+        SalaryCalculator.Calculate(input with { FixedSalary = false })!.OvertimePay.ShouldBeGreaterThan(0m);
+    }
 }

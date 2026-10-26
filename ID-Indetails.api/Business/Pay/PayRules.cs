@@ -60,6 +60,14 @@ public static class PayRules
             ? RuleDenial.Invalid(ErrorCodes.FixedSalaryPaidMonthly, "basis", "Admins and super admins are paid a monthly salary: their pay doesn't depend on hours.")
             : null;
 
+    /// <summary>
+    /// When a role change makes an employee an admin or super admin on <paramref name="today"/>, the day their pay becomes a
+    /// fixed salary: the first of the month, since a month with any day in that role is paid as one
+    /// (<see cref="RoleHistory.FixedSalaryMonth"/>). Null for any other change.
+    /// </summary>
+    public static DateOnly? FixedPayFrom(string previousRole, string newRole, DateOnly today)
+        => !HasFixedSalary(previousRole) && HasFixedSalary(newRole) ? new DateOnly(today.Year, today.Month, 1) : null;
+
     /// <summary>Someone paid by the hour must be given a monthly salary before becoming an admin or super admin.</summary>
     public static RuleDenial? CheckRoleChange(string newRole, PayBasis? basisInForce)
         => HasFixedSalary(newRole) && basisInForce == PayBasis.Hourly

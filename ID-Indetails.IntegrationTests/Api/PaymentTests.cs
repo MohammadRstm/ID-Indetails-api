@@ -31,6 +31,24 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
         => await (await Client.GetAsync($"/api/invoices/{invoiceId}", token)).ReadAsync<InvoiceResponse>();
 
     [Fact]
+    public async Task Payments_are_listed_by_the_day_they_arrived()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 5000m);
+        var first = await RecordAsync(project.Id, superAdmin.AccessToken, new { amount = 100m, currency = "USD", receivedOn = "2026-03-01" });
+        var last = await RecordAsync(project.Id, superAdmin.AccessToken, new { amount = 200m, currency = "USD", receivedOn = "2026-03-31" });
+        await RecordAsync(project.Id, superAdmin.AccessToken, new { amount = 300m, currency = "USD", receivedOn = "2026-04-01" });
+
+        var inMarch = await (await Client.GetAsync($"/api/payments?projectId={project.Id}&receivedFrom=2026-03-01&receivedTo=2026-03-31", superAdmin.AccessToken))
+            .ReadAsync<PagedResponse<PaymentResponse>>();
+        inMarch.Items.Select(p => p.Id).ShouldBe([last.Id, first.Id]);
+        inMarch.TotalCount.ShouldBe(2);
+
+        await (await Client.GetAsync("/api/payments?receivedFrom=2026-04-01&receivedTo=2026-03-01", superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
     public async Task Only_execution_sites_take_an_initial_payment()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

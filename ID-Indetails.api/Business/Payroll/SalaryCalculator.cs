@@ -39,7 +39,8 @@ public static class SalaryCalculator
         IReadOnlyList<Overtime.Work> Work,
         IReadOnlyList<Excuse> Excuses,
         DateOnly? LeftOn = null,
-        IReadOnlyList<Employment.Gap>? Gaps = null);
+        IReadOnlyList<Employment.Gap>? Gaps = null,
+        bool FixedSalary = false);
 
     /// <param name="HourlyRate">What an hour of <paramref name="Terms"/> is worth this month: it prices deductions.</param>
     /// <param name="StandardHourlyRate">The true hourly rate of <paramref name="Terms"/>: overtime is paid at it × the multiplier.</param>
@@ -82,7 +83,8 @@ public static class SalaryCalculator
         }
 
         var rate = terms.HourlyRateOn(input.Month, input.Calendar);
-        var work = Overtime.Of(input.Work, input.Calendar);
+        // a fixed salary doesn't depend on hours: logged time earns no overtime or paid breaks
+        IReadOnlyList<Overtime.Split> work = input.FixedSalary ? [] : Overtime.Of(input.Work, input.Calendar);
         var ledger = input.LedgerApplies ? LedgerOf(input, work) : null;
         int MadeUp(Overtime.Split w) => ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
         decimal OvertimePay(Overtime.Split w, PayTerms t)

@@ -5,7 +5,7 @@ using ID_Indetails.api.DTO.Response.Projects;
 namespace ID_Indetails.api.DTO.Response.Company;
 
 /// <summary>One domain over the period. Money is in USD.</summary>
-/// <param name="Revenue">Revenue recognised in the period (see docs/company.md).</param>
+/// <param name="Revenue">The money received in the period, each payment on the day it arrived (see docs/company.md).</param>
 /// <param name="Margin">Profit ÷ revenue; null without revenue.</param>
 /// <param name="ProjectsWithActivity">Projects with work or costs in the period.</param>
 /// <param name="People">Active employees.</param>
@@ -59,6 +59,11 @@ public sealed record CompanyOverviewResponse(
     int ProjectsWithActivity,
     int ClientsServed,
     IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
+
+/// <summary>Company overhead charged to a period, as the overview charges it.</summary>
+/// <param name="Usd">By calendar days, converted at the rate of each month.</param>
+/// <param name="Unconverted">Overhead with no exchange rate for its month, left out of <see cref="Usd"/>.</param>
+public sealed record PeriodOverheadResponse(DateOnly From, DateOnly To, decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted);
 
 /// <summary>One month for both domains together, in USD.</summary>
 /// <param name="AdminSalaries">The admins' and super admins' pay for the month, a company cost like overhead.</param>

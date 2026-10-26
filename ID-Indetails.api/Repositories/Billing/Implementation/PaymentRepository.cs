@@ -39,6 +39,16 @@ public sealed class PaymentRepository(IdIndetailsDbContext db) : IPaymentReposit
             query = query.Where(p => p.Project.DomainCode == domain);
         }
 
+        if (search.ReceivedFrom is { } receivedFrom)
+        {
+            query = query.Where(p => p.ReceivedOn >= receivedFrom);
+        }
+
+        if (search.ReceivedTo is { } receivedTo)
+        {
+            query = query.Where(p => p.ReceivedOn <= receivedTo);
+        }
+
         var total = await query.CountAsync(cancellationToken);
         var items = await query
             .Include(p => p.Project)

@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Globalization;
 using System.Text.RegularExpressions;
 using ID_Indetails.api.Enums;
 
@@ -847,15 +846,6 @@ public static partial class ProtonFormRules
         Walk(values);
         return found;
     }
-
-    /// <summary>Whether the user typed this amount (1500 matches "1500", "1,500" or "1500.00").</summary>
-    public static bool Typed(decimal amount, string typed)
-        => AmountPattern().Matches(typed)
-            .Select(m => decimal.TryParse(m.Value.Replace(",", ""), NumberStyles.Number, CultureInfo.InvariantCulture, out var n) ? n : (decimal?)null)
-            .Any(n => n == amount);
-
-    [GeneratedRegex(@"\d[\d,]*(\.\d+)?")]
-    private static partial Regex AmountPattern();
 
     [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
     private static partial Regex EmailPattern();

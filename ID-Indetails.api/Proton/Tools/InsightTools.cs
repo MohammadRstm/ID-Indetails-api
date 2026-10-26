@@ -61,17 +61,25 @@ public sealed record ReviewHours(ProtonFigure Hours, ProtonFigure Entries, Proto
 /// <param name="NextDeadline">The soonest deadline of an open requirement, today or later.</param>
 public sealed record ReviewRequirements(int Total, int Done, int Open, int Overdue, DateOnly? NextDeadline);
 
-/// <param name="AllTimeCostOfPaymentPct">All-time cost as a whole percentage of the agreed payment, while there is one.</param>
+/// <summary>The project's money: the period's cash, and all time against its agreed revenue.</summary>
+/// <param name="CashProfit">The period's received less its cost.</param>
+/// <param name="AllTimeAgreedRevenue">The contract value, not cash.</param>
+/// <param name="AllTimeAgreedProfit">Agreed revenue less the cost so far.</param>
+/// <param name="AllTimeCostOfAgreedPct">All-time cost as a whole percentage of the agreed revenue, while there is one.</param>
+/// <param name="HasUnconverted">A cost (or, all time, an invoice) is left out of these USD figures for want of an exchange rate.</param>
+/// <param name="UnpricedLabourHours">All time: hours of people with no pay record, left out of the labour cost.</param>
 public sealed record ReviewMoney(
     ProtonFigure Received,
     ProtonFigure Cost,
-    ProtonFigure Profit,
+    ProtonFigure CashProfit,
     bool CostNotable,
-    decimal AllTimeRevenue,
+    decimal AllTimeAgreedRevenue,
     decimal AllTimeCost,
-    decimal AllTimeProfit,
-    int? AllTimeMarginPct,
-    int? AllTimeCostOfPaymentPct);
+    decimal AllTimeAgreedProfit,
+    int? AllTimeAgreedMarginPct,
+    int? AllTimeCostOfAgreedPct,
+    bool HasUnconverted,
+    decimal? UnpricedLabourHours);
 
 /// <param name="DaysSinceLastWork">Design: days since work was last logged on it (since it started, if never).</param>
 public sealed record ProjectReview(
@@ -101,8 +109,9 @@ public sealed class ReviewProjectTool(ProtonAnalysisService analysis, IProjectSe
 
     public override string Description =>
         "One project's state and trend in one call: status, progress, target date and overdue, days since work was last " +
-        "logged, hours this period against the previous one with who contributed, requirements, money this period and " +
-        "all time, and the attention signals that fire for it. Parts the user may not see are listed in basis.omitted.";
+        "logged, hours this period against the previous one with who contributed, requirements, money (this period's " +
+        "cash: received, cost, cash profit; and all time against the agreed revenue), and the attention signals that " +
+        "fire for it. Parts the user may not see are listed in basis.omitted.";
 
     public override bool Heavy => true;
 
@@ -177,7 +186,13 @@ public sealed class ReviewProjectTool(ProtonAnalysisService analysis, IProjectSe
                 allTime?.Cost ?? 0,
                 allTime?.Profit ?? 0,
                 allTime?.MarginKnown == true ? ProtonAnalysis.Pct(allTime.Margin) : null,
-                allTime is { Revenue: > 0 } ? Business.Finance.MoneyAttention.UsedPct(allTime.Revenue, allTime.Cost) : null);
+                allTime is { Revenue: > 0 } ? Business.Finance.MoneyAttention.UsedPct(allTime.Revenue, allTime.Cost) : null,
+                a.HasUnconverted || (b?.HasUnconverted ?? false) || allTime?.HasUnconverted == true,
+                allTime is { UnpricedLabourMinutes: > 0 } ? ProtonText.Hours(allTime.UnpricedLabourMinutes) : null);
+            if (money.HasUnconverted)
+            {
+                omitted.Add(ProtonAnalysis.UnconvertedLeftOut);
+            }
             if (await context.CanCallAsync(ProtonAnalysisService.MoneyAttention))
             {
                 var followUps = await analysis.MoneyAttentionAsync(project.Domain, cancellationToken);
@@ -262,15 +277,23 @@ public sealed record WorkBlock(ProtonFigure Hours, ProtonFigure Entries, ProtonF
 /// <param name="DueSoon">Open requirements of active and on-hold projects due in the next 14 days, overdue ones included.</param>
 public sealed record RequirementsBlock(int DueSoon, int Overdue);
 
-public sealed record MoneyBlock(ProtonFigure Received, ProtonFigure Cost, ProtonFigure Profit, int? MarginPct, bool CostNotable);
+/// <summary>A domain's money in the period, cash basis.</summary>
+/// <param name="CashProfit">Received less cost.</param>
+/// <param name="Unconverted">Costs of the period left out of the USD figures for want of an exchange rate, in their own currency.</param>
+/// <param name="PreviousUnconverted">The same, in the period compared with.</param>
+public sealed record MoneyBlock(
+    ProtonFigure Received, ProtonFigure Cost, ProtonFigure CashProfit, int? CashMarginPct, bool CostNotable,
+    IReadOnlyList<string>? Unconverted, IReadOnlyList<string>? PreviousUnconverted);
 
 /// <summary>A domain's part of the summary: each block only when the user may see it (see basis.omitted).</summary>
 public sealed record DomainSummary(string Domain, ProjectsBlock? Projects, WorkBlock? Work, RequirementsBlock? Requirements, MoneyBlock? Money);
 
-/// <summary>Company overhead, this month and last, per currency (no salaries).</summary>
-public sealed record CompanyBlock(IReadOnlyList<OverheadMonth> Overhead);
-
-public sealed record OverheadMonth(DateOnly Month, IReadOnlyList<CurrencyTotalResponse> Totals);
+/// <summary>
+/// Company overhead charged to the period (and the one compared with) by calendar days, in USD, exactly as the Company
+/// overview charges it. No salaries.
+/// </summary>
+/// <param name="Unconverted">Overhead of the period with no exchange rate for its month, in its own currency, left out of the USD figure.</param>
+public sealed record CompanyBlock(ProtonFigure Overhead, IReadOnlyList<CurrencyTotalResponse>? Unconverted);
 
 public sealed record CompanySummary(IReadOnlyList<DomainSummary> Domains, CompanyBlock? Company, IReadOnlyList<AttentionItem> Attention, int MoreAttention);
 
@@ -279,23 +302,24 @@ public sealed class GetCompanySummaryTool(
     ProtonAnalysisService analysis,
     IActivityFeedService activity,
     IDashboardService dashboard,
-    IOverheadService overhead) : ProtonTool<CompanySummaryInput>
+    ICompanyOverviewService overview) : ProtonTool<CompanySummaryInput>
 {
     private const int AttentionItems = 5;
 
     /// <summary>Said when the company's overhead is left out, so a summary without it isn't read as complete.</summary>
-    public const string NoOverhead = "Company overhead isn't included: it needs the company or overhead permission.";
+    public const string NoOverhead = "Company overhead isn't included: it needs the company:view permission.";
 
     private static readonly ProtonEndpoint Activity = ProtonEndpoint.Of<ActivityController>(nameof(ActivityController.List));
-    private static readonly ProtonEndpoint Overhead = ProtonEndpoint.Of<OverheadController>(nameof(OverheadController.Monthly));
+    private static readonly ProtonEndpoint Overhead = ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get));
 
     public override string Name => "get_company_summary";
 
     public override string Description =>
         "A summary of the company for a period (this week by default) against the previous one: per domain the user " +
         "sees, projects (active, on hold, started, completed, overdue, target soon, idle), Design hours with the busiest " +
-        "projects, requirements due and overdue, money received, cost and profit; company overhead; and the top " +
-        "attention items. Blocks the user may not see are left out and named in basis.omitted.";
+        "projects, requirements due and overdue, money received, cost and cash profit (received − cost); the company " +
+        "overhead charged to the period (by calendar days, as the Company overview charges it); and the top attention " +
+        "items. Blocks the user may not see are left out and named in basis.omitted.";
 
     public override bool Heavy => true;
 
@@ -387,8 +411,14 @@ public sealed class GetCompanySummaryTool(
                     ProtonFigure.Of(a.Cost.Total, b?.Cost.Total),
                     ProtonFigure.Of(a.Profit, b?.Profit),
                     ProtonAnalysis.Pct(a.Margin),
-                    b is not null && ProtonSignals.IsNotable(ProtonTrends.Change(a.Cost.Total, b.Cost.Total), t.NotableUsd, t));
+                    b is not null && ProtonSignals.IsNotable(ProtonTrends.Change(a.Cost.Total, b.Cost.Total), t.NotableUsd, t),
+                    a.Unconverted.Count > 0 ? ProtonAnalysis.Unconverted(a.Unconverted) : null,
+                    b is { Unconverted.Count: > 0 } ? ProtonAnalysis.Unconverted(b.Unconverted) : null);
                 rules.Add(ProtonSignals.NotableMoneyRule(t));
+                if (money.Unconverted is not null || money.PreviousUnconverted is not null)
+                {
+                    omitted.Add(ProtonAnalysis.UnconvertedLeftOut);
+                }
             }
             else
             {
@@ -401,7 +431,9 @@ public sealed class GetCompanySummaryTool(
         CompanyBlock? company = null;
         if (await context.CanCallAsync(Overhead))
         {
-            company = new CompanyBlock((await overhead.MonthlyAsync(2, cancellationToken)).Select(m => new OverheadMonth(m.Month, m.Totals)).ToList());
+            var now = await overview.OverheadAsync(pair.Current.From, pair.Current.To, cancellationToken);
+            var before = pair.Previous is { } previous ? await overview.OverheadAsync(previous.From, previous.To, cancellationToken) : null;
+            company = new CompanyBlock(ProtonFigure.Of(now.Usd, before?.Usd), now.Unconverted.Count > 0 ? now.Unconverted : null);
         }
         else
         {
@@ -572,7 +604,7 @@ public sealed class GetAttentionTool(ProtonAnalysisService analysis) : ProtonToo
 
     public override string Description =>
         "What may need attention now: overdue invoices and projects, overdue requirements, costs past 85% of the " +
-        "payment, target dates coming up, notable or unusual changes in weekly hours or monthly cost, idle projects, " +
+        "agreed revenue, target dates coming up, notable or unusual changes in weekly hours or monthly cost, idle projects, " +
         "projects close to done, on hold, and Design employees not logging this week. Each item lists the measured " +
         "facts and the rule that fired, most pressing first. Use it for 'what should I look at?'.";
 

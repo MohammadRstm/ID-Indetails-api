@@ -17,7 +17,7 @@ public interface IProjectFinanceService
 
     /// <summary>
     /// What an hour of each person's time costs, over time (see <c>ProjectFinance.RatesOf</c>): a monthly salary's rate
-    /// month by month, from their schedule.
+    /// month by month, from their schedule, and nothing in the months they were paid a fixed salary.
     /// </summary>
     Task<IReadOnlyList<ProjectFinance.PayRate>> PayRatesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
 

@@ -1,4 +1,5 @@
 using ID_Indetails.api.Controllers;
+using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using Shouldly;
@@ -89,10 +90,12 @@ public class ProtonFormsTests
 
         ProtonFormRules.MoneyIn(invoice).ShouldBe([("Amount", 1500m)]);
         ProtonFormRules.MoneyIn(new NewProjectFill { Title = "Villa" }).ShouldBeEmpty();
-        ProtonFormRules.Typed(1500m, "Invoice them 1,500 for the concept").ShouldBeTrue();
-        ProtonFormRules.Typed(1500m, "Invoice them 1500.00").ShouldBeTrue();
-        ProtonFormRules.Typed(1500m, "Invoice them 15000").ShouldBeFalse();
-        ProtonFormRules.Typed(1500m, "Invoice them what the last one was").ShouldBeFalse();
+        // forms read the user's figures as money cards do (MoneyText)
+        MoneyText.TypedFigures("Invoice them 1,500 for the concept").ShouldContain(1500m);
+        MoneyText.TypedFigures("Invoice them 1500.00").ShouldContain(1500m);
+        MoneyText.TypedFigures("Invoice them 1.5k").ShouldContain(1500m);
+        MoneyText.TypedFigures("Invoice them 15000").ShouldNotContain(1500m);
+        MoneyText.TypedFigures("Invoice them what the last one was").ShouldBeEmpty();
     }
 
     [Fact]

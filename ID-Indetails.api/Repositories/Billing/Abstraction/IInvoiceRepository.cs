@@ -3,6 +3,8 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Billing.Abstraction;
 
+/// <param name="IssuedFrom">Only invoices issued at or after this instant.</param>
+/// <param name="IssuedBefore">Only invoices issued before this instant.</param>
 public sealed record InvoiceSearch(
     IReadOnlyList<string> Domains,
     long? ProjectId,
@@ -12,7 +14,9 @@ public sealed record InvoiceSearch(
     string? Domain,
     DateOnly Today,
     int Page,
-    int PageSize);
+    int PageSize,
+    DateTime? IssuedFrom = null,
+    DateTime? IssuedBefore = null);
 
 /// <summary>
 /// An invoice (with project and client loaded), what its live payments add up to (in USD), and its total in USD: at the

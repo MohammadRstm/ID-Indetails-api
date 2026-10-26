@@ -3,7 +3,6 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Company;
 using ID_Indetails.api.Business.Finance;
-using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Company;
@@ -136,6 +135,16 @@ public sealed class CompanyOverviewService(
             UnconvertedInvoices(invoices.Where(i => data.Rates.ToUsd(i.Total, i.Currency, clock.ToCompanyDate(i.IssuedAt)) is null)));
     }
 
+    public async Task<PeriodOverheadResponse> OverheadAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+    {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.CompanyView);
+        var end = to < clock.CompanyToday ? to : clock.CompanyToday;
+        var start = from > end ? end : from;
+        var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
+        var (usd, unconverted) = await OverheadAsync(Recognition.Months(start, end).Select(s => (s.Month, s.Calendar)), rates, cancellationToken);
+        return new PeriodOverheadResponse(start, end, usd, unconverted);
+    }
+
     public Task<IReadOnlyList<CompanyMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default)
     {
         var thisMonth = Recognition.MonthOf(clock.CompanyToday);
@@ -231,22 +240,23 @@ public sealed class CompanyOverviewService(
     }
 
     /// <summary>
-    /// The admins' and super admins' pay in each month (fixed salaries: they log no hours, so no project carries it), as
-    /// Salaries works it out, times the share of the month's calendar days the period covers (like overhead), converted at
-    /// the rate on the first of the month.
+    /// The admins' and super admins' pay in each month they were paid a fixed salary (any month they held that role on a
+    /// day: they log no hours, so no project carries it), as Salaries works it out, times the share of the month's
+    /// calendar days the period covers (like overhead), converted at the rate on the first of the month.
     /// </summary>
     private async Task<(IReadOnlyDictionary<DateOnly, decimal> Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted)> FixedSalariesAsync(
         IReadOnlyList<Recognition.MonthShare> shares,
         ExchangeRateTable rates,
         CancellationToken cancellationToken)
     {
-        var people = (await payroll.PeopleAsync(DomainCodes.All, includeSuperAdmins: true, domain: null, search: null, shares[0].Month, cancellationToken))
-            .Where(p => PayRules.HasFixedSalary(p.RoleCode))
-            .ToList();
+        var months = shares.Select(s => s.Month).ToList();
+        var people = await payroll.PeopleAsync(DomainCodes.All, includeSuperAdmins: true, domain: null, search: null, months.Min(), cancellationToken);
+        var roles = await payrollInputs.RoleHistoriesAsync(people.Select(p => p.Id).ToList(), cancellationToken);
+        var salaried = people.Where(p => roles[p.Id].HadFixedSalary(months.Min(), months.Max().AddMonths(1).AddDays(-1))).ToList();
         var usd = new Dictionary<DateOnly, decimal>();
         var unconverted = new Dictionary<string, decimal>();
 
-        foreach (var month in await payrollInputs.ForAsync(people, shares.Select(s => s.Month).ToList(), cancellationToken))
+        foreach (var month in (await payrollInputs.ForAsync(salaried, months, cancellationToken)).Where(m => m.Input.FixedSalary))
         {
             if (SalaryCalculator.Calculate(month.Input) is not { } pay)
             {

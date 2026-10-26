@@ -838,7 +838,9 @@ public sealed class FillFormTool(
             throw new ProtonToolInputException("Amounts are filled only when the user types them in their own words.");
         }
 
-        if (money.FirstOrDefault(m => !ProtonFormRules.Typed(m.Value, context.TypedText)) is { Field: not null } missing)
+        // the same reading of the user's figures as a money card ("1,500", "1.5k", "$900"), so a form and a card agree
+        var typed = Actions.MoneyText.TypedFigures(context.TypedText);
+        if (money.FirstOrDefault(m => !typed.Contains(m.Value)) is { Field: not null } missing)
         {
             throw new ProtonToolInputException($"{missing.Field}: use only an amount the user typed in this conversation; leave it out otherwise.");
         }

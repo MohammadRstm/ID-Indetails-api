@@ -54,8 +54,13 @@ public sealed record ListProjectsInput
     public int? Limit { get; init; }
 }
 
+/// <param name="AgreedRevenue">The contract value, not cash.</param>
+/// <param name="AgreedProfit">Agreed revenue less the cost so far.</param>
+/// <param name="HasUnconverted">A cost or an invoice is left out of these USD figures for want of an exchange rate.</param>
+/// <param name="UnpricedLabourHours">Hours of people with no pay record, left out of the cost.</param>
 public sealed record ProjectMoneyRow(
-    decimal Revenue, decimal Cost, decimal Profit, decimal? Margin, bool MarginKnown, decimal Invoiced, decimal Outstanding, bool HasUnconverted);
+    decimal AgreedRevenue, decimal Cost, decimal AgreedProfit, int? AgreedMarginPct, bool MarginKnown, decimal Invoiced, decimal Outstanding,
+    bool HasUnconverted, decimal? UnpricedLabourHours);
 
 public sealed record ProjectWorkRow(decimal Hours, decimal HoursLast14Days, int Contributors, DateTime? LastWorkAt);
 
@@ -87,7 +92,7 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
 
     public override string Description =>
         "List and count projects with filters (status, domain, client, owner, title words, year/quarter, overdue). " +
-        "Rows carry hours and money only when this user may see them.";
+        "Rows carry hours and money only when this user may see them; money is all time, against the agreed revenue.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
 
@@ -156,9 +161,9 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
 
         if (money)
         {
-            columns.Add(ProtonDatasets.Figure("revenue", "Revenue", ProtonUnit.Usd));
+            columns.Add(ProtonDatasets.Figure("agreed_revenue", "Agreed revenue", ProtonUnit.Usd));
             columns.Add(ProtonDatasets.Figure("cost", "Cost", ProtonUnit.Usd));
-            columns.Add(ProtonDatasets.Figure("profit", "Profit", ProtonUnit.Usd));
+            columns.Add(ProtonDatasets.Figure("agreed_profit", "Profit (vs agreed)", ProtonUnit.Usd));
         }
 
         var data = rows.Select(r =>
@@ -181,9 +186,9 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
 
             if (money)
             {
-                cells.Add(ProtonCell.Of(r.Money?.Revenue));
+                cells.Add(ProtonCell.Of(r.Money?.AgreedRevenue));
                 cells.Add(ProtonCell.Of(r.Money?.Cost));
-                cells.Add(ProtonCell.Of(r.Money?.Profit));
+                cells.Add(ProtonCell.Of(r.Money?.AgreedProfit));
             }
 
             return new ProtonDataRow(cells, new ProtonRef(ProtonRefType.Project, r.Id, r.Title, r.Domain));
@@ -230,7 +235,10 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
         p.ProgressPct,
         p.Location,
         p.Work is { } w ? new ProjectWorkRow(ProtonText.Hours(w.TotalMinutes), ProtonText.Hours(w.MinutesLast14Days), w.ContributorCount, w.LastStartedAt) : null,
-        p.Money is { } m ? new ProjectMoneyRow(m.Revenue, m.Cost, m.Profit, m.Margin, m.MarginKnown, m.Invoiced, m.Outstanding, m.HasUnconverted) : null);
+        p.Money is { } m
+            ? new ProjectMoneyRow(m.Revenue, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.MarginKnown, m.Invoiced, m.Outstanding, m.HasUnconverted,
+                m.UnpricedLabourMinutes > 0 ? ProtonText.Hours(m.UnpricedLabourMinutes) : null)
+            : null);
 }
 
 public sealed record ProjectCard(
@@ -440,23 +448,30 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
     private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 }
 
+/// <param name="AgreedRevenue">The contract value, not cash. Design: the agreed payment typed in. Execution: the fee plus the client
+/// prices of the materials sent on a statement.</param>
+/// <param name="AgreedRevenueLocked">The project is finished: its agreed revenue, fee and markup can't change until it is reopened.</param>
+/// <param name="MaterialMarkupPct">Execution: the default markup on materials, as a percentage.</param>
+/// <param name="Expenses">Project expenses, one total per currency, as recorded (not converted).</param>
+/// <param name="AgreedProfit">Agreed revenue less the cost so far.</param>
+/// <param name="CashProfit">Execution: received less the cost so far.</param>
 public sealed record ProjectFinancials(
     long ProjectId,
     string Title,
     string Currency,
-    decimal Revenue,
-    bool RevenueLocked,
+    decimal AgreedRevenue,
+    bool AgreedRevenueLocked,
     decimal? ProjectFee,
-    decimal? MaterialMarkup,
+    decimal? MaterialMarkupPct,
     decimal? MaterialCharge,
     decimal? UnsentMaterialCharge,
     IReadOnlyList<CurrencyTotalResponse> Expenses,
     ProjectBillingResponse Billing,
     ProjectCostResponse Cost,
-    decimal Profit,
-    decimal? Margin,
+    decimal AgreedProfit,
+    int? AgreedMarginPct,
     decimal RecognisedToDate,
-    ProjectProjectionResponse? Projected,
+    ProtonProjection? Projected,
     decimal LabourHours,
     decimal? CashProfit,
     decimal? MaterialProfit,
@@ -471,8 +486,9 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
     public override string Name => "get_project_financials";
 
     public override string Description =>
-        "A project's money, all time, in USD: revenue, received, invoiced, outstanding and overdue, cost by source " +
-        "(labour, expenses, materials, ground labour), profit, margin and projection.";
+        "A project's money, all time, in USD: its agreed revenue (the contract value, not cash), what was received, " +
+        "invoiced, outstanding and overdue, cost by source (labour, expenses, materials, ground labour), profit and margin " +
+        "against the agreed revenue, and projection. Execution sites also give cash profit (received − cost).";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Get));
 
@@ -482,10 +498,11 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
         var m = p.Money ?? throw new ForbiddenException(ErrorCodes.Forbidden, "This user can't see financial figures.");
         return ProtonToolOutput.Of(
             new ProjectFinancials(
-                p.Id, p.Title, m.Currency, m.Revenue, m.IsLocked, m.ProjectFee, m.MaterialMarkup, m.MaterialCharge,
-                m.UnsentMaterialCharge, m.ExpenseTotals, m.Billing, m.Cost, m.Profit, m.Margin, m.RecognisedToDate,
-                m.Projected, ProtonText.Hours(m.LabourHours), m.CashProfit, m.MaterialProfit,
-                "All-time figures in USD. Margin is empty until it means something (project done, 5% progress or 10 hours logged). " +
+                p.Id, p.Title, m.Currency, m.Revenue, m.IsLocked, m.ProjectFee, m.MaterialMarkup * 100, m.MaterialCharge,
+                m.UnsentMaterialCharge, m.ExpenseTotals, m.Billing, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.RecognisedToDate,
+                ProtonProjection.Of(m.Projected), ProtonText.Hours(m.LabourHours), m.CashProfit, m.MaterialProfit,
+                "All-time figures in USD. Agreed profit is against the agreed revenue, whether or not it was paid: billing.received " +
+                "is the cash in. Margin is empty until it means something (project done, 5% progress or 10 hours logged). " +
                 "Costs without an exchange rate for their day are listed as unconverted, not counted."),
             new ProtonRef(ProtonRefType.Project, p.Id, p.Title, p.Domain)) with { Datasets = Datasets(p.Title, m) };
     }
@@ -507,8 +524,8 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
 
         var headline = new ProtonDataset(
             $"{title}: money",
-            [ProtonDatasets.Label("project", "Project"), usd("revenue", "Revenue"), usd("received", "Received"), usd("outstanding", "Outstanding"),
-                usd("cost", "Cost"), usd("profit", "Profit"), ProtonDatasets.Figure("margin", "Margin", ProtonUnit.Percent)],
+            [ProtonDatasets.Label("project", "Project"), usd("agreed_revenue", "Agreed revenue"), usd("received", "Received"), usd("outstanding", "Outstanding"),
+                usd("cost", "Cost"), usd("agreed_profit", "Profit (vs agreed)"), ProtonDatasets.Figure("margin", "Margin", ProtonUnit.Percent)],
             [ProtonDatasets.Row(null, ProtonCell.Of(title), ProtonCell.Of(m.Revenue), ProtonCell.Of(m.Billing.Received), ProtonCell.Of(m.Billing.Outstanding),
                 ProtonCell.Of(m.Cost.Total), ProtonCell.Of(m.Profit), ProtonCell.Of(ProtonAnalysis.Pct(m.Margin)))],
             Notes: notes);

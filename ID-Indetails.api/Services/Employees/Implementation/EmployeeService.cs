@@ -317,7 +317,10 @@ public sealed class EmployeeService(
         await transaction.CommitAsync(cancellationToken);
         permissions.Forget(user.Id);
 
-        return await DescribeAsync(actor, userId, cancellationToken);
+        return (await DescribeAsync(actor, userId, cancellationToken)) with
+        {
+            FixedPayFrom = PayRules.FixedPayFrom(previousRole, user.RoleCode, clock.CompanyToday),
+        };
     }
 
     public async Task<EmployeeResponse> MoveAsync(

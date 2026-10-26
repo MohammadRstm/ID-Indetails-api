@@ -67,6 +67,7 @@ public sealed class ProposeCreateInvoiceTool(IProjectService projects, IInvoiceS
         {
             Lines = MoneyText.LinesOf(input.Lines), TermsDays = input.TermsDays, Notes = MoneyText.Clean(input.Notes),
         };
+        MoneyText.RequireTyped(context, [.. request.Lines.Select(l => (decimal?)l.Amount)]);
         // Every field the draft gets is on the card, and text the model wrote is only ever a value, never a row's label.
         var changes = new List<ProtonChange>
         {
@@ -141,6 +142,8 @@ public sealed class ProposeUpdateInvoiceTool(IInvoiceService invoices) : ProtonA
             Notes = input.Notes is null ? before.Notes : MoneyText.Clean(input.Notes),
         };
 
+        // a line kept as it was needn't be typed again; a new or changed amount must be the user's
+        MoneyText.RequireTyped(context, [.. after.Lines.Where(l => !before.Lines.Contains(l)).Select(l => (decimal?)l.Amount)]);
         var changes = new List<ProtonChange>();
         if (!MoneyText.SameLines(before.Lines, after.Lines))
         {
@@ -409,11 +412,14 @@ public sealed record RecordPaymentInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
-    [Description("The amount received, exactly as the user said.")]
-    public required decimal Amount { get; init; }
+    [Description("The amount received, exactly as the user typed it. Leave out with full_balance.")]
+    public decimal? Amount { get; init; }
 
     [Description("USD or LBP. Default USD.")]
     public string? Currency { get; init; }
+
+    [Description("The user said the client paid the whole remaining balance of the invoice (invoice_id): the server sets the amount and currency.")]
+    public bool FullBalance { get; init; }
 
     [Description("Today or earlier. Default today.")]
     public DateOnly? ReceivedOn { get; init; }
@@ -439,8 +445,9 @@ public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceS
     public override string Name => "propose_record_payment";
 
     public override string Description =>
-        "Propose recording a payment the client made, against an invoice or on account, at the day's exchange rate. " +
-        "The user confirms by typing the amount.";
+        "Propose recording a payment the client made, against an invoice or on account, at the day's exchange rate, " +
+        "with the amount the user typed (or full_balance when they said the whole balance of an invoice was paid). The " +
+        "user confirms by typing the amount. The card warns when the same amount was already recorded that day.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -449,16 +456,31 @@ public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceS
     protected override async Task<(RecordPaymentArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         RecordPaymentInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        if (input.Amount <= 0)
+        var project = await projects.GetAsync(input.ProjectId, cancellationToken);
+        decimal amount;
+        string currency;
+        if (input.FullBalance)
+        {
+            // the whole balance is the server's figure, so nothing is typed by the user or worked out by the model
+            var owed = await invoices.GetAsync(input.InvoiceId ?? throw new ProtonToolInputException("full_balance needs the invoice it pays."), cancellationToken);
+            amount = owed.Balance is { } balance and > 0 ? balance : throw new ProtonToolInputException("Nothing is left to pay on that invoice.");
+            currency = owed.Currency;
+        }
+        else
+        {
+            amount = input.Amount ?? throw new ProtonToolInputException("Give the amount received, or full_balance if the user said the whole balance was paid.");
+            MoneyText.RequireTyped(context, amount);
+            currency = (input.Currency ?? "USD").Trim().ToUpperInvariant();
+        }
+
+        if (amount <= 0)
         {
             throw new ProtonToolInputException("The amount must be more than zero.");
         }
 
-        var project = await projects.GetAsync(input.ProjectId, cancellationToken);
-        var currency = (input.Currency ?? "USD").Trim().ToUpperInvariant();
         var request = new RecordPaymentRequest
         {
-            Amount = input.Amount, Currency = currency, ReceivedOn = input.ReceivedOn, Method = input.Method ?? PaymentMethod.Bank,
+            Amount = amount, Currency = currency, ReceivedOn = input.ReceivedOn, Method = input.Method ?? PaymentMethod.Bank,
             Reference = MoneyText.Clean(input.Reference), Note = MoneyText.Clean(input.Note), InvoiceId = input.InvoiceId,
         };
         var changes = new List<ProtonChange>
@@ -495,9 +517,28 @@ public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceS
 
         return (new RecordPaymentArgs(project.Id, request),
             new ProtonPreview($"Record a payment from {project.Client?.DisplayName ?? project.Title}", changes,
-                $"{note} Converted at the dated exchange rate in force on the day received.",
+                $"{await AlreadyRecordedAsync(project.Id, request, context, cancellationToken)}{note} Converted at the dated exchange rate in force on the day received.",
                 Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(request.Amount)),
             ProjectText.Ref(project));
+    }
+
+    private static readonly ProtonEndpoint PaymentList = ProtonEndpoint.Of<PaymentsController>(nameof(PaymentsController.List));
+
+    /// <summary>
+    /// The same amount already received on the project that day: often the same payment asked for twice. It isn't
+    /// refused (two equal payments happen), but the card says so. Skipped for a user who can't list payments.
+    /// </summary>
+    private async Task<string> AlreadyRecordedAsync(long projectId, RecordPaymentRequest request, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        if (!await context.CanCallAsync(PaymentList))
+        {
+            return "";
+        }
+
+        var day = request.ReceivedOn ?? context.Today;
+        var same = (await payments.ListAsync(new PaymentListQuery { ProjectId = projectId, ReceivedFrom = day, ReceivedTo = day }, cancellationToken)).Items
+            .Count(p => p.Amount == request.Amount && p.Currency == request.Currency);
+        return same == 0 ? "" : $"Careful: {same} payment(s) of {MoneyText.Amount(request.Amount, request.Currency)} received that day are already recorded. Confirm only if this is another one. ";
     }
 
     protected override object RequestOf(RecordPaymentArgs args) => args.Request;
@@ -598,9 +639,43 @@ public sealed class ProposePaymentStepTool(IPaymentService payments, IInvoiceSer
 }
 
 /// <summary>Shared money wording: amounts as the app writes them, and what the user types to confirm money.</summary>
-public static class MoneyText
+public static partial class MoneyText
 {
     public static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    /// <summary>
+    /// Money on a card comes from the user's own words, never from a figure in the data or one the model worked out:
+    /// typing the card's amount to confirm only proves it was read, not where it came from. Each amount must be one the
+    /// user typed in this conversation, or the model is sent back to ask.
+    /// </summary>
+    public static void RequireTyped(ProtonToolContext context, params decimal?[] amounts)
+    {
+        var typed = TypedFigures(context.TypedText);
+        var missing = amounts.OfType<decimal>().Where(a => !typed.Contains(a)).Distinct().ToList();
+        if (missing.Count > 0)
+        {
+            throw new ProtonToolInputException(
+                $"The user didn't give {string.Join(", ", missing.Select(Phrase))}: a money card only uses amounts the user typed. " +
+                "Ask them for the amount in their own words.");
+        }
+    }
+
+    /// <summary>The numbers in what the user typed, as they meant them: "1,500", "1.5k", "4.5m", "2 million", "$900".</summary>
+    public static IReadOnlyList<decimal> TypedFigures(string typed)
+        => FiguresPattern().Matches(typed).Select(m =>
+        {
+            var number = decimal.Parse(m.Groups["number"].Value.Replace(",", ""), CultureInfo.InvariantCulture);
+            return m.Groups["scale"].Value.ToLowerInvariant() switch
+            {
+                "k" or "thousand" => number * 1_000,
+                "m" or "mil" or "million" => number * 1_000_000,
+                _ => number,
+            };
+        }).ToList();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?<![\w.,])(?<number>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?:\s*(?<scale>k|thousand|mil|million|m)\b)?",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex FiguresPattern();
 
     public static string Amount(decimal amount, string? currency)
         => $"{(currency is null ? "" : currency + " ")}{amount.ToString("#,0.##", CultureInfo.InvariantCulture)}";

@@ -93,13 +93,14 @@ POST /api/proton/messages
 | `list_meetings` | `GET /api/meetings` | at most 92 days |
 | `get_domain_dashboard` | `GET /api/dashboard/{domain}` + deadlines | |
 | `list_clients` / `get_client` | `GET /api/clients`, `/{id}` | |
-| `get_domain_finance` | `GET /api/finance/{domain}/summary` | |
-| `get_money_by_month` | `GET /api/finance/{domain}/monthly` | received, expected revenue, cost by source and profit month by month (2–36 months); heavy |
-| `get_finance_projects` | `GET /api/finance/{domain}/projects` | ranked by revenue, cost, profit, margin or hours (all time) |
+| `get_domain_finance` | `GET /api/finance/{domain}/summary` | split into `period` (cash: received, expected revenue, cost, cash profit), `as_of_today` (billing) and `all_time` (agreed revenue and profit) |
+| `get_money_by_month` | `GET /api/finance/{domain}/monthly` | received, expected revenue, cost by source and cash profit month by month (2–36 months); heavy |
+| `get_finance_projects` | `GET /api/finance/{domain}/projects` | ranked by agreed revenue, cost, profit against it, margin or hours (all time); unknown margins rank last both ways |
 | `get_money_attention` | `GET /api/finance/{domain}/attention` | |
-| `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | paid in USD, balance in the invoice's currency |
-| `get_company_overview` | `GET /api/company/overview` | without admin salaries and net profit |
+| `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | by the period issued or received; paid in USD, balance in the invoice's currency; up to 100 matching rows as a dataset for `add_up` |
+| `get_company_overview` | `GET /api/company/overview` | received, project cost and cash profit (the overview's gross profit), overhead by calendar days; without admin salaries and net profit |
 | `present_data` | — (open to whoever may list projects) | shows a dataset a tool returned as a chart, a table or headline figures; reads nothing |
+| `add_up` | — (open to whoever may list projects) | totals a number column of a dataset a tool returned, optionally where a text column has a value; refuses a dataset holding only part of its rows, percentages and compared headline figures; reads nothing |
 | `get_project_files` | `GET /api/projects/{id}/files` | Design only: titles, sections, sizes, uploader, for-client, comment counts, and whether each can be read |
 | `read_project_file` | `GET /api/projects/{id}/files` (the file's own link) | reads one file for the model itself (see "Project files, the portal and the discussion"); heavy, two per question |
 | `get_portal_status` | `GET /api/projects/{id}/portal/content` (+ `/portal/clients` for those who manage access) | published when and by whom, what the draft changes, files per section, who can follow it |
@@ -428,7 +429,7 @@ submits or sends anything itself.
   action family.
   - **Money** (`invoice`, `payment`, `project_expense`, `materials`, `labour_week`, `company_expense`): a
     `[ProtonMoney]` field fills only while the Money family is on, on a typed turn, and only with an amount the user
-    typed in this message (`ProtonFormRules.MoneyIn` finds them; `Typed` matches "1,500", "1500", "1500.00").
+    typed in this conversation (`ProtonFormRules.MoneyIn` finds them; `MoneyText.TypedFigures` reads the user's figures as money cards do: "1,500", "1500.00", "1.5k").
     `ProtonFormsTests` checks that no fill can name access, secrets or bank details, and that money fields are marked.
   - **Pay** (`schedule`, `hour_excuse`): only while the PayRules family is on.
   - Each form checks its record: a draft invoice and its project, the invoice a payment pays, a Design or Execution
@@ -616,7 +617,10 @@ How it works (`Proton/Actions/`):
    evaluated again **now**, the request is validated again, and the existing service makes the change (its own
    domain checks, rules, transaction, activity events and notifications).
 3. **Outcome.** `succeeded` (with the record created or changed) or `failed` (with the service's own error code,
-   returned to the client in the uniform error contract). Proton learns the outcome from the app in the next
+   returned to the client in the uniform error contract). Once claimed, an action runs to the end whatever the
+   browser does. A refusal (a business rule, a validation) comes before anything is written and says nothing changed;
+   any other error may come after the service saved, so it is `409 proton_action_uncertain`: it may have been saved,
+   check before asking again (the cause is only in the log). Proton learns the outcome from the app in the next
    question's context note — never from the model.
 
 There is no tool that executes: "don't ask me", "I already approved" or text inside data can't make Proton change
@@ -626,7 +630,7 @@ anything. Cancel: `POST /api/proton/actions/{id}/cancel`. Both decisions are rat
 the card showed, when it was proposed, decided and finished, the outcome, the record affected, and the model and
 prompt version. Error codes: `404 proton_action_not_found` (not yours, other conversation), `409
 proton_action_not_pending` (already decided, replaced or running), `422 proton_action_expired`, `422
-proton_action_stale`.
+proton_action_stale`, `409 proton_action_uncertain`.
 
 The client shows each proposal as a card in Proton's chat, listing what will change (before → after), its risk, and
 Cancel / Confirm. Typing "yes" confirms nothing.
@@ -684,20 +688,26 @@ Three more families, each off until switched on (`Proton:Actions:Money`, `Delete
 two steps, and where money is recorded or something can't be undone the user types the amount (digits and a point,
 no separators: `2500`, `320.5`) or the invoice number, which the server stored with the proposal.
 
+Every amount a money card sets (invoice lines, a payment, an expense, materials and client prices, a day rate, a rate,
+revenue, fee, markup, overhead) must be one the user typed in this conversation (`MoneyText.RequireTyped`, read as
+people write it: `1,500`, `1.5k`, `4.5m`), never one from the data or one the model worked out; otherwise the model is
+sent back to ask. Typing the card's amount to confirm only proves it was read, not where it came from. A payment of
+an invoice's whole balance uses `full_balance`, so the server sets the amount.
+
 | Tool | Stands in for | Typed |
 |---|---|---|
 | `propose_create_invoice`, `propose_update_invoice` | `POST /api/projects/{id}/invoices`, `PUT /api/invoices/{id}` | — (a draft is sent to nobody); the card shows every field the draft gets, the lines as one value and the notes printed for the client in full |
 | `propose_invoice_step` | `…/issue`, `…/void`, `DELETE /api/invoices/{id}` (discard), `DELETE …/schedule` | issue and discard: the total, refused at Confirm if the draft changed since the card (the issue card also shows the lines and notes); void: the invoice number (refused while payments are recorded against it) |
-| `propose_record_invoice_delivery`, `propose_record_statement_delivery` | `…/deliveries` | — (WhatsApp or by hand only: emails are sent from the app) |
-| `propose_record_payment` | `POST /api/projects/{id}/payments` | the amount; at the dated exchange rate in force, never one Proton sets; the card gives the invoice's balance before and after |
+| `propose_record_invoice_delivery`, `propose_record_statement_delivery` | `…/deliveries` | — (WhatsApp or by hand only: emails are sent from the app). A statement's first delivery makes its materials count toward the agreed revenue, and its card says so |
+| `propose_record_payment` | `POST /api/projects/{id}/payments` | the amount (or `full_balance`); at the dated exchange rate in force, never one Proton sets; the card gives the invoice's balance before and after, and warns when the same amount was already recorded that day |
 | `propose_payment_step` | `PUT /api/payments/{id}/invoice`, `…/void` | void: the amount |
-| `propose_add_expense`, `propose_delete_expense` | project expenses | the amount |
-| `propose_add_materials`, `propose_material_step` | a site's materials (add, correct, delete, client price) | add: the total cost; delete: its cost |
-| `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13) |
-| `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync`; refused at Confirm if the preview's total or count changed since the card |
-| `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; bank details are never read into a proposal: they are taken from the database when the change is made |
-| `propose_exchange_rate` | `POST /api/exchange-rates` | the rate |
-| `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), `…/pricing` (Execution fee and markup), each with why it changes (`reason`, asked for when not given) | the new amount |
+| `propose_add_expense`, `propose_delete_expense` | project expenses | the amount; the card warns when the same amount was already recorded that day |
+| `propose_add_materials`, `propose_material_step` | a site's materials (add, correct, delete, client price) | add: the total cost; delete: its cost. A correction changes only the fields named (the update replaces the whole material, so the rest is read from it) and is refused if the material changed since the card |
+| `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13); it sends the week's version, so a week changed since is refused (`409 labour_week_changed`) |
+| `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync`; refused at Confirm if the preview's total or count changed since the card. Irreversible: it freezes the client prices and can't be deleted |
+| `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; prefix, terms and footer only. Bank details and overdue reminders (which email clients on their own) are never part of a proposal: they are taken from the database when the change is made |
+| `propose_exchange_rate` | `POST /api/exchange-rates` | the rate; irreversible. A backdated rate changes past costs, overhead and invoices (they convert at the rate of their day when read), and the card says so; payments keep their own rate |
+| `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), `…/pricing` (Execution fee and markup), each with why it changes (`reason`, asked for when not given) | the new amount, or the new markup when only it changes. The markup is said and shown as a percentage and stored as the app's fraction (15 → 0.15) |
 | `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
 | `propose_delete` | requirement, meeting and client deletes | the project's or client's name; a client with projects is archived instead |
 | `propose_working_time`, `propose_schedule`, `propose_hour_excuse` | the company week, someone's own week, excused hours | — ; the cards describe the effect in words and never show an amount |
@@ -758,7 +768,8 @@ on. It replaces the top-bar button. It is mounted once, in `LiveRoute`, never on
 ## Prompts
 
 Markdown files in `Proton/Prompts/` (`persona.md` who Proton is and how it sounds, `proton.md` the company and the
-grounding rules, `data.md` what it may see and that people's text is data, `analysis.md` how to present comparisons,
+grounding rules, `data.md` what it may see and that people's text is data, `money.md` what each money figure means
+(agreed against received, cash profit, expected revenue, billing as of today), `analysis.md` how to present comparisons,
 judgements, "why" answers and anything about people, `navigation.md` how it moves around the app and offers buttons,
 `actions.md` how to propose changes and that only the card confirms them, `messages.md` messages sent as the user,
 `present.md` when to show a chart or a table, `chat.md` how to answer in chat), embedded
@@ -813,7 +824,7 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 | `Enabled` | `false` | must be true, with `ApiKey`, for Proton to answer |
 | `ApiKey` | — | user secrets locally; `Proton__ApiKey` (`PROTON_API_KEY` in the server's `.env`) in production. Required when enabled: the API won't start without it |
 | `Model` | `claude-haiku-5-5` | change `Prices` with it |
-| `Effort` | `low` | `low` … `max` |
+| `Effort` | `medium` | `low` … `max`. Medium since the money fixes: answers must keep agreed and received figures apart |
 | `MaxOutputTokens`, `MaxRoundTrips`, `MaxToolCallsPerQuestion` | 8000, 8, 12 | per question; at the limit the model must answer with what it has |
 | `ModelTimeoutSeconds`, `ToolTimeoutSeconds`, `QuestionTimeoutSeconds` | 40, 20, 55 | the question stays under nginx's 60-second read timeout |
 | `StreamQuestionTimeoutSeconds` | 120 | the whole question on the streaming endpoint; its pings keep proxies from timing out, and a streamed model call may run this long |

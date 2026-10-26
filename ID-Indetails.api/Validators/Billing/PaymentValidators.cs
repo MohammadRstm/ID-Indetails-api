@@ -11,6 +11,8 @@ public sealed class PaymentListQueryValidator : AbstractValidator<PaymentListQue
     public PaymentListQueryValidator()
     {
         RuleFor(x => x.Domain).ValidBusiness().When(x => x.Domain is not null);
+        RuleFor(x => x.ReceivedTo).GreaterThanOrEqualTo(x => x.ReceivedFrom).When(x => x.ReceivedFrom is not null && x.ReceivedTo is not null)
+            .WithMessage("The period must end on or after its start.");
         RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");
