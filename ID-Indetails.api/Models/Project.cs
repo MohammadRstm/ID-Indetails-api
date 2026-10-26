@@ -68,6 +68,9 @@ public class Project
     /// </summary>
     public byte ProgressPct { get; set; }
 
+    /// <summary>Execution only (required there, null for Design): whether its client payments go into the box.</summary>
+    public BoxState? BoxState { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public long? CreatedById { get; set; }

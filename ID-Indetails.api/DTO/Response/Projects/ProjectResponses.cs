@@ -73,8 +73,14 @@ public sealed record ProjectMoneyResponse
 
     public decimal CostPerHour { get; init; }
 
-    /// <summary>Execution: received − cost.</summary>
+    /// <summary>Execution: received + money from the box − cost.</summary>
     public decimal? CashProfit { get; init; }
+
+    /// <summary>Execution: what the Execution box moved to the project, counted in its cash profit.</summary>
+    public decimal? FromBox { get; init; }
+
+    /// <summary>Execution: whether its client payments go into the box.</summary>
+    public BoxState? BoxState { get; init; }
 
     /// <summary>Execution: what the materials sent earn, their charge − their cost.</summary>
     public decimal? MaterialProfit { get; init; }

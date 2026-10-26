@@ -118,6 +118,8 @@ public static class ProtonCoverage
         Never("Projects.UpdateStaff", "Who oversees a site is chosen in the app."),
         Never("SiteLogs.Create", "A daily log is the site staff's own words, written in the app."),
         Never("SiteLogs.Update", "A daily log is the site staff's own words, written in the app."),
+        Never("Box.Transfer", "Money moves out of the Execution box from its page, by someone who sees money."),
+        Never("Box.Decide", "What happens to a closed project's money in the box is decided on its page."),
         Action("Projects.UpdatePricing", "propose_project_money", T2, ProtonFamily.Money),
         Action("Requirements.Create", "propose_add_requirement"),
         Action("Requirements.Update", "propose_update_requirement"),
