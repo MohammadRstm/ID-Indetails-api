@@ -55,7 +55,7 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM project_requirements WHERE project_id = @p AND auto_done = 1", ("@p", project.Id)))
             .ShouldBe(3);
 
-        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/billing", new { billingType = "client", clientId = project.Client!.Id, revenue = 1 }, admin.AccessToken))
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/payment", new { revenue = 1, description = "After the end" }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProjectLocked);
         await (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.StatusUnchanged);
@@ -103,12 +103,12 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
         var completed = await ChangeAsync(site.Id, "complete", admin.AccessToken);
         completed.Money!.Revenue.ShouldBe(1000m);
         (await _steps.ScalarAsync<decimal>("SELECT revenue FROM projects WHERE id = @p", ("@p", site.Id))).ShouldBe(1000m);
-        await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 2000m, materialMarkup = 0.1m }, admin.AccessToken))
+        await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 2000m, materialMarkup = 0.1m, description = "Late" }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProjectLocked);
 
         await ChangeAsync(site.Id, "reopen", admin.AccessToken);
         (await _steps.ScalarAsync<decimal>("SELECT revenue FROM projects WHERE id = @p", ("@p", site.Id))).ShouldBe(0m);
-        var repriced = await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 2000m, materialMarkup = 0.1m }, admin.AccessToken))
+        var repriced = await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 2000m, materialMarkup = 0.1m, description = "Reopened" }, admin.AccessToken))
             .ReadAsync<ProjectResponse>();
         repriced.Money!.Revenue.ShouldBe(2000m);
     }

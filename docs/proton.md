@@ -582,7 +582,7 @@ no separators: `2500`, `320.5`) or the invoice number, which the server stored w
 | `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync`; refused at Confirm if the preview's total or count changed since the card |
 | `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; bank details are never read into a proposal: they are taken from the database when the change is made |
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate |
-| `propose_project_money` | `PUT /api/projects/{id}/billing` (Design revenue), `…/pricing` (Execution fee and markup) | the new amount |
+| `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), `…/pricing` (Execution fee and markup), each with why it changes (`reason`, asked for when not given) | the new amount |
 | `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
 | `propose_delete` | requirement, meeting and client deletes | the project's or client's name; a client with projects is archived instead |
 | `propose_working_time`, `propose_schedule`, `propose_hour_excuse` | the company week, someone's own week, excused hours | — ; the cards describe the effect in words and never show an amount |

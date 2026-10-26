@@ -142,5 +142,20 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
         return recorded.Select(r => new SiteRecorder(r.ProjectId, r.UserId, names.GetValueOrDefault(r.UserId, string.Empty), r.LastAt)).ToList();
     }
 
+    public async Task<IReadOnlyList<PaymentChangeRow>> PaymentChangesAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var changes = await db.ProjectPaymentChanges.AsNoTracking()
+            .Where(c => c.ProjectId == projectId)
+            .OrderByDescending(c => c.ChangedAt).ThenByDescending(c => c.Id)
+            .ToListAsync(cancellationToken);
+        var userIds = changes.Where(c => c.ChangedById is not null).Select(c => c.ChangedById!.Value).Distinct().ToList();
+        var names = await db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+            .ToDictionaryAsync(u => u.Id, u => PersonName.Of(u.FirstName, u.LastName, u.Email), cancellationToken);
+
+        return changes.Select(c => new PaymentChangeRow(c, c.ChangedById is { } id ? names.GetValueOrDefault(id) : null)).ToList();
+    }
+
     public void Add(Project project) => db.Projects.Add(project);
 }

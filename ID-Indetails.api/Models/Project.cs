@@ -87,4 +87,6 @@ public class Project
     public ICollection<ProjectExpense> Expenses { get; set; } = new List<ProjectExpense>();
 
     public ICollection<ProjectLabourDefault> LabourDefaults { get; set; } = new List<ProjectLabourDefault>();
+
+    public ICollection<ProjectPaymentChange> PaymentChanges { get; set; } = new List<ProjectPaymentChange>();
 }

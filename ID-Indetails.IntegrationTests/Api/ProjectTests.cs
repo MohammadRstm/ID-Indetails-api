@@ -72,7 +72,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         priced.Money.Revenue.ShouldBe(1000m);
 
         var repriced = await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing",
-            new { projectFee = 1500m, materialMarkup = 0.25m }, admin.AccessToken)).ReadAsync<ProjectResponse>();
+            new { projectFee = 1500m, materialMarkup = 0.25m, description = "Bigger site" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
         repriced.Money!.Revenue.ShouldBe(1500m);
         repriced.Money.UnsentMaterialCharge.ShouldBe(300m);
 
@@ -89,7 +89,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.PostJsonAsync("/api/projects", new { title = "Markup", clientId = client.Id, projectFee = 1, materialMarkup = 6 }, admin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
-        await (await Client.PutJsonAsync($"/api/projects/{site.Id}/billing", new { billingType = "client", clientId = client.Id, revenue = 5 }, admin.AccessToken))
+        await (await Client.PutJsonAsync($"/api/projects/{site.Id}/billing", new { billingType = "client", clientId = client.Id }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
     }
 
@@ -127,9 +127,11 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var other = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Design);
         var moved = await (await Client.PutJsonAsync($"/api/projects/{project.Id}/billing",
-            new { billingType = "client", clientId = other.Id, revenue = 7000m }, admin.AccessToken)).ReadAsync<ProjectResponse>();
+            new { billingType = "client", clientId = other.Id }, admin.AccessToken)).ReadAsync<ProjectResponse>();
         moved.Client!.Id.ShouldBe(other.Id);
-        moved.Money!.Revenue.ShouldBe(7000m);
+        var paid = await (await Client.PutJsonAsync($"/api/projects/{project.Id}/payment",
+            new { revenue = 7000m, description = "The new client's offer" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
+        paid.Money!.Revenue.ShouldBe(7000m);
 
         var madeInternal = await (await Client.PutJsonAsync($"/api/projects/{project.Id}/billing",
             new { billingType = "internal" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
@@ -217,7 +219,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         // Another domain's admin can't reach the project either.
         await (await Client.PutJsonAsync($"/api/projects/{design.Id}", new { title = "X", ownerId = executionAdmin.User.Id }, executionAdmin.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
-        await (await Client.PutJsonAsync($"/api/projects/{design.Id}/pricing", new { projectFee = 1, materialMarkup = 0 }, executionAdmin.AccessToken))
+        await (await Client.PutJsonAsync($"/api/projects/{design.Id}/pricing", new { projectFee = 1, materialMarkup = 0, description = "X" }, executionAdmin.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }
 
@@ -235,8 +237,11 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.PostJsonAsync("/api/projects", new { title = "Priced", clientId = client.Id, revenue = 5000m }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
-        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/billing", new { billingType = "client", clientId = client.Id, revenue = 5000m }, admin.AccessToken))
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/billing", new { billingType = "client", clientId = client.Id }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/payment", new { revenue = 5000m, description = "Agreed" }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.GetAsync($"/api/projects/{project.Id}/payment-changes", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync("/api/finance/design/summary", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 

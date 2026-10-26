@@ -1,4 +1,5 @@
 using FluentValidation;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.Validators.Clients;
 using ID_Indetails.api.Validators.Common;
@@ -80,7 +81,15 @@ public sealed class UpdateProjectBillingRequestValidator : AbstractValidator<Upd
     {
         RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
         RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
+    }
+}
+
+public sealed class UpdateProjectPaymentRequestValidator : AbstractValidator<UpdateProjectPaymentRequest>
+{
+    public UpdateProjectPaymentRequestValidator()
+    {
         RuleFor(x => x.Revenue).Amount("Revenue");
+        RuleFor(x => x.Description).ClientText("The description", ProjectRules.MaxPaymentDescriptionLength, required: true);
     }
 }
 
@@ -90,6 +99,7 @@ public sealed class UpdateProjectPricingRequestValidator : AbstractValidator<Upd
     {
         RuleFor(x => x.ProjectFee).Amount("Project fee");
         RuleFor(x => (decimal?)x.MaterialMarkup).MaterialMarkup().OverridePropertyName("MaterialMarkup");
+        RuleFor(x => x.Description).ClientText("The description", ProjectRules.MaxPaymentDescriptionLength, required: true);
     }
 }
 

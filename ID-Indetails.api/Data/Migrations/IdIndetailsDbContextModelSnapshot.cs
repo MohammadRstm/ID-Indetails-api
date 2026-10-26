@@ -4000,6 +4000,69 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectPaymentChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("changed_at");
+
+                    b.Property<long?>("ChangedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("changed_by_id");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("description");
+
+                    b.Property<decimal?>("MaterialMarkup")
+                        .HasPrecision(7, 4)
+                        .HasColumnType("decimal(7,4)")
+                        .HasColumnName("material_markup");
+
+                    b.Property<decimal?>("PreviousAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("previous_amount");
+
+                    b.Property<decimal?>("PreviousMaterialMarkup")
+                        .HasPrecision(7, 4)
+                        .HasColumnType("decimal(7,4)")
+                        .HasColumnName("previous_material_markup");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_payment_changes");
+
+                    b.HasIndex("ChangedById")
+                        .HasDatabaseName("ix_project_payment_changes_changed_by_id");
+
+                    b.HasIndex("ProjectId", "ChangedAt")
+                        .HasDatabaseName("ix_project_payment_changes_project_id_changed_at");
+
+                    b.ToTable("project_payment_changes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_payment_changes_amount_non_negative", "`amount` >= 0 AND (`previous_amount` IS NULL OR `previous_amount` >= 0)");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>
                 {
                     b.Property<long>("Id")
@@ -7494,6 +7557,24 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectPaymentChange", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_project_payment_changes_users_changed_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany("PaymentChanges")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_payment_changes_projects_project_id");
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -8027,6 +8108,8 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("LabourDefaults");
 
                     b.Navigation("Meetings");
+
+                    b.Navigation("PaymentChanges");
 
                     b.Navigation("Requirements");
                 });

@@ -10,6 +10,21 @@ public sealed record ProjectClientResponse(long Id, string DisplayName);
 
 public sealed record ProjectOwnerResponse(long Id, string Name);
 
+/// <summary>One change of a project's agreed payment, newest first in a list.</summary>
+/// <param name="Amount">USD: Design's customer payment, Execution's project fee.</param>
+/// <param name="PreviousAmount">Null for the payment agreed at the start.</param>
+/// <param name="MaterialMarkup">Execution only: the default material markup after it, a fraction (0.125 is 12.5%).</param>
+/// <param name="ChangedBy">Null when the person no longer exists.</param>
+public sealed record ProjectPaymentChangeResponse(
+    long Id,
+    decimal Amount,
+    decimal? PreviousAmount,
+    decimal? MaterialMarkup,
+    decimal? PreviousMaterialMarkup,
+    string Description,
+    DateTime ChangedAt,
+    ProjectOwnerResponse? ChangedBy);
+
 /// <summary>Only for callers with <c>financial:view</c>.</summary>
 public sealed record ProjectMoneyResponse
 {
