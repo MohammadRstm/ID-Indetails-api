@@ -98,6 +98,8 @@ public enum ProtonSurface
     PortalPreview,
     /// <summary>The invite form on the Website's staff page.</summary>
     InviteWebsiteStaff,
+    /// <summary>A project file opened to look at, on the project's files tab (its item id in <c>ItemId</c>).</summary>
+    ViewProjectFile,
 }
 
 public enum ProtonSettingsSection

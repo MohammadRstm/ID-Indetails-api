@@ -90,8 +90,11 @@ public sealed class ProtonUsageService(
     /// questions being answered already hold, can't cover it.
     /// </summary>
     public async Task<ProtonBudgetHold> HoldBudgetAsync(CancellationToken cancellationToken = default)
+        => await HoldBudgetAsync(options.Value.QuestionHoldUsd, cancellationToken);
+
+    /// <summary>Holds <paramref name="amount"/> of the budget: what something smaller than a question (a reply suggestion) may cost.</summary>
+    public async Task<ProtonBudgetHold> HoldBudgetAsync(decimal amount, CancellationToken cancellationToken)
     {
-        var amount = options.Value.QuestionHoldUsd;
         await holds.Deciding.WaitAsync(cancellationToken);
         try
         {

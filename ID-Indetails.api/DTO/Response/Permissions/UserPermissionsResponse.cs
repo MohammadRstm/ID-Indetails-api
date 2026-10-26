@@ -31,6 +31,12 @@ public sealed record UserPermissionsResponse
 
     /// <summary>Set after an update that changed the user's role automatically.</summary>
     public string? PreviousRole { get; init; }
+
+    /// <summary>
+    /// Set after an update that made an employee an admin: from this day (the first of this month) their pay is a fixed
+    /// monthly salary, so the client asks the caller to confirm it (the pay in force is <c>GET /api/employees/{id}/pay</c>).
+    /// </summary>
+    public DateOnly? FixedPayFrom { get; init; }
 }
 
 public sealed record PermissionOverrideResponse(

@@ -559,6 +559,14 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(150)")
                         .HasColumnName("name");
 
+                    b.Property<bool>("ProtonReadsFiles")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("proton_reads_files");
+
+                    b.Property<bool>("ProtonReplySuggestions")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("proton_reply_suggestions");
+
                     b.Property<string>("TimeZone")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -4607,7 +4615,7 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("proton_usage", null, t =>
                         {
-                            t.HasCheckConstraint("ck_proton_usage_channel", "`channel` IN ('text', 'voice')");
+                            t.HasCheckConstraint("ck_proton_usage_channel", "`channel` IN ('text', 'voice', 'suggestion')");
 
                             t.HasCheckConstraint("ck_proton_usage_outcome", "`outcome` IN ('answered', 'refused', 'limited', 'failed')");
 
@@ -5457,6 +5465,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("varchar(120)")
                         .HasColumnName("position");
+
+                    b.Property<bool>("ProtonReplySuggestions")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("proton_reply_suggestions");
 
                     b.Property<string>("RoleCode")
                         .IsRequired()

@@ -149,7 +149,10 @@ public sealed class PermissionManagementService(
         await transaction.CommitAsync(cancellationToken);
         permissions.Forget(user.Id);
 
-        return await DescribeAsync(user.Id, plan.Role, user.DomainCode, plan.PreviousRole, cancellationToken);
+        return (await DescribeAsync(user.Id, plan.Role, user.DomainCode, plan.PreviousRole, cancellationToken)) with
+        {
+            FixedPayFrom = plan.PreviousRole is { } previous ? PayRules.FixedPayFrom(previous, plan.Role, clock.CompanyToday) : null,
+        };
     }
 
     /// <summary>Makes the stored overrides match the plan, touching only rows that changed.</summary>

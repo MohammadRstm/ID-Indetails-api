@@ -22,6 +22,12 @@ public sealed record UpdateCompanySettingsRequest
 }
 
 /// <summary>A new company working week, from <see cref="EffectiveFrom"/> (today when empty).</summary>
+/// <summary>One of Proton's switches: reading project files (which sends them to Anthropic), or suggesting replies.</summary>
+public sealed record CompanyProtonSwitchRequest
+{
+    public bool Enabled { get; init; }
+}
+
 /// <summary>The company's own email address; empty clears it.</summary>
 public sealed record CompanyContactEmailRequest
 {

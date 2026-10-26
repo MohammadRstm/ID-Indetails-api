@@ -4,6 +4,8 @@ using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Analysis;
 using ID_Indetails.api.Proton.Agent;
 using ID_Indetails.api.Proton.Conversation;
+using ID_Indetails.api.Proton.Files;
+using ID_Indetails.api.Proton.Suggestions;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
 using ID_Indetails.api.Proton.Usage;
@@ -52,6 +54,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddHostedService<Jobs.ProtonHistoryCleanupJob>();
         services.AddScoped<Proton.Memory.ProtonMemoryService>();
         services.AddScoped<ProtonUsageService>();
+        services.AddScoped<ProtonReplySuggester>();
         services.AddSingleton<ProtonBudgetHolds>();
         services.AddSingleton<ProtonConversationStore>();
         services.AddScoped<ProtonToolbox>();
@@ -112,6 +115,19 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, FindRecipientTool>();
         services.AddScoped<IProtonTool, GetMyInboxTool>();
         services.AddScoped<IProtonTool, GetMyNotificationsTool>();
+
+        // A Design project's files and client portal, and the discussion with its client, read as the person (Phase 2).
+        services.AddSingleton<ProtonVideoFrames>();
+        services.AddSingleton<ProtonFileReader>();
+        services.AddScoped<IProtonTool, GetProjectFilesTool>();
+        services.AddScoped<IProtonTool, ReadProjectFileTool>();
+        services.AddScoped<IProtonTool, GetPortalStatusTool>();
+        services.AddScoped<IProtonTool, ReadDiscussionTool>();
+
+        // The company's public website: its projects, what it says, and its visitors.
+        services.AddScoped<IProtonTool, GetWebsiteProjectsTool>();
+        services.AddScoped<IProtonTool, GetWebsiteContentTool>();
+        services.AddScoped<IProtonTool, GetWebsiteAnalyticsTool>();
         services.AddScoped<ProtonBriefingService>();
 
         // UI tools: they read nothing new, they ask the app to open a page or record the user may already open.
@@ -174,6 +190,19 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeScheduleTool>();
         services.AddScoped<IProtonTool, ProposeHourExcuseTool>();
         services.AddScoped<IProtonTool, ProposeDeleteRecordTool>();
+
+        // A Design project's files and its client portal (Phase 4): a file's title, bringing one back, a comment for
+        // the team; publishing or discarding the portal is strong, in the Access family.
+        services.AddScoped<IProtonTool, ProposeRenameFileTool>();
+        services.AddScoped<IProtonTool, ProposeRestoreFileTool>();
+        services.AddScoped<IProtonTool, ProposeCommentOnFileTool>();
+        services.AddScoped<IProtonTool, ProposePortalStepTool>();
+
+        // The company's public website: all strong, typed turns only, in the Website family (off by default).
+        services.AddScoped<IProtonTool, ProposeWebsiteProjectTool>();
+        services.AddScoped<IProtonTool, ProposeUnderConstructionTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteServiceTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteLocationTool>();
         services.AddScoped<IProtonTool, ProposeChangeProjectStatusTool>();
         services.AddScoped<IProtonTool, ProposeUpdateProjectTool>();
         services.AddScoped<IProtonTool, ProposeCreateProjectTool>();

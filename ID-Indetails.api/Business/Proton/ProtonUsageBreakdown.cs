@@ -44,7 +44,8 @@ public static class ProtonUsageBreakdown
             .ToList();
 
     public static IReadOnlyList<ProtonConversationUsage> MostExpensiveConversations(IEnumerable<ProtonUsageTurn> turns, int count)
-        => turns.GroupBy(t => t.ConversationId)
+        // reply suggestions belong to no conversation
+        => turns.Where(t => t.ConversationId != Guid.Empty).GroupBy(t => t.ConversationId)
             .Select(g => new ProtonConversationUsage(g.Key, g.First().UserId, g.Count(), g.Sum(t => t.Tools.Count), g.Sum(t => t.CostUsd)))
             .OrderByDescending(c => c.CostUsd)
             .Take(count)

@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Proton.Abstraction;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,9 @@ public sealed class ProtonUsageRepository(IdIndetailsDbContext db) : IProtonUsag
         => await db.ProtonUsage
             .Where(u => u.OccurredAt >= fromUtc && u.OccurredAt < toUtc)
             .SumAsync(u => (decimal?)u.CostUsd, cancellationToken) ?? 0m;
+
+    public Task<int> SuggestionsAsync(long userId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
+        => db.ProtonUsage.CountAsync(u => u.UserId == userId && u.Channel == ProtonChannel.Suggestion && u.OccurredAt >= fromUtc && u.OccurredAt < toUtc, cancellationToken);
 
     public Task<int> QuestionsAsync(long userId, DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken = default)
         => db.ProtonUsage.CountAsync(u => u.UserId == userId && u.OccurredAt >= fromUtc && u.OccurredAt < toUtc && u.ToolCalls > 0, cancellationToken);

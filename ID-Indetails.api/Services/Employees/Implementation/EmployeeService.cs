@@ -317,7 +317,10 @@ public sealed class EmployeeService(
         await transaction.CommitAsync(cancellationToken);
         permissions.Forget(user.Id);
 
-        return await DescribeAsync(actor, userId, cancellationToken);
+        return (await DescribeAsync(actor, userId, cancellationToken)) with
+        {
+            FixedPayFrom = PayRules.FixedPayFrom(previousRole, user.RoleCode, clock.CompanyToday),
+        };
     }
 
     public async Task<EmployeeResponse> MoveAsync(
@@ -440,6 +443,16 @@ public sealed class EmployeeService(
     {
         var user = await ActiveSelfAsync(cancellationToken);
         user.PhotoFileId = null;
+        user.UpdatedAt = clock.UtcNow;
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return await sessions.DescribeAsync(user, cancellationToken);
+    }
+
+    public async Task<CurrentUserResponse> SetMyProtonSuggestionsAsync(MyProtonSuggestionsRequest request, CancellationToken cancellationToken = default)
+    {
+        var user = await ActiveSelfAsync(cancellationToken);
+        user.ProtonReplySuggestions = request.Enabled;
         user.UpdatedAt = clock.UtcNow;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

@@ -143,6 +143,7 @@ public sealed class ProjectPayService(
         var pay = (await payroll.PayHistoryAsync(userIds, cancellationToken)).ToLookup(p => p.UserId, p =>
             new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency));
         var personal = (await schedules.SchedulesAsync(userIds, cancellationToken)).ToLookup(s => s.UserId);
+        var roles = await inputs.RoleHistoriesAsync(userIds, cancellationToken);
         var policies = (await workingTime.GetPoliciesAsync(cancellationToken))
             .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
             .ToList();
@@ -168,14 +169,15 @@ public sealed class ProjectPayService(
                 var work = Overtime.Of(
                     monthWork.Where(e => e.UserId == userId && e.Work.Day.Month == month.Month && e.Work.Day.Year == month.Year).Select(e => e.Work),
                     calendar);
-                if (!PayrollInputs.PaidForHours(user))
+                var fixedSalary = roles[userId].FixedSalaryMonth(month);
+                if (fixedSalary)
                 {
-                    // a fixed salary earns no overtime: any time logged before admins stopped logging is priced as normal hours
+                    // a fixed salary earns no overtime: time logged in a month they were an admin is priced as normal hours
                     work = work.Select(w => w with { Overtime = 0 }).ToList();
                 }
 
                 var employment = inputs.EmploymentOf(user);
-                var ledger = user.DomainCode == DomainCodes.Design && user.RoleCode == RoleCodes.Employee
+                var ledger = user.DomainCode == DomainCodes.Design && !fixedSalary
                     ? HoursLedger.Build(month, today, employment.JoinedOn, calendar, work, new HoursLedger.Excuses(
                         excuses[userId].Any(x => x.Kind == ExcuseKind.WholeMonth),
                         excuses[userId].Sum(x => x.Minutes ?? 0),

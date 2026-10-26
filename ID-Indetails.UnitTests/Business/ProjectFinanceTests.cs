@@ -1,6 +1,8 @@
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkingTime;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using Shouldly;
 using static ID_Indetails.api.Business.Finance.ProjectFinance;
@@ -18,8 +20,20 @@ public class ProjectFinanceTests
         new ExchangeRateTable.Rate("LBP", Mar1, 90_000m),
     ]);
 
+    // Monday to Friday, 9 to 5: June 2026 has 176 paid hours, July 184.
+    private static readonly PersonCalendar NineToFive = new([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
+
+    private static readonly RoleHistory AnEmployee = new(RoleCodes.Employee, []);
+
     private static Costs CostOf(decimal labour = 0, decimal expenses = 0, decimal materials = 0, decimal ground = 0)
         => new(labour, expenses, materials, ground, []);
+
+    /// <summary>One hour on each day, priced at 1,760 a month from 1 January 2026 (10.4762 an hour in May, 10 in June, 9.5652 in July).</summary>
+    private static IEnumerable<decimal> HourOn(RoleHistory roles, params DateOnly[] days)
+        => PriceLabour(
+                days.Select(d => new WorkedTime(7, d, 60)),
+                RatesOf([new PayRecord(7, Jan1, PayBasis.Monthly, 1760m, "USD")], NineToFive, until: new DateOnly(2026, 7, 20), roles))
+            .Items.Select(i => i.Amount);
 
     [Fact]
     public void A_salary_costs_its_rate_of_each_month_and_hourly_pay_its_own_rate()
@@ -32,7 +46,7 @@ public class ProjectFinanceTests
             new(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD"),
         ];
 
-        RatesOf(history, calendar, until: new DateOnly(2026, 8, 20)).ShouldBe(
+        RatesOf(history, calendar, until: new DateOnly(2026, 8, 20), AnEmployee).ShouldBe(
         [
             new PayRate(7, new DateOnly(2026, 5, 15), 10.4762m, "USD"),
             new PayRate(7, new DateOnly(2026, 6, 1), 10m, "USD"),
@@ -46,9 +60,52 @@ public class ProjectFinanceTests
     {
         var calendar = new PersonCalendar([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
 
-        RatesOf([new PayRecord(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD")], calendar, until: new DateOnly(2026, 7, 1))
+        RatesOf([new PayRecord(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD")], calendar, until: new DateOnly(2026, 7, 1), AnEmployee)
             .Select(r => r.EffectiveFrom)
             .ShouldBe([new DateOnly(2026, 5, 15), new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 1)]);
+    }
+
+    [Fact]
+    public void A_promotion_makes_its_whole_month_free_and_leaves_the_months_before_alone()
+    {
+        var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new DateOnly(2026, 6, 15), RoleCodes.Employee, RoleCodes.Admin)]);
+
+        HourOn(promoted, new DateOnly(2026, 5, 29), new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 15), new DateOnly(2026, 7, 1))
+            .ShouldBe([10.4762m, 0m, 0m, 0m]);
+        HourOn(promoted, new DateOnly(2026, 5, 29)).ShouldBe(HourOn(AnEmployee, new DateOnly(2026, 5, 29)));
+    }
+
+    [Fact]
+    public void A_demoted_admin_costs_nothing_until_the_month_ends_then_their_rate()
+    {
+        var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new DateOnly(2026, 6, 15), RoleCodes.Admin, RoleCodes.Employee)]);
+
+        HourOn(demoted, new DateOnly(2026, 5, 29), new DateOnly(2026, 6, 15), new DateOnly(2026, 6, 30), new DateOnly(2026, 7, 1))
+            .ShouldBe([0m, 0m, 0m, 9.5652m]);
+    }
+
+    [Fact]
+    public void Someone_who_was_never_an_employee_costs_nothing_on_any_day()
+    {
+        var neverChanged = new RoleHistory(RoleCodes.SuperAdmin, []);
+        var adminThenSuperAdmin = new RoleHistory(RoleCodes.SuperAdmin, [new RoleHistory.Change(new DateOnly(2026, 6, 15), RoleCodes.Admin, RoleCodes.SuperAdmin)]);
+        DateOnly[] days = [new(2025, 12, 1), new(2026, 6, 12), new(2026, 6, 15), new(2026, 7, 1)];
+
+        HourOn(neverChanged, days).ShouldAllBe(amount => amount == 0m);
+        HourOn(adminThenSuperAdmin, days).ShouldAllBe(amount => amount == 0m);
+    }
+
+    [Fact]
+    public void Time_before_the_first_pay_record_keeps_the_role_held_then()
+    {
+        // Paid by the hour from 1 March; an admin until becoming an employee on 10 February, and the other way round.
+        PayRecord[] pay = [new(7, Mar1, PayBasis.Hourly, 12m, "USD")];
+        WorkedTime[] work = [new(7, new DateOnly(2026, 1, 20), 60), new(7, new DateOnly(2026, 2, 2), 60), new(7, new DateOnly(2026, 3, 5), 60)];
+        var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new DateOnly(2026, 2, 10), RoleCodes.Admin, RoleCodes.Employee)]);
+        var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new DateOnly(2026, 2, 10), RoleCodes.Employee, RoleCodes.Admin)]);
+
+        PriceLabour(work, RatesOf(pay, NineToFive, until: new DateOnly(2026, 3, 20), demoted)).Items.Select(i => i.Amount).ShouldBe([0m, 0m, 12m]);
+        PriceLabour(work, RatesOf(pay, NineToFive, until: new DateOnly(2026, 3, 20), promoted)).Items.Select(i => i.Amount).ShouldBe([12m, 0m, 0m]);
     }
 
     [Fact]

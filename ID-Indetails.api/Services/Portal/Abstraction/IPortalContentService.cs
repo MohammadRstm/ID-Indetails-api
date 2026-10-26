@@ -38,4 +38,13 @@ public interface IPortalContentService
 
     /// <summary>A short-lived link to open (images, videos, PDFs) or download one file.</summary>
     Task<PortalContentLinkResponse> LinkAsync(long projectId, long itemId, bool inline, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// One file's bytes, for Proton to read: to whoever may open its link, and only when it is no larger than
+    /// <paramref name="maxBytes"/> (otherwise <see cref="ProjectFileBytes.Data"/> is null and nothing is read).
+    /// </summary>
+    Task<ProjectFileBytes> ReadAsync(long projectId, long itemId, long maxBytes, CancellationToken cancellationToken = default);
 }
+
+/// <summary>A project file as read whole: its title, name, type and size, and its bytes when they were small enough to read.</summary>
+public sealed record ProjectFileBytes(long ItemId, string Title, string FileName, string ContentType, long Size, byte[]? Data);

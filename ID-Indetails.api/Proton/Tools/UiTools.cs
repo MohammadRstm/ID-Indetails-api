@@ -398,11 +398,11 @@ public sealed record OpenSurfaceInput
 
     [Description("The record it is for, from find or another tool: a project for edit_project, project_report, " +
                  "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment, new_statement, " +
-                 "file_comments, portal_discussion and portal_preview; a client for edit_client; a person for " +
+                 "view_project_file, file_comments, portal_discussion and portal_preview; a client for edit_client; a person for " +
                  "message_person; a website project for edit_website_project. Leave out for the others.")]
     public long? Id { get; init; }
 
-    [Description("file_comments (required) and portal_discussion (optional, to open one file's thread): the project file's item id, from the project's files.")]
+    [Description("view_project_file and file_comments (required), portal_discussion (optional, to open one file's thread): the project file's item_id, from get_project_files.")]
     public long? ItemId { get; init; }
 
     [Description("Which business, for surfaces not tied to a record (new project, new client, invite, new meeting, settings). " +
@@ -430,7 +430,7 @@ public sealed class OpenSurfaceTool(
     public override string Description =>
         "Open a form, dialog or tab for the user (\"open the new project form\", \"let me edit Acme's details\", \"take me " +
         "to the finance settings\", \"I want to message Sara\", \"open the comments on the floor plan\", \"show me the " +
-        "discussion with the client\", \"open the website project form\"). It only opens it: the user fills it in and " +
+        "discussion with the client\", \"show me the floor plan PDF\", \"open the website project form\"). It only opens it: the user fills it in and " +
         "saves it themselves. Use the record's id from find when the surface is for one. Changes you can propose go on a card instead.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
@@ -491,7 +491,7 @@ public sealed class OpenSurfaceTool(
     {
         switch (input.Surface)
         {
-            case ProtonSurface.FileComments:
+            case ProtonSurface.FileComments or ProtonSurface.ViewProjectFile:
                 var item = input.ItemId ?? throw new ProtonToolInputException("Which file? Give its item id from the project's files.");
                 await fileComments.ListAsync(project!.Id, item, cancellationToken);
                 return item;

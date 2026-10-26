@@ -57,6 +57,9 @@ public sealed record ProtonToolResult(
     public IReadOnlyList<string>? Suggestions { get; init; }
 
     public Ui.ProtonBlock? Block { get; init; }
+
+    /// <summary>A file's pictures or pages, sent to the model with <see cref="Content"/>.</summary>
+    public IReadOnlyList<ProtonAttachment>? Attachments { get; init; }
 }
 
 /// <summary>What the model is told of a dataset a tool returned: enough to show it, none of its values (they are in data).</summary>
@@ -148,7 +151,7 @@ public sealed class ProtonToolbox(
         else
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.ToolTimeoutSeconds));
+            timeout.CancelAfter(TimeSpan.FromSeconds(tool.TimeoutSeconds ?? options.Value.ToolTimeoutSeconds));
             if (tool.Heavy)
             {
                 session.HeavyCalls++;
@@ -326,7 +329,7 @@ public sealed class ProtonToolbox(
             : new ProtonToolResult(tool, input, ProtonToolStatus.Ok, json, output.Refs, output.Period, Elapsed(watch))
             {
                 Basis = output.Basis, UiCommand = output.UiCommand, Choices = output.Choices, QuickReplies = output.QuickReplies, Suggestions = output.Suggestions,
-                Block = output.Block,
+                Block = output.Block, Attachments = output.Attachments,
             };
     }
 

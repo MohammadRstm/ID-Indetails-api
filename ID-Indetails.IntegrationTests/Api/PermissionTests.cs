@@ -177,6 +177,8 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
         promoted.PreviousRole.ShouldBe(RoleCodes.Employee);
         promoted.Overrides.ShouldBeEmpty();
         promoted.IsJoker.ShouldBeFalse();
+        // their pay is a fixed salary from the first of this month: the client asks for it
+        promoted.FixedPayFrom.ShouldNotBeNull().Day.ShouldBe(1);
 
         (await _steps.ScalarAsync<string>("SELECT role_code FROM users WHERE id = @id", ("@id", employee.User.Id)))
             .ShouldBe(RoleCodes.Admin);
@@ -194,6 +196,7 @@ public class PermissionTests(ApiFactory api) : IClassFixture<ApiFactory>
         demoted.Role.ShouldBe(RoleCodes.Employee);
         demoted.PreviousRole.ShouldBe(RoleCodes.Admin);
         demoted.Overrides.ShouldBeEmpty();
+        demoted.FixedPayFrom.ShouldBeNull();
     }
 
     [Fact]
