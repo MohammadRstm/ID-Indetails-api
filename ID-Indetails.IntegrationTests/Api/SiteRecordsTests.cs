@@ -39,7 +39,14 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
             r => r.Weeks[^1].Value.ShouldBe(550m),
             r => r.Projects.Single().Title.ShouldBe(site.Title),
             r => r.Recent.Count.ShouldBe(3),
+            r => r.RecentTotal.ShouldBe(3),
             r => r.Recent[0].Kind.ShouldBe(SiteRecords.Kind.LabourWeek));
+
+        // the recent records come a page at a time, newest first
+        var second = await (await Client.GetAsync("/api/me/site-records?recentPage=2&recentPageSize=2", employee.AccessToken)).ReadAsync<SiteRecordsResponse>();
+        second.Recent.Single().ShouldBe(mine.Recent[2]);
+        second.RecentTotal.ShouldBe(3);
+        await (await Client.GetAsync("/api/me/site-records?recentPageSize=0", employee.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
 
         (await (await Client.GetAsync($"/api/employees/{employee.User.Id}/site-records", admin.AccessToken)).ReadAsync<SiteRecordsResponse>())
             .Total.ShouldBe(550m);

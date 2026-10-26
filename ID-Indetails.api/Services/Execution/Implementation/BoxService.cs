@@ -57,7 +57,14 @@ public sealed class BoxService(
     public async Task<PagedResponse<BoxEntryResponse>> EntriesAsync(BoxEntryListQuery query, CancellationToken cancellationToken = default)
     {
         await ActorAsync(cancellationToken);
-        var (items, total) = await box.SearchAsync(query.ProjectId, query.Page, query.PageSize, cancellationToken);
+        var (items, total) = await box.SearchAsync(new BoxEntrySearch(
+            query.ProjectId,
+            query.Kind,
+            query.From is { } from ? clock.CompanyDayStartUtc(from) : null,
+            query.To is { } to ? clock.CompanyDayStartUtc(to.AddDays(1)) : null,
+            query.Search?.Trim(),
+            query.Page,
+            query.PageSize), cancellationToken);
         return new PagedResponse<BoxEntryResponse>(items.Select(ToResponse).ToList(), query.Page, query.PageSize, total);
     }
 

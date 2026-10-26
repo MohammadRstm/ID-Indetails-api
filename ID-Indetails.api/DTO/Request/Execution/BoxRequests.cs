@@ -23,6 +23,16 @@ public sealed record BoxEntryListQuery
 {
     public long? ProjectId { get; init; }
 
+    public BoxEntryKind? Kind { get; init; }
+
+    /// <summary>Company days, both inclusive.</summary>
+    public DateOnly? From { get; init; }
+
+    public DateOnly? To { get; init; }
+
+    /// <summary>Words of the project's title, the note or the name of who made the movement.</summary>
+    public string? Search { get; init; }
+
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 25;

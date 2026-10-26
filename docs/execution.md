@@ -135,7 +135,7 @@ The box pools what Execution clients pay, so a site in the red can be kept going
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/execution/box` | `financial:view`, Execution visible | Balance, contributing projects (with their total), projects in the red, projects waiting for a decision |
-| `GET /api/execution/box/entries?projectId=` | `financial:view` | Movements, newest first |
+| `GET /api/execution/box/entries?projectId=&kind=&from=&to=&search=` | `financial:view` | Movements, newest first: of a project and kind, between company days (both inclusive), with words of the project's title, the note or the maker's name |
 | `POST /api/execution/box/transfers` | `financial:view` | `{ projectId, amount, note? }` to a project in the red |
 | `POST /api/execution/box/projects/{id}/decision` | `financial:view` | `{ decision: remove \| keep }` for a pending project |
 

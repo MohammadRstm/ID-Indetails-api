@@ -1,3 +1,4 @@
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Execution.Abstraction;
@@ -7,6 +8,19 @@ public sealed record BoxEntryRow(BoxEntry Entry, string ProjectTitle, string? Cr
 
 /// <summary>An Execution project as the Box page lists it, with what it put into the box and took out of it.</summary>
 public sealed record BoxProjectRow(Project Project, string? ClientName, decimal Contributed, decimal FromBox);
+
+/// <summary>
+/// Box movements of a project and kind, between UTC bounds (<paramref name="FromUtc"/> inclusive, <paramref name="ToUtc"/>
+/// exclusive), whose project title, note or maker's name has every word of <paramref name="Text"/>; newest first.
+/// </summary>
+public sealed record BoxEntrySearch(
+    long? ProjectId = null,
+    BoxEntryKind? Kind = null,
+    DateTime? FromUtc = null,
+    DateTime? ToUtc = null,
+    string? Text = null,
+    int Page = 1,
+    int PageSize = 30);
 
 /// <summary>The Execution box: its ledger, and where each Execution project stands with it.</summary>
 public interface IBoxRepository
@@ -32,7 +46,7 @@ public interface IBoxRepository
     Task<IReadOnlyList<BoxProjectRow>> ProjectsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Movements, newest first.</summary>
-    Task<(IReadOnlyList<BoxEntryRow> Items, int TotalCount)> SearchAsync(long? projectId, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<BoxEntryRow> Items, int TotalCount)> SearchAsync(BoxEntrySearch search, CancellationToken cancellationToken = default);
 
     Task<BoxEntryRow?> GetAsync(long id, CancellationToken cancellationToken = default);
 

@@ -13,6 +13,14 @@ public sealed record SaveSiteLogRequest
 }
 
 /// <summary>Daily logs, newest first. Days are company days, both inclusive.</summary>
+/// <summary>Which page of someone's recent records to show.</summary>
+public sealed record SiteRecordsQuery
+{
+    public int RecentPage { get; init; } = 1;
+
+    public int RecentPageSize { get; init; } = 20;
+}
+
 public sealed record SiteLogListQuery
 {
     /// <summary>Everyone's list only: one person's logs.</summary>

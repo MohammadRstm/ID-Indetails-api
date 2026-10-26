@@ -94,6 +94,37 @@ public class BoxTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Movements_are_searched_by_project_note_or_who_made_them_and_filtered_by_kind_and_day()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, money) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        await PayAsync(site.Id, 100m, superAdmin);
+        var voided = await PayAsync(site.Id, 200m, superAdmin);
+        await OkAsync<PaymentResponse>(Client.PostJsonAsync($"/api/payments/{voided.Id}/void", new { reason = "Bounced" }, superAdmin.AccessToken));
+        var losing = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        await Client.PostJsonAsync($"/api/projects/{losing.Id}/materials", new { items = new[] { new { name = "Cement", amount = 300m } } }, superAdmin.AccessToken);
+        var word = Guid.NewGuid().ToString("N")[..10];
+        await OkAsync<BoxResponse>(Client.PostJsonAsync("/api/execution/box/transfers", new { projectId = losing.Id, amount = 50m, note = $"Tiles {word}" }, money.AccessToken));
+
+        async Task<IReadOnlyList<(BoxEntryKind Kind, decimal Amount)>> Find(string query)
+            => (await OkAsync<PagedResponse<BoxEntryResponse>>(Client.GetAsync($"/api/execution/box/entries?{query}", money.AccessToken)))
+                .Items.Reverse().Select(e => (e.Kind, e.Amount)).ToList();
+
+        (await Find($"search={Uri.EscapeDataString(site.Title)}"))
+            .ShouldBe([(BoxEntryKind.PaymentIn, 100m), (BoxEntryKind.PaymentIn, 200m), (BoxEntryKind.PaymentVoided, -200m)]);
+        (await Find($"search={Uri.EscapeDataString(site.Title)}&kind=payment_voided")).ShouldBe([(BoxEntryKind.PaymentVoided, -200m)]);
+        (await Find($"search={word}")).ShouldBe([(BoxEntryKind.Transfer, -50m)]);
+        (await Find($"projectId={losing.Id}&kind=payment_in")).ShouldBeEmpty();
+
+        var today = DateTime.UtcNow.Date;
+        (await Find($"search={word}&from={today.AddDays(-1):yyyy-MM-dd}&to={today.AddDays(1):yyyy-MM-dd}")).Count.ShouldBe(1);
+        (await Find($"search={word}&from={today.AddDays(2):yyyy-MM-dd}")).ShouldBeEmpty();
+        await (await Client.GetAsync($"/api/execution/box/entries?from={today:yyyy-MM-dd}&to={today.AddDays(-3):yyyy-MM-dd}", money.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
     public async Task Only_whoever_sees_execution_money_reaches_the_box()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
