@@ -79,4 +79,20 @@ public class ProjectRulesTests
         ExecutionPricing.AgreedAmount([new(200m, null), new(30m, 50m)], 0.10m, 1000m).ShouldBe(1270m);
         ExecutionPricing.AgreedAmount([], 0.10m, 1000m).ShouldBe(1000m);
     }
+
+    [Fact]
+    public void Only_client_work_has_a_payment_to_change()
+    {
+        ProjectRules.CheckHasPayment(BillingType.Client).ShouldBeNull();
+        ProjectRules.CheckHasPayment(BillingType.Internal)!.Field.ShouldBe("revenue");
+    }
+
+    [Fact]
+    public void A_payment_change_must_change_an_amount()
+    {
+        ProjectRules.CheckPaymentChanges(true, "revenue").ShouldBeNull();
+        var denial = ProjectRules.CheckPaymentChanges(false, "projectFee")!;
+        denial.Field.ShouldBe("projectFee");
+        denial.Code.ShouldBe(ErrorCodes.ValidationFailed);
+    }
 }

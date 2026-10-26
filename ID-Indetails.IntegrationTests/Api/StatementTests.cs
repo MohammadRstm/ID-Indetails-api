@@ -48,7 +48,7 @@ public class StatementTests(ApiFactory api) : IClassFixture<ApiFactory>
             s => s.CreatedBy!.Id.ShouldBe(admin.User.Id));
 
         // A markup change reprices the material left out, never the stated one.
-        await Client.PutJsonAsync($"/api/projects/{project.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.50m }, admin.AccessToken);
+        await Client.PutJsonAsync($"/api/projects/{project.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.50m, description = "Priced" }, admin.AccessToken);
         var list = await (await Client.GetAsync($"/api/projects/{project.Id}/materials", admin.AccessToken)).ReadAsync<MaterialListResponse>();
         list.Items.Single(m => m.Id == materials[0].Id).ShouldSatisfyAllConditions(
             m => m.ClientPrice.ShouldBe(330m),

@@ -19,6 +19,15 @@ namespace ID_Indetails.api.Business.Projects;
 /// </summary>
 public static class ProjectRules
 {
+    /// <summary>Why a payment changed: required with every change, for the project report.</summary>
+    public const int MaxPaymentDescriptionLength = 500;
+
+    /// <summary>The description of the first change, the payment agreed when the project was created.</summary>
+    public const string AgreedAtStart = "Agreed at the start";
+
+    /// <summary>The description written when a Design project becomes internal work, which has no payment.</summary>
+    public const string MadeInternal = "Turned into internal work";
+
     public sealed record Setup(
         string Domain,
         BillingType BillingType,
@@ -66,6 +75,16 @@ public static class ProjectRules
             ? RuleDenial.Invalid(ErrorCodes.ValidationFailed, "revenue", "Internal projects have no revenue.")
             : null;
     }
+
+    /// <summary>Only client work has a customer payment: an internal project is made client work first.</summary>
+    public static RuleDenial? CheckHasPayment(BillingType billingType)
+        => billingType == BillingType.Client
+            ? null
+            : RuleDenial.Invalid(ErrorCodes.ValidationFailed, "revenue", "Internal projects have no customer payment: make it client work first.");
+
+    /// <summary>A payment change changes an amount: a description alone isn't one.</summary>
+    public static RuleDenial? CheckPaymentChanges(bool changes, string field)
+        => changes ? null : RuleDenial.Invalid(ErrorCodes.ValidationFailed, field, "Nothing would change: the payment is already this.");
 
     public static RuleDenial? CheckClient(bool isArchived)
         => isArchived

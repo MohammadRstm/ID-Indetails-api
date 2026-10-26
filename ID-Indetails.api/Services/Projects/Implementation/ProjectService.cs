@@ -228,6 +228,13 @@ public sealed class ProjectService(
             CreatedById = actor.UserId,
         };
 
+        if (project.BillingType == BillingType.Client)
+        {
+            project.PaymentChanges.Add(PaymentChange(
+                domain == DomainCodes.Execution ? project.ProjectFee ?? 0 : project.Revenue, null,
+                project.MaterialMarkup, null, ProjectRules.AgreedAtStart, actor.UserId));
+        }
+
         if (request.LabourDefaults is { } labour)
         {
             project.LabourDefaults.Add(new ProjectLabourDefault
@@ -331,8 +338,10 @@ public sealed class ProjectService(
         }
 
         Throw(ProjectRules.CheckMoneyEditable(project.RevenueLockedAt is not null));
+        // internal work has no payment; client work keeps the one it has, which is changed on its own
+        var revenue = request.BillingType == BillingType.Internal ? 0 : project.Revenue;
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
-            project.DomainCode, request.BillingType, request.ClientId, request.Revenue, null, null)));
+            project.DomainCode, request.BillingType, request.ClientId, revenue, null, null)));
         Throw(ProjectRules.CheckClientChange(
             project.ClientId, request.ClientId, await projects.HasBillingRecordsAsync(project.Id, cancellationToken)));
 
@@ -351,11 +360,10 @@ public sealed class ProjectService(
             }
         }
 
-        var revenue = request.Revenue ?? 0;
         if (revenue != project.Revenue)
         {
-            var kind = project.Revenue > 0 ? ActivityEventKinds.RevenueChanged : ActivityEventKinds.RevenueSet;
-            activity.Add(ProjectEvent(project, kind, actor.UserId, amount: revenue, prevAmount: project.Revenue));
+            activity.Add(ProjectEvent(project, ActivityEventKinds.RevenueChanged, actor.UserId, amount: revenue, prevAmount: project.Revenue));
+            project.PaymentChanges.Add(PaymentChange(revenue, project.Revenue, null, null, ProjectRules.MadeInternal, actor.UserId));
         }
 
         project.BillingType = request.BillingType;
@@ -384,6 +392,10 @@ public sealed class ProjectService(
         }
 
         Throw(ProjectRules.CheckMoneyEditable(project.RevenueLockedAt is not null));
+        Throw(ProjectRules.CheckPaymentChanges(
+            request.ProjectFee != project.ProjectFee || request.MaterialMarkup != project.MaterialMarkup, "projectFee"));
+        project.PaymentChanges.Add(PaymentChange(request.ProjectFee, project.ProjectFee ?? 0, request.MaterialMarkup, project.MaterialMarkup,
+            request.Description.Trim(), actor.UserId));
 
         if (request.ProjectFee != project.ProjectFee)
         {
@@ -407,6 +419,66 @@ public sealed class ProjectService(
 
         return await DescribeAsync(actor, project.Id, cancellationToken);
     }
+
+    public async Task<ProjectResponse> UpdatePaymentAsync(
+        long projectId,
+        UpdateProjectPaymentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var project = await VisibleProjectForUpdateAsync(actor, projectId, cancellationToken);
+
+        if (project.DomainCode == DomainCodes.Execution)
+        {
+            throw new BusinessRuleException(
+                ErrorCodes.NotForThisDomain, "An Execution project's payment is its fee and material markup; change those instead.");
+        }
+
+        Throw(ProjectRules.CheckMoneyEditable(project.RevenueLockedAt is not null));
+        Throw(ProjectRules.CheckHasPayment(project.BillingType));
+        Throw(ProjectRules.CheckPaymentChanges(request.Revenue != project.Revenue, "revenue"));
+
+        var kind = project.Revenue > 0 ? ActivityEventKinds.RevenueChanged : ActivityEventKinds.RevenueSet;
+        activity.Add(ProjectEvent(project, kind, actor.UserId, amount: request.Revenue, prevAmount: project.Revenue));
+        project.PaymentChanges.Add(PaymentChange(request.Revenue, project.Revenue, null, null, request.Description.Trim(), actor.UserId));
+        project.Revenue = request.Revenue;
+        project.UpdatedAt = clock.UtcNow;
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return await DescribeAsync(actor, project.Id, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ProjectPaymentChangeResponse>> PaymentChangesAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
+        var project = await projects.GetAsync(projectId, cancellationToken);
+        if (project is null || !actor.CanSee(project.DomainCode))
+        {
+            throw new NotFoundException(NotFoundMessage);
+        }
+
+        return (await projects.PaymentChangesAsync(projectId, cancellationToken))
+            .Select(r => new ProjectPaymentChangeResponse(
+                r.Change.Id, r.Change.Amount, r.Change.PreviousAmount, r.Change.MaterialMarkup, r.Change.PreviousMaterialMarkup,
+                r.Change.Description, r.Change.ChangedAt,
+                r.Change.ChangedById is { } id && r.ChangedByName is { } name ? new ProjectOwnerResponse(id, name) : null))
+            .ToList();
+    }
+
+    private ProjectPaymentChange PaymentChange(
+        decimal amount, decimal? previousAmount, decimal? markup, decimal? previousMarkup, string description, long actorId) => new()
+    {
+        Amount = amount,
+        PreviousAmount = previousAmount,
+        MaterialMarkup = markup,
+        PreviousMaterialMarkup = previousMarkup,
+        Description = description,
+        ChangedAt = clock.UtcNow,
+        ChangedById = actorId,
+    };
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);

@@ -59,12 +59,25 @@ public sealed class ProjectsController(
     public Task<ProjectResponse> Update(long projectId, UpdateProjectRequest request, CancellationToken cancellationToken)
         => projectService.UpdateAsync(projectId, request, cancellationToken);
 
-    /// <summary>Design: client work or internal, the client and the revenue.</summary>
+    /// <summary>Design: client work or internal, and the client.</summary>
     [HttpPut("{projectId:long}/billing")]
     [HasPermission(PermissionCodes.ProjectEdit)]
     [HasPermission(PermissionCodes.FinancialView)]
     public Task<ProjectResponse> UpdateBilling(long projectId, UpdateProjectBillingRequest request, CancellationToken cancellationToken)
         => projectService.UpdateBillingAsync(projectId, request, cancellationToken);
+
+    /// <summary>Design: a client project's customer payment, with why it changes.</summary>
+    [HttpPut("{projectId:long}/payment")]
+    [HasPermission(PermissionCodes.ProjectEdit)]
+    [HasPermission(PermissionCodes.FinancialView)]
+    public Task<ProjectResponse> UpdatePayment(long projectId, UpdateProjectPaymentRequest request, CancellationToken cancellationToken)
+        => projectService.UpdatePaymentAsync(projectId, request, cancellationToken);
+
+    /// <summary>Every change of the project's agreed payment, newest first, with why it changed.</summary>
+    [HttpGet("{projectId:long}/payment-changes")]
+    [HasPermission(PermissionCodes.FinancialView)]
+    public Task<IReadOnlyList<ProjectPaymentChangeResponse>> PaymentChanges(long projectId, CancellationToken cancellationToken)
+        => projectService.PaymentChangesAsync(projectId, cancellationToken);
 
     /// <summary>Execution: the project fee and the default material markup.</summary>
     [HttpPut("{projectId:long}/pricing")]

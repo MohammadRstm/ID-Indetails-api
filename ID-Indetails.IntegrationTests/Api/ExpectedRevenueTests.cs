@@ -29,7 +29,7 @@ public class ExpectedRevenueTests(ApiFactory api) : IClassFixture<ApiFactory>
         var design = await ExpectedAsync(DomainCodes.Design);
         var project = await Projects.CreateProjectAsync(token, DomainCodes.Design, revenue: 5000m);
         (await ExpectedAsync(DomainCodes.Design)).ShouldBe(design + 5000m);
-        (await Client.PutJsonAsync($"/api/projects/{project.Id}/billing", new { billingType = "client", clientId = project.Client!.Id, revenue = 4000m }, token))
+        (await Client.PutJsonAsync($"/api/projects/{project.Id}/payment", new { revenue = 4000m, description = "Smaller scope" }, token))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await ExpectedAsync(DomainCodes.Design)).ShouldBe(design + 4000m);
         // nothing received yet, so it isn't revenue
