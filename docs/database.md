@@ -39,7 +39,7 @@ The database is the second line of defence. The API must still filter every quer
 | Clients | `clients`, `client_contacts` |
 | Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses` |
 | Design work | `work_entries`, `work_entry_comments` |
-| Execution site costs and pricing | `project_staff`, `site_logs`, `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `client_statements`, `client_statement_lines`, `client_statement_deliveries`, `statement_sequences` |
+| Execution site costs and pricing | `project_staff`, `site_logs`, `box_entries`, `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `client_statements`, `client_statement_lines`, `client_statement_deliveries`, `statement_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
 | Working time and hours ledger | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days` |
 | Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `company_settings`, `domain_settings` |
