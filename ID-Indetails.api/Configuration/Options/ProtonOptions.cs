@@ -17,9 +17,9 @@ public sealed class ProtonOptions
     [Required]
     public string Model { get; init; } = "claude-haiku-5-5";
 
-    /// <summary>low, medium, high, xhigh or max. Low keeps chat answers fast and cheap.</summary>
+    /// <summary>low, medium, high, xhigh or max. Medium: money answers need the model to keep agreed and received figures apart.</summary>
     [RegularExpression("^(low|medium|high|xhigh|max)$")]
-    public string Effort { get; init; } = "low";
+    public string Effort { get; init; } = "medium";
 
     [Range(1_000, 64_000)]
     public int MaxOutputTokens { get; init; } = 8_000;

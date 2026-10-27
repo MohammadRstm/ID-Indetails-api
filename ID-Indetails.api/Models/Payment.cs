@@ -3,8 +3,9 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Models;
 
 /// <summary>
-/// Cash received from a client. Billing is a separate ledger: payments never change
-/// revenue, profit or margin. Payments are voided, never deleted.
+/// Cash received from a client. Billing is a separate ledger: payments never change a project's
+/// agreed revenue, profit or margin, but they are a period's revenue (money received, on the day
+/// it arrived) in the Financials summary and the company overview. Payments are voided, never deleted.
 /// </summary>
 public class Payment
 {

@@ -80,22 +80,27 @@ public sealed class ProtonActionService(
         ProtonActionDone done;
         try
         {
+            // claimed, it runs to the end: a closed browser or a dropped connection must not stop it half way
             var session = await toolbox.OpenAsync(caller, userId,
-                new ProtonOrigin(action.ConversationId, action.Model, action.PromptVersion), cancellationToken);
-            done = await session.ExecuteAsync(action.Id, action.Tool, call.Args.GetRawText(), cancellationToken);
+                new ProtonOrigin(action.ConversationId, action.Model, action.PromptVersion), CancellationToken.None);
+            done = await session.ExecuteAsync(action.Id, action.Tool, call.Args.GetRawText(), CancellationToken.None);
         }
         catch (Exception exception)
         {
-            var (code, message) = exception switch
+            var failure = FailureOf(exception);
+            await actions.FinishAsync(actionId, ProtonActionStatus.Failed, null, null, failure.Code, Short(failure.Message), clock.UtcNow, CancellationToken.None);
+            Note(userId, action, failure.MaybeSaved
+                ? $"The user confirmed \"{Title(action)}\" but something went wrong while it was being made: it may or may not have been " +
+                  "saved. Say so, and before proposing it again, check with a tool whether it is there."
+                : $"The user confirmed \"{Title(action)}\" but it failed, and nothing was changed: {failure.Message}");
+            _log.Log(failure.MaybeSaved ? LogLevel.Error : LogLevel.Warning, exception,
+                "Proton action {ActionId} ({Tool}) failed with {Code}.", actionId, action.Tool, failure.Code);
+            if (failure.MaybeSaved)
             {
-                AppException app => (app.Code, app.Message),
-                ValidationException validation => (ErrorCodes.ValidationFailed, string.Join(" ", validation.Errors.Select(e => e.ErrorMessage).Distinct())),
-                _ => (ErrorCodes.InternalError, "Something went wrong."),
-            };
-            await actions.FinishAsync(actionId, ProtonActionStatus.Failed, null, null, code, Short(message), clock.UtcNow, CancellationToken.None);
-            Note(userId, action, $"The user confirmed \"{Title(action)}\" but it failed: {message}");
-            _log.Log(exception is AppException or ValidationException ? LogLevel.Warning : LogLevel.Error, exception,
-                "Proton action {ActionId} ({Tool}) failed with {Code}.", actionId, action.Tool, code);
+                // the client is told only what is safe to know: that it may have been saved; the cause is in the log
+                throw new ConflictException(failure.Code, failure.Message);
+            }
+
             throw;
         }
 
@@ -119,6 +124,21 @@ public sealed class ProtonActionService(
         Note(userId, action, $"The user cancelled \"{Title(action)}\". Nothing was changed.");
         return new ProtonActionOutcomeResponse(actionId, ProtonActionStatus.Cancelled, "Cancelled. Nothing was changed.", [], []);
     }
+
+    /// <param name="MaybeSaved">The change may have been written before it failed.</param>
+    public sealed record Failure(string Code, string Message, bool MaybeSaved);
+
+    /// <summary>
+    /// What a failed confirmation tells the user and the model. A refusal (a business rule, a validation) comes before the
+    /// service writes anything; any other error may come after its save, so it is never reported as "nothing changed".
+    /// </summary>
+    public static Failure FailureOf(Exception exception) => exception switch
+    {
+        AppException app => new Failure(app.Code, app.Message, false),
+        ValidationException validation => new Failure(
+            ErrorCodes.ValidationFailed, string.Join(" ", validation.Errors.Select(e => e.ErrorMessage).Distinct()), false),
+        _ => new Failure(ErrorCodes.ProtonActionUncertain, "Something went wrong while this was being made, and it may have been saved. Check before asking again.", true),
+    };
 
     private const int Listed = 50;
 

@@ -159,16 +159,16 @@ public class ProtonPresentTests(ProtonApiFactory api) : IClassFixture<ProtonApiF
             api.Anthropic.Reset();
             api.Anthropic.Reply(
                 FakeAnthropic.ToolUse("list_projects", new { domain = "design", search = project.Title }),
-                FakeAnthropic.ToolUse("present_data", new { dataset = "d1", @as = "table", columns = new[] { "status", "revenue", "profit" } }, id: "toolu_2"),
+                FakeAnthropic.ToolUse("present_data", new { dataset = "d1", @as = "table", columns = new[] { "status", "agreed_revenue", "agreed_profit" } }, id: "toolu_2"),
                 FakeAnthropic.Text("Here it is."));
             var reply = await OkAsync<ProtonReplyResponse>(AskAsync(who, $"List {project.Title} with its money as a table"));
             return (reply, Result(1)["datasets"]!.AsArray()[0]!["columns"]!.ToJsonString());
         }
 
         var (shown, described) = await MoneyTableFor(superAdmin);
-        described.ShouldContain("revenue (usd)");
+        described.ShouldContain("agreed_revenue (usd)");
         var table = shown.Blocks.ShouldHaveSingleItem().Table!;
-        table.Columns.Select(c => c.Key).ShouldBe(["project", "status", "revenue", "profit"]);
+        table.Columns.Select(c => c.Key).ShouldBe(["project", "status", "agreed_revenue", "agreed_profit"]);
         table.Rows.ShouldHaveSingleItem().Cells[2].Number.ShouldBe(5000m);
 
         var (refused, describedToAdmin) = await MoneyTableFor(admin);
@@ -177,7 +177,7 @@ public class ProtonPresentTests(ProtonApiFactory api) : IClassFixture<ProtonApiF
         describedToAdmin.ShouldNotContain("cost");
         describedToAdmin.ShouldNotContain("profit");
         refused.Blocks.ShouldBeEmpty();
-        Result(2)["message"]!.GetValue<string>().ShouldContain("There is no column \"revenue\"");
+        Result(2)["message"]!.GetValue<string>().ShouldContain("There is no column \"agreed_revenue\"");
     }
 
     [Fact]

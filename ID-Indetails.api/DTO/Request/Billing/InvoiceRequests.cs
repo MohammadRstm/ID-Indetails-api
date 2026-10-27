@@ -17,6 +17,12 @@ public sealed record InvoiceListQuery
     /// <summary>Must be a domain the caller can see, or nothing is returned.</summary>
     public string? Domain { get; init; }
 
+    /// <summary>Only invoices issued on or after this day (company time). Drafts have no issue day, so a date leaves them out.</summary>
+    public DateOnly? IssuedFrom { get; init; }
+
+    /// <summary>Only invoices issued on or before this day (company time).</summary>
+    public DateOnly? IssuedTo { get; init; }
+
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 25;

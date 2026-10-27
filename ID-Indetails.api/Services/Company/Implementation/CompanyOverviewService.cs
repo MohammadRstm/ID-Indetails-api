@@ -135,6 +135,16 @@ public sealed class CompanyOverviewService(
             UnconvertedInvoices(invoices.Where(i => data.Rates.ToUsd(i.Total, i.Currency, clock.ToCompanyDate(i.IssuedAt)) is null)));
     }
 
+    public async Task<PeriodOverheadResponse> OverheadAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+    {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.CompanyView);
+        var end = to < clock.CompanyToday ? to : clock.CompanyToday;
+        var start = from > end ? end : from;
+        var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
+        var (usd, unconverted) = await OverheadAsync(Recognition.Months(start, end).Select(s => (s.Month, s.Calendar)), rates, cancellationToken);
+        return new PeriodOverheadResponse(start, end, usd, unconverted);
+    }
+
     public Task<IReadOnlyList<CompanyMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default)
     {
         var thisMonth = Recognition.MonthOf(clock.CompanyToday);

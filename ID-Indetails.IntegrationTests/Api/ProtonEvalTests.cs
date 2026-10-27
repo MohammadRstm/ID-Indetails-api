@@ -19,7 +19,7 @@ namespace ID_Indetails.IntegrationTests.Api;
 
 /// <summary>
 /// Runs only when PROTON_EVAL_API_KEY is set: these call the real model and cost money (about 2–4 USD a run).
-/// Never in CI. Optional PROTON_EVAL_MODEL picks the model (default: the configured one).
+/// Never in CI. Optional PROTON_EVAL_MODEL and PROTON_EVAL_EFFORT pick the model and effort (default: the configured ones).
 /// </summary>
 public sealed class ProtonEvalFactAttribute : TheoryAttribute
 {
@@ -70,6 +70,11 @@ public sealed class ProtonEvalApiFactory : ApiFactory
         if (Environment.GetEnvironmentVariable("PROTON_EVAL_MODEL") is { Length: > 0 } model)
         {
             builder.UseSetting("Proton:Model", model);
+        }
+
+        if (Environment.GetEnvironmentVariable("PROTON_EVAL_EFFORT") is { Length: > 0 } effort)
+        {
+            builder.UseSetting("Proton:Effort", effort);
         }
 
         builder.ConfigureTestServices(services =>
@@ -157,6 +162,10 @@ public sealed record ProtonEvalCompany(AuthResponse SuperAdmin, AuthResponse Des
 
         (await steps.Client.PostJsonAsync($"/api/projects/{villa}/expenses",
             new { label = "Structural survey", amount = 1_500m, currency = "USD", category = "other", spentOn = DateTime.UtcNow.AddDays(-3).ToString("yyyy-MM-dd") },
+            superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        // agreed 5,000 (every project's), of which 2,000 has come in: the agreed and the received figures differ
+        (await steps.Client.PostJsonAsync($"/api/projects/{villa}/payments",
+            new { amount = 2_000m, currency = "USD", receivedOn = DateTime.UtcNow.AddDays(-10).ToString("yyyy-MM-dd") },
             superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
         return new ProtonEvalCompany(superAdmin, designAdmin, "Anna Khoury", "Ben Saad", villa);
@@ -249,6 +258,17 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         new("money by month", ["How has Design's money gone month by month over the last 6 months?"], ["get_money_by_month"]),
         new("table in Arabic", ["اعرض ساعات العمل لكل شخص في آخر 14 يومًا في جدول"], ["get_time_summary", "compare_work"], Forms: [ProtonPresentForm.Table], Matches: @"\p{IsArabic}"),
         new("admin table", ["List the active Design projects as a table."], ["list_projects"], NoMoney: true, Forms: [ProtonPresentForm.Table]),
+        // money meanings: agreed against received, a period's cash, today's billing, totals by the server, what isn't there
+        new("profit on a project", ["What's the profit on Villa Mounir?"], ["get_project_financials", "review_project", "get_finance_projects"], MustMention: ["agreed"]),
+        new("revenue in a period", ["How much revenue did Design bring in over the last 30 days?"],
+            ["get_domain_finance", "compare_money", "get_money_by_month", "get_company_overview"], MustMention: ["received", "came in", "paid"]),
+        new("expected isn't a forecast", ["How much revenue should Design expect next month?"], [],
+            MustMention: ["forecast", "agreed", "can't predict", "cannot predict", "don't have"]),
+        new("outstanding is today's", ["How much was outstanding at the end of last month?"], [], MustMention: ["today", "now", "current"]),
+        new("a client's payments totalled", ["How much has Villa Mounir's client paid in the last 30 days?"],
+            ["list_payments", "get_project_financials", "add_up"], MustMention: ["2,000", "2000"]),
+        new("no net profit", ["What was the company's net profit this month?"], [],
+            MustMention: ["not available", "don't have", "can't see", "cannot see", "Company overview"]),
     };
 
     [ProtonEvalFact]

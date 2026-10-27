@@ -14,6 +14,8 @@ public sealed class InvoiceListQueryValidator : AbstractValidator<InvoiceListQue
     {
         RuleFor(x => x.Status).IsInEnum().WithMessage("Status must be draft, sent, partial, paid or void.");
         RuleFor(x => x.Domain).ValidBusiness().When(x => x.Domain is not null);
+        RuleFor(x => x.IssuedTo).GreaterThanOrEqualTo(x => x.IssuedFrom).When(x => x.IssuedFrom is not null && x.IssuedTo is not null)
+            .WithMessage("The period must end on or after its start.");
         RuleFor(x => x.Page).ValidPage();
         RuleFor(x => x.PageSize).InclusiveBetween(1, EmployeeListQueryValidator.MaxPageSize)
             .WithMessage($"Page size must be between 1 and {EmployeeListQueryValidator.MaxPageSize}.");

@@ -13,6 +13,8 @@ public static class ProtonToolSearch
         "get_domain_dashboard", "get_recent_activity",
         "compare_work", "compare_money", "get_money_by_month", "summarize_changes", "review_project", "get_project_financials", "get_time_summary",
         "get_person_work", "list_work_entries",
-        "open_record", "open_page", "open_surface", "offer_choices", "suggest_replies", "present_data", "refresh_page",
+        "open_record", "open_page", "open_surface", "offer_choices", "suggest_replies", "present_data", "add_up", "refresh_page",
+        // what a client paid or was invoiced in a period: read together with add_up, so offered with it
+        "list_payments", "list_invoices",
     };
 }

@@ -125,6 +125,29 @@ public class InvoiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Invoices_are_listed_by_the_day_they_were_issued()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        await Projects.SetUpBillingAsync(superAdmin.AccessToken, DomainCodes.Design);
+        // dated in 2024, a year no other test numbers invoices in
+        var march = await IssueAsync((await DraftAsync(project.Id, superAdmin.AccessToken, 100m)).Id, superAdmin.AccessToken, new { issuedOn = "2024-03-31" });
+        await IssueAsync((await DraftAsync(project.Id, superAdmin.AccessToken, 200m)).Id, superAdmin.AccessToken, new { issuedOn = "2024-04-01" });
+        await DraftAsync(project.Id, superAdmin.AccessToken, 300m);
+
+        // the last day of the range counts in full; a draft has no issue day, so a range leaves it out
+        var inMarch = await (await Client.GetAsync($"/api/invoices?projectId={project.Id}&issuedFrom=2024-03-01&issuedTo=2024-03-31", superAdmin.AccessToken))
+            .ReadAsync<PagedResponse<InvoiceSummaryResponse>>();
+        inMarch.Items.Select(i => i.Id).ShouldBe([march.Id]);
+        inMarch.TotalCount.ShouldBe(1);
+        (await (await Client.GetAsync($"/api/invoices?projectId={project.Id}", superAdmin.AccessToken))
+            .ReadAsync<PagedResponse<InvoiceSummaryResponse>>()).TotalCount.ShouldBe(3);
+
+        await (await Client.GetAsync("/api/invoices?issuedFrom=2026-04-01&issuedTo=2026-03-01", superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
     public async Task Internal_projects_are_not_invoiced()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

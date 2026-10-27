@@ -56,7 +56,7 @@ public static class ProtonSignals
 
     public static string CloseoutRule(ProtonThresholds t) => $"an active project at {t.CloseoutProgress}% progress or more";
 
-    public static string CostHighRule => $"cost past {MoneyAttention.CostWarning * 100:0}% of the agreed payment";
+    public static string CostHighRule => $"cost past {MoneyAttention.CostWarning * 100:0}% of the agreed revenue";
 
     public const string OverdueRule = "an active or on-hold project whose target date has passed";
 

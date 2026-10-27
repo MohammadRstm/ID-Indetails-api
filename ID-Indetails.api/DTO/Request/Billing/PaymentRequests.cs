@@ -16,6 +16,12 @@ public sealed record PaymentListQuery
     /// <summary>Must be a domain the caller can see, or nothing is returned.</summary>
     public string? Domain { get; init; }
 
+    /// <summary>Only payments received on or after this day.</summary>
+    public DateOnly? ReceivedFrom { get; init; }
+
+    /// <summary>Only payments received on or before this day.</summary>
+    public DateOnly? ReceivedTo { get; init; }
+
     public int Page { get; init; } = 1;
 
     public int PageSize { get; init; } = 25;

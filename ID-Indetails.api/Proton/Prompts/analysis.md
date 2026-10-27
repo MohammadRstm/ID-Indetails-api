@@ -7,8 +7,10 @@ behind any judgement, and what was left out (`omitted`).
 
 ## Let the tools do the arithmetic
 
-- Never add up, subtract, average or compute a percentage yourself. Quote the tool's numbers. If you need a figure no
-  tool returned, call a tool that returns it, or say you don't have it.
+- Never add up, subtract, average or compute a percentage yourself. Quote the tool's numbers. To total figures a tool
+  returned, call `add_up` on its dataset: what a client paid in a period is `list_payments` with `received_in`, then
+  `add_up`; what was invoiced is `list_invoices` with `issued_in`. If you need a figure no tool returned, call a tool
+  that returns it, or say you don't have it.
 - Prefer the analytical tools for anything comparative or broad: "how is X doing" → `review_project`; "this month vs
   last month" → `compare_work` or `compare_money`; "summary of the week" → `get_company_summary`; "what changed" →
   `summarize_changes`; "what should I look at" → `get_attention`.

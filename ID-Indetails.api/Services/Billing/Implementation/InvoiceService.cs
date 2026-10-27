@@ -55,7 +55,9 @@ public sealed class InvoiceService(
         var (rows, total) = await invoices.SearchAsync(
             new InvoiceSearch(
                 actor.VisibleDomains, query.ProjectId, query.ClientId, query.Status, query.Overdue, query.Domain,
-                clock.CompanyToday, query.Page, query.PageSize),
+                clock.CompanyToday, query.Page, query.PageSize,
+                query.IssuedFrom is { } from ? clock.CompanyDayStartUtc(from) : null,
+                query.IssuedTo is { } to ? clock.CompanyDayStartUtc(to.AddDays(1)) : null),
             cancellationToken);
 
         return new PagedResponse<InvoiceSummaryResponse>(
