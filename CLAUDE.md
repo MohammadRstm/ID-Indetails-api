@@ -132,10 +132,14 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
   (`npm run api:types`).
 - **Docs:** update the area's doc in `docs/` in the same PR.
 
-### Working on this machine
+### Working on the user's machines
 
-- **One core, low priority, for every build and test.** The development laptop shuts down under load, and other
-  sessions may be running checks.
+- **Ask before running builds or tests.** The user works from two machines:
+  - a laptop that shuts down under load;
+  - a desktop that comfortably runs on several cores.
+
+  Before the first build or test run in a session, ask whether to run on **one core at low priority** (the laptop) or normally (the desktop). Keep to the answer for the rest of the session.
+- **On the laptop:** run one core at low priority, and other sessions may be running checks there too.
 - **Integration tests need MySQL from `docker-compose.yml`.**
   - Always exclude the Proton evals: `--filter "<yours>&FullyQualifiedName!~ProtonEvalTests"`. They call a paid model.
   - Every test class shares one database, so never assert global totals; follow your own rows.
@@ -143,6 +147,13 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
 - **CI** (`.github/workflows/ci.yml`) builds Release with `-warnaserror`, then runs unit and integration tests and builds the Docker images.
 - **Deploying** is by hand only (Actions → Deploy). Never start it unless asked.
 - **Git:** never commit to `master`; use `MR-<Topic>` branches. Before renaming or moving a file, check the target doesn't exist: `git mv -f` silently overwrites it.
+
+### Keeping this file current
+
+This file is how every new session learns the project, so keep it true:
+- **When your work changes something written here, propose an edit to this file.** That includes a rule, a workflow, a file or folder, a command, or a business rule.
+- **When the user tells you a new rule or preference, also propose an edit** so later sessions follow it.
+- **Ask the user's permission first, every time.** Show the exact change and wait for a yes. This applies above all to the rules sections. Never change this file on your own.
 
 ### Known quirks
 
