@@ -97,7 +97,7 @@ public sealed class WorkEntryQueryService(
                 .ToDictionary(g => g.Key, g => (IReadOnlyList<ProjectFinance.PayRate>)g.OrderBy(r => r.EffectiveFrom).ToList())
             : [];
 
-        var header = new List<string> { "Date", "Weekday", "Start", "End", "Hours", "Overtime hours", "Employee", "Email", "Team", "Project", "Client", "Task" };
+        var header = new List<string> { "Date", "Weekday", "Start", "End", "Hours", "Overtime hours", "Employee", "Email", "Team", "Project", "Client", "Task", "Outside scope" };
         if (withMoney)
         {
             header.AddRange(["Hourly rate", "Currency", "Labour cost"]);
@@ -123,6 +123,7 @@ public sealed class WorkEntryQueryService(
                 e.ProjectTitle,
                 e.ClientName ?? "Internal",
                 e.Description,
+                e.OutsideScope ? "Yes" : "No",
             };
 
             if (withMoney)

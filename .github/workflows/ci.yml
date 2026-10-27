@@ -73,8 +73,10 @@ jobs:
 
       # Proton reads a video through pictures ffmpeg takes, as the API's image does (its test is skipped without it).
       # Non-interactive, so a package that asks a question can't wait for an answer until the job's time runs out.
+      # Optional: a slow Ubuntu mirror only means that test is skipped, not a failed run.
       - name: Install ffmpeg
         timeout-minutes: 5
+        continue-on-error: true
         env:
           DEBIAN_FRONTEND: noninteractive
         run: command -v ffmpeg || (sudo -E apt-get update -q && sudo -E apt-get install -y -q --no-install-recommends ffmpeg)

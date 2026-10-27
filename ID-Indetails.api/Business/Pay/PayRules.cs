@@ -54,11 +54,26 @@ public static class PayRules
     /// <summary>Admins and super admins are paid a fixed monthly salary: they log no hours, and hours never change their pay.</summary>
     public static bool HasFixedSalary(string role) => role != RoleCodes.Employee;
 
-    /// <summary>A fixed salary is monthly, so it can't be hourly.</summary>
-    public static RuleDenial? CheckBasis(string role, PayBasis basis)
-        => HasFixedSalary(role) && basis == PayBasis.Hourly
-            ? RuleDenial.Invalid(ErrorCodes.FixedSalaryPaidMonthly, "basis", "Admins and super admins are paid a monthly salary: their pay doesn't depend on hours.")
+    /// <summary>
+    /// A fixed salary is monthly, so it can't be hourly. Execution employees are on site and log no hours, so they are
+    /// paid monthly too.
+    /// </summary>
+    public static RuleDenial? CheckBasis(string role, string? domain, PayBasis basis)
+    {
+        if (basis != PayBasis.Hourly)
+        {
+            return null;
+        }
+
+        if (HasFixedSalary(role))
+        {
+            return RuleDenial.Invalid(ErrorCodes.FixedSalaryPaidMonthly, "basis", "Admins and super admins are paid a monthly salary: their pay doesn't depend on hours.");
+        }
+
+        return domain == DomainCodes.Execution
+            ? RuleDenial.Invalid(ErrorCodes.FixedSalaryPaidMonthly, "basis", "Execution staff log no hours, so they are paid a monthly salary.")
             : null;
+    }
 
     /// <summary>
     /// When a role change makes an employee an admin or super admin on <paramref name="today"/>, the day their pay becomes a

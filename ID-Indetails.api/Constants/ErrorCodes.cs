@@ -120,6 +120,21 @@ public static class ErrorCodes
     public const string LabourDayOutsideWeek = "labour_day_outside_week";
     public const string LabourDayInFuture = "labour_day_in_future";
     public const string LabourWeekChanged = "labour_week_changed";
+
+    /// <summary>403. Only a site's own staff report its labour and write its daily logs.</summary>
+    public const string NotOnSiteTeam = "not_on_site_team";
+
+    /// <summary>422. A daily log can only be changed on the day it was written.</summary>
+    public const string SiteLogLocked = "site_log_locked";
+
+    /// <summary>422. The Execution box holds less than the money asked for.</summary>
+    public const string BoxShort = "box_short";
+
+    /// <summary>422. The box only sends money to a project in the red.</summary>
+    public const string BoxProjectNotInRed = "box_project_not_in_red";
+
+    /// <summary>422. The project isn't waiting for a decision on its money in the box.</summary>
+    public const string BoxNoDecision = "box_no_decision";
     public const string StatementEmpty = "statement_empty";
 
     // Dependencies

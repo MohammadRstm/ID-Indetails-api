@@ -48,7 +48,11 @@ public class ProjectFilesTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<ProjectResponse> ProjectAsync(AuthResponse staff, string domain, long? clientId)
     {
         var title = "Project " + Guid.NewGuid().ToString("N")[..8];
-        object body = clientId is null ? new { title, domainCode = domain, billingType = "internal" } : new { title, domainCode = domain, clientId };
+        object body = clientId is null
+            ? new { title, domainCode = domain, billingType = "internal" }
+            : domain == DomainCodes.Execution
+                ? new { title, domainCode = domain, clientId, staffIds = new[] { await new ProjectTestSteps(_steps).SiteStaffAsync() } }
+                : new { title, domainCode = domain, clientId };
         var response = await Client.PostJsonAsync("/api/projects", body, staff.AccessToken);
         ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<ProjectResponse>();

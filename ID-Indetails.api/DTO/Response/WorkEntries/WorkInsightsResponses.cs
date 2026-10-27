@@ -26,13 +26,15 @@ public sealed record ProjectContributorResponse(
     int SharePct,
     DateTime LastStartedAt,
     IReadOnlyList<int> Weekly,
-    LabourCostResponse? LabourCost);
+    LabourCostResponse? LabourCost,
+    int OutsideScopeMinutes = 0);
 
 /// <summary>A Design project's logged work, for the admin project page.</summary>
 /// <param name="TotalOvertimeMinutes">The part of <paramref name="TotalMinutes"/> that is overtime; the rest is normal time.</param>
 /// <param name="ActivityLevel">From the last 14 days: busy from 45 h a week, steady from 15 h, quiet with any work.</param>
 /// <param name="Weekly">Weekly hours from the project's start (4 to 30 weeks), oldest first.</param>
 /// <param name="Contributors">Within the requested range and work text, most time first.</param>
+/// <param name="OutsideScopeMinutes">The part of <paramref name="TotalMinutes"/> logged as outside the project's original scope.</param>
 public sealed record ProjectWorkResponse(
     long ProjectId,
     int TotalMinutes,
@@ -45,7 +47,8 @@ public sealed record ProjectWorkResponse(
     int MinutesPrevious14Days,
     IReadOnlyList<WeekTotalResponse> Weekly,
     IReadOnlyList<HourCellResponse> HourHeat,
-    IReadOnlyList<ProjectContributorResponse> Contributors);
+    IReadOnlyList<ProjectContributorResponse> Contributors,
+    int OutsideScopeMinutes = 0);
 
 /// <summary>One person's work on a project, within the requested range and work text.</summary>
 /// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>

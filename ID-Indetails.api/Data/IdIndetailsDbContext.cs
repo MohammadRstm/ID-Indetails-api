@@ -63,6 +63,12 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ProjectLabourDefault> ProjectLabourDefaults => Set<ProjectLabourDefault>();
 
     public DbSet<ProjectPaymentChange> ProjectPaymentChanges => Set<ProjectPaymentChange>();
+
+    public DbSet<ProjectStaff> ProjectStaff => Set<ProjectStaff>();
+
+    public DbSet<SiteLog> SiteLogs => Set<SiteLog>();
+
+    public DbSet<BoxEntry> BoxEntries => Set<BoxEntry>();
     public DbSet<ClientStatement> ClientStatements => Set<ClientStatement>();
     public DbSet<ClientStatementLine> ClientStatementLines => Set<ClientStatementLine>();
     public DbSet<ClientStatementDelivery> ClientStatementDeliveries => Set<ClientStatementDelivery>();
@@ -137,6 +143,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         // Enums: readable snake_case strings, limited by a CHECK constraint per column.
         StoreAsSnakeCase<UserStatus>(configurationBuilder);
         StoreAsSnakeCase<ProjectStatus>(configurationBuilder);
+        StoreAsSnakeCase<BoxState>(configurationBuilder);
+        StoreAsSnakeCase<BoxEntryKind>(configurationBuilder);
         StoreAsSnakeCase<BillingType>(configurationBuilder);
         StoreAsSnakeCase<PayBasis>(configurationBuilder);
         StoreAsSnakeCase<ContactKind>(configurationBuilder);

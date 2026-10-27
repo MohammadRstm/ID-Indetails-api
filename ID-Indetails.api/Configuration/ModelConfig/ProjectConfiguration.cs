@@ -16,6 +16,10 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         {
             t.HasCheckConstraint("ck_projects_status", SnakeCaseEnum.CheckSql<ProjectStatus>("status"));
             t.HasCheckConstraint("ck_projects_billing_type", SnakeCaseEnum.CheckSql<BillingType>("billing_type"));
+            t.HasCheckConstraint("ck_projects_box_state", $"`box_state` IS NULL OR {SnakeCaseEnum.CheckSql<BoxState>("box_state")}");
+
+            // Every Execution project stands somewhere with the box; Design projects never do.
+            t.HasCheckConstraint("ck_projects_box_state_execution_only", "(`domain_code` = 'execution') = (`box_state` IS NOT NULL)");
 
             // Internal projects are cost-only: no client and no revenue.
             t.HasCheckConstraint(

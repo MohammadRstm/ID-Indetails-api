@@ -98,7 +98,8 @@ public sealed class WorkInsightsService(
                     SharePct(minutes, rangeMinutes),
                     g.Max(e => e.StartedAt),
                     WorkStats.Weekly(worked.Where(w => w.UserId == g.Key), today, SparkWeeks, calendar.FirstDayOfWeek).Select(w => w.Minutes).ToList(),
-                    pricer?.Price(g.Select(ToRow)));
+                    pricer?.Price(g.Select(ToRow)),
+                    g.Where(e => e.OutsideScope).Sum(e => e.Minutes));
             })
             .OrderByDescending(c => c.Minutes)
             .ToList();
@@ -116,7 +117,8 @@ public sealed class WorkInsightsService(
             WorkStats.Minutes(worked, today.AddDays(-27), today.AddDays(-14)),
             ToWeeks(WorkStats.Weekly(worked, end, weeks, calendar.FirstDayOfWeek)),
             WorkStats.HourHeat(worked).Select(c => new HourCellResponse(c.Weekday, c.Hour, c.Minutes)).ToList(),
-            contributors);
+            contributors,
+            all.Where(e => e.OutsideScope).Sum(e => e.Minutes));
     }
 
     public async Task<ProjectContributorDetailResponse> ContributorAsync(

@@ -73,8 +73,14 @@ public sealed record ProjectMoneyResponse
 
     public decimal CostPerHour { get; init; }
 
-    /// <summary>Execution: received − cost.</summary>
+    /// <summary>Execution: received + money from the box − cost.</summary>
     public decimal? CashProfit { get; init; }
+
+    /// <summary>Execution: what the Execution box moved to the project, counted in its cash profit.</summary>
+    public decimal? FromBox { get; init; }
+
+    /// <summary>Execution: whether its client payments go into the box.</summary>
+    public BoxState? BoxState { get; init; }
 
     /// <summary>Execution: what the materials sent earn, their charge − their cost.</summary>
     public decimal? MaterialProfit { get; init; }
@@ -179,10 +185,10 @@ public sealed record ProjectSummaryResponse
 }
 
 /// <summary>
-/// An Execution site's team: the people who recorded its materials or labour weeks (projects have no member list).
+/// An Execution site's team: the employees who oversee it.
 /// </summary>
-/// <param name="People">The 5 who recorded most recently, latest first.</param>
-/// <param name="Count">Everyone who recorded anything there.</param>
+/// <param name="People">The first 5, in the order they were put on the site.</param>
+/// <param name="Count">Everyone overseeing it.</param>
 public sealed record SiteTeamResponse(IReadOnlyList<PersonRefResponse> People, int Count);
 
 /// <summary>A Design project's logged work, as the project list shows it.</summary>
@@ -238,6 +244,10 @@ public sealed record ProjectResponse
     /// <summary>Execution sites only.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public SiteTeamResponse? Team { get; init; }
+
+    /// <summary>Execution sites only: everyone overseeing it, in the order they were put on it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<PersonRefResponse>? Staff { get; init; }
 
     public int ProgressPct { get; init; }
 

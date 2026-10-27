@@ -13,4 +13,10 @@ public interface IWorkEntryService
     Task DeleteAsync(long id, CancellationToken cancellationToken = default);
 
     Task<WorkEntryResponse> RestoreAsync(long id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Marks anyone's entry as outside the project's original scope, or not (work_entry:view_all), after the edit
+    /// window too; never in a closed month.
+    /// </summary>
+    Task<WorkEntryResponse> SetScopeAsync(long id, SetWorkEntryScopeRequest request, CancellationToken cancellationToken = default);
 }

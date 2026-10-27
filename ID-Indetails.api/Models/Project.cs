@@ -68,6 +68,9 @@ public class Project
     /// </summary>
     public byte ProgressPct { get; set; }
 
+    /// <summary>Execution only (required there, null for Design): whether its client payments go into the box.</summary>
+    public BoxState? BoxState { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public long? CreatedById { get; set; }
@@ -89,4 +92,7 @@ public class Project
     public ICollection<ProjectLabourDefault> LabourDefaults { get; set; } = new List<ProjectLabourDefault>();
 
     public ICollection<ProjectPaymentChange> PaymentChanges { get; set; } = new List<ProjectPaymentChange>();
+
+    /// <summary>Execution only: who oversees the site, now and before.</summary>
+    public ICollection<ProjectStaff> Staff { get; set; } = new List<ProjectStaff>();
 }

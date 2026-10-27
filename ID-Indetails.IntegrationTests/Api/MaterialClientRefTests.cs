@@ -27,7 +27,7 @@ public class MaterialClientRefTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_batch_sent_again_returns_the_materials_already_added_without_adding_events_or_notifications()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, worker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, worker) = await _steps.MaterialWorkerAsync(superAdmin);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var cement = Guid.NewGuid();
         var sand = Guid.NewGuid();
@@ -58,8 +58,8 @@ public class MaterialClientRefTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Client_refs_are_each_person_s_own_and_one_material_s_only()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, worker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var (_, _, colleague) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, worker) = await _steps.MaterialWorkerAsync(superAdmin);
+        var (_, _, colleague) = await _steps.MaterialWorkerAsync(superAdmin);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var otherSite = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var shared = Guid.NewGuid();
@@ -80,7 +80,7 @@ public class MaterialClientRefTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_finalised_site_still_answers_a_batch_it_already_has_but_takes_nothing_new()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, worker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, worker) = await _steps.MaterialWorkerAsync(superAdmin);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var cement = Guid.NewGuid();
         var first = await AddAsync(site.Id, worker.AccessToken, new { name = "Cement", amount = 120m, clientRef = cement });

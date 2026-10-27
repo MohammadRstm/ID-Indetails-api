@@ -60,6 +60,9 @@ public class PermissionCatalogTests
     {
         GrantsOf(RoleCodes.Employee).ShouldContain(PermissionCodes.WorkEntryCreate);
         GrantsOf(RoleCodes.Employee).ShouldContain(PermissionCodes.WorkEntryViewOwn);
+        // site staff report labour and write daily logs; materials are an admin's (or whoever is given them)
+        GrantsOf(RoleCodes.Employee).ShouldContain(PermissionCodes.SiteLogCreate);
+        GrantsOf(RoleCodes.Employee).ShouldNotContain(PermissionCodes.MaterialCreate);
         GrantsOf(RoleCodes.Admin).ShouldNotContain(c => PermissionCatalog.OwnWork.Contains(c));
         GrantsOf(RoleCodes.SuperAdmin).ShouldNotContain(c => PermissionCatalog.OwnWork.Contains(c));
     }
@@ -80,6 +83,7 @@ public class PermissionCatalogTests
             PermissionCodes.MeetingManage, PermissionCodes.MeetingCreate,
             PermissionCodes.WorkEntryViewAll, PermissionCodes.WorkEntryComment,
             PermissionCodes.MaterialCreate, PermissionCodes.MaterialManage, PermissionCodes.LabourReportCreate, PermissionCodes.LabourReportManage,
+            PermissionCodes.SiteLogCreate, PermissionCodes.SiteLogViewAll,
             PermissionCodes.ClientView, PermissionCodes.ClientCreate, PermissionCodes.ClientManage, PermissionCodes.ClientAccessManage,
             PermissionCodes.ProjectFilesManage,
             PermissionCodes.EmployeeView, PermissionCodes.EmployeeManage, PermissionCodes.TeamManage,

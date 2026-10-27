@@ -32,6 +32,8 @@ public static class PermissionCodes
     public const string MaterialManage = "material:manage";
     public const string LabourReportCreate = "labour_report:create";
     public const string LabourReportManage = "labour_report:manage";
+    public const string SiteLogCreate = "site_log:create";
+    public const string SiteLogViewAll = "site_log:view_all";
 
     // Clients
     public const string ClientView = "client:view";

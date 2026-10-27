@@ -38,6 +38,8 @@ public static class PermissionExplanations
         [PermissionCodes.MaterialManage] = "Edit or remove material records, including ones other people added.",
         [PermissionCodes.LabourReportCreate] = "Submit the weekly report of ground labour on a site: who worked and for how many days.",
         [PermissionCodes.LabourReportManage] = "Edit anyone's labour reports and change the labour defaults.",
+        [PermissionCodes.SiteLogCreate] = "Write the daily logs of the sites you oversee: what arrived, what was missing, what held the work up.",
+        [PermissionCodes.SiteLogViewAll] = "Read every site's daily logs, by person, site and day.",
         [PermissionCodes.StatementCreate] = "Prepare client statements listing the materials supplied to a site.",
         [PermissionCodes.StatementSend] = "Send client statements, by email, on WhatsApp or as a PDF. A material's price counts as revenue once a statement sends it.",
 

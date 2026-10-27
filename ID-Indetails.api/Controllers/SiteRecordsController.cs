@@ -21,12 +21,12 @@ public sealed class SiteRecordsController(ISiteRecordsService siteRecords) : Con
     /// <summary>The materials and labour weeks the caller recorded.</summary>
     [HttpGet("me/site-records")]
     [HasAnyPermission(PermissionCodes.MaterialCreate, PermissionCodes.MaterialManage, PermissionCodes.LabourReportCreate, PermissionCodes.LabourReportManage)]
-    public Task<SiteRecordsResponse> Mine(CancellationToken cancellationToken)
-        => siteRecords.MineAsync(cancellationToken);
+    public Task<SiteRecordsResponse> Mine([FromQuery] SiteRecordsQuery query, CancellationToken cancellationToken)
+        => siteRecords.MineAsync(query, cancellationToken);
 
     /// <summary>Someone's records, on sites the caller can see. People of a domain the caller can't see read as 404.</summary>
     [HttpGet("employees/{userId:long}/site-records")]
     [HasPermission(PermissionCodes.EmployeeView)]
-    public Task<SiteRecordsResponse> Of(long userId, CancellationToken cancellationToken)
-        => siteRecords.OfAsync(userId, cancellationToken);
+    public Task<SiteRecordsResponse> Of(long userId, [FromQuery] SiteRecordsQuery query, CancellationToken cancellationToken)
+        => siteRecords.OfAsync(userId, query, cancellationToken);
 }

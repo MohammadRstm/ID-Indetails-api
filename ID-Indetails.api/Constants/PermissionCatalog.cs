@@ -43,6 +43,8 @@ public static class PermissionCatalog
         new(P.MaterialManage, "Edit or remove anyone's material records", DomainCodes.Execution, Sensitivity: Money),
         new(P.LabourReportCreate, "Submit weekly ground-labour reports", DomainCodes.Execution, Sensitivity: Money),
         new(P.LabourReportManage, "Edit anyone's labour reports and labour defaults", DomainCodes.Execution, Sensitivity: Money),
+        new(P.SiteLogCreate, "Write the daily logs of the sites one oversees", DomainCodes.Execution),
+        new(P.SiteLogViewAll, "Read every site's daily logs", DomainCodes.Execution),
 
         new(P.ClientView, "View clients"),
         new(P.ClientCreate, "Add clients"),
@@ -130,8 +132,8 @@ public static class PermissionCatalog
         P.MeetingCreate,
         P.WorkEntryCreate,
         P.WorkEntryViewOwn,
-        P.MaterialCreate,
         P.LabourReportCreate,
+        P.SiteLogCreate,
         P.ProtonUse,
     ];
 

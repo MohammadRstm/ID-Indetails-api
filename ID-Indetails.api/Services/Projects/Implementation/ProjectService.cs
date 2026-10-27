@@ -7,6 +7,7 @@ using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Expenses;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
@@ -24,6 +25,7 @@ using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
+using ID_Indetails.api.Repositories.Execution.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Reports.Abstraction;
@@ -55,6 +57,7 @@ public sealed class ProjectService(
     IProjectNotifier notifier,
     IPortalAccessService portalAccess,
     IPortalPublishingService portalPublishing,
+    ISiteTeamRepository siteTeams,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectService
 {
@@ -131,10 +134,10 @@ public sealed class ProjectService(
             return new Dictionary<long, SiteTeamResponse>();
         }
 
-        var recorders = (await projects.SiteRecordersAsync(sites, cancellationToken)).ToLookup(r => r.ProjectId);
+        var staff = (await siteTeams.StaffAsync(sites, cancellationToken)).ToLookup(r => r.ProjectId);
         return sites.ToDictionary(id => id, id =>
         {
-            var people = recorders[id].OrderByDescending(r => r.LastAt).ToList();
+            var people = staff[id].ToList();
             return new SiteTeamResponse(people.Take(SiteTeamShown).Select(r => new PersonRefResponse(r.UserId, r.Name)).ToList(), people.Count);
         });
     }
@@ -201,6 +204,16 @@ public sealed class ProjectService(
             }
         }
 
+        if (domain == DomainCodes.Execution)
+        {
+            var chosen = request.StaffIds ?? [];
+            Throw(SiteTeamRules.CheckStaff(chosen, await siteTeams.CandidatesAsync(chosen, cancellationToken)));
+        }
+        else if (request.StaffIds is { Count: > 0 })
+        {
+            throw new RequestValidationException(ErrorCodes.ValidationFailed, "staffIds", "Only Execution sites have staff overseeing them.");
+        }
+
         await EnsureClientAsync(request.ClientId, domain, cancellationToken);
         var ownerId = request.OwnerId ?? actor.UserId;
         await EnsureOwnerAsync(actor, ownerId, domain, cancellationToken);
@@ -224,9 +237,16 @@ public sealed class ProjectService(
             // A site created without its pricing starts at no fee and no markup until someone with pricing sets them.
             ProjectFee = domain == DomainCodes.Execution ? request.ProjectFee ?? 0 : null,
             MaterialMarkup = domain == DomainCodes.Execution ? request.MaterialMarkup ?? 0 : null,
+            // a new site's client payments go into the Execution box
+            BoxState = domain == DomainCodes.Execution ? BoxState.In : null,
             CreatedAt = now,
             CreatedById = actor.UserId,
         };
+
+        foreach (var staffId in (request.StaffIds ?? []).Where(_ => domain == DomainCodes.Execution))
+        {
+            project.Staff.Add(new ProjectStaff { UserId = staffId, AssignedAt = now, AssignedById = actor.UserId });
+        }
 
         if (project.BillingType == BillingType.Client)
         {
@@ -451,6 +471,46 @@ public sealed class ProjectService(
         return await DescribeAsync(actor, project.Id, cancellationToken);
     }
 
+    public async Task<ProjectResponse> UpdateStaffAsync(long projectId, UpdateProjectStaffRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var project = await VisibleProjectForUpdateAsync(actor, projectId, cancellationToken);
+        if (project.DomainCode != DomainCodes.Execution)
+        {
+            throw new BusinessRuleException(ErrorCodes.NotForThisDomain, "Only Execution sites have staff overseeing them.");
+        }
+
+        Throw(SiteTeamRules.CheckStaff(request.StaffIds, await siteTeams.CandidatesAsync(request.StaffIds, cancellationToken)));
+
+        // taken off keeps the row, so their past records still say who they were; put back reuses it
+        var now = clock.UtcNow;
+        var rows = await siteTeams.StaffForUpdateAsync(project.Id, cancellationToken);
+        foreach (var row in rows)
+        {
+            var stays = request.StaffIds.Contains(row.UserId);
+            if (stays && row.RemovedAt is not null)
+            {
+                row.RemovedAt = null;
+                row.AssignedAt = now;
+                row.AssignedById = actor.UserId;
+            }
+            else if (!stays && row.RemovedAt is null)
+            {
+                row.RemovedAt = now;
+            }
+        }
+
+        foreach (var userId in request.StaffIds.Where(id => rows.All(r => r.UserId != id)))
+        {
+            siteTeams.AddStaff(new ProjectStaff { ProjectId = project.Id, UserId = userId, AssignedAt = now, AssignedById = actor.UserId });
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(actor, project.Id, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<ProjectPaymentChangeResponse>> PaymentChangesAsync(long projectId, CancellationToken cancellationToken = default)
     {
         var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
@@ -542,6 +602,9 @@ public sealed class ProjectService(
                 ? held
                 : null,
             Team = (await SiteTeamsAsync([p], cancellationToken)).GetValueOrDefault(p.Id),
+            Staff = p.DomainCode == DomainCodes.Execution
+                ? (await siteTeams.StaffAsync([p.Id], cancellationToken)).Select(s => new PersonRefResponse(s.UserId, s.Name)).ToList()
+                : null,
             ProgressPct = p.ProgressPct,
             CreatedAt = p.CreatedAt,
             Money = actor.Has(PermissionCodes.FinancialView) ? await MoneyOfAsync(p, cancellationToken) : null,
@@ -584,6 +647,8 @@ public sealed class ProjectService(
             LabourHours = Math.Round(money.LabourMinutes / 60m, 2),
             CostPerHour = summary.CostPerHour,
             CashProfit = money.CashProfit,
+            FromBox = money.FromBox,
+            BoxState = p.BoxState,
             MaterialProfit = money.MaterialProfit,
             UnconvertedMaterials = money.UnconvertedMaterials,
         };
