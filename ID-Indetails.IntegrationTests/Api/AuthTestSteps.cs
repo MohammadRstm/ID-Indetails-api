@@ -105,6 +105,19 @@ public sealed class AuthTestSteps(ApiFactory api)
         return admin;
     }
 
+    /// <summary>
+    /// An Execution employee given materials to record, which site staff don't record by default (they report labour
+    /// and write daily logs).
+    /// </summary>
+    public async Task<(string Email, string Password, AuthResponse Auth)> MaterialWorkerAsync(AuthResponse superAdmin)
+    {
+        var worker = await InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var granted = await Client.PutJsonAsync($"/api/users/{worker.Auth.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.MaterialCreate, action = "grant", reason = "Records deliveries" } } }, superAdmin.AccessToken);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+        return worker;
+    }
+
     /// <summary>Puts someone in a team directly, without the fields the employee edit needs.</summary>
     public Task PutInTeamAsync(long userId, long teamId)
         => ExecuteAsync("UPDATE users SET team_id = @t WHERE id = @u", ("@t", teamId), ("@u", userId));

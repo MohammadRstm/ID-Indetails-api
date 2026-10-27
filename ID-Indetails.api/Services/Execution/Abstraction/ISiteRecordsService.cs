@@ -9,7 +9,7 @@ public interface ISiteRecordsService
     /// <summary>The visible Execution sites among the ids; others are left out.</summary>
     Task<IReadOnlyList<SiteSummaryResponse>> SummariesAsync(SiteSummaryQuery query, CancellationToken cancellationToken = default);
 
-    Task<SiteRecordsResponse> MineAsync(CancellationToken cancellationToken = default);
+    Task<SiteRecordsResponse> MineAsync(SiteRecordsQuery query, CancellationToken cancellationToken = default);
 
-    Task<SiteRecordsResponse> OfAsync(long userId, CancellationToken cancellationToken = default);
+    Task<SiteRecordsResponse> OfAsync(long userId, SiteRecordsQuery query, CancellationToken cancellationToken = default);
 }

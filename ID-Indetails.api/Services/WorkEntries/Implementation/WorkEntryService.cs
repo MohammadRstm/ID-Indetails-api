@@ -56,6 +56,7 @@ public sealed class WorkEntryService(
             EndedAt = WorkEntryRules.AsUtc(request.EndedAt),
             CreatedAt = clock.UtcNow,
             AttachmentFileId = request.AttachmentFileId is { } fileId ? (await fileClaims.ClaimAsync(fileId, null, cancellationToken)).Id : null,
+            OutsideScope = request.OutsideScope ?? false,
         };
         Throw(WorkEntryRules.CheckEntry(entry.Description, entry.EndedAt, clock.UtcNow, settings.RequireDescription, settings.AllowFutureEntries));
         Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
@@ -99,6 +100,7 @@ public sealed class WorkEntryService(
         entry.Description = request.Description?.Trim() ?? string.Empty;
         entry.StartedAt = WorkEntryRules.AsUtc(request.StartedAt);
         entry.EndedAt = WorkEntryRules.AsUtc(request.EndedAt);
+        entry.OutsideScope = request.OutsideScope ?? entry.OutsideScope;
         entry.UpdatedAt = clock.UtcNow;
         if (request.AttachmentFileId != entry.AttachmentFileId)
         {
@@ -116,6 +118,32 @@ public sealed class WorkEntryService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
+        return await DescribeAsync(entry.Id, actor, settings, cancellationToken);
+    }
+
+    public async Task<WorkEntryResponse> SetScopeAsync(long id, SetWorkEntryScopeRequest request, CancellationToken cancellationToken = default)
+    {
+        // An admin's correction: anyone's entry, past the edit window, but never in a closed month.
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
+        var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        var entry = await entries.GetForUpdateAsync(id, cancellationToken);
+        if (entry is null || !actor.CanSee(entry.Project.DomainCode))
+        {
+            throw new NotFoundException("Work entry not found.");
+        }
+
+        Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
+        if (entry.OutsideScope != request.OutsideScope)
+        {
+            entry.OutsideScope = request.OutsideScope;
+            entry.UpdatedAt = clock.UtcNow;
+            activity.Add(EntryEvent(entry, ActivityEventKinds.WorkEntryUpdated, actor.UserId));
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
         return await DescribeAsync(entry.Id, actor, settings, cancellationToken);
     }
 

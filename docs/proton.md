@@ -830,7 +830,7 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 | `StreamQuestionTimeoutSeconds` | 120 | the whole question on the streaming endpoint; its pings keep proxies from timing out, and a streamed model call may run this long |
 | `MaxQuestionsPerConversation`, `ConversationIdleMinutes` | 20, 30 | a conversation at the question limit rolls over |
 | `MonthlyBudgetUsd`, `MonthlyQuestionsPerUser` | 50, 300 | |
-| `DeferToolsAbove` | 55 | past this many tools for a person, all but the core set (`ProtonToolSearch.Core`: find, the overviews, moving around, options) are sent with `defer_loading` and found through the provider's BM25 tool search. The list is the same on every call of a conversation, so it stays cached |
+| `DeferToolsAbove` | 55 | past this many tools for a person, all but the core set (`ProtonToolSearch.Core`: find, the overviews, moving around, options, and the invoice and payment lists with `add_up`) are sent with `defer_loading` and found through the provider's BM25 tool search. The list is the same on every call of a conversation, so it stays cached |
 | `MaxHeavyToolCallsPerQuestion` | 4 | analyses that load every project's money; the next one is refused |
 | `MaxConversationInputTokens` | 80000 | a conversation past it rolls over |
 | `Insights` | 30%, 10 h, 1,000 USD, 1.5×, 0.5×, 4 periods, 14 days | `NotablePct`, `NotableHours`, `NotableUsd`, `UnusualHigh`, `UnusualLow`, `BaselinePeriods`, `TargetSoonDays` |

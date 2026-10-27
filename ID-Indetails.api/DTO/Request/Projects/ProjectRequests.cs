@@ -74,6 +74,9 @@ public sealed record CreateProjectRequest
 
     /// <summary>Execution only: the crew size and day rate new labour weeks start from. Needs <c>labour_report:manage</c>.</summary>
     public SetLabourDefaultsRequest? LabourDefaults { get; init; }
+
+    /// <summary>Execution only, required: the employees who oversee the site (at least one).</summary>
+    public IReadOnlyList<long>? StaffIds { get; init; }
 }
 
 public sealed record InitialPaymentRequest
@@ -153,4 +156,10 @@ public sealed record ProjectReportQuery
 
     /// <summary>Repeat the key for each (<c>sections=summary&amp;sections=billing</c>). Empty means every one but the work log.</summary>
     public IReadOnlyList<ProjectReportSection> Sections { get; init; } = [];
+}
+
+/// <summary>Execution only: the employees who oversee the site, all of them (at least one).</summary>
+public sealed record UpdateProjectStaffRequest
+{
+    public IReadOnlyList<long> StaffIds { get; init; } = [];
 }

@@ -239,6 +239,7 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
             clientId = client.Id,
             projectFee = 1000m,
             materialMarkup = 0.1m,
+            staffIds = new[] { await Projects.SiteStaffAsync() },
             initialPayment = new { amount = 1500m, currency = "USD", method = "cheque", reference = "CHQ-9" },
         }, admin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());

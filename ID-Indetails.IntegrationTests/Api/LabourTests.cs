@@ -17,7 +17,7 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
+        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id]);
         await SetDefaultsAsync(project.Id, admin.AccessToken, workers: 11, dailyPay: 45m);
 
         var list = await ListAsync(project.Id, employee.AccessToken);
@@ -55,7 +55,7 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
         var (_, _, first) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         var (_, _, second) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
+        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [first.User.Id, second.User.Id]);
         var (weekStart, day) = await FirstDayAsync(project.Id, admin.AccessToken);
 
         await SubmitAsync(project.Id, weekStart, first.AccessToken, [new { date = day, workers = 5, dailyPay = 40m }]);
@@ -112,7 +112,7 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
         var created = await Client.PostJsonAsync("/api/projects", new
         {
             title = "Site with a crew", domainCode = DomainCodes.Execution, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.1m,
-            labourDefaults = new { workers = 8, dailyPay = 42m },
+            labourDefaults = new { workers = 8, dailyPay = 42m }, staffIds = new[] { await Projects.SiteStaffAsync() },
         }, superAdmin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
         var project = await created.ReadAsync<ProjectResponse>();

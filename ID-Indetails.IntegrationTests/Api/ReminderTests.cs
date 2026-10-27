@@ -24,8 +24,8 @@ public class ReminderTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_site_someone_recorded_on_is_theirs_to_report_until_its_week_is_reported()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, worker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var (_, _, worker) = await _steps.MaterialWorkerAsync(superAdmin);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [worker.User.Id]);
         var untouched = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var weekStart = LabourRules.WeekStartOf(DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
             TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut"))));

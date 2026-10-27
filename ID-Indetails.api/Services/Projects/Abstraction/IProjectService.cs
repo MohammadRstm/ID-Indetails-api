@@ -25,6 +25,9 @@ public interface IProjectService
     /// <summary>Design client projects only, while revenue isn't locked: the customer payment and why it changes.</summary>
     Task<ProjectResponse> UpdatePaymentAsync(long projectId, UpdateProjectPaymentRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Execution only: who oversees the site, all of them (at least one active Execution employee).</summary>
+    Task<ProjectResponse> UpdateStaffAsync(long projectId, UpdateProjectStaffRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>The project's payment changes, newest first; needs financial:view.</summary>
     Task<IReadOnlyList<ProjectPaymentChangeResponse>> PaymentChangesAsync(long projectId, CancellationToken cancellationToken = default);
 

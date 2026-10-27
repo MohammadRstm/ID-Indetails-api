@@ -5,6 +5,7 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
@@ -73,6 +74,12 @@ public sealed class ProjectsController(
     public Task<ProjectResponse> UpdatePayment(long projectId, UpdateProjectPaymentRequest request, CancellationToken cancellationToken)
         => projectService.UpdatePaymentAsync(projectId, request, cancellationToken);
 
+    /// <summary>Execution: the employees who oversee the site.</summary>
+    [HttpPut("{projectId:long}/staff")]
+    [HasPermission(PermissionCodes.ProjectEdit)]
+    public Task<ProjectResponse> UpdateStaff(long projectId, UpdateProjectStaffRequest request, CancellationToken cancellationToken)
+        => projectService.UpdateStaffAsync(projectId, request, cancellationToken);
+
     /// <summary>Every change of the project's agreed payment, newest first, with why it changed.</summary>
     [HttpGet("{projectId:long}/payment-changes")]
     [HasPermission(PermissionCodes.FinancialView)]
@@ -95,21 +102,27 @@ public sealed class ProjectsController(
     public Task<ProjectResponse> Resume(long projectId, CancellationToken cancellationToken)
         => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Resume, cancellationToken);
 
-    /// <summary>Finalises the project: revenue is locked and open requirements are ticked.</summary>
+    /// <summary>
+    /// Finalises the project: revenue is locked and open requirements are ticked. An Execution project's money is
+    /// removed from the box or kept (<c>box=remove|keep</c>, money holders only), or else waits for a decision.
+    /// </summary>
     [HttpPost("{projectId:long}/complete")]
     [HasPermission(PermissionCodes.ProjectChangeStatus)]
-    public Task<ProjectResponse> Complete(long projectId, CancellationToken cancellationToken)
-        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Complete, cancellationToken);
+    public Task<ProjectResponse> Complete(long projectId, [FromQuery] BoxChoice? box, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Complete, box, cancellationToken);
 
     /// <summary>Finalises the project too, unless it was already completed.</summary>
     [HttpPost("{projectId:long}/archive")]
     [HasPermission(PermissionCodes.ProjectChangeStatus)]
-    public Task<ProjectResponse> Archive(long projectId, CancellationToken cancellationToken)
-        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Archive, cancellationToken);
+    public Task<ProjectResponse> Archive(long projectId, [FromQuery] BoxChoice? box, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Archive, box, cancellationToken);
 
-    /// <summary>Unlocks revenue and reopens the requirements that completing ticked.</summary>
+    /// <summary>
+    /// Unlocks revenue and reopens the requirements that completing ticked. A removed Execution project puts its
+    /// earlier revenue back in the box (<c>box=readd</c>, money holders only) or counts afresh.
+    /// </summary>
     [HttpPost("{projectId:long}/reopen")]
     [HasPermission(PermissionCodes.ProjectChangeStatus)]
-    public Task<ProjectResponse> Reopen(long projectId, CancellationToken cancellationToken)
-        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Reopen, cancellationToken);
+    public Task<ProjectResponse> Reopen(long projectId, [FromQuery] BoxChoice? box, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Reopen, box, cancellationToken);
 }

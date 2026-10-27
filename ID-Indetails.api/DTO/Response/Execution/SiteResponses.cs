@@ -62,8 +62,11 @@ public sealed record SiteRecordsResponse
     /// <summary>Most recently recorded first.</summary>
     public IReadOnlyList<SiteRecordsProjectResponse> Projects { get; init; } = [];
 
-    /// <summary>The latest records, newest first.</summary>
+    /// <summary>A page of the records, newest first: the page and its size the query asked for.</summary>
     public IReadOnlyList<SiteRecordResponse> Recent { get; init; } = [];
+
+    /// <summary>How many records there are in all, to page <see cref="Recent"/>.</summary>
+    public int RecentTotal { get; init; }
 }
 
 /// <summary>Where cash stood at the end of a week, in USD. <c>Received</c>, <c>Spent</c> and <c>GroundLabour</c> add up from the start.</summary>
@@ -94,3 +97,18 @@ public sealed record SiteProjectionResponse(
 
 /// <param name="Weeks">From the project's first week to the current one (or the one it was finalised in), oldest first.</param>
 public sealed record SiteMoneyTimelineResponse(IReadOnlyList<CashWeekResponse> Weeks, SiteProjectionResponse Projection, string Currency);
+
+public sealed record SiteLogProjectResponse(long Id, string Title);
+
+/// <param name="CanEdit">The caller wrote it, today (company time): a log is only changed on the day it was written.</param>
+public sealed record SiteLogResponse(
+    long Id,
+    SiteLogProjectResponse Project,
+    PersonRefResponse Person,
+    string Body,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt,
+    bool CanEdit);
+
+/// <summary>A site the caller oversees.</summary>
+public sealed record MySiteResponse(long Id, string Title, string? ClientName, ProjectStatus Status, string? Location, DateTime AssignedAt);

@@ -13,6 +13,7 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Execution.Abstraction;
 using ID_Indetails.api.Repositories.Labour.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -29,6 +30,7 @@ public sealed class LabourService(
     ILabourRepository labour,
     IActivityEventRepository activity,
     INotificationSender notifications,
+    ISiteTeamRepository team,
     IUnitOfWork unitOfWork,
     IClock clock) : ILabourService
 {
@@ -57,7 +59,7 @@ public sealed class LabourService(
             reported.Values.Sum(r => Total(r.Week)),
             reported.Count,
             Currency,
-            IsOpen(project) && CanReport(actor));
+            IsOpen(project) && await CanReportAsync(actor, project.Id, cancellationToken));
     }
 
     public async Task<LabourWeekResponse> GetWeekAsync(long projectId, DateOnly weekStart, CancellationToken cancellationToken = default)
@@ -75,6 +77,7 @@ public sealed class LabourService(
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await OpenSiteAsync(actor, projectId, cancellationToken);
+        Throw(SiteTeamRules.CheckOnTeam(await CanReportAsync(actor, project.Id, cancellationToken)));
 
         var today = clock.CompanyToday;
         var days = request.Days.Select(d => new LabourRules.Day(d.Date, d.Workers, d.DailyPay)).ToList();
@@ -230,7 +233,7 @@ public sealed class LabourService(
     private async Task<LabourWeekResponse> DescribeWeekAsync(UserAccess actor, Project project, DateOnly weekStart, CancellationToken cancellationToken)
     {
         var record = await labour.GetWeekAsync(project.Id, weekStart, cancellationToken);
-        var open = IsOpen(project) && CanReport(actor);
+        var open = IsOpen(project) && await CanReportAsync(actor, project.Id, cancellationToken);
 
         if (record is null)
         {
@@ -315,8 +318,10 @@ public sealed class LabourService(
         }
     }
 
-    private static bool CanReport(UserAccess actor)
-        => actor.Has(PermissionCodes.LabourReportCreate) || actor.Has(PermissionCodes.LabourReportManage);
+    /// <summary>The manage permission reports any site; the create permission only the sites the person oversees.</summary>
+    private async Task<bool> CanReportAsync(UserAccess actor, long projectId, CancellationToken cancellationToken)
+        => actor.Has(PermissionCodes.LabourReportManage)
+            || (actor.Has(PermissionCodes.LabourReportCreate) && await team.IsOnTeamAsync(projectId, actor.UserId, cancellationToken));
 
     private static bool IsOpen(Project project)
         => SiteRules.CheckOpen(project.DomainCode, project.Status, project.RevenueLockedAt is not null) is null;

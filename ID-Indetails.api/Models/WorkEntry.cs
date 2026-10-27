@@ -23,6 +23,12 @@ public class WorkEntry
 
     public long? AttachmentFileId { get; set; }
 
+    /// <summary>
+    /// Work the client asked for beyond what was agreed with them (a change or something new), marked by whoever logged
+    /// it or corrected by an admin. The project report shows where those hours went.
+    /// </summary>
+    public bool OutsideScope { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

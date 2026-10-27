@@ -17,9 +17,9 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
-        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id]);
         await Client.PostJsonAsync($"/api/projects/{site.Id}/materials",
             new { items = new[] { new { name = "Cement", amount = 100m }, new { name = "Sand", amount = 50m } } }, employee.AccessToken);
         var week = (await (await Client.GetAsync($"/api/projects/{site.Id}/labour-weeks", employee.AccessToken)).ReadAsync<LabourWeekListResponse>()).Weeks[0].WeekStart;
@@ -39,7 +39,14 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
             r => r.Weeks[^1].Value.ShouldBe(550m),
             r => r.Projects.Single().Title.ShouldBe(site.Title),
             r => r.Recent.Count.ShouldBe(3),
+            r => r.RecentTotal.ShouldBe(3),
             r => r.Recent[0].Kind.ShouldBe(SiteRecords.Kind.LabourWeek));
+
+        // the recent records come a page at a time, newest first
+        var second = await (await Client.GetAsync("/api/me/site-records?recentPage=2&recentPageSize=2", employee.AccessToken)).ReadAsync<SiteRecordsResponse>();
+        second.Recent.Single().ShouldBe(mine.Recent[2]);
+        second.RecentTotal.ShouldBe(3);
+        await (await Client.GetAsync("/api/me/site-records?recentPageSize=0", employee.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
 
         (await (await Client.GetAsync($"/api/employees/{employee.User.Id}/site-records", admin.AccessToken)).ReadAsync<SiteRecordsResponse>())
             .Total.ShouldBe(550m);
@@ -51,7 +58,7 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Site_cards_show_what_was_recorded_on_visible_sites_only()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var quiet = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
