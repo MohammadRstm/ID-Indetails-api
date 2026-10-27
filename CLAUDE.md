@@ -1,9 +1,11 @@
-# CLAUDE.md — Backend Development Rules
+# CLAUDE.md — ID InDetails API
 
-These rules apply to all work on this backend. When a rule conflicts with speed or convenience, the rule wins.
+Section 0 explains what the project is and what to read first. Sections 1 to 21 are the development rules. They
+apply to all work on this backend, and when a rule conflicts with speed or convenience, the rule wins.
 
 ## Contents
 
+0. [Start here: what this project is](#0-start-here-what-this-project-is)
 1. [Core Development Principles](#1-core-development-principles)
 2. [Mandatory Git Commit Rule](#2-mandatory-git-commit-rule)
 3. [Required Backend Architecture](#3-required-backend-architecture)
@@ -25,6 +27,139 @@ These rules apply to all work on this backend. When a rule conflicts with speed 
 19. [Do Not Make Assumptions](#19-do-not-make-assumptions)
 20. [Definition of Done](#20-definition-of-done)
 21. [Final Rule](#21-final-rule)
+
+## 0. Start here: what this project is
+
+Read this section first, in every new session, before planning or changing anything. The numbered rules after it
+say how to work.
+
+### The product
+
+ID InDetails is a company of architectural engineers. This repository is the API of its internal system, codenamed
+**Hourline**. Staff log hours, run projects and clients, and see the money. Clients follow their projects in a portal.
+**Proton**, the AI assistant, answers questions and fills in forms.
+
+- **Domains** are the company's businesses, and almost everything belongs to one:
+  - **Design** runs on logged hours: work entries, overtime, pay by the hour.
+  - **Execution** runs construction sites on materials, weekly ground labour, client statements and site staff with
+    daily logs. The **Execution box** pools what Execution clients pay and moves money to sites in the red.
+  - **Website** is a third domain for the company's public website. Its staff are admins only.
+- **The company area** sits above the domains: the overview, salaries, schedules, overhead, settings and permissions.
+- **Roles** (`super_admin`, `admin`, `employee`) only supply *default* permissions. Endpoints check **permissions**,
+  never roles. A domain the caller can't see reads as `404`.
+
+### The repositories
+
+| Repo | Local checkout | What it is |
+|---|---|---|
+| API (this one) | `C:\Users\masst\source\repos\ID-Indetails` (`master`) | ASP.NET Core .NET 10, EF Core + Pomelo MySQL 8.4 |
+| Client | `C:\Users\masst\Desktop\Ident-Internal-Management-System-client` (`main`) | React 19 + TypeScript + Vite. It has its own CLAUDE.md. |
+| Website | `C:\Users\masst\Desktop\id-indetails-website` (`master`) | The public website. It reads `/api/public/website/` only. It has its own CLAUDE.md. |
+| Prototype | `C:\Users\masst\source\repos\hourline` | The approved HTML/JS prototype. It is the source of truth for screens and business rules. **Read-only: never change, branch, commit or push it.** |
+
+Feature work usually touches the API and the client together: one `MR-<Topic>` branch and one PR in each.
+
+### What to read before working on a feature
+
+1. [docs/status.md](docs/status.md): what the API does today and what is still missing.
+2. [docs/architecture.md](docs/architecture.md): where code lives. Then read the doc for the area you're touching:
+
+| Area | Doc |
+|---|---|
+| Sign-in, invitations, tokens | [authentication.md](docs/authentication.md) |
+| Permissions, roles, domain visibility | [authorization.md](docs/authorization.md) |
+| Projects, status, pricing, payment history | [projects.md](docs/projects.md) |
+| Design: work entries, meetings, work views, outside-scope hours | [design.md](docs/design.md) |
+| Execution: materials, labour, statements, site staff, daily logs, the box | [execution.md](docs/execution.md) |
+| Money: the finance calculator, dashboards, Financials | [finance.md](docs/finance.md) |
+| Invoices and payments | [billing.md](docs/billing.md) |
+| Clients | [clients.md](docs/clients.md) |
+| People, pay, hours | [employees.md](docs/employees.md), [me.md](docs/me.md) |
+| Company settings, working time, overhead | [company.md](docs/company.md) |
+| Client portal, project files, storage | [client-portal.md](docs/client-portal.md), [content-storage.md](docs/content-storage.md), [files.md](docs/files.md) |
+| Chats, notifications, live updates, search | [messaging.md](docs/messaging.md), [notifications.md](docs/notifications.md), [search.md](docs/search.md) |
+| PDFs (invoices, statements, reports) | [documents.md](docs/documents.md) |
+| The public website and its dashboard | [website.md](docs/website.md) |
+| Proton, the assistant | [proton.md](docs/proton.md). The `proton-stage-*-plan.md` files are history. |
+| Tables, migrations, seed data | [database.md](docs/database.md) |
+| Local setup, deployment, the server | [local-development.md](docs/local-development.md), [deployment.md](docs/deployment.md), [server-setup.md](docs/server-setup.md) |
+| Security | [security-runbook.md](docs/security-runbook.md), [security-audit.md](docs/security-audit.md) |
+| Open questions and past rule decisions | [business-rules-review.md](docs/business-rules-review.md) |
+
+3. Then the code of that area. Each area has the same layers:
+   - `Controllers/<Area>Controller.cs`;
+   - `Services/<Area>/{Abstraction,Implementation}`;
+   - pure rules in `Business/<Area>/*Rules.cs`;
+   - `Repositories/<Area>/{Abstraction,Implementation}`;
+   - `Validators/<Area>`, `DTO/Request|Response/<Area>`, `Models/` with `Configuration/ModelConfig/`.
+
+   The tests mirror it: `ID-Indetails.UnitTests/Business` and `ID-Indetails.IntegrationTests/Api/<Area>Tests.cs`.
+
+### Business rules that are easy to get wrong
+
+- **The API does every calculation.** The client never computes money, overtime or access.
+- **Money:**
+  - A Design project's revenue is typed in.
+  - An open Execution project is priced live: its fee plus the client prices of materials sent on a statement. Completing it freezes that amount.
+  - Execution cash profit = received + money from the box − cost.
+- **Pay:**
+  - The daily one-hour break is paid, so 7 hours of required work is an 8-hour paid day.
+  - The hourly rate is the salary ÷ that month's scheduled paid hours.
+  - Admins and super admins are on a fixed salary and never log hours. Super admins' salaries are a company cost.
+- **Privacy:** employees never see their colleagues' hours or pay.
+- **Site staff:** an Execution site has at least one staff member, an active Execution employee. Staff write daily logs, which they can edit until midnight. Execution employees are paid monthly only.
+
+### Changes that always come together
+
+- **A new permission:**
+  - `Constants/PermissionCodes.cs`;
+  - `Constants/PermissionCatalog.cs`, which is the seed and the role defaults;
+  - `Business/Auth/PermissionExplanations.cs`;
+  - a migration for the seed;
+  - the client's `P.*` codes and personas.
+- **A new write endpoint:** an entry in `Proton/Actions/ProtonCoverage.cs`, either `Action(...)` or `Never(...)` with a reason.
+- **Pinned counts.** Update these on purpose when they change:
+  - the Proton coverage counts (`ID-Indetails.UnitTests/Proton/ProtonCoverageTests.cs`);
+  - the permission count (`ID-Indetails.UnitTests/Business/PermissionExplanationsTests.cs`);
+  - the table count (`ID-Indetails.UnitTests/Data/DatabaseModelTests.cs`).
+- **A schema change:** see rule 9. Ask first, then:
+  - `dotnet ef migrations add <Name> --project ID-Indetails.api --output-dir Data/Migrations`;
+  - write any backfill SQL into the migration itself;
+  - never apply it to a database without being asked.
+
+  Branches with migrations that build on each other are stacked (each off the previous one) and merged in order.
+- **A response or request shape change:** the client regenerates `src/api/schema.d.ts` from the running API
+  (`npm run api:types`).
+- **Docs:** update the area's doc in `docs/` in the same PR.
+
+### Working on the user's machines
+
+- **Ask before running builds or tests.** The user works from two machines:
+  - a laptop that shuts down under load;
+  - a desktop that comfortably runs on several cores.
+
+  Before the first build or test run in a session, ask whether to run on **one core at low priority** (the laptop) or normally (the desktop). Keep to the answer for the rest of the session.
+- **On the laptop:** run one core at low priority, and other sessions may be running checks there too.
+- **Integration tests need MySQL from `docker-compose.yml`.**
+  - Always exclude the Proton evals: `--filter "<yours>&FullyQualifiedName!~ProtonEvalTests"`. They call a paid model.
+  - Every test class shares one database, so never assert global totals; follow your own rows.
+  - Run the classes you touched. CI runs the whole suite.
+- **CI** (`.github/workflows/ci.yml`) builds Release with `-warnaserror`, then runs unit and integration tests and builds the Docker images.
+- **Deploying** is by hand only (Actions → Deploy). Never start it unless asked.
+- **Git:** never commit to `master`; use `MR-<Topic>` branches. Before renaming or moving a file, check the target doesn't exist: `git mv -f` silently overwrites it.
+
+### Keeping this file current
+
+This file is how every new session learns the project, so keep it true:
+- **When your work changes something written here, propose an edit to this file.** That includes a rule, a workflow, a file or folder, a command, or a business rule.
+- **When the user tells you a new rule or preference, also propose an edit** so later sessions follow it.
+- **Ask the user's permission first, every time.** Show the exact change and wait for a yes. This applies above all to the rules sections. Never change this file on your own.
+
+### Known quirks
+
+- **Enums** are snake_case in JSON (`payment_voided`). A model binder (`Middlewares/SnakeCaseEnumBinder.cs`) makes query and route enums take the same spelling.
+- **Rules are pure:** `Business/*Rules.cs` return a `RuleDenial`, and the service throws it.
+- **The Execution box ledger is `box_entries`.** Its balance is the sum of the signed amounts. Payments, voids, transfers, removals and re-adds each write one row, and rows are never edited.
 
 ---
 
