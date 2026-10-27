@@ -420,11 +420,32 @@ submits or sends anything itself.
     their own words (as `propose_send_message` requires): a name that only appeared in the data is refused, so text
     in the data can't prepare a message to someone the user didn't ask for.
   - The command `fill_form` runs after the surface that opens the form (`Pick`: place, fill, preferences).
+- **Every safe form (Stage 5 Phase 3)**: `requirement`, `work_entry_comment`, `report_options`, `team` (rename only;
+  a new team is proposed on a card), `profile` (one's own name and phone), `file_rename`, `file_comment`,
+  `portal_intro`, `portal_message`, `website_project`, `website_service`, `website_location`, `website_social_link`,
+  `company_details`, `company_expense`, `materials`, `invoice` (a draft), `payment`, `project_expense`,
+  `labour_week`, `schedule` and `hour_excuse`. One table, `ProtonFormSpecs.All` (`Proton/Tools/UiTools.cs`), gives
+  each form's label, the endpoints it saves through (new and edit), whether it fills only on a typed turn, and its
+  action family.
+  - **Money** (`invoice`, `payment`, `project_expense`, `materials`, `labour_week`, `company_expense`): a
+    `[ProtonMoney]` field fills only while the Money family is on, on a typed turn, and only with an amount the user
+    typed in this conversation (`ProtonFormRules.MoneyIn` finds them; `MoneyText.TypedFigures` reads the user's figures as money cards do: "1,500", "1500.00", "1.5k").
+    `ProtonFormsTests` checks that no fill can name access, secrets or bank details, and that money fields are marked.
+  - **Pay** (`schedule`, `hour_excuse`): only while the PayRules family is on.
+  - Each form checks its record: a draft invoice and its project, the invoice a payment pays, a Design or Execution
+    project as the form needs, a visible person, a requirement, file or thread on that project, a website row that
+    exists.
+  - Five Website and portal actions move from Never to Prefill in `ProtonCoverage` (the social links, the portal
+    summary and the two portal messages): Proton prepares them, the person sends them.
 - **Client** (`formFill.ts`): a form that can be filled registers an adapter while it is open (`useProtonForm`);
   a fill that arrives before the form opens waits up to 10 s. Adapters fill **empty** fields only (`fillEmpty`); the edit
   form replaces values the user asked to change and shows what they were (`fillChange`). A note lists what was filled.
   In a filled form, **Enter does nothing until the person touches it**; the form's own Save is how it is saved.
   Pilots: `ClientModal`, `MeetingModal`, `CreateProjectModal`, `EditProjectModal`, `ReportBugModal`, `InviteModal`.
+  A fill opens its own form when it isn't open (`formPlaces.ts`: the record's page with a link such as `?edit=`,
+  `?add=1`, `?materials=add`, `?labour=`, `?schedule=` or `?person=`, or a surface). Adapters are keyed by form,
+  record and, for a new requirement or invoice, the project (a portal message by its thread), so a fill never lands in
+  another record's form.
 - **Drafts**: a message fill opens the chat and puts the draft in its composer (a store keyed by chat, never the URL).
   Enter doesn't send a Proton draft until the person changes it; they press Send.
 - **Messaging reads** (D1), as the user, through an explicit allow-list of endpoints without a permission of their own
@@ -432,8 +453,7 @@ submits or sends anything itself.
   `proton:use`): `find_recipient` (contacts and the user's team chats, with role, position, team and business),
   `get_my_inbox` (who, unread, mention, when; **never message bodies**), `get_my_notifications`. A new `team` ref type
   names a team chat the user is in; `open_surface message_team` opens it. The page context reports an open chat by id.
-- Later forms in the plan (company details, report options, overhead line, material rows) and sending (Phase 7) build
-  on the same pieces.
+- Sending (Phase 7) builds on the same pieces.
 
 ## Live answers (Stage 5, Phase 3)
 
