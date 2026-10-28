@@ -46,7 +46,7 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 ## Editing people
 
 - Admins edit name, phone, position and team. Names are required once someone has signed up; an invited person's may stay empty. The team must belong to the person's domain.
-- People edit their own name and phone (`PUT /api/me/profile`). Email, position, team and pay are managed by the company. Their own pay, hours, overtime, schedule and requirements are in [me.md](me.md). Their profile's work, overtime and hours balance, as others see them, are in [design.md](design.md).
+- People edit their own name and phone (`PUT /api/me/profile`). Email, position, team and pay are managed by the company. Their own hours, overtime, schedule and requirements are in [me.md](me.md); employees don't see their own pay. Their profile's work, overtime and hours balance, as others see them, are in [design.md](design.md).
 - Only **super admins** change sign-in addresses (below).
 
 ## Changing a sign-in address

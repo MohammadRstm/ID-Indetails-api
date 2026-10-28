@@ -16,9 +16,6 @@ public interface ISalaryService
     /// <summary>What each person is owed in every month of a year, up to this month, with a total per month and currency.</summary>
     Task<SalaryYearResponse> YearAsync(SalaryYearQuery query, CancellationToken cancellationToken = default);
 
-    /// <summary>The caller's own month: the same pay as the Salaries screen, with the day-by-day view and estimates.</summary>
-    Task<MyPayResponse> GetMineAsync(SalaryMonthQuery query, CancellationToken cancellationToken = default);
-
     /// <summary>Every row of the filtered list as CSV, with a total per currency.</summary>
     Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default);
 

@@ -145,7 +145,6 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
             [ProtonPage.Launcher] = (null, false, true, "the start page"),
             // the person's own pages: their route decides who has them (employees)
             [ProtonPage.MyWork] = (null, false, false, "your work"),
-            [ProtonPage.MyPay] = (ProtonEndpoint.Of<MyWorkController>(nameof(MyWorkController.ListEntries)), true, false, "your pay"),
             [ProtonPage.MyProfile] = (null, false, false, "your profile"),
             // the Website area: no business of its own, so like the company area it has no domain
             // its content pages read what its projects page reads, behind the same permission (Content can't be named:
@@ -174,7 +173,7 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
         "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people, financials " +
         "(optionally a tab), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
         "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
-        "start page; for employees their own my_work, my_pay and my_profile; in the Website area (the company's public " +
+        "start page; for employees their own my_work and my_profile (they don't see their pay); in the Website area (the company's public " +
         "website) its projects, analytics, services, locations, contact (email and social links), site (favicon, under " +
         "construction, watermark check) and staff. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
 
