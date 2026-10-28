@@ -267,6 +267,11 @@ public sealed class ProjectService(
 
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectCreated, actor.UserId));
         await notifier.CreatedAsync(project, actor.UserId, cancellationToken);
+        if (project.BillingType == BillingType.Client && !actor.Has(PermissionCodes.InvoiceSend))
+        {
+            // whoever sends quotes decides whether this one gets one; the creator can't
+            await notifier.QuoteDueAsync(project, actor.UserId, cancellationToken);
+        }
         if (project.Revenue > 0)
         {
             activity.Add(ProjectEvent(project, ActivityEventKinds.RevenueSet, actor.UserId, amount: project.Revenue));

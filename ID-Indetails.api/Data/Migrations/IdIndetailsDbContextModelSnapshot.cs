@@ -4858,6 +4858,154 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.Quote", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ClientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<decimal>("NetUsd")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("net_usd");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("number");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Scope")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("scope");
+
+                    b.Property<decimal>("TotalUsd")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("total_usd");
+
+                    b.Property<decimal>("TvaRate")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)")
+                        .HasColumnName("tva_rate");
+
+                    b.HasKey("Id")
+                        .HasName("pk_quotes");
+
+                    b.HasIndex("ClientId")
+                        .HasDatabaseName("ix_quotes_client_id");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_quotes_created_by_id");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_quotes_number");
+
+                    b.HasIndex("ProjectId", "CreatedAt")
+                        .HasDatabaseName("ix_quotes_project_id_created_at");
+
+                    b.ToTable("quotes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_quotes_amounts_positive", "`net_usd` > 0 AND `total_usd` >= `net_usd`");
+
+                            t.HasCheckConstraint("ck_quotes_tva_rate_range", "`tva_rate` >= 0 AND `tva_rate` <= 1");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.QuoteDelivery", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("channel");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("QuoteId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("quote_id");
+
+                    b.Property<string>("Recipient")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("recipient");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("sent_at");
+
+                    b.Property<long?>("SentById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sent_by_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_quote_deliveries");
+
+                    b.HasIndex("QuoteId")
+                        .HasDatabaseName("ix_quote_deliveries_quote_id");
+
+                    b.HasIndex("SentById")
+                        .HasDatabaseName("ix_quote_deliveries_sent_by_id");
+
+                    b.ToTable("quote_deliveries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_quote_deliveries_channel", "`channel` IN ('email', 'whatsapp', 'download')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.QuoteSequence", b =>
+                {
+                    b.Property<int>("Year")
+                        .HasColumnType("int")
+                        .HasColumnName("year");
+
+                    b.Property<int>("LastNumber")
+                        .HasColumnType("int")
+                        .HasColumnName("last_number");
+
+                    b.HasKey("Year")
+                        .HasName("pk_quote_sequences");
+
+                    b.ToTable("quote_sequences", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_quote_sequences_number_non_negative", "`last_number` >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.RefreshToken", b =>
                 {
                     b.Property<long>("Id")
@@ -8063,6 +8211,52 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.Quote", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_quotes_clients_client_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_quotes_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_quotes_projects_project_id");
+
+                    b.Navigation("Client");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.QuoteDelivery", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Quote", "Quote")
+                        .WithMany("Deliveries")
+                        .HasForeignKey("QuoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_quote_deliveries_quotes_quote_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SentById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_quote_deliveries_users_sent_by_id");
+
+                    b.Navigation("Quote");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.RefreshToken", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.RefreshToken", null)
@@ -8537,6 +8731,11 @@ namespace ID_Indetails.api.Data.Migrations
             modelBuilder.Entity("ID_Indetails.api.Models.ProtonStoredConversation", b =>
                 {
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.Quote", b =>
+                {
+                    b.Navigation("Deliveries");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Role", b =>
