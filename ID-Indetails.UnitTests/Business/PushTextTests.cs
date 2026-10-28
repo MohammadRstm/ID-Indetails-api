@@ -127,6 +127,13 @@ public class PushTextTests
     }
 
     [Fact]
+    public void An_announcement_is_titled_Announcements_and_names_who_wrote_it()
+    {
+        PushText.ForAnnouncement("Rana", "Closed on\nFriday", false).ShouldBe(new PushMessageText("Announcements", "Rana: Closed on Friday"));
+        PushText.ForAnnouncement("Rana", null, hasAttachments: true).Body.ShouldBe("Rana: Sent a photo or video.");
+    }
+
+    [Fact]
     public void A_long_message_is_cut_to_100_characters()
     {
         var preview = PushText.Preview(new string('a', 300))!;

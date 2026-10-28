@@ -58,8 +58,8 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         (await BadgeAsync(teammate)).ShouldBe(new MessagesBadgeResponse(1, true));
         (await BadgeAsync(engineer)).ShouldBe(new MessagesBadgeResponse(0, false));
-        var chat = (await OkAsync<List<ConversationResponse>>(Client.GetAsync("/api/messages/conversations", teammate.AccessToken))).First();
-        chat.Type.ShouldBe(ConversationType.Group);
+        var chat = (await OkAsync<List<ConversationResponse>>(Client.GetAsync("/api/messages/conversations", teammate.AccessToken)))
+            .Single(c => c.Type == ConversationType.Group);
         chat.Team!.Id.ShouldBe(engineering);
         chat.LastMessage!.Id.ShouldBe(first.Id);
         chat.Unread.ShouldBe(1);
@@ -71,7 +71,9 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync($"/api/messages/teams/{engineering}", analyst.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.GetAsync($"/api/messages/teams/{engineering}", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         var analystChats = await OkAsync<List<ConversationResponse>>(Client.GetAsync("/api/messages/conversations", analyst.AccessToken));
-        analystChats.ShouldHaveSingleItem().Team!.Id.ShouldBe(data);
+        // Announcements first, for everyone
+        analystChats.Select(c => c.Type).ShouldBe([ConversationType.Announcements, ConversationType.Group]);
+        analystChats[1].Team!.Id.ShouldBe(data);
         var members = (await OkAsync<List<ContactResponse>>(Client.GetAsync($"/api/messages/teams/{engineering}/members", engineer.AccessToken)))
             .Select(p => p.Id).ToList();
         members.ShouldContain(engineer.User.Id);
@@ -143,6 +145,53 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync($"/api/messages/direct/{analyst.User.Id}", new { body = "Still there?" }, engineer.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.UserDeactivated);
         (await PageAsync($"direct/{analyst.User.Id}", engineer)).Items.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task Everyone_reads_the_announcements_and_only_super_admins_write_them()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, websiteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Website);
+
+        var news = await SendAsync("announcements", new { body = " The office is closed on Friday " }, superAdmin);
+        news.Body.ShouldBe("The office is closed on Friday");
+        news.Sender.Id.ShouldBe(superAdmin.User.Id);
+
+        foreach (var reader in new[] { designAdmin, designer, siteWorker, websiteAdmin })
+        {
+            var pinned = (await OkAsync<List<ConversationResponse>>(Client.GetAsync("/api/messages/conversations", reader.AccessToken))).First();
+            pinned.Type.ShouldBe(ConversationType.Announcements);
+            pinned.Team.ShouldBeNull();
+            pinned.Person.ShouldBeNull();
+            pinned.LastMessage!.Id.ShouldBe(news.Id);
+            pinned.Unread.ShouldBe(1);
+            (await BadgeAsync(reader)).ShouldBe(new MessagesBadgeResponse(1, false));
+            (await PageAsync("announcements", reader)).Items.ShouldContain(m => m.Id == news.Id);
+        }
+
+        (await BadgeAsync(superAdmin)).Unread.ShouldBe(0);
+        (await OkAsync<MessagesBadgeResponse>(Client.PostEmptyAsync("/api/messages/announcements/read", designer.AccessToken)))
+            .ShouldBe(new MessagesBadgeResponse(0, false));
+
+        // only message:announce posts, which only super admins hold; and nobody is mentioned
+        await (await Client.PostJsonAsync("/api/messages/announcements", new { body = "Me too" }, designAdmin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PostJsonAsync("/api/messages/announcements", new { body = "Me too" }, designer.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PostJsonAsync("/api/messages/announcements", new { body = "Hi", mentionIds = new[] { designer.User.Id } }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        // someone who joins later reads what came before, without it counting as unread
+        var (_, _, newcomer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        (await PageAsync("announcements", newcomer)).Items.ShouldContain(m => m.Id == news.Id);
+        (await BadgeAsync(newcomer)).Unread.ShouldBe(0);
+
+        // a deactivated person reads nothing more
+        (await Client.PostEmptyAsync($"/api/employees/{siteWorker.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.GetAsync("/api/messages/announcements", siteWorker.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 
     [Fact]
