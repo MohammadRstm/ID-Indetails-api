@@ -62,7 +62,9 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
         var over = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 100m);
         var under = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
 
-        // A full Tuesday on "over" (09:00-17:00 in Beirut): 80 plus the paid hour of break, 90 of its 100. An hour on "under".
+        // A full Tuesday on "over" (09:00-17:00 in Beirut): 7h at 10, the 8th hour overtime at her overtime rate (1,600 ÷ 184
+        // = 8.70; February is before she joined, so it made up no short month), and the paid hour of break: 88.70 of its
+        // 100. An hour on "under".
         await Work.InsertAsync(designer.User.Id, over.Id, "2026-02-10 07:00:00", "2026-02-10 15:00:00");
         await Work.InsertAsync(designer.User.Id, under.Id, "2026-02-11 07:00:00", "2026-02-11 08:00:00");
 
@@ -71,7 +73,7 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
         var warning = (await OfKindAsync(admin, NotificationKinds.ProjectCostHigh, over.Id)).ShouldHaveSingleItem();
         warning.Actor.ShouldBeNull();
         warning.SubjectId.ShouldBe(over.Id);
-        warning.Payload!.Value.GetProperty("usedPct").GetInt32().ShouldBe(90);
+        warning.Payload!.Value.GetProperty("usedPct").GetInt32().ShouldBe(89);
         warning.Payload.Value.TryGetProperty("cost", out _).ShouldBeFalse();
         (await OfKindAsync(admin, NotificationKinds.ProjectCostHigh, under.Id)).ShouldBeEmpty();
         (await OfKindAsync(designer, NotificationKinds.ProjectCostHigh, over.Id)).ShouldBeEmpty();
