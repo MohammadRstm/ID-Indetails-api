@@ -80,12 +80,18 @@ public sealed class GetMyInboxTool(IMessagingService messaging, IClock clock) : 
         var rows = (await messaging.ConversationsAsync(cancellationToken))
             .Select(c => c.Team is { } team
                 ? new InboxRow("team", team.Id, team.Name, c.Unread, c.UnreadMention, clock.Local(c.LastMessage?.CreatedAt))
-                : new InboxRow("person", c.Person!.Id, c.Person.Name, c.Unread, c.UnreadMention, clock.Local(c.LastMessage?.CreatedAt)))
+                : c.Person is { } person
+                    ? new InboxRow("person", person.Id, person.Name, c.Unread, c.UnreadMention, clock.Local(c.LastMessage?.CreatedAt))
+                    : new InboxRow("announcements", 0, "Announcements", c.Unread, false, clock.Local(c.LastMessage?.CreatedAt)))
             .OrderByDescending(r => r.Unread > 0)
             .ThenByDescending(r => r.LastActivity)
             .Take(20)
             .ToList();
-        return new ProtonToolOutput(rows, rows.Select(r => new ProtonRef(r.Kind == "team" ? ProtonRefType.Team : ProtonRefType.Person, r.Id, r.Name)).ToList());
+        // Announcements is no record Proton can open
+        return new ProtonToolOutput(rows, rows
+            .Where(r => r.Kind != "announcements")
+            .Select(r => new ProtonRef(r.Kind == "team" ? ProtonRefType.Team : ProtonRefType.Person, r.Id, r.Name))
+            .ToList());
     }
 }
 

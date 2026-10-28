@@ -141,6 +141,10 @@ public static class PushText
         return new(title, preview);
     }
 
+    /// <summary>"Announcements", with who wrote it before the preview.</summary>
+    public static PushMessageText ForAnnouncement(string senderName, string? body, bool hasAttachments)
+        => new("Announcements", $"{Named(senderName, Someone)}: {Preview(body) ?? (hasAttachments ? "Sent a photo or video." : "Sent a message.")}");
+
     public static PushMessageText LogReminder()
         => new("Log your hours", "Your working day ends soon and some of today's hours aren't logged yet.");
 

@@ -233,6 +233,8 @@ public static class ProtonCoverage
         Action("Messages.SendToTeam", "propose_send_message", T2, ProtonFamily.Messaging),
         Open("Messages.MarkDirectRead", "opening the chat marks it read; Proton never marks unseen messages read"),
         Open("Messages.MarkTeamRead", "opening the chat marks it read; Proton never marks unseen messages read"),
+        Open("Messages.MarkAnnouncementsRead", "opening the chat marks it read; Proton never marks unseen messages read"),
+        Never("Messages.SendAnnouncement", "an announcement reaches everyone: a super admin writes it themselves"),
         Open("Notifications.MarkRead", "opening it marks it read; Proton never marks unseen ones read"),
         Open("Notifications.MarkAllRead", "Proton never marks unseen notifications read"),
         Prefill("BugReports.Report", "the report-a-problem form", externalSend: true),

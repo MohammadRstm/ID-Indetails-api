@@ -155,12 +155,19 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         var (_, _, websiteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Website);
+        var readers = new[] { designAdmin, designer, siteWorker, websiteAdmin };
+        // admins are in their domain's team chats too, which other tests write in: follow the change, not the total
+        var before = new Dictionary<long, int>();
+        foreach (var reader in readers)
+        {
+            before[reader.User.Id] = (await BadgeAsync(reader)).Unread;
+        }
 
         var news = await SendAsync("announcements", new { body = " The office is closed on Friday " }, superAdmin);
         news.Body.ShouldBe("The office is closed on Friday");
         news.Sender.Id.ShouldBe(superAdmin.User.Id);
 
-        foreach (var reader in new[] { designAdmin, designer, siteWorker, websiteAdmin })
+        foreach (var reader in readers)
         {
             var pinned = (await OkAsync<List<ConversationResponse>>(Client.GetAsync("/api/messages/conversations", reader.AccessToken))).First();
             pinned.Type.ShouldBe(ConversationType.Announcements);
@@ -168,11 +175,11 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
             pinned.Person.ShouldBeNull();
             pinned.LastMessage!.Id.ShouldBe(news.Id);
             pinned.Unread.ShouldBe(1);
-            (await BadgeAsync(reader)).ShouldBe(new MessagesBadgeResponse(1, false));
+            (await BadgeAsync(reader)).Unread.ShouldBe(before[reader.User.Id] + 1);
             (await PageAsync("announcements", reader)).Items.ShouldContain(m => m.Id == news.Id);
         }
 
-        (await BadgeAsync(superAdmin)).Unread.ShouldBe(0);
+        (await OkAsync<List<ConversationResponse>>(Client.GetAsync("/api/messages/conversations", superAdmin.AccessToken))).First().Unread.ShouldBe(0);
         (await OkAsync<MessagesBadgeResponse>(Client.PostEmptyAsync("/api/messages/announcements/read", designer.AccessToken)))
             .ShouldBe(new MessagesBadgeResponse(0, false));
 
@@ -189,9 +196,9 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await PageAsync("announcements", newcomer)).Items.ShouldContain(m => m.Id == news.Id);
         (await BadgeAsync(newcomer)).Unread.ShouldBe(0);
 
-        // a deactivated person reads nothing more
+        // a deactivated person is signed out, and reads nothing more
         (await Client.PostEmptyAsync($"/api/employees/{siteWorker.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await (await Client.GetAsync("/api/messages/announcements", siteWorker.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.GetAsync("/api/messages/announcements", siteWorker.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
     }
 
     [Fact]

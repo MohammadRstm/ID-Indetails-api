@@ -60,7 +60,7 @@ An Execution project has a fixed **project fee** and a default **material markup
 - **The break is paid.** It only reduces the hours required on a day longer than 6 hours, never pay: a 9–5 day requires 7 hours and pays 8.
 - **Personal schedules** (`user_schedules` with their `user_schedule_days`) override the company days and hours for one person from a date onward. A weekday with no row is a day off, and a row with `follows_default` returns the person to the company week.
 - **Excuses** (`hour_excuses`) cover minutes, specific days or a whole month in a person's hours ledger. They are paid unless `is_paid` is false.
-| Activity, messaging, files | `activity_events`, `notifications`, `conversations`, `messages`, `message_mentions`, `message_attachments`, `conversation_reads`, `files`, `user_board_layouts` |
+| Activity, messaging, files | `activity_events`, `notifications`, `conversations` (a `dm`, a team's `group`, or the one `announcements` row, which the `Announcements` migration inserts), `messages`, `message_mentions`, `message_attachments`, `conversation_reads`, `files`, `user_board_layouts` |
 | Phone app | `user_devices`, `user_notification_settings`, `user_notification_mutes` |
 
 ## Accounts and sign-in

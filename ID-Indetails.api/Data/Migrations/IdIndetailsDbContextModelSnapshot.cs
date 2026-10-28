@@ -745,9 +745,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("conversations", null, t =>
                         {
-                            t.HasCheckConstraint("ck_conversations_shape", "(`type` = 'dm' AND `team_id` IS NULL AND `dm_user_low_id` IS NOT NULL AND `dm_user_high_id` IS NOT NULL AND `dm_user_low_id` < `dm_user_high_id`) OR (`type` = 'group' AND `team_id` IS NOT NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL)");
+                            t.HasCheckConstraint("ck_conversations_shape", "(`type` = 'dm' AND `team_id` IS NULL AND `dm_user_low_id` IS NOT NULL AND `dm_user_high_id` IS NOT NULL AND `dm_user_low_id` < `dm_user_high_id`) OR (`type` = 'group' AND `team_id` IS NOT NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL) OR (`type` = 'announcements' AND `team_id` IS NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL)");
 
-                            t.HasCheckConstraint("ck_conversations_type", "`type` IN ('dm', 'group')");
+                            t.HasCheckConstraint("ck_conversations_type", "`type` IN ('dm', 'group', 'announcements')");
                         });
                 });
 
@@ -2404,6 +2404,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "hours:excuse",
                             Description = "Excuse hours and days off in the hours ledger"
+                        },
+                        new
+                        {
+                            Code = "message:announce",
+                            Description = "Write in Announcements, the chat everyone reads"
                         },
                         new
                         {
@@ -5219,6 +5224,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "super_admin",
                             PermissionCode = "hours:excuse"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "message:announce"
                         },
                         new
                         {

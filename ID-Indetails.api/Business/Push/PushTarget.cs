@@ -42,12 +42,15 @@ public sealed record PushTarget
 
     public DateOnly? WeekStart { get; init; }
 
-    /// <summary><c>notifications</c>, <c>today</c>, <c>work</c>, <c>meetings</c> or <c>company</c>.</summary>
+    /// <summary><c>notifications</c>, <c>today</c>, <c>work</c>, <c>meetings</c>, <c>company</c> or <c>announcements</c>.</summary>
     public string? Page { get; init; }
 
     public static PushTarget Notifications { get; } = OfPage("notifications");
 
     public static PushTarget OfPage(string page) => new() { Type = PageType, Page = page };
+
+    /// <summary>The Announcements chat.</summary>
+    public static PushTarget Announcements { get; } = OfPage("announcements");
 
     /// <summary>A team chat, or the direct chat with <paramref name="userId"/> (whoever wrote to the reader).</summary>
     public static PushTarget Chat(long? teamId, long? userId) => new() { Type = Conversation, TeamId = teamId, UserId = teamId is null ? userId : null };

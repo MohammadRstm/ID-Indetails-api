@@ -81,6 +81,9 @@ public static class PermissionCodes
     public const string ScheduleManage = "schedule:manage";
     public const string HoursExcuse = "hours:excuse";
 
+    // Messages: the Announcements chat everyone reads
+    public const string MessageAnnounce = "message:announce";
+
     // The company website (its public content)
     public const string WebsiteView = "website:view";
     public const string WebsiteManage = "website:manage";
