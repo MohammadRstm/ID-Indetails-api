@@ -18,6 +18,15 @@ public static class NotificationKinds
     /// <summary>Someone who doesn't manage meetings set one (subject: the meeting). Sent to the domain's meeting managers.</summary>
     public const string MeetingScheduled = "meeting_scheduled";
 
+    /// <summary>You were added to a general meeting (subject: the meeting). To its attendees, from whoever set it.</summary>
+    public const string MeetingInvited = "meeting_invited";
+
+    /// <summary>A general meeting you are in moved to another time (subject: the meeting).</summary>
+    public const string MeetingMoved = "meeting_moved";
+
+    /// <summary>A general meeting you were in was cancelled, or you were taken out of it (subject: the meeting).</summary>
+    public const string MeetingCancelled = "meeting_cancelled";
+
     /// <summary>Someone recorded materials on a site (subject: the project; the count in the payload).</summary>
     public const string MaterialsAdded = "materials_added";
 

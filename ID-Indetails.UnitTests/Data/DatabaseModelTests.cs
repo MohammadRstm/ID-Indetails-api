@@ -39,6 +39,8 @@ public class DatabaseModelTests
             "project_file_comments",
             // a website project's gallery goes with it
             "website_project_images",
+            // a general meeting's people are part of it
+            "meeting_attendees",
         };
 
         var cascading = Model.GetEntityTypes()

@@ -129,6 +129,7 @@ public static class ProtonCoverage
         Action("Meetings.Create", "propose_schedule_meeting"),
         Action("Meetings.Update", "propose_update_meeting"),
         Action("Meetings.Delete", "propose_delete", T2, ProtonFamily.Deletes),
+        Never("Meetings.CreateGeneral", "a general meeting's attendees are chosen in its form"),
         Action("Clients.Create", "propose_create_client"),
         Action("Clients.Update", "propose_update_client"),
         Action("Clients.Archive", "propose_set_client_archived"),

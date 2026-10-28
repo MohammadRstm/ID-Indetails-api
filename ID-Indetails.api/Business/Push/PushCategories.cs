@@ -39,6 +39,9 @@ public static class PushCategories
         [NotificationKinds.ProjectIdle] = NotificationCategory.Projects,
 
         [NotificationKinds.MeetingScheduled] = NotificationCategory.Meetings,
+        [NotificationKinds.MeetingInvited] = NotificationCategory.Meetings,
+        [NotificationKinds.MeetingMoved] = NotificationCategory.Meetings,
+        [NotificationKinds.MeetingCancelled] = NotificationCategory.Meetings,
 
         [NotificationKinds.MaterialsAdded] = NotificationCategory.Sites,
         [NotificationKinds.LabourWeekSubmitted] = NotificationCategory.Sites,

@@ -7,12 +7,15 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ID_Indetails.api.Controllers;
 
-/// <summary>Project meetings. Meetings of a domain the caller can't see read as 404.</summary>
+/// <summary>
+/// Project meetings, and general meetings about no project. Meetings the caller can't see (another domain's, or a
+/// general meeting not theirs) read as 404.
+/// </summary>
 [ApiController]
 [Route("api")]
 public sealed class MeetingsController(IMeetingService meetingService) : ControllerBase
 {
-    /// <summary>Meetings of every project the caller can see, earliest first.</summary>
+    /// <summary>Meetings of every project the caller can see, and the general meetings they may see, earliest first.</summary>
     [HttpGet("meetings")]
     [HasPermission(PermissionCodes.ProjectView)]
     public Task<IReadOnlyList<MeetingResponse>> List([FromQuery] MeetingListQuery query, CancellationToken cancellationToken)
@@ -28,7 +31,16 @@ public sealed class MeetingsController(IMeetingService meetingService) : Control
     public async Task<ActionResult<MeetingResponse>> Create(long projectId, SaveMeetingRequest request, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await meetingService.CreateAsync(projectId, request, cancellationToken));
 
-    /// <summary>Moves, resizes or renames a meeting: any with meeting:manage, your own with meeting:create.</summary>
+    /// <summary>A meeting about no project, for the people chosen: whoever manages meetings sets them.</summary>
+    [HttpPost("meetings")]
+    [HasPermission(PermissionCodes.MeetingManage)]
+    public async Task<ActionResult<MeetingResponse>> CreateGeneral(SaveGeneralMeetingRequest request, CancellationToken cancellationToken)
+        => StatusCode(StatusCodes.Status201Created, await meetingService.CreateGeneralAsync(request, cancellationToken));
+
+    /// <summary>
+    /// Moves, resizes or renames a meeting, and changes a general meeting's people: any with meeting:manage, your own
+    /// with meeting:create.
+    /// </summary>
     [HttpPut("meetings/{id:long}")]
     [HasAnyPermission(PermissionCodes.MeetingCreate, PermissionCodes.MeetingManage)]
     public Task<MeetingResponse> Update(long id, SaveMeetingRequest request, CancellationToken cancellationToken)

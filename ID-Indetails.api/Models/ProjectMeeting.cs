@@ -1,11 +1,21 @@
 namespace ID_Indetails.api.Models;
 
-/// <summary>A recorded project meeting. Its display title is derived from the start time, never stored.</summary>
+/// <summary>
+/// A recorded meeting: a project meeting, which everyone who sees the project sees, or a general one with no project,
+/// which is for its attendees. Its display title is derived from the start time, never stored.
+/// </summary>
 public class ProjectMeeting
 {
     public long Id { get; set; }
 
-    public long ProjectId { get; set; }
+    /// <summary>Null for a general meeting.</summary>
+    public long? ProjectId { get; set; }
+
+    /// <summary>
+    /// A general meeting's domain, whose meeting managers see it; null for a company-wide one, or a project meeting
+    /// (which belongs to its project's domain).
+    /// </summary>
+    public string? DomainCode { get; set; }
 
     public DateTime StartsAt { get; set; }
 
@@ -26,5 +36,8 @@ public class ProjectMeeting
 
     public DateTime? DeletedAt { get; set; }
 
-    public Project Project { get; set; } = null!;
+    public Project? Project { get; set; }
+
+    /// <summary>A general meeting's people; a project meeting has none.</summary>
+    public ICollection<MeetingAttendee> Attendees { get; set; } = new List<MeetingAttendee>();
 }

@@ -86,6 +86,9 @@ public static class PushText
                 : $"{project} has had no work for a while."),
 
             NotificationKinds.MeetingScheduled => new("Meeting set", $"{actor} set a meeting on {project}."),
+            NotificationKinds.MeetingInvited => new("Meeting", $"{actor} invited you to a meeting."),
+            NotificationKinds.MeetingMoved => new("Meeting moved", $"{actor} moved a meeting you're in."),
+            NotificationKinds.MeetingCancelled => new("Meeting cancelled", $"{actor} cancelled a meeting you were in."),
 
             NotificationKinds.MaterialsAdded => new("Materials added", Int(payload, "count") is > 1 and var materials
                 ? $"{actor} added {materials} materials on {project}."
