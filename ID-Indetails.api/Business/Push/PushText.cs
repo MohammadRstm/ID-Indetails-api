@@ -24,6 +24,7 @@ public static class PushText
     private static readonly IReadOnlyDictionary<string, PushMessageText> MoneyTexts = new Dictionary<string, PushMessageText>
     {
         [NotificationKinds.PaymentRecorded] = new("Payment", "Payment recorded. Open ID InDetails to see it."),
+        [NotificationKinds.PocketRequested] = new("Pocket money", "A site asks for pocket money. Open ID InDetails to decide."),
         [NotificationKinds.InvoiceOverdue] = new("Invoices", "An invoice needs your attention."),
         [NotificationKinds.InvoiceDraftWaiting] = new("Invoices", "An invoice needs your attention."),
         [NotificationKinds.InvoiceReminderDue] = new("Invoices", "An invoice needs your attention."),

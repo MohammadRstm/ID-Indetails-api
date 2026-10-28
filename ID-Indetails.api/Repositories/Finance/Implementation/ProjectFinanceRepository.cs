@@ -1,6 +1,5 @@
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Data;
-using ID_Indetails.api.Enums;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using Microsoft.EntityFrameworkCore;
 
@@ -67,18 +66,27 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
             .Select(g => new { ProjectId = g.Key, Received = g.Sum(p => p.AmountUsd) })
             .ToDictionaryAsync(r => r.ProjectId, r => r.Received, cancellationToken);
 
-    public async Task<IReadOnlyDictionary<long, decimal>> FromBoxAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
-        => await db.BoxEntries
+    public async Task<IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)>> PocketAsync(
+        IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
+    {
+        var rows = await db.PocketEntries
             .AsNoTracking()
-            .Where(e => projectIds.Contains(e.ProjectId) && e.Kind == BoxEntryKind.Transfer)
+            .Where(e => projectIds.Contains(e.ProjectId))
             .GroupBy(e => e.ProjectId)
-            .Select(g => new { ProjectId = g.Key, Moved = -g.Sum(e => e.Amount) })
-            .ToDictionaryAsync(r => r.ProjectId, r => r.Moved, cancellationToken);
+            .Select(g => new
+            {
+                ProjectId = g.Key,
+                In = g.Where(e => e.Amount > 0).Sum(e => (decimal?)e.Amount) ?? 0,
+                Out = g.Where(e => e.Amount < 0).Sum(e => (decimal?)e.Amount) ?? 0,
+            })
+            .ToListAsync(cancellationToken);
+        return rows.ToDictionary(r => r.ProjectId, r => (r.In, -r.Out));
+    }
 
-    public async Task<IReadOnlyList<(DateTime MovedAt, decimal AmountUsd)>> BoxMovesAsync(long projectId, CancellationToken cancellationToken = default)
-        => (await db.BoxEntries
+    public async Task<IReadOnlyList<(DateTime At, decimal AmountUsd)>> PocketMovesAsync(long projectId, CancellationToken cancellationToken = default)
+        => (await db.PocketEntries
                 .AsNoTracking()
-                .Where(e => e.ProjectId == projectId && e.Kind == BoxEntryKind.Transfer)
+                .Where(e => e.ProjectId == projectId)
                 .Select(e => new { e.CreatedAt, e.Amount })
                 .ToListAsync(cancellationToken))
             .Select(e => (e.CreatedAt, -e.Amount))

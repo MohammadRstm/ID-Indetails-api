@@ -42,7 +42,7 @@ ID InDetails is a company of architectural engineers. This repository is the API
 - **Domains** are the company's businesses, and almost everything belongs to one:
   - **Design** runs on logged hours: work entries, overtime, pay by the hour.
   - **Execution** runs construction sites on materials, weekly ground labour, client statements and site staff with
-    daily logs. The **Execution box** pools what Execution clients pay and moves money to sites in the red.
+    daily logs. **Pocket money** is money super admins set aside from Execution sites by hand and pay back, on request, to sites that run short.
   - **Website** is a third domain for the company's public website. Its staff are admins only.
 - **The company area** sits above the domains: the overview, salaries, schedules, overhead, settings and permissions.
 - **Roles** (`super_admin`, `admin`, `employee`) only supply *default* permissions. Endpoints check **permissions**,
@@ -70,7 +70,7 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
 | Permissions, roles, domain visibility | [authorization.md](docs/authorization.md) |
 | Projects, status, pricing, payment history | [projects.md](docs/projects.md) |
 | Design: work entries, meetings, work views, outside-scope hours | [design.md](docs/design.md) |
-| Execution: materials, labour, statements, site staff, daily logs, the box | [execution.md](docs/execution.md) |
+| Execution: materials, labour, statements, site staff, daily logs, pocket money | [execution.md](docs/execution.md) |
 | Money: the finance calculator, dashboards, Financials | [finance.md](docs/finance.md) |
 | Invoices and payments | [billing.md](docs/billing.md) |
 | Clients | [clients.md](docs/clients.md) |
@@ -101,7 +101,7 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
 - **Money:**
   - A Design project's revenue is typed in.
   - An open Execution project is priced live: its fee plus the client prices of materials sent on a statement. Completing it freezes that amount.
-  - Execution cash profit = received + money from the box − cost.
+  - Execution cash profit = received − cost − money moved to the pocket + money paid by it. Pocket money moves profit, never what the client owes.
 - **Pay:**
   - The daily one-hour break is paid, so 7 hours of required work is an 8-hour paid day.
   - The hourly rate is the salary ÷ that month's scheduled paid hours.
@@ -159,7 +159,7 @@ This file is how every new session learns the project, so keep it true:
 
 - **Enums** are snake_case in JSON (`payment_voided`). A model binder (`Middlewares/SnakeCaseEnumBinder.cs`) makes query and route enums take the same spelling.
 - **Rules are pure:** `Business/*Rules.cs` return a `RuleDenial`, and the service throws it.
-- **The Execution box ledger is `box_entries`.** Its balance is the sum of the signed amounts. Payments, voids, transfers, removals and re-adds each write one row, and rows are never edited.
+- **Pocket money ledger:** `pocket_entries`, signed from the pocket's side (a contribution is positive, a payout negative), never edited. Its balance is the sum. Sites ask for money in `pocket_requests`, each decided once.
 
 ---
 
