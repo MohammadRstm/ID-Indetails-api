@@ -32,6 +32,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 22 | **Project pay leaves paid breaks out.** A break isn't worked on any project, so project pay covers logged hours and overtime only, and differs from Salaries for hourly staff by exactly their paid breaks. It needs `salary:view`. | Project pay report |
 | 23 | **Leavers stay in past months** (29 Sep 2026). `users.deactivated_at` records when an account was deactivated (cleared on reactivation; backfilled from the latest `employee_deactivated` event). Salaries (list, detail, CSV, totals), the month-end alert and project pay include everyone active at any point in the month, with the final month pro-rated to the leaving day like a joining month, and the hours ledger ending there. | Schema (`UserDeactivatedAt` migration); payroll calculation |
 | 24 | **Employment is dated periods** (30 Sep 2026, open questions 4 and 5). Leaving ends a period on the last working day the admin gives (today by default, never reaching back into a closed month), which is paid. Being taken back starts a new period, and the days away between two periods are neither paid nor expected. When the time away began earlier in the same month, the admin says whether it is paid: if so, the period simply continues and the days away are excused as paid. | Schema (`EmploymentPeriods` migration); API; payroll calculation |
+| 25 | **The break is logged from 1 December 2026** (28 Oct 2026). The company week's break is 0 from that day, so the whole 8-hour day is required and logged: logging all of 9–5 is no longer an hour of overtime, and no paid break is added to hourly pay, missed-day deductions or project cost (M1). The rules are unchanged, since a day with no break already works this way, and November 2026 and earlier keep their paid 60-minute break (decision 1). | Company working-time setting |
 
 ## Decided for Design work (28 Sep 2026)
 
@@ -58,7 +59,7 @@ See [finance.md](finance.md).
 
 | # | Rule |
 |---|---|
-| M1 | **Everyone's paid break is labour cost**, hourly and salaried alike (7 required hours are 8 paid hours), on the days Salaries pays it, shared across the day's projects by in-hours minutes. Project pay (decision 22) still leaves breaks out. *(Changed on 29 Sep 2026: it was hourly staff only.)* |
+| M1 | **Everyone's paid break is labour cost**, hourly and salaried alike (7 required hours are 8 paid hours), on the days Salaries pays it, shared across the day's projects by in-hours minutes. Project pay (decision 22) still leaves breaks out. *(Changed on 29 Sep 2026: it was hourly staff only.)* There is no break to share from 1 December 2026, when the break is 0 (decision 25). |
 | M2 | **A client's margin follows the project rule** as a whole: shown once all their projects are done, at least 5% of their revenue is recognised, or 10 hours are logged. *(The prototype showed it whenever there was revenue.)* |
 | M3 | ~~Revenue in a period follows `Recognition`~~. **Replaced:** revenue in a period is the money received in it, counted on the day it arrived (the summaries, the Financials page, the company overview and its monthly chart). Overhead and admins' and super admins' salaries still count by the share of each month's calendar days the period covers. |
 | M4 | **Every cost source is returned** on the dashboards and Financials, so the parts add up to the total. *(The prototype's Execution breakdowns left out materials and ground labour.)* |
@@ -154,4 +155,4 @@ Answers to the questions raised after the helper sessions' work was merged.
 These have no decision yet. The schema doesn't depend on them.
 
 1. **Public holidays:** a company holiday calendar, or keep excusing per person?
-2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable?
+2. **Break edge cases:** is the whole break paid after any in-hours minute? Should the 6-hour threshold be configurable? *(Only for days with a break: none from 1 December 2026, decision 25.)*

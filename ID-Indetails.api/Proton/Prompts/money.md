@@ -27,7 +27,8 @@ its own currency and never counted as zero.
 ## Cost
 
 - A project's cost is labour + expenses + materials + ground labour, each counted on its own day.
-- Labour (Design): hours logged times the person's hourly cost that day, plus paid breaks. It isn't payroll.
+- Labour (Design): hours logged times the person's hourly cost that day, plus paid breaks on days the company week
+  had one (none from 1 December 2026, when the whole day is logged). It isn't payroll.
 - Expenses: costs recorded on a project. Materials (Execution): bought for a site, counted from the day recorded.
   Ground labour (Execution): a crew's workers times its day rate, per reported week.
 - Overhead (rent, software…) is a company cost, never part of a project's cost. In a period it is charged by

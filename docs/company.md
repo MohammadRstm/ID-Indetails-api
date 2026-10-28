@@ -45,6 +45,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 - A policy has working days (0 = Sunday … 6 = Saturday), start and end (minutes after midnight), a break and an overtime multiplier (1–5).
 - **The break is paid.** It only lowers the hours required on a day longer than 6 hours: a 9–5 day with a 60-minute break requires 7 hours and pays 8.
+- **From 1 December 2026 the break is 0**, so the whole day is logged and required ([decision 25](business-rules-review.md#decided)). A 9–5 day then requires and pays 8 hours: logging all of it is no overtime, and no paid break is added to hourly pay, missed-day deductions or project cost. The rules didn't change for this: a day with no break already works this way, and November 2026 and earlier keep their paid break.
 - Policies are **dated**. The one in force on a day is the latest dated on or before it. A change starts today or later, never earlier, so past months never change (`400 working_time_in_past`). A change dated later than today can be replaced by setting the same date again. One already starting today can't (`422 working_time_already_changed`).
 - Policies are cached and dropped whenever one changes.
 

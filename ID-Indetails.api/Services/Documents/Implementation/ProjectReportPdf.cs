@@ -185,7 +185,7 @@ public static class ProjectReportPdf
             PdfLayout.AddRow(table, true, "Total", worked.Entries.ToString(CultureInfo.InvariantCulture), Hours(worked.Overtime),
                 Hours(worked.Minutes), "100%", PdfLayout.Money(labour), "100%");
             PdfLayout.AddNote(section, $"Labour is each of the {worked.Entries:N0} work entries at the hourly rate in force on its day, "
-                + "with the paid break of each day worked."
+                + "with the paid break of each day worked while the company week had one."
                 + (money is not null ? $" Effective cost {PdfLayout.Money(money.CostPerHour)} per hour over the whole project." : string.Empty));
         }
 
