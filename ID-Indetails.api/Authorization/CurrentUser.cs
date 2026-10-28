@@ -22,6 +22,12 @@ public interface ICurrentUser
 
     /// <summary>The phone app's session (the <c>sid</c> claim). Null for the website's tokens.</summary>
     Guid? SessionId { get; }
+
+    /// <summary>
+    /// For the rest of this request, acts as another person: forcing an employee's blocked hours logs them as that
+    /// employee. Only the profit floor uses it, after checking who may force.
+    /// </summary>
+    void ActAs(long userId, string role, string? domain, string fullName) => throw new NotSupportedException();
 }
 
 public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
@@ -29,19 +35,23 @@ public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
     private System.Security.Claims.ClaimsPrincipal Principal =>
         accessor.HttpContext?.User ?? new System.Security.Claims.ClaimsPrincipal();
 
+    private (long Id, string Role, string? Domain, string Name)? actingAs;
+
     public bool IsAuthenticated => Principal.Identity?.IsAuthenticated == true;
 
-    public long Id => long.TryParse(Claim(AuthClaimTypes.UserId), out var id)
+    public long Id => actingAs?.Id ?? (long.TryParse(Claim(AuthClaimTypes.UserId), out var id)
         ? id
-        : throw new UnauthenticatedException(ErrorCodes.Unauthenticated, "You need to sign in.");
+        : throw new UnauthenticatedException(ErrorCodes.Unauthenticated, "You need to sign in."));
 
-    public string Role => Claim(AuthClaimTypes.Role)
+    public string Role => actingAs?.Role ?? Claim(AuthClaimTypes.Role)
         ?? throw new UnauthenticatedException(ErrorCodes.Unauthenticated, "You need to sign in.");
 
-    public string? Domain => Claim(AuthClaimTypes.Domain);
+    public string? Domain => actingAs is { } a ? a.Domain : Claim(AuthClaimTypes.Domain);
 
-    public string FullName =>
+    public string FullName => actingAs?.Name ??
         $"{Claim(AuthClaimTypes.FirstName)} {Claim(AuthClaimTypes.LastName)}".Trim();
+
+    public void ActAs(long userId, string role, string? domain, string fullName) => actingAs = (userId, role, domain, fullName);
 
     public Guid? SessionId => Guid.TryParse(Claim(AuthClaimTypes.SessionId), out var id) ? id : null;
 

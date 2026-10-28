@@ -9,6 +9,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Materials;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Materials;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
@@ -19,6 +20,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Materials.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Services.Materials.Implementation;
 
@@ -30,6 +32,7 @@ public sealed class MaterialService(
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
+    IProfitFloor floor,
     IClock clock) : IMaterialService
 {
     private const string ProjectNotFound = "Project not found.";
@@ -100,6 +103,7 @@ public sealed class MaterialService(
         if (fresh.Count > 0)
         {
             Throw(SiteRules.CheckOpen(project.DomainCode, project.Status, project.RevenueLockedAt is not null));
+            var before = await floor.BeforeAsync(project, cancellationToken);
             var markup = project.MaterialMarkup ?? 0;
             foreach (var item in fresh)
             {
@@ -126,6 +130,7 @@ public sealed class MaterialService(
 
             await NotifyAddedAsync(project, added.Count, actor.UserId, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
+            await floor.CheckAsync(before, BlockedChangeKind.MaterialAdd, new BlockedRequest<AddMaterialsRequest>(project.Id, request), cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -162,11 +167,14 @@ public sealed class MaterialService(
             Throw(MaterialRules.CheckNotStated(await materials.IsStatedAsync(material.Id, cancellationToken)));
         }
 
+        var before = await floor.BeforeAsync(project, cancellationToken);
         var previousCost = Cost(material);
         Apply(material, request, entry);
         material.UpdatedAt = clock.UtcNow;
         activity.Add(MaterialEvent(project, material, ActivityEventKinds.MaterialUpdated, actor.UserId, Cost(material), previousCost));
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.MaterialUpdate,
+            new BlockedRequest<MaterialEntryRequest>(project.Id, request, ItemId: material.Id), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(material.Id, project, actor, cancellationToken);

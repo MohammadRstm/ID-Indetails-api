@@ -84,13 +84,15 @@ public class PocketTests(ApiFactory api) : IClassFixture<ApiFactory>
         await OkAsync<PocketResponse>(ContributeAsync(giver.Id, 500m, money));
         var short_ = await SiteWithProfitAsync(superAdmin, 50m);
 
+        // the expense that took it close to zero asked already, so asking gets that request
         var request = await OkAsync<PocketRequestResponse>(Client.PostJsonAsync("/api/execution/pocket/requests", new { projectId = short_.Id, note = "Tiles came in dearer" }, money.AccessToken));
         request.ShouldSatisfyAllConditions(
             r => r.Status.ShouldBe(PocketRequestStatus.Pending),
             // back to a 10% margin on 1,000: 100 of profit, 50 short
             r => r.SuggestedAmount.ShouldBe(50m),
             r => r.SuggestedNow.ShouldBe(50m),
-            r => r.RequestedBy!.Id.ShouldBe(money.User.Id));
+            r => r.RequestedBy.ShouldBeNull(),
+            r => r.Note.ShouldBe("Close to zero profit"));
         // asking again gets the same request back
         (await OkAsync<PocketRequestResponse>(Client.PostJsonAsync("/api/execution/pocket/requests", new { projectId = short_.Id }, money.AccessToken)))
             .Id.ShouldBe(request.Id);
