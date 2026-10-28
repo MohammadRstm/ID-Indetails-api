@@ -52,7 +52,7 @@ public sealed class MoneySummaryRepository(IdIndetailsDbContext db) : IMoneySumm
         => await db.Payments
             .AsNoTracking()
             .Where(p => projectIds.Contains(p.ProjectId) && p.VoidedAt == null)
-            .Select(p => new PaymentMoneyRow(p.ProjectId, p.ClientId, p.InvoiceId, p.ReceivedOn, p.AmountUsd, p.Method))
+            .Select(p => new PaymentMoneyRow(p.ProjectId, p.ClientId, p.InvoiceId, p.ReceivedOn, p.AmountUsd, p.Method, p.TvaUsd))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ExpenseDetailRow>> ExpensesAsync(

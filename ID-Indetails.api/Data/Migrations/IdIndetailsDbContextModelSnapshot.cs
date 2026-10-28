@@ -1945,6 +1945,13 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(100)")
                         .HasColumnName("reference");
 
+                    b.Property<decimal>("TvaUsd")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("tva_usd");
+
                     b.Property<string>("VoidReason")
                         .HasMaxLength(500)
                         .HasColumnType("varchar(500)")
@@ -1990,6 +1997,8 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_payments_fx_rate_positive", "`fx_rate` > 0");
 
                             t.HasCheckConstraint("ck_payments_method", "`method` IN ('bank', 'cheque', 'cash', 'other')");
+
+                            t.HasCheckConstraint("ck_payments_tva_within_amount", "`tva_usd` >= 0 AND `tva_usd` <= `amount_usd`");
                         });
                 });
 
@@ -3735,6 +3744,13 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(200)")
                         .HasColumnName("title");
 
+                    b.Property<decimal>("TvaRate")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("tva_rate");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
@@ -3774,6 +3790,8 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_projects_revenue_non_negative", "`revenue` >= 0");
 
                             t.HasCheckConstraint("ck_projects_status", "`status` IN ('active', 'hold', 'completed', 'archived')");
+
+                            t.HasCheckConstraint("ck_projects_tva_rate_range", "`tva_rate` >= 0 AND `tva_rate` <= 1");
                         });
                 });
 
@@ -4212,9 +4230,19 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("decimal(7,4)")
                         .HasColumnName("previous_material_markup");
 
+                    b.Property<decimal?>("PreviousTvaRate")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)")
+                        .HasColumnName("previous_tva_rate");
+
                     b.Property<long>("ProjectId")
                         .HasColumnType("bigint")
                         .HasColumnName("project_id");
+
+                    b.Property<decimal?>("TvaRate")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)")
+                        .HasColumnName("tva_rate");
 
                     b.HasKey("Id")
                         .HasName("pk_project_payment_changes");

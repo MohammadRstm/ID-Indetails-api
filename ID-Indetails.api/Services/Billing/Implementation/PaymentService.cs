@@ -104,6 +104,7 @@ public sealed class PaymentService(
             Currency = currency,
             FxRate = rate,
             AmountUsd = amountUsd,
+            TvaUsd = Tva.ShareOf(amountUsd, project.TvaRate),
             ReceivedOn = receivedOn,
             Method = request.Method,
             Reference = Clean(request.Reference),

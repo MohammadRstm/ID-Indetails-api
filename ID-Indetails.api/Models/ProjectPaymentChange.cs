@@ -21,6 +21,11 @@ public class ProjectPaymentChange
 
     public decimal? PreviousMaterialMarkup { get; set; }
 
+    /// <summary>The project's TVA rate after the change; null on rows from before TVA.</summary>
+    public decimal? TvaRate { get; set; }
+
+    public decimal? PreviousTvaRate { get; set; }
+
     public string Description { get; set; } = string.Empty;
 
     public DateTime ChangedAt { get; set; }

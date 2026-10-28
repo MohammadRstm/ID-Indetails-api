@@ -159,7 +159,12 @@ public sealed class DocumentService(
         var billing = await billingSettings.GetAsync(invoice.Domain, cancellationToken);
         var issuedOn = invoice.IssuedAt is { } at ? clock.ToCompanyDate(at) : (DateOnly?)null;
         var name = invoice.Number is { } number ? number.ToLowerInvariant() : $"invoice-draft-{invoice.Id}";
-        return (new PdfFile(InvoicePdf.Render(invoice, issuedOn, head, billing), name + ".pdf"), issuedOn, head, billing);
+        // the whole project for its client, TVA included; only for whoever sees the project's money
+        var money = (await projectService.GetAsync(invoice.Project.Id, cancellationToken)).Money;
+        var position = money is null || invoice.VoidedAt is not null
+            ? null
+            : new InvoiceProjectPosition(money.RevenueWithTva, money.Billing.Received, invoice.Balance ?? invoice.Total);
+        return (new PdfFile(InvoicePdf.Render(invoice, issuedOn, head, billing, position), name + ".pdf"), issuedOn, head, billing);
     }
 
     private async Task<PdfFile> RenderStatementAsync(StatementResponse statement, CancellationToken cancellationToken)
