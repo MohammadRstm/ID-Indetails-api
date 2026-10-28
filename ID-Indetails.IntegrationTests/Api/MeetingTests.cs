@@ -1,4 +1,5 @@
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Meetings;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using Shouldly;
@@ -121,9 +122,120 @@ public class MeetingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync($"/api/projects/{site.Id}/meetings",
             new { startsAt = start, endsAt = start.AddHours(1) }, admin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
+        // On hold, a project takes no new meetings, but the ones it has can still be moved.
+        (await Client.PostEmptyAsync($"/api/projects/{project.Id}/hold", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1) }, admin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.ProjectNotActive);
+        (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start, endsAt = start.AddMinutes(30) }, admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.PostEmptyAsync($"/api/projects/{project.Id}/resume", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+
         (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
             new { startsAt = start, endsAt = start.AddHours(2) }, admin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.ProjectClosed);
+    }
+
+    private Task<long> NotifiedAsync(AuthResponse person, string kind, long meetingId) => _steps.ScalarAsync<long>(
+        "SELECT COUNT(*) FROM notifications WHERE recipient_id = @r AND kind = @k AND subject_id = @m",
+        ("@r", person.User.Id), ("@k", kind), ("@m", meetingId));
+
+    private async Task<List<MeetingResponse>> ListAsync(AuthResponse person, string query = "")
+        => await (await Client.GetAsync($"/api/meetings{query}", person.AccessToken)).ReadAsync<List<MeetingResponse>>();
+
+    [Fact]
+    public async Task A_general_meeting_is_for_its_attendees_and_its_domain_s_admins_who_hear_when_it_is_set_moved_or_cancelled()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, attendee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, bystander) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var start = Start();
+
+        var response = await Client.PostJsonAsync("/api/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1), topic = "Studio planning", attendeeIds = new[] { attendee.User.Id } }, admin.AccessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        var meeting = await response.ReadAsync<MeetingResponse>();
+        meeting.Project.ShouldBeNull();
+        meeting.Domain.ShouldBe(DomainCodes.Design);
+        meeting.Attendees.ShouldHaveSingleItem().Id.ShouldBe(attendee.User.Id);
+
+        (await NotifiedAsync(attendee, "meeting_invited", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(bystander, "meeting_invited", meeting.Id)).ShouldBe(0);
+        (await NotifiedAsync(admin, "meeting_invited", meeting.Id)).ShouldBe(0);
+
+        (await ListAsync(attendee)).ShouldContain(m => m.Id == meeting.Id);
+        (await ListAsync(admin, "?domain=design")).ShouldContain(m => m.Id == meeting.Id);
+        (await ListAsync(superAdmin)).ShouldContain(m => m.Id == meeting.Id);
+        (await ListAsync(bystander)).ShouldNotContain(m => m.Id == meeting.Id);
+        (await ListAsync(executionAdmin)).ShouldNotContain(m => m.Id == meeting.Id);
+
+        // it is on the attendee's day, not on a colleague's
+        var day = DateOnly.FromDateTime(start.AddHours(3));
+        (await (await Client.GetAsync($"/api/me/day?date={day:yyyy-MM-dd}", attendee.AccessToken)).ReadAsync<MyDayResponse>())
+            .Meetings.ShouldContain(m => m.Id == meeting.Id);
+        (await (await Client.GetAsync($"/api/me/day?date={day:yyyy-MM-dd}", bystander.AccessToken)).ReadAsync<MyDayResponse>())
+            .Meetings.ShouldNotContain(m => m.Id == meeting.Id);
+
+        // moved: the attendee hears; then the bystander replaces them, who hears it is cancelled for them
+        (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start.AddHours(1), endsAt = start.AddHours(2), topic = "Studio planning" }, admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await NotifiedAsync(attendee, "meeting_moved", meeting.Id)).ShouldBe(1);
+        var swapped = await (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start.AddHours(1), endsAt = start.AddHours(2), topic = "Studio planning", attendeeIds = new[] { bystander.User.Id } },
+            admin.AccessToken)).ReadAsync<MeetingResponse>();
+        swapped.Attendees.ShouldHaveSingleItem().Id.ShouldBe(bystander.User.Id);
+        (await NotifiedAsync(bystander, "meeting_invited", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(attendee, "meeting_cancelled", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(bystander, "meeting_moved", meeting.Id)).ShouldBe(0);
+
+        // an attendee can't change it, and whoever is no longer in it doesn't find it
+        await (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start, endsAt = start.AddHours(1) }, bystander.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.DeleteAsync($"/api/meetings/{meeting.Id}", attendee.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+
+        (await Client.DeleteAsync($"/api/meetings/{meeting.Id}", admin.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+        (await NotifiedAsync(bystander, "meeting_cancelled", meeting.Id)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Company_wide_meetings_are_for_their_attendees_and_the_company_and_only_meeting_managers_set_them()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var start = Start();
+
+        // a super admin may leave the domain out: the whole company
+        var meeting = await (await Client.PostJsonAsync("/api/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1), topic = "Partners", attendeeIds = new[] { admin.User.Id, executionAdmin.User.Id } },
+            superAdmin.AccessToken)).ReadAsync<MeetingResponse>();
+        meeting.Domain.ShouldBeNull();
+        (await ListAsync(admin, "?domain=design")).ShouldContain(m => m.Id == meeting.Id);
+        (await ListAsync(executionAdmin)).ShouldContain(m => m.Id == meeting.Id);
+        (await ListAsync(employee)).ShouldNotContain(m => m.Id == meeting.Id);
+
+        var body = new { startsAt = start, endsAt = start.AddHours(1), attendeeIds = new[] { employee.User.Id } };
+        await (await Client.PostJsonAsync("/api/meetings", body, employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PostJsonAsync("/api/meetings", body with { attendeeIds = Array.Empty<long>() }, admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        // a Design admin can't invite site staff, nor set a meeting in Execution
+        await (await Client.PostJsonAsync("/api/meetings", body with { attendeeIds = new[] { siteWorker.User.Id } }, admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.PostJsonAsync("/api/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1), domain = DomainCodes.Execution, attendeeIds = new[] { employee.User.Id } },
+            admin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        // a project meeting has no attendees
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var projectMeeting = await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1) }, admin.AccessToken)).ReadAsync<MeetingResponse>();
+        projectMeeting.Domain.ShouldBe(DomainCodes.Design);
+        projectMeeting.Attendees.ShouldBeEmpty();
+        await (await Client.PutJsonAsync($"/api/meetings/{projectMeeting.Id}",
+            new { startsAt = start, endsAt = start.AddHours(1), attendeeIds = new[] { employee.User.Id } }, admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
     [Fact]

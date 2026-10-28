@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_90_tables_with_snake_case_names()
+    public void Model_has_all_91_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(90);
+        tables.Count.ShouldBe(91);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -107,6 +107,7 @@ public class DatabaseModelTests
         CheckNames<WorkEntry>().ShouldContain("ck_work_entries_ends_after_start");
         CheckNames<Invoice>().ShouldContain("ck_invoices_numbered_when_issued");
         CheckNames<Conversation>().ShouldContain("ck_conversations_shape");
+        CheckNames<ProjectMeeting>().ShouldContain("ck_project_meetings_project_or_domain");
         CheckNames<LabourWeek>().ShouldContain("ck_labour_weeks_starts_on_monday");
         CheckNames<ProjectFileComment>().ShouldContain("ck_project_file_comments_fixed");
         CheckNames<PortalComment>().ShouldContain("ck_portal_comments_body_unless_deleted");
