@@ -13,6 +13,7 @@ public static class NotificationAccess
     {
         [NotificationKinds.WorkLogged] = PermissionCodes.WorkEntryViewAll,
         [NotificationKinds.WorkDigest] = PermissionCodes.WorkEntryViewAll,
+        [NotificationKinds.HoursMissedList] = PermissionCodes.WorkEntryViewAll,
         [NotificationKinds.HoursShort] = PermissionCodes.SalaryView,
         [NotificationKinds.ProjectClosed] = PermissionCodes.FinancialView,
         [NotificationKinds.ProjectCostHigh] = PermissionCodes.FinancialView,

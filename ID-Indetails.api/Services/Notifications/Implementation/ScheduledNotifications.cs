@@ -1,5 +1,7 @@
 using ID_Indetails.api.Business.Billing;
+using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
@@ -9,6 +11,7 @@ using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Notifications.Abstraction;
+using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
@@ -37,6 +40,8 @@ namespace ID_Indetails.api.Services.Notifications.Implementation;
 /// <item>Overdue invoices: once per invoice, to whoever sees the domain's money.</item>
 /// <item>Short hours: from the first of a month, who finished the month before short of their hours, to whoever
 /// sees salaries.</item>
+/// <item>Missed hours: the morning after a working day, a reminder to each Design employee who logged less than it
+/// asked for, and one list of them to whoever sees everyone's Design work (see <see cref="MissedHours"/>).</item>
 /// <item>Cost warnings: once per project, when an active client project's cost passes 85% of its payment, to whoever
 /// sees the domain's money.</item>
 /// <item>Draft invoices: once per draft still unissued 3 days after it was created, to whoever sees the domain's money.</item>
@@ -59,6 +64,8 @@ public sealed class ScheduledNotifications(
     IInvoiceScheduleService invoiceSchedule,
     IInvoiceReminderService invoiceReminders,
     IPushReminders reminders,
+    IPayrollRepository payroll,
+    IPayrollInputs payrollInputs,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IPushQueue pushes,
@@ -86,6 +93,7 @@ public sealed class ScheduledNotifications(
             ScheduledCheck.InvoiceReminders => invoiceReminders.RunAsync(cancellationToken),
             ScheduledCheck.LogReminders => reminders.LogHoursAsync(cancellationToken),
             ScheduledCheck.LabourWeekReminders => reminders.LabourWeeksAsync(cancellationToken),
+            ScheduledCheck.MissedHours => MissedHoursAsync(cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(check)),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -252,6 +260,63 @@ public sealed class ScheduledNotifications(
                 }),
             key,
             recipients,
+            cancellationToken);
+    }
+
+    private async Task MissedHoursAsync(CancellationToken cancellationToken)
+    {
+        var day = MissedHours.DayToCheck(clock.ToCompanyTime(clock.UtcNow));
+        var loggers = (await sender.HoldersAsync(DomainCodes.Design, PermissionCodes.WorkEntryCreate, cancellationToken)).ToHashSet();
+        var people = (await sender.DomainMembersAsync(DomainCodes.Design, cancellationToken)).Where(loggers.Contains).ToList();
+        if (people.Count == 0)
+        {
+            return;
+        }
+
+        var calendars = await payrollInputs.CalendarsAsync(people, cancellationToken);
+        var excuses = (await payroll.ExcusesAsync(people, WorkStats.MonthStartOf(day), cancellationToken)).ToLookup(x => x.UserId);
+        var logged = (await entries.RowsAsync(
+                new WorkEntrySearch(From: clock.CompanyDayStartUtc(day), To: clock.CompanyDayStartUtc(day.AddDays(1))),
+                cancellationToken))
+            .GroupBy(r => r.UserId)
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.Minutes));
+
+        var missed = (await payroll.UsersAsync(people, cancellationToken))
+            .Select(user => (User: user, Short: MissedHours.Check(
+                day,
+                calendars[user.Id],
+                payrollInputs.EmploymentOf(user),
+                excuses[user.Id].Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
+                logged.GetValueOrDefault(user.Id))))
+            .Where(m => m.Short is not null)
+            .Select(m => new { m.User.Id, Name = PersonName.Of(m.User.FirstName, m.User.LastName, m.User.Email), m.Short!.LoggedMinutes, m.Short.RequiredMinutes })
+            .OrderBy(m => m.Name)
+            .ToList();
+        if (missed.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var person in missed)
+        {
+            await sender.SendOnceAsync(
+                new NotificationDraft(NotificationKinds.HoursMissed, null, DomainCodes.Design, null, null, null,
+                    new { day, loggedMinutes = person.LoggedMinutes, requiredMinutes = person.RequiredMinutes }),
+                $"hours-missed-{day:yyyy-MM-dd}",
+                [person.Id],
+                cancellationToken);
+        }
+
+        await sender.SendOnceAsync(
+            new NotificationDraft(NotificationKinds.HoursMissedList, null, DomainCodes.Design, null, null, null,
+                new
+                {
+                    day,
+                    count = missed.Count,
+                    people = missed.Select(m => new { id = m.Id, name = m.Name, loggedMinutes = m.LoggedMinutes, requiredMinutes = m.RequiredMinutes }),
+                }),
+            $"hours-missed-list-{day:yyyy-MM-dd}",
+            await sender.HoldersAsync(DomainCodes.Design, PermissionCodes.WorkEntryViewAll, cancellationToken),
             cancellationToken);
     }
 

@@ -26,7 +26,7 @@ Every notification goes through one sender (`INotificationSender`), which applie
 - only active people who can see the notification's domain;
 - no money in payloads, so a notification can't reveal amounts to someone who later loses `financial:view`. The page it links to checks permissions as usual.
 
-Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged` and `work_digest` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`).
+Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged`, `work_digest` and `hours_missed_list` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`).
 
 "Holders of a permission" means the active people who hold it and can see the domain, super admins and people granted it from the other domain included. "The domain's people" means the active admins and employees whose home domain it is; super admins are left out of these broadcasts.
 
@@ -83,6 +83,8 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `requirement_overdue` | Once its deadline has passed, for deadlines up to 7 days ago (older ones are left alone, so turning this on doesn't flood anyone). Key `requirement-overdue-{id}-{deadline}` | Its assignees and holders of `requirement:manage` | the requirement | `projectTitle`, `text`, `deadline` |
 | `invoice_overdue` | An issued invoice still unpaid after its due date. Key `invoice-overdue-{id}` | Holders of `financial:view` in its domain | the invoice | `number`, `dueOn` |
 | `hours_short` | From the first of a month, when Design employees finished the month before flagged in the hours ledger. Key `hours-short-YYYY-MM` | Holders of `salary:view` | — | `month`, `count`, `people` (the 5 most short: `id`, `name`, `shortMinutes`) |
+| `hours_missed` | The morning after a working day on which a Design employee logged less than the day required (every minute logged that day counts, overtime included). From 09:00 company time it judges yesterday, before that the day before. Days off, excused days (a day or whole-month excuse; a minutes excuse names no day) and days outside their employment never count (`Business/Payroll/MissedHours.cs`). It is only a reminder: the day can still be logged for the rest of the month. Key `hours-missed-{day}` | That employee (Design members holding `work_entry:create`) | — | `day`, `loggedMinutes`, `requiredMinutes` |
+| `hours_missed_list` | With `hours_missed`: one list of everyone it went to that day. Key `hours-missed-list-{day}` | Holders of `work_entry:view_all` in Design (Design admins and super admins); never employees | — | `day`, `count`, `people` (all of them, by name: `id`, `name`, `loggedMinutes`, `requiredMinutes`) |
 | `project_cost_high` | An active Design client project's cost has passed 85% of its payment (its revenue). Not for Execution, whose payment includes its materials at client price. Once per project: key `project-cost-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` (the cost as a whole percentage of the payment) |
 | `invoice_draft_waiting` | A draft invoice still unissued 3 days after it was created. Key `invoice-draft-{id}` | Holders of `financial:view` in its domain | the invoice | `projectTitle`, `createdOn` |
 | `invoice_sent_automatically` | A scheduled invoice went out on its day ([billing.md](billing.md), "Auto invoice"). Each one, no key | Whoever scheduled it | the invoice | `number`, `to` (null when what was on account paid it, so it wasn't emailed) |
@@ -127,7 +129,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 
 | Category | Kinds |
 |---|---|
-| `work` | `work_logged`, `work_digest`, `entry_comment`, `weekly_summary`, `hours_excused`, `schedule_changed` |
+| `work` | `work_logged`, `work_digest`, `entry_comment`, `weekly_summary`, `hours_excused`, `schedule_changed`, `hours_missed`, `hours_missed_list` |
 | `requirements` | `requirement_assigned`, `requirements_added`, `requirement_done`, `requirement_due_soon`, `requirement_overdue` |
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled` |
