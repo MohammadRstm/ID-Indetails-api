@@ -317,7 +317,7 @@ public sealed class DomainFinanceService(
 
         var work = (await financeSources.WorkEntriesAsync(ids, cancellationToken))
             .Where(e => clock.ToCompanyDate(e.StartedAt) is var day && day >= from && day <= to)
-            .Select(e => new WorkRow(0, e.UserId, e.ProjectId, e.StartedAt, e.StartedAt.AddMinutes(e.Minutes), e.Minutes, e.StartedAt))
+            .Select(e => new WorkRow(e.Id, e.UserId, e.ProjectId, e.StartedAt, e.StartedAt.AddMinutes(e.Minutes), e.Minutes, e.StartedAt))
             .ToList();
         var pricer = await LabourPricer.LoadAsync(financeSources, finance, work, clock, cancellationToken);
         var names = (await people.PeopleAsync(work.Select(w => w.UserId).Distinct().ToList(), cancellationToken)).ToDictionary(p => p.Id, p => p.Name);

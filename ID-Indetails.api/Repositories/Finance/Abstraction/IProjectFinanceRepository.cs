@@ -30,7 +30,7 @@ public interface IProjectFinanceRepository
     Task<IReadOnlyList<(DateTime MovedAt, decimal AmountUsd)>> BoxMovesAsync(long projectId, CancellationToken cancellationToken = default);
 }
 
-public sealed record WorkEntryRow(long ProjectId, long UserId, DateTime StartedAt, int Minutes);
+public sealed record WorkEntryRow(long Id, long ProjectId, long UserId, DateTime StartedAt, int Minutes);
 
 public sealed record ExpenseRow(long ProjectId, string Currency, decimal Amount, DateOnly SpentOn);
 

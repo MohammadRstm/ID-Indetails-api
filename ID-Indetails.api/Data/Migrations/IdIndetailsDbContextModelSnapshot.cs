@@ -5982,15 +5982,15 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("date")
                         .HasColumnName("effective_from");
 
-                    b.Property<decimal>("HourlyCostRate")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)")
-                        .HasColumnName("hourly_cost_rate");
-
                     b.Property<string>("Note")
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)")
                         .HasColumnName("note");
+
+                    b.Property<decimal>("OvertimeRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("overtime_rate");
 
                     b.Property<long>("UserId")
                         .HasColumnType("bigint")
@@ -6012,7 +6012,7 @@ namespace ID_Indetails.api.Data.Migrations
 
                             t.HasCheckConstraint("ck_user_pay_history_basis", "`basis` IN ('hourly', 'monthly')");
 
-                            t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`hourly_cost_rate` >= 0");
+                            t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`overtime_rate` >= 0");
                         });
                 });
 

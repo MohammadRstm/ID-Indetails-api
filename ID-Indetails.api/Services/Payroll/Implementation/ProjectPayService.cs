@@ -5,7 +5,6 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Payroll;
-using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Auth;
@@ -13,7 +12,6 @@ using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Payroll;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
-using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -32,8 +30,6 @@ public sealed class ProjectPayService(
     IPermissionService permissions,
     IPayrollRepository payroll,
     IPayrollInputs inputs,
-    IScheduleRepository schedules,
-    IWorkingTimeService workingTime,
     ICompanySettingsService settings,
     IClock clock) : IProjectPayService
 {
@@ -141,69 +137,29 @@ public sealed class ProjectPayService(
         var userIds = users.Keys.ToList();
         periodWork = periodWork.Where(e => users.ContainsKey(e.UserId)).ToList();
         var pay = (await payroll.PayHistoryAsync(userIds, cancellationToken)).ToLookup(p => p.UserId, p =>
-            new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency));
-        var personal = (await schedules.SchedulesAsync(userIds, cancellationToken)).ToLookup(s => s.UserId);
-        var roles = await inputs.RoleHistoriesAsync(userIds, cancellationToken);
-        var policies = (await workingTime.GetPoliciesAsync(cancellationToken))
-            .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
-            .ToList();
+            new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.OvertimeRate));
+        var calendars = await inputs.CalendarsAsync(userIds, cancellationToken);
 
         // Overtime is decided per day and made-up hours per month, so every month the period touches is needed in full.
-        var firstMonth = new DateOnly(from.Year, from.Month, 1);
-        var lastMonth = new DateOnly(until.AddDays(-1).Year, until.AddDays(-1).Month, 1);
-        var monthWork = (await payroll.WorkAsync(userIds, Utc(firstMonth.AddDays(-1)), Utc(lastMonth.AddMonths(1).AddDays(1)), cancellationToken))
-            .Select(e => (e.UserId, Local: clock.ToCompanyTime(e.StartedAt), e.Id, e.Minutes))
-            .Select(e => (e.UserId, Work: new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes)))
-            .Where(e => InRange(e.Work.Day, firstMonth, lastMonth.AddMonths(1)))
-            .ToList();
-
-        var splits = new Dictionary<long, (Overtime.Split Split, int MadeUp, PersonCalendar Calendar)>();
-        for (var month = firstMonth; month <= lastMonth; month = month.AddMonths(1))
+        var months = new List<DateOnly>();
+        for (var month = new DateOnly(from.Year, from.Month, 1); month < until; month = month.AddMonths(1))
         {
-            var excuses = (await payroll.ExcusesAsync(userIds, month, cancellationToken)).ToLookup(x => x.UserId);
-            foreach (var userId in userIds)
-            {
-                var user = users[userId];
-                var calendar = new PersonCalendar(policies, personal[userId].Select(s => new PersonCalendar.Schedule(
-                    s.EffectiveFrom, s.FollowsDefault, s.Days.ToDictionary(d => (int)d.Weekday, d => ((int)d.StartMinute, (int)d.EndMinute)))));
-                var work = Overtime.Of(
-                    monthWork.Where(e => e.UserId == userId && e.Work.Day.Month == month.Month && e.Work.Day.Year == month.Year).Select(e => e.Work),
-                    calendar);
-                var fixedSalary = roles[userId].FixedSalaryMonth(month);
-                if (fixedSalary)
-                {
-                    // a fixed salary earns no overtime: time logged in a month they were an admin is priced as normal hours
-                    work = work.Select(w => w with { Overtime = 0 }).ToList();
-                }
-
-                var employment = inputs.EmploymentOf(user);
-                var ledger = user.DomainCode == DomainCodes.Design && !fixedSalary
-                    ? HoursLedger.Build(month, today, employment.JoinedOn, calendar, work, new HoursLedger.Excuses(
-                        excuses[userId].Any(x => x.Kind == ExcuseKind.WholeMonth),
-                        excuses[userId].Sum(x => x.Minutes ?? 0),
-                        excuses[userId].SelectMany(x => x.Days.Select(d => d.Day)).ToHashSet()),
-                        employment.LeftOn,
-                        employment.Gaps)
-                    : null;
-
-                foreach (var split in work)
-                {
-                    splits[split.Id] = (split, ledger?.MadeUpByWork.GetValueOrDefault(split.Id) ?? 0, calendar);
-                }
-            }
+            months.Add(month);
         }
+
+        var splits = await inputs.EntrySplitsAsync(users.Values.ToList(), months, cancellationToken);
 
         var priced = periodWork
             .Where(e => splits.ContainsKey(e.Id))
             .Select(e =>
             {
-                var (split, madeUp, calendar) = splits[e.Id];
-                var terms = SalaryCalculator.TermsOn(pay[e.UserId], split.Day);
+                var split = splits[e.Id];
+                var terms = SalaryCalculator.TermsOn(pay[e.UserId], split.Work.Day);
                 return new PricedWork(
                     e.ProjectId,
                     e.UserId,
-                    split.Day,
-                    ProjectPay.Of(split, madeUp, terms, calendar),
+                    split.Work.Day,
+                    ProjectPay.Of(split.Work, split.MadeUp, terms, calendars[e.UserId]),
                     terms?.Basis,
                     terms?.Basis == PayBasis.Monthly ? terms.Amount : null);
             })

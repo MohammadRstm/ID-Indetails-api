@@ -321,7 +321,7 @@ public sealed class SalaryService(
             Amount = r.Terms.Amount,
             Currency = r.Terms.Currency,
             HourlyRate = r.HourlyRate,
-            StandardHourlyRate = r.StandardHourlyRate,
+            OvertimeRate = r.OvertimeRate,
             // Design's employees log hours; Execution staff are paid their salary, and so are admins and super admins, in
             // any month they held that role
             TracksHours = c.Input.LedgerApplies,

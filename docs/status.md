@@ -40,6 +40,7 @@ These are known and harmless at today's size. Revisit them as the data grows.
 
 - **Loading too much:**
   - Paid breaks load every priced contributor's work over the whole period being priced, on project pages, lists and costs.
+  - Project cost's overtime loads every priced contributor's whole months of work, with one excuses query per month (28 Oct 2026).
   - Overtime loads each person's whole span of days, not only the days shown.
   - The money follow-ups, overdue requirements, a client's work and the draft-invoice check each load everything, then filter.
 - **Unconverted money still missing in two places:**

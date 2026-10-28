@@ -84,7 +84,7 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 - `earnedSoFar` is the salary accrued so far plus overtime pay. It accrues with the hours required so far (required so far ÷ the whole month's) where the hours ledger applies, otherwise with the working days passed (none on the 1st).
 - `fullMonthEstimate` is the salary plus overtime so far, less what would be deducted if the month closed as short as it is now: the shortfall plus the paid break of each whole missed day, at the hourly rate, exactly as a closed month deducts it (`SalaryCalculator.ShortfallMinutes`).
 
-**Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay (`hourlyRate`) is the salary ÷ the paid hours the person's schedule gives that month, so the salary stays fixed whatever the month's length; overtime is paid at the true hourly rate (`standardHourlyRate`): the salary ÷ a standard month's paid hours (weekly paid hours × 52 ÷ 12). See [employees.md](employees.md#pay).
+**Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay (`hourlyRate`) is the salary ÷ the paid hours the person's schedule gives that month, so the salary stays fixed whatever the month's length; overtime is paid at the pay's overtime rate (`overtimeRate`): the salary ÷ 184 unless an admin set another with the pay. See [employees.md](employees.md#pay).
 
 **Overtime** (`Overtime.cs`), day by day, using the person's schedule or the company week in force that day:
 - all time on a day off;
@@ -98,7 +98,7 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 - A closed month still short is *flagged*; the month in progress is *behind*.
 
 **Pay** (`SalaryCalculator.cs`):
-- **Monthly:** the salary, pro-rated on the paid hours of the person's own working days if they joined or left mid-month, plus overtime at the true hourly rate × the multiplier in force that day.
+- **Monthly:** the salary, pro-rated on the paid hours of the person's own working days if they joined or left mid-month, plus overtime at the overtime rate × the multiplier in force that day.
   - In a closed, flagged month the shortfall is deducted at the month's hourly rate, so a whole missed day costs exactly its share of the salary. Whole missed days still owed also lose their paid break, so each costs the full paid day (8h on a 9–5 day); a partly made-up remainder costs only its hours. Example: 21 missed days with one hour made up is 20 whole days (8h each) plus 6h.
   - Unpaid excuses are deducted too: unpaid minutes at the hourly rate, each unpaid day off as the full paid day, an unpaid whole month as the whole salary. The deduction never exceeds the salary.
 - **Hourly:** hours within schedule and made-up hours at the rate in force each day, plus the paid break of each working day they worked, plus overtime at the rate × multiplier. Excuses don't change their pay (they are paid for what they log).
@@ -130,7 +130,7 @@ Always calculated, from the shared finance calculator (`Business/Finance/`), in 
 What each Design project paid its people in a week, month or quarter (`Business/Payroll/ProjectPay.cs`).
 
 - **Period:** the week (following the company's week start), month or quarter containing `date` (today by default). Never a future period (`400 project_pay_period_in_future`).
-- **Each work entry** is paid as Salaries pays it: its hours within schedule, plus any overtime that made up a shortfall in the month, at the person's hourly rate that day (a salary's rate of that month), and the rest of its overtime at the true hourly rate × the multiplier.
+- **Each work entry** is paid as Salaries pays it: its hours within schedule, plus any overtime that made up a shortfall in the month, at the person's hourly rate that day (a salary's rate of that month), and the rest of its overtime at the overtime rate × the multiplier. Project cost prices labour the same way ([projects.md](projects.md)), so the two agree on every entry; Project pay leaves out the paid break.
 - **Left out:** paid breaks and salary deductions. They aren't worked on any project, so project pay differs from Salaries for hourly staff by exactly their paid breaks. Project cost is different: it counts everyone's paid break as labour ([projects.md](projects.md)).
 - Overtime and made-up hours are worked out from the person's whole day and month, whichever projects they worked on. A leaver's hours ledger ends on the day they left, as in Salaries.
 - Grouped by project, then person and currency; projects are ordered by USD pay. Someone with no pay record is listed with `priced: false` and paid 0.

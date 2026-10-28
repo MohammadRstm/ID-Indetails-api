@@ -33,8 +33,8 @@ public sealed record SalaryRowResponse
     /// <summary>What an hour is worth this month (a salary ÷ the month's paid hours): it prices deductions.</summary>
     public required decimal HourlyRate { get; init; }
 
-    /// <summary>The true hourly rate, the same every month (a salary ÷ a standard month's paid hours): overtime is paid at it × the multiplier.</summary>
-    public required decimal StandardHourlyRate { get; init; }
+    /// <summary>The pay's overtime rate, the same every month (a salary ÷ 184 unless set otherwise): overtime is paid at it × the multiplier.</summary>
+    public required decimal OvertimeRate { get; init; }
 
     /// <summary>False for Execution staff, admins and super admins, who don't log hours.</summary>
     public required bool TracksHours { get; init; }

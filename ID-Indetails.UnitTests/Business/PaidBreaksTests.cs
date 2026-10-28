@@ -46,8 +46,8 @@ public class PaidBreaksTests
         var history = new[]
         {
             // Hourly, then salaried from March: the break is paid either way.
-            new ProjectFinance.PayRate(1, new(2026, 1, 1), 20m, "USD"),
-            new ProjectFinance.PayRate(1, new(2026, 3, 1), 12m, "USD"),
+            new ProjectFinance.PayRate(1, new(2026, 1, 1), 20m, "USD", 20m),
+            new ProjectFinance.PayRate(1, new(2026, 3, 1), 12m, "USD", 11.5m),
         };
 
         var costs = PaidBreaks.Price(shares, history);
