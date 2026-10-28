@@ -31,7 +31,7 @@ public class MyTimeTests
             today,
             new DateOnly(2025, 1, 1),
             ledgerApplies,
-            [new SalaryCalculator.PayTerms(new DateOnly(2025, 1, 1), PayBasis.Monthly, 1760m, "USD")],
+            [new SalaryCalculator.PayTerms(new DateOnly(2025, 1, 1), PayBasis.Monthly, 1760m, "USD", 9.57m)],
             Calendar,
             worked.Select((day, i) => Work(i + 1, day, 540, 420)).ToList(),
             []);

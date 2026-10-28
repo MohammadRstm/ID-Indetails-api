@@ -66,7 +66,7 @@ public class PaidBreaksTests
         // of March is a fixed salary.
         var roles = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 3, 11), RoleCodes.Employee, RoleCodes.Admin)]);
         var history = ProjectFinance.RatesOf(
-            [new ProjectFinance.PayRecord(1, new(2026, 1, 1), PayBasis.Monthly, 3200m, "USD")], Calendar, until: new(2026, 3, 20), roles);
+            [new ProjectFinance.PayRecord(1, new(2026, 1, 1), PayBasis.Monthly, 3200m, "USD", 17.39m)], Calendar, until: new(2026, 3, 20), roles);
         var shares = new[] { new PaidBreaks.Share(10, Tuesday, 60m), new PaidBreaks.Share(10, new(2026, 3, 3), 60m) };
 
         PaidBreaks.Price(shares, history).Select(p => p.Cost.Amount).ShouldBe([20m, 0m]);
