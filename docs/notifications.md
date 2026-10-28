@@ -43,6 +43,9 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `work_digest` | The same, when `notifyEntry` is `digest`: one per person per day | — | `minutes`, `latestName`, `projectTitle` |
 | `entry_comment` | The work entry's author | the work entry | `authorName`, `text`, `entryDescription` |
 | `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
+| `meeting_invited` | A general meeting's attendees, when they are added | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
+| `meeting_moved` | A general meeting's attendees, when its time changes | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
+| `meeting_cancelled` | A general meeting's attendees, when it is deleted or they are taken out | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
 | `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` |
 | `labour_week_submitted` | Holders of `labour_report:manage` | the project | `weekStart`, `updated`, `projectTitle` |
 | `project_created` | The domain's people | the project | `projectTitle` |
@@ -132,7 +135,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `work` | `work_logged`, `work_digest`, `entry_comment`, `weekly_summary`, `hours_excused`, `schedule_changed`, `hours_missed`, `hours_missed_list` |
 | `requirements` | `requirement_assigned`, `requirements_added`, `requirement_done`, `requirement_due_soon`, `requirement_overdue` |
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
-| `meetings` | `meeting_scheduled` |
+| `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
 | `money` | the `invoice_*` kinds, `payment_recorded`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |

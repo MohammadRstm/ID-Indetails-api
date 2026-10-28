@@ -37,7 +37,7 @@ The database is the second line of defence. The API must still filter every quer
 |---|---|
 | Identity and access | `domains`, `roles`, `permissions`, `role_permissions`, `user_permission_overrides`, `users`, `teams`, `employment_periods`, `user_pay_history`, `refresh_tokens`, `user_invitations`, `password_reset_tokens` |
 | Clients | `clients`, `client_contacts` |
-| Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses` |
+| Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings` (with general meetings, about no project), `meeting_attendees`, `project_expenses` |
 | Design work | `work_entries`, `work_entry_comments` |
 | Execution site costs and pricing | `project_staff`, `site_logs`, `box_entries`, `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `client_statements`, `client_statement_lines`, `client_statement_deliveries`, `statement_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
