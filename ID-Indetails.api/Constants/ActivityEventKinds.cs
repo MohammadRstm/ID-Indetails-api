@@ -117,6 +117,9 @@ public static class ActivityEventKinds
     public const string PaymentApplied = "payment_applied";
     public const string PaymentVoided = "payment_voided";
 
+    /// <summary>A payment's account label was set, changed or cleared (the label names in the payload).</summary>
+    public const string PaymentLabelSet = "payment_label_set";
+
     // Site expenses (subject: the expense, whose type is still "material"; project_id is set; the cost in the amount columns).
     // The kinds keep their stored names, so older rows read the same.
     public const string MaterialAdded = "material_added";
@@ -146,6 +149,12 @@ public static class ActivityEventKinds
 
     /// <summary>The reason in the payload. Also writes <see cref="ProjectFeeSet"/>, as the work price changes.</summary>
     public const string BoqAgreementWithdrawn = "boq_agreement_withdrawn";
+
+    // Supervision taken (subject: the withdrawal, type "supervision_withdrawal"; project_id is set; the USD amount in the amount column)
+    /// <summary>The company took some of a site's supervision fee out of the project account. Not a cost.</summary>
+    public const string SupervisionTaken = "supervision_taken";
+
+    public const string SupervisionWithdrawalRemoved = "supervision_withdrawal_removed";
 
     // Company layer (no domain, except schedules, which carry the person's domain)
     public const string CompanySettingsUpdated = "company_settings_updated";
