@@ -30,9 +30,10 @@ public sealed class BoqTestSteps(AuthTestSteps steps)
         string title = "Villa Mounir",
         string adjustmentType = "none",
         decimal? adjustmentValue = null,
-        string? reason = null)
+        string? reason = null,
+        DateTime? updatedAt = null)
     {
-        var response = await Client.PutJsonAsync($"/api/boqs/{boqId}", new { title, reason, adjustmentType, adjustmentValue, lines }, accessToken);
+        var response = await Client.PutJsonAsync($"/api/boqs/{boqId}", new { title, reason, adjustmentType, adjustmentValue, lines, updatedAt }, accessToken);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<BoqDetailResponse>();
     }

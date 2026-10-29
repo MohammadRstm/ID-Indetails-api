@@ -152,6 +152,9 @@ public static class ErrorCodes
     /// <summary>422. An agreed BOQ can't be changed or deleted; withdraw its agreement first.</summary>
     public const string BoqLocked = "boq_locked";
 
+    /// <summary>409. Someone saved the BOQ after the caller loaded it: saving the older copy would undo their changes.</summary>
+    public const string BoqChanged = "boq_changed";
+
     /// <summary>422. Another client BOQ of the project is already agreed.</summary>
     public const string BoqAlreadyAgreed = "boq_already_agreed";
 
