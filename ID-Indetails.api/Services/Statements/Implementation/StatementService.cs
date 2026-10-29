@@ -231,19 +231,21 @@ public sealed class StatementService(
 
         // Revenue counts materials once they are sent; the client reads this statement as sent, so its own materials count too.
         var money = await finance.GetAsync(project, cancellationToken);
-        var agreed = money.Summary.Revenue;
+        var agreed = money.RevenueWithTva;
         var unsent = records.Where(r => r.SentAt is null).ToDictionary(r => r.Material.Id, r => r.Material);
         if (project.RevenueLockedAt is null && lines.Any(l => unsent.ContainsKey(l.MaterialId)))
         {
             // in USD, as revenue is: each at the rate of the day it was added
             var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
-            agreed += lines.Where(l => unsent.ContainsKey(l.MaterialId))
-                .Sum(l => rates.ToUsd(l.Price, unsent[l.MaterialId].Currency, clock.ToCompanyDate(unsent[l.MaterialId].AddedAt)) ?? 0);
+            agreed += Tva.Gross(
+                lines.Where(l => unsent.ContainsKey(l.MaterialId))
+                    .Sum(l => rates.ToUsd(l.Price, unsent[l.MaterialId].Currency, clock.ToCompanyDate(unsent[l.MaterialId].AddedAt)) ?? 0),
+                project.TvaRate);
         }
 
         var latest = await statements.LatestCreatedAtAsync(project.Id, cancellationToken);
         var shown = lines.Select(l => l with { Price = Tva.Gross(l.Price, project.TvaRate) }).ToList();
-        return (shown, new StatementRules.PaymentPosition(money.Received, Tva.Gross(agreed, project.TvaRate)), latest is { } at ? clock.ToCompanyDate(at) : null);
+        return (shown, new StatementRules.PaymentPosition(money.Received, agreed), latest is { } at ? clock.ToCompanyDate(at) : null);
     }
 
     private async Task<StatementResponse> DescribeAsync(UserAccess actor, long statementId, CancellationToken cancellationToken)

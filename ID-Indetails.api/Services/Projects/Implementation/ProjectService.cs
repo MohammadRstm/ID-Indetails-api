@@ -174,15 +174,15 @@ public sealed class ProjectService(
         }
 
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
-            domain, request.BillingType, request.ClientId, request.Revenue, request.ProjectFee, request.MaterialMarkup)));
+            domain, request.BillingType, request.ClientId, request.Revenue, request.MaterialMarkup, request.SupervisionRate)));
         if ((request.Revenue is not null || request.TvaRate is not null) && !actor.Has(PermissionCodes.FinancialView))
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment or its TVA needs the permission to see project money.");
         }
 
-        if ((request.ProjectFee is not null || request.MaterialMarkup is not null) && !actor.Has(PermissionCodes.ProjectPricingManage))
+        if ((request.MaterialMarkup is not null || request.SupervisionRate is not null) && !actor.Has(PermissionCodes.ProjectPricingManage))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting a site's fee and material markup needs the permission to manage pricing.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting a site's material markup and supervision needs the permission to manage pricing.");
         }
 
         if (request.LabourDefaults is not null)
@@ -228,9 +228,10 @@ public sealed class ProjectService(
             StartDate = clock.CompanyToday,
             TargetDate = request.TargetDate,
             Revenue = request.Revenue ?? 0,
-            // A site created without its pricing starts at no fee and no markup until someone with pricing sets them.
-            ProjectFee = domain == DomainCodes.Execution ? request.ProjectFee ?? 0 : null,
+            // A site starts with no work price: agreeing a BOQ sets it. Created without pricing, it starts at no markup.
+            ProjectFee = domain == DomainCodes.Execution ? 0 : null,
             MaterialMarkup = domain == DomainCodes.Execution ? request.MaterialMarkup ?? 0 : null,
+            SupervisionRate = domain == DomainCodes.Execution ? request.SupervisionRate ?? ExecutionPricing.DefaultSupervisionRate : null,
             // TVA is on what a client pays: internal work has none
             TvaRate = request.BillingType == BillingType.Client ? request.TvaRate ?? Tva.DefaultRate : 0,
             CreatedAt = now,
@@ -268,19 +269,14 @@ public sealed class ProjectService(
 
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectCreated, actor.UserId));
         await notifier.CreatedAsync(project, actor.UserId, cancellationToken);
-        if (project.BillingType == BillingType.Client && !actor.Has(PermissionCodes.InvoiceSend))
+        if (project.BillingType == BillingType.Client && domain != DomainCodes.Execution && !actor.Has(PermissionCodes.InvoiceSend))
         {
-            // whoever sends quotes decides whether this one gets one; the creator can't
+            // whoever sends quotes decides whether this one gets one (Execution has none); the creator can't
             await notifier.QuoteDueAsync(project, actor.UserId, cancellationToken);
         }
         if (project.Revenue > 0)
         {
             activity.Add(ProjectEvent(project, ActivityEventKinds.RevenueSet, actor.UserId, amount: project.Revenue));
-        }
-
-        if (project.ProjectFee is > 0)
-        {
-            activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectFeeSet, actor.UserId, amount: project.ProjectFee));
         }
 
         if (request.LabourDefaults is { } defaults)
@@ -396,32 +392,33 @@ public sealed class ProjectService(
 
         if (project.DomainCode != DomainCodes.Execution)
         {
-            throw new BusinessRuleException(ErrorCodes.NotForThisDomain, "Only Execution projects have a project fee and a material markup.");
+            throw new BusinessRuleException(ErrorCodes.NotForThisDomain, "Only Execution projects have a material markup and a supervision rate.");
         }
 
         Throw(ProjectRules.CheckMoneyEditable(project.RevenueLockedAt is not null));
         var tva = request.TvaRate ?? project.TvaRate;
+        var supervision = request.SupervisionRate ?? project.SupervisionRate;
         Throw(ProjectRules.CheckPaymentChanges(
-            request.ProjectFee != project.ProjectFee || request.MaterialMarkup != project.MaterialMarkup || tva != project.TvaRate, "projectFee"));
+            request.MaterialMarkup != project.MaterialMarkup || supervision != project.SupervisionRate || tva != project.TvaRate, "materialMarkup"));
         var before = await floor.BeforeAsync(project, cancellationToken);
-        project.PaymentChanges.Add(PaymentChange(request.ProjectFee, project.ProjectFee ?? 0, request.MaterialMarkup, project.MaterialMarkup,
+        project.PaymentChanges.Add(PaymentChange(project.ProjectFee ?? 0, project.ProjectFee ?? 0, request.MaterialMarkup, project.MaterialMarkup,
             tva, project.TvaRate, request.Description.Trim(), actor.UserId));
 
-        if (request.ProjectFee != project.ProjectFee)
-        {
-            activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectFeeSet, actor.UserId,
-                amount: request.ProjectFee, prevAmount: project.ProjectFee));
-        }
-
+        // A fraction (0.125 is 12.5%) goes in the payload: the amount columns keep 2 decimals.
         if (request.MaterialMarkup != project.MaterialMarkup)
         {
-            // A fraction (0.125 is 12.5%), so it goes in the payload: the amount columns keep 2 decimals.
             activity.Add(ProjectEvent(project, ActivityEventKinds.MaterialMarkupSet, actor.UserId,
                 new { markup = request.MaterialMarkup, prevMarkup = project.MaterialMarkup }));
         }
 
-        project.ProjectFee = request.ProjectFee;
+        if (supervision != project.SupervisionRate)
+        {
+            activity.Add(ProjectEvent(project, ActivityEventKinds.SupervisionRateSet, actor.UserId,
+                new { rate = supervision, prevRate = project.SupervisionRate }));
+        }
+
         project.MaterialMarkup = request.MaterialMarkup;
+        project.SupervisionRate = supervision;
         project.TvaRate = tva;
         project.UpdatedAt = clock.UtcNow;
 
@@ -631,8 +628,12 @@ public sealed class ProjectService(
             Revenue = summary.Revenue,
             IsLocked = p.RevenueLockedAt is not null,
             TvaRate = p.TvaRate,
-            PaymentWithTva = Tva.Gross(p.DomainCode == DomainCodes.Execution ? p.ProjectFee ?? 0 : p.Revenue, p.TvaRate),
-            RevenueWithTva = Tva.Gross(summary.Revenue, p.TvaRate),
+            SupervisionRate = p.SupervisionRate,
+            SupervisionUsd = money.Supervision,
+            PaymentWithTva = p.DomainCode == DomainCodes.Execution
+                ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
+                : Tva.Gross(p.Revenue, p.TvaRate),
+            RevenueWithTva = money.RevenueWithTva,
             ProjectFee = p.ProjectFee,
             MaterialMarkup = p.MaterialMarkup,
             MaterialCharge = money.MaterialCharge,

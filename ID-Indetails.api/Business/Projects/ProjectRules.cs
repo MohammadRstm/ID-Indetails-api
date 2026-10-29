@@ -9,8 +9,8 @@ namespace ID_Indetails.api.Business.Projects;
 /// <list type="bullet">
 /// <item><b>Design</b> projects are client work (with a client) or internal (no client, no revenue).
 /// They have no project fee or material markup.</item>
-/// <item><b>Execution</b> projects are always client work, with a project fee and a material markup.
-/// Their revenue is calculated from those (<see cref="ExecutionPricing"/>), never typed in.</item>
+/// <item><b>Execution</b> projects are always client work, with a work price (the project fee, set by agreeing a BOQ), a
+/// supervision rate and a material markup. Their revenue is calculated from those (<see cref="ExecutionPricing"/>), never typed in.</item>
 /// <item>A project's client belongs to its domain and is not archived when it is chosen.</item>
 /// <item>The owner is anyone in the project's domain who isn't deactivated, or a super admin.</item>
 /// <item>Once revenue is locked (the project was finalised), the billing, revenue, fee and markup
@@ -33,8 +33,8 @@ public static class ProjectRules
         BillingType BillingType,
         long? ClientId,
         decimal? Revenue,
-        decimal? ProjectFee,
-        decimal? MaterialMarkup);
+        decimal? MaterialMarkup,
+        decimal? SupervisionRate);
 
     public sealed record Person(string Role, string? Domain, UserStatus Status);
 
@@ -50,13 +50,16 @@ public static class ProjectRules
             if (setup.Revenue is not null)
             {
                 return RuleDenial.Invalid(
-                    ErrorCodes.ValidationFailed, "revenue", "Execution revenue is calculated from the project fee and materials.");
+                    ErrorCodes.ValidationFailed, "revenue", "Execution revenue is calculated from the agreed BOQs and materials.");
             }
         }
-        else if (setup.ProjectFee is not null || setup.MaterialMarkup is not null)
+        else if (setup.MaterialMarkup is not null)
         {
-            return RuleDenial.Invalid(
-                ErrorCodes.ValidationFailed, "projectFee", "Only Execution projects have a project fee and a material markup.");
+            return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "materialMarkup", "Only Execution projects have a material markup.");
+        }
+        else if (setup.SupervisionRate is not null)
+        {
+            return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "supervisionRate", "Only Execution projects have a supervision rate.");
         }
 
         if (setup.BillingType == BillingType.Client)

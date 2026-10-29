@@ -43,7 +43,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Execution_projects_are_client_work_with_a_fee_and_markup_and_a_calculated_revenue()
+    public async Task Execution_projects_are_client_work_with_a_work_price_supervision_and_markup_and_a_calculated_revenue()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
@@ -52,6 +52,8 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         site.Money!.ProjectFee.ShouldBe(1000m);
         site.Money.MaterialMarkup.ShouldBe(0.10m);
         site.Money.Revenue.ShouldBe(1000m);
+        site.Money.SupervisionRate.ShouldBe(0m);
+        site.Money.SupervisionUsd.ShouldBe(0m);
 
         // A material costing 200 at 10% markup, and one priced by hand at 50.
         await using (var connection = await api.Database.OpenConnectionAsync())
@@ -71,10 +73,15 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         priced.Money.UnsentMaterials.ShouldBe(2);
         priced.Money.Revenue.ShouldBe(1000m);
 
+        // a bigger BOQ was agreed (the price is never typed in), and supervision is 10% of it
+        await Projects.SetWorkPriceAsync(site.Id, 1500m);
         var repriced = await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing",
-            new { projectFee = 1500m, materialMarkup = 0.25m, description = "Bigger site" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
-        repriced.Money!.Revenue.ShouldBe(1500m);
-        repriced.Money.UnsentMaterialCharge.ShouldBe(300m);
+            new { materialMarkup = 0.25m, supervisionRate = 0.10m, description = "Bigger site" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
+        repriced.Money!.ShouldSatisfyAllConditions(
+            m => m.SupervisionRate.ShouldBe(0.10m),
+            m => m.SupervisionUsd.ShouldBe(150m),
+            m => m.Revenue.ShouldBe(1650m));
+        repriced.Money!.UnsentMaterialCharge.ShouldBe(300m);
 
         // sent on a statement, they join the revenue at the prices the client was shown
         await Projects.SendStatementAsync(admin.AccessToken, site.Id);
@@ -82,12 +89,19 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         sent.Money!.MaterialCharge.ShouldBe(300m);
         sent.Money.MaterialProfit.ShouldBe(70m);
         sent.Money.UnsentMaterials.ShouldBe(0);
-        sent.Money.Revenue.ShouldBe(1800m);
+        sent.Money.Revenue.ShouldBe(1950m);
 
         var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
         await (await Client.PostJsonAsync("/api/projects", new { title = "Internal site", billingType = "internal", projectFee = 1, materialMarkup = 0 }, admin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.PostJsonAsync("/api/projects", new { title = "Markup", clientId = client.Id, projectFee = 1, materialMarkup = 6 }, admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        // the work price comes from an agreed BOQ: it can't be typed in, at the start or after
+        (await (await Client.PostJsonAsync("/api/projects", new { title = "Priced", clientId = client.Id, projectFee = 1000m, materialMarkup = 0.1m }, admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("projectFee");
+        await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 2000m, materialMarkup = 0.1m, description = "Typed" }, admin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.PostJsonAsync("/api/projects", new { title = "Too much", clientId = client.Id, supervisionRate = 1.5m }, admin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.PutJsonAsync($"/api/projects/{site.Id}/billing", new { billingType = "client", clientId = client.Id }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
@@ -219,7 +233,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
         // Another domain's admin can't reach the project either.
         await (await Client.PutJsonAsync($"/api/projects/{design.Id}", new { title = "X", ownerId = executionAdmin.User.Id }, executionAdmin.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
-        await (await Client.PutJsonAsync($"/api/projects/{design.Id}/pricing", new { projectFee = 1, materialMarkup = 0, description = "X" }, executionAdmin.AccessToken))
+        await (await Client.PutJsonAsync($"/api/projects/{design.Id}/pricing", new { materialMarkup = 0, description = "X" }, executionAdmin.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }
 
@@ -258,8 +272,10 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ReadAsync<ProjectResponse>();
         site.Money!.ProjectFee.ShouldBe(0m);
         site.Money.MaterialMarkup.ShouldBe(0m);
+        // a site without pricing still starts at the default supervision
+        site.Money.SupervisionRate.ShouldBe(0.10m);
 
-        await (await Client.PostJsonAsync("/api/projects", new { title = "Priced", clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m, staffIds = new[] { await Projects.SiteStaffAsync() } }, admin.AccessToken))
+        await (await Client.PostJsonAsync("/api/projects", new { title = "Priced", clientId = client.Id, materialMarkup = 0.10m, staffIds = new[] { await Projects.SiteStaffAsync() } }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 }

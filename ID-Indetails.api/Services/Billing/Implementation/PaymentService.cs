@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Response.Billing;
@@ -17,6 +18,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Billing.Implementation;
@@ -28,6 +30,7 @@ public sealed class PaymentService(
     IProjectRepository projects,
     IInvoiceRepository invoices,
     IPaymentRepository payments,
+    IProjectFinanceService finance,
     IExchangeRateRepository exchangeRates,
     IActivityEventRepository activity,
     INotificationSender notifications,
@@ -104,7 +107,7 @@ public sealed class PaymentService(
             Currency = currency,
             FxRate = rate,
             AmountUsd = amountUsd,
-            TvaUsd = Tva.ShareOf(amountUsd, project.TvaRate),
+            TvaUsd = await TvaShareAsync(project, amountUsd, cancellationToken),
             ReceivedOn = receivedOn,
             Method = request.Method,
             Reference = Clean(request.Reference),
@@ -162,6 +165,18 @@ public sealed class PaymentService(
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+
+    /// <summary>The TVA inside a payment. An Execution site's TVA is on its work price only, so the payment holds its share of that.</summary>
+    private async Task<decimal> TvaShareAsync(Project project, decimal amountUsd, CancellationToken cancellationToken)
+    {
+        if (project.DomainCode != DomainCodes.Execution)
+        {
+            return Tva.ShareOf(amountUsd, project.TvaRate);
+        }
+
+        var money = await finance.GetAsync(project, cancellationToken);
+        return ExecutionPricing.TvaShareOf(amountUsd, money.RevenueTva, money.RevenueWithTva, project.TvaRate);
+    }
 
     /// <summary>The typed rate, 1 for US dollars, or else the dated rate in force on the day received.</summary>
     private async Task<decimal> RateAsync(string currency, decimal? typed, DateOnly receivedOn, CancellationToken cancellationToken)

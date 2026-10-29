@@ -323,6 +323,19 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     }
 
     [Fact]
+    public async Task Supervision_is_a_fraction_of_the_work_price()
+    {
+        var owner = await ActiveUserAsync("execution");
+        var client = await ClientAsync("execution");
+        string Site(string rate) =>
+            "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, project_fee, material_markup, supervision_rate, created_at) " +
+            $"VALUES ('execution', 'Project', 'active', 'client', {client}, {owner}, '2026-09-01', 0, 'USD', 0, 0, 0.10, {rate}, {Now})";
+
+        await InsertAsync(Site("0.10"));
+        await ShouldViolateAsync(Site("1.5"), "ck_projects_supervision_rate_range");
+    }
+
+    [Fact]
     public async Task Material_needs_quantity_and_unit_cost_or_a_lump_sum()
     {
         var user = await ActiveUserAsync("execution");

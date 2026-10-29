@@ -193,7 +193,7 @@ public sealed class DocumentService(
         {
             var rollup = await moneyRollups.LoadAsync([project], cancellationToken);
             position = new InvoiceProjectPosition(
-                Tva.Gross(rollup.Money(project.Id).Summary.Revenue, project.TvaRate),
+                rollup.Money(project.Id).RevenueWithTva,
                 rollup.ProjectBillingOf(project).Received,
                 invoice.Balance ?? invoice.Total);
         }

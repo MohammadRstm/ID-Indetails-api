@@ -26,11 +26,14 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
     }
 
     /// <summary>
-    /// A Design client project with the given revenue, or an Execution site with a fee of 1000 and a 10% markup,
-    /// overseen by <paramref name="staffIds"/> (by default someone made for it). A caller who may not set that money (a
-    /// plain admin) gets the project without it: no revenue, or no fee and no markup.
+    /// A Design client project with the given revenue, or an Execution site with a work price of 1000, a 10% markup and no
+    /// supervision, overseen by <paramref name="staffIds"/> (by default someone made for it). A caller who may not set that
+    /// money (a plain admin) gets the project without it: no revenue, or no work price and no markup.
     /// </summary>
-    /// <param name="projectFee">An Execution site's agreed amount; 1,000 unless said.</param>
+    /// <param name="projectFee">
+    /// An Execution site's work price; 1,000 unless said. It is never typed in (agreeing a BOQ sets it), so the test sets
+    /// it in the database, as agreeing will.
+    /// </param>
     public async Task<ProjectResponse> CreateProjectAsync(
         string accessToken, string domain, decimal revenue = 5000, IReadOnlyList<long>? staffIds = null, decimal projectFee = 1000m)
     {
@@ -41,7 +44,7 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
         // untaxed, so money figures read as before TVA; TVA has tests of its own
         object body = domain == DomainCodes.Execution
             ? me.Permissions.Contains(PermissionCodes.ProjectPricingManage)
-                ? new { title, domainCode = domain, clientId = client.Id, projectFee, materialMarkup = 0.10m, staffIds = staff, tvaRate = 0m }
+                ? new { title, domainCode = domain, clientId = client.Id, materialMarkup = 0.10m, supervisionRate = 0m, staffIds = staff, tvaRate = 0m }
                 : new { title, domainCode = domain, clientId = client.Id, staffIds = staff }
             : me.Permissions.Contains(PermissionCodes.FinancialView)
                 ? new { title, domainCode = domain, clientId = client.Id, revenue, tvaRate = 0m }
@@ -49,8 +52,23 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
 
         var response = await Client.PostJsonAsync("/api/projects", body, accessToken);
         ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
-        return await response.ReadAsync<ProjectResponse>();
+        var project = await response.ReadAsync<ProjectResponse>();
+        if (domain != DomainCodes.Execution || !me.Permissions.Contains(PermissionCodes.ProjectPricingManage) || projectFee <= 0)
+        {
+            return project;
+        }
+
+        await SetWorkPriceAsync(project.Id, projectFee);
+        return await (await Client.GetAsync($"/api/projects/{project.Id}", accessToken)).ReadAsync<ProjectResponse>();
     }
+
+    /// <summary>Sets an Execution site's work price in the database and records the fee event, as agreeing a BOQ will.</summary>
+    public Task SetWorkPriceAsync(long projectId, decimal fee)
+        => steps.ExecuteAsync(
+            "UPDATE projects SET project_fee = @fee WHERE id = @id; " +
+            "INSERT INTO activity_events (domain_code, kind, occurred_at, project_id, subject_type, subject_id, amount, is_demo) " +
+            "VALUES ('execution', 'project_fee_set', UTC_TIMESTAMP(3), @id, 'project', @id, @fee, 0)",
+            ("@id", projectId), ("@fee", fee));
 
     /// <summary>An active Execution employee made straight in the database, to oversee a site no test signs in to.</summary>
     public Task<long> SiteStaffAsync()

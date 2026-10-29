@@ -187,9 +187,6 @@ public sealed record ProjectMoneyInput : ProtonActionInput
     [Description("Design: the agreed revenue, as the user gave it.")]
     public decimal? Revenue { get; init; }
 
-    [Description("Execution: the project fee.")]
-    public decimal? ProjectFee { get; init; }
-
     [Description("Execution: the default material markup as a percentage, as the user said it: 15 for 15%.")]
     public decimal? MaterialMarkup { get; init; }
 
@@ -198,7 +195,7 @@ public sealed record ProjectMoneyInput : ProtonActionInput
 }
 
 /// <summary>
-/// Sets a Design project's agreed revenue (PUT /api/projects/{id}/payment), or an Execution site's fee and material
+/// Sets a Design project's agreed revenue (PUT /api/projects/{id}/payment), or an Execution site's material
 /// markup (PUT …/pricing), with why it changes, once confirmed. The user types the new amount.
 /// </summary>
 public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonActionTool<ProjectMoneyInput, ProjectMoneyArgs>
@@ -206,7 +203,7 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
     public override string Name => "propose_project_money";
 
     public override string Description =>
-        "Propose a Design project's agreed revenue, or an Execution site's fee and default material markup, with why it changes. " +
+        "Propose a Design project's agreed revenue, or an Execution site's default material markup, with why it changes (a site's price is set by agreeing its BOQ, not here). " +
         "Locked once the project is completed. The user confirms by typing the new amount.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
@@ -222,7 +219,7 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
     protected override async Task<(ProjectMoneyArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         ProjectMoneyInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        MoneyText.RequireTyped(context, input.Revenue, input.ProjectFee, input.MaterialMarkup);
+        MoneyText.RequireTyped(context, input.Revenue, input.MaterialMarkup);
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
         var money = project.Money ?? throw new ProtonToolInputException("The user can't see this project's money.");
         if (money.IsLocked)
@@ -260,11 +257,10 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
         // the app keeps the markup as a fraction (0.15); people say it as a percentage (15)
         var pricing = new UpdateProjectPricingRequest
         {
-            ProjectFee = input.ProjectFee ?? fee, MaterialMarkup = input.MaterialMarkup is { } percent ? percent / 100 : markup,
+            MaterialMarkup = input.MaterialMarkup is { } percent ? percent / 100 : markup,
             Description = reason,
         };
         var changes = new List<ProtonChange>();
-        SettingsText.Compare(changes, "Project fee", MoneyText.Amount(fee, money.Currency), MoneyText.Amount(pricing.ProjectFee, money.Currency));
         SettingsText.Compare(changes, "Material markup", CompanyMoneyText.Percent(markup), CompanyMoneyText.Percent(pricing.MaterialMarkup));
         if (changes.Count == 0)
         {
@@ -273,11 +269,9 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
 
         changes.Add(new ProtonChange("Why", null, reason));
 
-        // the user types the figure that changes: the fee, or the markup when only it changes
-        var phrase = pricing.ProjectFee != fee ? MoneyText.Phrase(pricing.ProjectFee) : MoneyText.Phrase(pricing.MaterialMarkup * 100);
         return (new ProjectMoneyArgs(project.Id, null, pricing, fee, markup),
             new ProtonPreview($"Price {project.Title}", changes, "Materials not on a statement yet follow the new markup.",
-                Confirm: ProtonConfirm.Typed, Phrase: phrase),
+                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(pricing.MaterialMarkup * 100)),
             ProjectText.Ref(project));
     }
 

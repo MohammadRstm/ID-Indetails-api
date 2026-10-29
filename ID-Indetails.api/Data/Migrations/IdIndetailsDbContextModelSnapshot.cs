@@ -22,6 +22,68 @@ namespace ID_Indetails.api.Data.Migrations
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
+            modelBuilder.Entity("ID_Indetails.api.Models.AccountLabel", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("archived_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int")
+                        .HasColumnName("position");
+
+                    b.HasKey("Id")
+                        .HasName("pk_account_labels");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_account_labels_name");
+
+                    b.ToTable("account_labels", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1L,
+                            CreatedAt = new DateTime(2026, 10, 29, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Concrete",
+                            Position = 1
+                        },
+                        new
+                        {
+                            Id = 2L,
+                            CreatedAt = new DateTime(2026, 10, 29, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Finishing",
+                            Position = 2
+                        },
+                        new
+                        {
+                            Id = 3L,
+                            CreatedAt = new DateTime(2026, 10, 29, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Permits",
+                            Position = 3
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ActivityEvent", b =>
                 {
                     b.Property<long>("Id")
@@ -3823,6 +3885,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(20)")
                         .HasColumnName("status");
 
+                    b.Property<decimal?>("SupervisionRate")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)")
+                        .HasColumnName("supervision_rate");
+
                     b.Property<DateOnly?>("TargetDate")
                         .HasColumnType("date")
                         .HasColumnName("target_date");
@@ -3884,6 +3951,8 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_projects_revenue_non_negative", "`revenue` >= 0");
 
                             t.HasCheckConstraint("ck_projects_status", "`status` IN ('active', 'hold', 'completed', 'archived')");
+
+                            t.HasCheckConstraint("ck_projects_supervision_rate_range", "`supervision_rate` IS NULL OR `supervision_rate` BETWEEN 0 AND 1");
 
                             t.HasCheckConstraint("ck_projects_tva_rate_range", "`tva_rate` >= 0 AND `tva_rate` <= 1");
                         });

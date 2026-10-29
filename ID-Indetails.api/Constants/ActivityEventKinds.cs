@@ -52,6 +52,7 @@ public static class ActivityEventKinds
     public const string RevenueChanged = "revenue_changed";
     public const string ProjectFeeSet = "project_fee_set";
     public const string MaterialMarkupSet = "material_markup_set";
+    public const string SupervisionRateSet = "supervision_rate_set";
     public const string ProjectHold = "project_hold";
     public const string ProjectResumed = "project_resumed";
     public const string ProjectCompleted = "project_completed";
@@ -148,6 +149,9 @@ public static class ActivityEventKinds
     public const string OverheadCancelled = "overhead_cancelled";
     public const string OverheadResumed = "overhead_resumed";
     public const string OverheadRemoved = "overhead_removed";
+
+    // Account labels
+    public const string AccountLabelChanged = "account_label_changed";
 
     // Hours ledger (subject: the person; no amounts)
     public const string HoursExcused = "hours_excused";

@@ -112,15 +112,21 @@ public sealed class DomainFinanceService(
     }
 
     /// <summary>
-    /// What the client projects agreed, dated: payments and fees as they were set or changed, and Execution materials at their
-    /// client price, converted at the rate of the day they were added, on the day they were first sent.
+    /// What the client projects agreed, dated: payments and fees as they were set or changed (an Execution site's fee with its
+    /// supervision on top, at the rate it has now), and Execution materials at their client price, converted at the rate of the
+    /// day they were added, on the day they were first sent.
     /// </summary>
     private async Task<IReadOnlyList<ExpectedRevenue.Agreed>> AgreedAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken)
     {
         var client = projects.Where(p => p.BillingType == BillingType.Client).ToDictionary(p => p.Id);
         var ids = client.Keys.ToList();
+        decimal WithSupervision(long projectId, decimal amount)
+            => client[projectId].DomainCode == DomainCodes.Execution ? amount * (1 + (client[projectId].SupervisionRate ?? 0)) : amount;
         var agreed = (await summaries.AgreedChangesAsync(ids, cancellationToken))
-            .Select(c => ExpectedRevenue.Change(clock.ToCompanyDate(c.OccurredAt), c.Amount, c.PrevAmount))
+            .Select(c => ExpectedRevenue.Change(
+                clock.ToCompanyDate(c.OccurredAt),
+                WithSupervision(c.ProjectId, c.Amount),
+                c.PrevAmount is { } previous ? WithSupervision(c.ProjectId, previous) : null))
             .ToList();
 
         var sites = client.Values.Where(p => p.DomainCode == DomainCodes.Execution).Select(p => p.Id).ToList();

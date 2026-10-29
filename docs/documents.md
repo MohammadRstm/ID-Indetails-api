@@ -22,20 +22,20 @@ Invoices, client statements and project reports are made as PDFs on the server (
 
 ## Quotes
 
-A quote tells a client what the whole project costs them: the agreed payment (Design) or agreed amount before
-materials (Execution), with TVA in it and never shown apart, and the project's description as its scope. Each is a
+A quote tells a Design client what the whole project costs them: the agreed payment, with TVA in it and never shown apart,
+and the project's description as its scope. Execution has no quotes: its price is built from BOQs. Each is a
 snapshot (`quotes`, numbered `QU-YYYY-NNN` per year in `quote_sequences`): a change of payment or TVA makes a new one.
 Sends are kept in `quote_deliveries`.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `POST /api/projects/{id}/quotes` | `invoice:send` | Makes a quote from the payment and TVA now (`422 quote_not_possible` for internal work or no agreed amount) |
+| `POST /api/projects/{id}/quotes` | `invoice:send` | Makes a quote from the payment and TVA now (`422 quote_not_possible` for internal work or no agreed amount, `422 quote_not_for_execution` for an Execution site) |
 | `GET /api/projects/{id}/quotes` | `invoice:send` | The project's quotes, newest first |
 | `GET /api/quotes/{id}` / `…/pdf` | `invoice:send` | One quote; its PDF |
 | `POST /api/quotes/{id}/email` | `invoice:send` | Emails it to the client with the PDF, and records the delivery |
 | `POST /api/quotes/{id}/deliveries` | `invoice:send` | Records a WhatsApp send or a download |
 
-When someone without `invoice:send` creates a client project, holders of it get `quote_due`: whether to send it a
+When someone without `invoice:send` creates a Design client project, holders of it get `quote_due` (never for an Execution site): whether to send it a
 quote is theirs to decide. Someone with it is asked in the app right after creating the project or changing its
 payment or TVA.
 
