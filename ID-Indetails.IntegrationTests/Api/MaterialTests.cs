@@ -18,7 +18,8 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
-        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
+        // priced above the costs below, so the profit floor (tested on its own) stays out of the way
+        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, projectFee: 30_000m);
 
         var added = await AddAsync(project.Id, employee.AccessToken,
             new { name = "Rebar 12mm", quantity = 12m, unit = "tonne", unitCost = 1500m, supplier = "Al-Rashid Steel" },
@@ -47,7 +48,7 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         // their cost counts straight away; their client prices are never revenue: the work price is in the BOQs
         var money = (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!;
         money.Cost.Materials.ShouldBe(21_225m);
-        money.Revenue.ShouldBe(1000m);
+        money.Revenue.ShouldBe(30_000m);
 
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'material_added'", ("@p", project.Id))).ShouldBe(3);
