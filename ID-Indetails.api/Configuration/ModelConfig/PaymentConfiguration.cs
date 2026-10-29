@@ -50,6 +50,11 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .HasForeignKey(x => x.InvoiceId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(x => x.AccountLabel)
+            .WithMany()
+            .HasForeignKey(x => x.AccountLabelId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne<User>()
             .WithMany()
             .HasForeignKey(x => x.RecordedById)

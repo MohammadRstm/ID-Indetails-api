@@ -13,9 +13,9 @@ namespace ID_Indetails.api.Business.Finance;
 /// </summary>
 public static class PeriodMoney
 {
-    public sealed record CostTotals(decimal Labour, decimal Expenses, decimal Materials, decimal GroundLabour)
+    public sealed record CostTotals(decimal Labour, decimal Expenses, decimal SiteExpenses, decimal GroundLabour)
     {
-        public decimal Total => Labour + Expenses + Materials + GroundLabour;
+        public decimal Total => Labour + Expenses + SiteExpenses + GroundLabour;
     }
 
     /// <summary>Revenue in a period: the payments received in it (in USD), each on the day it arrived.</summary>
@@ -26,7 +26,7 @@ public static class PeriodMoney
     {
         var inside = costs.Where(c => c.Day >= from && c.Day <= to).ToList();
         decimal Of(CostSource source) => inside.Where(c => c.Source == source).Sum(c => c.Usd);
-        return new CostTotals(Of(CostSource.Labour), Of(CostSource.Expenses), Of(CostSource.Materials), Of(CostSource.GroundLabour));
+        return new CostTotals(Of(CostSource.Labour), Of(CostSource.Expenses), Of(CostSource.SiteExpense), Of(CostSource.GroundLabour));
     }
 
     public static IReadOnlyList<ProjectFinance.UnconvertedCost> Unconverted(

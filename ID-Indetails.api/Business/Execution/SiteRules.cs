@@ -4,7 +4,7 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Business.Execution;
 
-/// <summary>What every record kept on an Execution site shares (materials, ground labour).</summary>
+/// <summary>What every record kept on an Execution site shares (site expenses, ground labour).</summary>
 public static class SiteRules
 {
     /// <summary>

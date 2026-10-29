@@ -6,7 +6,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices and statements), time zone, week start, time format, default currency |
+| `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices, quotes and BOQs), time zone, week start, time format, default currency |
 | `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row. Address (up to 300 characters) and website (a web address such as `indetails.com`) are optional; leaving one out clears it |
 | `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, from the caller's upload, whether or not the rest of the settings were saved ([files.md](files.md)) |
 | `PUT /api/company/contact-email` | `company_settings:manage` or `website:manage` | `{ email }`: the company's own address, which the website shows and its contact form sends to ([website.md](website.md)). Empty clears it; it comes back as `contactEmail` on the settings |
@@ -136,7 +136,7 @@ Always calculated, from the shared finance calculator (`Business/Finance/`), in 
 - **Invoices** are converted at the rate of their issue day. Those with no rate are left out of invoiced and outstanding and listed per currency in `unconvertedInvoices[]`, per domain and for the company.
 - **Per domain:** revenue, cost, profit and margin; projects with work or costs in the period and active projects; active employees and who logged work; clients served and all clients; invoiced (issued in the period), collected (received in the period) and outstanding today.
 - **Company:** both domains' profit less **company overhead**, charged by the calendar days of each month the period covers and converted at the rate on the first of the month, and less the **admins' and super admins' salaries** (`adminSalaries`). They are paid a fixed salary and log no hours, so no project carries their pay (hours they logged before that cost nothing): the pay of each month they were paid a fixed salary (any month they held that role on a day, see above), as Salaries works it out, counts for the share of the month's calendar days the period covers, converted at the rate on the first of the month. Someone promoted on Monday 16 February 2026 has all of February as a fixed salary: the whole February salary is a company cost, and none of their February hours cost projects anything. Their months before February stay employee months. Employees' labour is already in the domains' costs, through their hours. Overhead or salaries with no rate for their month are listed as unconverted instead of being added in.
-- **Monthly:** each month's revenue (money received), labour, expenses, materials, ground labour and overhead, with the profit before and after company expenses. This feeds the chart on the company expenses page, a year at a time.
+- **Monthly:** each month's revenue (money received), labour, expenses, site expenses (`materials` in the JSON), ground labour and overhead, with the profit before and after company expenses. This feeds the chart on the company expenses page, a year at a time.
 
 ## Project pay
 

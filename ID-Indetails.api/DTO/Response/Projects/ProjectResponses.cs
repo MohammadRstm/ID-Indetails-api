@@ -13,7 +13,8 @@ public sealed record ProjectOwnerResponse(long Id, string Name);
 /// <summary>One change of a project's agreed payment, newest first in a list.</summary>
 /// <param name="Amount">USD: Design's customer payment, Execution's project fee.</param>
 /// <param name="PreviousAmount">Null for the payment agreed at the start.</param>
-/// <param name="MaterialMarkup">Execution only: the default material markup after it, a fraction (0.125 is 12.5%).</param>
+/// <param name="MaterialMarkup">The default material markup after it, a fraction (0.125 is 12.5%). History only: markups are gone, so only rows written before are filled.</param>
+/// <param name="SupervisionRate">Execution only: the supervision rate after it; null on Design rows and on rows from before supervision.</param>
 /// <param name="ChangedBy">Null when the person no longer exists.</param>
 public sealed record ProjectPaymentChangeResponse(
     long Id,
@@ -25,7 +26,9 @@ public sealed record ProjectPaymentChangeResponse(
     DateTime ChangedAt,
     ProjectOwnerResponse? ChangedBy,
     decimal? TvaRate = null,
-    decimal? PreviousTvaRate = null);
+    decimal? PreviousTvaRate = null,
+    decimal? SupervisionRate = null,
+    decimal? PreviousSupervisionRate = null);
 
 /// <summary>Only for callers with <c>financial:view</c>.</summary>
 public sealed record ProjectMoneyResponse
@@ -33,12 +36,12 @@ public sealed record ProjectMoneyResponse
     public string Currency { get; init; } = "USD";
 
     /// <summary>
-    /// Design: the agreed revenue. Execution: the agreed amount (work price plus supervision, plus the client prices of
-    /// the materials sent for now), calculated live while the project is open and frozen when it is finalised.
+    /// Design: the agreed revenue. Execution: the agreed amount (the work price from the agreed BOQs plus supervision),
+    /// calculated live while the project is open and frozen when it is finalised.
     /// </summary>
     public decimal Revenue { get; init; }
 
-    /// <summary>Revenue, fee and markup can't change until the project is reopened.</summary>
+    /// <summary>Revenue, fee and rates can't change until the project is reopened.</summary>
     public bool IsLocked { get; init; }
 
     /// <summary>TVA on what the client pays for the work, 0.11 = 11%. Revenue and profit are net of it.</summary>
@@ -50,7 +53,7 @@ public sealed record ProjectMoneyResponse
     /// <summary>Execution only: the supervision, the work price × the supervision rate. Part of <see cref="Revenue"/>; no TVA on it.</summary>
     public decimal? SupervisionUsd { get; init; }
 
-    /// <summary>The agreed payment (Design) or the agreed work price plus supervision (Execution, before materials), TVA included.</summary>
+    /// <summary>The agreed payment (Design) or the agreed work price plus supervision (Execution), TVA included.</summary>
     public decimal PaymentWithTva { get; init; }
 
     /// <summary>Revenue with TVA included: what the client is agreed to pay so far. Execution: TVA is on the work price only.</summary>
@@ -58,17 +61,6 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Execution: the work price, set by agreeing a BOQ; 0 until then.</summary>
     public decimal? ProjectFee { get; init; }
-
-    public decimal? MaterialMarkup { get; init; }
-
-    /// <summary>Execution: the client prices of the materials sent to the client on a statement, which are part of revenue.</summary>
-    public decimal? MaterialCharge { get; init; }
-
-    /// <summary>Execution: the client prices of the materials not sent yet; sending them on a statement adds them to revenue.</summary>
-    public decimal? UnsentMaterialCharge { get; init; }
-
-    /// <summary>Execution: how many materials haven't been sent to the client yet.</summary>
-    public int UnsentMaterials { get; init; }
 
     /// <summary>Project expenses, one total per currency.</summary>
     public IReadOnlyList<CurrencyTotalResponse> ExpenseTotals { get; init; } = [];
@@ -99,23 +91,18 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Execution: what the pocket money paid to the project. Raises its profit.</summary>
     public decimal? FromPocket { get; init; }
-
-    /// <summary>Execution: what the materials sent earn, their charge − their cost.</summary>
-    public decimal? MaterialProfit { get; init; }
-
-    /// <summary>Execution: materials left out of the charge because no exchange rate covered their day.</summary>
-    public int UnconvertedMaterials { get; init; }
 }
 
 /// <summary>
 /// Cost in USD, each amount converted at the exchange rate of its day. Amounts with no rate that day
 /// are listed in <see cref="Unconverted"/> (in their own currency) instead of being added in.
 /// </summary>
+/// <param name="SiteExpenses">Execution: what was recorded on the site as expenses (materials, contractors, equipment, fees).</param>
 /// <param name="UnpricedLabourMinutes">Worked time of people with no pay record.</param>
 public sealed record ProjectCostResponse(
     decimal Labour,
     decimal Expenses,
-    decimal Materials,
+    decimal SiteExpenses,
     decimal GroundLabour,
     decimal Total,
     IReadOnlyList<UnconvertedCostResponse> Unconverted,

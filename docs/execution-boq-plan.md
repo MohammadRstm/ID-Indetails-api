@@ -64,6 +64,8 @@
 ## 3. Phases
 
 ### Phase 1: settings, supervision, account labels, no Execution quotes (branch `MR-Exec-Settings`)
+**Status:** finished on the desktop on 2026-10-29: migration `AccountLabelsAndSupervision`, Release build clean, schema regenerated. PRs: API MohammadRstm/ID-Indetails-api#162, client MohammadRstm/ID-Indetails-client#168. Tests run once on the whole stack after phase 4 (the user's call). The handoff notes below are kept for the record.
+
 **Status at handoff:** 
 
 **API: code, tests and docs are written and committed; the migration isn't made and nothing has compiled since the last edits.**
@@ -161,10 +163,10 @@ What's left on the client side:
 - **Client:** the Execution create form has no agreed amount, plus a supervision % field (10) and TVA 11. The pricing modal handles TVA + supervision, with the work price read-only ("Set when a BOQ is agreed"). Financials show work price, supervision, TVA and client total. Settings get an Account labels section for super admins, plus a reusable labels hook/select. No quote UI on Execution.
 
 ### Phase 2: BOQs and VOs replace statements (branch `MR-Boqs`, off `MR-Exec-Settings`)
-**Status:** not started. The full contract is in section 4.
+**Status:** API built (see "Phase 2 as built" at the end); the client is being built on the desktop. The full contract is in section 4, with the desktop's decisions at its end.
 
 ### Phase 3: cost-only expenses list (branch `MR-Site-Expenses`, off `MR-Boqs`)
-**Status:** not started. Outline:
+**Status:** API built (see "Phase 3 as built" at the end); the decisions below the outline win. The client is built on the desktop. Outline:
 - **Data:**
   - Rename `project_materials` → `site_expenses`; the model and API routes say "expenses", and the client's Execution "Materials" panel becomes "Expenses".
   - Fields: item, quantity, unit, unit cost or amount, currency, supplier/payee, `spentOn` (date, required, default today), `category` (materials | contractor | equipment | fees | other) and optional `accountLabelId`.
@@ -173,8 +175,30 @@ What's left on the client side:
 - **Profit floor:** the guard keeps covering expense writes.
 - **Approved DB changes:** the rename, the added and dropped columns listed above, and that row move.
 
+#### Phase 3 decisions made on the desktop (2026-10-29)
+Settled with the user or from the code. **Where they differ from the outline above, these win.**
+
+**Routes (the user's choice).** Site expenses live at `/api/projects/{projectId}/site-expenses` (`GET` list, `POST` a batch, `PUT` / `DELETE` `/{expenseId}`). The same controller also answers the old `/api/projects/{projectId}/materials` paths with the same shapes, so the phone app keeps recording until it's updated in its own PR; docs say the alias is temporary. `/api/projects/{id}/expenses` stays the project-expenses route. `PUT .../{id}/client-price` goes.
+
+**JSON names.** `name` (shown as "Item") and `supplier` (shown as "Supplier / payee") keep their names so the phone's requests still work. New optional request fields: `currency` (default USD, the existing currency validator), `spentOn` (default today in the company time zone), `category` (default `materials`) and `accountLabelId` (an existing label; archived ones can't be newly picked, but an expense keeps one it already has). The response gains `spentOn`, `category` and `accountLabel: { id, name } | null`, and loses `clientPrice`, `priceSource` and `markup`. The list loses `charge` and `defaultMarkup`, gains `category` and `accountLabelId` filters, and its `from` / `to` filter on `spentOn`. Record names: `SiteExpense…` (`SiteExpenseResponse`, `SiteExpenseListResponse`, `AddSiteExpensesRequest`, `NewSiteExpenseRequest`, …).
+
+**Data (approved).**
+- `project_materials` → `site_expenses`, model `SiteExpense`. `client_ref` stays: it's the phone's idempotency key.
+- Added: `spent_on` (date, required; backfilled from the day each row was added, in the company time zone), `category` (enum `materials | contractor | equipment | fees | other`, check constraint) and `account_label_id` (optional FK to `account_labels`).
+- Dropped: `site_expenses.client_price` and `projects.material_markup`. `ck_projects_execution_pricing` is rewritten without the markup.
+- `project_payment_changes.material_markup` / `previous_material_markup` stay as history: no longer written, still shown for old rows.
+- Execution `project_expenses` rows move into `site_expenses`: `label` → `name`, `amount`, `currency`, `spent_on`, `note`, `created_at` → `added_at`, `created_by_id` → `added_by_id` (the project's owner when null), `deleted_at` kept. Categories: contractor → contractor; assets, hardware → equipment; services, software → fees; travel, other → other.
+
+**Rules.**
+- Creating a project expense on an Execution project is refused (`422 expense_execution_uses_site_expenses`); the client offers no such window there.
+- Markup and client-price logic, events, validators, Proton actions and UI all go. The pricing edit becomes `{ supervisionRate?, tvaRate?, description }`; create loses `materialMarkup`; `ProjectMoneyResponse` loses `materialMarkup`.
+- Cost: `ProjectCostResponse.materials` → `siteExpenses`, and `CostSource.Material` → `SiteExpense` (`site_expense`). Costs are dated by `spentOn` for exchange rates.
+- The profit floor keeps guarding adds and edits.
+- Stored kinds don't change, so no event data migration: the activity and notification kinds (`material_*`) and the blocked-change kinds `material_add` / `material_update` keep their values. The words on screen say "expense".
+- Permissions keep their codes (`material:create`, `material:manage`). `PermissionExplanations` says "site expenses"; the seeded catalog descriptions are unchanged.
+
 ### Phase 4: payment labels, figures, supervision taken (branch `MR-Account-Figures`, off `MR-Site-Expenses`)
-**Status:** not started. Outline:
+**Status:** API built (see "Phase 4 as built" at the end); the decisions below the outline win. The client payment report PDF is not built. Outline:
 - **Data:**
   - `payments.account_label_id` (optional).
   - New table `supervision_withdrawals` (id, project_id, amount_usd, taken_on, note, created_by_id, created_at, deleted_at), recorded by super admins. It isn't a cost.
@@ -188,6 +212,33 @@ What's left on the client side:
   - a breakdown by category, payee and label.
 - **Client payment report PDF:** waits until the user agrees its layout.
 - **Approved DB changes:** the column and the table above.
+
+#### Phase 4 decisions made on the desktop (2026-10-29)
+Settled with the user or from the code. **Where they differ from the outline above, these win.**
+
+**Payment labels.** `payments.account_label_id` is optional. Recording and editing a payment accept `accountLabelId`, which must be an existing, non-archived label when newly set. Payment responses carry `accountLabel: { id, name } | null`.
+
+**Supervision taken.**
+- Endpoints: `GET /api/projects/{id}/supervision-withdrawals`, `POST` the same path with `{ amountUsd, takenOn, note? }`, and `DELETE /api/supervision-withdrawals/{id}` (soft delete via `deleted_at`).
+- Who: writes need `payment:record`, reads need `financial:view`.
+- Only on Execution client projects. Amount > 0; `takenOn` not in the future.
+- It isn't a cost. Taking more than is due is allowed and shown as "over".
+- Activity events record it and its removal.
+
+**Figures.** `GET /api/projects/{id}/account-figures` (`financial:view`, Execution client projects only) returns:
+- work price, supervision, TVA and client total;
+- received, and rest to pay (client total − received);
+- costs: site expenses, labour and total;
+- profit (the project's existing profit figure);
+- supervision due (work × rate), taken and left;
+- pocket money moved to the pocket and paid by it;
+- cash in account = received − costs − supervision taken − moved to pocket + paid by pocket. The user chose to count pocket moves.
+- rows by account label, each with received (payments with that label), spent (site expenses with it) and rest. An "Unlabelled" row also carries labour, supervision taken and pocket moves, so the rows add up to cash in account.
+- breakdowns of spending by category and by payee (`supplier`; "No payee" when empty).
+
+Amounts are in USD at dated rates; costs with no rate on their day are listed as unconverted, like the cost response.
+
+**Not built:** the client payment report PDF waits for the user to agree its layout.
 
 ## 4. Phase 2 contract (shared by API and client)
 
@@ -282,3 +333,156 @@ What's left on the client side:
   - remove the statement help articles;
   - remove the `?quote=new` link in `notificationWords.ts` for Execution.
 
+### Phase 2 decisions made on the desktop (2026-10-29)
+These settle what the contract above left open. **Where they differ from the table or shapes above, these win.**
+
+**Permissions (permissions, never roles: CLAUDE.md §0).** "Super admin only" means a permission super admins hold by default, as phase 1 did with `company_settings:manage` for account labels.
+- **Client BOQs and VOs**, every write (create, edit, copy lines into, duplicate, delete, email, record a delivery, agree, withdraw): `project:pricing_manage`.
+- **Internal drafts:** `boq:create`. Its author sees and edits their own; holders of `project:pricing_manage` see every internal draft (read, copy from, use as `fromBoqId`) and may edit or delete any.
+- **Reading** client BOQs, VOs, the price summary and the PDF: `financial:view` or `project:pricing_manage`.
+- `boq:create` keeps `statement:create`'s grants. It stays a super-admin-only default for now; a super admin can grant it to an admin per person. (Open question for the user: should admins hold it by default?)
+- BOQs exist only on Execution client projects the caller can see. A project the caller can't see is `404`; any other project is `422 boq_execution_only`.
+- BOQ writes need the project open (not completed or archived), with the error code the API already uses for writes to a closed site.
+
+**List response** (`GET /api/projects/{id}/boqs`): `internal` holds the caller's own drafts (all of them for `project:pricing_manage`). `client`, `vos` and `price` are empty / `null` without `financial:view` or `project:pricing_manage`. Newest first in each list. Needs any of `boq:create`, `financial:view`, `project:pricing_manage` (`403` otherwise).
+
+**Profit floor: no `force` field.** Agree and withdraw go through `IProfitFloor` (`BeforeAsync` before, `CheckAsync` after) like every other guarded change. New `BlockedChangeKind` values `BoqAgree` and `BoqWithdraw` (`boq_agree`, `boq_withdraw`), replayed by `BlockedChangeService`, with a description line like the others. The migration updates `ck_blocked_changes_kind` to match (implied by "exactly like lowering the fee did"). A refusal is the usual `422 profit_floor` with `blockedChangeId`; the client shows the existing force / dismiss UI. Agree has no body; withdraw takes `{ reason }`.
+
+**Work price.** Agreeing or withdrawing recomputes `Project.ProjectFee` and writes what a fee change used to write (the `project_fee_set` event, and a payment-change history row if the old fee edit wrote one; look at the fee path in `git show origin/master:ID-Indetails.api/Services/Projects/Implementation/ProjectService.cs`). The BOQ number is the reason on agreement; the given reason on withdrawal.
+
+**Storage.**
+- `boqs`: project, kind, status, number (unique, null for internal), title (≤ 120), reason (≤ 500, VOs only), author, adjustment type and value, `subtotal_usd` and `total_usd` (recomputed by `BoqRules` on every save, never taken from the client), created / updated / agreed at, agreed by, `deleted_at` (drafts are soft-deleted so a sent draft's deliveries stay on record).
+- `boq_lines`: position, code (≤ 20), description (≤ 500), quantity decimal(14,4) ≥ 0, waste rate decimal(6,4) between 0 and 1, unit (≤ 20), rate decimal(14,4). Final quantity and line total come from `BoqRules`, not stored. At most 1000 lines.
+- `boq_deliveries`: channel (the existing `DeliveryChannel`), recipient, note, `total_usd` at send time, sent at, sent by.
+- Titles default to "Client BOQ", "Internal draft" or "Variation order" when not given on create; `PUT` requires one.
+- Adjustment: `percent` between -0.99 and 1; `total` ≥ 0 except on a VO. A negative rate on a non-VO is `422 boq_negative_rate`.
+
+**Behaviour.**
+- Sending (email or a recorded delivery) works on drafts and agreed BOQs, never internal ones (`boq_internal`) or empty ones (`boq_empty`).
+- Agreeing a VO needs an agreed client BOQ (`boq_not_agreed_yet`), even for a VO made before a withdrawal.
+- Duplicate copies title (+ " (copy)"), reason, adjustment and lines into a new draft of the same kind, with a new number.
+- Activity events (`boq_created`, `boq_sent`, `boq_agreed`, `boq_agreement_withdrawn`, the kind and number in the payload, the total in the amount column) only for client BOQs and VOs. Internal drafts are private working papers and raise no events and no notifications.
+- No notifications for BOQs (no portal yet).
+- Proton: no BOQ actions yet. Every BOQ write endpoint gets a `Never(...)` entry in `ProtonCoverage` ("priced line by line in the BOQ editor"); statement actions, tools and surfaces go.
+
+**Money response after phase 2.** `ProjectMoneyResponse` loses `materialCharge`, `unsentMaterialCharge`, `unsentMaterials` (and any other material-revenue field). `revenue` = work + supervision; `revenueWithTva` = revenue + work × tvaRate. `materialMarkup` stays until phase 3.
+
+**Response shapes (C# record names fix the client's `Schemas[...]` names).**
+- `BoqSummaryResponse`: `{ id, kind, number, title, author: PersonRef, status, totalUsd, lineCount, reason, createdAt, updatedAt, agreedAt, agreedBy: PersonRef | null, lastDelivery: BoqLastDeliveryResponse | null }`
+- `BoqLastDeliveryResponse`: `{ channel, sentAt }`
+- `BoqDetailResponse`: every `BoqSummaryResponse` field + `{ projectId, adjustmentType, adjustmentValue, lines: BoqLineResponse[], subtotalUsd, adjustmentUsd, supervisionRate, supervisionUsd, tvaRate, tvaUsd, clientTotalUsd, deliveries: BoqDeliveryResponse[] }`
+- `BoqLineResponse`: `{ id, position, code, description, quantity, wasteRate, finalQuantity, unit, rate, totalUsd }`
+- `BoqDeliveryResponse`: `{ id, channel, recipient, note, totalUsd, sentAt, sentBy: PersonRef | null }`
+- `BoqListResponse`: `{ internal, client, vos: BoqSummaryResponse[], price: BoqPriceResponse | null }`
+- `BoqPriceResponse`: `{ agreedBoqUsd, agreedVosUsd, workUsd, supervisionRate, supervisionUsd, tvaRate, tvaUsd, clientTotalUsd }`
+- Requests: `CreateBoqRequest { kind, title?, reason?, fromBoqId? }`, `SaveBoqRequest { title, reason?, adjustmentType, adjustmentValue?, lines: SaveBoqLineRequest[] }`, `SaveBoqLineRequest { id?, code?, description, quantity, wasteRate, unit?, rate }`, `CopyBoqLinesRequest { fromBoqId, lineIds? }`, `WithdrawBoqAgreementRequest { reason }`, `EmailBoqRequest { to, note? }`, `RecordBoqDeliveryRequest { channel, recipient?, note? }`.
+- Enums in JSON: kind `internal | client | vo`, status `draft | agreed`, adjustmentType `none | percent | total`, channel `email | whatsapp | download`.
+
+**Client.** The API does every calculation: the editor shows final quantities and totals from the last saved `BoqDetailResponse`, and a line changed since then shows "—" until it's saved.
+
+**Pinned counts after phase 2:** tables stay 96 (three statement tables out, three BOQ tables in, the sequence table renamed); the permission count drops by one (`statement:send`); the Proton coverage counts move with the new `Never` entries and the removed statement actions.
+
+### Phase 2 as built (API, 2026-10-29)
+What the API does where the contract above was silent or differs. The client builds against this.
+
+**Permissions per endpoint** (the controller checks one of these, then the service checks the BOQ's kind):
+- `GET /api/projects/{id}/boqs`, `GET /api/boqs/{id}`: any of `boq:create`, `financial:view`, `project:pricing_manage`.
+- `POST /api/projects/{id}/boqs`, `PUT /api/boqs/{id}`, `POST …/copy-lines`, `POST …/duplicate`, `DELETE /api/boqs/{id}`: `boq:create` or `project:pricing_manage`. Then: an internal draft needs `boq:create` to be created or duplicated, and is written by its author or any `project:pricing_manage` holder; a client BOQ or VO needs `project:pricing_manage`.
+- `POST …/agree`, `POST …/withdraw-agreement`, `POST …/deliveries`, `POST …/email`: `project:pricing_manage`.
+- `GET …/pdf`: `financial:view` or `project:pricing_manage`.
+
+**Status codes.** Create and duplicate `201`; delete `204`; everything else `200`. Another author's internal draft is `404 not_found`; a client BOQ or VO the caller may not read is `403 forbidden`.
+
+**Errors** (all `422` unless noted): `boq_execution_only`, `boq_locked` (also a second agree of an agreed BOQ), `boq_already_agreed`, `boq_not_agreed_yet`, `boq_has_agreed_vos`, `boq_empty`, `boq_internal`, `boq_negative_rate`, plus two the contract didn't name: **`boq_not_agreed`** (withdrawing a BOQ that is a draft) and **`boq_price_below_zero`** (agreeing or withdrawing a VO that would take the work price below nothing). A closed site is `project_locked`. Validation is `400 validation_failed` with the field, including `reason` (required on a VO, refused on any other kind, also on save), `adjustmentValue`, `lines`, `lines[i].description|quantity|wasteRate|rate`, `lineIds`. A line id that isn't the BOQ's, or a copy of a line the source doesn't have, is `400` too. A source BOQ of another project or one the caller can't read is `404`.
+
+**Behaviour the contract left open**
+- Every write needs the project open, including recording a delivery and emailing (the email is refused before anything is sent). Reading and the PDF work on a finished site.
+- `BoqDetailResponse.deliveries` and every list are newest first. A VO's `reason` is on the summary too.
+- A duplicate of a VO needs the client BOQ agreed (`boq_not_agreed_yet`), like making one. Duplicating or creating a client BOQ never needs one to be agreed.
+- The PDF date is the day an agreed BOQ was agreed, or today for a draft; a draft is stamped DRAFT.
+- Agreeing sets the payment-history `description` to the BOQ's number, withdrawing to the reason given. The row carries the unchanged markup, TVA and supervision rates.
+- The profit floor judges only a lower price (a negative VO, a withdrawal): a rise, the first agreement included, always passes (corrected by the desktop session; the plan says a rise never needs force). Withdrawing the whole client price always needs forcing (the profit is 0 or below once nothing is agreed). `BlockedChangeResponse.summary` reads "Agreeing BQ-2026-001" or "Withdrawing the agreement of BQ-2026-001: <reason>".
+- Finalising a site no longer checks anything about materials: no `materials_not_sent`, and no `exchange_rate_missing` (the agreed amount needs no rate).
+
+**Removed from the API:** the statement endpoints; notification kind `statement_sent` (and its push target); activity kinds `statement_created`, `statement_sent`; error codes `statement_empty`, `material_stated`, `materials_not_sent`; permission `statement:send` (and `statement:create` became `boq:create`); Proton's statement tools and the `new_statement` surface. `MaterialResponse` lost `isStated` and `sentOn`, and `priceSource` is `auto` or `manual`. `ProjectMoneyResponse` lost `materialCharge`, `unsentMaterialCharge`, `unsentMaterials`, `materialProfit` and `unconvertedMaterials`.
+
+**Added beside the BOQs:** `ProjectPaymentChangeResponse.supervisionRate` and `previousSupervisionRate` (decimal fractions, null on Design rows and on rows from before supervision), filled like `tvaRate` and `previousTvaRate`.
+
+**Pinned counts after phase 2:** tables 96, permissions 61, Proton coverage Action 87, Open 25, ReadOnly 2, Never 100, notification kinds 46.
+
+### Phase 3 as built (API, 2026-10-29)
+What the API does where the decisions above were silent or differ. The client builds against this.
+
+**Routes and permissions** (the controller is `SiteExpensesController`; each route also answers under `/api/projects/{projectId}/materials`, the phone's old path, with the same shapes, until the phone moves):
+- `GET /api/projects/{id}/site-expenses`: `project:view`. `POST` (a batch, `201`): `material:create`. `PUT /{expenseId}` and `DELETE /{expenseId}` (`204`): `material:create` (own) or `material:manage` (anyone's). `PUT …/{id}/client-price` is gone (`404`).
+- `POST /api/projects/{id}/expenses` on an Execution project: `422 expense_execution_uses_site_expenses`. Design project expenses are unchanged.
+
+**Requests** (`NewSiteExpenseRequest`, `SiteExpenseEntryRequest` for `PUT`; `name` and `supplier` keep their names): `name`, `quantity`, `unit`, `unitCost`, `amount`, `supplier`, `note` as before, plus optional `currency` (`USD` or `LBP`), `spentOn` (date), `category` (`materials | contractor | equipment | fees | other`) and `accountLabelId`; `clientRef` on a batch item only. Left out on a batch item: USD, today (company time zone), `materials`, no label. Left out on a `PUT`: the expense keeps its currency, day and category, but its label is set to what the request says (none when left out). An unknown label id is `400 validation_failed` naming `items[i].accountLabelId` (or `accountLabelId` on a `PUT`); an archived label that isn't the expense's own is `422 account_label_archived`. A stray `clientPrice` (the phone's older builds) is ignored.
+
+**Responses.** `SiteExpenseResponse`: `id, name, quantity, unit, unitCost, cost, currency, supplier, note, spentOn, category, accountLabel { id, name } | null, addedAt, addedOn, addedBy, updatedAt, canEdit` (no `clientPrice`, `priceSource`, `markup`). `SiteExpenseListResponse`: `items, page, pageSize, totalCount, matching, all, types, suppliers, addedBy, canAdd` (no `defaultMarkup`). Totals are `SiteExpenseTotalsResponse { count, cost, byCurrency[] }` (no `charge`): `cost` is the total of the USD rows, `byCurrency` is `[{ currency, total }]` for every currency, since LBP and USD are never added together (the same for `types[].cost`). Filters: `type`, `supplier`, `addedById`, `category`, `accountLabelId`, `from`/`to` (the day **spent**), `search`, `page`, `pageSize`. The list stays ordered by when the expense was recorded, newest first.
+
+**Pricing and money.**
+- `PUT /api/projects/{id}/pricing` takes `{ supervisionRate?, tvaRate?, description }` (`projectFee` is still refused). A change that changes neither rate is `400 validation_failed` with the key **`supervisionRate`** (the first of the two). Create no longer takes `materialMarkup` (ignored if sent); `supervisionRate` on create still needs `project:pricing_manage`.
+- `ProjectMoneyResponse` loses `materialMarkup`. `ProjectCostResponse.materials` is now `siteExpenses`; `UnconvertedCostResponse.source` is `site_expense` for them. The period and company responses (`PeriodCostResponse`, the monthly rows, the company overview, `site-summary`, `me/site-records`) keep their JSON name `materials` for the same cost. The Financials CSV column is headed "Site expenses".
+- `ProjectPaymentChangeResponse.materialMarkup` and `previousMaterialMarkup` stay (null on rows written from now on).
+- A site expense's cost is dated by `spentOn` for exchange rates, so the cost-by-week figures and the project cost follow it.
+
+**Stored kinds kept.** Activity kinds `material_added`, `material_updated`, `material_removed` (subject type `material`), notification kind `materials_added` (push target section `materials`), blocked-change kinds `material_add` and `material_update`. `material_markup_set` and `material_priced` are no longer written; older rows stay in the feed (still grouped as money, payloads still hidden without `financial:view`). New texts say "expense": the push ("Expenses added"), the blocked change summaries ("1 expense: Crane hire", "Expense change: Crane hire") and the permission explanations.
+
+**Migration `SiteExpenses`.** `project_materials` is rebuilt as `site_expenses` (rows keep their ids); `spent_on` is the day each was added in the company time zone; Execution `project_expenses` rows with an amount above zero move over (mapping as above; no author becomes the project owner) and are deleted from `project_expenses`; `projects.material_markup` and `ck_projects_material_markup_range` are dropped, and `ck_projects_execution_money_fields` (the plan called it `ck_projects_execution_pricing`) is rewritten without the markup. Table count stays 96.
+
+**Proton.** `propose_add_materials` and `propose_material_step` became `propose_add_site_expenses` and `propose_site_expense_step` (add, update, delete: no price step). `propose_project_money` is Design revenue only; `Projects.UpdatePricing` is a `Never` entry and `SiteExpenses.Add/Update/Delete` replace `Materials.*` in `ProtonCoverage`. `propose_add_expense` is for Design only and refuses a site. The materials sheet form (`ProtonForm.Materials`) keeps its name and fields. **Pinned counts after phase 3:** tables 96, permissions 61, Proton coverage Action 85, Open 25, ReadOnly 2, Never 101, Prefill 7, Own 11, notification kinds 46.
+
+**Load-test tool and k6 scripts** use `/site-expenses`, the new request and cost-source names, and no markup; the site invoices are a quarter of the fee.
+
+### Phase 4 as built (API, 2026-10-29)
+What the API does where the decisions above were silent or differ. The client builds against this. Migration `AccountFigures` (additive: `payments.account_label_id` and the `supervision_withdrawals` table; nothing is backfilled).
+
+**Payment labels**
+- `POST /api/projects/{id}/payments` takes an optional `accountLabelId`. Every payment response (`PaymentResponse`: record, get, list, apply, void) gains `accountLabel: { id, name } | null`.
+- **Changing a label after recording** (the decision text says "editing", but payments are never edited): `PUT /api/payments/{id}/label` `{ accountLabelId }` (`payment:record`) sets, changes or clears (`null` or left out) the label of a live payment and answers the `PaymentResponse` (`200`). Nothing else about a payment can change.
+- Errors: a label that doesn't exist or an id of 0 or less is `400 validation_failed` with the key `accountLabelId`; an archived label that the payment doesn't already have is `422 account_label_archived`; a voided payment is `422 payment_already_voided`; a payment of a domain the caller can't see is `404`; no `payment:record` is `403`. Setting the label it already has is a `200` with no event.
+- Event `payment_label_set` (billing group): payload `{ label, previousLabel }`, the names or `null`.
+
+**Supervision taken**
+- `GET /api/projects/{id}/supervision-withdrawals` (`financial:view`) returns `SupervisionWithdrawalResponse[]`, the latest `takenOn` first (the one recorded last first on the same day); removed ones are left out.
+- `POST /api/projects/{id}/supervision-withdrawals` (`payment:record`) `{ amountUsd, takenOn, note? }` returns `201` with a `SupervisionWithdrawalResponse`.
+- `DELETE /api/supervision-withdrawals/{id}` (`payment:record`) returns `204`; soft delete, a second call is `404`.
+- `SupervisionWithdrawalResponse`: `{ id, amountUsd, takenOn, note, createdBy: { id, name } | null, createdAt }` (`takenOn` is `yyyy-MM-dd`; `createdBy` is always set today).
+- Errors: `422 not_for_this_domain` for a project that is not an Execution client site, `404` for a project or withdrawal in a domain the caller can't see, (a completed or archived site still takes and removes them: the user's call, as nothing frozen moves), `400 taken_date_in_future` (key `takenOn`) for a day after today in the company time zone, `400 validation_failed` for an amount of 0 or less, with more than 2 decimals or above 999,999,999,999.99 (key `amountUsd`), a missing or out-of-range day (2000-2100, key `takenOn`) or a note over 500 characters (key `note`). Reads and writes are separate permissions: `payment:record` alone cannot read the list, and `financial:view` alone cannot write.
+- Not a cost: no profit floor, no change to `money.profit`, `money.cost` or `money.cashProfit`. More than is due is accepted.
+- Events: `supervision_taken` (payload `{ takenOn, note }`) and `supervision_withdrawal_removed` (payload `{ takenOn }`), money group, subject type `supervision_withdrawal`, USD in the amount column. The feed hides the amount and the payload without `financial:view`.
+
+**Account figures** `GET /api/projects/{id}/account-figures` (`financial:view`; `422 not_for_this_domain` on a Design project; `404` for a domain the caller can't see) returns an `AccountFiguresResponse`, all USD:
+```
+{ workUsd, supervisionRate, supervisionUsd, tvaRate, tvaUsd, clientTotalUsd,
+  receivedUsd, restToPayUsd,
+  costs: { siteExpensesUsd, groundLabourUsd, staffUsd, otherUsd, totalUsd },
+  profitUsd,
+  supervision: { dueUsd, takenUsd, leftUsd },
+  pocket: { movedToPocketUsd, paidByPocketUsd },
+  cashInAccountUsd,
+  byLabel: [{ accountLabel: { id, name } | null, receivedUsd, spentUsd, otherUsd, restUsd }],
+  byCategory: [{ category, spentUsd }],
+  byPayee: [{ payee: string | null, spentUsd }],
+  unconverted: [{ source, currency, amount }] }
+```
+- Records (C# names fix the client's `Schemas[...]`): `AccountFiguresResponse`, `AccountCostsResponse`, `AccountSupervisionResponse`, `AccountPocketResponse`, `AccountLabelRowResponse`, `AccountCategoryRowResponse`, `AccountPayeeRowResponse`, `UnconvertedCostResponse` (already in the project money), `AccountLabelRefResponse` (`{ id, name }`), `SupervisionWithdrawalResponse`. Enums in JSON: `category` is `materials | contractor | equipment | fees | other`; `unconverted[].source` is a cost source such as `site_expense` (the same as `money.cost.unconverted`).
+- `workUsd` is the work price; `supervisionUsd` = work x `supervisionRate`; `tvaUsd` = work x `tvaRate`; `clientTotalUsd` = work + supervision + TVA (= `money.revenueWithTva`). `receivedUsd` counts live payments with their TVA; `restToPayUsd` = client total - received and is **negative when the client paid ahead**.
+- `costs` are `money.cost`: `staffUsd` is its `labour`, `otherUsd` its `expenses` (0 on a site). `profitUsd` is `money.profit` (pocket money counted). `supervision.dueUsd` = `supervisionUsd`, `leftUsd` = due - taken, **negative when over-taken**.
+- `cashInAccountUsd` = received - `costs.totalUsd` - supervision taken - moved to the pocket + paid by it. It can be negative.
+- `byLabel`: one row per label with a live payment or a site expense (archived labels included, by name), in the labels' order (the Settings order), then **always** the unlabelled row last (`accountLabel: null`), even when it is all zeros. A label row: `receivedUsd` = its payments, `spentUsd` = its site expenses, `otherUsd` = 0. The unlabelled row: `receivedUsd` = payments with no label, `spentUsd` = every cost no label holds (unlabelled site expenses, ground labour, staff, other), `otherUsd` = supervision taken + moved to the pocket - paid by it. `restUsd` = received - spent - other. **The rows' `restUsd` always add up to `cashInAccountUsd`** (and their `receivedUsd` to `receivedUsd`, their `spentUsd` to `costs.totalUsd`).
+- `byCategory` and `byPayee`: site expenses with a rate on their day, largest first (ties: category order above; payee by name, then "no payee"). Only categories and payees with spend appear. A payee groups suppliers by their text trimmed, with single spaces, in lower case, shown as last typed; `payee: null` is expenses with no supplier (the client shows "No payee").
+- `unconverted`: costs with no exchange rate on their day, in their own currency, equal to `money.cost.unconverted`. They are left out of every sum, including `byCategory`, `byPayee` and the label rows.
+
+**Decisions where the plan was silent**
+- Payments have no edit endpoint, so "editing" a payment's label is `PUT /api/payments/{id}/label`. A relabel writes an event; a no-op writes nothing; a voided payment is refused.
+- The withdrawal list is a plain array (no wrapper, no totals); the totals are in the account figures.
+- `not_for_this_domain` (not a new code) refuses supervision taken and account figures on non-Execution projects; the one new error code is `taken_date_in_future`.
+- `byLabel` always ends with the unlabelled row; received comes from the payments themselves (so the rows add up by construction), and the unlabelled row's cost is the project's total cost less the labelled site expenses.
+- Supervision events carry the day and the note in the payload, hidden without `financial:view`.
+- The relabel endpoint and the two supervision endpoints are `Never` entries in the Proton coverage; `Payments.Record` (an `Action`) keeps its tool and does not offer a label yet.
+
+**Not built:** the client payment report PDF, which waits for the user to agree its layout.
+
+**Pinned counts after phase 4:** tables 97, permissions 61 (no new permission), Proton coverage Action 85, Open 25, ReadOnly 2, Never 104, Prefill 7, Own 11, notification kinds 46.

@@ -118,7 +118,7 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
     public async Task<IReadOnlyList<SiteRecorder>> SiteRecordersAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
     {
         var ids = projectIds.ToList();
-        var materials = await db.ProjectMaterials.AsNoTracking()
+        var expenses = await db.SiteExpenses.AsNoTracking()
             .Where(m => ids.Contains(m.ProjectId) && m.DeletedAt == null)
             .GroupBy(m => new { m.ProjectId, m.AddedById })
             .Select(g => new { g.Key.ProjectId, UserId = g.Key.AddedById, LastAt = g.Max(m => m.AddedAt) })
@@ -129,7 +129,7 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
             .Select(g => new { g.Key.ProjectId, UserId = g.Key.SubmittedById, LastAt = g.Max(w => w.SubmittedAt) })
             .ToListAsync(cancellationToken);
 
-        var recorded = materials.Concat(labour)
+        var recorded = expenses.Concat(labour)
             .GroupBy(r => (r.ProjectId, r.UserId))
             .Select(g => (g.Key.ProjectId, g.Key.UserId, LastAt: g.Max(r => r.LastAt)))
             .ToList();

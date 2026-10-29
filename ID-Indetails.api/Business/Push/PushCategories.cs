@@ -60,7 +60,6 @@ public static class PushCategories
         [NotificationKinds.ChangeBlocked] = NotificationCategory.Money,
         [NotificationKinds.ProfitLow] = NotificationCategory.Money,
         [NotificationKinds.ProfitAtZero] = NotificationCategory.Money,
-        [NotificationKinds.StatementSent] = NotificationCategory.Money,
         [NotificationKinds.ProjectClosed] = NotificationCategory.Money,
         [NotificationKinds.ProjectCostHigh] = NotificationCategory.Money,
         [NotificationKinds.ClientAdded] = NotificationCategory.Money,

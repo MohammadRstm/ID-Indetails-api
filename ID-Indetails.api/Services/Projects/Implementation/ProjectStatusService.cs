@@ -88,22 +88,8 @@ public sealed class ProjectStatusService(
     {
         if (project.DomainCode == DomainCodes.Execution)
         {
-            // The agreed amount is frozen here, so it must include every material: each one sent to the client.
+            // The agreed amount, the work price plus supervision, is frozen here.
             var money = await finance.GetAsync(project, cancellationToken);
-            if (money.UnconvertedMaterials > 0)
-            {
-                throw new BusinessRuleException(
-                    ErrorCodes.ExchangeRateMissing,
-                    $"{money.UnconvertedMaterials} material(s) have no exchange rate for the day they were added. Add the rate, then finalise.");
-            }
-
-            if (money.UnsentMaterials > 0)
-            {
-                throw new BusinessRuleException(
-                    ErrorCodes.MaterialsNotSent,
-                    $"{money.UnsentMaterials} material{(money.UnsentMaterials == 1 ? " hasn't" : "s haven't")} been sent to the client on a statement yet. Send a statement first: then they count in what the client owes.");
-            }
-
             project.Revenue = money.Summary.Revenue;
         }
 

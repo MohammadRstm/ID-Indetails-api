@@ -12,10 +12,10 @@ public class CompanySettings
 
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>Printed on the letterhead of invoices and statements.</summary>
+    /// <summary>Printed on the letterhead of invoices, quotes and BOQs.</summary>
     public string? Address { get; set; }
 
-    /// <summary>Printed on the letterhead of invoices and statements, e.g. indetails.com.</summary>
+    /// <summary>Printed on the letterhead of invoices, quotes and BOQs, e.g. indetails.com.</summary>
     public string? Website { get; set; }
 
     public long? LogoFileId { get; set; }

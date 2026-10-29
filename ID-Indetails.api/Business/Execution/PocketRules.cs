@@ -6,8 +6,8 @@ namespace ID_Indetails.api.Business.Execution;
 
 /// <summary>
 /// Execution's pocket money: a super admin moves part of a site's money in by hand, and a site that runs short asks
-/// for money back, which a super admin approves or denies. A site's money here is its profit counting the materials not
-/// sent to the client yet (they are agreed, just not billed), so moving money never takes a site to zero or below.
+/// for money back, which a super admin approves or denies. A site's money here is its profit on its agreed amount (the
+/// work price plus supervision), so moving money never takes a site to zero or below.
 /// </summary>
 public static class PocketRules
 {
@@ -15,12 +15,6 @@ public static class PocketRules
 
     /// <summary>The margin a request's suggestion brings a site back to; below it a site is getting close to zero.</summary>
     public const decimal TargetMargin = 0.10m;
-
-    /// <summary>What the site is agreed to earn: its revenue so far and the materials not sent yet, at client prices.</summary>
-    public static decimal AgreedOf(decimal revenue, decimal? unsentCharge) => revenue + (unsentCharge ?? 0);
-
-    /// <summary>Its profit on that agreed amount, pocket money counted.</summary>
-    public static decimal ProfitOf(decimal profit, decimal? unsentCharge) => profit + (unsentCharge ?? 0);
 
     /// <summary>What brings the site back to <see cref="TargetMargin"/> on its agreed amount; nothing when it is there already.</summary>
     public static decimal Suggest(decimal agreed, decimal profit)

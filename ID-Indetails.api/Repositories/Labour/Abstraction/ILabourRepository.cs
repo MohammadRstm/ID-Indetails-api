@@ -36,7 +36,7 @@ public interface ILabourRepository
 
     /// <summary>
     /// Active Execution sites with no report for <paramref name="weekStart"/>, each with whichever of
-    /// <paramref name="reporterIds"/> added a material or submitted a labour week on it since <paramref name="since"/>.
+    /// <paramref name="reporterIds"/> added an expense or submitted a labour week on it since <paramref name="since"/>.
     /// </summary>
     Task<IReadOnlyList<SiteToReport>> UnreportedSitesAsync(
         IReadOnlyCollection<long> reporterIds,

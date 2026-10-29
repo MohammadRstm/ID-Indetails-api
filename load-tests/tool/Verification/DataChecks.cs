@@ -49,25 +49,27 @@ public static class DataChecks
               JOIN project_requirements r ON r.id = a.requirement_id JOIN projects p ON p.id = r.project_id
             WHERE u.domain_code IS NOT NULL AND u.domain_code <> p.domain_code
             """),
-        ("Materials, labour and statements belong to Execution projects", """
-            SELECT (SELECT COUNT(*) FROM project_materials m JOIN projects p ON p.id = m.project_id WHERE p.domain_code <> 'execution')
+        ("Site expenses, labour and BOQs belong to Execution projects, and project expenses to the others", """
+            SELECT (SELECT COUNT(*) FROM site_expenses m JOIN projects p ON p.id = m.project_id WHERE p.domain_code <> 'execution')
+                 + (SELECT COUNT(*) FROM project_expenses x JOIN projects p ON p.id = x.project_id WHERE p.domain_code = 'execution')
                  + (SELECT COUNT(*) FROM labour_weeks l JOIN projects p ON p.id = l.project_id WHERE p.domain_code <> 'execution')
-                 + (SELECT COUNT(*) FROM client_statements s JOIN projects p ON p.id = s.project_id WHERE p.domain_code <> 'execution')
+                 + (SELECT COUNT(*) FROM boqs b JOIN projects p ON p.id = b.project_id WHERE p.domain_code <> 'execution')
             """),
-        ("No statement lists a removed material", """
-            SELECT COUNT(*) FROM client_statement_lines l JOIN project_materials m ON m.id = l.material_id WHERE m.deleted_at IS NOT NULL
+        ("An agreed client BOQ is the only one of its project, and a site's price is what the agreed BOQs add up to", """
+            SELECT (SELECT COUNT(*) FROM (SELECT project_id FROM boqs WHERE kind = 'client' AND status = 'agreed' AND deleted_at IS NULL
+                                           GROUP BY project_id HAVING COUNT(*) > 1) many)
+                 + (SELECT COUNT(*) FROM projects p
+                    WHERE p.domain_code = 'execution'
+                      AND p.project_fee <> COALESCE((SELECT SUM(b.total_usd) FROM boqs b
+                                                     WHERE b.project_id = p.id AND b.status = 'agreed' AND b.deleted_at IS NULL), 0))
             """),
-        ("Materials are recorded by Execution people or super admins", """
-            SELECT COUNT(*) FROM project_materials m JOIN users u ON u.id = m.added_by_id WHERE u.domain_code = 'design'
+        ("Site expenses are recorded by Execution people or super admins", """
+            SELECT COUNT(*) FROM site_expenses m JOIN users u ON u.id = m.added_by_id WHERE u.domain_code = 'design'
             """),
         ("No work was logged on a project after it was completed", """
             SELECT COUNT(*) FROM work_entries w JOIN projects p ON p.id = w.project_id
             WHERE w.deleted_at IS NULL AND p.status IN ('completed', 'archived') AND p.completed_at IS NOT NULL
               AND w.created_at > p.completed_at
-            """),
-        ("A statement lists only its own project's materials", """
-            SELECT COUNT(*) FROM client_statement_lines l JOIN client_statements s ON s.id = l.statement_id
-              JOIN project_materials m ON m.id = l.material_id WHERE m.project_id <> s.project_id
             """),
         ("Invoices and payments are for their project's client", """
             SELECT (SELECT COUNT(*) FROM invoices i JOIN projects p ON p.id = i.project_id WHERE NOT (i.client_id <=> p.client_id))
@@ -85,12 +87,12 @@ public static class DataChecks
             LEFT JOIN invoice_sequences s ON s.domain_code = n.domain AND s.year = n.yr
             WHERE n.issued <> n.last OR NOT (s.last_number <=> n.last)
             """),
-        ("Statement numbers run without gaps per year, and the sequence holds the last", """
+        ("BOQ numbers run without gaps per prefix and year, and the sequence holds the last", """
             SELECT COUNT(*) FROM (
-              SELECT CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(number, '-', -2), '-', 1) AS UNSIGNED) AS yr,
+              SELECT SUBSTRING_INDEX(number, '-', 1) AS prefix, CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(number, '-', -2), '-', 1) AS UNSIGNED) AS yr,
                      COUNT(*) AS made, MAX(CAST(SUBSTRING_INDEX(number, '-', -1) AS UNSIGNED)) AS last
-              FROM client_statements GROUP BY yr) n
-            LEFT JOIN statement_sequences s ON s.year = n.yr
+              FROM boqs WHERE number IS NOT NULL GROUP BY prefix, yr) n
+            LEFT JOIN boq_sequences s ON s.prefix = n.prefix AND s.year = n.yr
             WHERE n.made <> n.last OR NOT (s.last_number <=> n.last)
             """),
         ("Live payments never come to more than their invoice", """

@@ -46,7 +46,6 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         RuleFor(x => x.OwnerId).GreaterThan(0).When(x => x.OwnerId is not null).WithMessage("Owner is invalid.");
         RuleFor(x => x.Revenue).Amount("Revenue");
         RuleFor(x => x.ProjectFee).WorkPriceNotTyped();
-        RuleFor(x => x.MaterialMarkup).MaterialMarkup();
         RuleFor(x => x.SupervisionRate).SupervisionRate();
         RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.LabourDefaults!).SetValidator(new SetLabourDefaultsRequestValidator()).When(x => x.LabourDefaults is not null);
@@ -92,7 +91,6 @@ public sealed class UpdateProjectPricingRequestValidator : AbstractValidator<Upd
     public UpdateProjectPricingRequestValidator()
     {
         RuleFor(x => x.ProjectFee).WorkPriceNotTyped();
-        RuleFor(x => (decimal?)x.MaterialMarkup).MaterialMarkup().OverridePropertyName("MaterialMarkup");
         RuleFor(x => x.SupervisionRate).SupervisionRate();
         RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.Description).ClientText("The description", ProjectRules.MaxPaymentDescriptionLength, required: true);
@@ -115,11 +113,6 @@ internal static class ProjectRuleExtensions
     public static IRuleBuilderOptions<T, string?> ProjectTint<T>(this IRuleBuilder<T, string?> rule)
         => rule.Matches("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
             .WithMessage("Tint must be a colour like #1F6FEB.");
-
-    public static IRuleBuilderOptions<T, decimal?> MaterialMarkup<T>(this IRuleBuilder<T, decimal?> rule)
-        => rule
-            .Must(v => v is null || v is >= 0 and <= 5).WithMessage("Material markup must be between 0 and 5 (0% to 500%).")
-            .Must(v => v is null || decimal.Round(v.Value, 4) == v).WithMessage("Material markup can have at most 4 decimals.");
 }
 
 public sealed class ProjectReportQueryValidator : AbstractValidator<ProjectReportQuery>

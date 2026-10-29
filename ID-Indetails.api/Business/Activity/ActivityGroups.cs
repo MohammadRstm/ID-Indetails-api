@@ -29,6 +29,8 @@ public static class ActivityGroups
         [ActivityEventKinds.LabourWeekSubmitted] = ActivityGroup.Money,
         [ActivityEventKinds.LabourWeekUpdated] = ActivityGroup.Money,
         [ActivityEventKinds.LabourDefaultsSet] = ActivityGroup.Money,
+        [ActivityEventKinds.SupervisionTaken] = ActivityGroup.Money,
+        [ActivityEventKinds.SupervisionWithdrawalRemoved] = ActivityGroup.Money,
 
         [ActivityEventKinds.BillingSettingsUpdated] = ActivityGroup.Billing,
         [ActivityEventKinds.ExchangeRateSet] = ActivityGroup.Billing,
@@ -41,8 +43,11 @@ public static class ActivityGroups
         [ActivityEventKinds.PaymentRecorded] = ActivityGroup.Billing,
         [ActivityEventKinds.PaymentApplied] = ActivityGroup.Billing,
         [ActivityEventKinds.PaymentVoided] = ActivityGroup.Billing,
-        [ActivityEventKinds.StatementCreated] = ActivityGroup.Billing,
-        [ActivityEventKinds.StatementSent] = ActivityGroup.Billing,
+        [ActivityEventKinds.PaymentLabelSet] = ActivityGroup.Billing,
+        [ActivityEventKinds.BoqCreated] = ActivityGroup.Billing,
+        [ActivityEventKinds.BoqSent] = ActivityGroup.Billing,
+        [ActivityEventKinds.BoqAgreed] = ActivityGroup.Billing,
+        [ActivityEventKinds.BoqAgreementWithdrawn] = ActivityGroup.Billing,
 
         [ActivityEventKinds.ProjectCreated] = ActivityGroup.Projects,
         [ActivityEventKinds.ProjectUpdated] = ActivityGroup.Projects,

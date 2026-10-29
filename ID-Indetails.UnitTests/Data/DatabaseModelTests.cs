@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_97_tables_with_snake_case_names()
+    public void Model_has_all_98_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(97);
+        tables.Count.ShouldBe(98);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -32,7 +32,7 @@ public class DatabaseModelTests
         {
             "client_contacts", "invoice_lines", "invoice_deliveries", "quote_deliveries", "labour_week_days",
             "requirement_assignees", "overhead_amounts", "message_mentions", "message_attachments",
-            "user_schedule_days", "hour_excuse_days", "client_statement_lines", "client_statement_deliveries",
+            "user_schedule_days", "hour_excuse_days", "boq_lines", "boq_deliveries",
             // a saved Proton chat's messages are part of it: deleting the chat (by its owner, or for retention) deletes them
             "proton_conversation_messages",
             // a project file's comments go with it when a file clients never saw is deleted
@@ -111,6 +111,7 @@ public class DatabaseModelTests
         CheckNames<Conversation>().ShouldContain("ck_conversations_shape");
         CheckNames<ProjectMeeting>().ShouldContain("ck_project_meetings_project_or_domain");
         CheckNames<LabourWeek>().ShouldContain("ck_labour_weeks_starts_on_monday");
+        CheckNames<SiteExpense>().ShouldContain("ck_site_expenses_category");
         CheckNames<ProjectFileComment>().ShouldContain("ck_project_file_comments_fixed");
         CheckNames<PortalComment>().ShouldContain("ck_portal_comments_body_unless_deleted");
         CheckNames<PortalMessage>().ShouldContain("ck_portal_messages_body_unless_deleted");
@@ -121,7 +122,7 @@ public class DatabaseModelTests
     {
         Entity<WorkEntry>().FindProperty(nameof(WorkEntry.DurationMinutes))!.GetComputedColumnSql()
             .ShouldBe("TIMESTAMPDIFF(MINUTE, `started_at`, `ended_at`)");
-        Entity<ProjectMaterial>().FindProperty(nameof(ProjectMaterial.Total))!.GetComputedColumnSql()
+        Entity<SiteExpense>().FindProperty(nameof(SiteExpense.Total))!.GetComputedColumnSql()
             .ShouldBe("CASE WHEN `quantity` > 0 AND `unit_cost` > 0 THEN ROUND(`quantity` * `unit_cost`, 2) ELSE `amount` END");
         Entity<LabourWeekDay>().FindProperty(nameof(LabourWeekDay.Cost))!.GetComputedColumnSql()
             .ShouldBe("`workers` * `daily_pay`");

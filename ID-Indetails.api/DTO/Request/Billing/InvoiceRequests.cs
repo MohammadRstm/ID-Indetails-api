@@ -100,7 +100,7 @@ public sealed record RecordDeliveryRequest
     public string? Note { get; init; }
 }
 
-/// <summary>Emails an invoice or statement to the client with its PDF attached.</summary>
+/// <summary>Emails an invoice or quote to the client with its PDF attached.</summary>
 public sealed record EmailDocumentRequest
 {
     public string To { get; init; } = string.Empty;

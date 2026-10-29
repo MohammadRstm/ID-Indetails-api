@@ -6,7 +6,7 @@ public sealed record UpdateCompanySettingsRequest
 {
     public string Name { get; init; } = string.Empty;
 
-    /// <summary>For the letterhead of invoices and statements; empty clears it.</summary>
+    /// <summary>For the letterhead of invoices, quotes and BOQs; empty clears it.</summary>
     public string? Address { get; init; }
 
     /// <summary>A web address such as indetails.com; empty clears it.</summary>
