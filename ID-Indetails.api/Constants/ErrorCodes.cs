@@ -204,6 +204,9 @@ public static class ErrorCodes
     /// <summary>422. An archived account label can't be newly picked.</summary>
     public const string AccountLabelArchived = "account_label_archived";
 
+    /// <summary>400. Supervision can't be recorded as taken on a day that hasn't come.</summary>
+    public const string TakenDateInFuture = "taken_date_in_future";
+
     /// <summary>422. An Execution site keeps its costs as site expenses, not project expenses.</summary>
     public const string ExpenseExecutionUsesSiteExpenses = "expense_execution_uses_site_expenses";
 

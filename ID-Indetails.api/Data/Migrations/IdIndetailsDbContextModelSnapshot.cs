@@ -2080,6 +2080,10 @@ namespace ID_Indetails.api.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<long?>("AccountLabelId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_label_id");
+
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
@@ -2176,6 +2180,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_payments");
+
+                    b.HasIndex("AccountLabelId")
+                        .HasDatabaseName("ix_payments_account_label_id");
 
                     b.HasIndex("ClientId")
                         .HasDatabaseName("ix_payments_client_id");
@@ -5995,6 +6002,62 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.SupervisionWithdrawal", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("AmountUsd")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("amount_usd");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateOnly>("TakenOn")
+                        .HasColumnType("date")
+                        .HasColumnName("taken_on");
+
+                    b.HasKey("Id")
+                        .HasName("pk_supervision_withdrawals");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_supervision_withdrawals_created_by_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_supervision_withdrawals_project_id");
+
+                    b.ToTable("supervision_withdrawals", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_supervision_withdrawals_amount_positive", "`amount_usd` > 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.Team", b =>
                 {
                     b.Property<long>("Id")
@@ -7703,6 +7766,12 @@ namespace ID_Indetails.api.Data.Migrations
 
             modelBuilder.Entity("ID_Indetails.api.Models.Payment", b =>
                 {
+                    b.HasOne("ID_Indetails.api.Models.AccountLabel", "AccountLabel")
+                        .WithMany()
+                        .HasForeignKey("AccountLabelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_payments_account_labels_account_label_id");
+
                     b.HasOne("ID_Indetails.api.Models.Client", "Client")
                         .WithMany()
                         .HasForeignKey("ClientId")
@@ -7734,6 +7803,8 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("VoidedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_payments_users_voided_by_id");
+
+                    b.Navigation("AccountLabel");
 
                     b.Navigation("Client");
 
@@ -8567,6 +8638,25 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("UploadedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_files_users_uploaded_by_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.SupervisionWithdrawal", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_supervision_withdrawals_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_supervision_withdrawals_projects_project_id");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Team", b =>

@@ -271,6 +271,45 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
         used.Number.ShouldBe(1451); // row is referenced by a foreign key
     }
 
+    [Fact]
+    public async Task A_payment_label_must_be_an_account_label_and_a_used_label_cannot_be_deleted()
+    {
+        var owner = await ActiveUserAsync("execution");
+        var client = await ClientAsync("execution");
+        var site = await SiteProjectAsync(owner);
+        var label = await InsertAsync($"INSERT INTO account_labels (name, position, created_at) VALUES ('Schema {Guid.NewGuid():N}', 98, {Now})");
+        string Payment(string accountLabelId) =>
+            "INSERT INTO payments (project_id, client_id, account_label_id, amount, currency, fx_rate, amount_usd, received_on, method, recorded_at, is_initial) " +
+            $"VALUES ({site}, {client}, {accountLabelId}, 1000, 'USD', 1, 1000, '2026-09-28', 'bank', {Now}, 0)";
+
+        var unknown = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(Payment("999999999")));
+        unknown.Number.ShouldBe(1452); // no such parent row
+
+        await InsertAsync(Payment(label.ToString()));
+        await InsertAsync(Payment("NULL"));
+        var used = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync($"DELETE FROM account_labels WHERE id = {label}"));
+        used.Number.ShouldBe(1451); // row is referenced by a foreign key
+    }
+
+    [Fact]
+    public async Task Supervision_taken_is_a_positive_amount_of_a_site()
+    {
+        var owner = await ActiveUserAsync("execution");
+        var site = await SiteProjectAsync(owner);
+        string Withdrawal(string amount) =>
+            "INSERT INTO supervision_withdrawals (project_id, amount_usd, taken_on, created_by_id, created_at) " +
+            $"VALUES ({site}, {amount}, '2026-09-28', {owner}, {Now})";
+
+        (await InsertAsync(Withdrawal("1500.50"))).ShouldBeGreaterThan(0);
+        await ShouldViolateAsync(Withdrawal("0"), "ck_supervision_withdrawals_amount_positive");
+        await ShouldViolateAsync(Withdrawal("-10"), "ck_supervision_withdrawals_amount_positive");
+
+        var project = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(
+            "INSERT INTO supervision_withdrawals (project_id, amount_usd, taken_on, created_by_id, created_at) " +
+            $"VALUES (999999999, 10, '2026-09-28', {owner}, {Now})"));
+        project.Number.ShouldBe(1452); // no such parent row
+    }
+
     // ---------- billing ----------
 
     [Fact]
