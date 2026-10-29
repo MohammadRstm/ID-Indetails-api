@@ -141,3 +141,19 @@ internal static class CompanyRuleExtensions
             .Must(n => !string.IsNullOrWhiteSpace(n)).WithMessage("Name is required.")
             .MaximumLength(150).WithMessage("Name must be at most 150 characters.");
 }
+
+public sealed class AccountLabelRequestValidator : AbstractValidator<AccountLabelRequest>
+{
+    public AccountLabelRequestValidator()
+    {
+        RuleFor(x => x.Name).ClientText("Name", AccountLabelRules.MaxName, required: true);
+    }
+}
+
+public sealed class AccountLabelOrderRequestValidator : AbstractValidator<AccountLabelOrderRequest>
+{
+    public AccountLabelOrderRequestValidator()
+    {
+        RuleFor(x => x.Ids).NotNull().WithMessage("List the labels in their new order.");
+    }
+}

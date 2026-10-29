@@ -140,6 +140,9 @@ public static class ErrorCodes
     /// <summary>422. Internal work, or a project with no agreed amount yet, can't be quoted.</summary>
     public const string QuoteNotPossible = "quote_not_possible";
 
+    /// <summary>422. Execution projects have no quotes: their price is built from BOQs.</summary>
+    public const string QuoteNotForExecution = "quote_not_for_execution";
+
     /// <summary>422. The change would take the project's profit to zero or below; it was kept for forcing (see <c>blockedChangeId</c>).</summary>
     public const string ProfitFloor = "profit_floor";
 
@@ -162,6 +165,12 @@ public static class ErrorCodes
     public const string OverheadGroupNotFound = "overhead_group_not_found";
     public const string OverheadGroupExists = "overhead_group_exists";
     public const string OverheadGroupInUse = "overhead_group_in_use";
+
+    /// <summary>409. Another account label already has this name, whatever its case.</summary>
+    public const string AccountLabelTaken = "account_label_taken";
+
+    /// <summary>422. The account labels changed since the new order was made.</summary>
+    public const string AccountLabelOrderStale = "account_label_order_stale";
 
     // Payroll
     public const string SalaryMonthInFuture = "salary_month_in_future";

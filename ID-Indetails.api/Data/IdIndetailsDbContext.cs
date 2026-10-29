@@ -103,6 +103,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     // Company layer
     public DbSet<OverheadGroup> OverheadGroups => Set<OverheadGroup>();
+    public DbSet<AccountLabel> AccountLabels => Set<AccountLabel>();
 
     public DbSet<OverheadItem> OverheadItems => Set<OverheadItem>();
     public DbSet<OverheadAmount> OverheadAmounts => Set<OverheadAmount>();

@@ -33,23 +33,30 @@ public sealed record ProjectMoneyResponse
     public string Currency { get; init; } = "USD";
 
     /// <summary>
-    /// Design: the agreed revenue. Execution: the agreed amount (material client prices plus the fee),
-    /// calculated live while the project is open and frozen when it is finalised.
+    /// Design: the agreed revenue. Execution: the agreed amount (work price plus supervision, plus the client prices of
+    /// the materials sent for now), calculated live while the project is open and frozen when it is finalised.
     /// </summary>
     public decimal Revenue { get; init; }
 
     /// <summary>Revenue, fee and markup can't change until the project is reopened.</summary>
     public bool IsLocked { get; init; }
 
-    /// <summary>TVA on what the client pays, 0.15 = 15%. Revenue and profit are net of it.</summary>
+    /// <summary>TVA on what the client pays for the work, 0.11 = 11%. Revenue and profit are net of it.</summary>
     public decimal TvaRate { get; init; }
 
-    /// <summary>The agreed payment (Design) or agreed amount before materials (Execution, the fee), TVA included.</summary>
+    /// <summary>Execution only: the supervision rate, a fraction (0.10 is 10%).</summary>
+    public decimal? SupervisionRate { get; init; }
+
+    /// <summary>Execution only: the supervision, the work price × the supervision rate. Part of <see cref="Revenue"/>; no TVA on it.</summary>
+    public decimal? SupervisionUsd { get; init; }
+
+    /// <summary>The agreed payment (Design) or the agreed work price plus supervision (Execution, before materials), TVA included.</summary>
     public decimal PaymentWithTva { get; init; }
 
-    /// <summary>Revenue with TVA included: what the client is agreed to pay so far.</summary>
+    /// <summary>Revenue with TVA included: what the client is agreed to pay so far. Execution: TVA is on the work price only.</summary>
     public decimal RevenueWithTva { get; init; }
 
+    /// <summary>Execution: the work price, set by agreeing a BOQ; 0 until then.</summary>
     public decimal? ProjectFee { get; init; }
 
     public decimal? MaterialMarkup { get; init; }

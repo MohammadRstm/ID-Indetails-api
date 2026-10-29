@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_96_tables_with_snake_case_names()
+    public void Model_has_all_97_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(96);
+        tables.Count.ShouldBe(97);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -154,5 +154,14 @@ public class DatabaseModelTests
 
         Entity<RolePermission>().GetSeedData().Count()
             .ShouldBe(PermissionCatalog.Grants.Sum(g => g.Value.Count));
+    }
+
+    [Fact]
+    public void Account_labels_start_with_three_unique_names()
+    {
+        Entity<AccountLabel>().GetSeedData().Select(l => l[nameof(AccountLabel.Name)])
+            .ShouldBe(["Concrete", "Finishing", "Permits"], ignoreOrder: true);
+        Entity<AccountLabel>().GetIndexes().ShouldContain(i => i.IsUnique && i.Properties.Single().Name == nameof(AccountLabel.Name));
+        CheckNames<Project>().ShouldContain("ck_projects_supervision_rate_range");
     }
 }

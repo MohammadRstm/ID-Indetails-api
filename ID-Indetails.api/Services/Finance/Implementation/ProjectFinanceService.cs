@@ -246,6 +246,9 @@ public sealed class ProjectFinanceService(
         decimal? materialCharge = null, materialProfit = null, unsentCharge = null;
         int unconvertedMaterials = 0, unsent = 0;
         var revenue = project.Revenue;
+        var revenueWithTva = Tva.Gross(revenue, project.TvaRate);
+        var revenueTva = revenueWithTva - revenue;
+        decimal? supervision = null;
 
         if (isExecution)
         {
@@ -266,9 +269,13 @@ public sealed class ProjectFinanceService(
             unconvertedMaterials = unconvertedSent + unconvertedUnsent;
 
             // Open Execution projects are priced live; finalising freezes the agreed amount into Revenue.
+            var price = ExecutionPricing.PriceOf(project.ProjectFee ?? 0, charge, project.SupervisionRate ?? 0, project.TvaRate);
+            supervision = price.Supervision;
+            revenueWithTva = price.Gross;
+            revenueTva = price.Tva;
             if (project.RevenueLockedAt is null)
             {
-                revenue = charge + (project.ProjectFee ?? 0);
+                revenue = price.Net;
             }
         }
 
@@ -297,6 +304,9 @@ public sealed class ProjectFinanceService(
             unsent,
             pocket.ToPocket,
             pocket.FromPocket,
-            received.Tva);
+            received.Tva,
+            supervision,
+            revenueWithTva,
+            revenueTva);
     }
 }

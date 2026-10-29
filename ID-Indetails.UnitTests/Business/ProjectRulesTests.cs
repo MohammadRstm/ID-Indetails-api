@@ -7,11 +7,11 @@ namespace ID_Indetails.UnitTests.Business;
 
 public class ProjectRulesTests
 {
-    private static ProjectRules.Setup Design(BillingType billing, long? client, decimal? revenue = null, decimal? fee = null, decimal? markup = null)
-        => new(DomainCodes.Design, billing, client, revenue, fee, markup);
+    private static ProjectRules.Setup Design(BillingType billing, long? client, decimal? revenue = null, decimal? markup = null, decimal? supervision = null)
+        => new(DomainCodes.Design, billing, client, revenue, markup, supervision);
 
-    private static ProjectRules.Setup Execution(BillingType billing, long? client, decimal? revenue = null, decimal? fee = 1000, decimal? markup = 0.1m)
-        => new(DomainCodes.Execution, billing, client, revenue, fee, markup);
+    private static ProjectRules.Setup Execution(BillingType billing, long? client, decimal? revenue = null, decimal? markup = 0.1m, decimal? supervision = 0.1m)
+        => new(DomainCodes.Execution, billing, client, revenue, markup, supervision);
 
     [Fact]
     public void Design_client_work_needs_a_client_and_internal_work_has_none()
@@ -24,12 +24,13 @@ public class ProjectRulesTests
     }
 
     [Fact]
-    public void Only_execution_projects_have_a_fee_and_markup()
+    public void Only_execution_projects_have_a_markup_and_supervision()
     {
-        ProjectRules.CheckSetup(Design(BillingType.Client, 1, fee: 100))!.Field.ShouldBe("projectFee");
+        ProjectRules.CheckSetup(Design(BillingType.Client, 1, markup: 0.1m))!.Field.ShouldBe("materialMarkup");
+        ProjectRules.CheckSetup(Design(BillingType.Client, 1, supervision: 0.1m))!.Field.ShouldBe("supervisionRate");
         ProjectRules.CheckSetup(Execution(BillingType.Client, 1)).ShouldBeNull();
         // a site may be created without its pricing, for someone with pricing to set later
-        ProjectRules.CheckSetup(Execution(BillingType.Client, 1, fee: null, markup: null)).ShouldBeNull();
+        ProjectRules.CheckSetup(Execution(BillingType.Client, 1, markup: null, supervision: null)).ShouldBeNull();
     }
 
     [Fact]
@@ -74,10 +75,10 @@ public class ProjectRulesTests
     }
 
     [Fact]
-    public void Agreed_amount_is_material_charges_plus_the_fee()
+    public void Material_charge_is_the_sum_of_the_client_prices()
     {
-        ExecutionPricing.AgreedAmount([new(200m, null), new(30m, 50m)], 0.10m, 1000m).ShouldBe(1270m);
-        ExecutionPricing.AgreedAmount([], 0.10m, 1000m).ShouldBe(1000m);
+        ExecutionPricing.MaterialCharge([new(200m, null), new(30m, 50m)], 0.10m).ShouldBe(270m);
+        ExecutionPricing.MaterialCharge([], 0.10m).ShouldBe(0m);
     }
 
     [Fact]

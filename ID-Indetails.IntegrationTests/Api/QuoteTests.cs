@@ -60,17 +60,20 @@ public class QuoteTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_sites_quote_is_its_agreed_amount_before_materials()
+    public async Task An_execution_site_has_no_quote_and_its_creation_asks_nobody_for_one()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var client = await Projects.CreateClientAsync(superAdmin.AccessToken, DomainCodes.Execution);
-        var site = await OkAsync<ProjectResponse>(Client.PostJsonAsync("/api/projects", new
-        {
-            title = "Harbour offices", domainCode = DomainCodes.Execution, clientId = client.Id, projectFee = 8000m, tvaRate = 0.2m,
-            staffIds = new[] { await Projects.SiteStaffAsync() },
-        }, superAdmin.AccessToken));
-        var quote = await OkAsync<QuoteResponse>(Client.PostEmptyAsync($"/api/projects/{site.Id}/quotes", superAdmin.AccessToken));
-        quote.ShouldSatisfyAllConditions(q => q.Domain.ShouldBe(DomainCodes.Execution), q => q.TotalUsd.ShouldBe(9600m));
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        await Projects.SetWorkPriceAsync(site.Id, 8000m);
+
+        await (await Client.PostEmptyAsync($"/api/projects/{site.Id}/quotes", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.QuoteNotForExecution);
+
+        // a site made by an admin who can't send quotes asks no one for one, unlike a Design project
+        var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
+        var byAdmin = await OkAsync<ProjectResponse>(Client.PostJsonAsync("/api/projects",
+            new { title = "No quote", domainCode = DomainCodes.Execution, clientId = client.Id, staffIds = new[] { await Projects.SiteStaffAsync() } }, admin.AccessToken));
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE kind = 'quote_due' AND project_id = @p", ("@p", byAdmin.Id))).ShouldBe(0);
     }
 
     [Fact]
