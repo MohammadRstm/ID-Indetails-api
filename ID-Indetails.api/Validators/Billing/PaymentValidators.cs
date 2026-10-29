@@ -31,6 +31,17 @@ public sealed class RecordPaymentRequestValidator : AbstractValidator<RecordPaym
         RuleFor(x => x.Reference).ClientText("Reference", 100);
         RuleFor(x => x.Note).ClientText("Note", 500);
         RuleFor(x => x.InvoiceId).GreaterThan(0).When(x => x.InvoiceId is not null).WithMessage("Invoice is invalid.");
+        RuleFor(x => x.AccountLabelId).GreaterThan(0).When(x => x.AccountLabelId is not null)
+            .WithMessage("Choose one of the account labels.");
+    }
+}
+
+public sealed class SetPaymentLabelRequestValidator : AbstractValidator<SetPaymentLabelRequest>
+{
+    public SetPaymentLabelRequestValidator()
+    {
+        RuleFor(x => x.AccountLabelId).GreaterThan(0).When(x => x.AccountLabelId is not null)
+            .WithMessage("Choose one of the account labels.");
     }
 }
 

@@ -191,6 +191,7 @@ public static class ProtonCoverage
         Action("Payments.Record", "propose_record_payment", T2, ProtonFamily.Money),
         Action("Payments.Apply", "propose_payment_step", T2, ProtonFamily.Money),
         Action("Payments.Void", "propose_payment_step", T2, ProtonFamily.Money),
+        Never("Payments.SetLabel", "A payment is filed under an account label on the site's Financials, where the labels are listed."),
         // bank fields are never shown to Proton nor stored in a proposal
         Action("BillingSettings.Save", "propose_billing_settings", T2, ProtonFamily.Money),
         Action("BillingSettings.AddExchangeRate", "propose_exchange_rate", T2, ProtonFamily.Money),
