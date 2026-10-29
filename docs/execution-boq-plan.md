@@ -198,7 +198,7 @@ Settled with the user or from the code. **Where they differ from the outline abo
 - Permissions keep their codes (`material:create`, `material:manage`). `PermissionExplanations` says "site expenses"; the seeded catalog descriptions are unchanged.
 
 ### Phase 4: payment labels, figures, supervision taken (branch `MR-Account-Figures`, off `MR-Site-Expenses`)
-**Status:** not started. Outline:
+**Status:** API built (see "Phase 4 as built" at the end); the decisions below the outline win. The client payment report PDF is not built. Outline:
 - **Data:**
   - `payments.account_label_id` (optional).
   - New table `supervision_withdrawals` (id, project_id, amount_usd, taken_on, note, created_by_id, created_at, deleted_at), recorded by super admins. It isn't a cost.
@@ -434,3 +434,55 @@ What the API does where the decisions above were silent or differ. The client bu
 **Proton.** `propose_add_materials` and `propose_material_step` became `propose_add_site_expenses` and `propose_site_expense_step` (add, update, delete: no price step). `propose_project_money` is Design revenue only; `Projects.UpdatePricing` is a `Never` entry and `SiteExpenses.Add/Update/Delete` replace `Materials.*` in `ProtonCoverage`. `propose_add_expense` is for Design only and refuses a site. The materials sheet form (`ProtonForm.Materials`) keeps its name and fields. **Pinned counts after phase 3:** tables 96, permissions 61, Proton coverage Action 85, Open 25, ReadOnly 2, Never 101, Prefill 7, Own 11, notification kinds 46.
 
 **Load-test tool and k6 scripts** use `/site-expenses`, the new request and cost-source names, and no markup; the site invoices are a quarter of the fee.
+
+### Phase 4 as built (API, 2026-10-29)
+What the API does where the decisions above were silent or differ. The client builds against this. Migration `AccountFigures` (additive: `payments.account_label_id` and the `supervision_withdrawals` table; nothing is backfilled).
+
+**Payment labels**
+- `POST /api/projects/{id}/payments` takes an optional `accountLabelId`. Every payment response (`PaymentResponse`: record, get, list, apply, void) gains `accountLabel: { id, name } | null`.
+- **Changing a label after recording** (the decision text says "editing", but payments are never edited): `PUT /api/payments/{id}/label` `{ accountLabelId }` (`payment:record`) sets, changes or clears (`null` or left out) the label of a live payment and answers the `PaymentResponse` (`200`). Nothing else about a payment can change.
+- Errors: a label that doesn't exist or an id of 0 or less is `400 validation_failed` with the key `accountLabelId`; an archived label that the payment doesn't already have is `422 account_label_archived`; a voided payment is `422 payment_already_voided`; a payment of a domain the caller can't see is `404`; no `payment:record` is `403`. Setting the label it already has is a `200` with no event.
+- Event `payment_label_set` (billing group): payload `{ label, previousLabel }`, the names or `null`.
+
+**Supervision taken**
+- `GET /api/projects/{id}/supervision-withdrawals` (`financial:view`) returns `SupervisionWithdrawalResponse[]`, the latest `takenOn` first (the one recorded last first on the same day); removed ones are left out.
+- `POST /api/projects/{id}/supervision-withdrawals` (`payment:record`) `{ amountUsd, takenOn, note? }` returns `201` with a `SupervisionWithdrawalResponse`.
+- `DELETE /api/supervision-withdrawals/{id}` (`payment:record`) returns `204`; soft delete, a second call is `404`.
+- `SupervisionWithdrawalResponse`: `{ id, amountUsd, takenOn, note, createdBy: { id, name } | null, createdAt }` (`takenOn` is `yyyy-MM-dd`; `createdBy` is always set today).
+- Errors: `422 not_for_this_domain` for a project that is not an Execution client site, `404` for a project or withdrawal in a domain the caller can't see, `422 project_locked` for a write on a completed or archived site, `400 taken_date_in_future` (key `takenOn`) for a day after today in the company time zone, `400 validation_failed` for an amount of 0 or less, with more than 2 decimals or above 999,999,999,999.99 (key `amountUsd`), a missing or out-of-range day (2000-2100, key `takenOn`) or a note over 500 characters (key `note`). Reads and writes are separate permissions: `payment:record` alone cannot read the list, and `financial:view` alone cannot write.
+- Not a cost: no profit floor, no change to `money.profit`, `money.cost` or `money.cashProfit`. More than is due is accepted.
+- Events: `supervision_taken` (payload `{ takenOn, note }`) and `supervision_withdrawal_removed` (payload `{ takenOn }`), money group, subject type `supervision_withdrawal`, USD in the amount column. The feed hides the amount and the payload without `financial:view`.
+
+**Account figures** `GET /api/projects/{id}/account-figures` (`financial:view`; `422 not_for_this_domain` on a Design project; `404` for a domain the caller can't see) returns an `AccountFiguresResponse`, all USD:
+```
+{ workUsd, supervisionRate, supervisionUsd, tvaRate, tvaUsd, clientTotalUsd,
+  receivedUsd, restToPayUsd,
+  costs: { siteExpensesUsd, groundLabourUsd, staffUsd, otherUsd, totalUsd },
+  profitUsd,
+  supervision: { dueUsd, takenUsd, leftUsd },
+  pocket: { movedToPocketUsd, paidByPocketUsd },
+  cashInAccountUsd,
+  byLabel: [{ accountLabel: { id, name } | null, receivedUsd, spentUsd, otherUsd, restUsd }],
+  byCategory: [{ category, spentUsd }],
+  byPayee: [{ payee: string | null, spentUsd }],
+  unconverted: [{ source, currency, amount }] }
+```
+- Records (C# names fix the client's `Schemas[...]`): `AccountFiguresResponse`, `AccountCostsResponse`, `AccountSupervisionResponse`, `AccountPocketResponse`, `AccountLabelRowResponse`, `AccountCategoryRowResponse`, `AccountPayeeRowResponse`, `UnconvertedCostResponse` (already in the project money), `AccountLabelRefResponse` (`{ id, name }`), `SupervisionWithdrawalResponse`. Enums in JSON: `category` is `materials | contractor | equipment | fees | other`; `unconverted[].source` is a cost source such as `site_expense` (the same as `money.cost.unconverted`).
+- `workUsd` is the work price; `supervisionUsd` = work x `supervisionRate`; `tvaUsd` = work x `tvaRate`; `clientTotalUsd` = work + supervision + TVA (= `money.revenueWithTva`). `receivedUsd` counts live payments with their TVA; `restToPayUsd` = client total - received and is **negative when the client paid ahead**.
+- `costs` are `money.cost`: `staffUsd` is its `labour`, `otherUsd` its `expenses` (0 on a site). `profitUsd` is `money.profit` (pocket money counted). `supervision.dueUsd` = `supervisionUsd`, `leftUsd` = due - taken, **negative when over-taken**.
+- `cashInAccountUsd` = received - `costs.totalUsd` - supervision taken - moved to the pocket + paid by it. It can be negative.
+- `byLabel`: one row per label with a live payment or a site expense (archived labels included, by name), in the labels' order (the Settings order), then **always** the unlabelled row last (`accountLabel: null`), even when it is all zeros. A label row: `receivedUsd` = its payments, `spentUsd` = its site expenses, `otherUsd` = 0. The unlabelled row: `receivedUsd` = payments with no label, `spentUsd` = every cost no label holds (unlabelled site expenses, ground labour, staff, other), `otherUsd` = supervision taken + moved to the pocket - paid by it. `restUsd` = received - spent - other. **The rows' `restUsd` always add up to `cashInAccountUsd`** (and their `receivedUsd` to `receivedUsd`, their `spentUsd` to `costs.totalUsd`).
+- `byCategory` and `byPayee`: site expenses with a rate on their day, largest first (ties: category order above; payee by name, then "no payee"). Only categories and payees with spend appear. A payee groups suppliers by their text trimmed, with single spaces, in lower case, shown as last typed; `payee: null` is expenses with no supplier (the client shows "No payee").
+- `unconverted`: costs with no exchange rate on their day, in their own currency, equal to `money.cost.unconverted`. They are left out of every sum, including `byCategory`, `byPayee` and the label rows.
+
+**Decisions where the plan was silent**
+- Payments have no edit endpoint, so "editing" a payment's label is `PUT /api/payments/{id}/label`. A relabel writes an event; a no-op writes nothing; a voided payment is refused.
+- The withdrawal list is a plain array (no wrapper, no totals); the totals are in the account figures.
+- `not_for_this_domain` (not a new code) refuses supervision taken and account figures on non-Execution projects; the one new error code is `taken_date_in_future`.
+- `byLabel` always ends with the unlabelled row; received comes from the payments themselves (so the rows add up by construction), and the unlabelled row's cost is the project's total cost less the labelled site expenses.
+- Supervision events carry the day and the note in the payload, hidden without `financial:view`.
+- The relabel endpoint and the two supervision endpoints are `Never` entries in the Proton coverage; `Payments.Record` (an `Action`) keeps its tool and does not offer a label yet.
+
+**Not built:** the client payment report PDF, which waits for the user to agree its layout.
+
+**Pinned counts after phase 4:** tables 97, permissions 61 (no new permission), Proton coverage Action 85, Open 25, ReadOnly 2, Never 104, Prefill 7, Own 11, notification kinds 46.

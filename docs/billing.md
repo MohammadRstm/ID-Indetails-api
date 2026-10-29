@@ -85,8 +85,9 @@ In a domain whose billing settings turn them on, the hourly run emails clients r
 |---|---|---|
 | `GET /api/payments?projectId=&clientId=&invoiceId=&includeVoided=&domain=&receivedFrom=&receivedTo=&page=1&pageSize=25` | `financial:view` | Most recently received first. Voided payments only with `includeVoided=true`. `receivedFrom` and `receivedTo` (both included) keep the payments received in that range |
 | `GET /api/payments/{id}` | `financial:view` | A payment |
-| `POST /api/projects/{id}/payments` | `payment:record` | `{ amount, currency, fxRate, receivedOn, method, reference, note, invoiceId, isInitial }` |
+| `POST /api/projects/{id}/payments` | `payment:record` | `{ amount, currency, fxRate, receivedOn, method, reference, note, invoiceId, isInitial, accountLabelId }` |
 | `PUT /api/payments/{id}/invoice` | `payment:record` | `{ invoiceId }` applies a payment on account to an issued invoice |
+| `PUT /api/payments/{id}/label` | `payment:record` | `{ accountLabelId }` files a live payment under an account label, changes it, or clears it (`null` or left out) |
 | `POST /api/payments/{id}/void` | `payment:void` | `{ reason }` |
 
 Rules (`Business/Billing/PaymentRules.cs`):
@@ -99,8 +100,12 @@ Rules (`Business/Billing/PaymentRules.cs`):
 - `receivedOn` is today or earlier (`400 received_date_in_future`). `method` is `bank` (default), `cheque`, `cash` or `other`.
 - **Initial payment:** `isInitial` marks it. A project has at most one live initial payment (`422 initial_payment_exists`); voiding it frees the slot. A down payment is recorded like any other payment once the project exists: projects take no payment when they are created.
 - **TVA share:** each payment keeps `tva_usd`, the TVA inside its `amount_usd` at the project's rate when it was recorded (`Tva.ShareOf`). Billing counts the whole amount; money reports count it net (see "TVA").
-- Payments are never edited or deleted. They are voided with a reason (`422 payment_already_voided` twice). Only a live payment on account can be applied (`422 payment_already_applied`).
-- Events: `payment_recorded`, `payment_applied`, `payment_voided`. The USD value is in the `amount` column. The payload has only the invoice number, currency, method, initial flag or reason, never the amount.
+- Payments are never edited or deleted. They are voided with a reason (`422 payment_already_voided` twice). Only a live payment on account can be applied (`422 payment_already_applied`). The one thing about a payment that can be changed after it is recorded is its account label (below).
+- **Account label.** A payment can be filed under one of the company's [account labels](company.md#account-labels) (`payments.account_label_id`, optional; Design payments take one too). It is given when the payment is recorded (`accountLabelId`) or later with `PUT /api/payments/{id}/label`, which sets, changes or clears it, and the payment shows it as `accountLabel: { id, name }` or `null`.
+  - The label must exist (`400 validation_failed` naming `accountLabelId`; a zero or negative id too), and an archived label can't be newly picked (`422 account_label_archived`). A payment keeps an archived label it already has, and can drop it, but cannot get it back once cleared.
+  - Setting the label a payment already has changes nothing and writes no event. A voided payment can't be relabelled (`422 payment_already_voided`). It follows the payment's domain: a payment of a domain the caller can't see reads as `404`.
+  - The label decides the row a payment is counted in on an Execution site's [account figures](execution.md#account-figures). It changes no amount, TVA share, invoice or profit, so there is no profit floor.
+- Events: `payment_recorded`, `payment_applied`, `payment_voided`, `payment_label_set` (the label's name and the previous one, `null` for none, in the payload). The USD value is in the `amount` column. The payload has only the invoice number, currency, method, initial flag, label names or reason, never the amount.
 
 ## A project's cash position
 
