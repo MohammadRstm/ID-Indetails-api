@@ -360,7 +360,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var (fee, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, project_fee = 500m, reason = "Agreed with the client" }, "Set the fee to 500, agreed with the client");
         fee.PendingAction!.Preview.Changes.ShouldNotContain(c => c.Label == "Material markup");
         fee.PendingAction.Preview.Phrase.ShouldBe("500");
-        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 0m, materialMarkup = 0.2m, description = "Changed in the app" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.2m, description = "Changed in the app" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PostJsonAsync($"/api/proton/actions/{fee.PendingAction.Id}/confirm", new { fee.ConversationId, typed = "500" }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
 

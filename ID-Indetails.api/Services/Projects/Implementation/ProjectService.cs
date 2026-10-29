@@ -58,6 +58,7 @@ public sealed class ProjectService(
     IPortalPublishingService portalPublishing,
     ISiteTeamRepository siteTeams,
     IUnitOfWork unitOfWork,
+    IProfitFloor floor,
     IClock clock) : IProjectService
 {
     private const string NotFoundMessage = "Project not found.";
@@ -402,6 +403,7 @@ public sealed class ProjectService(
         var tva = request.TvaRate ?? project.TvaRate;
         Throw(ProjectRules.CheckPaymentChanges(
             request.ProjectFee != project.ProjectFee || request.MaterialMarkup != project.MaterialMarkup || tva != project.TvaRate, "projectFee"));
+        var before = await floor.BeforeAsync(project, cancellationToken);
         project.PaymentChanges.Add(PaymentChange(request.ProjectFee, project.ProjectFee ?? 0, request.MaterialMarkup, project.MaterialMarkup,
             tva, project.TvaRate, request.Description.Trim(), actor.UserId));
 
@@ -424,6 +426,7 @@ public sealed class ProjectService(
         project.UpdatedAt = clock.UtcNow;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.Pricing, new BlockedRequest<UpdateProjectPricingRequest>(project.Id, request), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, project.Id, cancellationToken);
@@ -448,6 +451,7 @@ public sealed class ProjectService(
         Throw(ProjectRules.CheckHasPayment(project.BillingType));
         var tva = request.TvaRate ?? project.TvaRate;
         Throw(ProjectRules.CheckPaymentChanges(request.Revenue != project.Revenue || tva != project.TvaRate, "revenue"));
+        var before = await floor.BeforeAsync(project, cancellationToken);
 
         if (request.Revenue != project.Revenue)
         {
@@ -461,6 +465,7 @@ public sealed class ProjectService(
         project.UpdatedAt = clock.UtcNow;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.Payment, new BlockedRequest<UpdateProjectPaymentRequest>(project.Id, request), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, project.Id, cancellationToken);

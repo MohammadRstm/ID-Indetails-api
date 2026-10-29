@@ -194,6 +194,81 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.BlockedChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("decided_at");
+
+                    b.Property<long?>("DecidedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("decided_by_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("payload");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("requested_at");
+
+                    b.Property<long>("RequestedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("requested_by_id");
+
+                    b.Property<long?>("ResultId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("result_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_blocked_changes");
+
+                    b.HasIndex("DecidedById")
+                        .HasDatabaseName("ix_blocked_changes_decided_by_id");
+
+                    b.HasIndex("RequestedById")
+                        .HasDatabaseName("ix_blocked_changes_requested_by_id");
+
+                    b.HasIndex("ProjectId", "Status")
+                        .HasDatabaseName("ix_blocked_changes_project_id_status");
+
+                    b.ToTable("blocked_changes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_blocked_changes_decided", "(`status` = 'pending') = (`decided_at` IS NULL)");
+
+                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing')");
+
+                            t.HasCheckConstraint("ck_blocked_changes_status", "`status` IN ('pending', 'forced', 'dismissed')");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.Client", b =>
                 {
                     b.Property<long>("Id")
@@ -6964,6 +7039,31 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_billing_settings_users_updated_by_id");
 
                     b.Navigation("Domain");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.BlockedChange", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_blocked_changes_users_decided_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_blocked_changes_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_blocked_changes_users_requested_by_id");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Client", b =>
