@@ -146,28 +146,17 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     }
 
     [Fact]
-    public async Task Only_execution_projects_stand_somewhere_with_the_box()
+    public async Task Pocket_money_goes_in_with_a_contribution_and_out_with_a_payout()
     {
         var owner = await ActiveUserAsync("execution");
         var site = await SiteProjectAsync(owner);
-        await ShouldViolateAsync($"UPDATE projects SET box_state = NULL WHERE id = {site}", "ck_projects_box_state_execution_only");
-        await ShouldViolateAsync($"UPDATE projects SET box_state = 'lost' WHERE id = {site}", "ck_projects_box_state");
+        string Entry(string kind, decimal amount) =>
+            $"INSERT INTO pocket_entries (kind, project_id, amount, created_at, created_by_id) VALUES ('{kind}', {site}, {amount}, {Now}, {owner})";
 
-        var designer = await ActiveUserAsync("design");
-        var design = await InsertAsync(ProjectSql("design", designer, clientId: "NULL", billing: "internal", revenue: 0));
-        await ShouldViolateAsync($"UPDATE projects SET box_state = 'in' WHERE id = {design}", "ck_projects_box_state_execution_only");
-    }
-
-    [Fact]
-    public async Task A_box_entry_moves_some_money()
-    {
-        var site = await SiteProjectAsync(await ActiveUserAsync("execution"));
-        await ShouldViolateAsync(
-            $"INSERT INTO box_entries (kind, project_id, amount, created_at) VALUES ('transfer', {site}, 0, {Now})",
-            "ck_box_entries_amount_not_zero");
-        await ShouldViolateAsync(
-            $"INSERT INTO box_entries (kind, project_id, amount, created_at) VALUES ('gift', {site}, 10, {Now})",
-            "ck_box_entries_kind");
+        (await InsertAsync(Entry("contribution", 100))).ShouldBeGreaterThan(0);
+        (await InsertAsync(Entry("payout", -40))).ShouldBeGreaterThan(0);
+        await ShouldViolateAsync(Entry("contribution", -5), "ck_pocket_entries_amount_sign");
+        await ShouldViolateAsync(Entry("payout", 5), "ck_pocket_entries_amount_sign");
     }
 
     [Fact]
@@ -531,8 +520,8 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
 
     private static string ProjectSql(
         string domain, long ownerId, string clientId, string billing, decimal revenue, string projectFee, string materialMarkup) =>
-        "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, project_fee, material_markup, box_state, created_at) " +
-        $"VALUES ('{domain}', 'Project', 'active', '{billing}', {clientId}, {ownerId}, '2026-09-01', {revenue}, 'USD', 0, {projectFee}, {materialMarkup}, {(domain == "execution" ? "'in'" : "NULL")}, {Now})";
+        "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, project_fee, material_markup, created_at) " +
+        $"VALUES ('{domain}', 'Project', 'active', '{billing}', {clientId}, {ownerId}, '2026-09-01', {revenue}, 'USD', 0, {projectFee}, {materialMarkup}, {Now})";
 
     /// <summary>An Execution site project: always client work, with a fee and a material markup.</summary>
     private async Task<long> SiteProjectAsync(long ownerId)
