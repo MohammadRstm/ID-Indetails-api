@@ -122,6 +122,8 @@ public static class ProtonCoverage
         Never("Pocket.Ask", "A site asks the pocket money for money from its page, or the system raises it."),
         Never("Pocket.Approve", "A super admin approves pocket money on its page, choosing the amount."),
         Never("Pocket.Deny", "A super admin denies pocket money on its page."),
+        Never("SupervisionWithdrawals.Create", "Supervision taken out of a site's account is recorded by someone who records payments, on the site's Financials, with the amount and the day."),
+        Never("SupervisionWithdrawals.Delete", "Removing supervision taken changes the cash left in a site's account: it is done on the site's Financials."),
         Never("AccountLabels.Create", "Account labels are company settings, edited by a super admin in Settings."),
         Never("AccountLabels.Rename", "Account labels are company settings, edited by a super admin in Settings."),
         Never("AccountLabels.Archive", "Account labels are company settings, edited by a super admin in Settings."),
