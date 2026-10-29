@@ -26,14 +26,16 @@ public class AccountLabelTests(ApiFactory api) : IClassFixture<ApiFactory>
         => OkAsync<AccountLabelResponse>(Client.PostJsonAsync("/api/account-labels", new { name }, token));
 
     [Fact]
-    public async Task The_list_starts_with_the_three_seeded_labels_in_order_for_any_signed_in_person()
+    public async Task The_list_has_the_three_seeded_labels_in_order_for_any_signed_in_person()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        List<string> seeded = ["Concrete", "Finishing", "Permits"];
 
         var labels = await ListAsync(employee.AccessToken);
 
-        labels.Select(l => l.Name).Take(3).ShouldBe(["Concrete", "Finishing", "Permits"]);
+        // the class's other tests may have put labels of their own in front
+        labels.Select(l => l.Name).Where(seeded.Contains).ShouldBe(seeded);
         labels.Select(l => l.Position).ShouldBe(labels.Select(l => l.Position).Order());
         labels.ShouldAllBe(l => !l.Archived);
         await (await Client.GetAsync("/api/account-labels")).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
