@@ -31,7 +31,7 @@ public sealed class BoqRepository(IdIndetailsDbContext db) : IBoqRepository
     public Task<Boq?> GetAsync(long id, CancellationToken cancellationToken = default)
         => db.Boqs
             .AsNoTracking()
-            .Include(b => b.Project)
+            .Include(b => b.Project).ThenInclude(p => p.Client)
             .Include(b => b.Lines)
             .Include(b => b.Deliveries)
             .AsSplitQuery()
