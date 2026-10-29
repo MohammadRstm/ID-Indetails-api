@@ -23,7 +23,8 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
-        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
+        // priced above the costs below, so the profit floor (tested on its own) stays out of the way
+        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, projectFee: 30_000m);
 
         var added = await AddAsync(project.Id, employee.AccessToken,
             new { name = "Rebar 12mm", quantity = 12m, unit = "tonne", unitCost = 1500m, supplier = "Al-Rashid Steel" },
@@ -48,7 +49,7 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
         var money = (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!;
         money.Cost.SiteExpenses.ShouldBe(21_225m);
         money.Cost.Expenses.ShouldBe(0m);
-        money.Revenue.ShouldBe(1000m);
+        money.Revenue.ShouldBe(30_000m);
 
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'material_added'", ("@p", project.Id))).ShouldBe(3);
@@ -118,7 +119,8 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task An_expense_has_a_day_a_category_a_currency_and_a_label_and_a_change_keeps_what_it_leaves_out()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        // no work price agreed yet, so the profit floor (tested on its own) stays out of the way
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 0m);
         var label = await AddLabelAsync(superAdmin.AccessToken);
         await LbpRateAsync(superAdmin.AccessToken);
 
@@ -171,7 +173,8 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Expenses_are_filtered_by_category_label_and_the_day_spent()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        // no work price agreed yet, so the profit floor (tested on its own) stays out of the way
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 0m);
         var concrete = await AddLabelAsync(superAdmin.AccessToken);
         var finishing = await AddLabelAsync(superAdmin.AccessToken);
         await AddAsync(project.Id, superAdmin.AccessToken,

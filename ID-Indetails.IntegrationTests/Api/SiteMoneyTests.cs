@@ -51,7 +51,8 @@ public class SiteMoneyTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task A_site_expense_counts_on_the_day_it_was_spent_not_the_day_it_was_added()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        // priced well above the costs below, so the profit floor stays out of the way
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 5000m);
         await Client.PostJsonAsync($"/api/projects/{site.Id}/payments", new { amount = 1000m, currency = "USD" }, superAdmin.AccessToken);
         var added = await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses", new
         {
