@@ -1,6 +1,5 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Projects;
-using ID_Indetails.api.DTO.Response.Statements;
 using ID_Indetails.api.Enums;
 using MySqlConnector;
 using Shouldly;
@@ -110,19 +109,20 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Execution_money_converts_materials_and_refuses_to_finalise_with_unconvertible_ones()
+    public async Task Execution_money_converts_site_expense_costs_by_the_day_spent_and_lists_the_ones_it_cannot()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         await EnsureLbpRateAsync(superAdmin.AccessToken);
 
-        // Fee 1,000 and a 10% markup.
+        // Fee 1,000.
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
 
-        const string materialSql = "INSERT INTO project_materials (project_id, name, amount, currency, added_at, added_by_id) " +
-            "VALUES (@p, @name, @amount, @currency, @at, @u)";
-        await ExecuteAsync(materialSql, ("@p", site.Id), ("@name", "Cement"), ("@amount", 200m), ("@currency", "USD"), ("@at", "2026-03-02 08:00:00"), ("@u", admin.User.Id));
-        await ExecuteAsync(materialSql, ("@p", site.Id), ("@name", "Sand"), ("@amount", 900_000m), ("@currency", "LBP"), ("@at", "2026-03-02 08:00:00"), ("@u", admin.User.Id));
+        // an expense is dated by the day it was spent, whenever it was recorded
+        const string expenseSql = "INSERT INTO site_expenses (project_id, name, amount, currency, spent_on, added_at, added_by_id) " +
+            "VALUES (@p, @name, @amount, @currency, @on, UTC_TIMESTAMP(3), @u)";
+        await ExecuteAsync(expenseSql, ("@p", site.Id), ("@name", "Cement"), ("@amount", 200m), ("@currency", "USD"), ("@on", "2026-03-02"), ("@u", admin.User.Id));
+        await ExecuteAsync(expenseSql, ("@p", site.Id), ("@name", "Sand"), ("@amount", 900_000m), ("@currency", "LBP"), ("@on", "2026-03-02"), ("@u", admin.User.Id));
 
         // One labour day: 3 workers at 20.
         await ExecuteAsync("INSERT INTO labour_weeks (project_id, week_start, submitted_at, submitted_by_id) VALUES (@p, '2026-03-02', UTC_TIMESTAMP(3), @u)",
@@ -133,38 +133,24 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await Client.PostJsonAsync($"/api/projects/{site.Id}/payments", new { amount = 500m, currency = "USD" }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
-        // Not sent to the client yet: their cost counts, their charge (220 + 990,000 LBP, 11.06) waits for a statement.
-        var unsent = await MoneyAsync(site.Id, admin.AccessToken);
-        unsent.MaterialCharge.ShouldBe(0m);
-        unsent.UnsentMaterialCharge.ShouldBe(231.06m);
-        unsent.Revenue.ShouldBe(1000m);
-        unsent.Profit.ShouldBe(729.94m);
-        unsent.MaterialProfit.ShouldBe(0m);
-
-        var statementId = await Projects.SendStatementAsync(admin.AccessToken, site.Id);
-        (await (await Client.GetAsync($"/api/statements/{statementId}", admin.AccessToken)).ReadAsync<StatementResponse>()).Agreed.ShouldBe(1231.06m);
+        // The site expenses are plain costs: 200 + 900,000 LBP (10.06) and 60 of ground labour. Revenue is the work price alone.
         var money = await MoneyAsync(site.Id, admin.AccessToken);
-
-        // Charge: 220 + 990,000 LBP (11.06). Cost: 200 + 900,000 LBP (10.06) + 60 ground labour.
-        money.MaterialCharge.ShouldBe(231.06m);
-        money.Revenue.ShouldBe(1231.06m);
-        money.Cost.Materials.ShouldBe(210.06m);
+        money.Revenue.ShouldBe(1000m);
+        money.Cost.SiteExpenses.ShouldBe(210.06m);
         money.Cost.GroundLabour.ShouldBe(60m);
         money.Cost.Total.ShouldBe(270.06m);
-        money.Profit.ShouldBe(961m);
+        money.Profit.ShouldBe(729.94m);
         money.CashProfit.ShouldBe(229.94m);
-        money.MaterialProfit.ShouldBe(21m);
-        money.UnconvertedMaterials.ShouldBe(0);
 
-        // A material from a day before any LBP rate can't be converted: it is listed, not added.
-        await ExecuteAsync(materialSql, ("@p", site.Id), ("@name", "Old stock"), ("@amount", 179_000m), ("@currency", "LBP"), ("@at", "2025-06-01 08:00:00"), ("@u", admin.User.Id));
+        // An expense from a day before any LBP rate can't be converted: it is listed, not added.
+        await ExecuteAsync(expenseSql, ("@p", site.Id), ("@name", "Old stock"), ("@amount", 179_000m), ("@currency", "LBP"), ("@on", "2025-06-01"), ("@u", admin.User.Id));
         var partial = await MoneyAsync(site.Id, admin.AccessToken);
-        partial.UnconvertedMaterials.ShouldBe(1);
-        partial.Cost.Unconverted.ShouldHaveSingleItem().Source.ShouldBe(CostSource.Materials);
+        partial.Cost.Unconverted.ShouldHaveSingleItem().Source.ShouldBe(CostSource.SiteExpense);
         partial.Cost.Total.ShouldBe(270.06m);
 
-        // The agreed amount is frozen on finalising, so it must not leave a material out.
-        await (await Client.PostEmptyAsync($"/api/projects/{site.Id}/complete", admin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.ExchangeRateMissing);
+        // The agreed amount is the work price plus supervision: it needs no exchange rate, so finalising is not held back.
+        var completed = await Client.PostEmptyAsync($"/api/projects/{site.Id}/complete", admin.AccessToken);
+        completed.IsSuccessStatusCode.ShouldBeTrue(await completed.Content.ReadAsStringAsync());
+        (await MoneyAsync(site.Id, admin.AccessToken)).Revenue.ShouldBe(1000m);
     }
 }

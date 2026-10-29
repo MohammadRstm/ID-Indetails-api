@@ -27,7 +27,7 @@ public static class NotificationKinds
     /// <summary>A general meeting you were in was cancelled, or you were taken out of it (subject: the meeting).</summary>
     public const string MeetingCancelled = "meeting_cancelled";
 
-    /// <summary>Someone recorded materials on a site (subject: the project; the count in the payload).</summary>
+    /// <summary>Someone recorded expenses on a site (subject: the project; the count in the payload). The kind keeps its stored name.</summary>
     public const string MaterialsAdded = "materials_added";
 
     /// <summary>Someone submitted or updated a labour week (subject: the project; the week and whether it was an update in the payload).</summary>
@@ -117,9 +117,6 @@ public static class NotificationKinds
 
     /// <summary>A client project's profit reached zero or below, by a forced change or a change nobody made (subject: the project). Once per project, to whoever sees the domain's money.</summary>
     public const string ProfitAtZero = "profit_at_zero";
-
-    /// <summary>A client statement was sent (subject: the statement). Same recipients as <see cref="InvoiceIssued"/>.</summary>
-    public const string StatementSent = "statement_sent";
 
     /// <summary>A client project was completed or archived and its margin is final (subject: the project). Sent to whoever sees the domain's money, with the margin as a percentage and never an amount.</summary>
     public const string ProjectClosed = "project_closed";

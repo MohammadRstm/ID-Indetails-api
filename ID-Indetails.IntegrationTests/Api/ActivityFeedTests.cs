@@ -56,31 +56,65 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_markup_change_keeps_the_exact_markup_in_its_payload_for_money_viewers_only()
+    public async Task A_supervision_change_keeps_the_exact_rate_in_its_payload_for_money_viewers_only()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
-        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { materialMarkup = 0.125m, description = "Priced" }, admin.AccessToken))
+        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { supervisionRate = 0.125m, description = "Priced" }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
+        // a markup change from before markups went: an older row, which stays in the feed as it was
+        await _steps.ExecuteAsync(
+            "INSERT INTO activity_events (domain_code, kind, occurred_at, project_id, subject_type, subject_id, payload, is_demo) " +
+            "VALUES ('execution', 'material_markup_set', UTC_TIMESTAMP(3), @p, 'project', @p, '{\"markup\":0.125,\"prevMarkup\":0.1}', 0)",
+            ("@p", site.Id));
 
         var money = await (await Client.GetAsync($"/api/activity?group=money&projectId={site.Id}", admin.AccessToken))
             .ReadAsync<PagedResponse<ActivityItemResponse>>();
-        var markupSet = money.Items.Single(i => i.Kind == ActivityEventKinds.MaterialMarkupSet);
+        var rateSet = money.Items.Single(i => i.Kind == ActivityEventKinds.SupervisionRateSet);
         // 12.5% exactly: the amount columns keep 2 decimals and would have stored 0.13.
+        rateSet.Payload!.Value.GetProperty("rate").GetDecimal().ShouldBe(0.125m);
+        rateSet.Payload.Value.GetProperty("prevRate").GetDecimal().ShouldBe(0m);
+        rateSet.Amount.ShouldBeNull();
+        rateSet.PrevAmount.ShouldBeNull();
+        var markupSet = money.Items.Single(i => i.Kind == ActivityEventKinds.MaterialMarkupSet);
         markupSet.Payload!.Value.GetProperty("markup").GetDecimal().ShouldBe(0.125m);
-        markupSet.Payload.Value.GetProperty("prevMarkup").GetDecimal().ShouldBe(0.10m);
-        markupSet.Amount.ShouldBeNull();
-        markupSet.PrevAmount.ShouldBeNull();
 
-        // Someone who reads the feed without financial:view sees the change, not the markup.
+        // Someone who reads the feed without financial:view sees the change, not the rate or the old markup.
         var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
             new { changes = new[] { new { code = PermissionCodes.ActivityView, action = "grant", reason = "Test" } } },
             superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         var limited = await (await Client.GetAsync($"/api/activity?projectId={site.Id}", lead.AccessToken))
             .ReadAsync<PagedResponse<ActivityItemResponse>>();
+        limited.Items.Single(i => i.Kind == ActivityEventKinds.SupervisionRateSet).Payload.ShouldBeNull();
         limited.Items.Single(i => i.Kind == ActivityEventKinds.MaterialMarkupSet).Payload.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_BOQ_withdrawal_keeps_its_reason_in_the_payload_for_money_viewers_only()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 0m);
+        var boqs = new BoqTestSteps(_steps);
+        await boqs.AgreeClientBoqAsync(superAdmin.AccessToken, site.Id, 1000m);
+        var vo = await boqs.AgreeVoAsync(superAdmin.AccessToken, site.Id, 200m);
+        (await Client.PostJsonAsync($"/api/boqs/{vo.Id}/withdraw-agreement", new { reason = "The client will pay 480k at most" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        var money = await (await Client.GetAsync($"/api/activity?projectId={site.Id}", superAdmin.AccessToken))
+            .ReadAsync<PagedResponse<ActivityItemResponse>>();
+        money.Items.Single(i => i.Kind == ActivityEventKinds.BoqAgreementWithdrawn)
+            .Payload!.Value.GetProperty("reason").GetString().ShouldBe("The client will pay 480k at most");
+
+        // Someone who reads the feed without financial:view sees the withdrawal, not why.
+        var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.ActivityView, action = "grant", reason = "Test" } } },
+            superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var limited = await (await Client.GetAsync($"/api/activity?projectId={site.Id}", lead.AccessToken))
+            .ReadAsync<PagedResponse<ActivityItemResponse>>();
+        limited.Items.Single(i => i.Kind == ActivityEventKinds.BoqAgreementWithdrawn).Payload.ShouldBeNull();
     }
 
     [Fact]

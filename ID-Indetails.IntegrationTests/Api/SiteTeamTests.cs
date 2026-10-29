@@ -134,13 +134,13 @@ public class SiteTeamTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Execution_employees_record_no_materials_unless_given_it_and_are_paid_monthly()
+    public async Task Execution_employees_record_no_site_expenses_unless_given_it_and_are_paid_monthly()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, rami) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         var site = await NewSiteAsync(superAdmin.AccessToken, rami.User.Id);
 
-        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/materials", new { items = new[] { new { name = "Tiles", amount = 100m } } }, rami.AccessToken))
+        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses", new { items = new[] { new { name = "Tiles", amount = 100m } } }, rami.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         (await (await Client.PostJsonAsync($"/api/employees/{rami.User.Id}/pay",

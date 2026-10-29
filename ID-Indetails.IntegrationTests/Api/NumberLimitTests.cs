@@ -43,15 +43,15 @@ public class NumberLimitTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_material_whose_quantity_and_unit_cost_give_too_large_a_cost_is_refused()
+    public async Task A_site_expense_whose_quantity_and_unit_cost_give_too_large_a_cost_is_refused()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
 
-        (await RefusedAsync(await Client.PostJsonAsync($"/api/projects/{site.Id}/materials",
+        (await RefusedAsync(await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
                 new { items = new[] { new { name = "Marble", quantity = 99_999_999_999m, unitCost = 1_000_000m } } }, superAdmin.AccessToken), "items[0].unitCost"))
             .ShouldBe("Quantity × unit cost is too large.");
-        (await RefusedAsync(await Client.PostJsonAsync($"/api/projects/{site.Id}/materials",
+        (await RefusedAsync(await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
                 new { items = new[] { new { name = "Marble", quantity = 100_000_000_000m, amount = 10m } } }, superAdmin.AccessToken), "items[0].quantity"))
             .ShouldBe("Quantity is too large.");
     }

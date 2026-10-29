@@ -35,6 +35,12 @@ public sealed class PaymentsController(IPaymentService paymentService) : Control
     public Task<PaymentResponse> Apply(long paymentId, ApplyPaymentRequest request, CancellationToken cancellationToken)
         => paymentService.ApplyAsync(paymentId, request, cancellationToken);
 
+    /// <summary>Files a payment under an account label, or clears it. The money of a payment is never edited.</summary>
+    [HttpPut("payments/{paymentId:long}/label")]
+    [HasPermission(PermissionCodes.PaymentRecord)]
+    public Task<PaymentResponse> SetLabel(long paymentId, SetPaymentLabelRequest request, CancellationToken cancellationToken)
+        => paymentService.SetLabelAsync(paymentId, request, cancellationToken);
+
     [HttpPost("payments/{paymentId:long}/void")]
     [HasPermission(PermissionCodes.PaymentVoid)]
     public Task<PaymentResponse> Void(long paymentId, VoidRequest request, CancellationToken cancellationToken)

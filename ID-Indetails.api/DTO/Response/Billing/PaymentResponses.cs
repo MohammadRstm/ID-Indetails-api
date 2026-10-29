@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Billing;
@@ -18,6 +19,9 @@ public sealed record PaymentResponse
     public string? InvoiceNumber { get; init; }
 
     public bool IsInitial { get; init; }
+
+    /// <summary>The account label it is filed under, by name; null when none.</summary>
+    public AccountLabelRefResponse? AccountLabel { get; init; }
 
     public decimal Amount { get; init; }
 

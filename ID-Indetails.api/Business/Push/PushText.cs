@@ -36,7 +36,6 @@ public static class PushText
         [NotificationKinds.InvoiceSendFailed] = new("Invoices", "An invoice couldn't be sent automatically."),
         [NotificationKinds.InvoiceIssued] = new("Billing", "Billing update. Open ID InDetails to see it."),
         [NotificationKinds.InvoiceSentAutomatically] = new("Billing", "Billing update. Open ID InDetails to see it."),
-        [NotificationKinds.StatementSent] = new("Billing", "Billing update. Open ID InDetails to see it."),
         [NotificationKinds.ProjectClosed] = new("Project money", "A project's money needs a look."),
         [NotificationKinds.ProjectCostHigh] = new("Project money", "A project's money needs a look."),
         [NotificationKinds.ClientAdded] = new("Clients", "A new client was added."),
@@ -95,9 +94,9 @@ public static class PushText
             NotificationKinds.MeetingMoved => new("Meeting moved", $"{actor} moved a meeting you're in."),
             NotificationKinds.MeetingCancelled => new("Meeting cancelled", $"{actor} cancelled a meeting you were in."),
 
-            NotificationKinds.MaterialsAdded => new("Materials added", Int(payload, "count") is > 1 and var materials
-                ? $"{actor} added {materials} materials on {project}."
-                : $"{actor} added a material on {project}."),
+            NotificationKinds.MaterialsAdded => new("Expenses added", Int(payload, "count") is > 1 and var expenses
+                ? $"{actor} added {expenses} expenses on {project}."
+                : $"{actor} added an expense on {project}."),
             NotificationKinds.LabourWeekSubmitted => new("Labour week", LabourWeek(payload, actor, project)),
 
             NotificationKinds.InvitationAccepted => new("New colleague", $"{actor} accepted the invitation and joined."),

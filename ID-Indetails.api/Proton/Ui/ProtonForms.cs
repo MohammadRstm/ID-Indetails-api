@@ -77,7 +77,7 @@ public sealed record MeetingFill
     public string? Description { get; init; }
 }
 
-/// <summary>A new project's details: never its money (revenue, fee, markup, pay), which the user sets themselves.</summary>
+/// <summary>A new project's details: never its money (revenue, rates, pay), which the user sets themselves.</summary>
 public sealed record NewProjectFill
 {
     public string? Title { get; init; }
@@ -303,7 +303,7 @@ public sealed record CompanyExpenseFill
     public string? Currency { get; init; }
 }
 
-/// <summary>A site's new materials (the fill's id is the project), one row each.</summary>
+/// <summary>A site's new expenses (the fill's id is the project), one row each. The row's type is the item.</summary>
 public sealed record MaterialsFill
 {
     public IReadOnlyList<MaterialRowFill>? Rows { get; init; }

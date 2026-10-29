@@ -49,7 +49,7 @@ public sealed class LabourRepository(IdIndetailsDbContext db) : ILabourRepositor
             && p.Status == ProjectStatus.Active
             && !db.LabourWeeks.Any(w => w.ProjectId == p.Id && w.WeekStart == weekStart));
 
-        var byMaterials = await db.ProjectMaterials
+        var byExpenses = await db.SiteExpenses
             .Where(m => m.DeletedAt == null && m.AddedAt >= since && reporterIds.Contains(m.AddedById))
             .Join(unreported, m => m.ProjectId, p => p.Id, (m, p) => new { UserId = m.AddedById, ProjectId = p.Id, p.Title })
             .Distinct()
@@ -60,7 +60,7 @@ public sealed class LabourRepository(IdIndetailsDbContext db) : ILabourRepositor
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        return byMaterials.Concat(byWeeks)
+        return byExpenses.Concat(byWeeks)
             .DistinctBy(s => (s.UserId, s.ProjectId))
             .Select(s => new SiteToReport(s.UserId, s.ProjectId, s.Title))
             .ToList();

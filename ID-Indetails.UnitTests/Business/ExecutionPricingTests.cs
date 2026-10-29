@@ -10,7 +10,7 @@ public class ExecutionPricingTests
     public void Supervision_is_a_share_of_the_work_and_the_agreed_amount_is_work_plus_supervision()
     {
         // a real site: 787,646.20 of work at 8% supervision and 11% TVA
-        var price = ExecutionPricing.PriceOf(787_646.20m, materials: 0, supervisionRate: 0.08m, tvaRate: 0.11m);
+        var price = ExecutionPricing.PriceOf(787_646.20m, supervisionRate: 0.08m, tvaRate: 0.11m);
 
         price.ShouldSatisfyAllConditions(
             p => p.Supervision.ShouldBe(63_011.70m),
@@ -22,7 +22,7 @@ public class ExecutionPricingTests
     [Fact]
     public void Tva_is_on_the_work_never_on_supervision()
     {
-        var price = ExecutionPricing.PriceOf(1000m, materials: 0, supervisionRate: 0.10m, tvaRate: 0.11m);
+        var price = ExecutionPricing.PriceOf(1000m, supervisionRate: 0.10m, tvaRate: 0.11m);
 
         price.Supervision.ShouldBe(100m);
         price.Tva.ShouldBe(110m);
@@ -33,26 +33,15 @@ public class ExecutionPricingTests
     [Fact]
     public void A_site_with_no_price_yet_is_all_zero()
     {
-        var price = ExecutionPricing.PriceOf(0m, materials: 0, supervisionRate: 0.10m, tvaRate: 0.11m);
+        var price = ExecutionPricing.PriceOf(0m, supervisionRate: 0.10m, tvaRate: 0.11m);
 
         price.ShouldBe(new ExecutionPricing.Price(0m, 0m, 0m, 0m));
     }
 
     [Fact]
-    public void Materials_billed_to_the_client_are_part_of_the_agreed_amount_and_taxed_like_the_work()
-    {
-        var price = ExecutionPricing.PriceOf(1000m, materials: 270m, supervisionRate: 0.10m, tvaRate: 0.10m);
-
-        price.Supervision.ShouldBe(100m);
-        price.Net.ShouldBe(1370m);
-        price.Tva.ShouldBe(127m);
-        price.Gross.ShouldBe(1497m);
-    }
-
-    [Fact]
     public void No_supervision_and_no_tva_leave_the_work_price()
     {
-        var price = ExecutionPricing.PriceOf(5000m, materials: 0, supervisionRate: 0m, tvaRate: 0m);
+        var price = ExecutionPricing.PriceOf(5000m, supervisionRate: 0m, tvaRate: 0m);
 
         price.ShouldBe(new ExecutionPricing.Price(0m, 5000m, 0m, 5000m));
     }

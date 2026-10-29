@@ -13,7 +13,7 @@ public interface IProjectFinanceRepository
 
     Task<IReadOnlyList<ExpenseRow>> ExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<MaterialRow>> MaterialsAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SiteExpenseRow>> SiteExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<GroundLabourRow>> GroundLabourAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
@@ -34,7 +34,6 @@ public sealed record WorkEntryRow(long Id, long ProjectId, long UserId, DateTime
 
 public sealed record ExpenseRow(long ProjectId, string Currency, decimal Amount, DateOnly SpentOn);
 
-/// <param name="SentAt">When a client statement listing it was first sent (any delivery); null until then.</param>
-public sealed record MaterialRow(long ProjectId, string Currency, decimal Total, decimal? ClientPrice, DateTime AddedAt, DateTime? SentAt);
+public sealed record SiteExpenseRow(long ProjectId, string Currency, decimal Total, DateOnly SpentOn);
 
 public sealed record GroundLabourRow(long ProjectId, DateOnly WorkDate, decimal Cost);

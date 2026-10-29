@@ -62,11 +62,11 @@ public sealed class Billing(World world, ApiClient api, SimulatedClock clock)
         ]);
     }
 
-    /// <summary>A quarter of the fee and of the materials' client value so far.</summary>
+    /// <summary>A quarter of the fee.</summary>
     private async Task InvoiceSiteAsync(SeedProject site, DateOnly day)
     {
         site.LastInvoiceOn = day;
-        var amount = decimal.Round((site.Fee + site.MaterialCost * (1 + site.Markup)) * 0.25m / 50m, 0) * 50m;
+        var amount = decimal.Round(site.Fee * 0.25m / 50m, 0) * 50m;
         if (amount > 0)
         {
             await IssueAsync(site, day, [new InvoiceLineRequest { Description = $"Works progress to {day:d MMM yyyy}", Amount = amount }]);

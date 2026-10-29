@@ -51,7 +51,10 @@ public static class ActivityEventKinds
     public const string RevenueSet = "revenue_set";
     public const string RevenueChanged = "revenue_changed";
     public const string ProjectFeeSet = "project_fee_set";
+
+    /// <summary>History only: a site's default material markup changed. Markups are gone; nothing writes this any more, but older rows stay in the feed.</summary>
     public const string MaterialMarkupSet = "material_markup_set";
+
     public const string SupervisionRateSet = "supervision_rate_set";
     public const string ProjectHold = "project_hold";
     public const string ProjectResumed = "project_resumed";
@@ -114,12 +117,16 @@ public static class ActivityEventKinds
     public const string PaymentApplied = "payment_applied";
     public const string PaymentVoided = "payment_voided";
 
-    // Materials (subject: the material; project_id is set; the cost in the amount columns)
+    /// <summary>A payment's account label was set, changed or cleared (the label names in the payload).</summary>
+    public const string PaymentLabelSet = "payment_label_set";
+
+    // Site expenses (subject: the expense, whose type is still "material"; project_id is set; the cost in the amount columns).
+    // The kinds keep their stored names, so older rows read the same.
     public const string MaterialAdded = "material_added";
     public const string MaterialUpdated = "material_updated";
     public const string MaterialRemoved = "material_removed";
 
-    /// <summary>A material's client price was set or returned to the markup; new and previous price in the amount columns.</summary>
+    /// <summary>History only: a material's client price was set or returned to the markup. Client prices are gone; nothing writes this any more, but older rows stay in the feed.</summary>
     public const string MaterialPriced = "material_priced";
 
     // Ground labour (project_id is set; money in the amount columns)
@@ -130,11 +137,24 @@ public static class ActivityEventKinds
     /// <summary>Subject: the project; the new and previous daily pay in the amount columns, the crew sizes in the payload.</summary>
     public const string LabourDefaultsSet = "labour_defaults_set";
 
-    // Client statements (subject: the statement; project and client are set; the statement's total in the amount column)
-    public const string StatementCreated = "statement_created";
+    // Client BOQs and VOs (subject: the BOQ; project and client are set; its total in the amount column; the kind and
+    // number in the payload). Internal drafts are private working papers and raise none.
+    public const string BoqCreated = "boq_created";
 
     /// <summary>The channel in the payload.</summary>
-    public const string StatementSent = "statement_sent";
+    public const string BoqSent = "boq_sent";
+
+    /// <summary>Also writes <see cref="ProjectFeeSet"/>, as the work price changes.</summary>
+    public const string BoqAgreed = "boq_agreed";
+
+    /// <summary>The reason in the payload. Also writes <see cref="ProjectFeeSet"/>, as the work price changes.</summary>
+    public const string BoqAgreementWithdrawn = "boq_agreement_withdrawn";
+
+    // Supervision taken (subject: the withdrawal, type "supervision_withdrawal"; project_id is set; the USD amount in the amount column)
+    /// <summary>The company took some of a site's supervision fee out of the project account. Not a cost.</summary>
+    public const string SupervisionTaken = "supervision_taken";
+
+    public const string SupervisionWithdrawalRemoved = "supervision_withdrawal_removed";
 
     // Company layer (no domain, except schedules, which carry the person's domain)
     public const string CompanySettingsUpdated = "company_settings_updated";

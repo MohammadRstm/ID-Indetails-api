@@ -10,7 +10,7 @@ namespace ID_Indetails.api.Business.Finance;
 /// in force on the day it happened; a cost with no rate that day is left out and reported as unconverted.
 /// <list type="bullet">
 /// <item>Cost = employee labour (hours × the hourly cost in force that day, the hours paid as overtime at the overtime
-/// rate × the multiplier instead, plus everyone's paid breaks) + expenses + materials + ground labour.</item>
+/// rate × the multiplier instead, plus everyone's paid breaks) + expenses + site expenses + ground labour.</item>
 /// <item>Profit = revenue − cost. Internal projects have no revenue.</item>
 /// <item>Margin = profit ÷ revenue, only once it means something: the project is done, at least 5% along,
 /// or has at least 10 hours logged.</item>
@@ -31,11 +31,11 @@ public static class ProjectFinance
     public sealed record Costs(
         decimal Labour,
         decimal Expenses,
-        decimal Materials,
+        decimal SiteExpenses,
         decimal GroundLabour,
         IReadOnlyList<UnconvertedCost> Unconverted)
     {
-        public decimal Total => Labour + Expenses + Materials + GroundLabour;
+        public decimal Total => Labour + Expenses + SiteExpenses + GroundLabour;
     }
 
     /// <param name="OvertimeMinutes">The part paid as overtime, as Salaries pays it: not what made up a short month.</param>
@@ -211,7 +211,7 @@ public static class ProjectFinance
         return new Costs(
             Round(usd.GetValueOrDefault(CostSource.Labour)),
             Round(usd.GetValueOrDefault(CostSource.Expenses)),
-            Round(usd.GetValueOrDefault(CostSource.Materials)),
+            Round(usd.GetValueOrDefault(CostSource.SiteExpense)),
             Round(usd.GetValueOrDefault(CostSource.GroundLabour)),
             unconverted.Select(u => new UnconvertedCost(u.Key.Item1, u.Key.Item2, Round(u.Value))).ToList());
     }
@@ -257,33 +257,6 @@ public static class ProjectFinance
         }
 
         return weeks;
-    }
-
-    /// <summary>
-    /// What an Execution client is charged for materials, in USD: each client price converted at the rate
-    /// on the day the material was added. Materials with no rate that day are left out and counted.
-    /// </summary>
-    public static (decimal ChargeUsd, int Unconverted) MaterialCharge(
-        IEnumerable<(ExecutionPricing.Material Material, string Currency, DateOnly Day)> materials,
-        decimal markup,
-        ExchangeRateTable rates)
-    {
-        var charge = 0m;
-        var unconverted = 0;
-
-        foreach (var (material, currency, day) in materials)
-        {
-            if (rates.ToUsd(ExecutionPricing.ClientPrice(material, markup), currency, day) is { } usd)
-            {
-                charge += usd;
-            }
-            else
-            {
-                unconverted++;
-            }
-        }
-
-        return (Round(charge), unconverted);
     }
 
     public static Summary Summarise(Facts facts, Costs costs)

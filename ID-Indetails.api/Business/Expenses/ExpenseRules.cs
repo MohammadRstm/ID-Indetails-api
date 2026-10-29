@@ -18,6 +18,12 @@ public static class ExpenseRules
 
     public sealed record CurrencyTotal(string Currency, decimal Total);
 
+    /// <summary>An Execution site's costs are its site expenses: project expenses are for the other domains.</summary>
+    public static RuleDenial? CheckNotExecution(string domain)
+        => domain == DomainCodes.Execution
+            ? RuleDenial.BusinessRule(ErrorCodes.ExpenseExecutionUsesSiteExpenses, "An Execution site's expenses are recorded as site expenses.")
+            : null;
+
     public static RuleDenial? CheckEditable(ProjectStatus status, bool revenueLocked)
         => status is ProjectStatus.Completed or ProjectStatus.Archived || revenueLocked
             ? RuleDenial.BusinessRule(ErrorCodes.ProjectClosed, "This project is finished. Reopen it to change its expenses.")
