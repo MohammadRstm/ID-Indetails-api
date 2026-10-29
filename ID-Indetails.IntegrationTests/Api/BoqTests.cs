@@ -574,7 +574,7 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_first_agreement_that_does_not_cover_the_costs_already_recorded_is_held_to_the_floor_too()
+    public async Task A_first_agreement_passes_even_when_it_does_not_cover_the_costs_already_recorded()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await NewSiteAsync(superAdmin);
@@ -582,11 +582,8 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
         var boq = await Boqs.CreateAsync(superAdmin.AccessToken, site.Id);
         await Boqs.SaveAsync(superAdmin.AccessToken, boq.Id, [Line("Works", 1, 1000m)]);
 
-        // the floor is off until a price is agreed, and agreeing one that leaves the profit below zero is a change like any other
-        var refused = await (await Client.PostEmptyAsync($"/api/boqs/{boq.Id}/agree", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.ProfitFloor);
-        (await MoneyAsync(superAdmin, site.Id)).ProjectFee.ShouldBe(0m);
-
-        await OkAsync<BlockedChangeResponse>(Client.PostEmptyAsync($"/api/blocked-changes/{refused.BlockedChangeId}/force", superAdmin.AccessToken));
+        // the floor is off until a price is agreed, and agreeing one raises the price: a rise never needs forcing
+        await OkAsync<BoqDetailResponse>(Client.PostEmptyAsync($"/api/boqs/{boq.Id}/agree", superAdmin.AccessToken));
         (await MoneyAsync(superAdmin, site.Id)).ProjectFee.ShouldBe(1000m);
     }
 

@@ -230,22 +230,26 @@ public sealed class BoqService(
 
         var agreed = await boqs.AgreedAsync(project.Id, cancellationToken);
         Throw(BoqRules.CheckAgreeable(boq.Kind, boq.Status, boq.Lines.Count, agreed.ClientAgreed));
-        var before = await floor.BeforeAsync(project, cancellationToken);
+        var work = boq.Kind == BoqKind.Client
+            ? BoqRules.WorkPrice(boq.TotalUsd, agreed.VoTotals)
+            : BoqRules.WorkPrice(agreed.ClientTotal, [.. agreed.VoTotals, boq.TotalUsd]);
+        Throw(BoqRules.CheckWorkPrice(work));
+        var before = await FloorBeforeAsync(project, work, cancellationToken);
 
         var now = clock.UtcNow;
         boq.Status = BoqStatus.Agreed;
         boq.AgreedAt = now;
         boq.AgreedById = actor.UserId;
         boq.UpdatedAt = now;
-        var work = boq.Kind == BoqKind.Client
-            ? BoqRules.WorkPrice(boq.TotalUsd, agreed.VoTotals)
-            : BoqRules.WorkPrice(agreed.ClientTotal, [.. agreed.VoTotals, boq.TotalUsd]);
-        Throw(BoqRules.CheckWorkPrice(work));
         SetWorkPrice(project, work, boq.Number!, actor.UserId);
         activity.Add(BoqEvent(boq, project, ActivityEventKinds.BoqAgreed, actor.UserId, new { kind = KindOf(boq), number = boq.Number }));
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        await floor.CheckAsync(before, BlockedChangeKind.BoqAgree, new BlockedRequest<object?>(project.Id, null, ItemId: boq.Id), cancellationToken);
+        if (before is not null)
+        {
+            await floor.CheckAsync(before, BlockedChangeKind.BoqAgree, new BlockedRequest<object?>(project.Id, null, ItemId: boq.Id), cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
     }
@@ -260,22 +264,26 @@ public sealed class BoqService(
 
         var agreed = await boqs.AgreedAsync(project.Id, cancellationToken);
         Throw(BoqRules.CheckWithdrawable(boq.Kind, boq.Status, agreed.VoTotals.Count));
-        var before = await floor.BeforeAsync(project, cancellationToken);
+        var work = boq.Kind == BoqKind.Client
+            ? BoqRules.WorkPrice(0, agreed.VoTotals)
+            : BoqRules.WorkPrice(agreed.ClientTotal, WithoutOne(agreed.VoTotals, boq.TotalUsd));
+        Throw(BoqRules.CheckWorkPrice(work));
+        var before = await FloorBeforeAsync(project, work, cancellationToken);
 
         var reason = request.Reason.Trim();
         boq.Status = BoqStatus.Draft;
         boq.AgreedAt = null;
         boq.AgreedById = null;
         boq.UpdatedAt = clock.UtcNow;
-        var work = boq.Kind == BoqKind.Client
-            ? BoqRules.WorkPrice(0, agreed.VoTotals)
-            : BoqRules.WorkPrice(agreed.ClientTotal, WithoutOne(agreed.VoTotals, boq.TotalUsd));
-        Throw(BoqRules.CheckWorkPrice(work));
         SetWorkPrice(project, work, reason, actor.UserId);
         activity.Add(BoqEvent(boq, project, ActivityEventKinds.BoqAgreementWithdrawn, actor.UserId, new { kind = KindOf(boq), number = boq.Number, reason }));
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        await floor.CheckAsync(before, BlockedChangeKind.BoqWithdraw, new BlockedRequest<WithdrawBoqAgreementRequest>(project.Id, request, ItemId: boq.Id), cancellationToken);
+        if (before is not null)
+        {
+            await floor.CheckAsync(before, BlockedChangeKind.BoqWithdraw, new BlockedRequest<WithdrawBoqAgreementRequest>(project.Id, request, ItemId: boq.Id), cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
     }
@@ -445,6 +453,13 @@ public sealed class BoqService(
     }
 
     /// <summary>Sets the work price and records the change as a fee change always was: in the payment history and the feed.</summary>
+    /// <summary>
+    /// The profit before a change of the work price, when the floor has to judge it: only a lower price can take the
+    /// profit to zero, so a rise (the first agreement included) never needs forcing.
+    /// </summary>
+    private async Task<ProfitBefore?> FloorBeforeAsync(Project project, decimal work, CancellationToken cancellationToken)
+        => work < (project.ProjectFee ?? 0) ? await floor.BeforeAsync(project, cancellationToken) : null;
+
     private void SetWorkPrice(Project project, decimal work, string description, long actorId)
     {
         var previous = project.ProjectFee ?? 0;
