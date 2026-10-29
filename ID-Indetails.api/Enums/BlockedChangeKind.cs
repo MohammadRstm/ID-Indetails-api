@@ -11,6 +11,8 @@ public enum BlockedChangeKind
     WorkEntryUpdate,
     Payment,
     Pricing,
+    BoqAgree,
+    BoqWithdraw,
 }
 
 /// <summary>Where a refused change stands.</summary>
