@@ -37,7 +37,7 @@ public static class ProtonSurfaces
         [ProtonSurface.ProjectReport] = new("the project report", ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Report)), ProtonRefType.Project, DomainCodes.Design),
         [ProtonSurface.ProjectPaymentTerms] = new("the project's payment", ProtonEndpoint.OfWrite<ProjectsController>(nameof(ProjectsController.UpdateBilling)), ProtonRefType.Project, DomainCodes.Design),
         [ProtonSurface.AddProjectExpense] = new("the add expense form", ProtonEndpoint.OfWrite<ExpensesController>(nameof(ExpensesController.Create)), ProtonRefType.Project),
-        [ProtonSurface.SitePricing] = new("the site's fee and markup", ProtonEndpoint.OfWrite<ProjectsController>(nameof(ProjectsController.UpdatePricing)), ProtonRefType.Project, DomainCodes.Execution),
+        [ProtonSurface.SitePricing] = new("the site's supervision and TVA", ProtonEndpoint.OfWrite<ProjectsController>(nameof(ProjectsController.UpdatePricing)), ProtonRefType.Project, DomainCodes.Execution),
         [ProtonSurface.NewInvoice] = new("a new invoice", ProtonEndpoint.OfWrite<InvoicesController>(nameof(InvoicesController.Create)), ProtonRefType.Project),
         [ProtonSurface.RecordPayment] = new("the record payment form", ProtonEndpoint.OfWrite<PaymentsController>(nameof(PaymentsController.Record)), ProtonRefType.Project),
         [ProtonSurface.NewMeeting] = new("the new meeting form", ProtonEndpoint.OfWrite<MeetingsController>(nameof(MeetingsController.Create))),

@@ -25,7 +25,7 @@ public sealed class ProjectFinanceService(
         IReadOnlyList<ProjectFinance.PayRate> PayRates,
         ILookup<long, Cost> Breaks,
         ILookup<long, ExpenseRow> Expenses,
-        ILookup<long, MaterialRow> Materials,
+        ILookup<long, SiteExpenseRow> SiteExpenses,
         ILookup<long, GroundLabourRow> Ground,
         IReadOnlyDictionary<long, (decimal Received, decimal Tva)> Received,
         IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)> Pocket);
@@ -49,7 +49,7 @@ public sealed class ProjectFinanceService(
         return projects.ToDictionary(p => p.Id, p =>
         {
             var entries = loaded.Entries[p.Id].ToList();
-            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Breaks[p.Id], loaded.Expenses[p.Id], loaded.Materials[p.Id], loaded.Ground[p.Id]);
+            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Breaks[p.Id], loaded.Expenses[p.Id], loaded.SiteExpenses[p.Id], loaded.Ground[p.Id]);
             return new ProjectCostHistory(
                 Calculate(p, loaded),
                 ProjectFinance.DatedUsd(items, loaded.Rates),
@@ -70,7 +70,7 @@ public sealed class ProjectFinanceService(
             payRates,
             (await PaidBreaksAsync(entries, payRates, cancellationToken)).ToLookup(b => b.ProjectId, b => b.Cost),
             (await sources.ExpensesAsync(ids, cancellationToken)).ToLookup(x => x.ProjectId),
-            (await sources.MaterialsAsync(ids, cancellationToken)).ToLookup(m => m.ProjectId),
+            (await sources.SiteExpensesAsync(ids, cancellationToken)).ToLookup(e => e.ProjectId),
             (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId),
             await sources.ReceivedAsync(ids, cancellationToken),
             await sources.PocketAsync(ids, cancellationToken));
@@ -83,7 +83,7 @@ public sealed class ProjectFinanceService(
             loaded.PayRates,
             loaded.Breaks[project.Id],
             loaded.Expenses[project.Id],
-            loaded.Materials[project.Id].ToList(),
+            loaded.SiteExpenses[project.Id].ToList(),
             loaded.Ground[project.Id],
             loaded.Received.GetValueOrDefault(project.Id),
             loaded.Pocket.GetValueOrDefault(project.Id),
@@ -105,7 +105,7 @@ public sealed class ProjectFinanceService(
             payRates,
             breaks,
             await sources.ExpensesAsync(ids, cancellationToken),
-            await sources.MaterialsAsync(ids, cancellationToken),
+            await sources.SiteExpensesAsync(ids, cancellationToken),
             await sources.GroundLabourAsync(ids, cancellationToken));
         var payments = await sources.PaymentsAsync(project.Id, cancellationToken);
         // pocket money counts as cash on the day it moved: a payout in, a contribution out
@@ -180,7 +180,7 @@ public sealed class ProjectFinanceService(
         IReadOnlyList<ProjectFinance.PayRate> payRates,
         IEnumerable<Cost> breaks,
         IEnumerable<ExpenseRow> expenses,
-        IEnumerable<MaterialRow> materials,
+        IEnumerable<SiteExpenseRow> siteExpenses,
         IEnumerable<GroundLabourRow> ground)
     {
         var (labour, unpricedMinutes) = ProjectFinance.PriceLabour(
@@ -190,7 +190,7 @@ public sealed class ProjectFinanceService(
         var items = labour
             .Concat(breaks)
             .Concat(expenses.Select(x => new Cost(CostSource.Expenses, x.Currency, x.Amount, x.SpentOn)))
-            .Concat(materials.Select(m => new Cost(CostSource.Materials, m.Currency, m.Total, clock.ToCompanyDate(m.AddedAt))))
+            .Concat(siteExpenses.Select(e => new Cost(CostSource.SiteExpense, e.Currency, e.Total, e.SpentOn)))
             // Ground labour is recorded without a currency: daily pay is in USD.
             .Concat(ground.Select(d => new Cost(CostSource.GroundLabour, PaymentRules.BaseCurrency, d.Cost, d.WorkDate)))
             .ToList();
@@ -204,13 +204,13 @@ public sealed class ProjectFinanceService(
         IReadOnlyList<ProjectFinance.PayRate> payRates,
         IEnumerable<Cost> breaks,
         IEnumerable<ExpenseRow> expenses,
-        IReadOnlyList<MaterialRow> materials,
+        IReadOnlyList<SiteExpenseRow> siteExpenses,
         IEnumerable<GroundLabourRow> ground,
         (decimal Gross, decimal Tva) received,
         (decimal ToPocket, decimal FromPocket) pocket,
         ExchangeRateTable rates)
     {
-        var (items, unpricedMinutes) = CostItems(entries, payRates, breaks, expenses, materials, ground);
+        var (items, unpricedMinutes) = CostItems(entries, payRates, breaks, expenses, siteExpenses, ground);
         var costs = ProjectFinance.ToUsd(items, rates);
 
         var isExecution = project.DomainCode == DomainCodes.Execution;

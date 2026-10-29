@@ -1,16 +1,19 @@
+using ID_Indetails.api.Enums;
+
 namespace ID_Indetails.api.Models;
 
 /// <summary>
-/// Execution only: a material delivery or purchase on a site project. The cost is either
-/// quantity × unit cost, or a lump-sum <see cref="Amount"/> typed in when nobody counted.
+/// Execution only: a cost recorded on a site project (materials, a contractor, equipment, fees…). The cost is either
+/// quantity × unit cost, or a lump-sum <see cref="Amount"/> typed in when nobody counted. It is a cost only: nothing here
+/// is charged to the client.
 /// </summary>
-public class ProjectMaterial
+public class SiteExpense
 {
     public long Id { get; set; }
 
     public long ProjectId { get; set; }
 
-    /// <summary>The material type ("Type" on screen), e.g. "Rebar 12mm".</summary>
+    /// <summary>What it was ("Item" on screen), e.g. "Rebar 12mm".</summary>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>Optional. Together with <see cref="UnitCost"/> it gives the cost.</summary>
@@ -27,12 +30,7 @@ public class ProjectMaterial
 
     public string Currency { get; set; } = "USD";
 
-    /// <summary>
-    /// Price charged to the client when set by hand. Null means the project's default
-    /// material markup applies (cost × (1 + markup), calculated, never stored).
-    /// </summary>
-    public decimal? ClientPrice { get; set; }
-
+    /// <summary>Who was paid ("Supplier / payee" on screen).</summary>
     public string? Supplier { get; set; }
 
     public string? Note { get; set; }
@@ -43,6 +41,14 @@ public class ProjectMaterial
     /// </summary>
     public decimal Total { get; private set; }
 
+    /// <summary>The day the money was spent, in the company time zone. It dates the cost for exchange rates.</summary>
+    public DateOnly SpentOn { get; set; }
+
+    public SiteExpenseCategory Category { get; set; } = SiteExpenseCategory.Materials;
+
+    /// <summary>The company account label it is filed under; null when none. An archived label stays on what carries it.</summary>
+    public long? AccountLabelId { get; set; }
+
     public DateTime AddedAt { get; set; }
 
     public long AddedById { get; set; }
@@ -52,8 +58,8 @@ public class ProjectMaterial
     public DateTime? DeletedAt { get; set; }
 
     /// <summary>
-    /// The phone app's own id for the material, given when it was recorded (maybe offline), so a batch sent again adds
-    /// it only once. Unique per person who added it; null for materials added on the website.
+    /// The phone app's own id for the expense, given when it was recorded (maybe offline), so a batch sent again adds
+    /// it only once. Unique per person who added it; null for expenses added on the website.
     /// </summary>
     public Guid? ClientRef { get; set; }
 

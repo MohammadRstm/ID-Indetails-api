@@ -51,7 +51,10 @@ public static class ActivityEventKinds
     public const string RevenueSet = "revenue_set";
     public const string RevenueChanged = "revenue_changed";
     public const string ProjectFeeSet = "project_fee_set";
+
+    /// <summary>History only: a site's default material markup changed. Markups are gone; nothing writes this any more, but older rows stay in the feed.</summary>
     public const string MaterialMarkupSet = "material_markup_set";
+
     public const string SupervisionRateSet = "supervision_rate_set";
     public const string ProjectHold = "project_hold";
     public const string ProjectResumed = "project_resumed";
@@ -114,12 +117,13 @@ public static class ActivityEventKinds
     public const string PaymentApplied = "payment_applied";
     public const string PaymentVoided = "payment_voided";
 
-    // Materials (subject: the material; project_id is set; the cost in the amount columns)
+    // Site expenses (subject: the expense, whose type is still "material"; project_id is set; the cost in the amount columns).
+    // The kinds keep their stored names, so older rows read the same.
     public const string MaterialAdded = "material_added";
     public const string MaterialUpdated = "material_updated";
     public const string MaterialRemoved = "material_removed";
 
-    /// <summary>A material's client price was set or returned to the markup; new and previous price in the amount columns.</summary>
+    /// <summary>History only: a material's client price was set or returned to the markup. Client prices are gone; nothing writes this any more, but older rows stay in the feed.</summary>
     public const string MaterialPriced = "material_priced";
 
     // Ground labour (project_id is set; money in the amount columns)

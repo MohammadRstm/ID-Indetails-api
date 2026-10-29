@@ -138,7 +138,7 @@ async function projectPage(session, domain) {
     get(session, `/api/invoices?projectId=${id}&pageSize=100`);
     get(session, '/api/employees?domain=design&pageSize=100');
   } else {
-    get(session, `/api/projects/${id}/materials?page=1&pageSize=100`);
+    get(session, `/api/projects/${id}/site-expenses?page=1&pageSize=100`);
     get(session, `/api/projects/${id}/labour-weeks`);
     get(session, `/api/projects/${id}/labour-defaults`);
     get(session, `/api/payments?projectId=${id}&pageSize=100`);

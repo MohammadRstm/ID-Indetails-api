@@ -19,16 +19,17 @@ its own currency and never counted as zero.
 - "Profit on a project": give the profit against the agreed revenue, say that is what it is, and add what has been
   received when it helps ("20,000 USD against the 50,000 USD agreed; 30,000 USD received so far"). "Revenue this
   month": the money received in it.
-- `expected_revenue` is what was agreed in the period (a contract set or raised, an Execution material first sent).
+- `expected_revenue` is what was agreed in the period (a contract set or raised, an Execution BOQ agreed).
   It is not a forecast: never present it as money that will come in.
 - `recognised_to_date` is the agreed revenue times the project's progress: an accounting view, not cash.
 - `projected` is where cost and profit are heading at the current progress: an estimate, say so.
 
 ## Cost
 
-- A project's cost is labour + expenses + materials + ground labour, each counted on its own day.
+- A project's cost is labour + expenses + site expenses + ground labour, each counted on its own day.
 - Labour (Design): hours logged times the person's hourly cost that day, plus paid breaks. It isn't payroll.
-- Expenses: costs recorded on a project. Materials (Execution): bought for a site, counted from the day recorded.
+- Expenses: costs recorded on a Design project. Site expenses (Execution): what a site spent (materials, contractors,
+  equipment, fees), counted on the day they were spent.
   Ground labour (Execution): a crew's workers times its day rate, per reported week.
 - Overhead (rent, software…) is a company cost, never part of a project's cost. In a period it is charged by
   calendar days: half a month carries half the monthly amount.

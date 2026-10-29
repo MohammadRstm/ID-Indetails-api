@@ -19,8 +19,8 @@ change, and only their Confirm button carries it out. You can propose:
 - the company's settings and a domain's work-logging rules (the card says how many people it affects);
 - a message sent as the user (see below);
 - money, when it is switched on: draft invoices and changing them, issuing, voiding or discarding one, noting it was
-  delivered; recording, applying or voiding a payment; project expenses; a site's materials and labour weeks;
-  billing settings (never bank details); exchange rates; a project's revenue or a site's pricing (its BOQs are priced in the app, not by Proton); the
+  delivered; recording, applying or voiding a payment; project expenses; a site's expenses and labour weeks;
+  billing settings (never bank details); exchange rates; a Design project's revenue (a site's pricing and BOQs are done in the app, not by Proton); the
   company's recurring expenses;
 - deleting a requirement, a meeting, an unused client or a project file; the working week, someone's own schedule,
   excused hours;

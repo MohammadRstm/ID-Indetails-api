@@ -1,32 +1,39 @@
 # Execution sites
 
-What site staff and admins record on an Execution project, and how it is priced for the client. Execution projects themselves, their work price, supervision and markup, and their cost, profit and margin are in [projects.md](projects.md); how the client is charged (work, supervision, TVA) is in [billing.md](billing.md#tva); how the work price is set, by BOQs, is in the section below. A project of a domain the caller can't see reads as `404`, and Design projects have none of this (`422 not_for_this_domain`). Meetings work on sites exactly as on Design projects (see [design.md](design.md#meetings)).
+What site staff and admins record on an Execution project, and how it is priced for the client. Execution projects themselves, their work price and supervision, and their cost, profit and margin are in [projects.md](projects.md); how the client is charged (work, supervision, TVA) is in [billing.md](billing.md#tva); how the work price is set, by BOQs, is in the section below. A project of a domain the caller can't see reads as `404`, and Design projects have none of this (`422 not_for_this_domain`). Meetings work on sites exactly as on Design projects (see [design.md](design.md#meetings)).
 
-**A finalised project is locked.** Once a site is completed or archived, nobody (admins included) adds, changes or removes its materials until it is reopened (`422 project_locked`). Projects on hold stay open. This lock, and the rule that people change only what they recorded unless they hold the manage permission, are in `Business/Execution/SiteRules.cs`.
+**A finalised project is locked.** Once a site is completed or archived, nobody (admins included) adds, changes or removes its site expenses until it is reopened (`422 project_locked`). Projects on hold stay open. This lock, and the rule that people change only what they recorded unless they hold the manage permission, are in `Business/Execution/SiteRules.cs`.
 
-## Materials
+## Site expenses
+
+Everything an Execution site spends, other than ground labour, is a site expense: materials bought, a contractor, equipment, fees. It is a **cost only**: no client price, no markup, nothing charged to the client (the price of the work is in the BOQs). It replaced the materials list, and for Execution it replaces the "project expense" too (see below).
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects/{id}/materials?type=&supplier=&addedById=&from=&to=&search=&page=1&pageSize=30` | `project:view` | Newest first, with totals, types, suppliers and who added them |
-| `POST /api/projects/{id}/materials` | `material:create` | `{ items: [{ name, quantity, unit, unitCost, amount, supplier, note, clientPrice, clientRef }] }`, 1–100 at a time. Answers the materials in request order |
-| `PUT /api/projects/{id}/materials/{materialId}` | `material:create` (own) or `material:manage` (anyone's) | Replaces name, quantity, unit, unit cost, amount, supplier and note |
-| `DELETE /api/projects/{id}/materials/{materialId}` | `material:create` (own) or `material:manage` (anyone's) | Soft delete (`deleted_at`) |
-| `PUT /api/projects/{id}/materials/{materialId}/client-price` | `project:pricing_manage` | `{ clientPrice }`; `null` returns it to the project's markup |
+| `GET /api/projects/{id}/site-expenses?type=&supplier=&addedById=&category=&accountLabelId=&from=&to=&search=&page=1&pageSize=30` | `project:view` | Newest recorded first, with totals, types, suppliers and who added them |
+| `POST /api/projects/{id}/site-expenses` | `material:create` | `{ items: [{ name, quantity, unit, unitCost, amount, supplier, note, currency, spentOn, category, accountLabelId, clientRef }] }`, 1–100 at a time. Answers the expenses in request order |
+| `PUT /api/projects/{id}/site-expenses/{expenseId}` | `material:create` (own) or `material:manage` (anyone's) | Replaces the same fields (without `clientRef`) |
+| `DELETE /api/projects/{id}/site-expenses/{expenseId}` | `material:create` (own) or `material:manage` (anyone's) | Soft delete (`deleted_at`) |
 
-Rules (`Business/Materials/MaterialRules.cs`):
+**The old `/materials` paths are a temporary alias for the phone app.** `GET`, `POST`, `PUT` and `DELETE` on `/api/projects/{id}/materials` (and `/{id}`) are served by the same controller (`SiteExpensesController`) with the same shapes, so the phone keeps recording until it moves to `/site-expenses` in its own PR; then delete the second `[Route]` on the controller. A stray `clientPrice` in a phone batch is ignored (unknown JSON properties are skipped), and `PUT …/client-price` is gone on both paths (`404`). The permissions did not change: they keep the codes `material:create` and `material:manage`.
 
-- A material needs a **type** (`name`) and a **cost**: quantity × unit cost when both are given, otherwise the total (`amount`). Quantity (3 decimals), unit and unit cost (4 decimals) are optional. A total that doesn't match quantity × unit cost sets the unit cost to total ÷ quantity. Materials are in the project's currency (USD).
+Rules (`Business/SiteExpenses/SiteExpenseRules.cs`):
+
+- An expense needs an **item** (`name`, "Item" on screen) and a **cost**: quantity × unit cost when both are given, otherwise the total (`amount`). Quantity (3 decimals), unit and unit cost (4 decimals) are optional. A total that doesn't match quantity × unit cost sets the unit cost to total ÷ quantity. `supplier` is "Supplier / payee" on screen.
+- **`currency`** is `USD` (the default) or `LBP`, **`spentOn`** is the day the money was spent (default today in the company time zone; between 2000 and 2100; not necessarily the day it was recorded), and **`category`** is `materials` (the default), `contractor`, `equipment`, `fees` or `other`. A change that leaves out any of the three keeps what the expense has. An expense in LBP needs an exchange rate in force on its `spentOn` (`422 exchange_rate_missing`): without one the site's money couldn't convert it, so it would never reach profit or the profit floor. Its activity events carry the `currency` in their payload, since their amount is in the expense's own currency, and a person's site records (`/api/me/site-records`) count it in dollars at that day's rate.
+- **`accountLabelId`** files it under one of the company's [account labels](company.md). It must exist (`400 validation_failed` naming `items[i].accountLabelId`), and an archived label can't be newly picked (`422 account_label_archived`); an expense keeps an archived label it already has. A change sets the label to what it says, so leaving it out clears it. The response shows `accountLabel: { id, name }` or `null`.
 - People change and remove only what they recorded; `material:manage` changes anyone's (`403 forbidden`). `canEdit` on each row says whether the caller may.
-- **Client price:** a material's own price when set, otherwise cost × (1 + the project's markup). Setting one, on adding or afterwards, needs `project:pricing_manage`. A price equal to the automatic one is stored as automatic, so it keeps following the markup.
-- A material is a plain cost: it can be changed or removed while the site is open, and its price is never revenue. `priceSource` is `auto` or `manual`. (The client price and markup stay until materials become cost-only expenses.)
-- **Who sees what:** everyone who can see the project sees materials with their costs (site staff type them). Client price, price source, markup, charge totals and the default markup are only returned to callers with `financial:view` or `project:pricing_manage`.
-- **Grouping:** types and suppliers are grouped by their text trimmed, with single spaces, in lower case (`type` and `supplier` filters take these keys). A type is labelled as most recently typed. The `from`/`to` filters are days in the company time zone. `matching` totals cover everything the filters match, `all` the whole project.
-- Events: `material_added`, `material_updated`, `material_removed` (cost in the `amount` columns) and `material_priced` (new and previous client price), with the name in the payload.
-- Adding materials sends one `materials_added` notification (the count in the payload) to every active person who holds `material:manage` and can see the domain (super admins included), except the person who added them.
-- **Sent twice.** The phone app records materials offline and may send a batch again when its answer was lost. Each item can carry `clientRef`, a UUID the app gives the material once. If the caller already added a material with that ref, it is returned in the item's place: nothing is added, and no event or notification is sent. A batch whose items all exist changes nothing, and answers even on a site finalised since; one with new items follows the usual rules for those. A ref belongs to the person who added it (two people may use the same one), appears once in a batch, and is never reused on another site (`400`). The website sends none.
+- An expense is a plain cost: it can be changed or removed while the site is open. The response has no client price, price source or markup, and the list no charge or default markup. Everyone who can see the project sees the costs (site staff type them).
+- **Totals.** Amounts in different currencies are never added together: each totals block (`matching` covers everything the filters match, `all` the whole project) has the row `count`, `cost` (the rows in USD) and `byCurrency` (one total per currency, USD included). A type's `cost` is likewise its USD rows.
+- **Filters.** `from` and `to` are days **spent** (`spentOn`), `category` and `accountLabelId` are exact. Types and suppliers are grouped by their text trimmed, with single spaces, in lower case (`type` and `supplier` filters take these keys); a type is labelled as most recently typed. The list is ordered by when the expense was recorded, newest first.
+- Events keep their stored names: `material_added`, `material_updated`, `material_removed` (cost in the `amount` columns, subject type `material`) with the item's name in the payload. Older rows `material_priced` and `material_markup_set` stay in the feed as history; nothing writes them any more.
+- Adding expenses sends one `materials_added` notification (the count in the payload; it reads "Expenses added" on a phone) to every active person who holds `material:manage` and can see the domain (super admins included), except the person who added them.
+- **Sent twice.** The phone app records expenses offline and may send a batch again when its answer was lost. Each item can carry `clientRef`, a UUID the app gives the expense once. If the caller already added an expense with that ref, it is returned in the item's place: nothing is added, and no event or notification is sent. A batch whose items all exist changes nothing, and answers even on a site finalised since; one with new items follows the usual rules for those. A ref belongs to the person who added it (two people may use the same one), appears once in a batch, and is never reused on another site (`400`). The website sends none. An expense the phone recorded offline gets the day it is sent as its `spentOn` unless the phone names one.
+- **The profit floor** guards adding and changing them (stored kinds `material_add` and `material_update`, said as "expense" in the blocked change's summary): see [projects.md](projects.md#profit-floor).
 
-Material cost and client prices feed the shared finance calculator (`Business/Finance/ProjectFinance.cs`): cost is converted at the rate of the day a material was added.
+Site expenses feed the shared finance calculator (`Business/Finance/ProjectFinance.cs`) as the cost source `site_expense`: a cost is converted at the rate of the day it was **spent**, and one with no rate that day is listed as unconverted (`ProjectCostResponse.siteExpenses`, `unconverted[].source = "site_expense"`).
+
+**Project expenses are Design's.** `POST /api/projects/{id}/expenses` on an Execution project is refused with `422 expense_execution_uses_site_expenses`; Design project expenses are unchanged (see [projects.md](projects.md#expenses)). The migration moved an Execution site's existing project expenses into site expenses: label to item, amount, currency, day, note, who recorded them (the project's owner when no one is recorded) and when, `deleted_at` kept; the categories became `contractor` for contractor, `equipment` for assets and hardware, `fees` for services and software, and `other` for travel and anything else.
 
 ## Ground labour
 
@@ -96,17 +103,17 @@ Rules (`Business/Boqs/BoqRules.cs`, pure; the totals are recomputed from the lin
 - **The PDF** shows the company header, the client and project, the number, date and title (a VO also its reason), then each line's code, description, final quantity, unit, rate and total, and the subtotal, adjustment (when there is one), total, supervision (x%), TVA (y%) and total to pay. It never shows the exact quantity or the waste. A draft is stamped DRAFT. See [documents.md](documents.md).
 - Events (client BOQs and VOs only; the number and kind in the payload, the total in the `amount` column): `boq_created`, `boq_sent` (and the channel), `boq_agreed`, `boq_agreement_withdrawn` (and the reason). There are no notifications for BOQs: the client portal does not show them yet, so they reach the client as a PDF. Proton has no BOQ actions: every BOQ write endpoint is a `Never` entry in `ProtonCoverage`.
 
-Client statements, which listed materials supplied and froze their prices, are gone: nothing is in production, so their tables went with no data migration. A material is now a plain cost.
+Client statements, which listed materials supplied and froze their prices, are gone: nothing is in production, so their tables went with no data migration. A site expense is a plain cost.
 
 ## Site staff and daily logs
 
-Site staff are Execution employees. They log no hours (they are paid monthly: an hourly pay is refused with `400 fixed_salary_paid_monthly`), record no materials by default (`material:create` is no longer an employee default; admins record them, or someone given the permission), and on the sites they oversee they report ground labour and write daily logs.
+Site staff are Execution employees. They log no hours (they are paid monthly: an hourly pay is refused with `400 fixed_salary_paid_monthly`), record no site expenses by default (`material:create` is no longer an employee default; admins record them, or someone given the permission), and on the sites they oversee they report ground labour and write daily logs.
 
 **Who oversees a site** (`project_staff`):
 - `POST /api/projects` for an Execution site requires `staffIds`: at least one, each an active Execution employee, each once (`400 staffIds`). A Design project takes none.
 - `PUT /api/projects/{id}/staff` (`project:edit`) `{ staffIds }` replaces the list (at least one). Someone taken off keeps their row with `removedAt`, so their past records still say who they were; put back, the same row is used again.
 - The project shows them as `staff` (everyone, in the order they were put on) and as its `team` (the first 5 and the count), Execution only.
-- Sites that existed before got, as their staff, the Execution employees who had recorded their materials or labour.
+- Sites that existed before got, as their staff, the Execution employees who had recorded their expenses or labour.
 
 **Daily logs** (`site_logs`): one thing noted on a day ("the concrete arrived with 3 bags missing"). A day can have many, each its own; the writer changes one only on the company day it was written (`422 site_log_locked`), and none is deleted: losses are analysed from them later.
 
@@ -124,12 +131,12 @@ Each log is `{ id, project: { id, title }, person: { id, name }, body, createdAt
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects/site-summary?ids=1&ids=2` | `project:view` | One card per site among the ids (1–100, typically a page of the project list): material count and cost, reported weeks, ground labour, and when the caller last recorded something there. Projects the caller can't see and Design projects are left out |
+| `GET /api/projects/site-summary?ids=1&ids=2` | `project:view` | One card per site among the ids (1–100, typically a page of the project list): expense count and cost (the JSON keeps `materialCount` and `materialCost`), reported weeks, ground labour, and when the caller last recorded something there. Projects the caller can't see and Design projects are left out |
 | `GET /api/me/site-records` | `material:create`, `material:manage`, `labour_report:create` or `labour_report:manage` | What the caller recorded |
 | `GET /api/employees/{userId}/site-records` | `employee:view` | What someone recorded. People of a domain the caller can't see read as `404` |
 
-- **Cards:** material cost and ground labour come from the shared finance calculator (in USD).
-- **Records** (`Business/Execution/SiteRecords.cs`): the materials a person added (dated by when they were added) and the labour weeks they submitted (dated by when they were submitted, valued at the week's total), on sites the caller can see. The response has the totals, this calendar quarter's value, the days with anything recorded, the last 16 weeks (oldest first, ending with the current one), a row per site (most recently recorded first) and the 20 latest records.
+- **Cards:** site expense cost and ground labour come from the shared finance calculator (in USD).
+- **Records** (`Business/Execution/SiteRecords.cs`): the site expenses a person added (kept as `materials` in the JSON, dated by when they were added, not by the day spent) and the labour weeks they submitted (dated by when they were submitted, valued at the week's total), on sites the caller can see. The response has the totals, this calendar quarter's value, the days with anything recorded, the last 16 weeks (oldest first, ending with the current one), a row per site (most recently recorded first) and the 20 latest records.
 
 ## Site money
 

@@ -25,9 +25,9 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
     }
 
     /// <summary>
-    /// A Design client project with the given revenue, or an Execution site with a work price of 1000, a 10% markup and no
-    /// supervision, overseen by <paramref name="staffIds"/> (by default someone made for it). A caller who may not set that
-    /// money (a plain admin) gets the project without it: no revenue, or no work price and no markup.
+    /// A Design client project with the given revenue, or an Execution site with a work price of 1000 and no supervision,
+    /// overseen by <paramref name="staffIds"/> (by default someone made for it). A caller who may not set that money (a plain
+    /// admin) gets the project without it: no revenue, or no work price and the default supervision.
     /// </summary>
     /// <param name="projectFee">
     /// An Execution site's work price; 1,000 unless said. It is never typed in (agreeing a BOQ sets it), so the test sets
@@ -44,7 +44,7 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
         // untaxed, so money figures read as before TVA; TVA has tests of its own
         object body = domain == DomainCodes.Execution
             ? me.Permissions.Contains(PermissionCodes.ProjectPricingManage)
-                ? new { title, domainCode = domain, clientId = client.Id, materialMarkup = 0.10m, supervisionRate = 0m, staffIds = staff, tvaRate = 0m }
+                ? new { title, domainCode = domain, clientId = client.Id, supervisionRate = 0m, staffIds = staff, tvaRate = 0m }
                 : new { title, domainCode = domain, clientId = client.Id, staffIds = staff }
             : me.Permissions.Contains(PermissionCodes.FinancialView)
                 ? new { title, domainCode = domain, clientId = client.Id, revenue, tvaRate = 0m }

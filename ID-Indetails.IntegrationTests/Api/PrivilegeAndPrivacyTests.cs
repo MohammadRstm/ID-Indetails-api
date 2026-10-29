@@ -151,9 +151,12 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         await (await Client.GetAsync("/api/projects?sort=hours", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync("/api/clients?sort=hours", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
+        // a valid site in every other way, so it is the supervision rate (its pricing) that is refused
         var client = await Projects.CreateClientAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var (_, _, staff) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         await (await Client.PostJsonAsync("/api/projects",
-            new { title = "Lobby", domainCode = DomainCodes.Execution, clientId = client.Id, materialMarkup = 0.10m }, siteAdmin.AccessToken))
+            new { title = "Lobby", domainCode = DomainCodes.Execution, clientId = client.Id, staffIds = new[] { staff.User.Id }, supervisionRate = 0.10m },
+            siteAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 

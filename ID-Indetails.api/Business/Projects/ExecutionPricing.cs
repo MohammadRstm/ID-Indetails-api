@@ -9,8 +9,6 @@ namespace ID_Indetails.api.Business.Projects;
 /// supervision rate.</item>
 /// <item>The agreed amount, which revenue and profit are measured on, is the work price plus supervision.</item>
 /// <item>TVA is on the work price, never on supervision. The client pays the agreed amount plus that TVA.</item>
-/// <item>A material's client price (kept until materials become plain costs) is the price someone set by hand, otherwise
-/// its cost × (1 + markup), rounded to cents. It is not billed: the price of the work is in the BOQs.</item>
 /// </list>
 /// </summary>
 public static class ExecutionPricing
@@ -18,15 +16,10 @@ public static class ExecutionPricing
     /// <summary>A new site's supervision rate, 10% of the work price.</summary>
     public const decimal DefaultSupervisionRate = 0.10m;
 
-    public sealed record Material(decimal Cost, decimal? ManualClientPrice);
-
     /// <param name="Net">The agreed amount without TVA.</param>
     /// <param name="Tva">The TVA inside <paramref name="Gross"/>.</param>
     /// <param name="Gross">What the client pays: the agreed amount plus TVA.</param>
     public sealed record Price(decimal Supervision, decimal Net, decimal Tva, decimal Gross);
-
-    public static decimal ClientPrice(Material material, decimal markup)
-        => material.ManualClientPrice ?? Math.Round(material.Cost * (1 + markup), 2, MidpointRounding.AwayFromZero);
 
     /// <param name="work">The project fee, 0 until a BOQ is agreed.</param>
     public static Price PriceOf(decimal work, decimal supervisionRate, decimal tvaRate)

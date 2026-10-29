@@ -13,7 +13,7 @@ public sealed record ProjectOwnerResponse(long Id, string Name);
 /// <summary>One change of a project's agreed payment, newest first in a list.</summary>
 /// <param name="Amount">USD: Design's customer payment, Execution's project fee.</param>
 /// <param name="PreviousAmount">Null for the payment agreed at the start.</param>
-/// <param name="MaterialMarkup">Execution only: the default material markup after it, a fraction (0.125 is 12.5%).</param>
+/// <param name="MaterialMarkup">The default material markup after it, a fraction (0.125 is 12.5%). History only: markups are gone, so only rows written before are filled.</param>
 /// <param name="SupervisionRate">Execution only: the supervision rate after it; null on Design rows and on rows from before supervision.</param>
 /// <param name="ChangedBy">Null when the person no longer exists.</param>
 public sealed record ProjectPaymentChangeResponse(
@@ -41,7 +41,7 @@ public sealed record ProjectMoneyResponse
     /// </summary>
     public decimal Revenue { get; init; }
 
-    /// <summary>Revenue, fee and markup can't change until the project is reopened.</summary>
+    /// <summary>Revenue, fee and rates can't change until the project is reopened.</summary>
     public bool IsLocked { get; init; }
 
     /// <summary>TVA on what the client pays for the work, 0.11 = 11%. Revenue and profit are net of it.</summary>
@@ -61,8 +61,6 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Execution: the work price, set by agreeing a BOQ; 0 until then.</summary>
     public decimal? ProjectFee { get; init; }
-
-    public decimal? MaterialMarkup { get; init; }
 
     /// <summary>Project expenses, one total per currency.</summary>
     public IReadOnlyList<CurrencyTotalResponse> ExpenseTotals { get; init; } = [];
@@ -99,11 +97,12 @@ public sealed record ProjectMoneyResponse
 /// Cost in USD, each amount converted at the exchange rate of its day. Amounts with no rate that day
 /// are listed in <see cref="Unconverted"/> (in their own currency) instead of being added in.
 /// </summary>
+/// <param name="SiteExpenses">Execution: what was recorded on the site as expenses (materials, contractors, equipment, fees).</param>
 /// <param name="UnpricedLabourMinutes">Worked time of people with no pay record.</param>
 public sealed record ProjectCostResponse(
     decimal Labour,
     decimal Expenses,
-    decimal Materials,
+    decimal SiteExpenses,
     decimal GroundLabour,
     decimal Total,
     IReadOnlyList<UnconvertedCostResponse> Unconverted,

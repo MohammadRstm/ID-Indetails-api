@@ -1,28 +1,19 @@
 using ID_Indetails.api.Business.Common;
-using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Constants;
 
-namespace ID_Indetails.api.Business.Materials;
+namespace ID_Indetails.api.Business.SiteExpenses;
 
 /// <summary>
-/// Materials recorded on an Execution site:
+/// Expenses recorded on an Execution site (materials, a contractor, equipment, fees…), a cost and nothing charged to the client:
 /// <list type="bullet">
 /// <item>The cost is quantity × unit cost when both are known, otherwise the lump-sum amount.</item>
 /// <item>The finalise lock and who may change a record are shared with ground labour (<see cref="Execution.SiteRules"/>).</item>
 /// </list>
 /// </summary>
-public static class MaterialRules
+public static class SiteExpenseRules
 {
-    public enum PriceSource
-    {
-        /// <summary>Cost × (1 + the project's markup).</summary>
-        Auto,
-
-        /// <summary>Set by hand.</summary>
-        Manual,
-    }
-
-    /// <summary>What was typed: a type and a cost, either quantity × unit cost or a total.</summary>
+    /// <summary>What was typed: an item and a cost, either quantity × unit cost or a total.</summary>
     public sealed record Entry(decimal? Quantity, decimal? UnitCost, decimal? Amount);
 
     public static decimal Cost(decimal? quantity, decimal? unitCost, decimal? amount)
@@ -49,15 +40,25 @@ public static class MaterialRules
         return new Entry(entry.Quantity, unitCost, null);
     }
 
-    /// <summary>A price typed equal to the automatic one is stored as automatic, so it keeps following the markup.</summary>
-    public static decimal? ManualPrice(decimal? typed, decimal cost, decimal markup)
-        => typed is { } price && price == ExecutionPricing.ClientPrice(new ExecutionPricing.Material(cost, null), markup)
-            ? null
-            : typed;
-
-    public static PriceSource SourceOf(decimal? clientPrice) => clientPrice is null ? PriceSource.Auto : PriceSource.Manual;
-
-    /// <summary>What materials are grouped by (their type, their supplier): the text trimmed, with single spaces, in lower case.</summary>
+    /// <summary>What expenses are grouped by (their item, their supplier): the text trimmed, with single spaces, in lower case.</summary>
     public static string GroupKey(string name)
         => string.Join(' ', name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+
+    /// <summary>
+    /// A cost in another currency needs a rate in force on its day: the site's money leaves out what it can't convert,
+    /// so without one the cost would never reach profit or the profit floor.
+    /// </summary>
+    public static RuleDenial? CheckConvertible(IEnumerable<(string Currency, DateOnly Day)> costs, ExchangeRateTable rates)
+    {
+        foreach (var (currency, day) in costs)
+        {
+            if (rates.ToUsd(1m, currency, day) is null)
+            {
+                return RuleDenial.BusinessRule(ErrorCodes.ExchangeRateMissing,
+                    $"There is no {currency} exchange rate in force on {day:yyyy-MM-dd}. Add one first, or record the expense in USD.");
+            }
+        }
+
+        return null;
+    }
 }

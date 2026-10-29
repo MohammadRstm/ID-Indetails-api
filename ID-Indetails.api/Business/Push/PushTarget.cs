@@ -32,7 +32,7 @@ public sealed record PushTarget
     /// <summary><c>design</c> or <c>execution</c>, for projects and requirements.</summary>
     public string? Domain { get; init; }
 
-    /// <summary>A part of a project: <c>requirements</c>, <c>meetings</c>, <c>materials</c> or <c>labour</c>.</summary>
+    /// <summary>A part of a project: <c>requirements</c>, <c>meetings</c>, <c>materials</c> (the site's expenses; the phone still knows them by that name) or <c>labour</c>.</summary>
     public string? Section { get; init; }
 
     public long? TeamId { get; init; }

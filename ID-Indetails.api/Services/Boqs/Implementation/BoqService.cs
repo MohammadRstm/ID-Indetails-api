@@ -477,8 +477,6 @@ public sealed class BoqService(
         {
             Amount = work,
             PreviousAmount = previous,
-            MaterialMarkup = project.MaterialMarkup,
-            PreviousMaterialMarkup = project.MaterialMarkup,
             TvaRate = project.TvaRate,
             PreviousTvaRate = project.TvaRate,
             SupervisionRate = project.SupervisionRate,

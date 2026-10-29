@@ -226,16 +226,49 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     }
 
     [Fact]
-    public async Task Material_total_is_generated()
+    public async Task Site_expense_total_is_generated()
     {
         var user = await ActiveUserAsync("execution");
         var project = await SiteProjectAsync(user);
 
-        var material = await InsertAsync(
-            "INSERT INTO project_materials (project_id, name, quantity, unit, unit_cost, currency, added_at, added_by_id) " +
-            $"VALUES ({project}, 'Rebar', 2.5, 'tonne', 10.10, 'USD', {Now}, {user})");
+        var expense = await InsertAsync(
+            "INSERT INTO site_expenses (project_id, name, quantity, unit, unit_cost, currency, spent_on, added_at, added_by_id) " +
+            $"VALUES ({project}, 'Rebar', 2.5, 'tonne', 10.10, 'USD', '2026-09-28', {Now}, {user})");
 
-        (await ScalarAsync<decimal>($"SELECT total FROM project_materials WHERE id = {material}")).ShouldBe(25.25m);
+        (await ScalarAsync<decimal>($"SELECT total FROM site_expenses WHERE id = {expense}")).ShouldBe(25.25m);
+    }
+
+    [Fact]
+    public async Task A_site_expense_is_materials_unless_it_says_otherwise_and_has_a_known_category()
+    {
+        var user = await ActiveUserAsync("execution");
+        var project = await SiteProjectAsync(user);
+
+        var plain = await InsertAsync(SiteExpenseSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "10"));
+        (await ScalarAsync<string>($"SELECT category FROM site_expenses WHERE id = {plain}")).ShouldBe("materials");
+
+        foreach (var category in new[] { "materials", "contractor", "equipment", "fees", "other" })
+        {
+            await InsertAsync(SiteExpenseSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "10", category: category));
+        }
+
+        await ShouldViolateAsync(SiteExpenseSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "10", category: "luxury"), "ck_site_expenses_category");
+    }
+
+    [Fact]
+    public async Task A_site_expense_label_must_be_an_account_label_and_a_used_label_cannot_be_deleted()
+    {
+        var user = await ActiveUserAsync("execution");
+        var project = await SiteProjectAsync(user);
+        var label = await InsertAsync($"INSERT INTO account_labels (name, position, created_at) VALUES ('Schema {Guid.NewGuid():N}', 99, {Now})");
+
+        var unknown = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(
+            SiteExpenseSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "10", accountLabelId: "999999999")));
+        unknown.Number.ShouldBe(1452); // no such parent row
+
+        await InsertAsync(SiteExpenseSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "10", accountLabelId: label.ToString()));
+        var used = await Should.ThrowAsync<MySqlException>(() => ExecuteAsync($"DELETE FROM account_labels WHERE id = {label}"));
+        used.Number.ShouldBe(1451); // row is referenced by a foreign key
     }
 
     // ---------- billing ----------
@@ -297,29 +330,18 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     }
 
     [Fact]
-    public async Task Fee_and_markup_exist_exactly_on_execution_projects()
+    public async Task A_work_price_exists_exactly_on_execution_projects()
     {
         var siteOwner = await ActiveUserAsync("execution");
         var siteClient = await ClientAsync("execution");
         await ShouldViolateAsync(
-            ProjectSql("execution", siteOwner, siteClient.ToString(), "client", 0, projectFee: "NULL", materialMarkup: "0.10"),
+            ProjectSql("execution", siteOwner, siteClient.ToString(), "client", 0, projectFee: "NULL"),
             "ck_projects_execution_money_fields");
 
         var designOwner = await ActiveUserAsync("design");
         await ShouldViolateAsync(
-            ProjectSql("design", designOwner, "NULL", "internal", 0, projectFee: "500", materialMarkup: "NULL"),
+            ProjectSql("design", designOwner, "NULL", "internal", 0, projectFee: "500"),
             "ck_projects_execution_money_fields");
-    }
-
-    [Fact]
-    public async Task Material_markup_is_limited_to_500_percent()
-    {
-        var owner = await ActiveUserAsync("execution");
-        var client = await ClientAsync("execution");
-
-        await ShouldViolateAsync(
-            ProjectSql("execution", owner, client.ToString(), "client", 0, projectFee: "0", materialMarkup: "5.5"),
-            "ck_projects_material_markup_range");
     }
 
     [Fact]
@@ -328,28 +350,28 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
         var owner = await ActiveUserAsync("execution");
         var client = await ClientAsync("execution");
         string Site(string rate) =>
-            "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, project_fee, material_markup, supervision_rate, created_at) " +
-            $"VALUES ('execution', 'Project', 'active', 'client', {client}, {owner}, '2026-09-01', 0, 'USD', 0, 0, 0.10, {rate}, {Now})";
+            "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, project_fee, supervision_rate, created_at) " +
+            $"VALUES ('execution', 'Project', 'active', 'client', {client}, {owner}, '2026-09-01', 0, 'USD', 0, 0, {rate}, {Now})";
 
         await InsertAsync(Site("0.10"));
         await ShouldViolateAsync(Site("1.5"), "ck_projects_supervision_rate_range");
     }
 
     [Fact]
-    public async Task Material_needs_quantity_and_unit_cost_or_a_lump_sum()
+    public async Task A_site_expense_needs_quantity_and_unit_cost_or_a_lump_sum()
     {
         var user = await ActiveUserAsync("execution");
         var project = await SiteProjectAsync(user);
 
-        await ShouldViolateAsync(MaterialSql(project, user, quantity: "3", unitCost: "NULL", amount: "NULL"), "ck_project_materials_has_cost");
+        await ShouldViolateAsync(SiteExpenseSql(project, user, quantity: "3", unitCost: "NULL", amount: "NULL"), "ck_site_expenses_has_cost");
 
-        var lumpSum = await InsertAsync(MaterialSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "1250.00"));
-        (await ScalarAsync<decimal>($"SELECT total FROM project_materials WHERE id = {lumpSum}")).ShouldBe(1250.00m);
+        var lumpSum = await InsertAsync(SiteExpenseSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "1250.00"));
+        (await ScalarAsync<decimal>($"SELECT total FROM site_expenses WHERE id = {lumpSum}")).ShouldBe(1250.00m);
 
         // Unit cost keeps 4 decimals (derived as total ÷ quantity); the total is rounded to cents.
-        var counted = await InsertAsync(MaterialSql(project, user, quantity: "3", unitCost: "33.3333", amount: "NULL"));
-        (await ScalarAsync<decimal>($"SELECT unit_cost FROM project_materials WHERE id = {counted}")).ShouldBe(33.3333m);
-        (await ScalarAsync<decimal>($"SELECT total FROM project_materials WHERE id = {counted}")).ShouldBe(100.00m);
+        var counted = await InsertAsync(SiteExpenseSql(project, user, quantity: "3", unitCost: "33.3333", amount: "NULL"));
+        (await ScalarAsync<decimal>($"SELECT unit_cost FROM site_expenses WHERE id = {counted}")).ShouldBe(33.3333m);
+        (await ScalarAsync<decimal>($"SELECT total FROM site_expenses WHERE id = {counted}")).ShouldBe(100.00m);
     }
 
     [Fact]
@@ -559,18 +581,18 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     private Task<long> ClientAsync(string domain) =>
         InsertAsync($"INSERT INTO clients (domain_code, name, created_at) VALUES ('{domain}', 'Client', {Now})");
 
-    /// <summary>Execution projects get the fee and markup they require; Design projects get none.</summary>
+    /// <summary>Execution projects get the work price they require; Design projects get none.</summary>
     private static string ProjectSql(string domain, long ownerId, string clientId, string billing, decimal revenue) =>
         domain == "execution"
-            ? ProjectSql(domain, ownerId, clientId, billing, revenue, projectFee: "0", materialMarkup: "0.10")
-            : ProjectSql(domain, ownerId, clientId, billing, revenue, projectFee: "NULL", materialMarkup: "NULL");
+            ? ProjectSql(domain, ownerId, clientId, billing, revenue, projectFee: "0")
+            : ProjectSql(domain, ownerId, clientId, billing, revenue, projectFee: "NULL");
 
     private static string ProjectSql(
-        string domain, long ownerId, string clientId, string billing, decimal revenue, string projectFee, string materialMarkup) =>
-        "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, project_fee, material_markup, created_at) " +
-        $"VALUES ('{domain}', 'Project', 'active', '{billing}', {clientId}, {ownerId}, '2026-09-01', {revenue}, 'USD', 0, {projectFee}, {materialMarkup}, {Now})";
+        string domain, long ownerId, string clientId, string billing, decimal revenue, string projectFee) =>
+        "INSERT INTO projects (domain_code, title, status, billing_type, client_id, owner_id, start_date, revenue, revenue_currency, progress_pct, project_fee, created_at) " +
+        $"VALUES ('{domain}', 'Project', 'active', '{billing}', {clientId}, {ownerId}, '2026-09-01', {revenue}, 'USD', 0, {projectFee}, {Now})";
 
-    /// <summary>An Execution site project: always client work, with a fee and a material markup.</summary>
+    /// <summary>An Execution site project: always client work, with a work price.</summary>
     private async Task<long> SiteProjectAsync(long ownerId)
     {
         var client = await ClientAsync("execution");
@@ -581,9 +603,13 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
         "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
         $"VALUES ({userId}, {projectId}, 'Drawings', '{start}', '{end}', {Now})";
 
-    private static string MaterialSql(long projectId, long userId, string quantity, string unitCost, string amount) =>
-        "INSERT INTO project_materials (project_id, name, quantity, unit_cost, amount, currency, added_at, added_by_id) " +
-        $"VALUES ({projectId}, 'Concrete', {quantity}, {unitCost}, {amount}, 'USD', {Now}, {userId})";
+    private static string SiteExpenseSql(
+        long projectId, long userId, string quantity, string unitCost, string amount, string? category = null, string accountLabelId = "NULL") =>
+        category is null
+            ? "INSERT INTO site_expenses (project_id, name, quantity, unit_cost, amount, currency, spent_on, account_label_id, added_at, added_by_id) " +
+              $"VALUES ({projectId}, 'Concrete', {quantity}, {unitCost}, {amount}, 'USD', '2026-09-28', {accountLabelId}, {Now}, {userId})"
+            : "INSERT INTO site_expenses (project_id, name, quantity, unit_cost, amount, currency, spent_on, category, account_label_id, added_at, added_by_id) " +
+              $"VALUES ({projectId}, 'Concrete', {quantity}, {unitCost}, {amount}, 'USD', '2026-09-28', '{category}', {accountLabelId}, {Now}, {userId})";
 
     private static string PaymentSql(long projectId, long clientId, bool isInitial) =>
         "INSERT INTO payments (project_id, client_id, amount, currency, fx_rate, amount_usd, received_on, method, recorded_at, is_initial) " +

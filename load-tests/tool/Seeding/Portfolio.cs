@@ -78,7 +78,6 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
 
         var revenue = design && !isInternal ? Random.Amount(8000m, 60000m, 500m) : 0m;
         var fee = design ? 0m : Random.Amount(2000m, 15000m, 250m);
-        var markup = design ? 0m : Random.Amount(0.10m, 0.30m, 0.05m);
         var workers = design ? 0 : Random.Next(4, 13);
         var dailyPay = design ? 0m : Random.Amount(25m, 40m, 5m);
         var initialPayment = !design && Random.Chance(0.5) ? decimal.Round(fee * 0.3m, 0) : (decimal?)null;
@@ -94,7 +93,6 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
             OwnerId = owner.Id,
             TargetDate = target,
             Revenue = design && !isInternal ? revenue : null,
-            MaterialMarkup = design ? null : markup,
             LabourDefaults = design ? null : new SetLabourDefaultsRequest { Workers = workers, DailyPay = dailyPay },
         });
         world.Tally.Add($"projects.{domain}");
@@ -125,7 +123,7 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
         var project = new SeedProject
         {
             Id = created.Id(), Domain = domain, Client = client, Owner = owner, StartedOn = day, TargetOn = target,
-            Revenue = revenue, Fee = fee, Markup = markup, Workers = workers, DailyPay = dailyPay,
+            Revenue = revenue, Fee = fee, Workers = workers, DailyPay = dailyPay,
             LastMeetingOn = day, LastInvoiceOn = day,
         };
         world.Projects.Add(project);
@@ -302,7 +300,8 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
 
     private async Task AddExpensesAsync(DateOnly day)
     {
-        foreach (var project in world.Projects.Where(p => p.Status == "active" && Random.Chance(p.Domain == "design" ? 0.04 : 0.01)))
+        // an Execution site records its costs as site expenses (see Sites)
+        foreach (var project in world.Projects.Where(p => p.Domain == "design" && p.Status == "active" && Random.Chance(0.04)))
         {
             await api.PostAsync(world.AnyAdmin(project.Domain, day).Token, $"/api/projects/{project.Id}/expenses", new CreateExpenseRequest
             {

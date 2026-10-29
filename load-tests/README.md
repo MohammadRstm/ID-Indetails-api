@@ -375,7 +375,7 @@ API.
   - the company is set up and people are invited and accept;
   - admins create clients, projects and requirements;
   - designers log their work every evening;
-  - site crews record materials and weekly labour;
+  - site crews record site expenses and weekly labour;
   - invoices are issued and paid, and every site starts with an agreed client BOQ;
   - teams chat, and the scheduled checks run every morning.
 - Everything is written by the API itself: activity history, notifications, invoice and BOQ numbers, progress.

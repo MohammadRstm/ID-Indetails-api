@@ -1,18 +1,19 @@
 using System.ComponentModel;
-using ID_Indetails.api.Business.Materials;
+using ID_Indetails.api.Business.SiteExpenses;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
+using ID_Indetails.api.Data;
 using ID_Indetails.api.DTO.Request.Expenses;
 using ID_Indetails.api.DTO.Request.Labour;
-using ID_Indetails.api.DTO.Request.Materials;
-using ID_Indetails.api.DTO.Response.Materials;
+using ID_Indetails.api.DTO.Request.SiteExpenses;
+using ID_Indetails.api.DTO.Response.SiteExpenses;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Labour.Abstraction;
-using ID_Indetails.api.Services.Materials.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.SiteExpenses.Abstraction;
 
 namespace ID_Indetails.api.Proton.Actions;
 
@@ -39,16 +40,21 @@ public sealed record AddExpenseInput : ProtonActionInput
     public string? Note { get; init; }
 }
 
-/// <summary>Records a project expense, through POST /api/projects/{id}/expenses once confirmed. The user types the amount.</summary>
+/// <summary>
+/// Records a Design project expense, through POST /api/projects/{id}/expenses once confirmed. The user types the amount. An
+/// Execution site keeps its costs as site expenses instead.
+/// </summary>
 public sealed class ProposeAddExpenseTool(IProjectService projects, IExpenseService expenses) : ProtonActionTool<AddExpenseInput, ExpenseArgs>
 {
     public override string Name => "propose_add_expense";
 
     public override string Description =>
-        "Propose recording a cost spent on a project (a contractor, software, travel…) with the amount the user gave. " +
-        "The user confirms by typing the amount.";
+        "Propose recording a cost spent on a Design project (a contractor, software, travel…) with the amount the user gave. " +
+        "The user confirms by typing the amount. An Execution site's costs are site expenses, not this.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
+
+    public override string? OnlyInDomain => DomainCodes.Design;
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<ExpensesController>(nameof(ExpensesController.Create));
 
@@ -57,6 +63,11 @@ public sealed class ProposeAddExpenseTool(IProjectService projects, IExpenseServ
     {
         MoneyText.RequireTyped(context, input.Amount);
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
+        if (project.Domain == DomainCodes.Execution)
+        {
+            throw new ProtonToolInputException("An Execution site's costs are site expenses: use propose_add_site_expenses.");
+        }
+
         var request = new CreateExpenseRequest
         {
             Label = input.Label.Trim(), Amount = input.Amount, Currency = (input.Currency ?? "USD").Trim().ToUpperInvariant(),
@@ -129,9 +140,9 @@ public sealed class ProposeDeleteExpenseTool(IExpenseService expenses) : ProtonA
     }
 }
 
-public sealed record MaterialInput
+public sealed record SiteExpenseInput
 {
-    [Description("The type of material, as the user said (\"Cement\").")]
+    [Description("What it was, as the user said (\"Cement\", \"Crane hire\").")]
     public required string Name { get; init; }
 
     public decimal? Quantity { get; init; }
@@ -143,13 +154,20 @@ public sealed record MaterialInput
     [Description("The total cost, when the user gave a total rather than a unit cost.")]
     public decimal? Amount { get; init; }
 
+    [Description("Who was paid.")]
     public string? Supplier { get; init; }
 
     public string? Note { get; init; }
+
+    [Description("materials (the default), contractor, equipment, fees or other.")]
+    public SiteExpenseCategory? Category { get; init; }
+
+    [Description("The day it was spent. Default today.")]
+    public DateOnly? SpentOn { get; init; }
 }
 
-/// <summary>A change to a material: only the fields the user named; the rest stay as they are.</summary>
-public sealed record MaterialChangeInput
+/// <summary>A change to a site expense: only the fields the user named; the rest stay as they are.</summary>
+public sealed record SiteExpenseChangeInput
 {
     public string? Name { get; init; }
 
@@ -163,156 +181,155 @@ public sealed record MaterialChangeInput
     [Description("The total cost, when the user gave a total rather than a unit cost.")]
     public decimal? Amount { get; init; }
 
-    [Description("An empty string removes it.")]
+    [Description("Who was paid. An empty string removes it.")]
     public string? Supplier { get; init; }
 
     [Description("An empty string removes it.")]
     public string? Note { get; init; }
+
+    [Description("materials, contractor, equipment, fees or other.")]
+    public SiteExpenseCategory? Category { get; init; }
+
+    public DateOnly? SpentOn { get; init; }
 }
 
-/// <param name="Before">For an update: the material as the card was made from it. If it changed since, the update is refused.</param>
-public sealed record MaterialArgs(
-    long ProjectId, long? MaterialId, AddMaterialsRequest? Add, MaterialEntryRequest? Entry, SetMaterialPriceRequest? Price, MaterialEntryRequest? Before = null);
+/// <param name="Before">For an update: the expense as the card was made from it. If it changed since, the update is refused.</param>
+public sealed record SiteExpenseArgs(
+    long ProjectId, long? ExpenseId, AddSiteExpensesRequest? Add, SiteExpenseEntryRequest? Entry, SiteExpenseEntryRequest? Before = null);
 
-public sealed record AddMaterialsInput : ProtonActionInput
+public sealed record AddSiteExpensesInput : ProtonActionInput
 {
     [Description("An Execution site.")]
     public required long ProjectId { get; init; }
 
-    [Description("Up to 20 materials bought, each as the user gave it.")]
-    public required IReadOnlyList<MaterialInput> Items { get; init; }
+    [Description("Up to 20 expenses, each as the user gave it.")]
+    public required IReadOnlyList<SiteExpenseInput> Items { get; init; }
 }
 
 /// <summary>
-/// Records materials bought for an Execution site, through POST /api/projects/{id}/materials once confirmed, at the
-/// project's markup (a price of their own is set separately). The user types the total cost.
+/// Records the costs of an Execution site (materials, a contractor, equipment, fees), through POST
+/// /api/projects/{id}/site-expenses once confirmed. They are costs only: nothing is charged to the client. The user types
+/// the total cost.
 /// </summary>
-public sealed class ProposeAddMaterialsTool(IProjectService projects, IMaterialService materials) : ProtonActionTool<AddMaterialsInput, MaterialArgs>
+public sealed class ProposeAddSiteExpensesTool(IProjectService projects, ISiteExpenseService siteExpenses) : ProtonActionTool<AddSiteExpensesInput, SiteExpenseArgs>
 {
     private const int Max = 20;
 
-    public override string Name => "propose_add_materials";
+    public override string Name => "propose_add_site_expenses";
 
     public override string Description =>
-        "Propose recording materials bought for an Execution site: type, quantity and unit cost, or a total. The user " +
-        "confirms by typing the total cost.";
+        "Propose recording the costs of an Execution site: materials bought, a contractor, equipment or fees, each with its quantity " +
+        "and unit cost, or a total. The user confirms by typing the total cost.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
     public override string? OnlyInDomain => DomainCodes.Execution;
 
-    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<MaterialsController>(nameof(MaterialsController.Add));
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<SiteExpensesController>(nameof(SiteExpensesController.Add));
 
-    protected override async Task<(MaterialArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
-        AddMaterialsInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    protected override async Task<(SiteExpenseArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
+        AddSiteExpensesInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
         if (input.Items.Count is 0 or > Max)
         {
-            throw new ProtonToolInputException($"Give 1 to {Max} materials.");
+            throw new ProtonToolInputException($"Give 1 to {Max} expenses.");
         }
 
         MoneyText.RequireTyped(context, [.. input.Items.SelectMany(i => new[] { i.UnitCost, i.Amount })]);
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
         // the cost is the app's own: quantity × unit cost when both are given, otherwise the total
-        var items = input.Items.Select(i => new NewMaterialRequest
+        var items = input.Items.Select(i => new NewSiteExpenseRequest
         {
             Name = i.Name.Trim(), Quantity = i.Quantity, Unit = MoneyText.Clean(i.Unit), UnitCost = i.UnitCost,
             Amount = i.Amount, Supplier = MoneyText.Clean(i.Supplier), Note = MoneyText.Clean(i.Note),
+            Category = i.Category, SpentOn = i.SpentOn,
         }).ToList();
-        var costs = items.Select(MaterialText.CostOf).ToList();
+        var costs = items.Select(SiteExpenseText.CostOf).ToList();
         if (costs.Any(c => c <= 0))
         {
-            throw new ProtonToolInputException("Each material needs a cost: quantity and unit cost, or a total.");
+            throw new ProtonToolInputException("Each expense needs a cost: quantity and unit cost, or a total.");
         }
 
         var total = costs.Sum();
-        var changes = items.Select((i, n) => new ProtonChange(i.Name, null,
-            $"{(i.Quantity is { } q && i.UnitCost is { } unit ? $"{q:0.###} {i.Unit} × {MoneyText.Amount(unit, null)} = " : "")}{MoneyText.Amount(costs[n], "USD")}")).ToList();
+        var changes = items.Select((i, n) => new ProtonChange(i.Name, null, SiteExpenseText.Line(i, costs[n]))).ToList();
         changes.Add(new ProtonChange("Total cost", null, MoneyText.Amount(total, "USD")));
-        return (new MaterialArgs(project.Id, null, new AddMaterialsRequest { Items = items }, null, null),
-            new ProtonPreview($"Record materials for {project.Title}", changes, "Charged to the client at the project's markup.",
+        return (new SiteExpenseArgs(project.Id, null, new AddSiteExpensesRequest { Items = items }, null),
+            new ProtonPreview($"Record expenses for {project.Title}", changes, "It lowers the site's profit.",
                 Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(total)),
             ProjectText.Ref(project));
     }
 
-    protected override object? RequestOf(MaterialArgs args) => args.Add;
+    protected override object? RequestOf(SiteExpenseArgs args) => args.Add;
 
-    protected override async Task<ProtonActionDone> ExecuteAsync(MaterialArgs args, ProtonToolContext context, CancellationToken cancellationToken)
+    protected override async Task<ProtonActionDone> ExecuteAsync(SiteExpenseArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var added = await materials.AddAsync(args.ProjectId, args.Add!, cancellationToken);
-        return new ProtonActionDone($"Recorded {added.Count} material(s), {MoneyText.Amount(added.Sum(m => m.Cost), "USD")}.", "material", added[0].Id, []);
+        var added = await siteExpenses.AddAsync(args.ProjectId, args.Add!, cancellationToken);
+        return new ProtonActionDone($"Recorded {added.Count} expense(s), {MoneyText.Amount(added.Sum(m => m.Cost), "USD")}.", "material", added[0].Id, []);
     }
 }
 
-public enum ProtonMaterialStep
+public enum ProtonSiteExpenseStep
 {
     Update,
     Delete,
-    SetPrice,
 }
 
-public sealed record MaterialStepInput : ProtonActionInput
+public sealed record SiteExpenseStepInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
-    [Description("From list_materials.")]
-    public required long MaterialId { get; init; }
+    [Description("From the site's expenses list.")]
+    public required long ExpenseId { get; init; }
 
-    [Description("update its details, delete it, or set_price for the client.")]
-    public required ProtonMaterialStep Step { get; init; }
+    [Description("update its details, or delete it.")]
+    public required ProtonSiteExpenseStep Step { get; init; }
 
     [Description("For update: only what changes; everything left out stays as it is.")]
-    public MaterialChangeInput? Material { get; init; }
-
-    [Description("For set_price: the client's price; leave out to go back to the project's markup.")]
-    public decimal? ClientPrice { get; init; }
+    public SiteExpenseChangeInput? Expense { get; init; }
 }
 
 /// <summary>
-/// Changes, deletes or prices a material, through PUT, DELETE or PUT …/client-price once
-/// confirmed. Deleting can't be undone, so the user types its cost.
+/// Changes or deletes a site expense, through PUT or DELETE once confirmed. Deleting can't be undone, so the user types
+/// its cost.
 /// </summary>
-public sealed class ProposeMaterialStepTool(IMaterialService materials) : ProtonActionTool<MaterialStepInput, MaterialArgs>
+public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses) : ProtonActionTool<SiteExpenseStepInput, SiteExpenseArgs>
 {
-    public override string Name => "propose_material_step";
+    public override string Name => "propose_site_expense_step";
 
     public override string Description =>
-        "Propose correcting a material's details or cost, deleting it, or setting the client's price for it. Nothing " +
-        "changes until the user confirms the card.";
+        "Propose correcting a site expense's details or cost, or deleting it. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
     public override string? OnlyInDomain => DomainCodes.Execution;
 
-    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<MaterialsController>(nameof(MaterialsController.Update));
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<SiteExpensesController>(nameof(SiteExpensesController.Update));
 
-    private static readonly ProtonEndpoint Delete = ProtonEndpoint.OfWrite<MaterialsController>(nameof(MaterialsController.Delete));
+    private static readonly ProtonEndpoint Delete = ProtonEndpoint.OfWrite<SiteExpensesController>(nameof(SiteExpensesController.Delete));
 
-    private static readonly ProtonEndpoint Price = ProtonEndpoint.OfWrite<MaterialsController>(nameof(MaterialsController.SetPrice));
+    public override IReadOnlyList<ProtonEndpoint> StepEndpoints => [Endpoint, Delete];
 
-    public override IReadOnlyList<ProtonEndpoint> StepEndpoints => [Endpoint, Delete, Price];
+    protected override ProtonEndpoint StepOf(SiteExpenseArgs args) => args.Entry is not null ? Endpoint : Delete;
 
-    protected override ProtonEndpoint StepOf(MaterialArgs args) => args.Price is not null ? Price : args.Entry is not null ? Endpoint : Delete;
-
-    protected override async Task<(MaterialArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
-        MaterialStepInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    protected override async Task<(SiteExpenseArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
+        SiteExpenseStepInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var material = (await materials.ListAsync(input.ProjectId, new MaterialListQuery { PageSize = 200 }, cancellationToken)).Items
-            .FirstOrDefault(m => m.Id == input.MaterialId) ?? throw new NotFoundException("Material not found.");
-        if (!material.CanEdit)
+        var expense = (await siteExpenses.ListAsync(input.ProjectId, new SiteExpenseListQuery { PageSize = 200 }, cancellationToken)).Items
+            .FirstOrDefault(m => m.Id == input.ExpenseId) ?? throw new NotFoundException("Expense not found.");
+        if (!expense.CanEdit)
         {
             throw new ProtonToolInputException("It is not the user's to change, or the site is closed.");
         }
 
-        var cost = MoneyText.Amount(material.Cost, material.Currency);
+        var cost = MoneyText.Amount(expense.Cost, expense.Currency);
         switch (input.Step)
         {
-            case ProtonMaterialStep.Update:
-                var m = input.Material ?? throw new ProtonToolInputException("Say what changes on the material.");
+            case ProtonSiteExpenseStep.Update:
+                var m = input.Expense ?? throw new ProtonToolInputException("Say what changes on the expense.");
                 MoneyText.RequireTyped(context, m.UnitCost, m.Amount);
-                // The update replaces the whole material, as the app's form sends it: start from the material as it is, so
+                // The update replaces the whole expense, as the app's form sends it: start from the expense as it is, so
                 // a field the user didn't mention keeps its value instead of being cleared.
-                var before = MaterialText.EntryOf(material);
+                var before = SiteExpenseText.EntryOf(expense);
                 var entry = before with
                 {
                     Name = MoneyText.Clean(m.Name) ?? before.Name,
@@ -321,91 +338,89 @@ public sealed class ProposeMaterialStepTool(IMaterialService materials) : Proton
                     UnitCost = m.UnitCost ?? before.UnitCost,
                     Supplier = m.Supplier is null ? before.Supplier : MoneyText.Clean(m.Supplier),
                     Note = m.Note is null ? before.Note : MoneyText.Clean(m.Note),
+                    Category = m.Category ?? before.Category,
+                    SpentOn = m.SpentOn ?? before.SpentOn,
                 };
-                // a total given now counts; otherwise a lump-sum material keeps its total, and quantity × unit cost works out the rest
+                // a total given now counts; otherwise a lump-sum expense keeps its total, and quantity × unit cost works out the rest
                 entry = entry with { Amount = m.Amount ?? (entry.Quantity is > 0 && entry.UnitCost is > 0 ? null : before.Amount) };
                 var edits = new List<ProtonChange>();
-                SettingsText.Compare(edits, "Type", before.Name, entry.Name);
-                SettingsText.Compare(edits, "Quantity", MaterialText.Quantity(before), MaterialText.Quantity(entry));
-                SettingsText.Compare(edits, "Cost", cost, MoneyText.Amount(MaterialText.CostOf(entry), material.Currency));
-                SettingsText.Compare(edits, "Supplier", before.Supplier ?? "none", entry.Supplier ?? "none");
+                SettingsText.Compare(edits, "Item", before.Name, entry.Name);
+                SettingsText.Compare(edits, "Quantity", SiteExpenseText.Quantity(before), SiteExpenseText.Quantity(entry));
+                SettingsText.Compare(edits, "Cost", cost, MoneyText.Amount(SiteExpenseText.CostOf(entry), expense.Currency));
+                SettingsText.Compare(edits, "Supplier / payee", before.Supplier ?? "none", entry.Supplier ?? "none");
+                SettingsText.Compare(edits, "Category", SnakeCaseEnum.ToDb(expense.Category), SnakeCaseEnum.ToDb(entry.Category ?? expense.Category));
+                SettingsText.Compare(edits, "Spent on", ProjectText.Date(expense.SpentOn), ProjectText.Date(entry.SpentOn ?? expense.SpentOn));
                 SettingsText.Compare(edits, "Note", before.Note ?? "none", entry.Note ?? "none");
                 if (edits.Count == 0)
                 {
                     throw new ProtonToolInputException("Nothing would change: say what should be different.");
                 }
 
-                return (new MaterialArgs(input.ProjectId, material.Id, null, entry, null, before),
-                    new ProtonPreview($"Correct the material {material.Name}", edits),
-                    null);
-            case ProtonMaterialStep.Delete:
-                await context.RequireAsync(Delete);
-                return (new MaterialArgs(input.ProjectId, material.Id, null, null, null),
-                    new ProtonPreview($"Delete the material {material.Name}", [new ProtonChange(material.Name, cost, "deleted")],
-                        Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(material.Cost), Irreversible: true),
+                return (new SiteExpenseArgs(input.ProjectId, expense.Id, null, entry, before),
+                    new ProtonPreview($"Correct the expense {expense.Name}", edits),
                     null);
             default:
-                await context.RequireAsync(Price);
-                MoneyText.RequireTyped(context, input.ClientPrice);
-                return (new MaterialArgs(input.ProjectId, material.Id, null, null, new SetMaterialPriceRequest { ClientPrice = input.ClientPrice }),
-                    new ProtonPreview($"Price {material.Name} for the client",
-                        [new ProtonChange("Client price",
-                            material.ClientPrice is { } was ? MoneyText.Amount(was, material.Currency) : "the project's markup",
-                            input.ClientPrice is { } now ? MoneyText.Amount(now, material.Currency) : "the project's markup")]),
+                await context.RequireAsync(Delete);
+                return (new SiteExpenseArgs(input.ProjectId, expense.Id, null, null),
+                    new ProtonPreview($"Delete the expense {expense.Name}", [new ProtonChange(expense.Name, cost, "deleted")],
+                        Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(expense.Cost), Irreversible: true),
                     null);
         }
     }
 
-    protected override object? RequestOf(MaterialArgs args) => (object?)args.Entry ?? args.Price;
+    protected override object? RequestOf(SiteExpenseArgs args) => args.Entry;
 
-    protected override async Task<ProtonActionDone> ExecuteAsync(MaterialArgs args, ProtonToolContext context, CancellationToken cancellationToken)
+    protected override async Task<ProtonActionDone> ExecuteAsync(SiteExpenseArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
         if (args.Entry is { } entry)
         {
-            // the card showed the material as it was: if it changed since, this would put back what someone else changed
-            var current = (await materials.ListAsync(args.ProjectId, new MaterialListQuery { PageSize = 200 }, cancellationToken)).Items
-                .FirstOrDefault(m => m.Id == args.MaterialId);
-            if (current is null || args.Before is null || MaterialText.EntryOf(current) != args.Before)
+            // the card showed the expense as it was: if it changed since, this would put back what someone else changed
+            var current = (await siteExpenses.ListAsync(args.ProjectId, new SiteExpenseListQuery { PageSize = 200 }, cancellationToken)).Items
+                .FirstOrDefault(m => m.Id == args.ExpenseId);
+            if (current is null || args.Before is null || SiteExpenseText.EntryOf(current) != args.Before)
             {
-                throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The material changed since Proton proposed this. Ask again.");
+                throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The expense changed since Proton proposed this. Ask again.");
             }
 
-            var updated = await materials.UpdateAsync(args.ProjectId, args.MaterialId!.Value, entry, cancellationToken);
+            var updated = await siteExpenses.UpdateAsync(args.ProjectId, args.ExpenseId!.Value, entry, cancellationToken);
             return new ProtonActionDone($"Corrected {updated.Name}.", "material", updated.Id, []);
         }
 
-        if (args.Price is { } price)
-        {
-            await context.RequireAsync(Price);
-            var priced = await materials.SetPriceAsync(args.ProjectId, args.MaterialId!.Value, price, cancellationToken);
-            return new ProtonActionDone($"Set the client's price for {priced.Name}.", "material", priced.Id, []);
-        }
-
         await context.RequireAsync(Delete);
-        await materials.DeleteAsync(args.ProjectId, args.MaterialId!.Value, cancellationToken);
-        return new ProtonActionDone("Deleted the material.", "material", args.MaterialId.Value, []);
+        await siteExpenses.DeleteAsync(args.ProjectId, args.ExpenseId!.Value, cancellationToken);
+        return new ProtonActionDone("Deleted the expense.", "material", args.ExpenseId.Value, []);
     }
 }
 
-internal static class MaterialText
+internal static class SiteExpenseText
 {
-    /// <summary>A material as the update request carries it: quantity and unit cost when it has them, otherwise its total.</summary>
-    public static MaterialEntryRequest EntryOf(MaterialResponse m) => new()
+    /// <summary>An expense as the update request carries it: quantity and unit cost when it has them, otherwise its total; the rest as it is.</summary>
+    public static SiteExpenseEntryRequest EntryOf(SiteExpenseResponse m) => new()
     {
         Name = m.Name, Quantity = m.Quantity, Unit = m.Unit, UnitCost = m.UnitCost,
         Amount = m.Quantity is > 0 && m.UnitCost is > 0 ? null : m.Cost,
         Supplier = m.Supplier, Note = m.Note,
+        Currency = m.Currency, SpentOn = m.SpentOn, Category = m.Category, AccountLabelId = m.AccountLabel?.Id,
     };
 
     /// <summary>The cost the app will store for it, by its own rule (a total over quantity × unit cost sets the unit cost).</summary>
-    public static decimal CostOf(MaterialEntryRequest e)
+    public static decimal CostOf(SiteExpenseEntryRequest e)
     {
-        var stored = MaterialRules.Normalise(new MaterialRules.Entry(e.Quantity, e.UnitCost, e.Amount));
-        return MaterialRules.Cost(stored.Quantity, stored.UnitCost, stored.Amount);
+        var stored = SiteExpenseRules.Normalise(new SiteExpenseRules.Entry(e.Quantity, e.UnitCost, e.Amount));
+        return SiteExpenseRules.Cost(stored.Quantity, stored.UnitCost, stored.Amount);
     }
 
-    public static string Quantity(MaterialEntryRequest e)
+    public static string Quantity(SiteExpenseEntryRequest e)
         => e.Quantity is { } q ? $"{q.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)} {e.Unit}".Trim() : "none";
+
+    /// <summary>One line of the card: the cost (quantity × unit cost when both were given), then the category and day if named.</summary>
+    public static string Line(SiteExpenseEntryRequest e, decimal cost)
+    {
+        var worked = e.Quantity is { } q && e.UnitCost is { } unit ? $"{q:0.###} {e.Unit} × {MoneyText.Amount(unit, null)} = " : "";
+        var category = e.Category is { } c ? $", {SnakeCaseEnum.ToDb(c)}" : "";
+        var day = e.SpentOn is { } d ? $", {ProjectText.Date(d)}" : "";
+        return $"{worked}{MoneyText.Amount(cost, "USD")}{category}{day}";
+    }
 }
 
 public sealed record LabourDayInput

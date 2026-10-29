@@ -43,7 +43,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `work_digest` | The same, when `notifyEntry` is `digest`: one per person per day | — | `minutes`, `latestName`, `projectTitle` |
 | `entry_comment` | The work entry's author | the work entry | `authorName`, `text`, `entryDescription` |
 | `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
-| `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` |
+| `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` (someone recorded expenses on a site; the kind keeps its name, the text says "Expenses added") |
 | `labour_week_submitted` | Holders of `labour_report:manage` | the project | `weekStart`, `updated`, `projectTitle` |
 | `project_created` | The domain's people | the project | `projectTitle` |
 | `project_status_changed` | The domain's people, on hold, resume, complete and reopen (not archive) | the project | `projectTitle`, `change` (`hold`, `resume`, `complete`, `reopen`) |
@@ -149,7 +149,7 @@ Push only: no notification row, so the website's bell is unchanged. The notifica
 | Kind | When | To |
 |---|---|---|
 | `log_reminder` | In the last hour of the person's working day (their own schedule or the company week), when what they logged within their hours is less than the day requires. Not on a day off or an excused day. While Design's `logReminder` is on | Design people who log hours (`work_entry:create`) |
-| `labour_week_reminder` | Saturday from 15:00 company time, one per site whose current week isn't reported | Execution people with `labour_report:create`, for each active site they added a material or submitted a week on in the last 4 weeks |
+| `labour_week_reminder` | Saturday from 15:00 company time, one per site whose current week isn't reported | Execution people with `labour_report:create`, for each active site they added an expense or submitted a week on in the last 4 weeks |
 
 The timing rules are in `Business/Push/ReminderRules.cs`.
 

@@ -105,7 +105,7 @@ public sealed class DomainFinanceService(
                 var revenue = PeriodMoney.Received(received, month, end);
                 var cost = PeriodMoney.Costs(costs, month, end);
                 return new FinanceMonthResponse(
-                    month, revenue, ExpectedRevenue.In(agreed, month, end), Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.Materials), Rounded(cost.GroundLabour),
+                    month, revenue, ExpectedRevenue.In(agreed, month, end), Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.SiteExpenses), Rounded(cost.GroundLabour),
                     Rounded(cost.Total), revenue - Rounded(cost.Total), UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
             })
             .ToList();
@@ -149,7 +149,7 @@ public sealed class DomainFinanceService(
         static string Pct(decimal? margin) => margin is { } m ? (m * 100).ToString("0.0", CultureInfo.InvariantCulture) : string.Empty;
 
         var csv = new StringBuilder();
-        Csv.Line(csv, "Project", "Client", "Status", "Billing", "Revenue", "Currency", "Hours", "Labour cost", "Expenses", "Materials",
+        Csv.Line(csv, "Project", "Client", "Status", "Billing", "Revenue", "Currency", "Hours", "Labour cost", "Expenses", "Site expenses",
             "Ground labour", "Total cost", "Profit", "Margin %");
         foreach (var p in projects.Projects)
         {
@@ -164,7 +164,7 @@ public sealed class DomainFinanceService(
                 p.Hours.ToString("0.00", CultureInfo.InvariantCulture),
                 Csv.Money(p.Cost.Labour),
                 Csv.Money(p.Cost.Expenses),
-                Csv.Money(p.Cost.Materials),
+                Csv.Money(p.Cost.SiteExpenses),
                 Csv.Money(p.Cost.GroundLabour),
                 Csv.Money(p.Cost.Total),
                 Csv.Money(p.Profit),
@@ -453,7 +453,7 @@ public sealed class DomainFinanceService(
     private static string? ClientName(Project p) => p.Client is { } c ? ClientRules.DisplayName(c.Name, c.Organisation) : null;
 
     private static PeriodCostResponse PeriodCost(PeriodMoney.CostTotals c)
-        => new(Rounded(c.Labour), Rounded(c.Expenses), Rounded(c.Materials), Rounded(c.GroundLabour), Rounded(c.Total));
+        => new(Rounded(c.Labour), Rounded(c.Expenses), Rounded(c.SiteExpenses), Rounded(c.GroundLabour), Rounded(c.Total));
 
     private static decimal Rounded(decimal amount) => PeriodMoney.Round(amount);
 

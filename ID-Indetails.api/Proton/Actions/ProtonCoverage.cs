@@ -141,7 +141,7 @@ public static class ProtonCoverage
         Never("Boqs.Email", "A BOQ goes to the client: a super admin sends it from the BOQ editor.", externalSend: true),
         Never("BlockedChanges.Force", "Taking a project to zero profit or below is a person's call, made on purpose."),
         Never("BlockedChanges.Dismiss", "A refused change is decided by whoever sees the project's money."),
-        Action("Projects.UpdatePricing", "propose_project_money", T2, ProtonFamily.Money),
+        Never("Projects.UpdatePricing", "A site's supervision and TVA rates are changed in the app's pricing dialog; its work price comes from the agreed BOQ."),
         Action("Requirements.Create", "propose_add_requirement"),
         Action("Requirements.Update", "propose_update_requirement"),
         Action("Requirements.Done", "propose_set_requirement_done"),
@@ -168,13 +168,12 @@ public static class ProtonCoverage
         Open("BoardLayouts.Delete", "the board's own menu puts its cards back in the default order"),
         Open("Files.Upload", "uploads come from the person's own device"),
 
-        // Execution sites (money: costs and client prices)
+        // Project expenses (Design) and an Execution site's costs
         Action("Expenses.Create", "propose_add_expense", T2, ProtonFamily.Money),
         Action("Expenses.Delete", "propose_delete_expense", T2, ProtonFamily.Money),
-        Action("Materials.Add", "propose_add_materials", T2, ProtonFamily.Money),
-        Action("Materials.Update", "propose_material_step", T2, ProtonFamily.Money),
-        Action("Materials.Delete", "propose_material_step", T2, ProtonFamily.Money),
-        Action("Materials.SetPrice", "propose_material_step", T2, ProtonFamily.Money),
+        Action("SiteExpenses.Add", "propose_add_site_expenses", T2, ProtonFamily.Money),
+        Action("SiteExpenses.Update", "propose_site_expense_step", T2, ProtonFamily.Money),
+        Action("SiteExpenses.Delete", "propose_site_expense_step", T2, ProtonFamily.Money),
         Action("Labour.SubmitWeek", "propose_submit_labour_week", T2, ProtonFamily.Money),
         Action("Labour.SetDefaults", "propose_labour_defaults", T2, ProtonFamily.Money),
 
