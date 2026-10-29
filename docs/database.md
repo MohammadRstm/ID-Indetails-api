@@ -42,16 +42,16 @@ The database is the second line of defence. The API must still filter every quer
 | Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `client_statements`, `client_statement_lines`, `client_statement_deliveries`, `statement_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
 | Working time and hours ledger | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days` |
-| Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `company_settings`, `domain_settings` |
+| Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `account_labels`, `company_settings`, `domain_settings` |
 
 ## Execution pricing
 
-An Execution project has a fixed **project fee** and a default **material markup** (`projects.project_fee`, `projects.material_markup`, 0–500%). Design projects have neither.
+An Execution project has a **work price** (`projects.project_fee`, 0 until a BOQ is agreed), a **supervision rate** (`projects.supervision_rate`, a fraction from 0 to 1, 10% by default) and a default **material markup** (`projects.material_markup`, 0–500%). Design projects have none of them (`supervision_rate` is NULL).
 
 - **Client price of a material:** `project_materials.client_price` when someone set it by hand, or when a client statement froze it at the price shown. Otherwise it is calculated as cost × (1 + markup), and never stored. A price typed equal to the automatic one is stored as automatic (`NULL`).
 - **Material cost:** quantity × unit cost when both are known, otherwise the lump-sum `amount`. The generated `total` column holds whichever applies.
-- **Agreed amount:** the material client prices plus the project fee. It is calculated live while the project is open. Finalising writes the frozen amount into `projects.revenue`.
-- **Ground labour is never billed.** The fee and the markup cover it.
+- **Agreed amount:** the work price plus supervision (`project_fee × supervision_rate`), plus for now the client prices of the materials sent. TVA is on the work (and those materials), never on supervision. It is calculated live while the project is open. Finalising writes the frozen amount into `projects.revenue`.
+- **Ground labour is never billed.** The price and the markup cover it.
 - **Client statements** are immutable snapshots of materials supplied and payments received, numbered `ST-YYYY-NNN`. A material that appears on a statement is *stated*, and it can't be deleted while that statement exists.
 
 ## Working time
@@ -86,7 +86,8 @@ bytes live in the content store, never in MySQL or on the server's disk. See [cl
 - A permission override is a grant or a revoke, at most one per user and permission.
 - An active user has a password and a name.
 - Internal projects have no client and zero revenue; revenue is never negative; progress is 0–100.
-- Execution projects are always client work and always have a fee and a material markup (0–500%); Design projects have neither.
+- Execution projects are always client work and always have a work price and a material markup (0–500%); Design projects have neither.
+- A supervision rate is a fraction from 0 to 1.
 - A material has either quantity and unit cost or a lump-sum amount; its client price is never negative.
 - No labour day falls on a Sunday.
 - At most one live (not voided) initial payment per project.
