@@ -62,7 +62,7 @@ public class ProtonCoverageTests
         Count(ProtonCoverageKind.Prefill).ShouldBe(7);
         Count(ProtonCoverageKind.Open).ShouldBe(27);
         Count(ProtonCoverageKind.ReadOnly).ShouldBe(3);
-        Count(ProtonCoverageKind.Never).ShouldBe(81);
+        Count(ProtonCoverageKind.Never).ShouldBe(88);
         Count(ProtonCoverageKind.Own).ShouldBe(11);
     }
 

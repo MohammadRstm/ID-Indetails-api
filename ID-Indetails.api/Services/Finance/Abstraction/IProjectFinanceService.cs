@@ -61,8 +61,11 @@ public interface IProjectFinanceService
 /// <param name="UnsentMaterials">Execution: how many materials haven't been sent to the client yet.</param>
 /// <param name="UnconvertedMaterials">Execution: materials left out of the charge for want of an exchange rate.</param>
 /// <param name="UnpricedLabourMinutes">Worked time of people with no pay record, left out of labour cost.</param>
-/// <param name="CashProfit">Execution: received + money from the box − cost.</param>
-/// <param name="FromBox">Execution: what the Execution box moved to the project.</param>
+/// <param name="Received">What the client paid, TVA included.</param>
+/// <param name="ReceivedTva">The TVA inside <paramref name="Received"/>.</param>
+/// <param name="CashProfit">Execution: received net of TVA − cost − moved to the pocket + paid by the pocket.</param>
+/// <param name="ToPocket">Execution: what a super admin moved from the project into the pocket money.</param>
+/// <param name="FromPocket">Execution: what the pocket money paid to the project.</param>
 /// <param name="MaterialProfit">Execution: what the materials sent earn: their charge − their cost.</param>
 public sealed record ProjectFinancials(
     ProjectFinance.Summary Summary,
@@ -76,7 +79,9 @@ public sealed record ProjectFinancials(
     decimal? MaterialProfit,
     decimal? UnsentMaterialCharge = null,
     int UnsentMaterials = 0,
-    decimal? FromBox = null);
+    decimal ToPocket = 0,
+    decimal FromPocket = 0,
+    decimal ReceivedTva = 0);
 
 public sealed record WorkDay(long UserId, DateOnly Day, int Minutes);
 

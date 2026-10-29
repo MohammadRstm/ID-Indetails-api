@@ -69,7 +69,17 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<SiteLog> SiteLogs => Set<SiteLog>();
 
-    public DbSet<BoxEntry> BoxEntries => Set<BoxEntry>();
+    public DbSet<PocketEntry> PocketEntries => Set<PocketEntry>();
+
+    public DbSet<PocketRequest> PocketRequests => Set<PocketRequest>();
+
+    public DbSet<Quote> Quotes => Set<Quote>();
+
+    public DbSet<QuoteDelivery> QuoteDeliveries => Set<QuoteDelivery>();
+
+    public DbSet<QuoteSequence> QuoteSequences => Set<QuoteSequence>();
+
+    public DbSet<BlockedChange> BlockedChanges => Set<BlockedChange>();
     public DbSet<ClientStatement> ClientStatements => Set<ClientStatement>();
     public DbSet<ClientStatementLine> ClientStatementLines => Set<ClientStatementLine>();
     public DbSet<ClientStatementDelivery> ClientStatementDeliveries => Set<ClientStatementDelivery>();
@@ -144,8 +154,10 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         // Enums: readable snake_case strings, limited by a CHECK constraint per column.
         StoreAsSnakeCase<UserStatus>(configurationBuilder);
         StoreAsSnakeCase<ProjectStatus>(configurationBuilder);
-        StoreAsSnakeCase<BoxState>(configurationBuilder);
-        StoreAsSnakeCase<BoxEntryKind>(configurationBuilder);
+        StoreAsSnakeCase<PocketEntryKind>(configurationBuilder);
+        StoreAsSnakeCase<PocketRequestStatus>(configurationBuilder);
+        StoreAsSnakeCase<BlockedChangeKind>(configurationBuilder);
+        StoreAsSnakeCase<BlockedChangeStatus>(configurationBuilder);
         StoreAsSnakeCase<BillingType>(configurationBuilder);
         StoreAsSnakeCase<PayBasis>(configurationBuilder);
         StoreAsSnakeCase<ContactKind>(configurationBuilder);

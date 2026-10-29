@@ -128,14 +128,23 @@ public static class ErrorCodes
     /// <summary>422. A daily log can only be changed on the day it was written.</summary>
     public const string SiteLogLocked = "site_log_locked";
 
-    /// <summary>422. The Execution box holds less than the money asked for.</summary>
-    public const string BoxShort = "box_short";
+    /// <summary>422. The pocket money holds less than the amount asked for.</summary>
+    public const string PocketShort = "pocket_short";
 
-    /// <summary>422. The box only sends money to a project in the red.</summary>
-    public const string BoxProjectNotInRed = "box_project_not_in_red";
+    /// <summary>422. Moving that much into the pocket money would take the site's profit to zero or below.</summary>
+    public const string PocketWouldEmptySite = "pocket_would_empty_site";
 
-    /// <summary>422. The project isn't waiting for a decision on its money in the box.</summary>
-    public const string BoxNoDecision = "box_no_decision";
+    /// <summary>422. The pocket money request was already approved or denied.</summary>
+    public const string PocketRequestDecided = "pocket_request_decided";
+
+    /// <summary>422. Internal work, or a project with no agreed amount yet, can't be quoted.</summary>
+    public const string QuoteNotPossible = "quote_not_possible";
+
+    /// <summary>422. The change would take the project's profit to zero or below; it was kept for forcing (see <c>blockedChangeId</c>).</summary>
+    public const string ProfitFloor = "profit_floor";
+
+    /// <summary>422. The blocked change was already forced through or dismissed.</summary>
+    public const string BlockedChangeDecided = "blocked_change_decided";
     public const string StatementEmpty = "statement_empty";
 
     // Dependencies

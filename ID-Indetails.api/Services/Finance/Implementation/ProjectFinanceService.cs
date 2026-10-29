@@ -30,8 +30,8 @@ public sealed class ProjectFinanceService(
         ILookup<long, ExpenseRow> Expenses,
         ILookup<long, MaterialRow> Materials,
         ILookup<long, GroundLabourRow> Ground,
-        IReadOnlyDictionary<long, decimal> Received,
-        IReadOnlyDictionary<long, decimal> FromBox);
+        IReadOnlyDictionary<long, (decimal Received, decimal Tva)> Received,
+        IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)> Pocket);
 
     public async Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default)
         => (await GetAsync([project], cancellationToken))[project.Id];
@@ -77,7 +77,7 @@ public sealed class ProjectFinanceService(
             (await sources.MaterialsAsync(ids, cancellationToken)).ToLookup(m => m.ProjectId),
             (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId),
             await sources.ReceivedAsync(ids, cancellationToken),
-            await sources.FromBoxAsync(ids, cancellationToken));
+            await sources.PocketAsync(ids, cancellationToken));
     }
 
     private ProjectFinancials Calculate(Project project, Loaded loaded)
@@ -91,7 +91,7 @@ public sealed class ProjectFinanceService(
             loaded.Materials[project.Id].ToList(),
             loaded.Ground[project.Id],
             loaded.Received.GetValueOrDefault(project.Id),
-            loaded.FromBox.GetValueOrDefault(project.Id),
+            loaded.Pocket.GetValueOrDefault(project.Id),
             loaded.Rates);
 
     public async Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(
@@ -114,12 +114,12 @@ public sealed class ProjectFinanceService(
             await sources.MaterialsAsync(ids, cancellationToken),
             await sources.GroundLabourAsync(ids, cancellationToken));
         var payments = await sources.PaymentsAsync(project.Id, cancellationToken);
-        // money the Execution box moved to the site counts as received on the day it was moved
-        var fromBox = await sources.BoxMovesAsync(project.Id, cancellationToken);
+        // pocket money counts as cash on the day it moved: a payout in, a contribution out
+        var pocket = await sources.PocketMovesAsync(project.Id, cancellationToken);
 
         return ProjectFinance.CashByWeek(
             items,
-            payments.Select(p => (p.ReceivedOn, p.AmountUsd)).Concat(fromBox.Select(m => (clock.ToCompanyDate(m.MovedAt), m.AmountUsd))),
+            payments.Select(p => (p.ReceivedOn, p.AmountUsd)).Concat(pocket.Select(m => (clock.ToCompanyDate(m.At), m.AmountUsd))),
             entries.Select(e => (clock.ToCompanyDate(e.StartedAt), e.Minutes)),
             rates,
             project.StartDate,
@@ -235,8 +235,8 @@ public sealed class ProjectFinanceService(
         IEnumerable<ExpenseRow> expenses,
         IReadOnlyList<MaterialRow> materials,
         IEnumerable<GroundLabourRow> ground,
-        decimal received,
-        decimal fromBox,
+        (decimal Gross, decimal Tva) received,
+        (decimal ToPocket, decimal FromPocket) pocket,
         ExchangeRateTable rates)
     {
         var (items, unpricedMinutes) = CostItems(entries, payRates, overtime, breaks, expenses, materials, ground);
@@ -279,7 +279,8 @@ public sealed class ProjectFinanceService(
                 project.Status is ProjectStatus.Completed or ProjectStatus.Archived,
                 project.ProgressPct,
                 revenue,
-                labourMinutes),
+                labourMinutes,
+                pocket.FromPocket - pocket.ToPocket),
             costs);
 
         return new ProjectFinancials(
@@ -289,11 +290,13 @@ public sealed class ProjectFinanceService(
             unpricedMinutes,
             materialCharge,
             unconvertedMaterials,
-            received,
-            isExecution ? received + fromBox - costs.Total : null,
+            received.Gross,
+            isExecution ? received.Gross - received.Tva - costs.Total - pocket.ToPocket + pocket.FromPocket : null,
             materialProfit,
             unsentCharge,
             unsent,
-            isExecution ? fromBox : null);
+            pocket.ToPocket,
+            pocket.FromPocket,
+            received.Tva);
     }
 }

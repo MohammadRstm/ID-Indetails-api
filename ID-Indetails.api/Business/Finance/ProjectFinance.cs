@@ -48,7 +48,8 @@ public static class ProjectFinance
     /// <summary>A row of someone's pay history.</summary>
     public sealed record PayRecord(long UserId, DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency, decimal OvertimeRate);
 
-    public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes);
+    /// <param name="PocketNet">Execution: what pocket money paid to the project less what was moved from it into the pocket.</param>
+    public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes, decimal PocketNet = 0);
 
     public sealed record Projection(decimal Cost, decimal Profit, decimal? Margin);
 
@@ -289,7 +290,7 @@ public static class ProjectFinance
     {
         var revenue = facts.IsClientWork ? facts.Revenue : 0;
         var cost = costs.Total;
-        var profit = revenue - cost;
+        var profit = revenue - cost + facts.PocketNet;
         var hours = facts.LabourMinutes / 60m;
         var marginKnown = facts.IsDone || facts.ProgressPct >= MinProgressForMargin || hours >= MinHoursForMargin;
 
@@ -297,7 +298,8 @@ public static class ProjectFinance
         if (!facts.IsDone && facts.IsClientWork && facts.ProgressPct >= MinProgressForMargin)
         {
             var projectedCost = Round(cost / (facts.ProgressPct / 100m));
-            projected = new Projection(projectedCost, revenue - projectedCost, MarginOf(revenue - projectedCost, revenue));
+            var projectedProfit = revenue - projectedCost + facts.PocketNet;
+            projected = new Projection(projectedCost, projectedProfit, MarginOf(projectedProfit, revenue));
         }
 
         var progress = facts.IsDone ? 1m : Math.Clamp(facts.ProgressPct, 0, 100) / 100m;

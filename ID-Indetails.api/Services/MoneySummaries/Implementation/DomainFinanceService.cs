@@ -80,9 +80,11 @@ public sealed class DomainFinanceService(
             clientWork.Sum(s => s.Profit),
             projects.Where(p => p.BillingType == BillingType.Internal).Sum(p => rollup.Money(p.Id).Summary.Cost),
             projects.Where(p => p.BillingType == BillingType.Client)
-                .Sum(p => Math.Max(0, rollup.Money(p.Id).Summary.Revenue - rollup.Payments.Where(x => x.ProjectId == p.Id).Sum(x => x.AmountUsd))),
+                .Sum(p => Math.Max(0, rollup.Money(p.Id).Summary.Revenue - rollup.Payments.Where(x => x.ProjectId == p.Id).Sum(x => x.NetUsd))),
             rollup.Position(rollup.Billing(projects)),
-            labourMinutes);
+            labourMinutes,
+            // the TVA clients paid in the period: collected for the state, never revenue
+            PeriodMoney.Received(rollup.Payments.Where(p => projects.Any(x => x.Id == p.ProjectId)).Select(p => (p.ReceivedOn, p.TvaUsd)), from, to));
     }
 
     public async Task<IReadOnlyList<FinanceMonthResponse>> MonthlyAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default)
@@ -142,7 +144,7 @@ public sealed class DomainFinanceService(
     private static IReadOnlyList<(DateOnly Day, decimal Usd)> ReceivedOn(IReadOnlyCollection<Project> projects, MoneyRollup rollup)
     {
         var ids = projects.Select(p => p.Id).ToHashSet();
-        return rollup.Payments.Where(p => ids.Contains(p.ProjectId)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();
+        return rollup.Payments.Where(p => ids.Contains(p.ProjectId)).Select(p => (p.ReceivedOn, p.NetUsd)).ToList();
     }
 
     public async Task<(string FileName, string Csv)> ExportProjectsAsync(
@@ -403,7 +405,7 @@ public sealed class DomainFinanceService(
         // the same figures as SummaryAsync, per project: payments on the day they arrived, costs dated in the period
         FinanceProjectPeriodMoneyResponse MoneyOf(Project project, DateOnly from, DateOnly to)
         {
-            var received = PeriodMoney.Received(payments[project.Id].Select(p => (p.ReceivedOn, p.AmountUsd)), from, to);
+            var received = PeriodMoney.Received(payments[project.Id].Select(p => (p.ReceivedOn, p.NetUsd)), from, to);
             var cost = PeriodMoney.Costs(rollup.Costs(project.Id), from, to);
             return new FinanceProjectPeriodMoneyResponse(
                 from, to, received, PeriodCost(cost), received - Rounded(cost.Total), PeriodMoney.Unconverted(rollup.Unconverted(project.Id), from, to).Count > 0);

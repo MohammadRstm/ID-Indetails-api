@@ -23,7 +23,9 @@ public sealed record ProjectPaymentChangeResponse(
     decimal? PreviousMaterialMarkup,
     string Description,
     DateTime ChangedAt,
-    ProjectOwnerResponse? ChangedBy);
+    ProjectOwnerResponse? ChangedBy,
+    decimal? TvaRate = null,
+    decimal? PreviousTvaRate = null);
 
 /// <summary>Only for callers with <c>financial:view</c>.</summary>
 public sealed record ProjectMoneyResponse
@@ -38,6 +40,15 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Revenue, fee and markup can't change until the project is reopened.</summary>
     public bool IsLocked { get; init; }
+
+    /// <summary>TVA on what the client pays, 0.15 = 15%. Revenue and profit are net of it.</summary>
+    public decimal TvaRate { get; init; }
+
+    /// <summary>The agreed payment (Design) or agreed amount before materials (Execution, the fee), TVA included.</summary>
+    public decimal PaymentWithTva { get; init; }
+
+    /// <summary>Revenue with TVA included: what the client is agreed to pay so far.</summary>
+    public decimal RevenueWithTva { get; init; }
 
     public decimal? ProjectFee { get; init; }
 
@@ -73,14 +84,14 @@ public sealed record ProjectMoneyResponse
 
     public decimal CostPerHour { get; init; }
 
-    /// <summary>Execution: received + money from the box − cost.</summary>
+    /// <summary>Execution: received − cost − moved to the pocket money + paid by it.</summary>
     public decimal? CashProfit { get; init; }
 
-    /// <summary>Execution: what the Execution box moved to the project, counted in its cash profit.</summary>
-    public decimal? FromBox { get; init; }
+    /// <summary>Execution: what was moved from the project into the pocket money. Lowers its profit, not what the client owes.</summary>
+    public decimal? ToPocket { get; init; }
 
-    /// <summary>Execution: whether its client payments go into the box.</summary>
-    public BoxState? BoxState { get; init; }
+    /// <summary>Execution: what the pocket money paid to the project. Raises its profit.</summary>
+    public decimal? FromPocket { get; init; }
 
     /// <summary>Execution: what the materials sent earn, their charge − their cost.</summary>
     public decimal? MaterialProfit { get; init; }

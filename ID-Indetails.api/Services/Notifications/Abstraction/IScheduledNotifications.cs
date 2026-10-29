@@ -7,7 +7,7 @@ public enum ScheduledCheck
     RequirementDeadlines,
     OverdueInvoices,
     ShortHours,
-    CostWarnings,
+    ProfitWarnings,
     DraftInvoices,
     AutoArchive,
     ScheduledInvoices,

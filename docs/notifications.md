@@ -65,6 +65,9 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `client_added` | Holders of `client:manage` in the client's domain | the client | `name`, `organisation` |
 | `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
+| `pocket_requested` | Holders of `financial:view` who see Execution | the pocket money request | none |
+| `change_blocked` | Holders of `financial:view` in the project's domain, the requester aside, when the profit floor refused a change (see [projects.md](projects.md), "Profit floor") | the blocked change | `projectTitle`, `kind` (never the amount) |
+| `quote_due` | Holders of `invoice:send` | the project | `projectTitle` |
 | `statement_sent` | Holders of `financial:view` | the statement | `number` |
 | `portal_client_message` | Staff taking part in a project's client portal discussion, when a client writes in its chat. Rolling per project (`portal_chat:{projectId}`) | — | `projectTitle`, `authorName` (never the text) |
 | `portal_client_comment` | The project's manager and the file's uploader (everyone taking part on the staff side when neither does), when a client comments on a file. Rolling per file (`portal_comments:{itemId}`) | the item | `projectTitle`, `authorName`, `itemTitle` |
@@ -88,7 +91,9 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `hours_short` | From the first of a month, when Design employees finished the month before flagged in the hours ledger. Key `hours-short-YYYY-MM` | Holders of `salary:view` | — | `month`, `count`, `people` (the 5 most short: `id`, `name`, `shortMinutes`) |
 | `hours_missed` | The morning after a working day on which a Design employee logged less than the day required (every minute logged that day counts, overtime included). From 09:00 company time it judges yesterday, before that the day before. Days off, excused days (a day or whole-month excuse; a minutes excuse names no day) and days outside their employment never count (`Business/Payroll/MissedHours.cs`). It is only a reminder: the day can still be logged for the rest of the month. Key `hours-missed-{day}` | That employee (Design members holding `work_entry:create`) | — | `day`, `loggedMinutes`, `requiredMinutes` |
 | `hours_missed_list` | With `hours_missed`: one list of everyone it went to that day. Key `hours-missed-list-{day}` | Holders of `work_entry:view_all` in Design (Design admins and super admins); never employees | — | `day`, `count`, `people` (all of them, by name: `id`, `name`, `loggedMinutes`, `requiredMinutes`) |
-| `project_cost_high` | An active Design client project's cost has passed 85% of its payment (its revenue). Not for Execution, whose payment includes its materials at client price. Once per project: key `project-cost-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` (the cost as a whole percentage of the payment) |
+| `profit_low` | An active client project held to the profit floor is at 10% of its agreed amount or less. Sent by the change that took it there, or by the hourly check when nobody's change did. Once per project: key `profit-low-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `marginPct` (whole percentage, never an amount) |
+| `profit_at_zero` | The same project is at zero profit or below: a forced change, or a change nobody made. Once per project: key `profit-zero-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `marginPct` |
+| `project_cost_high` | No longer sent (`profit_low` replaced it, 29 Oct 2026); the ones sent before still read. Was: a Design client project's cost past 85% of its payment | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` |
 | `invoice_draft_waiting` | A draft invoice still unissued 3 days after it was created. Key `invoice-draft-{id}` | Holders of `financial:view` in its domain | the invoice | `projectTitle`, `createdOn` |
 | `invoice_sent_automatically` | A scheduled invoice went out on its day ([billing.md](billing.md), "Auto invoice"). Each one, no key | Whoever scheduled it | the invoice | `number`, `to` (null when what was on account paid it, so it wasn't emailed) |
 | `invoice_send_due` | A scheduled invoice with no address to email reached its day, so it isn't issued. Key `invoice-send-due:{id}:{sendOn}` | Whoever scheduled it, to send it themselves | the invoice | `sendOn` |
@@ -137,7 +142,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
-| `money` | the `invoice_*` kinds, `payment_recorded`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
+| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `quote_due`, `change_blocked`, `profit_low`, `profit_at_zero`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 

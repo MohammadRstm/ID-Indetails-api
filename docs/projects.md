@@ -15,7 +15,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner |
 | `PUT /api/projects/{id}/billing` | `project:edit` and `financial:view` | Design only: client work or internal, and the client. Becoming internal drops the payment to 0 |
 | `PUT /api/projects/{id}/payment` | `project:edit` and `financial:view` | Design client projects only: `{ revenue, description }`, the customer payment and why it changes (see "Payment changes") |
-| `PUT /api/projects/{id}/pricing` | `project:pricing_manage` | Execution only: `{ projectFee, materialMarkup, description }`, the project fee and default material markup, and why they change |
+| `PUT /api/projects/{id}/pricing` | `project:pricing_manage` | Execution only: `{ projectFee, materialMarkup, tvaRate?, description }`, the agreed amount, default material markup and TVA, and why they change |
 | `GET /api/projects/{id}/payment-changes` | `financial:view` | Every change of the agreed payment, newest first (see "Payment changes") |
 | `POST /api/projects/{id}/hold`, `/resume`, `/complete`, `/archive`, `/reopen` | `project:change_status` | Status changes (below) |
 
@@ -31,7 +31,8 @@ Employees hold `project:view`, so they see every project of their domain in any 
 
 - The start date is today (company time zone). The owner defaults to the caller.
 - **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No fee or markup. Sending a `revenue` needs `financial:view` (`403`): admins create the project and a super admin sets its customer payment later.
-- **Execution:** always client work, with a `clientId`, and optionally a `projectFee` and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). Sending either needs `project:pricing_manage` (`403`); left out, the site starts with a fee of 0 and no markup until someone with pricing sets them. `revenue` is never sent; it is calculated. An optional `initialPayment` (`amount`, `currency`, `fxRate`, `receivedOn`, `method`, `reference`, `note`) is recorded on account as the project's initial payment in the same transaction. It needs `payment:record`, and Design projects don't take one (`400`). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
+- **Execution:** always client work, with a `clientId`, and optionally a `projectFee` (the site's **agreed amount**, before materials) and a `materialMarkup` (a fraction: `0.10` is 10%, 0 to 5). Sending either needs `project:pricing_manage` (`403`); left out, the site starts at 0 and with no markup until someone with pricing sets them. `revenue` is never sent; it is calculated. A project takes no payment when it is created: a down payment is recorded as a payment afterwards.
+- **TVA:** `tvaRate` (0 to 1, needs `financial:view`) on client work; left out, it is 15% (see [billing.md](billing.md#tva)). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
 - The client must belong to the project's domain (`400`) and not be archived (`422 client_archived`).
 - **Owner:** an admin of the project's domain who isn't deactivated, or a super admin; never an employee (`422 owner_not_allowed`). The rule applies when a project is created and when its owner changes.
 
@@ -64,6 +65,28 @@ Every project money figure comes from one place: `Business/Finance/ProjectFinanc
 - **Recognised to date** = revenue × progress, or all of it once completed or archived.
 - **Execution:** `cashProfit` = received − cost, and `materialProfit` = what the materials sent to the client earn (their charge − their cost).
 - **Cash by week** (`ProjectFinance.CashByWeek`): payments received and cost added up week by week, Monday to Sunday. Execution sites show it on `GET /api/projects/{id}/site-money/timeline` (see [execution.md](execution.md)).
+
+## Profit floor
+
+A client project's profit may not reach zero unless someone who sees its money says so (`Business/Projects/ProfitFloorRules.cs`, `Services/Projects/Implementation/ProfitFloor.cs`).
+
+- **Which projects:** client work with an agreed amount: Design's payment (`revenue > 0`), an Execution site's fee (`projectFee > 0`). Internal work is cost by nature and isn't held to it.
+- **Which profit:** the project's profit counting the materials not sent to the client yet, and the pocket money (`PocketRules.ProfitOf`), on its agreed amount with those materials (`PocketRules.AgreedOf`). TVA is never part of it.
+- **Guarded changes:** adding an expense, adding or changing materials, submitting a labour week, logging or changing hours, and lowering the payment, the project fee or the material markup. Each takes the profit before it (with the project locked, except hours) and checks it again after saving, inside its transaction.
+  - A change that **raises** the profit, or leaves it as it was, always passes, so a project at zero or below can still be helped (a higher payment, a removed expense).
+  - A change that **lowers it to zero or below** is refused: `422 profit_floor`, with `blockedChangeId` in the error body. Nothing of it is saved. The error handler then keeps the request as a **blocked change** (`blocked_changes`: the request as JSON with its route ids, who, when) and sends `change_blocked` to whoever sees the domain's money (`financial:view`), the requester aside.
+  - A change that lowers it to **10% of the agreed amount or less** passes and sends `profit_low`, once per project. An Execution site also asks the pocket money for help (a pending request with no requester, "Close to zero profit"; see [execution.md](execution.md)).
+- **Blocked changes** (`financial:view`, in a domain the caller sees):
+
+  | Method and path | Purpose |
+  |---|---|
+  | `GET /api/blocked-changes/{id}` | The change in words (`summary`, e.g. "Expense: Tiles, 1,000.00 USD"), its `kind`, project, `requestedBy`, `status` (`pending`, `forced`, `dismissed`), who decided it, and `profitNow` |
+  | `POST /api/blocked-changes/{id}/force` | Makes the change again through the same service and checks, past the floor. Hours are logged as the employee who logged them (`ICurrentUser.ActAs`). Then `profit_at_zero` goes once to whoever sees the money |
+  | `POST /api/blocked-changes/{id}/dismiss` | Drops it |
+
+  - A change is decided **once**: it is marked forced or dismissed before anything else (an atomic update on a pending row), so a second force or dismiss is `422 blocked_change_decided`. If the forced change fails on its own checks (the project closed meanwhile, the labour week changed: `409 labour_week_changed`), it is pending again and the error is returned.
+  - Its `resultId` is what forcing made: the expense, the first material, the work entry.
+- **Changes nobody made** (pay, schedules, exchange rates, a voided payment) aren't refused: the hourly scheduler sends `profit_low` and `profit_at_zero` for them, under the same keys, so nobody hears it twice (see [notifications.md](notifications.md)).
 
 ## Status
 

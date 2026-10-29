@@ -100,6 +100,24 @@ public static class NotificationKinds
     /// <summary>A client payment was recorded (subject: the payment). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string PaymentRecorded = "payment_recorded";
 
+    /// <summary>An Execution site asks the pocket money for money: for whoever sees Execution's money to approve or deny.</summary>
+    public const string PocketRequested = "pocket_requested";
+
+    /// <summary>A client project was made by someone who can't send quotes: for those who can, to send one or not.</summary>
+    public const string QuoteDue = "quote_due";
+
+    /// <summary>
+    /// A change was refused because it would take a client project's profit to zero or below (subject: the blocked
+    /// change). To whoever sees the domain's money, to force it through or dismiss it.
+    /// </summary>
+    public const string ChangeBlocked = "change_blocked";
+
+    /// <summary>A client project's profit is down to 10% of its agreed amount or less (subject: the project). Once per project, to whoever sees the domain's money.</summary>
+    public const string ProfitLow = "profit_low";
+
+    /// <summary>A client project's profit reached zero or below, by a forced change or a change nobody made (subject: the project). Once per project, to whoever sees the domain's money.</summary>
+    public const string ProfitAtZero = "profit_at_zero";
+
     /// <summary>A client statement was sent (subject: the statement). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string StatementSent = "statement_sent";
 
@@ -131,8 +149,10 @@ public static class NotificationKinds
 
     /// <summary>Who logged less than a working day asked for (digest key <c>hours-missed-list-YYYY-MM-DD</c>). The next morning, to whoever sees everyone's Design work.</summary>
     public const string HoursMissedList = "hours_missed_list";
-
-    /// <summary>An active client project's cost passed 85% of its payment (subject: the project). Once per project, to whoever sees the domain's money.</summary>
+    /// <summary>
+    /// An active client project's cost passed 85% of its payment (subject: the project). No longer sent: <see cref="ProfitLow"/>
+    /// took its place; kept so the ones sent before still read.
+    /// </summary>
     public const string ProjectCostHigh = "project_cost_high";
 
     /// <summary>A draft invoice is still unissued 3 days after it was created (subject: the invoice). Once per draft, to whoever sees the domain's money.</summary>

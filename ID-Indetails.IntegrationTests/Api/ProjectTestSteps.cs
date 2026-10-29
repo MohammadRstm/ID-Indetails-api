@@ -30,18 +30,21 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
     /// overseen by <paramref name="staffIds"/> (by default someone made for it). A caller who may not set that money (a
     /// plain admin) gets the project without it: no revenue, or no fee and no markup.
     /// </summary>
-    public async Task<ProjectResponse> CreateProjectAsync(string accessToken, string domain, decimal revenue = 5000, IReadOnlyList<long>? staffIds = null)
+    /// <param name="projectFee">An Execution site's agreed amount; 1,000 unless said.</param>
+    public async Task<ProjectResponse> CreateProjectAsync(
+        string accessToken, string domain, decimal revenue = 5000, IReadOnlyList<long>? staffIds = null, decimal projectFee = 1000m)
     {
         var client = await CreateClientAsync(accessToken, domain);
         var me = await (await Client.GetAsync("/api/auth/me", accessToken)).ReadAsync<CurrentUserResponse>();
         var title = (domain == DomainCodes.Execution ? "Site " : "Project ") + Guid.NewGuid().ToString("N")[..8];
         var staff = domain == DomainCodes.Execution ? staffIds ?? [await SiteStaffAsync()] : null;
+        // untaxed, so money figures read as before TVA; TVA has tests of its own
         object body = domain == DomainCodes.Execution
             ? me.Permissions.Contains(PermissionCodes.ProjectPricingManage)
-                ? new { title, domainCode = domain, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m, staffIds = staff }
+                ? new { title, domainCode = domain, clientId = client.Id, projectFee, materialMarkup = 0.10m, staffIds = staff, tvaRate = 0m }
                 : new { title, domainCode = domain, clientId = client.Id, staffIds = staff }
             : me.Permissions.Contains(PermissionCodes.FinancialView)
-                ? new { title, domainCode = domain, clientId = client.Id, revenue }
+                ? new { title, domainCode = domain, clientId = client.Id, revenue, tvaRate = 0m }
                 : new { title, domainCode = domain, clientId = client.Id };
 
         var response = await Client.PostJsonAsync("/api/projects", body, accessToken);

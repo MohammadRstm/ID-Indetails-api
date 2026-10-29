@@ -97,12 +97,16 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
             Revenue = design && !isInternal ? revenue : null,
             ProjectFee = design ? null : fee,
             MaterialMarkup = design ? null : markup,
-            InitialPayment = initialPayment is { } amount ? new InitialPaymentRequest { Amount = amount, ReceivedOn = day, Reference = $"LT-INIT-{number:000}" } : null,
             LabourDefaults = design ? null : new SetLabourDefaultsRequest { Workers = workers, DailyPay = dailyPay },
         });
         world.Tally.Add($"projects.{domain}");
-        if (initialPayment is not null)
+        // a site's down payment is an ordinary payment, recorded once the site exists
+        if (initialPayment is { } amount)
         {
+            await api.PostAsync(owner.Token, $"/api/projects/{created.Id()}/payments", new RecordPaymentRequest
+            {
+                Amount = amount, ReceivedOn = day, Reference = $"LT-INIT-{number:000}", IsInitial = true,
+            });
             world.Tally.Add("payments");
         }
 
