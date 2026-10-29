@@ -102,6 +102,8 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
   - A Design project's revenue is typed in.
   - An open Execution project is priced live: its fee plus the client prices of materials sent on a statement. Completing it freezes that amount.
   - Execution cash profit = received − cost − money moved to the pocket + money paid by it. Pocket money moves profit, never what the client owes.
+  - **TVA** is per project: 15% by default, 0 for internal work. It sits on the net: revenue, profit and margin exclude it. Billing (invoices, statements, what the client owes or paid) is gross, and the client never sees TVA as its own line.
+  - **Profit floor:** a client project with an agreed amount can't have its profit lowered to zero or below. The change is refused (`profit_floor`) and kept as a blocked change, which only someone with `financial:view` can force through, once. Changes that raise profit always pass ([projects.md](docs/projects.md), "Profit floor").
 - **Pay:**
   - The daily one-hour break is paid, so 7 hours of required work is an 8-hour paid day.
   - The hourly rate is the salary ÷ that month's scheduled paid hours.
