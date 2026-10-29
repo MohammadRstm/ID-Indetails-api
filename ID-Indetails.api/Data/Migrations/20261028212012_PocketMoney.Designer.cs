@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ID_Indetails.api.Data.Migrations
 {
     [DbContext(typeof(IdIndetailsDbContext))]
-    [Migration("20261026174733_ExecutionBox")]
-    partial class ExecutionBox
+    [Migration("20261028212012_PocketMoney")]
+    partial class PocketMoney
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -194,71 +194,6 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_billing_settings_reminders", "`reminder_first_after_days` BETWEEN 1 AND 60 AND `reminder_every_days` BETWEEN 1 AND 60 AND `reminder_max` BETWEEN 1 AND 10");
 
                             t.HasCheckConstraint("ck_billing_settings_terms_non_negative", "`default_terms_days` >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("ID_Indetails.api.Models.BoxEntry", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("amount");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasPrecision(3)
-                        .HasColumnType("datetime(3)")
-                        .HasColumnName("created_at");
-
-                    b.Property<long?>("CreatedById")
-                        .HasColumnType("bigint")
-                        .HasColumnName("created_by_id");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
-                        .HasColumnName("note");
-
-                    b.Property<long?>("PaymentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("payment_id");
-
-                    b.Property<long>("ProjectId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("project_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_box_entries");
-
-                    b.HasIndex("CreatedAt")
-                        .HasDatabaseName("ix_box_entries_created_at");
-
-                    b.HasIndex("CreatedById")
-                        .HasDatabaseName("ix_box_entries_created_by_id");
-
-                    b.HasIndex("PaymentId")
-                        .HasDatabaseName("ix_box_entries_payment_id");
-
-                    b.HasIndex("ProjectId", "Kind")
-                        .HasDatabaseName("ix_box_entries_project_id_kind");
-
-                    b.ToTable("box_entries", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_box_entries_amount_not_zero", "`amount` <> 0 OR `kind` = 'removed'");
-
-                            t.HasCheckConstraint("ck_box_entries_kind", "`kind` IN ('payment_in', 'payment_voided', 'transfer', 'removed', 'readded')");
                         });
                 });
 
@@ -2419,6 +2354,154 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.PocketEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<long?>("RequestId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("request_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pocket_entries");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_pocket_entries_created_by_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_pocket_entries_project_id");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_pocket_entries_request_id");
+
+                    b.HasIndex("Kind", "CreatedAt")
+                        .HasDatabaseName("ix_pocket_entries_kind_created_at");
+
+                    b.ToTable("pocket_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_pocket_entries_amount_sign", "(`kind` = 'contribution' AND `amount` > 0) OR (`kind` = 'payout' AND `amount` < 0)");
+
+                            t.HasCheckConstraint("ck_pocket_entries_kind", "`kind` IN ('contribution', 'payout')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PocketRequest", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal?>("ApprovedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("approved_amount");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("decided_at");
+
+                    b.Property<long?>("DecidedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("decided_by_id");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("decision_note");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("requested_at");
+
+                    b.Property<long?>("RequestedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("requested_by_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("SuggestedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("suggested_amount");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pocket_requests");
+
+                    b.HasIndex("DecidedById")
+                        .HasDatabaseName("ix_pocket_requests_decided_by_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_pocket_requests_project_id");
+
+                    b.HasIndex("RequestedById")
+                        .HasDatabaseName("ix_pocket_requests_requested_by_id");
+
+                    b.HasIndex("Status", "RequestedAt")
+                        .HasDatabaseName("ix_pocket_requests_status_requested_at");
+
+                    b.ToTable("pocket_requests", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_pocket_requests_approved_amount", "(`status` = 'approved' AND `approved_amount` > 0) OR (`status` <> 'approved' AND `approved_amount` IS NULL)");
+
+                            t.HasCheckConstraint("ck_pocket_requests_status", "`status` IN ('pending', 'approved', 'denied')");
+
+                            t.HasCheckConstraint("ck_pocket_requests_suggested_non_negative", "`suggested_amount` >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.PortalAccount", b =>
                 {
                     b.Property<long>("Id")
@@ -3551,11 +3634,6 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(20)")
                         .HasColumnName("billing_type");
 
-                    b.Property<string>("BoxState")
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("box_state");
-
                     b.Property<long?>("ClientId")
                         .HasColumnType("bigint")
                         .HasColumnName("client_id");
@@ -3683,10 +3761,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("projects", null, t =>
                         {
                             t.HasCheckConstraint("ck_projects_billing_type", "`billing_type` IN ('client', 'internal')");
-
-                            t.HasCheckConstraint("ck_projects_box_state", "`box_state` IS NULL OR `box_state` IN ('in', 'pending', 'removed')");
-
-                            t.HasCheckConstraint("ck_projects_box_state_execution_only", "(`domain_code` = 'execution') = (`box_state` IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_projects_execution_is_client_work", "`domain_code` <> 'execution' OR `billing_type` = 'client'");
 
@@ -6719,30 +6793,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Domain");
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.BoxEntry", b =>
-                {
-                    b.HasOne("ID_Indetails.api.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_box_entries_users_created_by_id");
-
-                    b.HasOne("ID_Indetails.api.Models.Payment", null)
-                        .WithMany()
-                        .HasForeignKey("PaymentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_box_entries_payments_payment_id");
-
-                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_box_entries_projects_project_id");
-
-                    b.Navigation("Project");
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.Client", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -7312,6 +7362,55 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_permissions_domains_domain_code");
 
                     b.Navigation("Domain");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PocketEntry", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pocket_entries_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pocket_entries_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.PocketRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pocket_entries_pocket_requests_request_id");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.PocketRequest", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pocket_requests_users_decided_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_pocket_requests_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_pocket_requests_users_requested_by_id");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.PortalAccount", b =>

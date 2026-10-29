@@ -11,7 +11,6 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
-using ID_Indetails.api.Services.Execution.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 
@@ -28,17 +27,12 @@ public sealed class ProjectStatusService(
     IProjectFinanceService finance,
     IActivityEventRepository activity,
     IProjectNotifier notifier,
-    IBoxService executionBox,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectStatusService
 {
-    public Task<ProjectResponse> ChangeAsync(long projectId, ProjectStatusRules.Action action, CancellationToken cancellationToken = default)
-        => ChangeAsync(projectId, action, null, cancellationToken);
-
     public async Task<ProjectResponse> ChangeAsync(
         long projectId,
         ProjectStatusRules.Action action,
-        BoxChoice? box,
         CancellationToken cancellationToken = default)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
@@ -64,7 +58,6 @@ public sealed class ProjectStatusService(
         if (transition.Finalises)
         {
             await FinaliseAsync(project, actor.UserId, now, cancellationToken);
-            await executionBox.ClosedAsync(project, box, actor, cancellationToken);
             await notifier.ClosedAsync(project, (await finance.GetAsync(project, cancellationToken)).Summary.Margin, actor.UserId, cancellationToken);
         }
 
@@ -80,7 +73,6 @@ public sealed class ProjectStatusService(
             }
 
             await requirements.UntickAutoDoneAsync(project.Id, cancellationToken);
-            await executionBox.ReopenedAsync(project, box, actor, cancellationToken);
         }
 
         await progress.RefreshAsync(project, actor.UserId, cancellationToken);
