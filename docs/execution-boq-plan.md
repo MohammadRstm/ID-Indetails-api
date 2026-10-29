@@ -166,7 +166,7 @@ What's left on the client side:
 **Status:** API built (see "Phase 2 as built" at the end); the client is being built on the desktop. The full contract is in section 4, with the desktop's decisions at its end.
 
 ### Phase 3: cost-only expenses list (branch `MR-Site-Expenses`, off `MR-Boqs`)
-**Status:** not started. Outline:
+**Status:** in progress on the desktop; the decisions below the outline win. Outline:
 - **Data:**
   - Rename `project_materials` → `site_expenses`; the model and API routes say "expenses", and the client's Execution "Materials" panel becomes "Expenses".
   - Fields: item, quantity, unit, unit cost or amount, currency, supplier/payee, `spentOn` (date, required, default today), `category` (materials | contractor | equipment | fees | other) and optional `accountLabelId`.
@@ -174,6 +174,28 @@ What's left on the client side:
 - **Execution expenses:** the separate `ProjectExpense` "Add project expense" window is no longer offered for Execution projects. A migration moves any existing Execution `project_expenses` rows into `site_expenses`.
 - **Profit floor:** the guard keeps covering expense writes.
 - **Approved DB changes:** the rename, the added and dropped columns listed above, and that row move.
+
+#### Phase 3 decisions made on the desktop (2026-10-29)
+Settled with the user or from the code. **Where they differ from the outline above, these win.**
+
+**Routes (the user's choice).** Site expenses live at `/api/projects/{projectId}/site-expenses` (`GET` list, `POST` a batch, `PUT` / `DELETE` `/{expenseId}`). The same controller also answers the old `/api/projects/{projectId}/materials` paths with the same shapes, so the phone app keeps recording until it's updated in its own PR; docs say the alias is temporary. `/api/projects/{id}/expenses` stays the project-expenses route. `PUT .../{id}/client-price` goes.
+
+**JSON names.** `name` (shown as "Item") and `supplier` (shown as "Supplier / payee") keep their names so the phone's requests still work. New optional request fields: `currency` (default USD, the existing currency validator), `spentOn` (default today in the company time zone), `category` (default `materials`) and `accountLabelId` (an existing label; archived ones can't be newly picked, but an expense keeps one it already has). The response gains `spentOn`, `category` and `accountLabel: { id, name } | null`, and loses `clientPrice`, `priceSource` and `markup`. The list loses `charge` and `defaultMarkup`, gains `category` and `accountLabelId` filters, and its `from` / `to` filter on `spentOn`. Record names: `SiteExpense…` (`SiteExpenseResponse`, `SiteExpenseListResponse`, `AddSiteExpensesRequest`, `NewSiteExpenseRequest`, …).
+
+**Data (approved).**
+- `project_materials` → `site_expenses`, model `SiteExpense`. `client_ref` stays: it's the phone's idempotency key.
+- Added: `spent_on` (date, required; backfilled from the day each row was added, in the company time zone), `category` (enum `materials | contractor | equipment | fees | other`, check constraint) and `account_label_id` (optional FK to `account_labels`).
+- Dropped: `site_expenses.client_price` and `projects.material_markup`. `ck_projects_execution_pricing` is rewritten without the markup.
+- `project_payment_changes.material_markup` / `previous_material_markup` stay as history: no longer written, still shown for old rows.
+- Execution `project_expenses` rows move into `site_expenses`: `label` → `name`, `amount`, `currency`, `spent_on`, `note`, `created_at` → `added_at`, `created_by_id` → `added_by_id` (the project's owner when null), `deleted_at` kept. Categories: contractor → contractor; assets, hardware → equipment; services, software → fees; travel, other → other.
+
+**Rules.**
+- Creating a project expense on an Execution project is refused (`422 expense_execution_uses_site_expenses`); the client offers no such window there.
+- Markup and client-price logic, events, validators, Proton actions and UI all go. The pricing edit becomes `{ supervisionRate?, tvaRate?, description }`; create loses `materialMarkup`; `ProjectMoneyResponse` loses `materialMarkup`.
+- Cost: `ProjectCostResponse.materials` → `siteExpenses`, and `CostSource.Material` → `SiteExpense` (`site_expense`). Costs are dated by `spentOn` for exchange rates.
+- The profit floor keeps guarding adds and edits.
+- Stored kinds don't change, so no event data migration: the activity and notification kinds (`material_*`) and the blocked-change kinds `material_add` / `material_update` keep their values. The words on screen say "expense".
+- Permissions keep their codes (`material:create`, `material:manage`). `PermissionExplanations` says "site expenses"; the seeded catalog descriptions are unchanged.
 
 ### Phase 4: payment labels, figures, supervision taken (branch `MR-Account-Figures`, off `MR-Site-Expenses`)
 **Status:** not started. Outline:
@@ -190,6 +212,33 @@ What's left on the client side:
   - a breakdown by category, payee and label.
 - **Client payment report PDF:** waits until the user agrees its layout.
 - **Approved DB changes:** the column and the table above.
+
+#### Phase 4 decisions made on the desktop (2026-10-29)
+Settled with the user or from the code. **Where they differ from the outline above, these win.**
+
+**Payment labels.** `payments.account_label_id` is optional. Recording and editing a payment accept `accountLabelId`, which must be an existing, non-archived label when newly set. Payment responses carry `accountLabel: { id, name } | null`.
+
+**Supervision taken.**
+- Endpoints: `GET /api/projects/{id}/supervision-withdrawals`, `POST` the same path with `{ amountUsd, takenOn, note? }`, and `DELETE /api/supervision-withdrawals/{id}` (soft delete via `deleted_at`).
+- Who: writes need `payment:record`, reads need `financial:view`.
+- Only on Execution client projects. Amount > 0; `takenOn` not in the future.
+- It isn't a cost. Taking more than is due is allowed and shown as "over".
+- Activity events record it and its removal.
+
+**Figures.** `GET /api/projects/{id}/account-figures` (`financial:view`, Execution client projects only) returns:
+- work price, supervision, TVA and client total;
+- received, and rest to pay (client total − received);
+- costs: site expenses, labour and total;
+- profit (the project's existing profit figure);
+- supervision due (work × rate), taken and left;
+- pocket money moved to the pocket and paid by it;
+- cash in account = received − costs − supervision taken − moved to pocket + paid by pocket. The user chose to count pocket moves.
+- rows by account label, each with received (payments with that label), spent (site expenses with it) and rest. An "Unlabelled" row also carries labour, supervision taken and pocket moves, so the rows add up to cash in account.
+- breakdowns of spending by category and by payee (`supplier`; "No payee" when empty).
+
+Amounts are in USD at dated rates; costs with no rate on their day are listed as unconverted, like the cost response.
+
+**Not built:** the client payment report PDF waits for the user to agree its layout.
 
 ## 4. Phase 2 contract (shared by API and client)
 
