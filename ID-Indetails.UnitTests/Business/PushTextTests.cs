@@ -31,9 +31,9 @@ public class PushTextTests
         """).RootElement;
 
     [Fact]
-    public void There_are_44_notification_kinds_and_each_has_its_own_text()
+    public void There_are_46_notification_kinds_and_each_has_its_own_text()
     {
-        AllKinds.Count.ShouldBe(47);
+        AllKinds.Count.ShouldBe(46);
         foreach (var kind in AllKinds)
         {
             var text = PushText.ForNotification(kind, "Rana Haddad", "Villa Haddad", Revealing, 2);
@@ -64,7 +64,7 @@ public class PushTextTests
     {
         string Body(string kind) => PushText.ForNotification(kind, "Rana", "Villa Haddad", Revealing, 1).Body;
 
-        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(19);
+        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(18);
         Body(NotificationKinds.PaymentRecorded).ShouldBe("Payment recorded. Open ID InDetails to see it.");
         Body(NotificationKinds.PocketRequested).ShouldBe("A site asks for pocket money. Open ID InDetails to decide.");
         Body(NotificationKinds.ChangeBlocked).ShouldBe("A change was stopped to keep a project above zero profit. Open ID InDetails to decide.");
@@ -78,7 +78,6 @@ public class PushTextTests
         Body(NotificationKinds.InvoiceSendFailed).ShouldBe("An invoice couldn't be sent automatically.");
         Body(NotificationKinds.InvoiceIssued).ShouldBe("Billing update. Open ID InDetails to see it.");
         Body(NotificationKinds.InvoiceSentAutomatically).ShouldBe("Billing update. Open ID InDetails to see it.");
-        Body(NotificationKinds.StatementSent).ShouldBe("Billing update. Open ID InDetails to see it.");
         Body(NotificationKinds.ProjectClosed).ShouldBe("A project's money needs a look.");
         Body(NotificationKinds.ProjectCostHigh).ShouldBe("A project's money needs a look.");
         Body(NotificationKinds.ClientAdded).ShouldBe("A new client was added.");

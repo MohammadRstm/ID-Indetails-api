@@ -1,9 +1,11 @@
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Projects;
-using ID_Indetails.api.DTO.Response.Statements;
+using ID_Indetails.api.DTO.Response.Boqs;
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Services.Boqs.Abstraction;
 using ID_Indetails.api.Services.Documents.Implementation;
 using PdfSharp.Pdf.IO;
 using Shouldly;
@@ -47,30 +49,50 @@ public class DocumentPdfTests
         Pages(InvoicePdf.Render(Invoice(1) with { Number = null, DueOn = null }, null, Head, null)).ShouldBe(1);
     }
 
-    [Theory]
-    [InlineData(StatementMode.Detail, false)]
-    [InlineData(StatementMode.Detail, true)]
-    [InlineData(StatementMode.Total, false)]
-    public void A_statement_renders_in_every_mode(StatementMode mode, bool includesEarlier)
+    private static BoqDocument Boq(BoqKind kind, BoqStatus status, int lines, BoqAdjustmentType adjustment = BoqAdjustmentType.None, decimal? value = null)
     {
-        var statement = new StatementResponse
-        {
-            Id = 1,
-            Number = "ST-2026-003",
-            ProjectTitle = "Site 12",
-            Client = new ProjectClientResponse(2, "Haddad Holdings"),
-            Mode = mode,
-            IncludesEarlier = includesEarlier,
-            Date = new DateOnly(2026, 9, 30),
-            Types = mode == StatementMode.Total ? [] : [new StatementTypeResponse("cement", "Cement", "40 bag", 2, includesEarlier ? 110m : 0, 55m, 165m)],
-            HiddenTypes = includesEarlier ? new StatementHiddenTypesResponse(1, 220m) : null,
-            Total = 385m,
-            Count = 3,
-            Received = 500m,
-            Remaining = 1930m,
-        };
+        var items = Enumerable.Range(1, lines)
+            .Select(i => new BoqLineResponse(i, i, $"2.1.{i}", $"Reinforced concrete slab, level {i}", 10m, 0.05m, 10.5m, "m3", 120.5m, 1265.25m))
+            .ToList();
+        var subtotal = items.Sum(l => l.TotalUsd);
+        var total = adjustment == BoqAdjustmentType.Percent ? subtotal + Math.Round(subtotal * (value ?? 0), 2) : adjustment == BoqAdjustmentType.Total ? value!.Value : subtotal;
+        var boq = new BoqDetailResponse(
+            9, kind, kind == BoqKind.Vo ? "VO-2026-002" : "BQ-2026-001", "Villa Mounir", new PersonRefResponse(1, "Nadia Khoury"), status, total, lines,
+            kind == BoqKind.Vo ? "The client added a guest house" : null, new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc),
+            null, null, null, 4, adjustment, value, items, subtotal, total - subtotal, 0.10m, total * 0.10m, 0.11m, total * 0.11m, total * 1.21m, []);
 
-        Pages(StatementPdf.Render(statement, Head)).ShouldBe(1);
+        return new BoqDocument(boq, "Site 12", "Beit Mery", "Haddad Holdings");
+    }
+
+    [Theory]
+    [InlineData(BoqKind.Client, BoqStatus.Draft, BoqAdjustmentType.None)]
+    [InlineData(BoqKind.Client, BoqStatus.Agreed, BoqAdjustmentType.Percent)]
+    [InlineData(BoqKind.Vo, BoqStatus.Draft, BoqAdjustmentType.Total)]
+    public void A_boq_renders_with_or_without_an_adjustment_and_a_long_one_runs_onto_more_pages(BoqKind kind, BoqStatus status, BoqAdjustmentType adjustment)
+    {
+        decimal? value = adjustment == BoqAdjustmentType.Percent ? -0.05m : adjustment == BoqAdjustmentType.Total ? 900m : null;
+
+        Pages(BoqPdf.Render(Boq(kind, status, 3, adjustment, value), new DateOnly(2026, 9, 30), Head)).ShouldBe(1);
+        Pages(BoqPdf.Render(Boq(kind, status, 120, adjustment, value), new DateOnly(2026, 9, 30), Head)).ShouldBeGreaterThan(1);
+    }
+
+    [Fact]
+    public void A_boq_shows_the_totals_the_client_pays_and_never_the_exact_quantity_or_waste()
+    {
+        var boq = Boq(BoqKind.Client, BoqStatus.Agreed, 2, BoqAdjustmentType.Percent, -0.05m).Boq;
+
+        BoqPdf.Totals(boq).Select(t => t.Label).ShouldBe(["Subtotal", "Adjustment (-5%)", "Total", "Supervision (10%)", "TVA (11%)", "Total to pay"]);
+        BoqPdf.Totals(Boq(BoqKind.Client, BoqStatus.Draft, 2).Boq).Select(t => t.Label).ShouldBe(["Total", "Supervision (10%)", "TVA (11%)", "Total to pay"]);
+        BoqPdf.Totals(boq).Last().Value.ShouldBe(PdfLayout.Money(boq.ClientTotalUsd));
+
+        // the figures the client reads: the final quantity, never the quantity before waste
+        BoqPdf.Quantity(boq.Lines[0].FinalQuantity).ShouldBe("10.5");
+        BoqPdf.Quantity(1234.5m).ShouldBe("1,234.5");
+        BoqPdf.Rate(120.5m).ShouldBe("$120.50");
+        BoqPdf.Rate(0.0125m).ShouldBe("$0.0125");
+        BoqPdf.Rate(-250m).ShouldBe("-$250.00");
+        BoqPdf.Percent(0.11m).ShouldBe("11%");
+        BoqPdf.Percent(0.125m).ShouldBe("12.5%");
     }
 
     [Fact]

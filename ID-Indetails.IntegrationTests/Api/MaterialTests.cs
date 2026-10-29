@@ -44,15 +44,10 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.PriceSource.ShouldBe(MaterialRules.PriceSource.Auto),
             m => m.Markup.ShouldBe(0.10m));
 
-        // their cost counts straight away; their client prices once they are sent to the client
+        // their cost counts straight away; their client prices are never revenue: the work price is in the BOQs
         var money = (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!;
         money.Cost.Materials.ShouldBe(21_225m);
-        money.MaterialCharge.ShouldBe(0m);
-        money.UnsentMaterialCharge.ShouldBe(23_347.50m);
-        asAdmin.Items.ShouldAllBe(m => m.SentOn == null);
-        await Projects.SendStatementAsync(admin.AccessToken, project.Id);
-        (await (await Client.GetAsync($"/api/projects/{project.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>()).Money!.MaterialCharge.ShouldBe(23_347.50m);
-        (await ListAsync(project.Id, admin.AccessToken)).Items.ShouldAllBe(m => m.SentOn != null);
+        money.Revenue.ShouldBe(1000m);
 
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'material_added'", ("@p", project.Id))).ShouldBe(3);
@@ -136,10 +131,7 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var material = (await AddAsync(project.Id, superAdmin.AccessToken, new { name = "Sand", amount = 80m }))[0];
 
-        // completing freezes what the client owes, so every material must have been sent to them
-        await (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.MaterialsNotSent);
-        await Projects.SendStatementAsync(superAdmin.AccessToken, project.Id);
+        // a material is a cost: completing doesn't wait for anything to be sent to the client
         (await Client.PostEmptyAsync($"/api/projects/{project.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PostJsonAsync($"/api/projects/{project.Id}/materials", new { items = new[] { new { name = "Late", amount = 5m } } }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProjectLocked);
@@ -161,27 +153,26 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_stated_material_keeps_its_type_cost_and_price_and_cannot_be_removed()
+    public async Task A_material_can_change_and_be_removed_while_the_site_is_open_whatever_the_client_was_sent()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 0m);
         var material = (await AddAsync(project.Id, superAdmin.AccessToken, new { name = "Paint", quantity = 10m, unit = "litre", unitCost = 5m }))[0];
-        await StateAsync(project.Id, superAdmin.AccessToken);
 
-        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{material.Id}",
-                new { name = "Paint", quantity = 12m, unit = "litre", unitCost = 5m }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.MaterialStated);
-        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{material.Id}/client-price", new { clientPrice = 99m }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.MaterialStated);
-        await (await Client.DeleteAsync($"/api/projects/{project.Id}/materials/{material.Id}", superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.MaterialStated);
+        // a client BOQ agreed and sent doesn't freeze the site's costs: they are plain costs
+        var boq = await new BoqTestSteps(_steps).AgreeClientBoqAsync(superAdmin.AccessToken, project.Id, 500m);
+        (await Client.PostJsonAsync($"/api/boqs/{boq.Id}/deliveries", new { channel = "download" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
-        var noted = await (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{material.Id}",
-            new { name = "Paint", quantity = 10m, unit = "litre", unitCost = 5m, supplier = "Levant Paints", note = "White" }, superAdmin.AccessToken)).ReadAsync<MaterialResponse>();
-        noted.ShouldSatisfyAllConditions(
+        var changed = await (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{material.Id}",
+            new { name = "Paint", quantity = 12m, unit = "litre", unitCost = 5m, supplier = "Levant Paints" }, superAdmin.AccessToken)).ReadAsync<MaterialResponse>();
+        changed.ShouldSatisfyAllConditions(
+            m => m.Cost.ShouldBe(60m),
             m => m.Supplier.ShouldBe("Levant Paints"),
-            m => m.IsStated.ShouldBeTrue(),
-            m => m.PriceSource.ShouldBe(MaterialRules.PriceSource.Stated));
+            m => m.PriceSource.ShouldBe(MaterialRules.PriceSource.Auto));
+        (await Client.PutJsonAsync($"/api/projects/{project.Id}/materials/{material.Id}/client-price", new { clientPrice = 99m }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.DeleteAsync($"/api/projects/{project.Id}/materials/{material.Id}", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await ListAsync(project.Id, superAdmin.AccessToken)).Items.ShouldBeEmpty();
     }
 
     [Fact]
@@ -239,11 +230,5 @@ public class MaterialTests(ApiFactory api) : IClassFixture<ApiFactory>
         var response = await Client.GetAsync($"/api/projects/{projectId}/materials{query}", accessToken);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<MaterialListResponse>();
-    }
-
-    private async Task StateAsync(long projectId, string accessToken)
-    {
-        var response = await Client.PostJsonAsync($"/api/projects/{projectId}/statements", new { mode = "detail" }, accessToken);
-        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
     }
 }

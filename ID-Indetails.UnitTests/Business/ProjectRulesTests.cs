@@ -75,13 +75,6 @@ public class ProjectRulesTests
     }
 
     [Fact]
-    public void Material_charge_is_the_sum_of_the_client_prices()
-    {
-        ExecutionPricing.MaterialCharge([new(200m, null), new(30m, 50m)], 0.10m).ShouldBe(270m);
-        ExecutionPricing.MaterialCharge([], 0.10m).ShouldBe(0m);
-    }
-
-    [Fact]
     public void Only_client_work_has_a_payment_to_change()
     {
         ProjectRules.CheckHasPayment(BillingType.Client).ShouldBeNull();

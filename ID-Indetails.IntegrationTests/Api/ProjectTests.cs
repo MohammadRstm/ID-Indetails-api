@@ -66,12 +66,10 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             await insert.ExecuteNonQueryAsync();
         }
 
-        // not sent to the client yet: their cost counts, their client prices don't
+        // their cost counts; their client prices are never revenue
         var priced = await (await Client.GetAsync($"/api/projects/{site.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>();
-        priced.Money!.MaterialCharge.ShouldBe(0m);
-        priced.Money.UnsentMaterialCharge.ShouldBe(270m);
-        priced.Money.UnsentMaterials.ShouldBe(2);
-        priced.Money.Revenue.ShouldBe(1000m);
+        priced.Money!.Revenue.ShouldBe(1000m);
+        priced.Money.Cost.Materials.ShouldBe(230m);
 
         // a bigger BOQ was agreed (the price is never typed in), and supervision is 10% of it
         await Projects.SetWorkPriceAsync(site.Id, 1500m);
@@ -81,15 +79,8 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.SupervisionRate.ShouldBe(0.10m),
             m => m.SupervisionUsd.ShouldBe(150m),
             m => m.Revenue.ShouldBe(1650m));
-        repriced.Money!.UnsentMaterialCharge.ShouldBe(300m);
-
-        // sent on a statement, they join the revenue at the prices the client was shown
-        await Projects.SendStatementAsync(admin.AccessToken, site.Id);
-        var sent = await (await Client.GetAsync($"/api/projects/{site.Id}", admin.AccessToken)).ReadAsync<ProjectResponse>();
-        sent.Money!.MaterialCharge.ShouldBe(300m);
-        sent.Money.MaterialProfit.ShouldBe(70m);
-        sent.Money.UnsentMaterials.ShouldBe(0);
-        sent.Money.Revenue.ShouldBe(1950m);
+        // TVA is on the work only (0% on this site, set at creation): the client total adds none to supervision
+        repriced.Money!.RevenueWithTva.ShouldBe(1650m);
 
         var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
         await (await Client.PostJsonAsync("/api/projects", new { title = "Internal site", billingType = "internal", projectFee = 1, materialMarkup = 0 }, admin.AccessToken))
