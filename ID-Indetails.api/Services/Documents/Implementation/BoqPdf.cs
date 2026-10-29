@@ -71,9 +71,10 @@ public static class BoqPdf
         }
 
         rows.Add(new TotalRow("Total", PdfLayout.Money(boq.TotalUsd), Strong: true));
-        rows.Add(new TotalRow($"Supervision ({Percent(boq.SupervisionRate)})", PdfLayout.Money(boq.SupervisionUsd)));
-        rows.Add(new TotalRow($"TVA ({Percent(boq.TvaRate)})", PdfLayout.Money(boq.TvaUsd)));
-        rows.Add(new TotalRow("Total to pay", PdfLayout.Money(boq.ClientTotalUsd), Strong: true));
+        // the PDF is only made for whoever reads client BOQs, who is always given these
+        rows.Add(new TotalRow($"Supervision ({Percent(boq.SupervisionRate!.Value)})", PdfLayout.Money(boq.SupervisionUsd!.Value)));
+        rows.Add(new TotalRow($"TVA ({Percent(boq.TvaRate!.Value)})", PdfLayout.Money(boq.TvaUsd!.Value)));
+        rows.Add(new TotalRow("Total to pay", PdfLayout.Money(boq.ClientTotalUsd!.Value), Strong: true));
         return rows;
     }
 

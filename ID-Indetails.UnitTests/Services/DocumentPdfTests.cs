@@ -83,7 +83,7 @@ public class DocumentPdfTests
 
         BoqPdf.Totals(boq).Select(t => t.Label).ShouldBe(["Subtotal", "Adjustment (-5%)", "Total", "Supervision (10%)", "TVA (11%)", "Total to pay"]);
         BoqPdf.Totals(Boq(BoqKind.Client, BoqStatus.Draft, 2).Boq).Select(t => t.Label).ShouldBe(["Total", "Supervision (10%)", "TVA (11%)", "Total to pay"]);
-        BoqPdf.Totals(boq).Last().Value.ShouldBe(PdfLayout.Money(boq.ClientTotalUsd));
+        BoqPdf.Totals(boq).Last().Value.ShouldBe(PdfLayout.Money(boq.ClientTotalUsd!.Value));
 
         // the figures the client reads: the final quantity, never the quantity before waste
         BoqPdf.Quantity(boq.Lines[0].FinalQuantity).ShouldBe("10.5");

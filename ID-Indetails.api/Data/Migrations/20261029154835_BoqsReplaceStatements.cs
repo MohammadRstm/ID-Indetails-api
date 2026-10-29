@@ -27,6 +27,9 @@ namespace ID_Indetails.api.Data.Migrations
             migrationBuilder.Sql("UPDATE user_permission_overrides SET permission_code = 'boq:create' WHERE permission_code = 'statement:create';");
             migrationBuilder.Sql("DELETE FROM user_permission_overrides WHERE permission_code = 'statement:send';");
             migrationBuilder.Sql("DELETE FROM role_permissions WHERE permission_code IN ('statement:create', 'statement:send');");
+            // a saved Proton chat keeps the permissions it was held under: the renamed one is followed there too, or every
+            // chat of whoever held it would read as hidden (statement:send, gone from the catalog, no longer counts)
+            migrationBuilder.Sql("UPDATE proton_conversations SET access_permissions = REPLACE(access_permissions, '\"statement:create\"', '\"boq:create\"');");
 
             migrationBuilder.DeleteData(
                 table: "permissions",
@@ -288,6 +291,7 @@ namespace ID_Indetails.api.Data.Migrations
                 table: "permissions",
                 keyColumn: "code",
                 keyValue: "boq:create");
+            migrationBuilder.Sql("UPDATE proton_conversations SET access_permissions = REPLACE(access_permissions, '\"boq:create\"', '\"statement:create\"');");
 
             migrationBuilder.DropTable(
                 name: "boq_deliveries");
@@ -304,6 +308,9 @@ namespace ID_Indetails.api.Data.Migrations
             migrationBuilder.DropCheckConstraint(
                 name: "ck_blocked_changes_kind",
                 table: "blocked_changes");
+
+            // refused BOQ agreements have nothing left to replay, and the old kinds check below would refuse them
+            migrationBuilder.Sql("DELETE FROM blocked_changes WHERE kind IN ('boq_agree', 'boq_withdraw');");
 
             migrationBuilder.DropColumn(
                 name: "previous_supervision_rate",

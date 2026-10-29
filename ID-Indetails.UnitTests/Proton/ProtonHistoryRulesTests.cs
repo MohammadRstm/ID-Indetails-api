@@ -46,5 +46,7 @@ public class ProtonHistoryRulesTests
         // a permission or a domain lost does
         ProtonHistoryRules.LostAccess(then, domains, Access([PermissionCodes.ProtonUse], domains)).ShouldBeTrue();
         ProtonHistoryRules.LostAccess(then, domains, Access([.. then], [DomainCodes.Execution])).ShouldBeTrue();
+        // a permission since removed from the catalog can't have been taken away
+        ProtonHistoryRules.LostAccess([.. then, "statement:send"], domains, Access([.. then], domains)).ShouldBeFalse();
     }
 }

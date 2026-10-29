@@ -72,7 +72,7 @@ public sealed class BoqService(
     public async Task<BoqDetailResponse> GetAsync(long boqId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        return await DescribeAsync(await ReadableAsync(actor, boqId, cancellationToken), cancellationToken);
+        return await DescribeAsync(await ReadableAsync(actor, boqId, cancellationToken), actor, cancellationToken);
     }
 
     public async Task<BoqDetailResponse> CreateAsync(long projectId, CreateBoqRequest request, CancellationToken cancellationToken = default)
@@ -95,7 +95,7 @@ public sealed class BoqService(
 
         await FinishAsync(boq, project, actor, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return await DescribeAsync(await boqs.GetAsync(boq.Id, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boq.Id, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
 
     public async Task<BoqDetailResponse> SaveAsync(long boqId, SaveBoqRequest request, CancellationToken cancellationToken = default)
@@ -149,7 +149,7 @@ public sealed class BoqService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
 
     public async Task<BoqDetailResponse> CopyLinesAsync(long boqId, CopyBoqLinesRequest request, CancellationToken cancellationToken = default)
@@ -179,7 +179,7 @@ public sealed class BoqService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
 
     public async Task<BoqDetailResponse> DuplicateAsync(long boqId, CancellationToken cancellationToken = default)
@@ -202,7 +202,7 @@ public sealed class BoqService(
 
         await FinishAsync(boq, project, actor, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return await DescribeAsync(await boqs.GetAsync(boq.Id, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boq.Id, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
 
     public async Task DeleteAsync(long boqId, CancellationToken cancellationToken = default)
@@ -251,7 +251,7 @@ public sealed class BoqService(
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
 
     public async Task<BoqDetailResponse> WithdrawAgreementAsync(long boqId, WithdrawBoqAgreementRequest request, CancellationToken cancellationToken = default)
@@ -285,7 +285,7 @@ public sealed class BoqService(
         }
 
         await transaction.CommitAsync(cancellationToken);
-        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
 
     public async Task<BoqDetailResponse> RecordDeliveryAsync(long boqId, RecordBoqDeliveryRequest request, CancellationToken cancellationToken = default)
@@ -312,7 +312,7 @@ public sealed class BoqService(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
 
     public async Task<BoqDocument> GetDocumentAsync(long boqId, CancellationToken cancellationToken = default)
@@ -549,22 +549,30 @@ public sealed class BoqService(
     private static IReadOnlyList<long> UserIds(IEnumerable<Boq> list)
         => list.SelectMany(b => b.Deliveries.Select(d => d.SentById).Append(b.AuthorId).Append(b.AgreedById)).OfType<long>().Distinct().ToList();
 
-    private async Task<BoqDetailResponse> DescribeAsync(Boq boq, CancellationToken cancellationToken)
-        => Detail(boq, await boqs.NamesAsync(UserIds([boq]), cancellationToken));
+    private async Task<BoqDetailResponse> DescribeAsync(Boq boq, UserAccess actor, CancellationToken cancellationToken)
+    {
+        var caller = CallerOf(actor);
+        return Detail(boq, await boqs.NamesAsync(UserIds([boq]), cancellationToken), caller.CanSeeMoney || caller.CanManagePricing);
+    }
 
+    /// <summary>A client BOQ or VO's PDF: only for callers who read those, so with every figure.</summary>
     private async Task<BoqDocument> DocumentAsync(Boq boq, CancellationToken cancellationToken)
     {
         var project = boq.Project;
         return new BoqDocument(
-            await DescribeAsync(boq, cancellationToken),
+            Detail(boq, await boqs.NamesAsync(UserIds([boq]), cancellationToken), seesPrice: true),
             project.Title,
             project.Location,
             project.Client is { } client ? ClientRules.DisplayName(client.Name, client.Organisation) : string.Empty);
     }
 
+    /// <summary>
+    /// The work price as stored, which agreeing and withdrawing keep equal to the agreed BOQ and VOs: a site priced
+    /// before BOQs keeps its typed-in price until its first agreement replaces it.
+    /// </summary>
     private static BoqPriceResponse PriceOf(Project project, decimal agreedBoq, decimal agreedVos)
     {
-        var work = BoqRules.WorkPrice(agreedBoq, [agreedVos]);
+        var work = project.ProjectFee ?? 0;
         var price = ExecutionPricing.PriceOf(work, project.SupervisionRate ?? 0, project.TvaRate);
         return new BoqPriceResponse(agreedBoq, agreedVos, work, project.SupervisionRate ?? 0, price.Supervision, project.TvaRate, price.Tva, price.Gross);
     }
@@ -595,7 +603,7 @@ public sealed class BoqService(
         PersonOf(boq.AgreedById, names),
         LastDeliveryOf(boq));
 
-    private static BoqDetailResponse Detail(Boq boq, IReadOnlyDictionary<long, string> names)
+    private static BoqDetailResponse Detail(Boq boq, IReadOnlyDictionary<long, string> names, bool seesPrice)
     {
         var project = boq.Project;
         var price = ExecutionPricing.PriceOf(boq.TotalUsd, project.SupervisionRate ?? 0, project.TvaRate);
@@ -630,11 +638,11 @@ public sealed class BoqService(
                 BoqRules.LineTotal(l.Quantity, l.WasteRate, l.Rate))).ToList(),
             boq.SubtotalUsd,
             boq.TotalUsd - boq.SubtotalUsd,
-            project.SupervisionRate ?? 0,
-            price.Supervision,
-            project.TvaRate,
-            price.Tva,
-            price.Gross,
+            seesPrice ? project.SupervisionRate ?? 0 : null,
+            seesPrice ? price.Supervision : null,
+            seesPrice ? project.TvaRate : null,
+            seesPrice ? price.Tva : null,
+            seesPrice ? price.Gross : null,
             boq.Deliveries.OrderByDescending(d => d.SentAt).ThenByDescending(d => d.Id)
                 .Select(d => new BoqDeliveryResponse(d.Id, d.Channel, d.Recipient, d.Note, d.TotalUsd, d.SentAt, PersonOf(d.SentById, names))).ToList());
     }

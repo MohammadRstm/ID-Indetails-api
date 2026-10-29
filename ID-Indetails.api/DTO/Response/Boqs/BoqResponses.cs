@@ -26,6 +26,8 @@ public sealed record BoqSummaryResponse(
 public sealed record BoqLastDeliveryResponse(DeliveryChannel Channel, DateTime SentAt);
 
 /// <summary>A BOQ with its lines. Supervision, TVA and the client's total use the project's rates as they are now.</summary>
+/// <param name="SupervisionRate">With the supervision, TVA and client total: only for callers who see money or manage the
+/// pricing. An internal draft's author may see neither, and the project's rates are pricing.</param>
 public sealed record BoqDetailResponse(
     long Id,
     BoqKind Kind,
@@ -47,11 +49,11 @@ public sealed record BoqDetailResponse(
     IReadOnlyList<BoqLineResponse> Lines,
     decimal SubtotalUsd,
     decimal AdjustmentUsd,
-    decimal SupervisionRate,
-    decimal SupervisionUsd,
-    decimal TvaRate,
-    decimal TvaUsd,
-    decimal ClientTotalUsd,
+    decimal? SupervisionRate,
+    decimal? SupervisionUsd,
+    decimal? TvaRate,
+    decimal? TvaUsd,
+    decimal? ClientTotalUsd,
     IReadOnlyList<BoqDeliveryResponse> Deliveries);
 
 /// <param name="Quantity">The exact quantity, before waste. Internal: the client's PDF shows the final quantity.</param>
