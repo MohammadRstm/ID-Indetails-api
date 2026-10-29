@@ -30,7 +30,7 @@ public class DatabaseModelTests
         // Everything else is RESTRICT so history can never be deleted by accident.
         var allowed = new[]
         {
-            "client_contacts", "invoice_lines", "invoice_deliveries", "labour_week_days",
+            "client_contacts", "invoice_lines", "invoice_deliveries", "quote_deliveries", "labour_week_days",
             "requirement_assignees", "overhead_amounts", "message_mentions", "message_attachments",
             "user_schedule_days", "hour_excuse_days", "client_statement_lines", "client_statement_deliveries",
             // a saved Proton chat's messages are part of it: deleting the chat (by its owner, or for retention) deletes them

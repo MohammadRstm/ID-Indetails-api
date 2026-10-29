@@ -124,7 +124,7 @@ public static class ProtonCoverage
         Never("Pocket.Deny", "A super admin denies pocket money on its page."),
         Never("Quotes.Create", "A quote goes to the client: a super admin makes and sends it from the project."),
         Never("Quotes.RecordDelivery", "A quote goes to the client: a super admin makes and sends it from the project."),
-        Never("Quotes.Email", "A quote goes to the client: a super admin makes and sends it from the project."),
+        Never("Quotes.Email", "A quote goes to the client: a super admin makes and sends it from the project.", externalSend: true),
         Action("Projects.UpdatePricing", "propose_project_money", T2, ProtonFamily.Money),
         Action("Requirements.Create", "propose_add_requirement"),
         Action("Requirements.Update", "propose_update_requirement"),

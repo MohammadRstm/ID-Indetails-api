@@ -1,5 +1,7 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Billing;
+using ID_Indetails.api.Services.MoneySummaries.Abstraction;
+using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Projects;
@@ -33,6 +35,8 @@ public sealed class DocumentService(
     IStatementService statementService,
     IQuoteService quoteService,
     IProjectService projectService,
+    IProjectRepository projects,
+    IMoneyRollupService moneyRollups,
     IWorkInsightsService workInsights,
     IExpenseService expenseService,
     IPaymentService paymentService,
@@ -181,11 +185,18 @@ public sealed class DocumentService(
         var billing = await billingSettings.GetAsync(invoice.Domain, cancellationToken);
         var issuedOn = invoice.IssuedAt is { } at ? clock.ToCompanyDate(at) : (DateOnly?)null;
         var name = invoice.Number is { } number ? number.ToLowerInvariant() : $"invoice-draft-{invoice.Id}";
-        // the whole project for its client, TVA included; only for whoever sees the project's money
-        var money = (await projectService.GetAsync(invoice.Project.Id, cancellationToken)).Money;
-        var position = money is null || invoice.VoidedAt is not null
-            ? null
-            : new InvoiceProjectPosition(money.RevenueWithTva, money.Billing.Received, invoice.Balance ?? invoice.Total);
+        // the whole project for its client, TVA included. Read straight from the project: whoever may send the invoice
+        // may send its PDF, and the hourly run and reminders make it with nobody signed in.
+        var project = await projects.GetAsync(invoice.Project.Id, cancellationToken);
+        InvoiceProjectPosition? position = null;
+        if (project is not null && invoice.VoidedAt is null)
+        {
+            var rollup = await moneyRollups.LoadAsync([project], cancellationToken);
+            position = new InvoiceProjectPosition(
+                Tva.Gross(rollup.Money(project.Id).Summary.Revenue, project.TvaRate),
+                rollup.ProjectBillingOf(project).Received,
+                invoice.Balance ?? invoice.Total);
+        }
         return (new PdfFile(InvoicePdf.Render(invoice, issuedOn, head, billing, position), name + ".pdf"), issuedOn, head, billing);
     }
 
