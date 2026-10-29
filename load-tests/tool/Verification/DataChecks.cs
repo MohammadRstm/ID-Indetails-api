@@ -49,8 +49,9 @@ public static class DataChecks
               JOIN project_requirements r ON r.id = a.requirement_id JOIN projects p ON p.id = r.project_id
             WHERE u.domain_code IS NOT NULL AND u.domain_code <> p.domain_code
             """),
-        ("Materials, labour and BOQs belong to Execution projects", """
-            SELECT (SELECT COUNT(*) FROM project_materials m JOIN projects p ON p.id = m.project_id WHERE p.domain_code <> 'execution')
+        ("Site expenses, labour and BOQs belong to Execution projects, and project expenses to the others", """
+            SELECT (SELECT COUNT(*) FROM site_expenses m JOIN projects p ON p.id = m.project_id WHERE p.domain_code <> 'execution')
+                 + (SELECT COUNT(*) FROM project_expenses x JOIN projects p ON p.id = x.project_id WHERE p.domain_code = 'execution')
                  + (SELECT COUNT(*) FROM labour_weeks l JOIN projects p ON p.id = l.project_id WHERE p.domain_code <> 'execution')
                  + (SELECT COUNT(*) FROM boqs b JOIN projects p ON p.id = b.project_id WHERE p.domain_code <> 'execution')
             """),
@@ -62,8 +63,8 @@ public static class DataChecks
                       AND p.project_fee <> COALESCE((SELECT SUM(b.total_usd) FROM boqs b
                                                      WHERE b.project_id = p.id AND b.status = 'agreed' AND b.deleted_at IS NULL), 0))
             """),
-        ("Materials are recorded by Execution people or super admins", """
-            SELECT COUNT(*) FROM project_materials m JOIN users u ON u.id = m.added_by_id WHERE u.domain_code = 'design'
+        ("Site expenses are recorded by Execution people or super admins", """
+            SELECT COUNT(*) FROM site_expenses m JOIN users u ON u.id = m.added_by_id WHERE u.domain_code = 'design'
             """),
         ("No work was logged on a project after it was completed", """
             SELECT COUNT(*) FROM work_entries w JOIN projects p ON p.id = w.project_id

@@ -1,12 +1,12 @@
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Labour;
-using ID_Indetails.api.DTO.Request.Materials;
+using ID_Indetails.api.DTO.Request.SiteExpenses;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.LoadTests.Tool.Seeding;
 
 /// <summary>
-/// Execution sites. The crew records material deliveries most days (Monday to Saturday) and reports last week's
+/// Execution sites. The crew records site expenses (mostly material deliveries) most days (Monday to Saturday) and reports last week's
 /// ground labour every Monday. A site's price is a client BOQ agreed when it is made (see Portfolio).
 /// </summary>
 public sealed class Sites(World world, ApiClient api, SimulatedClock clock)
@@ -32,12 +32,12 @@ public sealed class Sites(World world, ApiClient api, SimulatedClock clock)
         clock.MoveTo(day, 11);
         foreach (var site in world.Live("execution").Where(_ => Random.Chance(0.45)))
         {
-            await RecordMaterialsAsync(site, day);
+            await RecordSiteExpensesAsync(site, day);
         }
 
     }
 
-    private async Task RecordMaterialsAsync(SeedProject site, DateOnly day)
+    private async Task RecordSiteExpensesAsync(SeedProject site, DateOnly day)
     {
         var crew = site.Team.Where(p => p.WorksOn(day)).ToList();
         if (crew.Count == 0)
@@ -45,34 +45,31 @@ public sealed class Sites(World world, ApiClient api, SimulatedClock clock)
             return;
         }
 
-        var items = new List<NewMaterialRequest>();
-        var costs = new List<decimal>();
+        var items = new List<NewSiteExpenseRequest>();
         for (var i = Random.Next(1, 5); i > 0; i--)
         {
             var (name, unit, low, high) = Random.Pick(Vocabulary.Materials);
             if (Random.Chance(0.2))
             {
-                var amount = Random.Amount(100m, 3000m, 10m);
-                items.Add(new NewMaterialRequest { Name = name, Amount = amount, Supplier = Random.Pick(Vocabulary.Suppliers), Note = "LT lump sum" });
-                costs.Add(amount);
+                // a lump sum is often a subcontractor's invoice
+                items.Add(new NewSiteExpenseRequest
+                {
+                    Name = name, Amount = Random.Amount(100m, 3000m, 10m), Supplier = Random.Pick(Vocabulary.Suppliers), Note = "LT lump sum",
+                    Category = Random.Chance(0.5) ? SiteExpenseCategory.Contractor : null,
+                });
             }
             else
             {
                 var quantity = unit == "tonne" ? Random.Amount(0.5m, 5m, 0.5m) : Random.Next(2, 121);
-                var unitCost = Random.Amount(low, high, 0.5m);
-                items.Add(new NewMaterialRequest { Name = name, Quantity = quantity, Unit = unit, UnitCost = unitCost, Supplier = Random.Pick(Vocabulary.Suppliers) });
-                costs.Add(decimal.Round(quantity * unitCost, 2));
+                items.Add(new NewSiteExpenseRequest
+                {
+                    Name = name, Quantity = quantity, Unit = unit, UnitCost = Random.Amount(low, high, 0.5m), Supplier = Random.Pick(Vocabulary.Suppliers),
+                });
             }
         }
 
-        var added = await api.PostAsync(Random.Pick(crew).Token, $"/api/projects/{site.Id}/materials", new AddMaterialsRequest { Items = items });
-        var ids = added.EnumerateArray().Select(m => m.Id()).ToList();
-        for (var i = 0; i < ids.Count; i++)
-        {
-            site.MaterialCost += costs[i];
-        }
-
-        world.Tally.Add("materials", ids.Count);
+        var added = await api.PostAsync(Random.Pick(crew).Token, $"/api/projects/{site.Id}/site-expenses", new AddSiteExpensesRequest { Items = items });
+        world.Tally.Add("site_expenses", added.EnumerateArray().Count());
     }
 
     /// <summary>Last week, Monday to Saturday from the site's first day, around the project's usual crew.</summary>

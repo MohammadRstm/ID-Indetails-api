@@ -280,7 +280,7 @@ public sealed class Company(World world, ApiClient api, SeedingApi host, SeedMai
         {
             (Persona.DesignEmployee, "team lead: creates projects and clients",
                 [Grant("project:create"), Grant("client:create")]),
-            (Persona.ExecutionEmployee, "site lead: manages everyone's materials", [Grant("material:manage")]),
+            (Persona.ExecutionEmployee, "site lead: manages everyone's site expenses", [Grant("material:manage")]),
             (Persona.DesignAdmin, "may not void invoices", [new PermissionChangeRequest { Code = "invoice:void", Action = PermissionChangeAction.Revoke, Reason = "LT load test" }]),
             (Persona.DesignAdmin, "also prices Execution projects", [Grant("project:pricing_manage")]),
         };

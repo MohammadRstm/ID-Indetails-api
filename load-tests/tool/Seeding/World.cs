@@ -84,14 +84,9 @@ public sealed class SeedProject
 
     public decimal Fee { get; init; }
 
-    public decimal Markup { get; init; }
-
     public int Workers { get; init; }
 
     public decimal DailyPay { get; init; }
-
-    /// <summary>Execution: cost of the materials so far, for progress invoices.</summary>
-    public decimal MaterialCost { get; set; }
 
     public DateOnly LastInvoiceOn { get; set; }
 
