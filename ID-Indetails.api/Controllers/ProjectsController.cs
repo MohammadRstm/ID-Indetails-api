@@ -85,7 +85,7 @@ public sealed class ProjectsController(
     public Task<IReadOnlyList<ProjectPaymentChangeResponse>> PaymentChanges(long projectId, CancellationToken cancellationToken)
         => projectService.PaymentChangesAsync(projectId, cancellationToken);
 
-    /// <summary>Execution: the project fee and the default material markup.</summary>
+    /// <summary>Execution: the supervision rate and TVA. The work price is set by agreeing a BOQ, never here.</summary>
     [HttpPut("{projectId:long}/pricing")]
     [HasPermission(PermissionCodes.ProjectPricingManage)]
     public Task<ProjectResponse> UpdatePricing(long projectId, UpdateProjectPricingRequest request, CancellationToken cancellationToken)

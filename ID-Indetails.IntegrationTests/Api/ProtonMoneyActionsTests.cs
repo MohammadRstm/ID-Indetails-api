@@ -9,10 +9,10 @@ using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Expenses;
-using ID_Indetails.api.DTO.Response.Materials;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Proton;
-using ID_Indetails.api.DTO.Response.Statements;
+using ID_Indetails.api.DTO.Response.SiteExpenses;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Proton.Actions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -160,38 +160,41 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
     }
 
     /// <summary>
-    /// Regression: an update sent only what the model mentioned, and the service (which replaces the whole material, as
+    /// Regression: an update sent only what the model mentioned, and the service (which replaces the whole expense, as
     /// the app's form sends it) cleared the rest. And a change made in the app between the card and Confirm was
-    /// overwritten, for a material as for a labour week.
+    /// overwritten, for a site expense as for a labour week.
     /// </summary>
     [Fact]
     public async Task A_correction_changes_only_what_was_said_and_never_overwrites_a_newer_change()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
-        var materials = $"/api/projects/{site.Id}/materials";
-        (await Client.PostJsonAsync(materials,
-                new { items = new[] { new { name = "Cement", quantity = 10m, unit = "bag", unitCost = 12m, supplier = "Holcim", note = "Grey" } } }, superAdmin.AccessToken))
+        var expenses = $"/api/projects/{site.Id}/site-expenses";
+        (await Client.PostJsonAsync(expenses,
+                new { items = new[] { new { name = "Cement", quantity = 10m, unit = "bag", unitCost = 12m, supplier = "Holcim", note = "Grey", category = "materials", spentOn = "2026-09-20" } } }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        var cement = (await GetAsync<MaterialListResponse>(superAdmin, materials)).Items.ShouldHaveSingleItem();
+        var cement = (await GetAsync<SiteExpenseListResponse>(superAdmin, expenses)).Items.ShouldHaveSingleItem();
 
-        var (fix, _) = await ProposeAsync(superAdmin, "propose_material_step",
-            new { project_id = site.Id, material_id = cement.Id, step = "update", material = new { quantity = 12m } }, "It was 12 bags");
+        var (fix, _) = await ProposeAsync(superAdmin, "propose_site_expense_step",
+            new { project_id = site.Id, expense_id = cement.Id, step = "update", expense = new { quantity = 12m } }, "It was 12 bags");
         var changes = fix.PendingAction!.Preview.Changes;
         changes.Select(c => c.Label).ShouldBe(["Quantity", "Cost"]);
         changes.Single(c => c.Label == "Cost").After.ShouldBe("USD 144");
         await ConfirmAsync(superAdmin, fix);
-        var corrected = (await GetAsync<MaterialListResponse>(superAdmin, materials)).Items.ShouldHaveSingleItem();
+        var corrected = (await GetAsync<SiteExpenseListResponse>(superAdmin, expenses)).Items.ShouldHaveSingleItem();
         corrected.Quantity.ShouldBe(12m);
         corrected.Cost.ShouldBe(144m);
         corrected.Unit.ShouldBe("bag");
         corrected.Supplier.ShouldBe("Holcim");
         corrected.Note.ShouldBe("Grey");
+        // what the correction didn't name stays, the day and the category included
+        corrected.SpentOn.ShouldBe(new DateOnly(2026, 9, 20));
+        corrected.Category.ShouldBe(SiteExpenseCategory.Materials);
 
         // the note changes in the app before Confirm: the card would put the old one back, so it is refused
-        var (supplier, _) = await ProposeAsync(superAdmin, "propose_material_step",
-            new { project_id = site.Id, material_id = cement.Id, step = "update", material = new { supplier = "Sibline" } }, "It came from Sibline");
-        (await Client.PutJsonAsync($"{materials}/{cement.Id}",
+        var (supplier, _) = await ProposeAsync(superAdmin, "propose_site_expense_step",
+            new { project_id = site.Id, expense_id = cement.Id, step = "update", expense = new { supplier = "Sibline" } }, "It came from Sibline");
+        (await Client.PutJsonAsync($"{expenses}/{cement.Id}",
                 new { name = "Cement", quantity = 12m, unit = "bag", unitCost = 12m, supplier = "Holcim", note = "White" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         await (await Client.PostJsonAsync($"/api/proton/actions/{supplier.PendingAction!.Id}/confirm", new { supplier.ConversationId }, superAdmin.AccessToken))
@@ -342,64 +345,47 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
     }
 
     [Fact]
-    public async Task A_markup_is_said_as_a_percentage_and_kept_as_the_fraction_the_app_prices_with()
+    public async Task A_revenue_card_is_refused_if_the_revenue_changed_since_and_an_execution_site_is_not_priced_by_proton()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var projects = new ProjectTestSteps(_steps);
+        var project = await projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 5000m);
 
-        var (price, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 15m, reason = "New supplier terms" }, "Set the markup to 15% for the new supplier terms");
-        // the site was made with 0.1, which reads as 10%
-        var markup = price.PendingAction!.Preview.Changes.Single(c => c.Label == "Material markup");
-        markup.Before.ShouldBe("10%");
-        markup.After.ShouldBe("15%");
-        price.PendingAction.Preview.Phrase.ShouldBe("15");
-        await ConfirmAsync(superAdmin, price, "15");
-        (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!.MaterialMarkup.ShouldBe(0.15m);
+        var (price, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = project.Id, revenue = 6500m, reason = "A guest house was added" }, "Make the revenue 6500 for the guest house");
+        price.PendingAction!.Preview.Changes.Select(c => c.Label).ShouldBe(["Revenue", "Why"]);
+        price.PendingAction.Preview.Phrase.ShouldBe("6500");
+        await ConfirmAsync(superAdmin, price, "6500");
+        (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{project.Id}")).Money!.Revenue.ShouldBe(6500m);
 
-        // a fee card re-sends the markup it read: if the markup changed in the app since, the card is refused, not put back
-        var (fee, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, project_fee = 500m, reason = "Agreed with the client" }, "Set the fee to 500, agreed with the client");
-        fee.PendingAction!.Preview.Changes.ShouldNotContain(c => c.Label == "Material markup");
-        fee.PendingAction.Preview.Phrase.ShouldBe("500");
-        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.2m, description = "Changed in the app" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await (await Client.PostJsonAsync($"/api/proton/actions/{fee.PendingAction.Id}/confirm", new { fee.ConversationId, typed = "500" }, superAdmin.AccessToken))
+        // a card re-sends the revenue it read: if the revenue changed in the app since, the card is refused, not put back
+        var (again, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = project.Id, revenue = 7000m, reason = "Bigger scope" }, "Make the revenue 7000 for the bigger scope");
+        (await Client.PutJsonAsync($"/api/projects/{project.Id}/payment", new { revenue = 8000m, description = "Changed in the app" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/proton/actions/{again.PendingAction!.Id}/confirm", new { again.ConversationId, typed = "7000" }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
 
-        var (_, tooHigh) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 600m, reason = "Rush order" }, "Make the markup 600% for the rush order");
-        tooHigh["message"]!.GetValue<string>().ShouldContain("500%");
+        // a site's price is its agreed BOQ, and its rates are changed in the app: Proton has no tool for either
+        var site = await projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var (_, refused) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, revenue = 100m, reason = "Typed" }, "Set the site's revenue to 100");
+        refused["message"]!.GetValue<string>().ShouldContain("agreed BOQ");
+
+        // and a site's costs are site expenses, not project expenses
+        var (_, notAnExpense) = await ProposeAsync(superAdmin, "propose_add_expense", new { project_id = site.Id, label = "Crane", amount = 90m }, "Add a 90 crane expense");
+        notAnExpense["message"]!.GetValue<string>().ShouldContain("site expenses");
     }
 
     [Fact]
-    public async Task A_statement_is_refused_when_the_sites_materials_changed_since_the_card()
-    {
-        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
-        var (materials, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Sand", amount = 80m } } }, "Sand for 80");
-        await ConfirmAsync(superAdmin, materials, "80");
-
-        var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });
-        statement.PendingAction!.Preview.Phrase.ShouldNotBeNull();
-
-        // more materials arrive before Confirm: the statement would bill more than the total the user typed
-        var (more, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Gravel", amount = 50m } } }, "Gravel for 50");
-        await ConfirmAsync(superAdmin, more, "50");
-        await (await Client.PostJsonAsync($"/api/proton/actions/{statement.PendingAction.Id}/confirm",
-                new { statement.ConversationId, typed = statement.PendingAction.Preview.Phrase }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
-    }
-
-    [Fact]
-    public async Task A_site_records_materials_and_labour_then_states_them_to_the_client()
+    public async Task A_site_records_expenses_and_labour_as_costs_and_proton_has_no_tool_for_what_the_client_is_charged()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
 
-        var (materials, _) = await ProposeAsync(superAdmin, "propose_add_materials", new
+        var (expenses, _) = await ProposeAsync(superAdmin, "propose_add_site_expenses", new
         {
             project_id = site.Id,
-            items = new object[] { new { name = "Cement", quantity = 10m, unit = "bag", unit_cost = 12m }, new { name = "Sand", amount = 80m } },
-        }, "10 bags of cement at 12 each, and sand for 80");
-        materials.PendingAction!.Preview.Phrase.ShouldBe("200");
-        await ConfirmAsync(superAdmin, materials, "200");
+            items = new object[] { new { name = "Cement", quantity = 10m, unit = "bag", unit_cost = 12m }, new { name = "Crane hire", amount = 80m, category = "contractor" } },
+        }, "10 bags of cement at 12 each, and the crane for 80");
+        expenses.PendingAction!.Preview.Phrase.ShouldBe("200");
+        await ConfirmAsync(superAdmin, expenses, "200");
 
         var monday = WorkEntryTestSteps.CompanyDay(DateTime.UtcNow);
         while (monday.DayOfWeek != DayOfWeek.Monday)
@@ -414,21 +400,12 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         }, "3 workers on Monday at 25 a day");
         await ConfirmAsync(superAdmin, labour, "75");
 
-        var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });
-        var card = statement.PendingAction!;
-        card.Preview.Note!.ShouldContain("2 material(s)");
-        card.Preview.Note!.ShouldContain("frozen");
-        card.Preview.Irreversible.ShouldBeTrue();
-        var outcome = await ConfirmAsync(superAdmin, statement, card.Preview.Phrase);
-        outcome.Message.ShouldStartWith("Made statement");
-
-        // its first delivery is what turns its materials into revenue, and the card says so; a second one changes nothing
-        var made = (await GetAsync<PagedResponse<StatementSummaryResponse>>(superAdmin, $"/api/projects/{site.Id}/statements")).Items.ShouldHaveSingleItem();
-        var (first, _) = await ProposeAsync(superAdmin, "propose_record_statement_delivery", new { statement_id = made.Id, channel = "whatsapp" });
-        first.PendingAction!.Preview.Note!.ShouldContain("first delivery");
-        first.PendingAction.Preview.Note!.ShouldContain("agreed revenue");
-        await ConfirmAsync(superAdmin, first);
-        var (again, _) = await ProposeAsync(superAdmin, "propose_record_statement_delivery", new { statement_id = made.Id, channel = "download" });
-        again.PendingAction!.Preview.Note!.ShouldContain("delivered before");
+        // what was recorded is cost: the price the client pays is in the BOQs, which Proton doesn't write
+        (await GetAsync<SiteExpenseListResponse>(superAdmin, $"/api/projects/{site.Id}/site-expenses")).Items.Select(e => e.Category)
+            .Order().ShouldBe([SiteExpenseCategory.Materials, SiteExpenseCategory.Contractor]);
+        var money = (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!;
+        money.Cost.SiteExpenses.ShouldBe(200m);
+        money.Cost.GroundLabour.ShouldBe(75m);
+        money.Revenue.ShouldBe(1000m);
     }
 }

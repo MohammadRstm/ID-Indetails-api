@@ -85,11 +85,11 @@ public sealed class ProfitFloor(
     private static bool Applies(Project project)
         => ProfitFloorRules.Applies(project.BillingType, project.DomainCode, project.Revenue, project.ProjectFee);
 
-    /// <summary>Profit and agreed amount counting the materials not sent yet (see <c>PocketRules</c>).</summary>
+    /// <summary>Profit and agreed amount: Execution's agreed amount is the work price plus supervision, net of TVA.</summary>
     private async Task<(decimal Profit, decimal Agreed)> MoneyAsync(Project project, CancellationToken cancellationToken)
     {
         var money = await finance.GetAsync(project, cancellationToken);
-        return (PocketRules.ProfitOf(money.Summary.Profit, money.UnsentMaterialCharge), PocketRules.AgreedOf(money.Summary.Revenue, money.UnsentMaterialCharge));
+        return (money.Summary.Profit, money.Summary.Revenue);
     }
 
     private async Task AlertAsync(Project project, ProfitFloorRules.Standing standing, decimal profit, decimal agreed, CancellationToken cancellationToken)

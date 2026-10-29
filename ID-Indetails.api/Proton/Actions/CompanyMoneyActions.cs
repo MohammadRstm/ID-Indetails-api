@@ -175,54 +175,40 @@ public sealed class ProposeExchangeRateTool(IBillingSettingsService settings) : 
     }
 }
 
-/// <param name="Before">The revenue (Design) or the fee (Execution) when proposed.</param>
-/// <param name="BeforeMarkup">Execution: the markup when proposed, as stored (a fraction).</param>
-public sealed record ProjectMoneyArgs(
-    long ProjectId, UpdateProjectPaymentRequest? Payment, UpdateProjectPricingRequest? Pricing, decimal Before, decimal BeforeMarkup = 0);
+/// <param name="Before">The revenue when proposed.</param>
+public sealed record ProjectMoneyArgs(long ProjectId, UpdateProjectPaymentRequest Payment, decimal Before);
 
 public sealed record ProjectMoneyInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
-    [Description("Design: the agreed revenue, as the user gave it.")]
-    public decimal? Revenue { get; init; }
-
-    [Description("Execution: the project fee.")]
-    public decimal? ProjectFee { get; init; }
-
-    [Description("Execution: the default material markup as a percentage, as the user said it: 15 for 15%.")]
-    public decimal? MaterialMarkup { get; init; }
+    [Description("The agreed revenue, as the user gave it.")]
+    public required decimal Revenue { get; init; }
 
     [Description("Why the payment changes, as the user gave it (it goes in the project's payment history). Ask for it if they didn't say.")]
     public required string Reason { get; init; }
 }
 
 /// <summary>
-/// Sets a Design project's agreed revenue (PUT /api/projects/{id}/payment), or an Execution site's fee and material
-/// markup (PUT …/pricing), with why it changes, once confirmed. The user types the new amount.
+/// Sets a Design project's agreed revenue (PUT /api/projects/{id}/payment) with why it changes, once confirmed. The user
+/// types the new amount. An Execution site's price comes from its agreed BOQs, and its supervision and TVA are changed in the app.
 /// </summary>
 public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonActionTool<ProjectMoneyInput, ProjectMoneyArgs>
 {
     public override string Name => "propose_project_money";
 
     public override string Description =>
-        "Propose a Design project's agreed revenue, or an Execution site's fee and default material markup, with why it changes. " +
+        "Propose a Design project's agreed revenue, with why it changes (an Execution site's price is set by agreeing its BOQ, not here). " +
         "Locked once the project is completed. The user confirms by typing the new amount.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<ProjectsController>(nameof(ProjectsController.UpdatePayment));
 
-    private static readonly ProtonEndpoint Pricing = ProtonEndpoint.OfWrite<ProjectsController>(nameof(ProjectsController.UpdatePricing));
-
-    public override IReadOnlyList<ProtonEndpoint> StepEndpoints => [Endpoint, Pricing];
-
-    protected override ProtonEndpoint StepOf(ProjectMoneyArgs args) => args.Pricing is not null ? Pricing : Endpoint;
-
     protected override async Task<(ProjectMoneyArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         ProjectMoneyInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        MoneyText.RequireTyped(context, input.Revenue, input.ProjectFee, input.MaterialMarkup);
+        MoneyText.RequireTyped(context, input.Revenue);
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
         var money = project.Money ?? throw new ProtonToolInputException("The user can't see this project's money.");
         if (money.IsLocked)
@@ -236,74 +222,34 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
             throw new ProtonToolInputException("Ask the user why the payment changes: it is required.");
         }
 
-        if (project.Domain == DomainCodes.Design)
+        if (project.Domain != DomainCodes.Design)
         {
-            var revenue = input.Revenue ?? throw new ProtonToolInputException("Give the new revenue.");
-            var payment = new UpdateProjectPaymentRequest { Revenue = revenue, Description = reason };
-            return (new ProjectMoneyArgs(project.Id, payment, null, money.Revenue),
-                new ProtonPreview($"Set the revenue of {project.Title}",
-                    [new ProtonChange("Revenue", MoneyText.Amount(money.Revenue, money.Currency), MoneyText.Amount(revenue, money.Currency)),
-                        new ProtonChange("Why", null, reason)],
-                    "Its profit and what is left to invoice follow it.",
-                    Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(revenue)),
-                ProjectText.Ref(project));
+            throw new ProtonToolInputException("An Execution site's price comes from its agreed BOQ; its supervision and TVA are changed in the app.");
         }
 
-        await context.RequireAsync(Pricing);
-        if (input.MaterialMarkup is < 0 or > CompanyMoneyText.MaxMarkupPercent)
-        {
-            throw new ProtonToolInputException($"The markup must be between 0% and {CompanyMoneyText.MaxMarkupPercent}%.");
-        }
-
-        var fee = money.ProjectFee ?? 0;
-        var markup = money.MaterialMarkup ?? 0;
-        // the app keeps the markup as a fraction (0.15); people say it as a percentage (15)
-        var pricing = new UpdateProjectPricingRequest
-        {
-            ProjectFee = input.ProjectFee ?? fee, MaterialMarkup = input.MaterialMarkup is { } percent ? percent / 100 : markup,
-            Description = reason,
-        };
-        var changes = new List<ProtonChange>();
-        SettingsText.Compare(changes, "Project fee", MoneyText.Amount(fee, money.Currency), MoneyText.Amount(pricing.ProjectFee, money.Currency));
-        SettingsText.Compare(changes, "Material markup", CompanyMoneyText.Percent(markup), CompanyMoneyText.Percent(pricing.MaterialMarkup));
-        if (changes.Count == 0)
-        {
-            throw new ProtonToolInputException("Nothing would change: say what should be different.");
-        }
-
-        changes.Add(new ProtonChange("Why", null, reason));
-
-        // the user types the figure that changes: the fee, or the markup when only it changes
-        var phrase = pricing.ProjectFee != fee ? MoneyText.Phrase(pricing.ProjectFee) : MoneyText.Phrase(pricing.MaterialMarkup * 100);
-        return (new ProjectMoneyArgs(project.Id, null, pricing, fee, markup),
-            new ProtonPreview($"Price {project.Title}", changes, "Materials not on a statement yet follow the new markup.",
-                Confirm: ProtonConfirm.Typed, Phrase: phrase),
+        var payment = new UpdateProjectPaymentRequest { Revenue = input.Revenue, Description = reason };
+        return (new ProjectMoneyArgs(project.Id, payment, money.Revenue),
+            new ProtonPreview($"Set the revenue of {project.Title}",
+                [new ProtonChange("Revenue", MoneyText.Amount(money.Revenue, money.Currency), MoneyText.Amount(input.Revenue, money.Currency)),
+                    new ProtonChange("Why", null, reason)],
+                "Its profit and what is left to invoice follow it.",
+                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(input.Revenue)),
             ProjectText.Ref(project));
     }
 
-    protected override object? RequestOf(ProjectMoneyArgs args) => (object?)args.Payment ?? args.Pricing;
+    protected override object? RequestOf(ProjectMoneyArgs args) => args.Payment;
 
     protected override async Task<ProtonActionDone> ExecuteAsync(ProjectMoneyArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        // the pricing request sends the markup again as the card read it: if it changed since, it would be put back
+        // the payment request is a whole new revenue: if the revenue changed since the card was made, it would put that back
         var current = (await projects.GetAsync(args.ProjectId, cancellationToken)).Money;
-        var stale = current is null || (args.Payment is not null
-            ? current.Revenue != args.Before
-            : (current.ProjectFee ?? 0) != args.Before || (current.MaterialMarkup ?? 0) != args.BeforeMarkup);
-        if (stale)
+        if (current is null || current.Revenue != args.Before)
         {
             throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The project's money changed since Proton proposed this. Ask again.");
         }
 
-        if (args.Payment is { } payment)
-        {
-            var updated = await projects.UpdatePaymentAsync(args.ProjectId, payment, cancellationToken);
-            return new ProtonActionDone($"Set the revenue of {updated.Title}.", "project", updated.Id, [ProjectText.Ref(updated)]);
-        }
-
-        await context.RequireAsync(Pricing);
-        var priced = await projects.UpdatePricingAsync(args.ProjectId, args.Pricing!, cancellationToken);
-        return new ProtonActionDone($"Priced {priced.Title}.", "project", priced.Id, [ProjectText.Ref(priced)]);
+        var updated = await projects.UpdatePaymentAsync(args.ProjectId, args.Payment, cancellationToken);
+        return new ProtonActionDone($"Set the revenue of {updated.Title}.", "project", updated.Id, [ProjectText.Ref(updated)]);
     }
 }
 
@@ -526,12 +472,6 @@ public sealed class ProposeOverheadTool(IOverheadService overhead) : ProtonActio
 
 internal static class CompanyMoneyText
 {
-    /// <summary>The highest markup the app takes (its validator's 5, as a fraction).</summary>
-    public const decimal MaxMarkupPercent = 500;
-
-    /// <summary>A stored markup (a fraction: 0.15) as people read it ("15%").</summary>
-    public static string Percent(decimal fraction) => $"{(fraction * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%";
-
     public static BillingSettingsChange ChangeOf(BillingSettingsResponse s) => new(s.InvoicePrefix, s.DefaultTermsDays, s.TermsText, s.Footer);
 }
 

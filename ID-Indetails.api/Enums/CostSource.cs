@@ -5,6 +5,7 @@ public enum CostSource
 {
     Labour,
     Expenses,
-    Materials,
+    /// <summary>A cost recorded on an Execution site: materials, a contractor, equipment, fees.</summary>
+    SiteExpense,
     GroundLabour,
 }

@@ -342,12 +342,10 @@ public sealed class ScheduledNotifications(
             foreach (var project in guarded)
             {
                 var m = money[project.Id];
-                var profit = PocketRules.ProfitOf(m.Summary.Profit, m.UnsentMaterialCharge);
-                var agreed = PocketRules.AgreedOf(m.Summary.Revenue, m.UnsentMaterialCharge);
-                var standing = ProfitFloorRules.StandingOf(profit, agreed);
+                var standing = ProfitFloorRules.StandingOf(m.Summary.Profit, m.Summary.Revenue);
                 if (standing != ProfitFloorRules.Standing.Fine)
                 {
-                    await ProfitFloor.AlertAsync(sender, project, standing, profit, agreed, null, cancellationToken);
+                    await ProfitFloor.AlertAsync(sender, project, standing, m.Summary.Profit, m.Summary.Revenue, null, cancellationToken);
                 }
             }
         }

@@ -97,3 +97,7 @@ public sealed record OverheadResponse(
 
 /// <param name="Month">First day of the month.</param>
 public sealed record OverheadMonthResponse(DateOnly Month, IReadOnlyList<CurrencyTotalResponse> Totals);
+
+/// <summary>A label payments and expenses are filed under.</summary>
+/// <param name="Archived">It can't be picked any more but stays on what already carries it.</param>
+public sealed record AccountLabelResponse(long Id, string Name, int Position, bool Archived);

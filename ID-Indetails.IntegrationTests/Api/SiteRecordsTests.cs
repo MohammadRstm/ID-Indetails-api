@@ -20,7 +20,7 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
         var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id]);
-        await Client.PostJsonAsync($"/api/projects/{site.Id}/materials",
+        await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
             new { items = new[] { new { name = "Cement", amount = 100m }, new { name = "Sand", amount = 50m } } }, employee.AccessToken);
         var week = (await (await Client.GetAsync($"/api/projects/{site.Id}/labour-weeks", employee.AccessToken)).ReadAsync<LabourWeekListResponse>()).Weeks[0].WeekStart;
         var day = (await (await Client.GetAsync($"/api/projects/{site.Id}/labour-weeks/{week:yyyy-MM-dd}", employee.AccessToken))
@@ -55,6 +55,23 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task An_expense_in_another_currency_counts_in_dollars_at_its_days_rate()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, employee) = await _steps.MaterialWorkerAsync(superAdmin);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id]);
+        // 89,500 LBP to the dollar from 1 January 2026 (company-wide, added in date order: a repeat is refused, which is fine)
+        await Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_500m, effectiveFrom = "2026-01-01" }, superAdmin.AccessToken);
+        (await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
+                new { items = new object[] { new { name = "Cement", amount = 100m }, new { name = "Crane hire", amount = 895_000m, currency = "LBP" } } }, employee.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        // 895,000 LBP is 10 dollars, never 895,000 "dollars"
+        var mine = await (await Client.GetAsync("/api/me/site-records", employee.AccessToken)).ReadAsync<SiteRecordsResponse>();
+        mine.ShouldSatisfyAllConditions(r => r.MaterialCount.ShouldBe(2), r => r.Materials.ShouldBe(110m), r => r.Total.ShouldBe(110m));
+    }
+
+    [Fact]
     public async Task Site_cards_show_what_was_recorded_on_visible_sites_only()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
@@ -63,7 +80,7 @@ public class SiteRecordsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var quiet = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var design = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        await Client.PostJsonAsync($"/api/projects/{site.Id}/materials", new { items = new[] { new { name = "Cement", amount = 100m } } }, employee.AccessToken);
+        await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses", new { items = new[] { new { name = "Cement", amount = 100m } } }, employee.AccessToken);
 
         var cardsResponse = await Client.GetAsync($"/api/projects/site-summary?ids={site.Id}&ids={quiet.Id}&ids={design.Id}", employee.AccessToken);
         ((int)cardsResponse.StatusCode).ShouldBe(200, await cardsResponse.Content.ReadAsStringAsync());

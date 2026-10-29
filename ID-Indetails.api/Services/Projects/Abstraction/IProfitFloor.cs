@@ -30,7 +30,7 @@ public interface IProfitFloor
 public sealed record ProfitBefore(Project Project, decimal? Profit);
 
 /// <summary>A guarded request with its route ids, kept as JSON when the floor refuses it.</summary>
-/// <param name="ItemId">The material or work entry it changes, when it changes one.</param>
+/// <param name="ItemId">The site expense or work entry it changes, when it changes one.</param>
 /// <param name="WeekStart">A labour week's first day.</param>
 public sealed record BlockedRequest<T>(long ProjectId, T Request, long? ItemId = null, DateOnly? WeekStart = null);
 

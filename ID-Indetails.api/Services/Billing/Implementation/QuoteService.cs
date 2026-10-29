@@ -36,8 +36,8 @@ public sealed class QuoteService(
             throw new NotFoundException("Project not found.");
         }
 
-        var net = QuoteRules.NetOf(project.DomainCode, project.Revenue, project.ProjectFee);
-        Throw(QuoteRules.CheckQuotable(project.BillingType, net));
+        var net = project.Revenue;
+        Throw(QuoteRules.CheckQuotable(project.DomainCode, project.BillingType, net));
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var year = clock.CompanyToday.Year;

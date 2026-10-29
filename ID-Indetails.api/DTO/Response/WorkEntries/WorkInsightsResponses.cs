@@ -139,7 +139,7 @@ public sealed record EmployeeLabourCostResponse(
 
 /// <param name="Minutes">Hours logged in the week.</param>
 /// <param name="Labour">Employee labour cost of the week (paid breaks included).</param>
-/// <param name="Spent">Every cost of the week: labour, expenses, materials and ground labour.</param>
+/// <param name="Spent">Every cost of the week: labour, expenses, site expenses and ground labour.</param>
 /// <param name="CostToDate">Every cost up to the end of the week.</param>
 /// <param name="CollectedToDate">Payments received up to the end of the week.</param>
 public sealed record CostWeekResponse(DateOnly WeekStart, int Minutes, decimal Labour, decimal Spent, decimal CostToDate, decimal CollectedToDate);

@@ -43,7 +43,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `work_digest` | The same, when `notifyEntry` is `digest`: one per person per day | — | `minutes`, `latestName`, `projectTitle` |
 | `entry_comment` | The work entry's author | the work entry | `authorName`, `text`, `entryDescription` |
 | `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
-| `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` |
+| `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` (someone recorded expenses on a site; the kind keeps its name, the text says "Expenses added") |
 | `labour_week_submitted` | Holders of `labour_report:manage` | the project | `weekStart`, `updated`, `projectTitle` |
 | `project_created` | The domain's people | the project | `projectTitle` |
 | `project_status_changed` | The domain's people, on hold, resume, complete and reopen (not archive) | the project | `projectTitle`, `change` (`hold`, `resume`, `complete`, `reopen`) |
@@ -65,7 +65,6 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `pocket_requested` | Holders of `financial:view` who see Execution | the pocket money request | none |
 | `change_blocked` | Holders of `financial:view` in the project's domain, the requester aside, when the profit floor refused a change (see [projects.md](projects.md), "Profit floor") | the blocked change | `projectTitle`, `kind` (never the amount) |
 | `quote_due` | Holders of `invoice:send` | the project | `projectTitle` |
-| `statement_sent` | Holders of `financial:view` | the statement | `number` |
 | `portal_client_message` | Staff taking part in a project's client portal discussion, when a client writes in its chat. Rolling per project (`portal_chat:{projectId}`) | — | `projectTitle`, `authorName` (never the text) |
 | `portal_client_comment` | The project's manager and the file's uploader (everyone taking part on the staff side when neither does), when a client comments on a file. Rolling per file (`portal_comments:{itemId}`) | the item | `projectTitle`, `authorName`, `itemTitle` |
 | `portal_mention` | Staff mentioned in a client portal message or comment, once each (`portal_mention:m{id}` / `c{id}`) | `message` or `comment` (subject id: the item, for comments) | `projectTitle`, `authorName`, `itemTitle` |
@@ -124,7 +123,7 @@ Queued pushes live in memory: one queued when the API stops is lost, but the not
 |---|---|
 | Title and body | Short text written by the server (`Business/Push/PushText.cs`). Other kinds may name the project and who acted ("Rana assigned you a requirement on Villa Haddad"). Messages show the sender and the first 100 characters |
 | Money kinds | A fixed neutral text, never a client's name, an amount, a margin, a cost or pay, nor the project's title: "Payment recorded. Open ID InDetails to see it.", "An invoice needs your attention.", "An invoice couldn't be sent automatically.", "Billing update. Open ID InDetails to see it.", "A project's money needs a look.", "A new client was added.", "Pay and hours update." |
-| `data` | Ids only: `{ forUserId, kind, notificationId?, target }`. `kind` is a notification kind, `message`, `log_reminder` or `labour_week_reminder`. `target` is the screen to open (`Business/Push/PushTarget.cs`): a project (with `section`), a requirement, a work entry, a chat (`teamId` or the sender's `userId`), a labour week, a person, a client, an invoice, a payment, a statement, or a page (`notifications`, `work`, ...) |
+| `data` | Ids only: `{ forUserId, kind, notificationId?, target }`. `kind` is a notification kind, `message`, `log_reminder` or `labour_week_reminder`. `target` is the screen to open (`Business/Push/PushTarget.cs`): a project (with `section`), a requirement, a work entry, a chat (`teamId` or the sender's `userId`), a labour week, a person, a client, an invoice, a payment, or a page (`notifications`, `work`, ...) |
 | `badge` | Unread notifications (as the bell counts them) plus unread messages |
 | `channelId` | The Android channel: the category below, `reminders` for the log reminder, `quiet` during quiet hours |
 
@@ -139,7 +138,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
-| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `quote_due`, `change_blocked`, `profit_low`, `profit_at_zero`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
+| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `quote_due`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 
@@ -152,7 +151,7 @@ Push only: no notification row, so the website's bell is unchanged. The notifica
 | Kind | When | To |
 |---|---|---|
 | `log_reminder` | In the last hour of the person's working day (their own schedule or the company week), when what they logged within their hours is less than the day requires. Not on a day off or an excused day. While Design's `logReminder` is on | Design people who log hours (`work_entry:create`) |
-| `labour_week_reminder` | Saturday from 15:00 company time, one per site whose current week isn't reported | Execution people with `labour_report:create`, for each active site they added a material or submitted a week on in the last 4 weeks |
+| `labour_week_reminder` | Saturday from 15:00 company time, one per site whose current week isn't reported | Execution people with `labour_report:create`, for each active site they added an expense or submitted a week on in the last 4 weeks |
 
 The timing rules are in `Business/Push/ReminderRules.cs`.
 

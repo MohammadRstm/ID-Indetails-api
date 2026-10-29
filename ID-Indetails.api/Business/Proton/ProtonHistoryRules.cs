@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Constants;
 
 namespace ID_Indetails.api.Business.Proton;
 
@@ -32,10 +33,13 @@ public static class ProtonHistoryRules
     public static string AccessKey(string accessFingerprint)
         => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(accessFingerprint)));
 
+    private static readonly HashSet<string> KnownPermissions = PermissionCatalog.Definitions.Select(d => d.Code).ToHashSet();
+
     /// <summary>
     /// Whether the owner has lost any of the access they had when the chat was held: then its answers could show what
-    /// they may no longer see, so it isn't shown. Gaining access changes nothing.
+    /// they may no longer see, so it isn't shown. Gaining access changes nothing, and neither does a permission that no
+    /// longer exists: nobody can hold it, so nobody lost it.
     /// </summary>
     public static bool LostAccess(IEnumerable<string> permissionsThen, IEnumerable<string> domainsThen, UserAccess now)
-        => permissionsThen.Any(p => !now.Has(p)) || domainsThen.Any(d => !now.CanSee(d));
+        => permissionsThen.Any(p => KnownPermissions.Contains(p) && !now.Has(p)) || domainsThen.Any(d => !now.CanSee(d));
 }

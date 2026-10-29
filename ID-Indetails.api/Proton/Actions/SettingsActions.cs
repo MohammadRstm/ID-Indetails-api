@@ -27,7 +27,7 @@ public sealed record CompanySettingsInput : ProtonActionInput
 {
     public string? Name { get; init; }
 
-    [Description("For the letterhead of invoices and statements; an empty string removes it.")]
+    [Description("For the letterhead of invoices, quotes and BOQs; an empty string removes it.")]
     public string? Address { get; init; }
 
     [Description("An empty string removes it.")]

@@ -7,11 +7,11 @@ namespace ID_Indetails.UnitTests.Business;
 
 public class ProjectRulesTests
 {
-    private static ProjectRules.Setup Design(BillingType billing, long? client, decimal? revenue = null, decimal? fee = null, decimal? markup = null)
-        => new(DomainCodes.Design, billing, client, revenue, fee, markup);
+    private static ProjectRules.Setup Design(BillingType billing, long? client, decimal? revenue = null, decimal? supervision = null)
+        => new(DomainCodes.Design, billing, client, revenue, supervision);
 
-    private static ProjectRules.Setup Execution(BillingType billing, long? client, decimal? revenue = null, decimal? fee = 1000, decimal? markup = 0.1m)
-        => new(DomainCodes.Execution, billing, client, revenue, fee, markup);
+    private static ProjectRules.Setup Execution(BillingType billing, long? client, decimal? revenue = null, decimal? supervision = 0.1m)
+        => new(DomainCodes.Execution, billing, client, revenue, supervision);
 
     [Fact]
     public void Design_client_work_needs_a_client_and_internal_work_has_none()
@@ -24,12 +24,12 @@ public class ProjectRulesTests
     }
 
     [Fact]
-    public void Only_execution_projects_have_a_fee_and_markup()
+    public void Only_execution_projects_have_supervision()
     {
-        ProjectRules.CheckSetup(Design(BillingType.Client, 1, fee: 100))!.Field.ShouldBe("projectFee");
+        ProjectRules.CheckSetup(Design(BillingType.Client, 1, supervision: 0.1m))!.Field.ShouldBe("supervisionRate");
         ProjectRules.CheckSetup(Execution(BillingType.Client, 1)).ShouldBeNull();
         // a site may be created without its pricing, for someone with pricing to set later
-        ProjectRules.CheckSetup(Execution(BillingType.Client, 1, fee: null, markup: null)).ShouldBeNull();
+        ProjectRules.CheckSetup(Execution(BillingType.Client, 1, supervision: null)).ShouldBeNull();
     }
 
     [Fact]
@@ -63,21 +63,6 @@ public class ProjectRulesTests
         ProjectRules.CheckClientChange(1, 2, hasBillingRecords: false).ShouldBeNull();
         ProjectRules.CheckClientChange(1, null, hasBillingRecords: true)!.Code.ShouldBe(ErrorCodes.ProjectHasBilling);
         ProjectRules.CheckClient(isArchived: true)!.Code.ShouldBe(ErrorCodes.ClientIsArchived);
-    }
-
-    [Fact]
-    public void Material_client_price_is_the_manual_price_or_cost_plus_markup()
-    {
-        ExecutionPricing.ClientPrice(new(200m, null), 0.10m).ShouldBe(220m);
-        ExecutionPricing.ClientPrice(new(33.33m, null), 0.15m).ShouldBe(38.33m);
-        ExecutionPricing.ClientPrice(new(30m, 50m), 0.10m).ShouldBe(50m);
-    }
-
-    [Fact]
-    public void Agreed_amount_is_material_charges_plus_the_fee()
-    {
-        ExecutionPricing.AgreedAmount([new(200m, null), new(30m, 50m)], 0.10m, 1000m).ShouldBe(1270m);
-        ExecutionPricing.AgreedAmount([], 0.10m, 1000m).ShouldBe(1000m);
     }
 
     [Fact]

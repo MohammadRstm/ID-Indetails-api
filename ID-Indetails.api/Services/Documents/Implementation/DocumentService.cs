@@ -8,13 +8,15 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Projects;
-using ID_Indetails.api.DTO.Response.Statements;
+using ID_Indetails.api.DTO.Request.Boqs;
+using ID_Indetails.api.DTO.Response.Boqs;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
+using ID_Indetails.api.Services.Boqs.Abstraction;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
@@ -22,17 +24,16 @@ using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
-using ID_Indetails.api.Services.Statements.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Services.Documents.Implementation;
 
-/// <summary>Reads through the invoice and statement services, so visibility and what each caller sees stay theirs.</summary>
+/// <summary>Reads through the invoice, quote and BOQ services, so visibility and what each caller sees stay theirs.</summary>
 public sealed class DocumentService(
     ICurrentUser currentUser,
     IPermissionService permissions,
     IInvoiceService invoiceService,
-    IStatementService statementService,
+    IBoqService boqService,
     IQuoteService quoteService,
     IProjectService projectService,
     IProjectRepository projects,
@@ -79,21 +80,32 @@ public sealed class DocumentService(
         await SendAsync(DocumentEmails.Invoice(to, invoice, issuedOn, head, billing, sender, pdf), "invoice", invoice.Id, cancellationToken);
     }
 
-    public async Task<PdfFile> StatementPdfAsync(long statementId, CancellationToken cancellationToken = default)
-        => await RenderStatementAsync(await statementService.GetAsync(statementId, cancellationToken), cancellationToken);
-
-    public async Task<StatementResponse> EmailStatementAsync(long statementId, EmailDocumentRequest request, CancellationToken cancellationToken = default)
+    public async Task<PdfFile> BoqPdfAsync(long boqId, CancellationToken cancellationToken = default)
     {
-        var statement = await statementService.GetAsync(statementId, cancellationToken);
+        var document = await boqService.GetDocumentAsync(boqId, cancellationToken);
+        return BoqFile(document, await LetterheadAsync(cancellationToken));
+    }
 
+    public async Task<BoqDetailResponse> EmailBoqAsync(long boqId, EmailBoqRequest request, CancellationToken cancellationToken = default)
+    {
+        // checked before anything is sent, so an email that can't be recorded never goes out
+        var document = await boqService.GetDocumentForSendingAsync(boqId, cancellationToken);
         var to = request.To.Trim();
         var head = await LetterheadAsync(cancellationToken);
-        var pdf = new PdfFile(StatementPdf.Render(statement, head), statement.Number.ToLowerInvariant() + ".pdf");
-        await SendAsync(DocumentEmails.Statement(to, statement, head, currentUser.FullName, pdf), "statement", statementId, cancellationToken);
+        var date = BoqDate(document.Boq);
+        var pdf = BoqFile(document, head);
+        var kind = document.Boq.Kind == BoqKind.Vo ? "variation order" : "BOQ";
+        await SendAsync(DocumentEmails.Boq(to, document, date, head, currentUser.FullName, pdf), kind, boqId, cancellationToken);
 
-        return await statementService.RecordDeliveryAsync(
-            statementId, new RecordDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = to, Note = request.Note }, cancellationToken);
+        return await boqService.RecordDeliveryAsync(
+            boqId, new RecordBoqDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = to, Note = request.Note }, cancellationToken);
     }
+
+    /// <summary>The day an agreed BOQ was agreed; a draft carries the day it is sent.</summary>
+    private DateOnly BoqDate(BoqDetailResponse boq) => boq.AgreedAt is { } agreed ? clock.ToCompanyDate(agreed) : clock.CompanyToday;
+
+    private PdfFile BoqFile(BoqDocument document, Letterhead head)
+        => new(BoqPdf.Render(document, BoqDate(document.Boq), head), document.Boq.Number!.ToLowerInvariant() + ".pdf");
 
     public async Task<PdfFile> QuotePdfAsync(long quoteId, CancellationToken cancellationToken = default)
     {
@@ -193,15 +205,12 @@ public sealed class DocumentService(
         {
             var rollup = await moneyRollups.LoadAsync([project], cancellationToken);
             position = new InvoiceProjectPosition(
-                Tva.Gross(rollup.Money(project.Id).Summary.Revenue, project.TvaRate),
+                rollup.Money(project.Id).RevenueWithTva,
                 rollup.ProjectBillingOf(project).Received,
                 invoice.Balance ?? invoice.Total);
         }
         return (new PdfFile(InvoicePdf.Render(invoice, issuedOn, head, billing, position), name + ".pdf"), issuedOn, head, billing);
     }
-
-    private async Task<PdfFile> RenderStatementAsync(StatementResponse statement, CancellationToken cancellationToken)
-        => new(StatementPdf.Render(statement, await LetterheadAsync(cancellationToken)), statement.Number.ToLowerInvariant() + ".pdf");
 
     /// <summary>The logo is left out when it is an image PDFs can't hold (only PNG and JPEG can).</summary>
     private async Task<Letterhead> LetterheadAsync(CancellationToken cancellationToken)
