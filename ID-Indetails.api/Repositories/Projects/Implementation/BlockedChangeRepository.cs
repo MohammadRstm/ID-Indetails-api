@@ -11,7 +11,9 @@ public sealed class BlockedChangeRepository(IdIndetailsDbContext db) : IBlockedC
 {
     public async Task<BlockedChangeRow?> GetAsync(long id, CancellationToken cancellationToken = default)
     {
+        // untracked: deciding updates the row in the database directly, so a tracked copy would read stale
         var row = await db.BlockedChanges
+            .AsNoTracking()
             .Where(c => c.Id == id)
             .Select(c => new
             {

@@ -17,7 +17,8 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id]);
+        // agreed high enough that a week of labour keeps it above zero profit
+        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id], projectFee: 50_000m);
         await SetDefaultsAsync(project.Id, admin.AccessToken, workers: 11, dailyPay: 45m);
 
         var list = await ListAsync(project.Id, employee.AccessToken);
