@@ -208,6 +208,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ICompanyRepository, CompanyRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
         services.AddScoped<IOverheadRepository, OverheadRepository>();
+        services.AddScoped<IAccountLabelRepository, AccountLabelRepository>();
         services.AddScoped<ICompanyFinanceRepository, CompanyFinanceRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IHourExcuseRepository, HourExcuseRepository>();
@@ -284,6 +285,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IWorkingTimeService, WorkingTimeService>();
         services.AddScoped<IScheduleService, ScheduleService>();
         services.AddScoped<IOverheadService, OverheadService>();
+        services.AddScoped<IAccountLabelService, AccountLabelService>();
         services.AddScoped<ICompanyOverviewService, CompanyOverviewService>();
         services.AddScoped<IPayrollInputs, PayrollInputs>();
         services.AddScoped<IOvertimeService, OvertimeService>();
