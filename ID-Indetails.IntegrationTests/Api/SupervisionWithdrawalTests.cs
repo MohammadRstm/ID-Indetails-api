@@ -189,7 +189,7 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
     }
 
     [Fact]
-    public async Task A_finalised_site_is_locked_until_it_is_reopened_but_still_readable()
+    public async Task A_finalised_site_still_takes_and_removes_them_since_nothing_frozen_moves()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
@@ -197,15 +197,10 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
 
         (await Client.PostEmptyAsync($"/api/projects/{site.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
 
-        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/supervision-withdrawals", new { amountUsd = 5m, takenOn = Day(1) }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.ProjectLocked);
-        await (await Client.DeleteAsync($"/api/supervision-withdrawals/{kept.Id}", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.ProjectLocked);
-        (await ListAsync(site.Id, superAdmin.AccessToken)).Select(w => w.Id).ShouldBe([kept.Id]);
-
-        (await Client.PostEmptyAsync($"/api/projects/{site.Id}/reopen", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await TakeAsync(site.Id, superAdmin.AccessToken, 5m, Day(1));
+        // the last of the supervision is often taken after the client's final payment, on a site already completed
+        var late = await TakeAsync(site.Id, superAdmin.AccessToken, 5m, Day(1));
         (await Client.DeleteAsync($"/api/supervision-withdrawals/{kept.Id}", superAdmin.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await ListAsync(site.Id, superAdmin.AccessToken)).Count.ShouldBe(1);
+        (await ListAsync(site.Id, superAdmin.AccessToken)).Select(w => w.Id).ShouldBe([late.Id]);
     }
 
     [Fact]

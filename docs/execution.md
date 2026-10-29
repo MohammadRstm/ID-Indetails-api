@@ -198,7 +198,7 @@ Rules (`Business/Execution/SupervisionRules.cs`):
 
 - Only Execution client sites: any other project the caller can see is `422 not_for_this_domain`, and a project (or withdrawal) of a domain the caller can't see reads as `404`.
 - `amountUsd` is more than zero with at most 2 decimals (up to 999,999,999,999.99); `takenOn` is a day between 2000 and 2100 and not in the future in the company time zone (`400 taken_date_in_future` naming `takenOn`); `note` is trimmed, at most 500 characters.
-- Writes need the site open, like the rest of a site's records (`422 project_locked` once it is finalised, until it is reopened). Reading works on a finalised site.
+- A finalised site still takes them, and they can still be removed (the user's call): they are neither cost nor revenue, so nothing frozen moves, and the last of the supervision is often taken after the client's final payment.
 - Reading needs `financial:view` and writing needs `payment:record`: neither implies the other.
 - Events (money group, project and client set, the USD amount in the `amount` column, subject type `supervision_withdrawal`): `supervision_taken` (the day and the note in the payload) and `supervision_withdrawal_removed`. Without `financial:view` the feed shows neither the amount nor the payload.
 - The write endpoints are `Never` entries in the Proton coverage.

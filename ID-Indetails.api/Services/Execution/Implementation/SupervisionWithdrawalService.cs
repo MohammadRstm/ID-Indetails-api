@@ -1,8 +1,8 @@
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
-using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Execution;
+using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Execution;
 using ID_Indetails.api.DTO.Response.Common;
@@ -54,8 +54,8 @@ public sealed class SupervisionWithdrawalService(
             throw new NotFoundException(ProjectNotFound);
         }
 
+        // a finished site takes them too (the user's call): they are neither cost nor revenue, so nothing frozen moves
         Throw(SupervisionRules.CheckSite(project.DomainCode, project.BillingType));
-        Throw(SiteRules.CheckOpen(project.DomainCode, project.Status, project.RevenueLockedAt is not null));
         Throw(SupervisionRules.CheckTakenOn(request.TakenOn, clock.CompanyToday));
 
         var withdrawal = new SupervisionWithdrawal
@@ -88,8 +88,6 @@ public sealed class SupervisionWithdrawalService(
         {
             throw new NotFoundException(WithdrawalNotFound);
         }
-
-        Throw(SiteRules.CheckOpen(project.DomainCode, project.Status, project.RevenueLockedAt is not null));
 
         withdrawal.DeletedAt = clock.UtcNow;
         activity.Add(WithdrawalEvent(project, withdrawal, ActivityEventKinds.SupervisionWithdrawalRemoved, actor.UserId, new { takenOn = withdrawal.TakenOn }));
