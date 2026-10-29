@@ -6,6 +6,7 @@ using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Company;
 using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Business.Expenses;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.SiteExpenses;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.SiteExpenses;
@@ -18,6 +19,7 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
+using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.SiteExpenses.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -34,6 +36,7 @@ public sealed class SiteExpenseService(
     IProjectRepository projects,
     ISiteExpenseRepository siteExpenses,
     IAccountLabelRepository accountLabels,
+    IProjectFinanceRepository financeSources,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -123,6 +126,7 @@ public sealed class SiteExpenseService(
                 added.Add(expense);
             }
 
+            await CheckConvertibleAsync(added, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             foreach (var expense in added)
             {
@@ -162,6 +166,7 @@ public sealed class SiteExpenseService(
         var before = await floor.BeforeAsync(project, cancellationToken);
         var previousCost = Cost(expense);
         Apply(expense, request, entry);
+        await CheckConvertibleAsync([expense], cancellationToken);
         expense.UpdatedAt = clock.UtcNow;
         activity.Add(ExpenseEvent(project, expense, ActivityEventKinds.MaterialUpdated, actor.UserId, Cost(expense), previousCost));
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -374,6 +379,17 @@ public sealed class SiteExpenseService(
         expense.AccountLabelId = request.AccountLabelId;
     }
 
+    private async Task CheckConvertibleAsync(IReadOnlyCollection<SiteExpense> expenses, CancellationToken cancellationToken)
+    {
+        if (expenses.All(e => e.Currency == PaymentRules.BaseCurrency))
+        {
+            return;
+        }
+
+        var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
+        Throw(SiteExpenseRules.CheckConvertible(expenses.Select(e => (e.Currency, e.SpentOn)), rates));
+    }
+
     /// <summary>Worked out here rather than read from the generated column, which is only filled in after a save.</summary>
     private static decimal Cost(SiteExpense e) => SiteExpenseRules.Cost(e.Quantity, e.UnitCost, e.Amount);
 
@@ -390,7 +406,8 @@ public sealed class SiteExpenseService(
         SubjectId = expense.Id,
         Amount = amount,
         PrevAmount = prevAmount,
-        Payload = JsonSerializer.Serialize(new { name = expense.Name }),
+        // the amount is in the expense's own currency, which the event has no column for
+        Payload = JsonSerializer.Serialize(new { name = expense.Name, currency = expense.Currency }),
     };
 
     private static void Throw(RuleDenial? denial)

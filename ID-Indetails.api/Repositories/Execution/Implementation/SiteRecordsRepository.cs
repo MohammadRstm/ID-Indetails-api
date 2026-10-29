@@ -15,7 +15,7 @@ public sealed class SiteRecordsRepository(IdIndetailsDbContext db) : ISiteRecord
         => await db.SiteExpenses
             .AsNoTracking()
             .Where(m => m.AddedById == userId && m.DeletedAt == null && domains.Contains(m.Project.DomainCode))
-            .Select(m => new PersonMaterialRow(m.Id, m.ProjectId, m.Name, m.Total, m.AddedAt))
+            .Select(m => new PersonMaterialRow(m.Id, m.ProjectId, m.Name, m.Total, m.Currency, m.SpentOn, m.AddedAt))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<PersonLabourWeekRow>> LabourWeeksByAsync(

@@ -1,3 +1,7 @@
+using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Constants;
+
 namespace ID_Indetails.api.Business.SiteExpenses;
 
 /// <summary>
@@ -39,4 +43,22 @@ public static class SiteExpenseRules
     /// <summary>What expenses are grouped by (their item, their supplier): the text trimmed, with single spaces, in lower case.</summary>
     public static string GroupKey(string name)
         => string.Join(' ', name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
+
+    /// <summary>
+    /// A cost in another currency needs a rate in force on its day: the site's money leaves out what it can't convert,
+    /// so without one the cost would never reach profit or the profit floor.
+    /// </summary>
+    public static RuleDenial? CheckConvertible(IEnumerable<(string Currency, DateOnly Day)> costs, ExchangeRateTable rates)
+    {
+        foreach (var (currency, day) in costs)
+        {
+            if (rates.ToUsd(1m, currency, day) is null)
+            {
+                return RuleDenial.BusinessRule(ErrorCodes.ExchangeRateMissing,
+                    $"There is no {currency} exchange rate in force on {day:yyyy-MM-dd}. Add one first, or record the expense in USD.");
+            }
+        }
+
+        return null;
+    }
 }

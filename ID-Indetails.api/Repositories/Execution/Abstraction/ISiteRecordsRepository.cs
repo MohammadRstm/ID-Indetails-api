@@ -2,7 +2,8 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Execution.Abstraction;
 
-public sealed record PersonMaterialRow(long Id, long ProjectId, string Name, decimal Cost, DateTime AddedAt);
+/// <param name="Cost">In <paramref name="Currency"/>, on <paramref name="SpentOn"/>.</param>
+public sealed record PersonMaterialRow(long Id, long ProjectId, string Name, decimal Cost, string Currency, DateOnly SpentOn, DateTime AddedAt);
 
 public sealed record PersonLabourWeekRow(long Id, long ProjectId, DateOnly WeekStart, decimal Total, DateTime SubmittedAt);
 
