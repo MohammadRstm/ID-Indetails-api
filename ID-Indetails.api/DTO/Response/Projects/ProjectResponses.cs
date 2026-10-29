@@ -73,14 +73,14 @@ public sealed record ProjectMoneyResponse
 
     public decimal CostPerHour { get; init; }
 
-    /// <summary>Execution: received + money from the box − cost.</summary>
+    /// <summary>Execution: received − cost − moved to the pocket money + paid by it.</summary>
     public decimal? CashProfit { get; init; }
 
-    /// <summary>Execution: what the Execution box moved to the project, counted in its cash profit.</summary>
-    public decimal? FromBox { get; init; }
+    /// <summary>Execution: what was moved from the project into the pocket money. Lowers its profit, not what the client owes.</summary>
+    public decimal? ToPocket { get; init; }
 
-    /// <summary>Execution: whether its client payments go into the box.</summary>
-    public BoxState? BoxState { get; init; }
+    /// <summary>Execution: what the pocket money paid to the project. Raises its profit.</summary>
+    public decimal? FromPocket { get; init; }
 
     /// <summary>Execution: what the materials sent earn, their charge − their cost.</summary>
     public decimal? MaterialProfit { get; init; }

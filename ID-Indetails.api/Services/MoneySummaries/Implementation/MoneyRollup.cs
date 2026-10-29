@@ -183,7 +183,8 @@ public sealed class MoneyRollup(
             projects.Count > 0 && projects.All(IsDone),
             revenue > 0 ? (int)Math.Round(recognised * 100 / revenue, MidpointRounding.AwayFromZero) : 0,
             revenue,
-            moneys.Sum(m => m.LabourMinutes));
+            moneys.Sum(m => m.LabourMinutes),
+            moneys.Sum(m => m.FromPocket - m.ToPocket));
 
         return (ProjectFinance.Summarise(facts, costs), costs);
     }
