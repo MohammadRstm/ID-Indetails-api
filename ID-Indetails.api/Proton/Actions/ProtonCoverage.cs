@@ -125,6 +125,8 @@ public static class ProtonCoverage
         Never("Quotes.Create", "A quote goes to the client: a super admin makes and sends it from the project."),
         Never("Quotes.RecordDelivery", "A quote goes to the client: a super admin makes and sends it from the project."),
         Never("Quotes.Email", "A quote goes to the client: a super admin makes and sends it from the project.", externalSend: true),
+        Never("BlockedChanges.Force", "Taking a project to zero profit or below is a person's call, made on purpose."),
+        Never("BlockedChanges.Dismiss", "A refused change is decided by whoever sees the project's money."),
         Action("Projects.UpdatePricing", "propose_project_money", T2, ProtonFamily.Money),
         Action("Requirements.Create", "propose_add_requirement"),
         Action("Requirements.Update", "propose_update_requirement"),

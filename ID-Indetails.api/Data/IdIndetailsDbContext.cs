@@ -78,6 +78,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<QuoteDelivery> QuoteDeliveries => Set<QuoteDelivery>();
 
     public DbSet<QuoteSequence> QuoteSequences => Set<QuoteSequence>();
+
+    public DbSet<BlockedChange> BlockedChanges => Set<BlockedChange>();
     public DbSet<ClientStatement> ClientStatements => Set<ClientStatement>();
     public DbSet<ClientStatementLine> ClientStatementLines => Set<ClientStatementLine>();
     public DbSet<ClientStatementDelivery> ClientStatementDeliveries => Set<ClientStatementDelivery>();
@@ -154,6 +156,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<ProjectStatus>(configurationBuilder);
         StoreAsSnakeCase<PocketEntryKind>(configurationBuilder);
         StoreAsSnakeCase<PocketRequestStatus>(configurationBuilder);
+        StoreAsSnakeCase<BlockedChangeKind>(configurationBuilder);
+        StoreAsSnakeCase<BlockedChangeStatus>(configurationBuilder);
         StoreAsSnakeCase<BillingType>(configurationBuilder);
         StoreAsSnakeCase<PayBasis>(configurationBuilder);
         StoreAsSnakeCase<ContactKind>(configurationBuilder);

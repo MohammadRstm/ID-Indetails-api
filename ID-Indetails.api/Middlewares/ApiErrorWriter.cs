@@ -29,12 +29,14 @@ public static class ApiErrorWriter
         ErrorType type,
         string code,
         string message,
-        IDictionary<string, string[]>? errors = null) => new()
+        IDictionary<string, string[]>? errors = null,
+        long? blockedChangeId = null) => new()
     {
         Type = type,
         Code = code,
         Message = message,
         Errors = errors,
+        BlockedChangeId = blockedChangeId,
         TraceId = TraceIdOf(context),
     };
 
@@ -44,11 +46,12 @@ public static class ApiErrorWriter
         string code,
         string message,
         IDictionary<string, string[]>? errors = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        long? blockedChangeId = null)
     {
         context.Response.StatusCode = StatusCodeFor(type);
         return context.Response.WriteAsJsonAsync(
-            Build(context, type, code, message, errors),
+            Build(context, type, code, message, errors, blockedChangeId),
             cancellationToken);
     }
 

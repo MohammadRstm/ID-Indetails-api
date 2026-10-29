@@ -157,6 +157,7 @@ sum of the rows. A `contribution` is positive and a `payout` is negative. Sites 
   - The site is locked while its profit is checked.
 - **Out:**
   - A site asks for money (`POST .../requests`); the system will also raise requests when a site gets close to zero.
+  - A change that takes a site to 10% of its agreed amount or less raises a request by itself, with no requester and the note "Close to zero profit", unless one is pending already (see [projects.md](projects.md), "Profit floor").
   - The request suggests what brings the site back to a 10% margin (`PocketRules.TargetMargin`); a pending request shows that suggestion as it stands today. Whoever sees Execution's money is notified (`pocket_requested`).
   - A site has at most one pending request: asking again returns it.
   - A super admin approves the amount they choose, at most the balance (`422 pocket_short`), or denies it. Either way it is decided once (`422 pocket_request_decided`).

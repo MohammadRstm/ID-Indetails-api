@@ -66,6 +66,28 @@ Every project money figure comes from one place: `Business/Finance/ProjectFinanc
 - **Execution:** `cashProfit` = received − cost, and `materialProfit` = what the materials sent to the client earn (their charge − their cost).
 - **Cash by week** (`ProjectFinance.CashByWeek`): payments received and cost added up week by week, Monday to Sunday. Execution sites show it on `GET /api/projects/{id}/site-money/timeline` (see [execution.md](execution.md)).
 
+## Profit floor
+
+A client project's profit may not reach zero unless someone who sees its money says so (`Business/Projects/ProfitFloorRules.cs`, `Services/Projects/Implementation/ProfitFloor.cs`).
+
+- **Which projects:** client work with an agreed amount: Design's payment (`revenue > 0`), an Execution site's fee (`projectFee > 0`). Internal work is cost by nature and isn't held to it.
+- **Which profit:** the project's profit counting the materials not sent to the client yet, and the pocket money (`PocketRules.ProfitOf`), on its agreed amount with those materials (`PocketRules.AgreedOf`). TVA is never part of it.
+- **Guarded changes:** adding an expense, adding or changing materials, submitting a labour week, logging or changing hours, and lowering the payment, the project fee or the material markup. Each takes the profit before it (with the project locked, except hours) and checks it again after saving, inside its transaction.
+  - A change that **raises** the profit, or leaves it as it was, always passes, so a project at zero or below can still be helped (a higher payment, a removed expense).
+  - A change that **lowers it to zero or below** is refused: `422 profit_floor`, with `blockedChangeId` in the error body. Nothing of it is saved. The error handler then keeps the request as a **blocked change** (`blocked_changes`: the request as JSON with its route ids, who, when) and sends `change_blocked` to whoever sees the domain's money (`financial:view`), the requester aside.
+  - A change that lowers it to **10% of the agreed amount or less** passes and sends `profit_low`, once per project. An Execution site also asks the pocket money for help (a pending request with no requester, "Close to zero profit"; see [execution.md](execution.md)).
+- **Blocked changes** (`financial:view`, in a domain the caller sees):
+
+  | Method and path | Purpose |
+  |---|---|
+  | `GET /api/blocked-changes/{id}` | The change in words (`summary`, e.g. "Expense: Tiles, 1,000.00 USD"), its `kind`, project, `requestedBy`, `status` (`pending`, `forced`, `dismissed`), who decided it, and `profitNow` |
+  | `POST /api/blocked-changes/{id}/force` | Makes the change again through the same service and checks, past the floor. Hours are logged as the employee who logged them (`ICurrentUser.ActAs`). Then `profit_at_zero` goes once to whoever sees the money |
+  | `POST /api/blocked-changes/{id}/dismiss` | Drops it |
+
+  - A change is decided **once**: it is marked forced or dismissed before anything else (an atomic update on a pending row), so a second force or dismiss is `422 blocked_change_decided`. If the forced change fails on its own checks (the project closed meanwhile, the labour week changed: `409 labour_week_changed`), it is pending again and the error is returned.
+  - Its `resultId` is what forcing made: the expense, the first material, the work entry.
+- **Changes nobody made** (pay, schedules, exchange rates, a voided payment) aren't refused: the hourly scheduler sends `profit_low` and `profit_at_zero` for them, under the same keys, so nobody hears it twice (see [notifications.md](notifications.md)).
+
 ## Status
 
 `Business/Projects/ProjectStatusRules.cs`:

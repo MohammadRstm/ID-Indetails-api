@@ -139,6 +139,12 @@ public static class ErrorCodes
 
     /// <summary>422. Internal work, or a project with no agreed amount yet, can't be quoted.</summary>
     public const string QuoteNotPossible = "quote_not_possible";
+
+    /// <summary>422. The change would take the project's profit to zero or below; it was kept for forcing (see <c>blockedChangeId</c>).</summary>
+    public const string ProfitFloor = "profit_floor";
+
+    /// <summary>422. The blocked change was already forced through or dismissed.</summary>
+    public const string BlockedChangeDecided = "blocked_change_decided";
     public const string StatementEmpty = "statement_empty";
 
     // Dependencies
