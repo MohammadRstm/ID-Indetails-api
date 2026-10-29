@@ -45,8 +45,9 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
         RuleFor(x => x.OwnerId).GreaterThan(0).When(x => x.OwnerId is not null).WithMessage("Owner is invalid.");
         RuleFor(x => x.Revenue).Amount("Revenue");
-        RuleFor(x => x.ProjectFee).Amount("Project fee");
+        RuleFor(x => x.ProjectFee).WorkPriceNotTyped();
         RuleFor(x => x.MaterialMarkup).MaterialMarkup();
+        RuleFor(x => x.SupervisionRate).SupervisionRate();
         RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.LabourDefaults!).SetValidator(new SetLabourDefaultsRequestValidator()).When(x => x.LabourDefaults is not null);
     }
@@ -90,8 +91,9 @@ public sealed class UpdateProjectPricingRequestValidator : AbstractValidator<Upd
 {
     public UpdateProjectPricingRequestValidator()
     {
-        RuleFor(x => x.ProjectFee).Amount("Project fee");
+        RuleFor(x => x.ProjectFee).WorkPriceNotTyped();
         RuleFor(x => (decimal?)x.MaterialMarkup).MaterialMarkup().OverridePropertyName("MaterialMarkup");
+        RuleFor(x => x.SupervisionRate).SupervisionRate();
         RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.Description).ClientText("The description", ProjectRules.MaxPaymentDescriptionLength, required: true);
     }
@@ -101,6 +103,14 @@ internal static class ProjectRuleExtensions
 {
     public static IRuleBuilderOptions<T, decimal?> TvaRate<T>(this IRuleBuilder<T, decimal?> rule)
         => rule.InclusiveBetween(0m, Tva.MaxRate).WithMessage("TVA must be between 0% and 100%.");
+
+    public static IRuleBuilderOptions<T, decimal?> SupervisionRate<T>(this IRuleBuilder<T, decimal?> rule)
+        => rule
+            .InclusiveBetween(0m, 1m).WithMessage("Supervision must be between 0% and 100%.")
+            .Must(v => v is null || decimal.Round(v.Value, 4) == v).WithMessage("Supervision can have at most 4 decimals.");
+
+    public static IRuleBuilderOptions<T, decimal?> WorkPriceNotTyped<T>(this IRuleBuilder<T, decimal?> rule)
+        => rule.Null().WithMessage("The work price comes from the agreed BOQs: it can't be typed in.");
 
     public static IRuleBuilderOptions<T, string?> ProjectTint<T>(this IRuleBuilder<T, string?> rule)
         => rule.Matches("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")

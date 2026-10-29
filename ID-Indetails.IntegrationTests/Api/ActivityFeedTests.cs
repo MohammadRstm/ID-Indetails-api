@@ -61,7 +61,7 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var site = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
-        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.125m, description = "Priced" }, admin.AccessToken))
+        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { materialMarkup = 0.125m, description = "Priced" }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var money = await (await Client.GetAsync($"/api/activity?group=money&projectId={site.Id}", admin.AccessToken))

@@ -112,7 +112,7 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var created = await Client.PostJsonAsync("/api/projects", new
         {
-            title = "Site with a crew", domainCode = DomainCodes.Execution, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.1m,
+            title = "Site with a crew", domainCode = DomainCodes.Execution, clientId = client.Id, materialMarkup = 0.1m,
             labourDefaults = new { workers = 8, dailyPay = 42m }, staffIds = new[] { await Projects.SiteStaffAsync() },
         }, superAdmin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());

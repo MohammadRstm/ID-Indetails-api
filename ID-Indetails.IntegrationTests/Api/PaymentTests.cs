@@ -240,15 +240,16 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
 
-        // the site is created with its agreed amount only: the down payment is an ordinary payment afterwards
+        // the site is created, then its BOQ is agreed at 1000: the down payment is an ordinary payment afterwards
         var site = await OkAsync<ProjectResponse>(Client.PostJsonAsync("/api/projects", new
         {
             title = "Villa",
             clientId = client.Id,
-            projectFee = 1000m,
+            supervisionRate = 0m,
             tvaRate = 0m,
             staffIds = new[] { await Projects.SiteStaffAsync() },
         }, admin.AccessToken));
+        await Projects.SetWorkPriceAsync(site.Id, 1000m);
         var initial = await RecordAsync(site.Id, admin.AccessToken, new { amount = 1500m, currency = "USD", method = "cheque", reference = "CHQ-9", isInitial = true });
         initial.IsInitial.ShouldBeTrue();
         var money = (await OkAsync<ProjectResponse>(Client.GetAsync($"/api/projects/{site.Id}", admin.AccessToken))).Money!;

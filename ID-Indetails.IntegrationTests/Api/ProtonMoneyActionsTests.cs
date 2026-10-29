@@ -356,12 +356,11 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         await ConfirmAsync(superAdmin, price, "15");
         (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!.MaterialMarkup.ShouldBe(0.15m);
 
-        // a fee card re-sends the markup it read: if the markup changed in the app since, the card is refused, not put back
-        var (fee, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, project_fee = 500m, reason = "Agreed with the client" }, "Set the fee to 500, agreed with the client");
-        fee.PendingAction!.Preview.Changes.ShouldNotContain(c => c.Label == "Material markup");
-        fee.PendingAction.Preview.Phrase.ShouldBe("500");
-        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 1000m, materialMarkup = 0.2m, description = "Changed in the app" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        await (await Client.PostJsonAsync($"/api/proton/actions/{fee.PendingAction.Id}/confirm", new { fee.ConversationId, typed = "500" }, superAdmin.AccessToken))
+        // a card re-sends the markup it read: if the markup changed in the app since, the card is refused, not put back
+        var (again, _) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 20m, reason = "Better terms" }, "Make the markup 20% for the better terms");
+        again.PendingAction!.Preview.Phrase.ShouldBe("20");
+        (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { materialMarkup = 0.3m, description = "Changed in the app" }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/proton/actions/{again.PendingAction.Id}/confirm", new { again.ConversationId, typed = "20" }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
 
         var (_, tooHigh) = await ProposeAsync(superAdmin, "propose_project_money", new { project_id = site.Id, material_markup = 600m, reason = "Rush order" }, "Make the markup 600% for the rush order");
