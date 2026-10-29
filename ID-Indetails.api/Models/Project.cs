@@ -63,6 +63,12 @@ public class Project
     public decimal? MaterialMarkup { get; set; }
 
     /// <summary>
+    /// TVA on everything the client pays, 0.15 = 15%, 0 when untaxed. Client work only; internal projects keep 0.
+    /// Never shown to the client as a line: they see totals with it included (see <see cref="Business.Billing.Tva"/>).
+    /// </summary>
+    public decimal TvaRate { get; set; }
+
+    /// <summary>
     /// Cached done / total requirements, 0–100. Updated in the same transaction as every
     /// requirement change, which also records a progress_set event.
     /// </summary>

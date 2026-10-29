@@ -16,6 +16,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             t.HasCheckConstraint("ck_payments_method", SnakeCaseEnum.CheckSql<PaymentMethod>("method"));
             t.HasCheckConstraint("ck_payments_amount_positive", "`amount` > 0");
             t.HasCheckConstraint("ck_payments_fx_rate_positive", "`fx_rate` > 0");
+            t.HasCheckConstraint("ck_payments_tva_within_amount", "`tva_usd` >= 0 AND `tva_usd` <= `amount_usd`");
             t.HasCheckConstraint("ck_payments_amount_usd_positive", "`amount_usd` > 0");
         });
 
@@ -23,6 +24,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 
         builder.Property(x => x.Currency).IsCurrencyCode();
         builder.Property(x => x.FxRate).HasPrecision(18, 6);
+        builder.Property(x => x.TvaUsd).HasDefaultValue(0m);
         builder.Property(x => x.Reference).HasMaxLength(100);
         builder.Property(x => x.Note).HasMaxLength(500);
         builder.Property(x => x.VoidReason).HasMaxLength(500);

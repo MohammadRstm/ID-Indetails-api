@@ -69,6 +69,12 @@ public sealed class ProjectNotifier(
             cancellationToken);
     }
 
+    public async Task QuoteDueAsync(Project project, long actorId, CancellationToken cancellationToken = default)
+        => await sender.SendAsync(
+            Draft(NotificationKinds.QuoteDue, project, actorId, "project", project.Id, new { projectTitle = project.Title }),
+            await sender.HoldersAsync(project.DomainCode, PermissionCodes.InvoiceSend, cancellationToken),
+            cancellationToken);
+
     public async Task ProgressChangedAsync(Project project, int previousPct, long actorId, CancellationToken cancellationToken = default)
     {
         if (project.Status != ProjectStatus.Active || previousPct >= NearlyDonePct || project.ProgressPct < NearlyDonePct)

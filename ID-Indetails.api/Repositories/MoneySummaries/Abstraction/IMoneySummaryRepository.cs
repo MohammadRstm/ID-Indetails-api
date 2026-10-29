@@ -16,7 +16,7 @@ public sealed record InvoiceMoneyRow(
     bool IsVoided,
     decimal PaidUsd);
 
-public sealed record PaymentMoneyRow(long ProjectId, long ClientId, long? InvoiceId, DateOnly ReceivedOn, decimal AmountUsd, PaymentMethod Method);
+public sealed record PaymentMoneyRow(long ProjectId, long ClientId, long? InvoiceId, DateOnly ReceivedOn, decimal AmountUsd, PaymentMethod Method, decimal TvaUsd);
 
 /// <summary>A project's agreed payment (Design) or fee (Execution) being set or changed: the new amount, and the one before.</summary>
 public sealed record AgreedChangeRow(long ProjectId, DateTime OccurredAt, decimal Amount, decimal? PrevAmount);

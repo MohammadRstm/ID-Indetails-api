@@ -23,7 +23,9 @@ public sealed record ProjectPaymentChangeResponse(
     decimal? PreviousMaterialMarkup,
     string Description,
     DateTime ChangedAt,
-    ProjectOwnerResponse? ChangedBy);
+    ProjectOwnerResponse? ChangedBy,
+    decimal? TvaRate = null,
+    decimal? PreviousTvaRate = null);
 
 /// <summary>Only for callers with <c>financial:view</c>.</summary>
 public sealed record ProjectMoneyResponse
@@ -38,6 +40,15 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Revenue, fee and markup can't change until the project is reopened.</summary>
     public bool IsLocked { get; init; }
+
+    /// <summary>TVA on what the client pays, 0.15 = 15%. Revenue and profit are net of it.</summary>
+    public decimal TvaRate { get; init; }
+
+    /// <summary>The agreed payment (Design) or agreed amount before materials (Execution, the fee), TVA included.</summary>
+    public decimal PaymentWithTva { get; init; }
+
+    /// <summary>Revenue with TVA included: what the client is agreed to pay so far.</summary>
+    public decimal RevenueWithTva { get; init; }
 
     public decimal? ProjectFee { get; init; }
 

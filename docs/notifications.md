@@ -63,6 +63,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
 | `pocket_requested` | Holders of `financial:view` who see Execution | the pocket money request | none |
+| `quote_due` | Holders of `invoice:send` | the project | `projectTitle` |
 | `statement_sent` | Holders of `financial:view` | the statement | `number` |
 | `portal_client_message` | Staff taking part in a project's client portal discussion, when a client writes in its chat. Rolling per project (`portal_chat:{projectId}`) | — | `projectTitle`, `authorName` (never the text) |
 | `portal_client_comment` | The project's manager and the file's uploader (everyone taking part on the staff side when neither does), when a client comments on a file. Rolling per file (`portal_comments:{itemId}`) | the item | `projectTitle`, `authorName`, `itemTitle` |
@@ -133,7 +134,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
-| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
+| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `quote_due`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 

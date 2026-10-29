@@ -94,6 +94,9 @@ public static class NotificationKinds
     /// <summary>An Execution site asks the pocket money for money: for whoever sees Execution's money to approve or deny.</summary>
     public const string PocketRequested = "pocket_requested";
 
+    /// <summary>A client project was made by someone who can't send quotes: for those who can, to send one or not.</summary>
+    public const string QuoteDue = "quote_due";
+
     /// <summary>A client statement was sent (subject: the statement). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string StatementSent = "statement_sent";
 

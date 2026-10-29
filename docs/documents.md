@@ -20,6 +20,25 @@ Invoices, client statements and project reports are made as PDFs on the server (
   - A draft or voided invoice can't be emailed (`422 invoice_not_issued` / `invoice_voided`).
 - **Wording:** documents are in English only. They have no Arabic, since the company's invoices don't use it.
 
+## Quotes
+
+A quote tells a client what the whole project costs them: the agreed payment (Design) or agreed amount before
+materials (Execution), with TVA in it and never shown apart, and the project's description as its scope. Each is a
+snapshot (`quotes`, numbered `QU-YYYY-NNN` per year in `quote_sequences`): a change of payment or TVA makes a new one.
+Sends are kept in `quote_deliveries`.
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `POST /api/projects/{id}/quotes` | `invoice:send` | Makes a quote from the payment and TVA now (`422 quote_not_possible` for internal work or no agreed amount) |
+| `GET /api/projects/{id}/quotes` | `invoice:send` | The project's quotes, newest first |
+| `GET /api/quotes/{id}` / `…/pdf` | `invoice:send` | One quote; its PDF |
+| `POST /api/quotes/{id}/email` | `invoice:send` | Emails it to the client with the PDF, and records the delivery |
+| `POST /api/quotes/{id}/deliveries` | `invoice:send` | Records a WhatsApp send or a download |
+
+When someone without `invoice:send` creates a client project, holders of it get `quote_due`: whether to send it a
+quote is theirs to decide. Someone with it is asked in the app right after creating the project or changing its
+payment or TVA.
+
 ## What each document shows
 
 Every document opens with the company's letterhead (name, website and address from the company settings, and the logo when it is a PNG or JPEG). Every page ends with a footer line and "Page X of Y". Long tables run onto more pages and repeat their header row. Money is written in full (`$1,250.00`, `1,500,000 LBP`), and dates as `Sep 30, 2026` in the company time zone.
