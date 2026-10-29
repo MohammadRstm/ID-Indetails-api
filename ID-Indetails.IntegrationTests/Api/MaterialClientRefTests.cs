@@ -85,8 +85,6 @@ public class MaterialClientRefTests(ApiFactory api) : IClassFixture<ApiFactory>
         var cement = Guid.NewGuid();
         var first = await AddAsync(site.Id, worker.AccessToken, new { name = "Cement", amount = 120m, clientRef = cement });
 
-        // a site's materials must be sent to the client before it can be completed
-        await Projects.SendStatementAsync(superAdmin.AccessToken, site.Id);
         var completed = await Client.PostEmptyAsync($"/api/projects/{site.Id}/complete", superAdmin.AccessToken);
         completed.IsSuccessStatusCode.ShouldBeTrue(await completed.Content.ReadAsStringAsync());
 

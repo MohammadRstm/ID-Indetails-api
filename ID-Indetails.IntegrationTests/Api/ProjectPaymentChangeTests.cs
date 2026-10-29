@@ -35,6 +35,9 @@ public class ProjectPaymentChangeTests(ApiFactory api) : IClassFixture<ApiFactor
         opening.Amount.ShouldBe(5000m);
         opening.PreviousAmount.ShouldBeNull();
         opening.MaterialMarkup.ShouldBeNull();
+        // supervision is Execution's: a Design row has none, as one from before it
+        opening.SupervisionRate.ShouldBeNull();
+        opening.PreviousSupervisionRate.ShouldBeNull();
         opening.Description.ShouldBe(ProjectRules.AgreedAtStart);
         opening.ChangedBy!.Id.ShouldBe(superAdmin.User.Id);
 
@@ -120,6 +123,7 @@ public class ProjectPaymentChangeTests(ApiFactory api) : IClassFixture<ApiFactor
         // the work price is set later, by agreeing a BOQ: the site starts at 0
         var opening = (await HistoryAsync(site.Id, superAdmin.AccessToken)).ShouldHaveSingleItem();
         (opening.Amount, opening.PreviousAmount, opening.MaterialMarkup, opening.Description).ShouldBe((0m, null, (decimal?)0.10m, ProjectRules.AgreedAtStart));
+        (opening.SupervisionRate, opening.PreviousSupervisionRate).ShouldBe((0m, null));
 
         (await (await Client.PutJsonAsync(url, new { materialMarkup = 0.10m, supervisionRate = 0.08m }, superAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("description");
@@ -138,6 +142,11 @@ public class ProjectPaymentChangeTests(ApiFactory api) : IClassFixture<ApiFactor
         (history[0].Amount, history[0].PreviousAmount, history[0].MaterialMarkup, history[0].PreviousMaterialMarkup, history[0].Description)
             .ShouldBe((1000m, (decimal?)1000m, (decimal?)0.15m, (decimal?)0.10m, "Imported tiles"));
         (history[1].Amount, history[1].MaterialMarkup, history[1].Description).ShouldBe((1000m, (decimal?)0.10m, "Agreed at 8%"));
+
+        // supervision is kept like TVA: the rate after the change and the one before it, left as it was when only the markup changed
+        (history[1].SupervisionRate, history[1].PreviousSupervisionRate).ShouldBe((0.08m, (decimal?)0m));
+        (history[0].SupervisionRate, history[0].PreviousSupervisionRate).ShouldBe((0.08m, (decimal?)0.08m));
+        (history[2].SupervisionRate, history[2].PreviousSupervisionRate).ShouldBe((0m, null));
 
         // the supervision change is in the feed, with the exact rates in its payload
         var set = await _steps.ScalarAsync<string>(

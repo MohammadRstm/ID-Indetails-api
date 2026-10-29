@@ -19,7 +19,6 @@ public sealed record PushTarget
     public const string Client = "client";
     public const string Invoice = "invoice";
     public const string Payment = "payment";
-    public const string Statement = "statement";
     public const string PageType = "page";
 
     public required string Type { get; init; }
@@ -92,7 +91,6 @@ public sealed record PushTarget
             NotificationKinds.InvitationAccepted => Subject(Person, "user", subjectType, subjectId),
             NotificationKinds.ClientAdded => Subject(Client, "client", subjectType, subjectId),
             NotificationKinds.PaymentRecorded => Subject(Payment, "payment", subjectType, subjectId),
-            NotificationKinds.StatementSent => Subject(Statement, "statement", subjectType, subjectId),
             NotificationKinds.InvoiceIssued or NotificationKinds.InvoiceSentAutomatically or NotificationKinds.InvoiceSendDue
                 or NotificationKinds.InvoiceSendFailed or NotificationKinds.InvoiceReminderDue or NotificationKinds.InvoiceOverdue
                 or NotificationKinds.InvoiceDraftWaiting

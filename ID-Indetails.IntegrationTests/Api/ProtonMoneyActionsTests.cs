@@ -12,7 +12,6 @@ using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Materials;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Proton;
-using ID_Indetails.api.DTO.Response.Statements;
 using ID_Indetails.api.Proton.Actions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -368,26 +367,7 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
     }
 
     [Fact]
-    public async Task A_statement_is_refused_when_the_sites_materials_changed_since_the_card()
-    {
-        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
-        var (materials, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Sand", amount = 80m } } }, "Sand for 80");
-        await ConfirmAsync(superAdmin, materials, "80");
-
-        var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });
-        statement.PendingAction!.Preview.Phrase.ShouldNotBeNull();
-
-        // more materials arrive before Confirm: the statement would bill more than the total the user typed
-        var (more, _) = await ProposeAsync(superAdmin, "propose_add_materials", new { project_id = site.Id, items = new object[] { new { name = "Gravel", amount = 50m } } }, "Gravel for 50");
-        await ConfirmAsync(superAdmin, more, "50");
-        await (await Client.PostJsonAsync($"/api/proton/actions/{statement.PendingAction.Id}/confirm",
-                new { statement.ConversationId, typed = statement.PendingAction.Preview.Phrase }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
-    }
-
-    [Fact]
-    public async Task A_site_records_materials_and_labour_then_states_them_to_the_client()
+    public async Task A_site_records_materials_and_labour_as_costs_and_proton_has_no_tool_for_what_the_client_is_charged()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
@@ -413,21 +393,10 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         }, "3 workers on Monday at 25 a day");
         await ConfirmAsync(superAdmin, labour, "75");
 
-        var (statement, _) = await ProposeAsync(superAdmin, "propose_create_statement", new { project_id = site.Id });
-        var card = statement.PendingAction!;
-        card.Preview.Note!.ShouldContain("2 material(s)");
-        card.Preview.Note!.ShouldContain("frozen");
-        card.Preview.Irreversible.ShouldBeTrue();
-        var outcome = await ConfirmAsync(superAdmin, statement, card.Preview.Phrase);
-        outcome.Message.ShouldStartWith("Made statement");
-
-        // its first delivery is what turns its materials into revenue, and the card says so; a second one changes nothing
-        var made = (await GetAsync<PagedResponse<StatementSummaryResponse>>(superAdmin, $"/api/projects/{site.Id}/statements")).Items.ShouldHaveSingleItem();
-        var (first, _) = await ProposeAsync(superAdmin, "propose_record_statement_delivery", new { statement_id = made.Id, channel = "whatsapp" });
-        first.PendingAction!.Preview.Note!.ShouldContain("first delivery");
-        first.PendingAction.Preview.Note!.ShouldContain("agreed revenue");
-        await ConfirmAsync(superAdmin, first);
-        var (again, _) = await ProposeAsync(superAdmin, "propose_record_statement_delivery", new { statement_id = made.Id, channel = "download" });
-        again.PendingAction!.Preview.Note!.ShouldContain("delivered before");
+        // what was recorded is cost: the price the client pays is in the BOQs, which Proton doesn't write
+        var money = (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!;
+        money.Cost.Materials.ShouldBe(200m);
+        money.Cost.GroundLabour.ShouldBe(75m);
+        money.Revenue.ShouldBe(1000m);
     }
 }

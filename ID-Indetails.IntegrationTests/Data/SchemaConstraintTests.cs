@@ -383,27 +383,61 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     }
 
     [Fact]
-    public async Task Stated_material_cannot_be_deleted_and_appears_once_per_statement()
+    public async Task A_boq_is_numbered_unless_it_is_internal_and_only_a_vo_has_a_reason_or_a_negative_total()
     {
         var user = await ActiveUserAsync("execution");
         var client = await ClientAsync("execution");
         var project = await InsertAsync(ProjectSql("execution", user, client.ToString(), "client", 0));
-        var material = await InsertAsync(MaterialSql(project, user, quantity: "NULL", unitCost: "NULL", amount: "500"));
+        string Number() => $"'BQ-2026-{Random.Shared.Next(100000, 999999)}'";
 
-        var statement = await InsertAsync(
-            "INSERT INTO client_statements (number, project_id, client_id, mode, includes_earlier, received_usd, agreed_usd, created_at) " +
-            $"VALUES ('ST-2026-{Random.Shared.Next(100000, 999999)}', {project}, {client}, 'detail', 0, 0, 550, {Now})");
-        await InsertAsync(StatementLineSql(statement, material, position: 1));
+        (await InsertAsync(BoqSql(project, user, "internal", "NULL"))).ShouldBeGreaterThan(0);
+        var numbered = await InsertAsync(BoqSql(project, user, "client", Number()));
+        await InsertAsync(BoqSql(project, user, "vo", "'VO-2026-" + Random.Shared.Next(100000, 999999) + "'", reason: "'Bigger kitchen'", total: "-500"));
 
-        (await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(StatementLineSql(statement, material, position: 2))))
+        await ShouldViolateAsync(BoqSql(project, user, "client", "NULL"), "ck_boqs_number_by_kind");
+        await ShouldViolateAsync(BoqSql(project, user, "internal", Number()), "ck_boqs_number_by_kind");
+        await ShouldViolateAsync(BoqSql(project, user, "internal", "NULL", status: "agreed"), "ck_boqs_internal_is_draft");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), reason: "'Why'"), "ck_boqs_reason_only_vo");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), total: "-1"), "ck_boqs_amounts_by_kind");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), adjustment: "'total'", adjustmentValue: "-5"), "ck_boqs_amounts_by_kind");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), adjustment: "'percent'", adjustmentValue: "-1"), "ck_boqs_adjustment_percent_range");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), adjustment: "'percent'", adjustmentValue: "1.5"), "ck_boqs_adjustment_percent_range");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), adjustmentValue: "0.1"), "ck_boqs_adjustment_value");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), adjustment: "'percent'"), "ck_boqs_adjustment_value");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), status: "agreed", agreedAt: "NULL"), "ck_boqs_agreed");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), status: "draft", agreedAt: Now), "ck_boqs_agreed");
+        await ShouldViolateAsync(BoqSql(project, user, "quote", Number()), "ck_boqs_kind");
+        await ShouldViolateAsync(BoqSql(project, user, "client", Number(), status: "withdrawn"), "ck_boqs_status");
+        (await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(
+            $"INSERT INTO boqs (project_id, kind, status, number, title, author_id, adjustment_type, subtotal_usd, total_usd, created_at, updated_at) " +
+            $"SELECT project_id, kind, status, number, title, author_id, adjustment_type, subtotal_usd, total_usd, created_at, updated_at FROM boqs WHERE id = {numbered}")))
             .Number.ShouldBe(1062);
-        (await Should.ThrowAsync<MySqlException>(() => ExecuteAsync($"DELETE FROM project_materials WHERE id = {material}")))
-            .Number.ShouldBe(1451);
+
+        // a line: no negative quantity, waste between none and all of it (a negative rate is the BOQ's rule)
+        (await InsertAsync(BoqLineSql(numbered, quantity: "10", waste: "0.05", rate: "-3"))).ShouldBeGreaterThan(0);
+        await ShouldViolateAsync(BoqLineSql(numbered, quantity: "-1", waste: "0", rate: "3"), "ck_boq_lines_quantity_non_negative");
+        await ShouldViolateAsync(BoqLineSql(numbered, quantity: "1", waste: "1.5", rate: "3"), "ck_boq_lines_waste_rate_range");
+        await ShouldViolateAsync(BoqLineSql(numbered, quantity: "1", waste: "-0.1", rate: "3"), "ck_boq_lines_waste_rate_range");
 
         await ShouldViolateAsync(
-            "INSERT INTO client_statements (number, project_id, client_id, mode, includes_earlier, received_usd, agreed_usd, created_at) " +
-            $"VALUES ('ST-2026-X{Random.Shared.Next(100000, 999999)}', {project}, {client}, 'grouped', 0, 0, 0, {Now})",
-            "ck_client_statements_mode");
+            $"INSERT INTO boq_deliveries (boq_id, channel, total_usd, sent_at) VALUES ({numbered}, 'pigeon', 100, {Now})", "ck_boq_deliveries_channel");
+        (await InsertAsync($"INSERT INTO boq_deliveries (boq_id, channel, total_usd, sent_at) VALUES ({numbered}, 'email', 100, {Now})")).ShouldBeGreaterThan(0);
+        await ShouldViolateAsync("INSERT INTO boq_sequences (prefix, year, last_number) VALUES ('ZZ', 2026, -1)", "ck_boq_sequences_number_non_negative");
+    }
+
+    [Fact]
+    public async Task A_blocked_change_can_be_a_boq_agreement_or_withdrawal_and_nothing_else_new()
+    {
+        var user = await ActiveUserAsync("execution");
+        var client = await ClientAsync("execution");
+        var project = await InsertAsync(ProjectSql("execution", user, client.ToString(), "client", 0));
+        string Change(string kind) =>
+            "INSERT INTO blocked_changes (project_id, kind, payload, requested_by_id, requested_at, status) " +
+            $"VALUES ({project}, '{kind}', '{{}}', {user}, {Now}, 'pending')";
+
+        (await InsertAsync(Change("boq_agree"))).ShouldBeGreaterThan(0);
+        (await InsertAsync(Change("boq_withdraw"))).ShouldBeGreaterThan(0);
+        await ShouldViolateAsync(Change("boq_delete"), "ck_blocked_changes_kind");
     }
 
     // ---------- working time (ExecutionPricingAndWorkingTime) ----------
@@ -555,9 +589,15 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
         "INSERT INTO payments (project_id, client_id, amount, currency, fx_rate, amount_usd, received_on, method, recorded_at, is_initial) " +
         $"VALUES ({projectId}, {clientId}, 1000, 'USD', 1, 1000, '2026-09-28', 'bank', {Now}, {(isInitial ? 1 : 0)})";
 
-    private static string StatementLineSql(long statementId, long materialId, int position) =>
-        "INSERT INTO client_statement_lines (statement_id, material_id, position, description, price, is_earlier, is_listed) " +
-        $"VALUES ({statementId}, {materialId}, {position}, 'Concrete', 550, 0, 1)";
+    private static string BoqSql(
+        long projectId, long authorId, string kind, string number, string status = "draft", string reason = "NULL", string total = "100",
+        string adjustment = "'none'", string adjustmentValue = "NULL", string? agreedAt = null) =>
+        "INSERT INTO boqs (project_id, kind, status, number, title, reason, author_id, adjustment_type, adjustment_value, subtotal_usd, total_usd, created_at, updated_at, agreed_at) " +
+        $"VALUES ({projectId}, '{kind}', '{status}', {number}, 'Villa', {reason}, {authorId}, {adjustment}, {adjustmentValue}, {total}, {total}, {Now}, {Now}, {agreedAt ?? (status == "agreed" ? Now : "NULL")})";
+
+    private static string BoqLineSql(long boqId, string quantity, string waste, string rate) =>
+        "INSERT INTO boq_lines (boq_id, position, description, quantity, waste_rate, rate) " +
+        $"VALUES ({boqId}, 1, 'Concrete', {quantity}, {waste}, {rate})";
 
     private static string PolicySql(string effectiveFrom, int start, int end, int days, int breakMinutes) =>
         "INSERT INTO working_time_policies (effective_from, work_start_minute, work_end_minute, work_days, break_minutes, overtime_multiplier, created_at) " +

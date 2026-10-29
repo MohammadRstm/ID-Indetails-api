@@ -1,15 +1,13 @@
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Labour;
 using ID_Indetails.api.DTO.Request.Materials;
-using ID_Indetails.api.DTO.Request.Statements;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.LoadTests.Tool.Seeding;
 
 /// <summary>
 /// Execution sites. The crew records material deliveries most days (Monday to Saturday) and reports last week's
-/// ground labour every Monday. Every few weeks the project's admin sets a client price or two and sends the client a
-/// statement of the materials supplied.
+/// ground labour every Monday. A site's price is a client BOQ agreed when it is made (see Portfolio).
 /// </summary>
 public sealed class Sites(World world, ApiClient api, SimulatedClock clock)
 {
@@ -37,13 +35,6 @@ public sealed class Sites(World world, ApiClient api, SimulatedClock clock)
             await RecordMaterialsAsync(site, day);
         }
 
-        if (World.IsWorkingDay(day))
-        {
-            foreach (var site in world.Live("execution").Where(p => DueForStatement(p, day)))
-            {
-                await SendStatementAsync(site, day);
-            }
-        }
     }
 
     private async Task RecordMaterialsAsync(SeedProject site, DateOnly day)
@@ -78,7 +69,6 @@ public sealed class Sites(World world, ApiClient api, SimulatedClock clock)
         var ids = added.EnumerateArray().Select(m => m.Id()).ToList();
         for (var i = 0; i < ids.Count; i++)
         {
-            site.Unstated.Add((ids[i], costs[i]));
             site.MaterialCost += costs[i];
         }
 
@@ -110,29 +100,5 @@ public sealed class Sites(World world, ApiClient api, SimulatedClock clock)
             Days = days, Note = "LT weekly labour report",
         });
         world.Tally.Add("labour_weeks");
-    }
-
-    private static bool DueForStatement(SeedProject site, DateOnly day)
-        => site.Unstated.Count >= 6 && (day.DayNumber - (site.LastStatementOn ?? site.StartedOn).DayNumber) >= 21;
-
-    private async Task SendStatementAsync(SeedProject site, DateOnly day)
-    {
-        clock.MoveTo(day, 14);
-        var admin = site.Owner.WorksOn(day) ? site.Owner : world.AnyAdmin("execution", day);
-        if (Random.Chance(0.3))
-        {
-            var (materialId, cost) = Random.Pick(site.Unstated);
-            await api.PutAsync(admin.Token, $"/api/projects/{site.Id}/materials/{materialId}/client-price", new SetMaterialPriceRequest
-            {
-                ClientPrice = decimal.Round(cost * (1 + site.Markup + 0.05m), 2),
-            });
-            world.Tally.Add("materials.priced");
-        }
-
-        var statement = await api.PostAsync(admin.Token, $"/api/projects/{site.Id}/statements", new CreateStatementRequest { Mode = StatementMode.Detail });
-        await api.PostAsync(admin.Token, $"/api/statements/{statement.Id()}/deliveries", new RecordDeliveryRequest { Channel = DeliveryChannel.Download });
-        site.Unstated.Clear();
-        site.LastStatementOn = day;
-        world.Tally.Add("statements");
     }
 }

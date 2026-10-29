@@ -46,17 +46,12 @@ public interface IProjectFinanceService
         CancellationToken cancellationToken = default);
 }
 
-/// <param name="MaterialCharge">Execution: the client prices, in USD, of the materials sent to the client on a statement: part of revenue.</param>
-/// <param name="UnsentMaterialCharge">Execution: the client prices of the materials not sent yet, which a statement will add to revenue.</param>
-/// <param name="UnsentMaterials">Execution: how many materials haven't been sent to the client yet.</param>
-/// <param name="UnconvertedMaterials">Execution: materials left out of the charge for want of an exchange rate.</param>
 /// <param name="UnpricedLabourMinutes">Worked time of people with no pay record, left out of labour cost.</param>
 /// <param name="Received">What the client paid, TVA included.</param>
 /// <param name="ReceivedTva">The TVA inside <paramref name="Received"/>.</param>
 /// <param name="CashProfit">Execution: received net of TVA − cost − moved to the pocket + paid by the pocket.</param>
 /// <param name="ToPocket">Execution: what a super admin moved from the project into the pocket money.</param>
 /// <param name="FromPocket">Execution: what the pocket money paid to the project.</param>
-/// <param name="MaterialProfit">Execution: what the materials sent earn: their charge − their cost.</param>
 /// <param name="Supervision">Execution: the company's supervision, the work price × the supervision rate; it is part of revenue.</param>
 /// <param name="RevenueWithTva">What the client is agreed to pay: revenue plus TVA (Execution: TVA on the work, never on supervision).</param>
 /// <param name="RevenueTva">The TVA inside <paramref name="RevenueWithTva"/>.</param>
@@ -65,13 +60,8 @@ public sealed record ProjectFinancials(
     ProjectFinance.Costs Costs,
     int LabourMinutes,
     int UnpricedLabourMinutes,
-    decimal? MaterialCharge,
-    int UnconvertedMaterials,
     decimal Received,
     decimal? CashProfit,
-    decimal? MaterialProfit,
-    decimal? UnsentMaterialCharge = null,
-    int UnsentMaterials = 0,
     decimal ToPocket = 0,
     decimal FromPocket = 0,
     decimal ReceivedTva = 0,

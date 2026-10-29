@@ -106,7 +106,6 @@ public static class ErrorCodes
     public const string PaymentExceedsBalance = "payment_exceeds_balance";
     public const string PaymentTooSmall = "payment_too_small";
     public const string ExchangeRateMissing = "exchange_rate_missing";
-    public const string MaterialsNotSent = "materials_not_sent";
     public const string ReceivedDateInFuture = "received_date_in_future";
     public const string InitialPaymentExists = "initial_payment_exists";
     public const string PaymentAlreadyVoided = "payment_already_voided";
@@ -115,7 +114,6 @@ public static class ErrorCodes
     public const string RateNotAfterLatest = "rate_not_after_latest";
 
     // Execution site costs
-    public const string MaterialStated = "material_stated";
     public const string LabourWeekOutOfRange = "labour_week_out_of_range";
     public const string LabourDayOutsideWeek = "labour_day_outside_week";
     public const string LabourDayInFuture = "labour_day_in_future";
@@ -147,7 +145,39 @@ public static class ErrorCodes
 
     /// <summary>422. The blocked change was already forced through or dismissed.</summary>
     public const string BlockedChangeDecided = "blocked_change_decided";
-    public const string StatementEmpty = "statement_empty";
+
+    /// <summary>422. BOQs belong to Execution client projects; any other project has none.</summary>
+    public const string BoqExecutionOnly = "boq_execution_only";
+
+    /// <summary>422. An agreed BOQ can't be changed or deleted; withdraw its agreement first.</summary>
+    public const string BoqLocked = "boq_locked";
+
+    /// <summary>409. Someone saved the BOQ after the caller loaded it: saving the older copy would undo their changes.</summary>
+    public const string BoqChanged = "boq_changed";
+
+    /// <summary>422. Another client BOQ of the project is already agreed.</summary>
+    public const string BoqAlreadyAgreed = "boq_already_agreed";
+
+    /// <summary>422. A variation order needs the project's client BOQ to be agreed first.</summary>
+    public const string BoqNotAgreedYet = "boq_not_agreed_yet";
+
+    /// <summary>422. The client BOQ can't be withdrawn while variation orders are agreed on top of it.</summary>
+    public const string BoqHasAgreedVos = "boq_has_agreed_vos";
+
+    /// <summary>422. A BOQ with no lines can't be sent or agreed.</summary>
+    public const string BoqEmpty = "boq_empty";
+
+    /// <summary>422. An internal draft is never sent, agreed or withdrawn.</summary>
+    public const string BoqInternal = "boq_internal";
+
+    /// <summary>422. Only a variation order can have a negative rate.</summary>
+    public const string BoqNegativeRate = "boq_negative_rate";
+
+    /// <summary>422. Only an agreed BOQ has an agreement to withdraw.</summary>
+    public const string BoqNotAgreed = "boq_not_agreed";
+
+    /// <summary>422. The agreed BOQs would take the project's work price below zero.</summary>
+    public const string BoqPriceBelowZero = "boq_price_below_zero";
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";

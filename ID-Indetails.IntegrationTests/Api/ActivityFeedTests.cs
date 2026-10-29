@@ -84,6 +84,32 @@ public class ActivityFeedTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_BOQ_withdrawal_keeps_its_reason_in_the_payload_for_money_viewers_only()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 0m);
+        var boqs = new BoqTestSteps(_steps);
+        await boqs.AgreeClientBoqAsync(superAdmin.AccessToken, site.Id, 1000m);
+        var vo = await boqs.AgreeVoAsync(superAdmin.AccessToken, site.Id, 200m);
+        (await Client.PostJsonAsync($"/api/boqs/{vo.Id}/withdraw-agreement", new { reason = "The client will pay 480k at most" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        var money = await (await Client.GetAsync($"/api/activity?projectId={site.Id}", superAdmin.AccessToken))
+            .ReadAsync<PagedResponse<ActivityItemResponse>>();
+        money.Items.Single(i => i.Kind == ActivityEventKinds.BoqAgreementWithdrawn)
+            .Payload!.Value.GetProperty("reason").GetString().ShouldBe("The client will pay 480k at most");
+
+        // Someone who reads the feed without financial:view sees the withdrawal, not why.
+        var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.ActivityView, action = "grant", reason = "Test" } } },
+            superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var limited = await (await Client.GetAsync($"/api/activity?projectId={site.Id}", lead.AccessToken))
+            .ReadAsync<PagedResponse<ActivityItemResponse>>();
+        limited.Items.Single(i => i.Kind == ActivityEventKinds.BoqAgreementWithdrawn).Payload.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Other_domains_and_company_events_stay_out_of_a_domain_feed()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

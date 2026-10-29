@@ -41,8 +41,10 @@ public static class ActivityGroups
         [ActivityEventKinds.PaymentRecorded] = ActivityGroup.Billing,
         [ActivityEventKinds.PaymentApplied] = ActivityGroup.Billing,
         [ActivityEventKinds.PaymentVoided] = ActivityGroup.Billing,
-        [ActivityEventKinds.StatementCreated] = ActivityGroup.Billing,
-        [ActivityEventKinds.StatementSent] = ActivityGroup.Billing,
+        [ActivityEventKinds.BoqCreated] = ActivityGroup.Billing,
+        [ActivityEventKinds.BoqSent] = ActivityGroup.Billing,
+        [ActivityEventKinds.BoqAgreed] = ActivityGroup.Billing,
+        [ActivityEventKinds.BoqAgreementWithdrawn] = ActivityGroup.Billing,
 
         [ActivityEventKinds.ProjectCreated] = ActivityGroup.Projects,
         [ActivityEventKinds.ProjectUpdated] = ActivityGroup.Projects,

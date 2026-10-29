@@ -26,6 +26,11 @@ public class ProjectPaymentChange
 
     public decimal? PreviousTvaRate { get; set; }
 
+    /// <summary>Execution only: the company's supervision rate after the change; null on Design rows and on rows from before supervision.</summary>
+    public decimal? SupervisionRate { get; set; }
+
+    public decimal? PreviousSupervisionRate { get; set; }
+
     public string Description { get; set; } = string.Empty;
 
     public DateTime ChangedAt { get; set; }

@@ -210,24 +210,6 @@ public class ProjectFinanceTests
     }
 
     [Fact]
-    public void Material_charge_converts_each_client_price_and_counts_what_it_cannot()
-    {
-        var (charge, unconverted) = MaterialCharge(
-            [
-                (new ExecutionPricing.Material(100m, null), "USD", Mar1),
-                (new ExecutionPricing.Material(900_000m, null), "LBP", Mar1),
-                (new ExecutionPricing.Material(50m, 80m), "USD", Mar1),
-                (new ExecutionPricing.Material(179_000m, null), "LBP", new DateOnly(2025, 1, 1)),
-            ],
-            markup: 0.10m,
-            Rates);
-
-        // 110 + (990,000 LBP = 11) + 80 (manual price)
-        charge.ShouldBe(201m);
-        unconverted.ShouldBe(1);
-    }
-
-    [Fact]
     public void Cash_adds_up_week_by_week_from_the_first_week()
     {
         // 2 March 2026 is a Monday.

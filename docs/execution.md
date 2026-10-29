@@ -1,6 +1,6 @@
 # Execution sites
 
-What site staff and admins record on an Execution project, and how it is priced for the client. Execution projects themselves, their work price, supervision and markup, and their cost, profit and margin are in [projects.md](projects.md); how the client is charged (work, supervision, TVA) is in [billing.md](billing.md#tva). A project of a domain the caller can't see reads as `404`, and Design projects have none of this (`422 not_for_this_domain`). Meetings work on sites exactly as on Design projects (see [design.md](design.md#meetings)).
+What site staff and admins record on an Execution project, and how it is priced for the client. Execution projects themselves, their work price, supervision and markup, and their cost, profit and margin are in [projects.md](projects.md); how the client is charged (work, supervision, TVA) is in [billing.md](billing.md#tva); how the work price is set, by BOQs, is in the section below. A project of a domain the caller can't see reads as `404`, and Design projects have none of this (`422 not_for_this_domain`). Meetings work on sites exactly as on Design projects (see [design.md](design.md#meetings)).
 
 **A finalised project is locked.** Once a site is completed or archived, nobody (admins included) adds, changes or removes its materials until it is reopened (`422 project_locked`). Projects on hold stay open. This lock, and the rule that people change only what they recorded unless they hold the manage permission, are in `Business/Execution/SiteRules.cs`.
 
@@ -19,7 +19,7 @@ Rules (`Business/Materials/MaterialRules.cs`):
 - A material needs a **type** (`name`) and a **cost**: quantity × unit cost when both are given, otherwise the total (`amount`). Quantity (3 decimals), unit and unit cost (4 decimals) are optional. A total that doesn't match quantity × unit cost sets the unit cost to total ÷ quantity. Materials are in the project's currency (USD).
 - People change and remove only what they recorded; `material:manage` changes anyone's (`403 forbidden`). `canEdit` on each row says whether the caller may.
 - **Client price:** a material's own price when set, otherwise cost × (1 + the project's markup). Setting one, on adding or afterwards, needs `project:pricing_manage`. A price equal to the automatic one is stored as automatic, so it keeps following the markup.
-- **Stated materials** (on a client statement) keep their type, quantity, unit, cost and price, and can't be removed (`422 material_stated`). Their supplier and note can still change. `priceSource` is `auto`, `manual` or `stated`.
+- A material is a plain cost: it can be changed or removed while the site is open, and its price is never revenue. `priceSource` is `auto` or `manual`. (The client price and markup stay until materials become cost-only expenses.)
 - **Who sees what:** everyone who can see the project sees materials with their costs (site staff type them). Client price, price source, markup, charge totals and the default markup are only returned to callers with `financial:view` or `project:pricing_manage`.
 - **Grouping:** types and suppliers are grouped by their text trimmed, with single spaces, in lower case (`type` and `supplier` filters take these keys). A type is labelled as most recently typed. The `from`/`to` filters are days in the company time zone. `matching` totals cover everything the filters match, `all` the whole project.
 - Events: `material_added`, `material_updated`, `material_removed` (cost in the `amount` columns) and `material_priced` (new and previous client price), with the name in the payload.
@@ -57,32 +57,46 @@ Rules (`Business/Labour/LabourRules.cs`):
 
   The version is the time of the week's last change in milliseconds; each change is recorded at least a millisecond after the previous one, so it always moves.
 
-## Client statements
+## BOQs and variation orders
 
-A statement tells the client which materials were supplied, at the prices they are charged, and where payment stands. It is **not an invoice**: it records no payment and changes nothing that is owed. Once made it is an immutable snapshot of that day's figures; there is no edit, void or delete.
+A site's price is built line by line in bills of quantities (BOQs), not typed in. There are three kinds (`kind`):
+
+- **`internal`**: an admin's private working draft. Never numbered, sent or agreed, and it raises no events or notifications.
+- **`client`**: the BOQ the client is sent, as a PDF, as often as needed. It stays a draft until a super admin agrees it. One per project can be agreed (`422 boq_already_agreed`); the other client drafts stay drafts.
+- **`vo`**: a variation order, a later change of price. It needs the client BOQ agreed first (`422 boq_not_agreed_yet`, even for a VO made before a withdrawal) and has a required `reason`. It is the only kind that can lower the price: negative rates, or a lower total.
+
+BOQs exist only on Execution client projects. A project the caller can't see reads as `404`; any other project is `422 boq_execution_only`. Writes need the project open (`422 project_locked` once it is finalised, like the rest of a site's records).
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects/{id}/statements?page=1&pageSize=10` | `statement:create`, `statement:send` or `financial:view` | Newest first, with each one's total, material count and last delivery |
-| `POST /api/projects/{id}/statements/preview` | `statement:create` | The statement as it would be made now, with a provisional number; nothing is saved |
-| `POST /api/projects/{id}/statements` | `statement:create` | `{ mode: detail \| total, includeEarlier, excludedMaterialIds, unlistedTypeKeys }` makes and numbers it |
-| `GET /api/statements/{statementId}` | `statement:create`, `statement:send` or `financial:view` | The statement as the client reads it |
-| `GET /api/statements/{statementId}/pdf` | `statement:create`, `statement:send` or `financial:view` | The statement as a PDF (`st-2026-003.pdf`). Downloading records nothing |
-| `POST /api/statements/{statementId}/email` | `statement:send` | `{ to, note }` emails the statement to the client with its PDF attached and records an `email` delivery. If sending fails, nothing is recorded (`503 email_delivery_failed`) |
-| `POST /api/statements/{statementId}/deliveries` | `statement:send` | `{ channel: email \| whatsapp \| download, recipient, note }` records a send made outside Hourline. Repeatable. Saving the PDF counts as a `download` |
+| `GET /api/projects/{id}/boqs` | `boq:create`, `financial:view` or `project:pricing_manage` | `{ internal, client, vos, price }`, newest first. `internal` holds the caller's own drafts (all of them for `project:pricing_manage`). `client`, `vos` and `price` are empty / `null` without `financial:view` or `project:pricing_manage` |
+| `POST /api/projects/{id}/boqs` | `boq:create` (internal) or `project:pricing_manage` (client, vo) | `{ kind, title?, reason?, fromBoqId? }`. `fromBoqId` starts it with all the lines of a BOQ the caller can read on the same project. Numbers a client BOQ or VO. `201`, the BOQ |
+| `GET /api/boqs/{boqId}` | as the list | The BOQ with its lines, totals and deliveries |
+| `PUT /api/boqs/{boqId}` | the author of an internal draft, or `project:pricing_manage` | Saves the whole document: `{ title, reason?, adjustmentType, adjustmentValue?, lines: [{ id?, code?, description, quantity, wasteRate, unit?, rate }], updatedAt? }`. Lines are replaced in the order given; a line with an `id` keeps it, one left out is removed. `updatedAt` is the BOQ's as the editor loaded it (the web editor always sends it): if someone saved since, it is `409 boq_changed` and nothing is saved, so an older copy can't undo their changes |
+| `POST /api/boqs/{boqId}/copy-lines` | as the save | `{ fromBoqId, lineIds? }` appends lines (all, or the ones named, in the source's order) of another BOQ of the project |
+| `POST /api/boqs/{boqId}/duplicate` | `boq:create` (internal) or `project:pricing_manage` | A new draft of the same kind with the title plus " (copy)", the reason, the adjustment and the lines, and a new number. `201` |
+| `DELETE /api/boqs/{boqId}` | as the save | Drafts only (`204`). Soft delete: what was sent stays on record |
+| `POST /api/boqs/{boqId}/agree` | `project:pricing_manage` | No body. Locks the BOQ and sets the work price |
+| `POST /api/boqs/{boqId}/withdraw-agreement` | `project:pricing_manage` | `{ reason }`. Returns it to draft and takes it out of the work price |
+| `GET /api/boqs/{boqId}/pdf` | `financial:view` or `project:pricing_manage` | A client BOQ or VO as a PDF (`bq-2026-001.pdf`, `vo-2026-001.pdf`). Downloading records nothing |
+| `POST /api/boqs/{boqId}/email` | `project:pricing_manage` | `{ to, note? }` emails it to the client with its PDF attached and records an `email` delivery. If sending fails, nothing is recorded (`503 email_delivery_failed`) |
+| `POST /api/boqs/{boqId}/deliveries` | `project:pricing_manage` | `{ channel: email \| whatsapp \| download, recipient?, note? }` records a send made outside Hourline. Repeatable |
 
-Rules (`Business/Statements/StatementRules.cs`):
+Rules (`Business/Boqs/BoqRules.cs`, pure; the totals are recomputed from the lines on every save and never taken from the client):
 
-- **New materials** are those on no earlier statement. A detailed statement takes them all except `excludedMaterialIds`; a total-only statement takes them all.
-- **Earlier materials** come back with `includeEarlier`. They always count in the total. In a detailed statement, a type with nothing new can be left unlisted (`unlistedTypeKeys`, the type keys of the materials list); unlisted types are shown as one line (`hiddenTypes`). A type with new materials is always listed (`400`).
-- A statement needs at least one material (`422 statement_empty`).
-- The client reads **one row per material type** (grouped like the materials list), with what it came to on earlier statements, what is new and the total, plus the quantity added up when every delivery has the same unit. A total-only statement has no rows, just the total. `since` is the day of the previous statement.
-- **Prices are frozen.** Each line keeps the client price shown, and every material a statement shows becomes *stated*: its price is written to the material and no markup change or manual price moves it again (see Materials).
-- **Sending makes it revenue.** A material's client price joins the project's agreed amount (its revenue) the first time a statement listing it is sent: an email, or a WhatsApp send or download recorded. Each material's `sentOn` says when. A statement made but never sent changes nothing that is owed.
-- The **payment summary** is snapshotted: what was received and the agreed amount with TVA (the work, supervision and the materials sent before, from the shared finance calculator, plus the materials on this statement, which sending it adds), with what remains or was paid ahead. Everyone who may read the statement sees it, `financial:view` or not: it is printed on the client's document (decision M10 in [business-rules-review.md](business-rules-review.md)).
-- **Numbers** are `ST-YYYY-NNN`, one sequence per year across the company, taken from `statement_sequences` under a row lock so a number is never handed out twice. A preview doesn't use one up. Statements can be made while a site is on hold or finalised.
-- **The PDF** is made on the server (see [documents.md](documents.md)). It shows the same rows, totals and payment summary, and ends by saying it is not an invoice.
-- Events: `statement_created` and `statement_sent` (the statement's total in the `amount` column; the number, and the mode or channel, in the payload).
+- **A line** has a `code` (optional, e.g. "2.1.1"), a `description`, an exact `quantity`, a `wasteRate` (a fraction, default 0), a `unit` and a `rate`. `finalQuantity` = quantity × (1 + waste), rounded to 2 decimals; the line total is `finalQuantity` × rate, rounded to cents. A BOQ has at most 1,000 lines. A negative rate is allowed only on a VO (`422 boq_negative_rate`).
+- **Adjustment** of the whole BOQ: `none`, `percent` (the value is a fraction from -0.99 to 1, e.g. -0.05) or `total` (the value is the new total, not negative except on a VO). `adjustmentUsd` = subtotal × percent, or value − subtotal; `totalUsd` = subtotal + adjustment.
+- **Supervision, TVA and the client's total** are shown with each BOQ at the project's rates as they are now: `supervisionUsd` = total × supervision rate, `tvaUsd` = total × TVA rate (never on supervision), `clientTotalUsd` = total + supervision + TVA.
+- **Rights.** Internal drafts: written by whoever holds `boq:create`; its author reads and edits their own, and holders of `project:pricing_manage` read, copy from and edit or delete any of them. Another author's draft is `404` to everyone else. Client BOQs and VOs: every write (create, save, copy lines into, duplicate, delete, email, record a delivery, agree, withdraw) needs `project:pricing_manage`; reading them, the price summary and the PDF needs `financial:view` or `project:pricing_manage` (`403` otherwise). Both permissions are super-admin defaults; a super admin can grant `boq:create` to an admin person by person.
+- **Numbers** are `BQ-YYYY-NNN` (client) and `VO-YYYY-NNN`, one sequence per prefix and year, taken from `boq_sequences` under a row lock so a number is never handed out twice. Internal drafts have none. A duplicate takes the next number.
+- **Agreed BOQs are locked** (`422 boq_locked`: no save, copy into, delete, or a second agree). Drafts stay editable after being sent; each delivery keeps the BOQ's total when it was sent.
+- **Sending** (email or a recorded delivery) works on drafts and agreed BOQs, never on an internal draft (`422 boq_internal`) or an empty one (`422 boq_empty`). Agreeing an empty BOQ is `422 boq_empty` too.
+- **The work price.** Agreeing or withdrawing recomputes `projects.project_fee` = the agreed client BOQ's total + the agreed VOs' totals (0 when nothing is agreed). It is the only way the price changes. It writes what a fee change always wrote: a `project_fee_set` event (new and previous price), and a payment-history row whose reason is the BOQ's number when agreeing, or the reason given when withdrawing. Withdrawing the client BOQ while VOs are agreed on it is `422 boq_has_agreed_vos`; withdrawing a BOQ that is not agreed is `422 boq_not_agreed`. Agreeing or withdrawing a VO that would take the price below nothing is refused (`422 boq_price_below_zero`). A site priced before BOQs existed keeps its typed-in work price (and the price summary shows it) until its first client BOQ is agreed, which replaces it. An internal draft's detail leaves out the site's rates and the client figures (`supervisionRate`, `supervisionUsd`, `tvaRate`, `tvaUsd`, `clientTotalUsd` are `null`) for a caller without `financial:view` or `project:pricing_manage`, and a withdrawal's reason is left out of the activity feed for whoever doesn't see money.
+- **The profit floor** holds agreeing and withdrawing like any other change: a recompute that leaves the profit at zero or below is refused with `422 profit_floor` and a `blockedChangeId`, and the change is kept (kinds `boq_agree` and `boq_withdraw`) for someone who sees the money to force through or dismiss (see [finance.md](finance.md)). Only a lower price is held to it: a rise always passes, the first agreement included (the floor is off until a price is agreed), and withdrawing the whole price always needs forcing.
+- **The PDF** shows the company header, the client and project, the number, date and title (a VO also its reason), then each line's code, description, final quantity, unit, rate and total, and the subtotal, adjustment (when there is one), total, supervision (x%), TVA (y%) and total to pay. It never shows the exact quantity or the waste. A draft is stamped DRAFT. See [documents.md](documents.md).
+- Events (client BOQs and VOs only; the number and kind in the payload, the total in the `amount` column): `boq_created`, `boq_sent` (and the channel), `boq_agreed`, `boq_agreement_withdrawn` (and the reason). There are no notifications for BOQs: the client portal does not show them yet, so they reach the client as a PDF. Proton has no BOQ actions: every BOQ write endpoint is a `Never` entry in `ProtonCoverage`.
+
+Client statements, which listed materials supplied and froze their prices, are gone: nothing is in production, so their tables went with no data migration. A material is now a plain cost.
 
 ## Site staff and daily logs
 
@@ -119,7 +133,7 @@ Each log is `{ id, project: { id, title }, person: { id, name }, body, createdAt
 
 ## Site money
 
-A site's money (received, cost by source, cash profit, material profit, expected profit as `profit`, owed or paid ahead) is on `GET /api/projects/{id}` for callers with `financial:view`, from the shared finance calculator. Over time:
+A site's money (received, cost by source, cash profit, expected profit as `profit`, owed or paid ahead) is on `GET /api/projects/{id}` for callers with `financial:view`, from the shared finance calculator. Over time:
 
 | Method and path | Needs | Purpose |
 |---|---|---|
@@ -146,8 +160,8 @@ sum of the rows. A `contribution` is positive and a `payout` is negative. Sites 
 | `POST /api/execution/pocket/requests/{id}/approve` | `financial:view` | Pays `{ amount, note? }` to the site |
 | `POST /api/execution/pocket/requests/{id}/deny` | `financial:view` | `{ note? }` |
 
-- **A site's money** here is its profit counting the materials not sent to the client yet. They are agreed, just not
-  billed. Pocket money changes a site's **profit**, never what the client owes:
+- **A site's money** here is its profit on its agreed amount (the work price plus supervision). Pocket money changes
+  a site's **profit**, never what the client owes:
   - a contribution lowers it and a payout raises it;
   - both show on the project as `money.toPocket` and `money.fromPocket`;
   - both count in its cash profit (received − cost − to the pocket + from it) and in its weekly cash on the day they moved.

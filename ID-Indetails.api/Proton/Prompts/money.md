@@ -8,8 +8,8 @@ its own currency and never counted as zero.
 
 - **Agreed** (fields starting with `agreed_`): what the client agreed to pay for a project, its contract value,
   whether or not it has been paid. Design: the agreed payment typed into the project. Execution: the work price
-  (set by agreeing a BOQ) plus the company's supervision on it, plus the client prices of the materials sent to the client on a statement, so it grows as statements are sent and is
-  frozen once the site is finished. `agreed_profit` is agreed revenue less all the cost so far; `agreed_margin_pct` is
+  (set by agreeing the client BOQ and its variation orders) plus the company's supervision on it, so it changes when a
+  BOQ is agreed or withdrawn and is frozen once the site is finished. `agreed_profit` is agreed revenue less all the cost so far; `agreed_margin_pct` is
   that profit as a percentage of the agreed revenue, empty until it means something.
 - **Cash** (`received`, `cash_profit`, `cash_margin_pct`): money that actually arrived, client payments counted on
   the day received. `cash_profit` is received less the cost of the same days. Execution sites also give an all-time

@@ -40,7 +40,6 @@ public static class ProtonSurfaces
         [ProtonSurface.SitePricing] = new("the site's fee and markup", ProtonEndpoint.OfWrite<ProjectsController>(nameof(ProjectsController.UpdatePricing)), ProtonRefType.Project, DomainCodes.Execution),
         [ProtonSurface.NewInvoice] = new("a new invoice", ProtonEndpoint.OfWrite<InvoicesController>(nameof(InvoicesController.Create)), ProtonRefType.Project),
         [ProtonSurface.RecordPayment] = new("the record payment form", ProtonEndpoint.OfWrite<PaymentsController>(nameof(PaymentsController.Record)), ProtonRefType.Project),
-        [ProtonSurface.NewStatement] = new("a new materials statement", ProtonEndpoint.OfWrite<StatementsController>(nameof(StatementsController.Create)), ProtonRefType.Project, DomainCodes.Execution),
         [ProtonSurface.NewMeeting] = new("the new meeting form", ProtonEndpoint.OfWrite<MeetingsController>(nameof(MeetingsController.Create))),
         [ProtonSurface.AddCompanyExpense] = new("the add company expense form", ProtonEndpoint.OfWrite<OverheadController>(nameof(OverheadController.Create)), Company: true),
         [ProtonSurface.MessagePerson] = new("a chat", null, ProtonRefType.Person),

@@ -76,7 +76,7 @@ public sealed class PocketService(
             // the site stays locked while its profit is checked, so a cost added meanwhile can't slip under it
             var site = await SiteAsync(request.ProjectId, forUpdate: true, cancellationToken);
             var money = await finance.GetAsync(site, cancellationToken);
-            Throw(PocketRules.CheckContribution(request.Amount, PocketRules.ProfitOf(money.Summary.Profit, money.UnsentMaterialCharge)));
+            Throw(PocketRules.CheckContribution(request.Amount, money.Summary.Profit));
 
             pocket.Add(new PocketEntry
             {
@@ -166,9 +166,7 @@ public sealed class PocketService(
         {
             ProjectId = site.Id,
             Status = PocketRequestStatus.Pending,
-            SuggestedAmount = PocketRules.Suggest(
-                PocketRules.AgreedOf(money.Summary.Revenue, money.UnsentMaterialCharge),
-                PocketRules.ProfitOf(money.Summary.Profit, money.UnsentMaterialCharge)),
+            SuggestedAmount = PocketRules.Suggest(money.Summary.Revenue, money.Summary.Profit),
             Note = note,
             RequestedAt = clock.UtcNow,
             RequestedById = actorId,
@@ -232,9 +230,7 @@ public sealed class PocketService(
             new PocketProjectResponse(r.ProjectId, row.ProjectTitle),
             r.Status,
             r.SuggestedAmount,
-            live is null ? null : PocketRules.Suggest(
-                PocketRules.AgreedOf(live.Summary.Revenue, live.UnsentMaterialCharge),
-                PocketRules.ProfitOf(live.Summary.Profit, live.UnsentMaterialCharge)),
+            live is null ? null : PocketRules.Suggest(live.Summary.Revenue, live.Summary.Profit),
             live?.CashProfit,
             r.ApprovedAmount,
             r.Note,

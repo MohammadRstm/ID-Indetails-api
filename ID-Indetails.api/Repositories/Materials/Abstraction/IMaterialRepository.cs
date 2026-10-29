@@ -2,11 +2,8 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Repositories.Materials.Abstraction;
 
-/// <summary>
-/// A live material with the name of who recorded it, whether it is on a client statement, and when such a statement was
-/// first sent to the client (null until then).
-/// </summary>
-public sealed record MaterialRecord(ProjectMaterial Material, string AddedByName, bool IsStated, DateTime? SentAt);
+/// <summary>A live material with the name of who recorded it.</summary>
+public sealed record MaterialRecord(ProjectMaterial Material, string AddedByName);
 
 public interface IMaterialRepository
 {
@@ -18,9 +15,6 @@ public interface IMaterialRepository
 
     /// <summary>The given live materials, tracked.</summary>
     Task<IReadOnlyList<ProjectMaterial>> GetManyForUpdateAsync(IReadOnlyCollection<long> materialIds, CancellationToken cancellationToken = default);
-
-    /// <summary>Whether the material is on any client statement.</summary>
-    Task<bool> IsStatedAsync(long materialId, CancellationToken cancellationToken = default);
 
     /// <summary>The given materials, in the order of <paramref name="materialIds"/>, not tracked.</summary>
     Task<IReadOnlyList<MaterialRecord>> GetRowsAsync(IReadOnlyList<long> materialIds, CancellationToken cancellationToken = default);

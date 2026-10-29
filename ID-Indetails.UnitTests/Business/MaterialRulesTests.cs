@@ -44,18 +44,10 @@ public class MaterialRulesTests
     }
 
     [Fact]
-    public void The_price_source_is_stated_first_then_manual_then_automatic()
+    public void The_price_source_is_manual_when_a_price_was_set_and_automatic_otherwise()
     {
-        MaterialRules.SourceOf(null, stated: false).ShouldBe(MaterialRules.PriceSource.Auto);
-        MaterialRules.SourceOf(99, stated: false).ShouldBe(MaterialRules.PriceSource.Manual);
-        MaterialRules.SourceOf(99, stated: true).ShouldBe(MaterialRules.PriceSource.Stated);
-    }
-
-    [Fact]
-    public void A_stated_material_cannot_change_its_cost_or_be_removed()
-    {
-        MaterialRules.CheckNotStated(true)!.Code.ShouldBe(ErrorCodes.MaterialStated);
-        MaterialRules.CheckNotStated(false).ShouldBeNull();
+        MaterialRules.SourceOf(null).ShouldBe(MaterialRules.PriceSource.Auto);
+        MaterialRules.SourceOf(99).ShouldBe(MaterialRules.PriceSource.Manual);
     }
 
     [Fact]

@@ -36,7 +36,6 @@ public static class PushText
         [NotificationKinds.InvoiceSendFailed] = new("Invoices", "An invoice couldn't be sent automatically."),
         [NotificationKinds.InvoiceIssued] = new("Billing", "Billing update. Open ID InDetails to see it."),
         [NotificationKinds.InvoiceSentAutomatically] = new("Billing", "Billing update. Open ID InDetails to see it."),
-        [NotificationKinds.StatementSent] = new("Billing", "Billing update. Open ID InDetails to see it."),
         [NotificationKinds.ProjectClosed] = new("Project money", "A project's money needs a look."),
         [NotificationKinds.ProjectCostHigh] = new("Project money", "A project's money needs a look."),
         [NotificationKinds.ClientAdded] = new("Clients", "A new client was added."),

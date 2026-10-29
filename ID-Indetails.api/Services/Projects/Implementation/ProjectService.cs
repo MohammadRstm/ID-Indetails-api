@@ -247,7 +247,7 @@ public sealed class ProjectService(
         {
             project.PaymentChanges.Add(PaymentChange(
                 domain == DomainCodes.Execution ? project.ProjectFee ?? 0 : project.Revenue, null,
-                project.MaterialMarkup, null, project.TvaRate, null, ProjectRules.AgreedAtStart, actor.UserId));
+                project.MaterialMarkup, null, project.TvaRate, null, ProjectRules.AgreedAtStart, actor.UserId, project.SupervisionRate));
         }
 
         if (request.LabourDefaults is { } labour)
@@ -402,7 +402,7 @@ public sealed class ProjectService(
             request.MaterialMarkup != project.MaterialMarkup || supervision != project.SupervisionRate || tva != project.TvaRate, "materialMarkup"));
         var before = await floor.BeforeAsync(project, cancellationToken);
         project.PaymentChanges.Add(PaymentChange(project.ProjectFee ?? 0, project.ProjectFee ?? 0, request.MaterialMarkup, project.MaterialMarkup,
-            tva, project.TvaRate, request.Description.Trim(), actor.UserId));
+            tva, project.TvaRate, request.Description.Trim(), actor.UserId, supervision, project.SupervisionRate));
 
         // A fraction (0.125 is 12.5%) goes in the payload: the amount columns keep 2 decimals.
         if (request.MaterialMarkup != project.MaterialMarkup)
@@ -522,12 +522,13 @@ public sealed class ProjectService(
                 r.Change.Id, r.Change.Amount, r.Change.PreviousAmount, r.Change.MaterialMarkup, r.Change.PreviousMaterialMarkup,
                 r.Change.Description, r.Change.ChangedAt,
                 r.Change.ChangedById is { } id && r.ChangedByName is { } name ? new ProjectOwnerResponse(id, name) : null,
-                r.Change.TvaRate, r.Change.PreviousTvaRate))
+                r.Change.TvaRate, r.Change.PreviousTvaRate, r.Change.SupervisionRate, r.Change.PreviousSupervisionRate))
             .ToList();
     }
 
     private ProjectPaymentChange PaymentChange(
-        decimal amount, decimal? previousAmount, decimal? markup, decimal? previousMarkup, decimal tva, decimal? previousTva, string description, long actorId) => new()
+        decimal amount, decimal? previousAmount, decimal? markup, decimal? previousMarkup, decimal tva, decimal? previousTva, string description, long actorId,
+        decimal? supervision = null, decimal? previousSupervision = null) => new()
     {
         Amount = amount,
         PreviousAmount = previousAmount,
@@ -535,6 +536,8 @@ public sealed class ProjectService(
         PreviousMaterialMarkup = previousMarkup,
         TvaRate = tva,
         PreviousTvaRate = previousTva,
+        SupervisionRate = supervision,
+        PreviousSupervisionRate = previousSupervision,
         Description = description,
         ChangedAt = clock.UtcNow,
         ChangedById = actorId,
@@ -631,14 +634,11 @@ public sealed class ProjectService(
             SupervisionRate = p.SupervisionRate,
             SupervisionUsd = money.Supervision,
             PaymentWithTva = p.DomainCode == DomainCodes.Execution
-                ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
+                ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
                 : Tva.Gross(p.Revenue, p.TvaRate),
             RevenueWithTva = money.RevenueWithTva,
             ProjectFee = p.ProjectFee,
             MaterialMarkup = p.MaterialMarkup,
-            MaterialCharge = money.MaterialCharge,
-            UnsentMaterialCharge = money.UnsentMaterialCharge,
-            UnsentMaterials = money.UnsentMaterials,
             ExpenseTotals = expenseTotals,
             Billing = rollup.ProjectBillingOf(p),
             Cost = new ProjectCostResponse(
@@ -656,8 +656,6 @@ public sealed class ProjectService(
             CashProfit = money.CashProfit,
             ToPocket = p.DomainCode == DomainCodes.Execution ? money.ToPocket : null,
             FromPocket = p.DomainCode == DomainCodes.Execution ? money.FromPocket : null,
-            MaterialProfit = money.MaterialProfit,
-            UnconvertedMaterials = money.UnconvertedMaterials,
         };
     }
 

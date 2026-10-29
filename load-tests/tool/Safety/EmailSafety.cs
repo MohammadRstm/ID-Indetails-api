@@ -25,7 +25,7 @@ public static partial class EmailSafety
         ("client_contacts", "normalized_value"),
         ("invoices", "send_to"),
         ("invoice_deliveries", "recipient"),
-        ("client_statement_deliveries", "recipient"),
+        ("boq_deliveries", "recipient"),
     ];
 
     /// <summary>Whether the text holds an address that a real mail server could deliver to.</summary>

@@ -448,8 +448,8 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
     private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 }
 
-/// <param name="AgreedRevenue">The contract value, not cash. Design: the agreed payment typed in. Execution: the fee plus the client
-/// prices of the materials sent on a statement.</param>
+/// <param name="AgreedRevenue">The contract value, not cash. Design: the agreed payment typed in. Execution: the work price from the
+/// agreed BOQs plus supervision.</param>
 /// <param name="AgreedRevenueLocked">The project is finished: its agreed revenue, fee and markup can't change until it is reopened.</param>
 /// <param name="MaterialMarkupPct">Execution: the default markup on materials, as a percentage.</param>
 /// <param name="Expenses">Project expenses, one total per currency, as recorded (not converted).</param>
@@ -463,8 +463,6 @@ public sealed record ProjectFinancials(
     bool AgreedRevenueLocked,
     decimal? ProjectFee,
     decimal? MaterialMarkupPct,
-    decimal? MaterialCharge,
-    decimal? UnsentMaterialCharge,
     IReadOnlyList<CurrencyTotalResponse> Expenses,
     ProjectBillingResponse Billing,
     ProjectCostResponse Cost,
@@ -474,7 +472,6 @@ public sealed record ProjectFinancials(
     ProtonProjection? Projected,
     decimal LabourHours,
     decimal? CashProfit,
-    decimal? MaterialProfit,
     string Note);
 
 /// <summary>
@@ -498,9 +495,9 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
         var m = p.Money ?? throw new ForbiddenException(ErrorCodes.Forbidden, "This user can't see financial figures.");
         return ProtonToolOutput.Of(
             new ProjectFinancials(
-                p.Id, p.Title, m.Currency, m.Revenue, m.IsLocked, m.ProjectFee, m.MaterialMarkup * 100, m.MaterialCharge,
-                m.UnsentMaterialCharge, m.ExpenseTotals, m.Billing, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.RecognisedToDate,
-                ProtonProjection.Of(m.Projected), ProtonText.Hours(m.LabourHours), m.CashProfit, m.MaterialProfit,
+                p.Id, p.Title, m.Currency, m.Revenue, m.IsLocked, m.ProjectFee, m.MaterialMarkup * 100,
+                m.ExpenseTotals, m.Billing, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.RecognisedToDate,
+                ProtonProjection.Of(m.Projected), ProtonText.Hours(m.LabourHours), m.CashProfit,
                 "All-time figures in USD. Agreed profit is against the agreed revenue, whether or not it was paid: billing.received " +
                 "is the cash in. Margin is empty until it means something (project done, 5% progress or 10 hours logged). " +
                 "Costs without an exchange rate for their day are listed as unconverted, not counted."),

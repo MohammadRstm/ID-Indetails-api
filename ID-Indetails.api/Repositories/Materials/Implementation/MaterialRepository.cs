@@ -21,9 +21,6 @@ public sealed class MaterialRepository(IdIndetailsDbContext db) : IMaterialRepos
     public async Task<IReadOnlyList<ProjectMaterial>> GetManyForUpdateAsync(IReadOnlyCollection<long> materialIds, CancellationToken cancellationToken = default)
         => await db.ProjectMaterials.Where(m => materialIds.Contains(m.Id) && m.DeletedAt == null).ToListAsync(cancellationToken);
 
-    public Task<bool> IsStatedAsync(long materialId, CancellationToken cancellationToken = default)
-        => db.ClientStatementLines.AnyAsync(l => l.MaterialId == materialId, cancellationToken);
-
     public async Task<IReadOnlyList<MaterialRecord>> GetRowsAsync(IReadOnlyList<long> materialIds, CancellationToken cancellationToken = default)
     {
         var rows = (await Rows(db.ProjectMaterials.Where(m => materialIds.Contains(m.Id))).ToListAsync(cancellationToken))
@@ -47,9 +44,5 @@ public sealed class MaterialRepository(IdIndetailsDbContext db) : IMaterialRepos
     private IQueryable<MaterialRecord> Rows(IQueryable<ProjectMaterial> materials)
         => from m in materials.AsNoTracking()
            join u in db.Users on m.AddedById equals u.Id
-           select new MaterialRecord(
-               m,
-               (u.FirstName + " " + u.LastName).Trim(),
-               db.ClientStatementLines.Any(l => l.MaterialId == m.Id),
-               db.ClientStatementLines.Where(l => l.MaterialId == m.Id).SelectMany(l => l.Statement.Deliveries).Min(d => (DateTime?)d.SentAt));
+           select new MaterialRecord(m, (u.FirstName + " " + u.LastName).Trim());
 }

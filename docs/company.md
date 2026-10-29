@@ -6,7 +6,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices and statements), time zone, week start, time format, default currency |
+| `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices, quotes and BOQs), time zone, week start, time format, default currency |
 | `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row. Address (up to 300 characters) and website (a web address such as `indetails.com`) are optional; leaving one out clears it |
 | `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, from the caller's upload, whether or not the rest of the settings were saved ([files.md](files.md)) |
 | `PUT /api/company/contact-email` | `company_settings:manage` or `website:manage` | `{ email }`: the company's own address, which the website shows and its contact form sends to ([website.md](website.md)). Empty clears it; it comes back as `contactEmail` on the settings |

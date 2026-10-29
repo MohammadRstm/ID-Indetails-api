@@ -64,7 +64,7 @@ public sealed class ActivityFeedService(
                 e.SubjectId,
                 seesMoney ? e.Amount : null,
                 seesMoney ? e.PrevAmount : null,
-                e.Payload is null || (!seesMoney && e.Kind is ActivityEventKinds.MaterialMarkupSet or ActivityEventKinds.SupervisionRateSet)
+                e.Payload is null || (!seesMoney && e.Kind is ActivityEventKinds.MaterialMarkupSet or ActivityEventKinds.SupervisionRateSet or ActivityEventKinds.BoqAgreementWithdrawn)
                     ? null
                     : JsonDocument.Parse(e.Payload).RootElement.Clone(),
                 e.SubjectType == "work_entry" && e.SubjectId is { } id && work.TryGetValue(id, out var entry)

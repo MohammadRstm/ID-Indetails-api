@@ -8,14 +8,6 @@ namespace ID_Indetails.UnitTests.Business;
 public class PocketRulesTests
 {
     [Fact]
-    public void A_site_counts_the_materials_not_sent_yet_in_what_it_is_agreed_to_earn_and_in_its_profit()
-    {
-        PocketRules.AgreedOf(revenue: 1000, unsentCharge: 330).ShouldBe(1330);
-        PocketRules.AgreedOf(revenue: 1000, unsentCharge: null).ShouldBe(1000);
-        PocketRules.ProfitOf(profit: -200, unsentCharge: 330).ShouldBe(130);
-    }
-
-    [Fact]
     public void The_suggestion_brings_the_site_back_to_a_ten_percent_margin()
     {
         PocketRules.Suggest(agreed: 1000, profit: 50).ShouldBe(50);

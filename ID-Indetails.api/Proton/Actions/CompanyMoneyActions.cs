@@ -270,7 +270,7 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
         changes.Add(new ProtonChange("Why", null, reason));
 
         return (new ProjectMoneyArgs(project.Id, null, pricing, fee, markup),
-            new ProtonPreview($"Price {project.Title}", changes, "Materials not on a statement yet follow the new markup.",
+            new ProtonPreview($"Price {project.Title}", changes, "Materials follow the new markup.",
                 Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(pricing.MaterialMarkup * 100)),
             ProjectText.Ref(project));
     }

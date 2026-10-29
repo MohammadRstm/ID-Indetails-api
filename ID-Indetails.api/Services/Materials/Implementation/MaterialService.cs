@@ -157,16 +157,6 @@ public sealed class MaterialService(
         var material = await ChangeableMaterialAsync(actor, projectId, materialId, cancellationToken);
 
         var entry = MaterialRules.Normalise(new MaterialRules.Entry(request.Quantity, request.UnitCost, request.Amount));
-        var costChanged = material.Name != request.Name.Trim()
-            || material.Quantity != entry.Quantity
-            || material.Unit != Trimmed(request.Unit)
-            || material.UnitCost != entry.UnitCost
-            || material.Amount != entry.Amount;
-        if (costChanged)
-        {
-            Throw(MaterialRules.CheckNotStated(await materials.IsStatedAsync(material.Id, cancellationToken)));
-        }
-
         var before = await floor.BeforeAsync(project, cancellationToken);
         var previousCost = Cost(material);
         Apply(material, request, entry);
@@ -186,7 +176,6 @@ public sealed class MaterialService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await OpenProjectAsync(actor, projectId, cancellationToken);
         var material = await ChangeableMaterialAsync(actor, projectId, materialId, cancellationToken);
-        Throw(MaterialRules.CheckNotStated(await materials.IsStatedAsync(material.Id, cancellationToken)));
 
         material.DeletedAt = clock.UtcNow;
         activity.Add(MaterialEvent(project, material, ActivityEventKinds.MaterialRemoved, actor.UserId, Cost(material)));
@@ -205,7 +194,6 @@ public sealed class MaterialService(
         var project = await OpenProjectAsync(actor, projectId, cancellationToken);
         var material = await materials.GetForUpdateAsync(projectId, materialId, cancellationToken)
             ?? throw new NotFoundException(MaterialNotFound);
-        Throw(MaterialRules.CheckNotStated(await materials.IsStatedAsync(material.Id, cancellationToken)));
 
         var markup = project.MaterialMarkup ?? 0;
         var price = MaterialRules.ManualPrice(request.ClientPrice, Cost(material), markup);
@@ -344,11 +332,9 @@ public sealed class MaterialService(
             AddedOn = clock.ToCompanyDate(m.AddedAt),
             AddedBy = new PersonRefResponse(m.AddedById, row.AddedByName),
             UpdatedAt = m.UpdatedAt,
-            IsStated = row.IsStated,
-            SentOn = row.SentAt is { } sent ? clock.ToCompanyDate(sent) : null,
             CanEdit = open && canWrite && SiteRules.CanChange(m.AddedById == actor.UserId, actor.Has(PermissionCodes.MaterialManage)),
             ClientPrice = money ? price : null,
-            PriceSource = money ? MaterialRules.SourceOf(m.ClientPrice, row.IsStated) : null,
+            PriceSource = money ? MaterialRules.SourceOf(m.ClientPrice) : null,
             Markup = money ? Math.Round(price / Cost(m) - 1, 4, MidpointRounding.AwayFromZero) : null,
         };
     }
