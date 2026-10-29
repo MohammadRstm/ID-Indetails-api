@@ -47,8 +47,11 @@ public sealed class AccountFiguresService(
 
         var money = await finance.GetAsync(project, cancellationToken);
         var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
-        var labels = await accountLabels.ListAsync(includeArchived: true, cancellationToken);
         var taken = await withdrawals.TakenAsync(project.Id, cancellationToken);
+        var payments = await figures.LivePaymentsAsync(project.Id, cancellationToken);
+        var expenses = await figures.SiteExpensesAsync(project.Id, cancellationToken);
+        // read after the rows, so a label one of them names is in the list (labels are archived, never deleted)
+        var labels = await accountLabels.ListAsync(includeArchived: true, cancellationToken);
         var supervisionDue = money.Supervision ?? 0;
 
         var result = AccountFiguresRules.Build(new AccountFiguresRules.Inputs(
@@ -59,10 +62,8 @@ public sealed class AccountFiguresService(
             money.ToPocket,
             money.FromPocket,
             labels.Select(l => l.Id).ToList(),
-            (await figures.LivePaymentsAsync(project.Id, cancellationToken))
-                .Select(p => new AccountFiguresRules.PaymentRow(p.AccountLabelId, p.AmountUsd))
-                .ToList(),
-            (await figures.SiteExpensesAsync(project.Id, cancellationToken))
+            payments.Select(p => new AccountFiguresRules.PaymentRow(p.AccountLabelId, p.AmountUsd)).ToList(),
+            expenses
                 .Select(e => new AccountFiguresRules.ExpenseRow(e.AccountLabelId, e.Category, e.Supplier, rates.ToUsd(e.Total, e.Currency, e.SpentOn)))
                 .ToList()));
 

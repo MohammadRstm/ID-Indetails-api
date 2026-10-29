@@ -191,6 +191,9 @@ public class PaymentLabelTests(ApiFactory api) : IClassFixture<ApiFactory>
         // seeing money is not enough, and an employee has neither
         await (await SetLabelAsync(payment.Id, viewer.AccessToken, null)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await SetLabelAsync(payment.Id, employee.AccessToken, null)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        // nor is recording payments without seeing money: the answer is the whole payment
+        var (_, _, blindRecorder) = await AdminWithAsync(superAdmin, DomainCodes.Execution, PermissionCodes.PaymentRecord);
+        await (await SetLabelAsync(payment.Id, blindRecorder.AccessToken, label.Id)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.PostJsonAsync($"/api/projects/{site.Id}/payments",
                 new { amount = 5m, currency = "USD", accountLabelId = label.Id }, viewer.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);

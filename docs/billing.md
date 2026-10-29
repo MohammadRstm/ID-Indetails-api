@@ -87,7 +87,7 @@ In a domain whose billing settings turn them on, the hourly run emails clients r
 | `GET /api/payments/{id}` | `financial:view` | A payment |
 | `POST /api/projects/{id}/payments` | `payment:record` | `{ amount, currency, fxRate, receivedOn, method, reference, note, invoiceId, isInitial, accountLabelId }` |
 | `PUT /api/payments/{id}/invoice` | `payment:record` | `{ invoiceId }` applies a payment on account to an issued invoice |
-| `PUT /api/payments/{id}/label` | `payment:record` | `{ accountLabelId }` files a live payment under an account label, changes it, or clears it (`null` or left out) |
+| `PUT /api/payments/{id}/label` | `payment:record` and `financial:view` (it answers with the whole payment) | `{ accountLabelId }` files a live payment under an account label, changes it, or clears it (`null` or left out) |
 | `POST /api/payments/{id}/void` | `payment:void` | `{ reason }` |
 
 Rules (`Business/Billing/PaymentRules.cs`):

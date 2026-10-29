@@ -156,7 +156,8 @@ public sealed class PaymentService(
 
     public async Task<PaymentResponse> SetLabelAsync(long paymentId, SetPaymentLabelRequest request, CancellationToken cancellationToken = default)
     {
-        var actor = await ActorAsync(cancellationToken);
+        // it answers with the whole payment, which only whoever sees the money may read
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var (payment, domain) = await VisiblePaymentForUpdateAsync(actor, paymentId, cancellationToken);
         Throw(PaymentRules.CheckVoid(payment.VoidedAt is not null));
