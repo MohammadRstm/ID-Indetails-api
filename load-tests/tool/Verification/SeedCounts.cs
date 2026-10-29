@@ -32,7 +32,7 @@ public static class SeedCounts
         ("work_entry_comments", "SELECT COUNT(*) FROM work_entry_comments"),
         ("materials", "SELECT COUNT(*) FROM project_materials WHERE deleted_at IS NULL"),
         ("labour_weeks", "SELECT COUNT(*) FROM labour_weeks"),
-        ("statements", "SELECT COUNT(*) FROM client_statements"),
+        ("boqs", "SELECT COUNT(*) FROM boqs WHERE deleted_at IS NULL"),
         ("invoices", "SELECT COUNT(*) FROM invoices"),
         ("invoices.voided", "SELECT COUNT(*) FROM invoices WHERE voided_at IS NOT NULL"),
         ("payments", "SELECT COUNT(*) FROM payments"),

@@ -86,7 +86,7 @@ Several checks stop a command before it changes anything:
   | `POST /api/auth/forgot-password` | a reset link |
   | `POST /api/auth/change-email`, `PUT /api/employees/{id}/email` | the old and the new address |
   | `POST /api/invitations`, `POST /api/invitations/{id}/resend` | an invitation link |
-  | `POST /api/invoices/{id}/email`, `POST /api/statements/{id}/email` | the PDF to the client |
+  | `POST /api/invoices/{id}/email`, `POST /api/boqs/{id}/email` | the PDF to the client |
   | `POST /api/setup/super-admin` | a temporary password (disabled here: no setup key) |
   | `POST /api/projects/{id}/invoice-plan`, `PUT /api/invoices/{id}/schedule` | later, when the scheduler runs |
 
@@ -153,8 +153,7 @@ cached. Check what's left under GitHub → Settings → Billing before a long pr
 - ten requirements ticked at once, and one requirement ticked by three people;
 - six payments on one 100-dollar invoice;
 - a draft issued by each Design admin at once (numbering);
-- three statements on one project;
-- a material deleted while a statement is made;
+- three client BOQs made on one project at once (their numbers stay distinct and consecutive);
 - one person logging the same time in two tabs;
 - one labour week saved three times at once;
 - two permission changes to one person;
@@ -321,7 +320,7 @@ Each run's artifact (Actions → the run → Artifacts, kept 14 days) is a folde
   - Design work only on Design projects by Design people;
   - assignees in their project's domain;
   - Execution records only on Execution projects;
-  - no statement lists a removed or foreign material;
+  - a site has at most one agreed client BOQ, and its price is what the agreed BOQs add up to;
   - invoices and payments for the project's client;
   - totals equal their lines;
   - numbering without gaps, with the sequences holding the last number;
@@ -377,9 +376,9 @@ API.
   - admins create clients, projects and requirements;
   - designers log their work every evening;
   - site crews record materials and weekly labour;
-  - invoices are issued and paid, and statements are made;
+  - invoices are issued and paid, and every site starts with an agreed client BOQ;
   - teams chat, and the scheduled checks run every morning.
-- Everything is written by the API itself: activity history, notifications, invoice and statement numbers, progress.
+- Everything is written by the API itself: activity history, notifications, invoice and BOQ numbers, progress.
   So the data keeps every rule the API keeps.
 - Email stays in the seeder's memory, and any address outside `@loadtest.invalid` fails the seed.
 

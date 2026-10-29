@@ -93,11 +93,6 @@ public sealed class SeedProject
     /// <summary>Execution: cost of the materials so far, for progress invoices.</summary>
     public decimal MaterialCost { get; set; }
 
-    /// <summary>Execution: materials not yet on a statement, with their cost.</summary>
-    public List<(long Id, decimal Cost)> Unstated { get; } = [];
-
-    public DateOnly? LastStatementOn { get; set; }
-
     public DateOnly LastInvoiceOn { get; set; }
 
     public bool IsClientWork => Client is not null;
