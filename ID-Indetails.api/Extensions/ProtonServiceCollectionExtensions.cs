@@ -181,8 +181,6 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeMaterialStepTool>();
         services.AddScoped<IProtonTool, ProposeSubmitLabourWeekTool>();
         services.AddScoped<IProtonTool, ProposeLabourDefaultsTool>();
-        services.AddScoped<IProtonTool, ProposeCreateStatementTool>();
-        services.AddScoped<IProtonTool, ProposeStatementDeliveryTool>();
         services.AddScoped<IProtonTool, ProposeBillingSettingsTool>();
         services.AddScoped<IProtonTool, ProposeExchangeRateTool>();
         services.AddScoped<IProtonTool, ProposeProjectMoneyTool>();

@@ -77,7 +77,6 @@ public enum ProtonSurface
     SitePricing,
     NewInvoice,
     RecordPayment,
-    NewStatement,
     NewMeeting,
     AddCompanyExpense,
     MessagePerson,

@@ -9,7 +9,6 @@ namespace ID_Indetails.api.Business.Materials;
 /// <list type="bullet">
 /// <item>The cost is quantity × unit cost when both are known, otherwise the lump-sum amount.</item>
 /// <item>The finalise lock and who may change a record are shared with ground labour (<see cref="Execution.SiteRules"/>).</item>
-/// <item>A stated material (on a client statement) keeps its type, cost and price, and can't be removed.</item>
 /// </list>
 /// </summary>
 public static class MaterialRules
@@ -21,9 +20,6 @@ public static class MaterialRules
 
         /// <summary>Set by hand.</summary>
         Manual,
-
-        /// <summary>Frozen at the price shown on a client statement.</summary>
-        Stated,
     }
 
     /// <summary>What was typed: a type and a cost, either quantity × unit cost or a total.</summary>
@@ -59,13 +55,7 @@ public static class MaterialRules
             ? null
             : typed;
 
-    public static PriceSource SourceOf(decimal? clientPrice, bool stated)
-        => stated ? PriceSource.Stated : clientPrice is null ? PriceSource.Auto : PriceSource.Manual;
-
-    public static RuleDenial? CheckNotStated(bool stated)
-        => stated
-            ? RuleDenial.BusinessRule(ErrorCodes.MaterialStated, "This material is on a client statement, so its type, cost and price can't change and it can't be removed.")
-            : null;
+    public static PriceSource SourceOf(decimal? clientPrice) => clientPrice is null ? PriceSource.Auto : PriceSource.Manual;
 
     /// <summary>What materials are grouped by (their type, their supplier): the text trimmed, with single spaces, in lower case.</summary>
     public static string GroupKey(string name)

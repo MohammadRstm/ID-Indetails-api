@@ -109,9 +109,6 @@ public static class NotificationKinds
     /// <summary>A client project's profit reached zero or below, by a forced change or a change nobody made (subject: the project). Once per project, to whoever sees the domain's money.</summary>
     public const string ProfitAtZero = "profit_at_zero";
 
-    /// <summary>A client statement was sent (subject: the statement). Same recipients as <see cref="InvoiceIssued"/>.</summary>
-    public const string StatementSent = "statement_sent";
-
     /// <summary>A client project was completed or archived and its margin is final (subject: the project). Sent to whoever sees the domain's money, with the margin as a percentage and never an amount.</summary>
     public const string ProjectClosed = "project_closed";
 

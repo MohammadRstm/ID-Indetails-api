@@ -634,14 +634,11 @@ public sealed class ProjectService(
             SupervisionRate = p.SupervisionRate,
             SupervisionUsd = money.Supervision,
             PaymentWithTva = p.DomainCode == DomainCodes.Execution
-                ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
+                ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
                 : Tva.Gross(p.Revenue, p.TvaRate),
             RevenueWithTva = money.RevenueWithTva,
             ProjectFee = p.ProjectFee,
             MaterialMarkup = p.MaterialMarkup,
-            MaterialCharge = money.MaterialCharge,
-            UnsentMaterialCharge = money.UnsentMaterialCharge,
-            UnsentMaterials = money.UnsentMaterials,
             ExpenseTotals = expenseTotals,
             Billing = rollup.ProjectBillingOf(p),
             Cost = new ProjectCostResponse(
@@ -659,8 +656,6 @@ public sealed class ProjectService(
             CashProfit = money.CashProfit,
             ToPocket = p.DomainCode == DomainCodes.Execution ? money.ToPocket : null,
             FromPocket = p.DomainCode == DomainCodes.Execution ? money.FromPocket : null,
-            MaterialProfit = money.MaterialProfit,
-            UnconvertedMaterials = money.UnconvertedMaterials,
         };
     }
 

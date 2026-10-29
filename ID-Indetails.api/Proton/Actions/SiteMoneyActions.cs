@@ -2,11 +2,9 @@ using System.ComponentModel;
 using ID_Indetails.api.Business.Materials;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
-using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.Expenses;
 using ID_Indetails.api.DTO.Request.Labour;
 using ID_Indetails.api.DTO.Request.Materials;
-using ID_Indetails.api.DTO.Request.Statements;
 using ID_Indetails.api.DTO.Response.Materials;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
@@ -15,7 +13,6 @@ using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Labour.Abstraction;
 using ID_Indetails.api.Services.Materials.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
-using ID_Indetails.api.Services.Statements.Abstraction;
 
 namespace ID_Indetails.api.Proton.Actions;
 
@@ -272,7 +269,7 @@ public sealed record MaterialStepInput : ProtonActionInput
 }
 
 /// <summary>
-/// Changes, deletes or prices a material not yet on a statement, through PUT, DELETE or PUT …/client-price once
+/// Changes, deletes or prices a material, through PUT, DELETE or PUT …/client-price once
 /// confirmed. Deleting can't be undone, so the user types its cost.
 /// </summary>
 public sealed class ProposeMaterialStepTool(IMaterialService materials) : ProtonActionTool<MaterialStepInput, MaterialArgs>
@@ -280,8 +277,8 @@ public sealed class ProposeMaterialStepTool(IMaterialService materials) : Proton
     public override string Name => "propose_material_step";
 
     public override string Description =>
-        "Propose correcting a material's details or cost, deleting it, or setting the client's price for it, while it " +
-        "isn't on a statement yet. Nothing changes until the user confirms the card.";
+        "Propose correcting a material's details or cost, deleting it, or setting the client's price for it. Nothing " +
+        "changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -304,7 +301,7 @@ public sealed class ProposeMaterialStepTool(IMaterialService materials) : Proton
             .FirstOrDefault(m => m.Id == input.MaterialId) ?? throw new NotFoundException("Material not found.");
         if (!material.CanEdit)
         {
-            throw new ProtonToolInputException("It is on a statement already, or not the user's to change.");
+            throw new ProtonToolInputException("It is not the user's to change, or the site is closed.");
         }
 
         var cost = MoneyText.Amount(material.Cost, material.Currency);
@@ -536,140 +533,5 @@ public sealed class ProposeLabourDefaultsTool(IProjectService projects, ILabourS
     {
         await labour.SetDefaultsAsync(args.ProjectId, args.Defaults!, cancellationToken);
         return new ProtonActionDone("Set the usual crew.", "labour_defaults", args.ProjectId, []);
-    }
-}
-
-/// <param name="Total">For a new statement: the total the card showed (the user typed it), and how many materials it held.</param>
-public sealed record StatementArgs(
-    long ProjectId, long? StatementId, CreateStatementRequest? Request, RecordDeliveryRequest? Delivery, decimal? Total = null, int? Count = null);
-
-public sealed record CreateStatementInput : ProtonActionInput
-{
-    [Description("An Execution site.")]
-    public required long ProjectId { get; init; }
-
-    [Description("detail: one row per material type; total: a single line. Default detail.")]
-    public StatementMode? Mode { get; init; }
-
-    [Description("Show materials from earlier statements again.")]
-    public bool IncludeEarlier { get; init; }
-}
-
-/// <summary>
-/// Makes a site's next statement for the client, through POST /api/projects/{id}/statements once confirmed. The card
-/// is the service's own preview; the user types the statement's total. It freezes the client prices of its materials
-/// and can't be deleted. Sending it is a separate step in the app.
-/// </summary>
-public sealed class ProposeCreateStatementTool(IStatementService statements) : ProtonActionTool<CreateStatementInput, StatementArgs>
-{
-    public override string Name => "propose_create_statement";
-
-    public override string Description =>
-        "Propose making a site's next statement of materials for the client, from the server's own preview. It freezes " +
-        "the client prices of its materials and can't be deleted. The user confirms by typing its total; sending it is " +
-        "done in the app.";
-
-    public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
-
-    public override string? OnlyInDomain => DomainCodes.Execution;
-
-    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<StatementsController>(nameof(StatementsController.Create));
-
-    protected override async Task<(StatementArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
-        CreateStatementInput input, ProtonToolContext context, CancellationToken cancellationToken)
-    {
-        var request = new CreateStatementRequest { Mode = input.Mode ?? StatementMode.Detail, IncludeEarlier = input.IncludeEarlier };
-        var preview = await statements.PreviewAsync(input.ProjectId, request, cancellationToken);
-        if (preview.Count == 0)
-        {
-            throw new ProtonToolInputException("There are no new materials to put on a statement.");
-        }
-
-        var changes = preview.Types.Take(10).Select(t => new ProtonChange(t.Label, null, MoneyText.Amount(t.Total, preview.Currency))).ToList();
-        changes.Add(new ProtonChange("Total", null, MoneyText.Amount(preview.Total, preview.Currency)));
-        changes.Add(new ProtonChange("Remaining after it", null, MoneyText.Amount(preview.Remaining, preview.Currency)));
-        return (new StatementArgs(input.ProjectId, null, request, null, preview.Total, preview.Count),
-            new ProtonPreview($"Make a statement for {preview.ProjectTitle}", changes,
-                $"{preview.Count} material(s) for {preview.Client.DisplayName}. Their client prices are frozen as shown, and a statement " +
-                "can't be deleted. It isn't sent until you send it from the app.",
-                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(preview.Total), Irreversible: true),
-            new ProtonRef(ProtonRefType.Project, preview.ProjectId, preview.ProjectTitle, DomainCodes.Execution));
-    }
-
-    protected override object? RequestOf(StatementArgs args) => args.Request;
-
-    protected override async Task<ProtonActionDone> ExecuteAsync(StatementArgs args, ProtonToolContext context, CancellationToken cancellationToken)
-    {
-        // the statement bills the materials there are now: they must still add up to the total the user typed
-        var now = await statements.PreviewAsync(args.ProjectId, args.Request!, cancellationToken);
-        if (args.Total is null || now.Total != args.Total || now.Count != args.Count)
-        {
-            throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The site's materials changed since Proton proposed this. Ask again.");
-        }
-
-        var statement = await statements.CreateAsync(args.ProjectId, args.Request!, cancellationToken);
-        return new ProtonActionDone($"Made statement {statement.Number}: {MoneyText.Amount(statement.Total, statement.Currency)}.", "statement", statement.Id ?? 0, []);
-    }
-}
-
-public sealed record StatementDeliveryInput : ProtonActionInput
-{
-    [Description("From list_statements or the project's statements.")]
-    public required long StatementId { get; init; }
-
-    [Description("whatsapp, or download (handed over). Emails are sent from the app.")]
-    public required DeliveryChannel Channel { get; init; }
-
-    public string? Recipient { get; init; }
-
-    public string? Note { get; init; }
-}
-
-/// <summary>
-/// Notes that a statement reached the client outside the app, through POST /api/statements/{id}/deliveries once
-/// confirmed. Its first delivery is what makes its materials count: their client prices join the site's agreed revenue.
-/// </summary>
-public sealed class ProposeStatementDeliveryTool(IStatementService statements) : ProtonActionTool<StatementDeliveryInput, StatementArgs>
-{
-    public override string Name => "propose_record_statement_delivery";
-
-    public override string Description =>
-        "Propose noting that a statement was given to the client outside the app (WhatsApp, by hand). It sends nothing, " +
-        "but a statement's first delivery makes its materials count as sent: their client prices join the site's agreed revenue.";
-
-    public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
-
-    public override string? OnlyInDomain => DomainCodes.Execution;
-
-    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<StatementsController>(nameof(StatementsController.RecordDelivery));
-
-    protected override async Task<(StatementArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
-        StatementDeliveryInput input, ProtonToolContext context, CancellationToken cancellationToken)
-    {
-        if (input.Channel == DeliveryChannel.Email)
-        {
-            throw new ProtonToolInputException("Emails are sent from the app itself, which records them: open the statement for the user instead.");
-        }
-
-        var statement = await statements.GetAsync(input.StatementId, cancellationToken);
-        var delivery = new RecordDeliveryRequest { Channel = input.Channel, Recipient = MoneyText.Clean(input.Recipient), Note = MoneyText.Clean(input.Note) };
-        // the first delivery of a statement is what turns its materials into revenue; a later one only adds to its record
-        var effect = statement.Deliveries.Count == 0
-            ? $"This is its first delivery: its materials now count as sent, so their client prices ({MoneyText.Amount(statement.NewTotal, statement.Currency)} " +
-              $"for the new ones, and any earlier ones not sent before) join {statement.ProjectTitle}'s agreed revenue."
-            : "It was delivered before: this only adds to its record, and the agreed revenue doesn't change.";
-        return (new StatementArgs(statement.ProjectId, statement.Id, null, delivery),
-            new ProtonPreview($"Note that statement {statement.Number} was delivered",
-                [new ProtonChange("How", null, input.Channel == DeliveryChannel.Whatsapp ? "WhatsApp" : "Handed over"), new ProtonChange("To", null, delivery.Recipient ?? statement.Client.DisplayName)],
-                effect),
-            new ProtonRef(ProtonRefType.Project, statement.ProjectId, statement.ProjectTitle, DomainCodes.Execution));
-    }
-
-    protected override object? RequestOf(StatementArgs args) => args.Delivery;
-
-    protected override async Task<ProtonActionDone> ExecuteAsync(StatementArgs args, ProtonToolContext context, CancellationToken cancellationToken)
-    {
-        var statement = await statements.RecordDeliveryAsync(args.StatementId!.Value, args.Delivery!, cancellationToken);
-        return new ProtonActionDone($"Noted that statement {statement.Number} was delivered.", "statement", statement.Id ?? 0, []);
     }
 }

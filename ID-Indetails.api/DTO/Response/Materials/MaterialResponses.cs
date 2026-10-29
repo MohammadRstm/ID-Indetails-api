@@ -33,12 +33,6 @@ public sealed record MaterialResponse
 
     public DateTime? UpdatedAt { get; init; }
 
-    /// <summary>On a client statement: its type, cost and price are frozen and it can't be removed.</summary>
-    public bool IsStated { get; init; }
-
-    /// <summary>The day a statement listing it was first sent to the client: from then its client price is revenue.</summary>
-    public DateOnly? SentOn { get; init; }
-
     /// <summary>Whether the caller may change or remove it now.</summary>
     public bool CanEdit { get; init; }
 

@@ -401,7 +401,7 @@ public sealed record OpenSurfaceInput
     public required ProtonSurface Surface { get; init; }
 
     [Description("The record it is for, from find or another tool: a project for edit_project, project_report, " +
-                 "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment, new_statement, " +
+                 "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment, " +
                  "view_project_file, file_comments, portal_discussion and portal_preview; a client for edit_client; a person for " +
                  "message_person; a website project for edit_website_project. Leave out for the others.")]
     public long? Id { get; init; }

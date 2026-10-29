@@ -250,33 +250,6 @@ public static class ProjectFinance
         return weeks;
     }
 
-    /// <summary>
-    /// What an Execution client is charged for materials, in USD: each client price converted at the rate
-    /// on the day the material was added. Materials with no rate that day are left out and counted.
-    /// </summary>
-    public static (decimal ChargeUsd, int Unconverted) MaterialCharge(
-        IEnumerable<(ExecutionPricing.Material Material, string Currency, DateOnly Day)> materials,
-        decimal markup,
-        ExchangeRateTable rates)
-    {
-        var charge = 0m;
-        var unconverted = 0;
-
-        foreach (var (material, currency, day) in materials)
-        {
-            if (rates.ToUsd(ExecutionPricing.ClientPrice(material, markup), currency, day) is { } usd)
-            {
-                charge += usd;
-            }
-            else
-            {
-                unconverted++;
-            }
-        }
-
-        return (Round(charge), unconverted);
-    }
-
     public static Summary Summarise(Facts facts, Costs costs)
     {
         var revenue = facts.IsClientWork ? facts.Revenue : 0;

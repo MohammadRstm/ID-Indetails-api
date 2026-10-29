@@ -357,7 +357,7 @@ public sealed record CompareMoneyInput
     public int? Limit { get; init; }
 }
 
-/// <param name="ExpectedRevenue">Agreed in the period (a contract set or raised, an Execution material first sent), not a forecast.</param>
+/// <param name="ExpectedRevenue">Agreed in the period (a contract set or changed, an Execution BOQ agreed or withdrawn), not a forecast.</param>
 /// <param name="CashProfit">Received less cost.</param>
 /// <param name="CashMarginPct">Cash profit as a whole percentage of what was received, while anything was.</param>
 /// <param name="ProjectsWithMoney">Projects with money received or costs in either period; <paramref name="Projects"/> holds the first ones.</param>

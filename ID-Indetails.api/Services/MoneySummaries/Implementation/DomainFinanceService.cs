@@ -112,9 +112,8 @@ public sealed class DomainFinanceService(
     }
 
     /// <summary>
-    /// What the client projects agreed, dated: payments and fees as they were set or changed (an Execution site's fee with its
-    /// supervision on top, at the rate it has now), and Execution materials at their client price, converted at the rate of the
-    /// day they were added, on the day they were first sent.
+    /// What the client projects agreed, dated: payments and fees as they were set or changed (an Execution site's fee, set
+    /// by agreeing a BOQ, with its supervision on top at the rate it has now).
     /// </summary>
     private async Task<IReadOnlyList<ExpectedRevenue.Agreed>> AgreedAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken)
     {
@@ -128,20 +127,6 @@ public sealed class DomainFinanceService(
                 WithSupervision(c.ProjectId, c.Amount),
                 c.PrevAmount is { } previous ? WithSupervision(c.ProjectId, previous) : null))
             .ToList();
-
-        var sites = client.Values.Where(p => p.DomainCode == DomainCodes.Execution).Select(p => p.Id).ToList();
-        if (sites.Count > 0)
-        {
-            var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
-            foreach (var m in (await financeSources.MaterialsAsync(sites, cancellationToken)).Where(m => m.SentAt is not null))
-            {
-                var price = ExecutionPricing.ClientPrice(new ExecutionPricing.Material(m.Total, m.ClientPrice), client[m.ProjectId].MaterialMarkup ?? 0);
-                if (rates.ToUsd(price, m.Currency, clock.ToCompanyDate(m.AddedAt)) is { } usd)
-                {
-                    agreed.Add(new ExpectedRevenue.Agreed(clock.ToCompanyDate(m.SentAt!.Value), usd));
-                }
-            }
-        }
 
         return agreed;
     }
