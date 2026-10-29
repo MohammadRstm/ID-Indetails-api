@@ -91,12 +91,6 @@ public static class ProjectRules
             ? RuleDenial.BusinessRule(ErrorCodes.ClientIsArchived, "This client is archived. Restore it before starting work for it.")
             : null;
 
-    public static RuleDenial? CheckInitialPayment(string domain, bool hasInitialPayment)
-        => hasInitialPayment && domain != DomainCodes.Execution
-            ? RuleDenial.Invalid(
-                ErrorCodes.ValidationFailed, "initialPayment", "Only Execution projects take an initial payment when they are created.")
-            : null;
-
     /// <summary>A project is owned by an admin of its business or a super admin, never an employee.</summary>
     /// <param name="owner">Null when no such person exists; answered the same as a disallowed owner so ids can't be probed.</param>
     public static RuleDenial? CheckOwner(Person? owner, string projectDomain)

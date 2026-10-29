@@ -30,7 +30,7 @@ public sealed class ProjectFinanceService(
         ILookup<long, ExpenseRow> Expenses,
         ILookup<long, MaterialRow> Materials,
         ILookup<long, GroundLabourRow> Ground,
-        IReadOnlyDictionary<long, decimal> Received,
+        IReadOnlyDictionary<long, (decimal Received, decimal Tva)> Received,
         IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)> Pocket);
 
     public async Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default)
@@ -235,7 +235,7 @@ public sealed class ProjectFinanceService(
         IEnumerable<ExpenseRow> expenses,
         IReadOnlyList<MaterialRow> materials,
         IEnumerable<GroundLabourRow> ground,
-        decimal received,
+        (decimal Gross, decimal Tva) received,
         (decimal ToPocket, decimal FromPocket) pocket,
         ExchangeRateTable rates)
     {
@@ -290,12 +290,13 @@ public sealed class ProjectFinanceService(
             unpricedMinutes,
             materialCharge,
             unconvertedMaterials,
-            received,
-            isExecution ? received - costs.Total - pocket.ToPocket + pocket.FromPocket : null,
+            received.Gross,
+            isExecution ? received.Gross - received.Tva - costs.Total - pocket.ToPocket + pocket.FromPocket : null,
             materialProfit,
             unsentCharge,
             unsent,
             pocket.ToPocket,
-            pocket.FromPocket);
+            pocket.FromPocket,
+            received.Tva);
     }
 }

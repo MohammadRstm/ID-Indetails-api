@@ -40,6 +40,12 @@ public class Payment
 
     public decimal AmountUsd { get; set; }
 
+    /// <summary>
+    /// The TVA inside <see cref="AmountUsd"/>, at the project's rate when it was recorded. Money reports count the
+    /// rest (net); billing counts the whole amount, since TVA is part of what the client owes.
+    /// </summary>
+    public decimal TvaUsd { get; set; }
+
     public DateOnly ReceivedOn { get; set; }
 
     public PaymentMethod Method { get; set; }

@@ -53,18 +53,22 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
         => (await db.Payments
                 .AsNoTracking()
                 .Where(p => p.ProjectId == projectId && p.VoidedAt == null)
-                .Select(p => new { p.ReceivedOn, p.AmountUsd })
+                .Select(p => new { p.ReceivedOn, Net = p.AmountUsd - p.TvaUsd })
                 .ToListAsync(cancellationToken))
-            .Select(p => (p.ReceivedOn, p.AmountUsd))
+            .Select(p => (p.ReceivedOn, p.Net))
             .ToList();
 
-    public async Task<IReadOnlyDictionary<long, decimal>> ReceivedAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
-        => await db.Payments
+    public async Task<IReadOnlyDictionary<long, (decimal Received, decimal Tva)>> ReceivedAsync(
+        IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
+    {
+        var rows = await db.Payments
             .AsNoTracking()
             .Where(p => projectIds.Contains(p.ProjectId) && p.VoidedAt == null)
             .GroupBy(p => p.ProjectId)
-            .Select(g => new { ProjectId = g.Key, Received = g.Sum(p => p.AmountUsd) })
-            .ToDictionaryAsync(r => r.ProjectId, r => r.Received, cancellationToken);
+            .Select(g => new { ProjectId = g.Key, Received = g.Sum(p => p.AmountUsd), Tva = g.Sum(p => p.TvaUsd) })
+            .ToListAsync(cancellationToken);
+        return rows.ToDictionary(r => r.ProjectId, r => (r.Received, r.Tva));
+    }
 
     public async Task<IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)>> PocketAsync(
         IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)

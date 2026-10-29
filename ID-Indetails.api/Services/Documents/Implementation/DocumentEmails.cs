@@ -154,6 +154,39 @@ public static class DocumentEmails
             [Attachment(pdf)]);
     }
 
+    /// <summary>A quote: the project's total for the client, TVA included and never shown apart, with its scope.</summary>
+    public static EmailMessage QuoteEmail(string to, QuoteResponse quote, DateOnly quotedOn, Letterhead head, string senderName, PdfFile pdf)
+    {
+        var total = PdfLayout.Money(quote.TotalUsd, "USD");
+        var intro = $"Please find below our quote {quote.Number} for {quote.ProjectTitle}. A PDF copy is attached.";
+        var materials = quote.Domain == ID_Indetails.api.Constants.DomainCodes.Execution ? QuotePdf.MaterialsNote : null;
+        var html = Paragraph($"Hello {quote.Client.DisplayName},")
+            + Paragraph(intro)
+            + Facts(("Quote", quote.Number), ("Date", PdfLayout.Date(quotedOn)), ("Project", quote.ProjectTitle), ("Location", quote.ProjectLocation))
+            + (quote.Scope is { } scope ? Heading("Scope") + Quote(scope) : "")
+            + Heading("Price")
+            + Totals(("Total for the project", total, true))
+            + (materials is null ? "" : Note(materials))
+            + SignOff("Kind regards,", senderName, head.CompanyName);
+        var text = $"""
+            Hello {quote.Client.DisplayName},
+
+            {intro}
+
+            {(quote.Scope is { } s ? $"Scope: {s}\n" : "")}Total for the project: {total}
+            {materials}
+
+            Kind regards,
+            {senderName}
+            {head.CompanyName}
+            """;
+        return Compose(
+            to, null, $"Quote {quote.Number} - {quote.ProjectTitle}",
+            Page(head.CompanyName, $"Quote {quote.Number}: {total} for {quote.ProjectTitle}.", html, Footer(head, null)),
+            text,
+            [Attachment(pdf)]);
+    }
+
     /// <summary>The invoice as the PDF shows it: who and what it is for, its lines, totals, notes and how to pay.</summary>
     private static string InvoiceBody(InvoiceResponse invoice, DateOnly? issuedOn, BillingSettings? billing, string intro, string highlight)
     {

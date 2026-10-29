@@ -36,12 +36,13 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
         var me = await (await Client.GetAsync("/api/auth/me", accessToken)).ReadAsync<CurrentUserResponse>();
         var title = (domain == DomainCodes.Execution ? "Site " : "Project ") + Guid.NewGuid().ToString("N")[..8];
         var staff = domain == DomainCodes.Execution ? staffIds ?? [await SiteStaffAsync()] : null;
+        // untaxed, so money figures read as before TVA; TVA has tests of its own
         object body = domain == DomainCodes.Execution
             ? me.Permissions.Contains(PermissionCodes.ProjectPricingManage)
-                ? new { title, domainCode = domain, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m, staffIds = staff }
+                ? new { title, domainCode = domain, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m, staffIds = staff, tvaRate = 0m }
                 : new { title, domainCode = domain, clientId = client.Id, staffIds = staff }
             : me.Permissions.Contains(PermissionCodes.FinancialView)
-                ? new { title, domainCode = domain, clientId = client.Id, revenue }
+                ? new { title, domainCode = domain, clientId = client.Id, revenue, tvaRate = 0m }
                 : new { title, domainCode = domain, clientId = client.Id };
 
         var response = await Client.PostJsonAsync("/api/projects", body, accessToken);
