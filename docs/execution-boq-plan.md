@@ -64,6 +64,8 @@
 ## 3. Phases
 
 ### Phase 1: settings, supervision, account labels, no Execution quotes (branch `MR-Exec-Settings`)
+**Status:** finished on the desktop on 2026-10-29: migration `AccountLabelsAndSupervision`, Release build clean, schema regenerated. PRs: API MohammadRstm/ID-Indetails-api#162, client MohammadRstm/ID-Indetails-client#168. Tests run once on the whole stack after phase 4 (the user's call). The handoff notes below are kept for the record.
+
 **Status at handoff:** 
 
 **API: code, tests and docs are written and committed; the migration isn't made and nothing has compiled since the last edits.**
@@ -161,7 +163,7 @@ What's left on the client side:
 - **Client:** the Execution create form has no agreed amount, plus a supervision % field (10) and TVA 11. The pricing modal handles TVA + supervision, with the work price read-only ("Set when a BOQ is agreed"). Financials show work price, supervision, TVA and client total. Settings get an Account labels section for super admins, plus a reusable labels hook/select. No quote UI on Execution.
 
 ### Phase 2: BOQs and VOs replace statements (branch `MR-Boqs`, off `MR-Exec-Settings`)
-**Status:** not started. The full contract is in section 4.
+**Status:** in progress on the desktop. The full contract is in section 4, with the desktop's decisions at its end.
 
 ### Phase 3: cost-only expenses list (branch `MR-Site-Expenses`, off `MR-Boqs`)
 **Status:** not started. Outline:
@@ -282,3 +284,51 @@ What's left on the client side:
   - remove the statement help articles;
   - remove the `?quote=new` link in `notificationWords.ts` for Execution.
 
+### Phase 2 decisions made on the desktop (2026-10-29)
+These settle what the contract above left open. **Where they differ from the table or shapes above, these win.**
+
+**Permissions (permissions, never roles: CLAUDE.md §0).** "Super admin only" means a permission super admins hold by default, as phase 1 did with `company_settings:manage` for account labels.
+- **Client BOQs and VOs**, every write (create, edit, copy lines into, duplicate, delete, email, record a delivery, agree, withdraw): `project:pricing_manage`.
+- **Internal drafts:** `boq:create`. Its author sees and edits their own; holders of `project:pricing_manage` see every internal draft (read, copy from, use as `fromBoqId`) and may edit or delete any.
+- **Reading** client BOQs, VOs, the price summary and the PDF: `financial:view` or `project:pricing_manage`.
+- `boq:create` keeps `statement:create`'s grants. It stays a super-admin-only default for now; a super admin can grant it to an admin per person. (Open question for the user: should admins hold it by default?)
+- BOQs exist only on Execution client projects the caller can see. A project the caller can't see is `404`; any other project is `422 boq_execution_only`.
+- BOQ writes need the project open (not completed or archived), with the error code the API already uses for writes to a closed site.
+
+**List response** (`GET /api/projects/{id}/boqs`): `internal` holds the caller's own drafts (all of them for `project:pricing_manage`). `client`, `vos` and `price` are empty / `null` without `financial:view` or `project:pricing_manage`. Newest first in each list. Needs any of `boq:create`, `financial:view`, `project:pricing_manage` (`403` otherwise).
+
+**Profit floor: no `force` field.** Agree and withdraw go through `IProfitFloor` (`BeforeAsync` before, `CheckAsync` after) like every other guarded change. New `BlockedChangeKind` values `BoqAgree` and `BoqWithdraw` (`boq_agree`, `boq_withdraw`), replayed by `BlockedChangeService`, with a description line like the others. The migration updates `ck_blocked_changes_kind` to match (implied by "exactly like lowering the fee did"). A refusal is the usual `422 profit_floor` with `blockedChangeId`; the client shows the existing force / dismiss UI. Agree has no body; withdraw takes `{ reason }`.
+
+**Work price.** Agreeing or withdrawing recomputes `Project.ProjectFee` and writes what a fee change used to write (the `project_fee_set` event, and a payment-change history row if the old fee edit wrote one; look at the fee path in `git show origin/master:ID-Indetails.api/Services/Projects/Implementation/ProjectService.cs`). The BOQ number is the reason on agreement; the given reason on withdrawal.
+
+**Storage.**
+- `boqs`: project, kind, status, number (unique, null for internal), title (≤ 120), reason (≤ 500, VOs only), author, adjustment type and value, `subtotal_usd` and `total_usd` (recomputed by `BoqRules` on every save, never taken from the client), created / updated / agreed at, agreed by, `deleted_at` (drafts are soft-deleted so a sent draft's deliveries stay on record).
+- `boq_lines`: position, code (≤ 20), description (≤ 500), quantity decimal(14,4) ≥ 0, waste rate decimal(6,4) between 0 and 1, unit (≤ 20), rate decimal(14,4). Final quantity and line total come from `BoqRules`, not stored. At most 1000 lines.
+- `boq_deliveries`: channel (the existing `DeliveryChannel`), recipient, note, `total_usd` at send time, sent at, sent by.
+- Titles default to "Client BOQ", "Internal draft" or "Variation order" when not given on create; `PUT` requires one.
+- Adjustment: `percent` between -0.99 and 1; `total` ≥ 0 except on a VO. A negative rate on a non-VO is `422 boq_negative_rate`.
+
+**Behaviour.**
+- Sending (email or a recorded delivery) works on drafts and agreed BOQs, never internal ones (`boq_internal`) or empty ones (`boq_empty`).
+- Agreeing a VO needs an agreed client BOQ (`boq_not_agreed_yet`), even for a VO made before a withdrawal.
+- Duplicate copies title (+ " (copy)"), reason, adjustment and lines into a new draft of the same kind, with a new number.
+- Activity events (`boq_created`, `boq_sent`, `boq_agreed`, `boq_agreement_withdrawn`, the kind and number in the payload, the total in the amount column) only for client BOQs and VOs. Internal drafts are private working papers and raise no events and no notifications.
+- No notifications for BOQs (no portal yet).
+- Proton: no BOQ actions yet. Every BOQ write endpoint gets a `Never(...)` entry in `ProtonCoverage` ("priced line by line in the BOQ editor"); statement actions, tools and surfaces go.
+
+**Money response after phase 2.** `ProjectMoneyResponse` loses `materialCharge`, `unsentMaterialCharge`, `unsentMaterials` (and any other material-revenue field). `revenue` = work + supervision; `revenueWithTva` = revenue + work × tvaRate. `materialMarkup` stays until phase 3.
+
+**Response shapes (C# record names fix the client's `Schemas[...]` names).**
+- `BoqSummaryResponse`: `{ id, kind, number, title, author: PersonRef, status, totalUsd, lineCount, reason, createdAt, updatedAt, agreedAt, agreedBy: PersonRef | null, lastDelivery: BoqLastDeliveryResponse | null }`
+- `BoqLastDeliveryResponse`: `{ channel, sentAt }`
+- `BoqDetailResponse`: every `BoqSummaryResponse` field + `{ projectId, adjustmentType, adjustmentValue, lines: BoqLineResponse[], subtotalUsd, adjustmentUsd, supervisionRate, supervisionUsd, tvaRate, tvaUsd, clientTotalUsd, deliveries: BoqDeliveryResponse[] }`
+- `BoqLineResponse`: `{ id, position, code, description, quantity, wasteRate, finalQuantity, unit, rate, totalUsd }`
+- `BoqDeliveryResponse`: `{ id, channel, recipient, note, totalUsd, sentAt, sentBy: PersonRef | null }`
+- `BoqListResponse`: `{ internal, client, vos: BoqSummaryResponse[], price: BoqPriceResponse | null }`
+- `BoqPriceResponse`: `{ agreedBoqUsd, agreedVosUsd, workUsd, supervisionRate, supervisionUsd, tvaRate, tvaUsd, clientTotalUsd }`
+- Requests: `CreateBoqRequest { kind, title?, reason?, fromBoqId? }`, `SaveBoqRequest { title, reason?, adjustmentType, adjustmentValue?, lines: SaveBoqLineRequest[] }`, `SaveBoqLineRequest { id?, code?, description, quantity, wasteRate, unit?, rate }`, `CopyBoqLinesRequest { fromBoqId, lineIds? }`, `WithdrawBoqAgreementRequest { reason }`, `EmailBoqRequest { to, note? }`, `RecordBoqDeliveryRequest { channel, recipient?, note? }`.
+- Enums in JSON: kind `internal | client | vo`, status `draft | agreed`, adjustmentType `none | percent | total`, channel `email | whatsapp | download`.
+
+**Client.** The API does every calculation: the editor shows final quantities and totals from the last saved `BoqDetailResponse`, and a line changed since then shows "—" until it's saved.
+
+**Pinned counts after phase 2:** tables stay 96 (three statement tables out, three BOQ tables in, the sequence table renamed); the permission count drops by one (`statement:send`); the Proton coverage counts move with the new `Never` entries and the removed statement actions.
