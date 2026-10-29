@@ -1,30 +1,30 @@
 using ID_Indetails.api.Constants;
-using ID_Indetails.api.DTO.Response.Materials;
+using ID_Indetails.api.DTO.Response.SiteExpenses;
 using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
 
-/// <summary>Materials sent twice (an answer lost on the way to the phone) are added once.</summary>
-public class MaterialClientRefTests(ApiFactory api) : IClassFixture<ApiFactory>
+/// <summary>Expenses sent twice (an answer lost on the way to the phone) are added once.</summary>
+public class SiteExpenseClientRefTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
     private ProjectTestSteps Projects => new(_steps);
 
     private Task<HttpResponseMessage> SendAsync(long projectId, string token, params object[] items)
-        => Client.PostJsonAsync($"/api/projects/{projectId}/materials", new { items }, token);
+        => Client.PostJsonAsync($"/api/projects/{projectId}/site-expenses", new { items }, token);
 
-    private async Task<List<MaterialResponse>> AddAsync(long projectId, string token, params object[] items)
+    private async Task<List<SiteExpenseResponse>> AddAsync(long projectId, string token, params object[] items)
     {
         var response = await SendAsync(projectId, token, items);
         response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
-        return await response.ReadAsync<List<MaterialResponse>>();
+        return await response.ReadAsync<List<SiteExpenseResponse>>();
     }
 
     private Task<int> CountAsync(string sql, long projectId) => _steps.ScalarAsync<int>(sql, ("@p", projectId));
 
     [Fact]
-    public async Task A_batch_sent_again_returns_the_materials_already_added_without_adding_events_or_notifications()
+    public async Task A_batch_sent_again_returns_the_expenses_already_added_without_adding_events_or_notifications()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, worker) = await _steps.MaterialWorkerAsync(superAdmin);
@@ -38,7 +38,7 @@ public class MaterialClientRefTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { name = "Cement", amount = 120m, clientRef = cement }, new { name = "Sand", amount = 40m, clientRef = sand });
 
         again.Select(m => m.Id).ShouldBe(first.Select(m => m.Id));
-        (await CountAsync("SELECT COUNT(*) FROM project_materials WHERE project_id = @p", site.Id)).ShouldBe(2);
+        (await CountAsync("SELECT COUNT(*) FROM site_expenses WHERE project_id = @p", site.Id)).ShouldBe(2);
         (await CountAsync("SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'material_added'", site.Id)).ShouldBe(2);
         (await CountAsync("SELECT COUNT(*) FROM notifications WHERE project_id = @p AND kind = 'materials_added'", site.Id))
             .ShouldBe(await CountAsync("SELECT COUNT(DISTINCT recipient_id) FROM notifications WHERE project_id = @p AND kind = 'materials_added'", site.Id));
@@ -50,12 +50,12 @@ public class MaterialClientRefTests(ApiFactory api) : IClassFixture<ApiFactory>
         mixed[1].Id.ShouldBe(first[0].Id);
         mixed[0].Name.ShouldBe("Gravel");
         mixed[2].Name.ShouldBe("Nails");
-        (await CountAsync("SELECT COUNT(*) FROM project_materials WHERE project_id = @p", site.Id)).ShouldBe(4);
+        (await CountAsync("SELECT COUNT(*) FROM site_expenses WHERE project_id = @p", site.Id)).ShouldBe(4);
         (await CountAsync("SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'material_added'", site.Id)).ShouldBe(4);
     }
 
     [Fact]
-    public async Task Client_refs_are_each_person_s_own_and_one_material_s_only()
+    public async Task Client_refs_are_each_person_s_own_and_one_expense_s_only()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, worker) = await _steps.MaterialWorkerAsync(superAdmin);

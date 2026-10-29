@@ -20,6 +20,13 @@ public class ExpenseRulesTests
     }
 
     [Fact]
+    public void An_execution_site_keeps_its_costs_as_site_expenses_not_project_expenses()
+    {
+        ExpenseRules.CheckNotExecution(DomainCodes.Design).ShouldBeNull();
+        ExpenseRules.CheckNotExecution(DomainCodes.Execution)!.Code.ShouldBe(ErrorCodes.ExpenseExecutionUsesSiteExpenses);
+    }
+
+    [Fact]
     public void Totals_are_kept_per_currency_and_never_mixed()
     {
         var totals = ExpenseRules.Totals([("USD", 100.50m), ("LBP", 900_000m), ("USD", 49.50m)]);

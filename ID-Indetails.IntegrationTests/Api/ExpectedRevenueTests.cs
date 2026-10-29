@@ -36,11 +36,11 @@ public class ExpectedRevenueTests(ApiFactory api) : IClassFixture<ApiFactory>
         var summary = await OkAsync<FinanceSummaryResponse>("/api/finance/design/summary", token);
         (await OkAsync<List<FinanceMonthResponse>>("/api/finance/design/monthly?months=1", token)).Single().ExpectedRevenue.ShouldBe(summary.ExpectedRevenue);
 
-        // Execution: the work price on the day a BOQ is agreed, and a variation order by its difference; a material is a cost
+        // Execution: the work price on the day a BOQ is agreed, and a variation order by its difference; a site expense is a cost
         var execution = await ExpectedAsync(DomainCodes.Execution);
         var site = await Projects.CreateProjectAsync(token, DomainCodes.Execution);
         (await ExpectedAsync(DomainCodes.Execution)).ShouldBe(execution + 1000m);
-        (await Client.PostJsonAsync($"/api/projects/{site.Id}/materials", new { items = new[] { new { name = "Cement", amount = 100m } } }, token))
+        (await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses", new { items = new[] { new { name = "Cement", amount = 100m } } }, token))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await ExpectedAsync(DomainCodes.Execution)).ShouldBe(execution + 1000m);
 

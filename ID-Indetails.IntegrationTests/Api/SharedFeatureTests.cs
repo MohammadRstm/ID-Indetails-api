@@ -2,9 +2,9 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Activity;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Common;
-using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.Requirements;
+using ID_Indetails.api.DTO.Response.SiteExpenses;
 using ID_Indetails.api.Enums;
 using Shouldly;
 
@@ -44,11 +44,12 @@ public class SharedFeatureTests(ApiFactory api) : IClassFixture<ApiFactory>
         var requirements = await OkAsync<RequirementListResponse>(Client.GetAsync($"/api/projects/{site.Id}/requirements", siteWorker.AccessToken));
         requirements.ProgressPct.ShouldBe(100);
 
-        var expense = await Client.PostJsonAsync($"/api/projects/{site.Id}/expenses",
-            new { label = "Crane hire", amount = 350m, currency = "USD", category = "contractor" }, admin.AccessToken);
+        // a site's costs are its site expenses
+        var expense = await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
+            new { items = new[] { new { name = "Crane hire", amount = 350m, category = "contractor" } } }, admin.AccessToken);
         ((int)expense.StatusCode).ShouldBe(201, await expense.Content.ReadAsStringAsync());
-        var expenses = await OkAsync<ExpenseListResponse>(Client.GetAsync($"/api/projects/{site.Id}/expenses", admin.AccessToken));
-        expenses.Totals.ShouldHaveSingleItem().Total.ShouldBe(350m);
+        var expenses = await OkAsync<SiteExpenseListResponse>(Client.GetAsync($"/api/projects/{site.Id}/site-expenses", admin.AccessToken));
+        expenses.All.ByCurrency.ShouldHaveSingleItem().Total.ShouldBe(350m);
 
         var renamed = await OkAsync<ProjectResponse>(Client.PutJsonAsync($"/api/projects/{site.Id}",
             new { title = "Tower B", ownerId = admin.User.Id }, admin.AccessToken));

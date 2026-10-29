@@ -43,7 +43,7 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
     /// <summary>10% supervision and 11% TVA on the site, as a new client project starts.</summary>
     private async Task SetRatesAsync(AuthResponse superAdmin, long siteId)
         => await OkAsync<ProjectResponse>(Client.PutJsonAsync($"/api/projects/{siteId}/pricing",
-            new { materialMarkup = 0.10m, supervisionRate = 0.10m, tvaRate = 0.11m, description = "The usual rates" }, superAdmin.AccessToken));
+            new { supervisionRate = 0.10m, tvaRate = 0.11m, description = "The usual rates" }, superAdmin.AccessToken));
 
     private Task<BoqListResponse> ListAsync(AuthResponse by, long siteId) => OkAsync<BoqListResponse>(Client.GetAsync($"/api/projects/{siteId}/boqs", by.AccessToken));
 
@@ -55,10 +55,10 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
     private Task<long> EventsAsync(long boqId, string kind)
         => CountAsync("SELECT COUNT(*) FROM activity_events WHERE subject_type = 'boq' AND subject_id = @id AND kind = @kind", ("@id", boqId), ("@kind", kind));
 
-    /// <summary>A material cost written straight into the database: adding one through the API is itself held to the profit floor.</summary>
+    /// <summary>A site expense written straight into the database: adding one through the API is itself held to the profit floor.</summary>
     private Task CostAsync(long siteId, long userId, decimal amount)
         => _steps.ExecuteAsync(
-            "INSERT INTO project_materials (project_id, name, amount, currency, added_at, added_by_id) VALUES (@p, 'Concrete', @a, 'USD', UTC_TIMESTAMP(3), @u)",
+            "INSERT INTO site_expenses (project_id, name, amount, currency, spent_on, added_at, added_by_id) VALUES (@p, 'Concrete', @a, 'USD', UTC_DATE(), UTC_TIMESTAMP(3), @u)",
             ("@p", siteId), ("@a", amount), ("@u", userId));
 
     [Fact]

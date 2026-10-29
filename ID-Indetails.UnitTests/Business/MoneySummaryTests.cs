@@ -25,7 +25,7 @@ public class MoneySummaryTests
             [
                 new Recognition.DatedCost(CostSource.Labour, new(2026, 8, 16), 50m),
                 new Recognition.DatedCost(CostSource.Labour, new(2026, 8, 17), 70m),
-                new Recognition.DatedCost(CostSource.Materials, new(2026, 9, 29), 30m),
+                new Recognition.DatedCost(CostSource.SiteExpense, new(2026, 9, 29), 30m),
             ],
             new DateOnly(2026, 8, 17),
             Today);
@@ -44,14 +44,14 @@ public class MoneySummaryTests
                 new ProjectFinance.DatedUnconverted(CostSource.Expenses, "LBP", 100_000m, new(2026, 8, 16)),
                 new ProjectFinance.DatedUnconverted(CostSource.Expenses, "LBP", 200_000m, new(2026, 8, 17)),
                 new ProjectFinance.DatedUnconverted(CostSource.Expenses, "LBP", 300_000m, new(2026, 9, 29)),
-                new ProjectFinance.DatedUnconverted(CostSource.Materials, "EUR", 40m, new(2026, 9, 1)),
+                new ProjectFinance.DatedUnconverted(CostSource.SiteExpense, "EUR", 40m, new(2026, 9, 1)),
             ],
             new DateOnly(2026, 8, 17),
             Today);
 
         unconverted.ShouldBe([
             new ProjectFinance.UnconvertedCost(CostSource.Expenses, "LBP", 500_000m),
-            new ProjectFinance.UnconvertedCost(CostSource.Materials, "EUR", 40m),
+            new ProjectFinance.UnconvertedCost(CostSource.SiteExpense, "EUR", 40m),
         ]);
     }
 

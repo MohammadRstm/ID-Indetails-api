@@ -112,7 +112,6 @@ public class TvaTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // no price yet: everything is 0, and the site starts at the default supervision
         site.Money!.ShouldSatisfyAllConditions(
-            m => m.MaterialMarkup.ShouldBe(0m),
             m => m.SupervisionRate.ShouldBe(0.10m),
             m => m.SupervisionUsd.ShouldBe(0m),
             m => m.Revenue.ShouldBe(0m),
@@ -139,7 +138,7 @@ public class TvaTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // the rate changes with the supervision, on the pricing
         var priced = await OkAsync<ProjectResponse>(Client.PutJsonAsync($"/api/projects/{site.Id}/pricing",
-            new { materialMarkup = 0m, tvaRate = 0.1m, description = "Lower rate for this client" }, superAdmin.AccessToken));
+            new { tvaRate = 0.1m, description = "Lower rate for this client" }, superAdmin.AccessToken));
         priced.Money!.ShouldSatisfyAllConditions(m => m.PaymentWithTva.ShouldBe(1200m), m => m.RevenueWithTva.ShouldBe(1200m));
     }
 

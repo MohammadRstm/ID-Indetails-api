@@ -91,7 +91,7 @@ public class PushTextTests
         PushText.ForNotification(NotificationKinds.RequirementAssigned, "Rana", "Villa Haddad", null, 1)
             .ShouldBe(new PushMessageText("New requirement", "Rana assigned you a requirement on Villa Haddad."));
         PushText.ForNotification(NotificationKinds.MaterialsAdded, "Sami", "Tower B", JsonDocument.Parse("""{"count":4}""").RootElement, 1)
-            .Body.ShouldBe("Sami added 4 materials on Tower B.");
+            .Body.ShouldBe("Sami added 4 expenses on Tower B.");
         PushText.ForNotification(NotificationKinds.LabourWeekSubmitted, "Sami", "Tower B",
                 JsonDocument.Parse("""{"weekStart":"2026-10-05","updated":true}""").RootElement, 1)
             .Body.ShouldBe("Sami updated the labour week of 5 Oct on Tower B.");
