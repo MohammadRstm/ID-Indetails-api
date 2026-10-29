@@ -31,9 +31,9 @@ public class PushTextTests
         """).RootElement;
 
     [Fact]
-    public void There_are_45_notification_kinds_and_each_has_its_own_text()
+    public void There_are_46_notification_kinds_and_each_has_its_own_text()
     {
-        AllKinds.Count.ShouldBe(45);
+        AllKinds.Count.ShouldBe(46);
         foreach (var kind in AllKinds)
         {
             var text = PushText.ForNotification(kind, "Rana Haddad", "Villa Haddad", Revealing, 2);
@@ -64,9 +64,10 @@ public class PushTextTests
     {
         string Body(string kind) => PushText.ForNotification(kind, "Rana", "Villa Haddad", Revealing, 1).Body;
 
-        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(15);
+        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(16);
         Body(NotificationKinds.PaymentRecorded).ShouldBe("Payment recorded. Open ID InDetails to see it.");
         Body(NotificationKinds.PocketRequested).ShouldBe("A site asks for pocket money. Open ID InDetails to decide.");
+        Body(NotificationKinds.QuoteDue).ShouldBe("A new project may need a quote. Open ID InDetails to decide.");
         Body(NotificationKinds.InvoiceOverdue).ShouldBe("An invoice needs your attention.");
         Body(NotificationKinds.InvoiceDraftWaiting).ShouldBe("An invoice needs your attention.");
         Body(NotificationKinds.InvoiceReminderDue).ShouldBe("An invoice needs your attention.");

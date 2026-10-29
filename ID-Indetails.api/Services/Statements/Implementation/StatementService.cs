@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Finance;
@@ -241,7 +242,8 @@ public sealed class StatementService(
         }
 
         var latest = await statements.LatestCreatedAtAsync(project.Id, cancellationToken);
-        return (lines, new StatementRules.PaymentPosition(money.Received, agreed), latest is { } at ? clock.ToCompanyDate(at) : null);
+        var shown = lines.Select(l => l with { Price = Tva.Gross(l.Price, project.TvaRate) }).ToList();
+        return (shown, new StatementRules.PaymentPosition(money.Received, Tva.Gross(agreed, project.TvaRate)), latest is { } at ? clock.ToCompanyDate(at) : null);
     }
 
     private async Task<StatementResponse> DescribeAsync(UserAccess actor, long statementId, CancellationToken cancellationToken)

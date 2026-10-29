@@ -135,6 +135,9 @@ public static class ErrorCodes
 
     /// <summary>422. The pocket money request was already approved or denied.</summary>
     public const string PocketRequestDecided = "pocket_request_decided";
+
+    /// <summary>422. Internal work, or a project with no agreed amount yet, can't be quoted.</summary>
+    public const string QuoteNotPossible = "quote_not_possible";
     public const string StatementEmpty = "statement_empty";
 
     // Dependencies

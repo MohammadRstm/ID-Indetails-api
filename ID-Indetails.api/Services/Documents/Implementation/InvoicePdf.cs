@@ -7,11 +7,22 @@ namespace ID_Indetails.api.Services.Documents.Implementation;
 /// The invoice the client receives. It reads only client-facing fields: never rates, labour, hours, expenses,
 /// profit or margin.
 /// </summary>
+/// <summary>
+/// Where the whole project stands for its client, TVA included: what it costs them in all, what they paid so far
+/// (this invoice's payments too) and what this invoice asks for now.
+/// </summary>
+public sealed record InvoiceProjectPosition(decimal ProjectTotal, decimal PaidSoFar, decimal ThisInvoice)
+{
+    /// <summary>What is still to pay once this invoice is paid.</summary>
+    public decimal LeftAfter => Math.Max(0, ProjectTotal - PaidSoFar - ThisInvoice);
+}
+
 public static class InvoicePdf
 {
     /// <param name="issuedOn">The issue day in the company time zone; null for a draft.</param>
     /// <param name="billing">The domain's bank details and wording; null when they aren't set up.</param>
-    public static byte[] Render(InvoiceResponse invoice, DateOnly? issuedOn, Letterhead head, BillingSettings? billing)
+    /// <param name="position">The project's position for its client; null when the caller can't see project money.</param>
+    public static byte[] Render(InvoiceResponse invoice, DateOnly? issuedOn, Letterhead head, BillingSettings? billing, InvoiceProjectPosition? position = null)
     {
         var number = invoice.Number ?? "Draft";
         var (document, section) = PdfLayout.NewDocument($"Invoice {number}", $"{head.CompanyName} · Invoice {number}");
@@ -46,6 +57,17 @@ public static class InvoicePdf
 
         totals.Add(new("Amount due", PdfLayout.Money(invoice.Balance ?? invoice.Total, invoice.Currency), Strong: true));
         PdfLayout.AddTotals(section, [.. totals]);
+
+        if (position is not null)
+        {
+            PdfLayout.AddHeading(section, "Your project");
+            PdfLayout.AddTotals(
+                section,
+                new TotalRow("Project total", PdfLayout.Money(position.ProjectTotal, invoice.Currency)),
+                new TotalRow("Paid so far", PdfLayout.Money(position.PaidSoFar, invoice.Currency)),
+                new TotalRow("This invoice", PdfLayout.Money(position.ThisInvoice, invoice.Currency)),
+                new TotalRow("Left after this invoice", PdfLayout.Money(position.LeftAfter, invoice.Currency), Strong: true));
+        }
 
         if (!string.IsNullOrWhiteSpace(invoice.Notes))
         {

@@ -24,6 +24,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
             t.HasCheckConstraint("ck_projects_revenue_non_negative", "`revenue` >= 0");
             t.HasCheckConstraint("ck_projects_progress_range", "`progress_pct` <= 100");
+            t.HasCheckConstraint("ck_projects_tva_rate_range", "`tva_rate` >= 0 AND `tva_rate` <= 1");
 
             // Execution sites are always for a client.
             t.HasCheckConstraint(
@@ -50,6 +51,7 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(x => x.Tint).HasMaxLength(9);
         builder.Property(x => x.RevenueCurrency).IsCurrencyCode();
         builder.Property(x => x.MaterialMarkup).HasPrecision(7, 4);
+        builder.Property(x => x.TvaRate).HasPrecision(5, 4).HasDefaultValue(0m);
 
         builder.HasIndex(x => new { x.DomainCode, x.Status });
 

@@ -26,7 +26,8 @@ public sealed record BillingPositionResponse(
     int PaymentCount);
 
 /// <summary>A domain's money over a period (the dashboard's money cards and the Financials header).</summary>
-/// <param name="Revenue">The money received in the period, each payment on the day it arrived.</param>
+/// <param name="Revenue">The money received in the period, each payment on the day it arrived, TVA left out.</param>
+/// <param name="TvaCollected">The TVA inside the payments of the period: collected for the state, never revenue.</param>
 /// <param name="ExpectedRevenue">Agreed in the period: client projects' payments and fees on the day set or changed (a change counts
 /// its difference), and Execution materials at client prices on the day they were first sent on a statement.</param>
 /// <param name="Unconverted">Costs of the period with no exchange rate on their day, in their own currency.</param>
@@ -52,7 +53,8 @@ public sealed record FinanceSummaryResponse(
     decimal AllTimeInternalCost,
     decimal StillToEarn,
     BillingPositionResponse Billing,
-    int LabourMinutes);
+    int LabourMinutes,
+    decimal TvaCollected = 0);
 
 /// <param name="Unconverted">Costs of the month with no exchange rate on their day, in their own currency.</param>
 public sealed record FinanceMonthResponse(

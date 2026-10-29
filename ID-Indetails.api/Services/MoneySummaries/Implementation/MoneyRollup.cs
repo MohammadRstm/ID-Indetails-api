@@ -42,7 +42,8 @@ public sealed class MoneyRollup(
         var list = projects.ToList();
         var ids = list.Select(p => p.Id).ToHashSet();
         return ProjectBilling.Summarise(
-            list.Where(p => p.BillingType == BillingType.Client).Sum(p => Money(p.Id).Summary.Revenue),
+            // the client owes the agreed amount with TVA on it
+            list.Where(p => p.BillingType == BillingType.Client).Sum(p => Tva.Gross(Money(p.Id).Summary.Revenue, p.TvaRate)),
             Invoices.Where(i => ids.Contains(i.ProjectId)).ToList(),
             Payments.Where(p => ids.Contains(p.ProjectId)).ToList(),
             Today);
