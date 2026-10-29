@@ -80,7 +80,7 @@ public static class DocumentEmails
         var boq = document.Boq;
         var label = BoqPdf.Label(boq.Kind);
         var number = boq.Number ?? "Draft";
-        var total = PdfLayout.Money(boq.ClientTotalUsd);
+        var total = PdfLayout.Money(boq.ClientTotalUsd!.Value);
         var intro = $"Please find below the {label.ToLowerInvariant()} {number} for {document.ProjectTitle}. A PDF copy is attached for your records.";
         var rows = boq.Lines
             .Select(l => new[]

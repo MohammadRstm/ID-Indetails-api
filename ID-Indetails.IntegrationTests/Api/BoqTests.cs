@@ -79,7 +79,17 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
             d => d.Title.ShouldBe("Internal draft"),
             d => d.Author.Id.ShouldBe(author.User.Id),
             d => d.Lines.ShouldBeEmpty());
-        await Boqs.SaveAsync(author.AccessToken, draft.Id, [Line("Excavation", 100, 8)], "My estimate");
+        var saved = await Boqs.SaveAsync(author.AccessToken, draft.Id, [Line("Excavation", 100, 8)], "My estimate");
+        // the author sees their own lines and totals, but not the site's pricing (supervision, TVA, the client's total)
+        saved.ShouldSatisfyAllConditions(
+            d => d.TotalUsd.ShouldBe(800m),
+            d => d.SupervisionRate.ShouldBeNull(),
+            d => d.SupervisionUsd.ShouldBeNull(),
+            d => d.TvaRate.ShouldBeNull(),
+            d => d.TvaUsd.ShouldBeNull(),
+            d => d.ClientTotalUsd.ShouldBeNull());
+        (await Boqs.GetAsync(author.AccessToken, draft.Id)).ClientTotalUsd.ShouldBeNull();
+        (await Boqs.GetAsync(pricing.AccessToken, draft.Id)).ClientTotalUsd.ShouldNotBeNull();
 
         (await ListAsync(author, site.Id)).Internal.Select(b => b.Id).ShouldBe([draft.Id]);
         (await ListAsync(otherDrafter, site.Id)).Internal.ShouldBeEmpty();
