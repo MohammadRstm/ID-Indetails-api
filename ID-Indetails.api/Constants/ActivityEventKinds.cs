@@ -130,11 +130,18 @@ public static class ActivityEventKinds
     /// <summary>Subject: the project; the new and previous daily pay in the amount columns, the crew sizes in the payload.</summary>
     public const string LabourDefaultsSet = "labour_defaults_set";
 
-    // Client statements (subject: the statement; project and client are set; the statement's total in the amount column)
-    public const string StatementCreated = "statement_created";
+    // Client BOQs and VOs (subject: the BOQ; project and client are set; its total in the amount column; the kind and
+    // number in the payload). Internal drafts are private working papers and raise none.
+    public const string BoqCreated = "boq_created";
 
     /// <summary>The channel in the payload.</summary>
-    public const string StatementSent = "statement_sent";
+    public const string BoqSent = "boq_sent";
+
+    /// <summary>Also writes <see cref="ProjectFeeSet"/>, as the work price changes.</summary>
+    public const string BoqAgreed = "boq_agreed";
+
+    /// <summary>The reason in the payload. Also writes <see cref="ProjectFeeSet"/>, as the work price changes.</summary>
+    public const string BoqAgreementWithdrawn = "boq_agreement_withdrawn";
 
     // Company layer (no domain, except schedules, which carry the person's domain)
     public const string CompanySettingsUpdated = "company_settings_updated";

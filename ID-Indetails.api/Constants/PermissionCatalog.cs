@@ -25,8 +25,7 @@ public static class PermissionCatalog
         new(P.ProjectEdit, "Edit project details, owner, client and revenue"),
         new(P.ProjectChangeStatus, "Put projects on hold, complete, reopen or archive them"),
         new(P.ProjectPricingManage, "Set the project fee, default material markup and material client prices", DomainCodes.Execution, Sensitivity: Money),
-        new(P.StatementCreate, "Create client statements of materials supplied", DomainCodes.Execution, Sensitivity: Money),
-        new(P.StatementSend, "Send client statements", DomainCodes.Execution, Sensitivity: Money),
+        new(P.BoqCreate, "Write internal draft BOQs of a site", DomainCodes.Execution, Sensitivity: Money),
         new(P.RequirementView, "View project requirements"),
         new(P.RequirementManage, "Add, edit, assign, tick and remove requirements"),
         new(P.RequirementCompleteOwn, "Tick requirements assigned to you, and untick the ones you ticked"),
@@ -106,12 +105,12 @@ public static class PermissionCatalog
 
     /// <summary>
     /// Money and hiring are the super admins' alone: admins see no revenue, cost, profit, invoices, payments, pricing,
-    /// statements or pay, and invite no one.
+    /// BOQs or pay, and invite no one.
     /// </summary>
     private static readonly string[] SuperAdminOnly =
     [
         P.FinancialView, P.InvoiceCreate, P.InvoiceSend, P.InvoiceVoid, P.PaymentRecord, P.PaymentVoid,
-        P.BillingSettingsManage, P.ExpenseManage, P.ProjectPricingManage, P.StatementCreate, P.StatementSend,
+        P.BillingSettingsManage, P.ExpenseManage, P.ProjectPricingManage, P.BoqCreate,
         P.EmployeeInvite, P.EmployeePayManage,
     ];
 
