@@ -14,6 +14,7 @@ public sealed record ProjectOwnerResponse(long Id, string Name);
 /// <param name="Amount">USD: Design's customer payment, Execution's project fee.</param>
 /// <param name="PreviousAmount">Null for the payment agreed at the start.</param>
 /// <param name="MaterialMarkup">Execution only: the default material markup after it, a fraction (0.125 is 12.5%).</param>
+/// <param name="SupervisionRate">Execution only: the supervision rate after it; null on Design rows and on rows from before supervision.</param>
 /// <param name="ChangedBy">Null when the person no longer exists.</param>
 public sealed record ProjectPaymentChangeResponse(
     long Id,
@@ -25,7 +26,9 @@ public sealed record ProjectPaymentChangeResponse(
     DateTime ChangedAt,
     ProjectOwnerResponse? ChangedBy,
     decimal? TvaRate = null,
-    decimal? PreviousTvaRate = null);
+    decimal? PreviousTvaRate = null,
+    decimal? SupervisionRate = null,
+    decimal? PreviousSupervisionRate = null);
 
 /// <summary>Only for callers with <c>financial:view</c>.</summary>
 public sealed record ProjectMoneyResponse
