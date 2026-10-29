@@ -81,7 +81,7 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.SupervisionRate.ShouldBe(0.10m),
             m => m.SupervisionUsd.ShouldBe(150m),
             m => m.Revenue.ShouldBe(1650m));
-        repriced.Money.UnsentMaterialCharge.ShouldBe(300m);
+        repriced.Money!.UnsentMaterialCharge.ShouldBe(300m);
 
         // sent on a statement, they join the revenue at the prices the client was shown
         await Projects.SendStatementAsync(admin.AccessToken, site.Id);
