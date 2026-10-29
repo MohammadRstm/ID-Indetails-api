@@ -410,7 +410,7 @@ Proton can fill a form for the person to check and save, and draft a message for
 submits or sends anything itself.
 
 - **`fill_form {form, id?, <form>: values}`** (`Proton/Ui/ProtonForms.cs`): one typed record per form (decision 11b,
-  no loose dictionary). The forms are `client`, `meeting`, `new_project` (no money: revenue, fee, markup and pay don't
+  no loose dictionary). The forms are `client`, `meeting`, `new_project` (no money: revenue, rates and pay don't
   exist in it), `edit_project`, `report_bug`, `invite` (address, position and team, never role or pay) and `message`.
   - Shape problems go back to the model field by field (lengths, email format, times).
   - It needs the endpoint the form saves through, and any record it names must be visible to the user.
@@ -688,8 +688,8 @@ Three more families, each off until switched on (`Proton:Actions:Money`, `Delete
 two steps, and where money is recorded or something can't be undone the user types the amount (digits and a point,
 no separators: `2500`, `320.5`) or the invoice number, which the server stored with the proposal.
 
-Every amount a money card sets (invoice lines, a payment, an expense, materials and client prices, a day rate, a rate,
-revenue, fee, markup, overhead) must be one the user typed in this conversation (`MoneyText.RequireTyped`, read as
+Every amount a money card sets (invoice lines, a payment, an expense, site expenses, a day rate, a rate,
+revenue, overhead) must be one the user typed in this conversation (`MoneyText.RequireTyped`, read as
 people write it: `1,500`, `1.5k`, `4.5m`), never one from the data or one the model worked out; otherwise the model is
 sent back to ask. Typing the card's amount to confirm only proves it was read, not where it came from. A payment of
 an invoice's whole balance uses `full_balance`, so the server sets the amount.
@@ -701,12 +701,12 @@ an invoice's whole balance uses `full_balance`, so the server sets the amount.
 | `propose_record_invoice_delivery` | `…/deliveries` | — (WhatsApp or by hand only: emails are sent from the app) |
 | `propose_record_payment` | `POST /api/projects/{id}/payments` | the amount (or `full_balance`); at the dated exchange rate in force, never one Proton sets; the card gives the invoice's balance before and after, and warns when the same amount was already recorded that day |
 | `propose_payment_step` | `PUT /api/payments/{id}/invoice`, `…/void` | void: the amount |
-| `propose_add_expense`, `propose_delete_expense` | project expenses | the amount; the card warns when the same amount was already recorded that day |
-| `propose_add_materials`, `propose_material_step` | a site's materials (add, correct, delete, client price) | add: the total cost; delete: its cost. A correction changes only the fields named (the update replaces the whole material, so the rest is read from it) and is refused if the material changed since the card |
+| `propose_add_expense`, `propose_delete_expense` | Design project expenses (an Execution site's costs are site expenses; the tool refuses a site) | the amount; the card warns when the same amount was already recorded that day |
+| `propose_add_site_expenses`, `propose_site_expense_step` | a site's expenses (add, correct, delete): an item, its quantity and unit cost or total, who was paid, a category and the day spent | add: the total cost; delete: its cost. A correction changes only the fields named (the update replaces the whole expense, so the rest is read from it, its currency, day, category and label included) and is refused if the expense changed since the card. Nothing about a client price or a markup: they are gone. The materials sheet (`materials` form) keeps its name and fields |
 | `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13); it sends the week's version, so a week changed since is refused (`409 labour_week_changed`) |
 | `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; prefix, terms and footer only. Bank details and overdue reminders (which email clients on their own) are never part of a proposal: they are taken from the database when the change is made |
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate; irreversible. A backdated rate changes past costs, overhead and invoices (they convert at the rate of their day when read), and the card says so; payments keep their own rate |
-| `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), `…/pricing` (Execution fee and markup), each with why it changes (`reason`, asked for when not given) | the new amount, or the new markup when only it changes. The markup is said and shown as a percentage and stored as the app's fraction (15 → 0.15) |
+| `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), with why it changes (`reason`, asked for when not given) | the new amount. An Execution site isn't priced by Proton: its price is its agreed BOQ, and its supervision and TVA are changed in the app (`PUT …/pricing` is a `Never` entry) |
 | `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
 | `propose_delete` | requirement, meeting and client deletes | the project's or client's name; a client with projects is archived instead |
 | `propose_working_time`, `propose_schedule`, `propose_hour_excuse` | the company week, someone's own week, excused hours | — ; the cards describe the effect in words and never show an amount |
