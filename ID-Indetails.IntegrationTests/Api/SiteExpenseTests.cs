@@ -1,5 +1,7 @@
 using System.Text.Json;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Activity;
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.SiteExpenses;
@@ -118,6 +120,7 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var label = await AddLabelAsync(superAdmin.AccessToken);
+        await LbpRateAsync(superAdmin.AccessToken);
 
         var crane = (await AddAsync(project.Id, superAdmin.AccessToken, new
         {
@@ -364,6 +367,33 @@ public class SiteExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
         response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<AccountLabelResponse>();
     }
+
+    [Fact]
+    public async Task An_expense_in_another_currency_needs_a_rate_on_its_day_so_profit_never_misses_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        await LbpRateAsync(superAdmin.AccessToken);
+
+        // before the first LBP rate nothing converts it, so the site's money would leave it out: it is refused instead
+        await (await Client.PostJsonAsync($"/api/projects/{project.Id}/site-expenses",
+                new { items = new[] { new { name = "Old stock", amount = 179_000m, currency = "LBP", spentOn = "2025-06-01" } } }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ExchangeRateMissing);
+        var sand = (await AddAsync(project.Id, superAdmin.AccessToken, new { name = "Sand", amount = 50m }))[0];
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/site-expenses/{sand.Id}",
+                new { name = "Sand", amount = 4_475_000m, currency = "LBP", spentOn = "2025-06-01" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ExchangeRateMissing);
+
+        // on a day with a rate it is recorded, and the feed says which currency its amount is in
+        var crane = (await AddAsync(project.Id, superAdmin.AccessToken, new { name = "Crane hire", amount = 895_000m, currency = "LBP", spentOn = "2026-09-14" }))[0];
+        var feed = await (await Client.GetAsync($"/api/activity?projectId={project.Id}", superAdmin.AccessToken)).ReadAsync<PagedResponse<ActivityItemResponse>>();
+        feed.Items.Single(i => i.Kind == ActivityEventKinds.MaterialAdded && i.SubjectId == crane.Id)
+            .Payload!.Value.GetProperty("currency").GetString().ShouldBe("LBP");
+    }
+
+    /// <summary>89,500 LBP to the dollar from 1 January 2026. Rates are company-wide and added in date order: a repeat is refused, which is fine.</summary>
+    private Task LbpRateAsync(string token)
+        => Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_500m, effectiveFrom = "2026-01-01" }, token);
 
     private async Task<IReadOnlyList<SiteExpenseResponse>> AddAsync(long projectId, string accessToken, params object[] items)
     {
