@@ -83,6 +83,7 @@ public sealed record PushTarget
             NotificationKinds.ProjectCreated or NotificationKinds.ProjectStatusChanged or NotificationKinds.ProjectOwnerSet
                 or NotificationKinds.ProjectNearlyDone or NotificationKinds.ProjectIdle
                 or NotificationKinds.ProjectClosed or NotificationKinds.ProjectCostHigh or NotificationKinds.QuoteDue
+                or NotificationKinds.ChangeBlocked or NotificationKinds.ProfitLow or NotificationKinds.ProfitAtZero
                 => ProjectPart(projectId, projectDomain, null),
 
             NotificationKinds.WorkLogged or NotificationKinds.EntryComment => Subject(WorkEntry, "work_entry", subjectType, subjectId),

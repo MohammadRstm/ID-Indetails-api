@@ -9,6 +9,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Labour;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Labour;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
@@ -20,6 +21,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Labour.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Services.Labour.Implementation;
 
@@ -32,6 +34,7 @@ public sealed class LabourService(
     INotificationSender notifications,
     ISiteTeamRepository team,
     IUnitOfWork unitOfWork,
+    IProfitFloor floor,
     IClock clock) : ILabourService
 {
     private const string ProjectNotFound = "Project not found.";
@@ -106,6 +109,7 @@ public sealed class LabourService(
                 throw new ConflictException(ErrorCodes.LabourWeekChanged, "Someone changed this week since you loaded it.");
         }
 
+        var before = await floor.BeforeAsync(project, cancellationToken);
         decimal? previousTotal = null;
         if (week is null)
         {
@@ -137,6 +141,8 @@ public sealed class LabourService(
         });
         await NotifyAsync(project, weekStart, isNew, actor.UserId, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.LabourWeek,
+            new BlockedRequest<SubmitLabourWeekRequest>(project.Id, request, WeekStart: weekStart), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeWeekAsync(actor, project, weekStart, cancellationToken);
