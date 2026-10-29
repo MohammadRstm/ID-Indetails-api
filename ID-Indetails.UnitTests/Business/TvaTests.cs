@@ -23,6 +23,13 @@ public class TvaTests
     }
 
     [Fact]
-    public void A_new_project_starts_at_15_percent()
-        => Tva.DefaultRate.ShouldBe(0.15m);
+    public void A_new_project_starts_at_11_percent()
+        => Tva.DefaultRate.ShouldBe(0.11m);
+
+    [Fact]
+    public void Tva_of_an_amount_is_the_rate_on_it()
+    {
+        Tva.Of(787_646.20m, 0.11m).ShouldBe(86_641.08m);
+        Tva.Of(500m, 0m).ShouldBe(0m);
+    }
 }

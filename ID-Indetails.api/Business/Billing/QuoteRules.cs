@@ -5,20 +5,21 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Business.Billing;
 
 /// <summary>
-/// A quote tells a client what the whole project costs them, TVA included. It is made from the project's agreed
-/// payment (Design) or agreed amount before materials (Execution, whose materials are billed as they are delivered).
+/// A quote tells a Design client what the whole project costs them, TVA included, from the project's agreed payment.
+/// Execution has no quotes: its price is built from BOQs.
 /// </summary>
 public static class QuoteRules
 {
     public static string Number(int year, int sequence) => $"QU-{year}-{sequence:000}";
 
-    /// <summary>What the quote is for, before TVA: Design's payment, or an Execution site's agreed amount.</summary>
-    public static decimal NetOf(string domain, decimal revenue, decimal? projectFee)
-        => domain == DomainCodes.Execution ? projectFee ?? 0 : revenue;
-
-    /// <summary>Only client work with an agreed amount can be quoted.</summary>
-    public static RuleDenial? CheckQuotable(BillingType billingType, decimal net)
+    /// <summary>Only Design client work with an agreed payment can be quoted.</summary>
+    public static RuleDenial? CheckQuotable(string domain, BillingType billingType, decimal net)
     {
+        if (domain == DomainCodes.Execution)
+        {
+            return RuleDenial.BusinessRule(ErrorCodes.QuoteNotForExecution, "Execution projects have no quotes: their price comes from the agreed BOQs.");
+        }
+
         if (billingType != BillingType.Client)
         {
             return RuleDenial.BusinessRule(ErrorCodes.QuoteNotPossible, "Internal projects have no client to quote.");

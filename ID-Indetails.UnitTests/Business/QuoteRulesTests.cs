@@ -12,17 +12,17 @@ public class QuoteRulesTests
         => QuoteRules.Number(2026, 7).ShouldBe("QU-2026-007");
 
     [Fact]
-    public void A_quote_is_for_designs_payment_or_a_sites_agreed_amount_before_materials()
+    public void Only_design_client_work_with_an_agreed_amount_is_quoted()
     {
-        QuoteRules.NetOf(DomainCodes.Design, revenue: 10_000m, projectFee: null).ShouldBe(10_000m);
-        QuoteRules.NetOf(DomainCodes.Execution, revenue: 12_500m, projectFee: 8000m).ShouldBe(8000m);
+        QuoteRules.CheckQuotable(DomainCodes.Design, BillingType.Client, 100m).ShouldBeNull();
+        QuoteRules.CheckQuotable(DomainCodes.Design, BillingType.Client, 0m)!.Code.ShouldBe(ErrorCodes.QuoteNotPossible);
+        QuoteRules.CheckQuotable(DomainCodes.Design, BillingType.Internal, 100m)!.Message.ShouldContain("Internal");
     }
 
     [Fact]
-    public void Only_client_work_with_an_agreed_amount_is_quoted()
+    public void Execution_has_no_quotes_whatever_its_amount()
     {
-        QuoteRules.CheckQuotable(BillingType.Client, 100m).ShouldBeNull();
-        QuoteRules.CheckQuotable(BillingType.Client, 0m)!.Code.ShouldBe(ErrorCodes.QuoteNotPossible);
-        QuoteRules.CheckQuotable(BillingType.Internal, 100m)!.Message.ShouldContain("Internal");
+        QuoteRules.CheckQuotable(DomainCodes.Execution, BillingType.Client, 100m)!.Code.ShouldBe(ErrorCodes.QuoteNotForExecution);
+        QuoteRules.CheckQuotable(DomainCodes.Execution, BillingType.Client, 0m)!.Code.ShouldBe(ErrorCodes.QuoteNotForExecution);
     }
 }

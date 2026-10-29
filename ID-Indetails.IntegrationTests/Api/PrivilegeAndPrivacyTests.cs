@@ -153,7 +153,7 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
 
         var client = await Projects.CreateClientAsync(superAdmin.AccessToken, DomainCodes.Execution);
         await (await Client.PostJsonAsync("/api/projects",
-            new { title = "Lobby", domainCode = DomainCodes.Execution, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m }, siteAdmin.AccessToken))
+            new { title = "Lobby", domainCode = DomainCodes.Execution, clientId = client.Id, materialMarkup = 0.10m }, siteAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
 

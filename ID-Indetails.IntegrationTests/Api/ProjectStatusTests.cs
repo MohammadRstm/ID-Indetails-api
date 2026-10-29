@@ -103,14 +103,16 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
         var completed = await ChangeAsync(site.Id, "complete", admin.AccessToken);
         completed.Money!.Revenue.ShouldBe(1000m);
         (await _steps.ScalarAsync<decimal>("SELECT revenue FROM projects WHERE id = @p", ("@p", site.Id))).ShouldBe(1000m);
-        await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 2000m, materialMarkup = 0.1m, description = "Late" }, admin.AccessToken))
+        await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { materialMarkup = 0.2m, description = "Late" }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.ProjectLocked);
 
         await ChangeAsync(site.Id, "reopen", admin.AccessToken);
         (await _steps.ScalarAsync<decimal>("SELECT revenue FROM projects WHERE id = @p", ("@p", site.Id))).ShouldBe(0m);
-        var repriced = await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { projectFee = 2000m, materialMarkup = 0.1m, description = "Reopened" }, admin.AccessToken))
+        var repriced = await (await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing", new { materialMarkup = 0.1m, supervisionRate = 0.1m, description = "Reopened" }, admin.AccessToken))
             .ReadAsync<ProjectResponse>();
-        repriced.Money!.Revenue.ShouldBe(2000m);
+        repriced.Money!.ShouldSatisfyAllConditions(
+            m => m.SupervisionUsd.ShouldBe(100m),
+            m => m.Revenue.ShouldBe(1100m));
     }
 
     [Fact]

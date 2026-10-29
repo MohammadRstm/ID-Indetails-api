@@ -171,7 +171,7 @@ public sealed class BlockedChangeService(
                 return $"Payment set to {Read<UpdateProjectPaymentRequest>(change).Request.Revenue:N2} USD";
             case BlockedChangeKind.Pricing:
                 var pricing = Read<UpdateProjectPricingRequest>(change).Request;
-                return $"Project fee set to {pricing.ProjectFee:N2} USD, material profit {pricing.MaterialMarkup * 100:0.##}%";
+                return $"Material profit set to {pricing.MaterialMarkup * 100:0.##}%{(pricing.SupervisionRate is { } supervision ? $", supervision {supervision * 100:0.##}%" : "")}";
             default:
                 return change.Kind.ToString();
         }
