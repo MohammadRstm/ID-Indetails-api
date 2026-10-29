@@ -31,6 +31,11 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<AuthResponse> AdminWithAsync(AuthResponse superAdmin, params string[] codes)
     {
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        if (codes.Length == 0)
+        {
+            return admin;
+        }
+
         var granted = await Client.PutJsonAsync($"/api/users/{admin.User.Id}/permissions",
             new { changes = codes.Select(code => new { code, action = "grant", reason = "BOQ work" }) }, superAdmin.AccessToken);
         granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
@@ -637,7 +642,7 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
         sent.LastDelivery!.Channel.ShouldBe(DeliveryChannel.Whatsapp);
 
         // a draft stays editable after it was sent: the delivery keeps what was sent
-        var edited = await Boqs.SaveAsync(superAdmin.AccessToken, boq.Id, [Line("Concrete slab", 10, 130m, waste: 0.05m)]);
+        var edited = await Boqs.SaveAsync(superAdmin.AccessToken, boq.Id, [Line("Concrete slab", 10, 130m, waste: 0.05m, code: "2.1.1", unit: "m3")]);
         edited.TotalUsd.ShouldBe(1365m);
         edited.Deliveries.Single().TotalUsd.ShouldBe(1265.25m);
 
@@ -657,7 +662,8 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
         email.Subject.ShouldBe($"Bill of quantities {boq.Number} - {site.Title}");
         email.Attachments!.Single().FileName.ShouldBe(boq.Number!.ToLowerInvariant() + ".pdf");
         email.Attachments!.Single().MimeType.ShouldBe("application/pdf");
-        // the client reads the final quantity, never the quantity before waste nor the waste itself
+        // addressed to the site's client, who reads the final quantity, never the quantity before waste nor the waste itself
+        email.TextBody.ShouldContain($"Hello {site.Client!.DisplayName},");
         email.TextBody.ShouldContain("10.5 m3");
         email.TextBody.ShouldContain("2.1.1");
         email.TextBody.ShouldNotContain("0.05");
