@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Execution;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Execution;
 using ID_Indetails.api.DTO.Response.Common;
@@ -9,6 +10,7 @@ using ID_Indetails.api.DTO.Response.Execution;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Repositories.Employees.Abstraction;
 using ID_Indetails.api.Repositories.Execution.Abstraction;
+using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Execution.Abstraction;
@@ -21,6 +23,7 @@ public sealed class SiteRecordsService(
     IPermissionService permissions,
     IEmployeeRepository employees,
     ISiteRecordsRepository records,
+    IProjectFinanceRepository financeSources,
     IProjectFinanceService finance,
     IClock clock) : ISiteRecordsService
 {
@@ -45,7 +48,7 @@ public sealed class SiteRecordsService(
             .Select(id => new SiteSummaryResponse(
                 id,
                 activity[id].MaterialCount,
-                seesMoney ? money[id].Costs.Materials : null,
+                seesMoney ? money[id].Costs.SiteExpenses : null,
                 activity[id].ReportedWeeks,
                 seesMoney ? money[id].Costs.GroundLabour : null,
                 activity[id].LastRecordedAt))
@@ -77,8 +80,13 @@ public sealed class SiteRecordsService(
 
         var materials = await records.MaterialsByAsync(userId, actor.VisibleDomains, cancellationToken);
         var weeks = await records.LabourWeeksByAsync(userId, actor.VisibleDomains, cancellationToken);
+        // in dollars at the rate of the day it was spent, as in the site's money; one with no rate can't be added in
+        var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
         var all = materials
-            .Select(m => new SiteRecords.Record(SiteRecords.Kind.Material, m.Id, m.ProjectId, clock.ToCompanyDate(m.AddedAt), m.AddedAt, m.Name, m.Cost))
+            .Select(m => (Row: m, Usd: rates.ToUsd(m.Cost, m.Currency, m.SpentOn)))
+            .Where(m => m.Usd is not null)
+            .Select(m => new SiteRecords.Record(
+                SiteRecords.Kind.Material, m.Row.Id, m.Row.ProjectId, clock.ToCompanyDate(m.Row.AddedAt), m.Row.AddedAt, m.Row.Name, m.Usd!.Value))
             .Concat(weeks.Select(w => new SiteRecords.Record(
                 SiteRecords.Kind.LabourWeek, w.Id, w.ProjectId, clock.ToCompanyDate(w.SubmittedAt), w.SubmittedAt, w.WeekStart.ToString("yyyy-MM-dd"), w.Total)))
             .ToList();

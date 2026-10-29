@@ -18,6 +18,11 @@ public sealed class ApiErrorResponse
     /// <summary>Field errors, keyed by camelCase field name. Only for validation errors.</summary>
     public IDictionary<string, string[]>? Errors { get; init; }
 
+    /// <summary>
+    /// For <c>profit_floor</c>: the refused change, kept so whoever sees the project's money can force it through.
+    /// </summary>
+    public long? BlockedChangeId { get; init; }
+
     /// <summary>Correlates the response with server logs.</summary>
     public string? TraceId { get; init; }
 }

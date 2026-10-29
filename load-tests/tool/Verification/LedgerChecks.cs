@@ -22,7 +22,7 @@ public static class LedgerChecks
         ("work_entry.created", "work_entries", "description"),
         ("requirement.created", "project_requirements", "text"),
         ("meeting.created", "project_meetings", "topic"),
-        ("material.created", "project_materials", "note"),
+        ("site_expense.created", "site_expenses", "note"),
         ("client.created", "clients", "note"),
         ("payment.recorded", "payments", "note"),
         ("expense.created", "project_expenses", "label"),
@@ -37,7 +37,7 @@ public static class LedgerChecks
         ("work_entries", "work_entry.created", "work_entry.deleted", "work_entry.restored"),
         ("project_requirements", "requirement.created", "requirement.deleted", null),
         ("project_meetings", "meeting.created", "meeting.deleted", null),
-        ("project_materials", "material.created", "material.deleted", null),
+        ("site_expenses", "site_expense.created", "site_expense.deleted", null),
         ("project_expenses", "expense.created", "expense.deleted", null),
         ("hour_excuses", "hour_excuse.created", "hour_excuse.deleted", null),
     ];
@@ -46,7 +46,7 @@ public static class LedgerChecks
     private static readonly (string Kind, string Table, string OwnerColumn)[] Owned =
     [
         ("work_entry.created", "work_entries", "user_id"),
-        ("material.created", "project_materials", "added_by_id"),
+        ("site_expense.created", "site_expenses", "added_by_id"),
         ("client.created", "clients", "created_by_id"),
         ("message.sent", "messages", "sender_id"),
         ("payment.recorded", "payments", "recorded_by_id"),

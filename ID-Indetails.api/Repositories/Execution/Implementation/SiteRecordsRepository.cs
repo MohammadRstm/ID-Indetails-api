@@ -12,10 +12,10 @@ public sealed class SiteRecordsRepository(IdIndetailsDbContext db) : ISiteRecord
         long userId,
         IReadOnlyCollection<string> domains,
         CancellationToken cancellationToken = default)
-        => await db.ProjectMaterials
+        => await db.SiteExpenses
             .AsNoTracking()
             .Where(m => m.AddedById == userId && m.DeletedAt == null && domains.Contains(m.Project.DomainCode))
-            .Select(m => new PersonMaterialRow(m.Id, m.ProjectId, m.Name, m.Total, m.AddedAt))
+            .Select(m => new PersonMaterialRow(m.Id, m.ProjectId, m.Name, m.Total, m.Currency, m.SpentOn, m.AddedAt))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<PersonLabourWeekRow>> LabourWeeksByAsync(
@@ -46,9 +46,9 @@ public sealed class SiteRecordsRepository(IdIndetailsDbContext db) : ISiteRecord
             .Where(p => projectIds.Contains(p.Id))
             .Select(p => new SiteActivityRow(
                 p.Id,
-                db.ProjectMaterials.Count(m => m.ProjectId == p.Id && m.DeletedAt == null),
+                db.SiteExpenses.Count(m => m.ProjectId == p.Id && m.DeletedAt == null),
                 db.LabourWeeks.Count(w => w.ProjectId == p.Id),
-                db.ProjectMaterials.Where(m => m.ProjectId == p.Id && m.AddedById == userId && m.DeletedAt == null).Max(m => (DateTime?)m.AddedAt),
+                db.SiteExpenses.Where(m => m.ProjectId == p.Id && m.AddedById == userId && m.DeletedAt == null).Max(m => (DateTime?)m.AddedAt),
                 db.LabourWeeks.Where(w => w.ProjectId == p.Id && w.SubmittedById == userId).Max(w => (DateTime?)w.SubmittedAt)))
             .ToListAsync(cancellationToken);
 }

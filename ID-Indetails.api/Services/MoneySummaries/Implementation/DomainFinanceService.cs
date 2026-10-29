@@ -80,9 +80,11 @@ public sealed class DomainFinanceService(
             clientWork.Sum(s => s.Profit),
             projects.Where(p => p.BillingType == BillingType.Internal).Sum(p => rollup.Money(p.Id).Summary.Cost),
             projects.Where(p => p.BillingType == BillingType.Client)
-                .Sum(p => Math.Max(0, rollup.Money(p.Id).Summary.Revenue - rollup.Payments.Where(x => x.ProjectId == p.Id).Sum(x => x.AmountUsd))),
+                .Sum(p => Math.Max(0, rollup.Money(p.Id).Summary.Revenue - rollup.Payments.Where(x => x.ProjectId == p.Id).Sum(x => x.NetUsd))),
             rollup.Position(rollup.Billing(projects)),
-            labourMinutes);
+            labourMinutes,
+            // the TVA clients paid in the period: collected for the state, never revenue
+            PeriodMoney.Received(rollup.Payments.Where(p => projects.Any(x => x.Id == p.ProjectId)).Select(p => (p.ReceivedOn, p.TvaUsd)), from, to));
     }
 
     public async Task<IReadOnlyList<FinanceMonthResponse>> MonthlyAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default)
@@ -103,37 +105,28 @@ public sealed class DomainFinanceService(
                 var revenue = PeriodMoney.Received(received, month, end);
                 var cost = PeriodMoney.Costs(costs, month, end);
                 return new FinanceMonthResponse(
-                    month, revenue, ExpectedRevenue.In(agreed, month, end), Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.Materials), Rounded(cost.GroundLabour),
+                    month, revenue, ExpectedRevenue.In(agreed, month, end), Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.SiteExpenses), Rounded(cost.GroundLabour),
                     Rounded(cost.Total), revenue - Rounded(cost.Total), UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
             })
             .ToList();
     }
 
     /// <summary>
-    /// What the client projects agreed, dated: payments and fees as they were set or changed, and Execution materials at their
-    /// client price, converted at the rate of the day they were added, on the day they were first sent.
+    /// What the client projects agreed, dated: payments and fees as they were set or changed (an Execution site's fee, set
+    /// by agreeing a BOQ, with its supervision on top at the rate it has now).
     /// </summary>
     private async Task<IReadOnlyList<ExpectedRevenue.Agreed>> AgreedAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken)
     {
         var client = projects.Where(p => p.BillingType == BillingType.Client).ToDictionary(p => p.Id);
         var ids = client.Keys.ToList();
+        decimal WithSupervision(long projectId, decimal amount)
+            => client[projectId].DomainCode == DomainCodes.Execution ? amount * (1 + (client[projectId].SupervisionRate ?? 0)) : amount;
         var agreed = (await summaries.AgreedChangesAsync(ids, cancellationToken))
-            .Select(c => ExpectedRevenue.Change(clock.ToCompanyDate(c.OccurredAt), c.Amount, c.PrevAmount))
+            .Select(c => ExpectedRevenue.Change(
+                clock.ToCompanyDate(c.OccurredAt),
+                WithSupervision(c.ProjectId, c.Amount),
+                c.PrevAmount is { } previous ? WithSupervision(c.ProjectId, previous) : null))
             .ToList();
-
-        var sites = client.Values.Where(p => p.DomainCode == DomainCodes.Execution).Select(p => p.Id).ToList();
-        if (sites.Count > 0)
-        {
-            var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
-            foreach (var m in (await financeSources.MaterialsAsync(sites, cancellationToken)).Where(m => m.SentAt is not null))
-            {
-                var price = ExecutionPricing.ClientPrice(new ExecutionPricing.Material(m.Total, m.ClientPrice), client[m.ProjectId].MaterialMarkup ?? 0);
-                if (rates.ToUsd(price, m.Currency, clock.ToCompanyDate(m.AddedAt)) is { } usd)
-                {
-                    agreed.Add(new ExpectedRevenue.Agreed(clock.ToCompanyDate(m.SentAt!.Value), usd));
-                }
-            }
-        }
 
         return agreed;
     }
@@ -142,7 +135,7 @@ public sealed class DomainFinanceService(
     private static IReadOnlyList<(DateOnly Day, decimal Usd)> ReceivedOn(IReadOnlyCollection<Project> projects, MoneyRollup rollup)
     {
         var ids = projects.Select(p => p.Id).ToHashSet();
-        return rollup.Payments.Where(p => ids.Contains(p.ProjectId)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();
+        return rollup.Payments.Where(p => ids.Contains(p.ProjectId)).Select(p => (p.ReceivedOn, p.NetUsd)).ToList();
     }
 
     public async Task<(string FileName, string Csv)> ExportProjectsAsync(
@@ -156,7 +149,7 @@ public sealed class DomainFinanceService(
         static string Pct(decimal? margin) => margin is { } m ? (m * 100).ToString("0.0", CultureInfo.InvariantCulture) : string.Empty;
 
         var csv = new StringBuilder();
-        Csv.Line(csv, "Project", "Client", "Status", "Billing", "Revenue", "Currency", "Hours", "Labour cost", "Expenses", "Materials",
+        Csv.Line(csv, "Project", "Client", "Status", "Billing", "Revenue", "Currency", "Hours", "Labour cost", "Expenses", "Site expenses",
             "Ground labour", "Total cost", "Profit", "Margin %");
         foreach (var p in projects.Projects)
         {
@@ -171,7 +164,7 @@ public sealed class DomainFinanceService(
                 p.Hours.ToString("0.00", CultureInfo.InvariantCulture),
                 Csv.Money(p.Cost.Labour),
                 Csv.Money(p.Cost.Expenses),
-                Csv.Money(p.Cost.Materials),
+                Csv.Money(p.Cost.SiteExpenses),
                 Csv.Money(p.Cost.GroundLabour),
                 Csv.Money(p.Cost.Total),
                 Csv.Money(p.Profit),
@@ -403,7 +396,7 @@ public sealed class DomainFinanceService(
         // the same figures as SummaryAsync, per project: payments on the day they arrived, costs dated in the period
         FinanceProjectPeriodMoneyResponse MoneyOf(Project project, DateOnly from, DateOnly to)
         {
-            var received = PeriodMoney.Received(payments[project.Id].Select(p => (p.ReceivedOn, p.AmountUsd)), from, to);
+            var received = PeriodMoney.Received(payments[project.Id].Select(p => (p.ReceivedOn, p.NetUsd)), from, to);
             var cost = PeriodMoney.Costs(rollup.Costs(project.Id), from, to);
             return new FinanceProjectPeriodMoneyResponse(
                 from, to, received, PeriodCost(cost), received - Rounded(cost.Total), PeriodMoney.Unconverted(rollup.Unconverted(project.Id), from, to).Count > 0);
@@ -460,7 +453,7 @@ public sealed class DomainFinanceService(
     private static string? ClientName(Project p) => p.Client is { } c ? ClientRules.DisplayName(c.Name, c.Organisation) : null;
 
     private static PeriodCostResponse PeriodCost(PeriodMoney.CostTotals c)
-        => new(Rounded(c.Labour), Rounded(c.Expenses), Rounded(c.Materials), Rounded(c.GroundLabour), Rounded(c.Total));
+        => new(Rounded(c.Labour), Rounded(c.Expenses), Rounded(c.SiteExpenses), Rounded(c.GroundLabour), Rounded(c.Total));
 
     private static decimal Rounded(decimal amount) => PeriodMoney.Round(amount);
 

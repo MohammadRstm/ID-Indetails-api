@@ -2,7 +2,6 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Projects;
-using ID_Indetails.api.DTO.Response.Statements;
 using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
@@ -26,28 +25,57 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
     }
 
     /// <summary>
-    /// A Design client project with the given revenue, or an Execution site with a fee of 1000 and a 10% markup,
-    /// overseen by <paramref name="staffIds"/> (by default someone made for it). A caller who may not set that money (a
-    /// plain admin) gets the project without it: no revenue, or no fee and no markup.
+    /// A Design client project with the given revenue, or an Execution site with a work price of 1000 and no supervision,
+    /// overseen by <paramref name="staffIds"/> (by default someone made for it). A caller who may not set that money (a plain
+    /// admin) gets the project without it: no revenue, or no work price and the default supervision.
     /// </summary>
-    public async Task<ProjectResponse> CreateProjectAsync(string accessToken, string domain, decimal revenue = 5000, IReadOnlyList<long>? staffIds = null)
+    /// <param name="projectFee">
+    /// An Execution site's work price; 1,000 unless said. It is never typed in (agreeing a BOQ sets it), so the test sets
+    /// it in the database as a fast path (<see cref="SetWorkPriceAsync"/>). A test of the real flow agrees a BOQ instead
+    /// (<see cref="BoqTestSteps.AgreeClientBoqAsync"/>, or <see cref="AgreeWorkPriceAsync"/>), with <c>projectFee: 0</c> here.
+    /// </param>
+    public async Task<ProjectResponse> CreateProjectAsync(
+        string accessToken, string domain, decimal revenue = 5000, IReadOnlyList<long>? staffIds = null, decimal projectFee = 1000m)
     {
         var client = await CreateClientAsync(accessToken, domain);
         var me = await (await Client.GetAsync("/api/auth/me", accessToken)).ReadAsync<CurrentUserResponse>();
         var title = (domain == DomainCodes.Execution ? "Site " : "Project ") + Guid.NewGuid().ToString("N")[..8];
         var staff = domain == DomainCodes.Execution ? staffIds ?? [await SiteStaffAsync()] : null;
+        // untaxed, so money figures read as before TVA; TVA has tests of its own
         object body = domain == DomainCodes.Execution
             ? me.Permissions.Contains(PermissionCodes.ProjectPricingManage)
-                ? new { title, domainCode = domain, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.10m, staffIds = staff }
+                ? new { title, domainCode = domain, clientId = client.Id, supervisionRate = 0m, staffIds = staff, tvaRate = 0m }
                 : new { title, domainCode = domain, clientId = client.Id, staffIds = staff }
             : me.Permissions.Contains(PermissionCodes.FinancialView)
-                ? new { title, domainCode = domain, clientId = client.Id, revenue }
+                ? new { title, domainCode = domain, clientId = client.Id, revenue, tvaRate = 0m }
                 : new { title, domainCode = domain, clientId = client.Id };
 
         var response = await Client.PostJsonAsync("/api/projects", body, accessToken);
         ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
-        return await response.ReadAsync<ProjectResponse>();
+        var project = await response.ReadAsync<ProjectResponse>();
+        if (domain != DomainCodes.Execution || !me.Permissions.Contains(PermissionCodes.ProjectPricingManage) || projectFee <= 0)
+        {
+            return project;
+        }
+
+        await SetWorkPriceAsync(project.Id, projectFee);
+        return await (await Client.GetAsync($"/api/projects/{project.Id}", accessToken)).ReadAsync<ProjectResponse>();
     }
+
+    /// <summary>
+    /// Sets an Execution site's work price in the database, with the <c>project_fee_set</c> event (new and previous
+    /// amount) that agreeing a BOQ writes. The fast path: it skips the BOQ and the profit floor.
+    /// </summary>
+    public Task SetWorkPriceAsync(long projectId, decimal fee)
+        => steps.ExecuteAsync(
+            "INSERT INTO activity_events (domain_code, kind, occurred_at, project_id, subject_type, subject_id, amount, prev_amount, is_demo) " +
+            "SELECT 'execution', 'project_fee_set', UTC_TIMESTAMP(3), id, 'project', id, @fee, project_fee, 0 FROM projects WHERE id = @id; " +
+            "UPDATE projects SET project_fee = @fee WHERE id = @id",
+            ("@id", projectId), ("@fee", fee));
+
+    /// <summary>Gives a site its work price the real way: a client BOQ of one line worth <paramref name="work"/>, agreed.</summary>
+    public Task AgreeWorkPriceAsync(string accessToken, long projectId, decimal work)
+        => new BoqTestSteps(steps).AgreeClientBoqAsync(accessToken, projectId, work);
 
     /// <summary>An active Execution employee made straight in the database, to oversee a site no test signs in to.</summary>
     public Task<long> SiteStaffAsync()
@@ -74,19 +102,5 @@ public sealed class ProjectTestSteps(AuthTestSteps steps)
             defaultTermsDays = 45,
         }, accessToken);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
-    }
-
-    /// <summary>
-    /// A detailed statement of the site's new materials, sent (saved as a download): from then their client prices are
-    /// revenue. Returns the statement's id.
-    /// </summary>
-    public async Task<long> SendStatementAsync(string accessToken, long projectId)
-    {
-        var made = await Client.PostJsonAsync($"/api/projects/{projectId}/statements", new { mode = "detail" }, accessToken);
-        ((int)made.StatusCode).ShouldBe(201, await made.Content.ReadAsStringAsync());
-        var statement = await made.ReadAsync<StatementResponse>();
-        var sent = await Client.PostJsonAsync($"/api/statements/{statement.Id}/deliveries", new { channel = "download" }, accessToken);
-        ((int)sent.StatusCode).ShouldBe(200, await sent.Content.ReadAsStringAsync());
-        return statement.Id!.Value;
     }
 }

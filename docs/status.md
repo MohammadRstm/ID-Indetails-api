@@ -10,9 +10,9 @@ This page covers what the API does today, what is in progress, and what the prot
 | Permissions: role defaults, personal grants and revokes, delegation, domain separation | [authorization.md](authorization.md) | #6 |
 | People, teams, pay records, employment periods (leaving and coming back) | [employees.md](employees.md) | #7, #23 |
 | Clients, projects, requirements, expenses, status changes, project lists with filters, sorts and work | [clients.md](clients.md), [projects.md](projects.md) | #8, #16, #22 |
-| Invoices, payments, deliveries, billing settings, exchange rates | [billing.md](billing.md) | #8, #9, #21 |
+| Invoices, payments (filed under account labels), deliveries, billing settings, exchange rates | [billing.md](billing.md) | #8, #9, #21 |
 | Project cost, profit and margin; domain money summaries, list money, client rollups, money follow-ups | [finance.md](finance.md) | #10, #18, #21, #22 |
-| Execution: pricing, materials, ground labour, client statements, site money | [execution.md](execution.md) | #5, #12 |
+| Execution: BOQs and variation orders, site expenses (cost-only; the old materials paths stay as a temporary alias for the phone), ground labour, site money, supervision taken and a site's account figures | [execution.md](execution.md) | #5, #12 |
 | Company: settings, working time, schedules, overhead, salaries, hours ledger, excuses, overview, project pay | [company.md](company.md) | #11, #13, #15, #23 |
 | Design work: entries, comments, meetings, settings, reports, activity, timeline, overtime, closed months, dashboards | [design.md](design.md) | #14, #22, #24 |
 | Self-service: hours, overtime, schedule, requirements, board layouts (employees don't see their pay) | [me.md](me.md) | #17, #22, #23, #24 |
@@ -21,8 +21,8 @@ This page covers what the API does today, what is in progress, and what the prot
 | Search | [search.md](search.md) | #22 |
 | Uploads: message and work-entry attachments, profile photos, the company logo and sign-in branding | [files.md](files.md) | `MR-Files` |
 | The prototype gaps: Design cost over time, client overview, list totals, CSV export, wider search, timeline entries, People columns, overtime preview, site teams | [projects.md](projects.md), [clients.md](clients.md), [design.md](design.md), [me.md](me.md) | `MR-Gaps` |
-| PDFs of invoices, statements and project reports; emailing invoices and statements | [documents.md](documents.md) | `MR-Gaps` |
-| The phone app's API: 30-day mobile sessions, push devices, pushes and reminders, notification settings, duplicate-safe offline materials and labour weeks | [authentication.md](authentication.md#mobile-sessions), [notifications.md](notifications.md#pushes), [me.md](me.md#my-devices), [execution.md](execution.md) | `MR-Mobile-Api` |
+| PDFs of invoices, quotes, BOQs and project reports; emailing invoices, quotes and BOQs | [documents.md](documents.md) | `MR-Gaps` |
+| The phone app's API: 30-day mobile sessions, push devices, pushes and reminders, notification settings, duplicate-safe offline expenses and labour weeks | [authentication.md](authentication.md#mobile-sessions), [notifications.md](notifications.md#pushes), [me.md](me.md#my-devices), [execution.md](execution.md) | `MR-Mobile-Api` |
 
 The tests: 369 unit tests and 297 integration tests against real MySQL. The integration run takes about 4 minutes ([local-development.md](local-development.md#tests)).
 

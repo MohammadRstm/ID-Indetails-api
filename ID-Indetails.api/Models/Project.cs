@@ -5,7 +5,7 @@ namespace ID_Indetails.api.Models;
 /// <summary>
 /// A project of one domain. Only the current status is stored here; status and progress
 /// history are recorded in <see cref="ActivityEvent"/>. Cost, profit and margin are never
-/// stored: they are calculated from entries, expenses, materials and labour.
+/// stored: they are calculated from entries, expenses, site expenses and labour.
 /// </summary>
 public class Project
 {
@@ -42,7 +42,7 @@ public class Project
     /// <summary>
     /// Agreed contract value (not cash received). Always 0 for internal projects.
     /// Design: typed in by an admin. Execution: 0 while open, because the agreed amount is
-    /// calculated live (material client prices + project fee); finalising writes the frozen
+    /// calculated live (the work price + supervision); finalising writes the frozen
     /// agreed amount here.
     /// </summary>
     public decimal Revenue { get; set; }
@@ -53,23 +53,23 @@ public class Project
 
     public DateTime? FinalizedAt { get; set; }
 
-    /// <summary>Execution only (required there, null for Design): fixed charge for doing the job.</summary>
+    /// <summary>Execution only (required there, null for Design): the work price. 0 until a price is agreed.</summary>
     public decimal? ProjectFee { get; set; }
 
+    /// <summary>Execution only: the company's supervision on the work price, 0.10 = 10%. Null for Design.</summary>
+    public decimal? SupervisionRate { get; set; }
+
     /// <summary>
-    /// Execution only (required there, null for Design): default markup on material cost,
-    /// 0.10 = 10%, up to 5 (500%). Materials without their own client price use it.
+    /// TVA on what the client pays for the work, 0.11 = 11%, 0 when untaxed. Client work only; internal projects keep 0.
+    /// Never shown to the client as a line: they see totals with it included (see <see cref="Business.Billing.Tva"/>).
     /// </summary>
-    public decimal? MaterialMarkup { get; set; }
+    public decimal TvaRate { get; set; }
 
     /// <summary>
     /// Cached done / total requirements, 0–100. Updated in the same transaction as every
     /// requirement change, which also records a progress_set event.
     /// </summary>
     public byte ProgressPct { get; set; }
-
-    /// <summary>Execution only (required there, null for Design): whether its client payments go into the box.</summary>
-    public BoxState? BoxState { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

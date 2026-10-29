@@ -6,7 +6,7 @@ public sealed record UpdateCompanySettingsRequest
 {
     public string Name { get; init; } = string.Empty;
 
-    /// <summary>For the letterhead of invoices and statements; empty clears it.</summary>
+    /// <summary>For the letterhead of invoices, quotes and BOQs; empty clears it.</summary>
     public string? Address { get; init; }
 
     /// <summary>A web address such as indetails.com; empty clears it.</summary>
@@ -118,4 +118,16 @@ public sealed record ChangeOverheadCurrencyRequest
 
     /// <summary>First month in the new currency (any day in it); this month when empty.</summary>
     public DateOnly? FromMonth { get; init; }
+}
+
+/// <summary>An account label: its name.</summary>
+public sealed record AccountLabelRequest
+{
+    public string Name { get; init; } = string.Empty;
+}
+
+/// <summary>The labels that can be picked, in their new order: every one of them, once.</summary>
+public sealed record AccountLabelOrderRequest
+{
+    public IReadOnlyList<long> Ids { get; init; } = [];
 }

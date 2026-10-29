@@ -51,9 +51,19 @@ public sealed record RecordPaymentRequest
 
     /// <summary>The project's initial payment. At most one live one per project.</summary>
     public bool IsInitial { get; init; }
+
+    /// <summary>One of the company's account labels, to file the payment under. Empty for none.</summary>
+    public long? AccountLabelId { get; init; }
 }
 
 public sealed record ApplyPaymentRequest
 {
     public long InvoiceId { get; init; }
+}
+
+/// <summary>Files a payment under an account label, or clears it.</summary>
+public sealed record SetPaymentLabelRequest
+{
+    /// <summary>The label to file it under; empty clears it.</summary>
+    public long? AccountLabelId { get; init; }
 }

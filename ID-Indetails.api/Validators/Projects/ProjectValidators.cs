@@ -1,4 +1,5 @@
 using FluentValidation;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.Validators.Clients;
@@ -44,18 +45,9 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
         RuleFor(x => x.OwnerId).GreaterThan(0).When(x => x.OwnerId is not null).WithMessage("Owner is invalid.");
         RuleFor(x => x.Revenue).Amount("Revenue");
-        RuleFor(x => x.ProjectFee).Amount("Project fee");
-        RuleFor(x => x.MaterialMarkup).MaterialMarkup();
-        RuleFor(x => x.InitialPayment!).ChildRules(payment =>
-        {
-            payment.RuleFor(p => p.Amount).Amount("Initial payment", allowZero: false)
-                .Must((p, amount) => MoneyRules.FitsInUsd(amount, p.FxRate)).WithMessage("At this exchange rate, the initial payment in US dollars is too large.");
-            payment.RuleFor(p => p.Currency).Currency();
-            payment.RuleFor(p => p.FxRate).Rate();
-            payment.RuleFor(p => p.Method).IsInEnum().WithMessage("Method must be bank, cheque, cash or other.");
-            payment.RuleFor(p => p.Reference).ClientText("Reference", 100);
-            payment.RuleFor(p => p.Note).ClientText("Note", 500);
-        }).When(x => x.InitialPayment is not null);
+        RuleFor(x => x.ProjectFee).WorkPriceNotTyped();
+        RuleFor(x => x.SupervisionRate).SupervisionRate();
+        RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.LabourDefaults!).SetValidator(new SetLabourDefaultsRequestValidator()).When(x => x.LabourDefaults is not null);
     }
 }
@@ -89,6 +81,7 @@ public sealed class UpdateProjectPaymentRequestValidator : AbstractValidator<Upd
     public UpdateProjectPaymentRequestValidator()
     {
         RuleFor(x => x.Revenue).Amount("Revenue");
+        RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.Description).ClientText("The description", ProjectRules.MaxPaymentDescriptionLength, required: true);
     }
 }
@@ -97,22 +90,29 @@ public sealed class UpdateProjectPricingRequestValidator : AbstractValidator<Upd
 {
     public UpdateProjectPricingRequestValidator()
     {
-        RuleFor(x => x.ProjectFee).Amount("Project fee");
-        RuleFor(x => (decimal?)x.MaterialMarkup).MaterialMarkup().OverridePropertyName("MaterialMarkup");
+        RuleFor(x => x.ProjectFee).WorkPriceNotTyped();
+        RuleFor(x => x.SupervisionRate).SupervisionRate();
+        RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.Description).ClientText("The description", ProjectRules.MaxPaymentDescriptionLength, required: true);
     }
 }
 
 internal static class ProjectRuleExtensions
 {
+    public static IRuleBuilderOptions<T, decimal?> TvaRate<T>(this IRuleBuilder<T, decimal?> rule)
+        => rule.InclusiveBetween(0m, Tva.MaxRate).WithMessage("TVA must be between 0% and 100%.");
+
+    public static IRuleBuilderOptions<T, decimal?> SupervisionRate<T>(this IRuleBuilder<T, decimal?> rule)
+        => rule
+            .InclusiveBetween(0m, 1m).WithMessage("Supervision must be between 0% and 100%.")
+            .Must(v => v is null || decimal.Round(v.Value, 4) == v).WithMessage("Supervision can have at most 4 decimals.");
+
+    public static IRuleBuilderOptions<T, decimal?> WorkPriceNotTyped<T>(this IRuleBuilder<T, decimal?> rule)
+        => rule.Null().WithMessage("The work price comes from the agreed BOQs: it can't be typed in.");
+
     public static IRuleBuilderOptions<T, string?> ProjectTint<T>(this IRuleBuilder<T, string?> rule)
         => rule.Matches("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
             .WithMessage("Tint must be a colour like #1F6FEB.");
-
-    public static IRuleBuilderOptions<T, decimal?> MaterialMarkup<T>(this IRuleBuilder<T, decimal?> rule)
-        => rule
-            .Must(v => v is null || v is >= 0 and <= 5).WithMessage("Material markup must be between 0 and 5 (0% to 500%).")
-            .Must(v => v is null || decimal.Round(v.Value, 4) == v).WithMessage("Material markup can have at most 4 decimals.");
 }
 
 public sealed class ProjectReportQueryValidator : AbstractValidator<ProjectReportQuery>

@@ -18,7 +18,7 @@ public static class NotificationKinds
     /// <summary>Someone who doesn't manage meetings set one (subject: the meeting). Sent to the domain's meeting managers.</summary>
     public const string MeetingScheduled = "meeting_scheduled";
 
-    /// <summary>Someone recorded materials on a site (subject: the project; the count in the payload).</summary>
+    /// <summary>Someone recorded expenses on a site (subject: the project; the count in the payload). The kind keeps its stored name.</summary>
     public const string MaterialsAdded = "materials_added";
 
     /// <summary>Someone submitted or updated a labour week (subject: the project; the week and whether it was an update in the payload).</summary>
@@ -91,8 +91,23 @@ public static class NotificationKinds
     /// <summary>A client payment was recorded (subject: the payment). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string PaymentRecorded = "payment_recorded";
 
-    /// <summary>A client statement was sent (subject: the statement). Same recipients as <see cref="InvoiceIssued"/>.</summary>
-    public const string StatementSent = "statement_sent";
+    /// <summary>An Execution site asks the pocket money for money: for whoever sees Execution's money to approve or deny.</summary>
+    public const string PocketRequested = "pocket_requested";
+
+    /// <summary>A client project was made by someone who can't send quotes: for those who can, to send one or not.</summary>
+    public const string QuoteDue = "quote_due";
+
+    /// <summary>
+    /// A change was refused because it would take a client project's profit to zero or below (subject: the blocked
+    /// change). To whoever sees the domain's money, to force it through or dismiss it.
+    /// </summary>
+    public const string ChangeBlocked = "change_blocked";
+
+    /// <summary>A client project's profit is down to 10% of its agreed amount or less (subject: the project). Once per project, to whoever sees the domain's money.</summary>
+    public const string ProfitLow = "profit_low";
+
+    /// <summary>A client project's profit reached zero or below, by a forced change or a change nobody made (subject: the project). Once per project, to whoever sees the domain's money.</summary>
+    public const string ProfitAtZero = "profit_at_zero";
 
     /// <summary>A client project was completed or archived and its margin is final (subject: the project). Sent to whoever sees the domain's money, with the margin as a percentage and never an amount.</summary>
     public const string ProjectClosed = "project_closed";
@@ -117,7 +132,10 @@ public static class NotificationKinds
     /// <summary>Design employees finished a closed month short of their hours (digest key <c>hours-short-YYYY-MM</c>). Sent to whoever sees salaries.</summary>
     public const string HoursShort = "hours_short";
 
-    /// <summary>An active client project's cost passed 85% of its payment (subject: the project). Once per project, to whoever sees the domain's money.</summary>
+    /// <summary>
+    /// An active client project's cost passed 85% of its payment (subject: the project). No longer sent: <see cref="ProfitLow"/>
+    /// took its place; kept so the ones sent before still read.
+    /// </summary>
     public const string ProjectCostHigh = "project_cost_high";
 
     /// <summary>A draft invoice is still unissued 3 days after it was created (subject: the invoice). Once per draft, to whoever sees the domain's money.</summary>

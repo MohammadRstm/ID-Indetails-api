@@ -32,7 +32,7 @@ Every request counts against a global limit: 300 a minute per signed-in user, or
 - Login (the website's and the phone's), forgot and reset password and the two public invitation endpoints: 10 a minute per IP, together (`auth`).
 - Refresh (the website's and the phone's): 60 a minute per IP on its own (`refresh`), since every page load refreshes and an office shares one address; the refresh token itself is the secret.
 - Change password (on either) and change sign-in address, which check the current password: 10 a minute per person (`credential`).
-- Requests that email an address the caller chooses (invoice and statement emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
+- Requests that email an address the caller chooses (invoice, quote and BOQ emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
 - Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Bug reports: 5 an hour per person. Setup: 5 an hour per IP.
 - The Website area's analytics, which ask Google Analytics: 30 a minute per person (`website-analytics`).
 
