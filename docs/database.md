@@ -39,7 +39,7 @@ The database is the second line of defence. The API must still filter every quer
 | Clients | `clients`, `client_contacts` |
 | Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses`, `blocked_changes` |
 | Design work | `work_entries`, `work_entry_comments` |
-| Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `client_statements`, `client_statement_lines`, `client_statement_deliveries`, `statement_sequences` |
+| Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `project_materials`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
 | Working time and hours ledger | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days` |
 | Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `account_labels`, `company_settings`, `domain_settings` |
@@ -48,11 +48,11 @@ The database is the second line of defence. The API must still filter every quer
 
 An Execution project has a **work price** (`projects.project_fee`, 0 until a BOQ is agreed), a **supervision rate** (`projects.supervision_rate`, a fraction from 0 to 1, 10% by default) and a default **material markup** (`projects.material_markup`, 0–500%). Design projects have none of them (`supervision_rate` is NULL).
 
-- **Client price of a material:** `project_materials.client_price` when someone set it by hand, or when a client statement froze it at the price shown. Otherwise it is calculated as cost × (1 + markup), and never stored. A price typed equal to the automatic one is stored as automatic (`NULL`).
+- **Client price of a material:** `project_materials.client_price` when someone set it by hand. Otherwise it is calculated as cost × (1 + markup), and never stored. A price typed equal to the automatic one is stored as automatic (`NULL`).
 - **Material cost:** quantity × unit cost when both are known, otherwise the lump-sum `amount`. The generated `total` column holds whichever applies.
 - **Agreed amount:** the work price plus supervision (`project_fee × supervision_rate`), plus for now the client prices of the materials sent. TVA is on the work (and those materials), never on supervision. It is calculated live while the project is open. Finalising writes the frozen amount into `projects.revenue`.
 - **Ground labour is never billed.** The price and the markup cover it.
-- **Client statements** are immutable snapshots of materials supplied and payments received, numbered `ST-YYYY-NNN`. A material that appears on a statement is *stated*, and it can't be deleted while that statement exists.
+- **BOQs** (`boqs`, `boq_lines`, `boq_deliveries`) price an Execution site's work: a kind (`internal`, `client`, `vo`), a status (`draft`, `agreed`), a number (`BQ-YYYY-NNN` or `VO-YYYY-NNN` from `boq_sequences`, keyed by prefix and year; null for internal drafts), an author, an adjustment and the stored `subtotal_usd` and `total_usd`, which `BoqRules` recomputes from the lines on every save. A line keeps its exact quantity, waste rate (a fraction), unit and rate; the final quantity and the line total are calculated, not stored. A delivery keeps the BOQ's total when it was sent. Drafts are soft-deleted (`deleted_at`) so what was sent stays on record. Check constraints keep a number on every kind but internal, an internal draft never agreed, a reason on VOs only, `agreed_at` with the agreed status, and negative totals to VOs. Agreeing or withdrawing sets `projects.project_fee` (see [execution.md](execution.md#boqs-and-variation-orders)). Client statements are gone.
 
 ## Working time
 
@@ -91,7 +91,7 @@ bytes live in the content store, never in MySQL or on the server's disk. See [cl
 - A material has either quantity and unit cost or a lump-sum amount; its client price is never negative.
 - No labour day falls on a Sunday.
 - At most one live (not voided) initial payment per project.
-- A statement lists each material once; a stated material cannot be deleted.
+- A BOQ's number is unique; a line is part of its BOQ and goes with it.
 - Working-time policies have valid hours (0–1440, start before end), at least one working day, and a break shorter than the day; one policy per effective date. Personal schedule days are single spans within a day, one change per person per date.
 - An excuse belongs to a month (first day of the month) and carries minutes exactly when it is a "minutes" excuse.
 - A project's client belongs to the same domain.
@@ -153,7 +153,7 @@ The `MaterialMarkupEventPayload` migration only moves data: existing `material_m
 
 The `EmploymentPeriods` migration adds `employment_periods` and gives everyone who has worked here one period, from their joining day to the day their account was deactivated (from UTC timestamps, so a date can be a day off near midnight; nothing was in production). Someone deactivated with no known date gets none and stays out of salaries, as before.
 
-The `CompanyAddressAndWebsite` migration adds the optional `address` and `website` columns to `company_settings`, for the letterhead of invoices and statements.
+The `CompanyAddressAndWebsite` migration adds the optional `address` and `website` columns to `company_settings`, for the letterhead of invoices, quotes and BOQs.
 
 The `DropProjectMembers` migration drops `project_members` and `disciplines`. Nothing used them, and projects have no member list: anyone in the domain may work on any project (30 Sep 2026).
 

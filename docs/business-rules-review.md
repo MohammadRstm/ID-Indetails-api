@@ -11,7 +11,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 1 | **Working time is dated.** The company working week, the break, the overtime multiplier and personal schedules only apply from their effective date. A change never rewrites past months' overtime, hours or pay. | Schema (dated tables) |
 | 2 | **Excused time is paid** by default. Each excuse has an `is_paid` flag for unpaid leave. Leave types and a public-holiday calendar are deferred. | Schema; API / payroll calculation |
 | 3 | **A finalised Execution project is locked.** Nobody, admins included, can add, edit or delete its materials or labour until it is reopened. *(The prototype still lets admins edit after finalise; the backend won't.)* | API |
-| 4 | **A stated material's price is frozen.** Once a material appears on a statement, neither a markup change nor a manual edit changes its client price. *(The prototype reprices stated materials live; the backend won't.)* | API; statement lines keep the price shown |
+| 4 | ~~**A stated material's price is frozen.**~~ *Superseded (Oct 2026): client statements were removed and a site's price comes from BOQs ([execution.md](execution.md#boqs-and-variation-orders)). A material is a plain cost.* | gone |
 | 5 | **Execution has no internal projects.** Every site is for a client. | Schema (CHECK) |
 | 6 | **The initial payment is flagged** with `payments.is_initial`, not recognised from its note text. At most one live initial payment per project. | Schema (generated column + unique index) |
 | 7 | **Labour defaults are admin-only** (`labour_report:manage`), per the permission catalogue. *(The prototype lets employees change them; the backend won't.)* | API / permissions |
@@ -67,7 +67,7 @@ See [finance.md](finance.md).
 | M7 | **Money on the project list isn't sortable or filterable** on the server (the list is paged in the database); the Financials projects table has every project. |
 | M8 | **One billing rule** (`Business/Billing/ProjectBilling`) for the project page, the project and client lists, the client pages and Financials. Invoices are converted at the rate of their issue day everywhere, so the project page and the lists always agree. |
 | M9 | **Unconverted money is never dropped.** Costs with no rate are listed for the period they fall in (summary, each month, costs tab); list rows flag them (`hasUnconverted`); the company overview lists invoices and costs with no rate instead of counting them as 0. |
-| M10 | **Statement readers see the statement's money.** Holders of `statement:create` or `statement:send` see its received, agreed, remaining and paid-ahead figures without `financial:view`, because the statement is printed on the client's document. |
+| M10 | ~~**Statement readers see the statement's money.**~~ *Superseded (Oct 2026) with the statements: client BOQs and VOs are read with `financial:view` or `project:pricing_manage`; holders of `boq:create` alone see only their own internal drafts.* |
 | M11 | **The markup event keeps the exact markup** in its payload (`markup`, `prevMarkup`, as in the prototype), with no amount: the amount columns keep 2 decimals, so 12.5% was saved as 0.13. The feed shows that payload only with `financial:view`. Existing events were moved by the `MaterialMarkupEventPayload` migration: each project's latest one is exact, older ones keep their rounded value. |
 
 ## Decided for the admin views (29 Sep 2026)
@@ -113,9 +113,7 @@ See [messaging.md](messaging.md).
   - Invoicing is open from project creation.
   - Payments on account are normal.
   - Cash profit = received − spent.
-- **Statements:**
-  - Numbering is one sequence per year, `ST-YYYY-NNN`, across the company.
-  - A statement is not an invoice and changes nothing that is owed.
+- **Client BOQs and variation orders** (they replaced the statements in Oct 2026): numbered `BQ-YYYY-NNN` and `VO-YYYY-NNN`, one sequence per prefix and year. They set the work price; they are not invoices and owe nothing by themselves.
 - **Labour weeks** run Monday to Saturday.
 - **Materials** are grouped by their type name (trimmed, lower-case); the category field was removed.
 - **The break** is paid, reduces only the required hours, and applies on days longer than 6 hours. The 6-hour threshold is a code constant, not a setting.
@@ -133,7 +131,7 @@ Answers to the questions raised after the helper sessions' work was merged.
 
 | # | Rule |
 |---|---|
-| O3 | **PDFs are made on the server**, so invoices and statements can be emailed with them. The library is PDFsharp with MigraDoc (MIT licence, free for everyone). The layout starts plain and is refined later. The documents have no Arabic ([documents.md](documents.md)). |
+| O3 | **PDFs are made on the server**, so invoices, quotes and BOQs can be emailed with them. The library is PDFsharp with MigraDoc (MIT licence, free for everyone). The layout starts plain and is refined later. The documents have no Arabic ([documents.md](documents.md)). |
 | O4, O5 | **Employment is dated periods** (decision 24): leaving takes a last working day, and time away between two periods isn't paid unless it began that month and the admin says so. |
 | O6 | **The month just ended stays open through the 1st** (D11). |
 | O7 | **The cost warning is Design only** (A1). A material's cost is always what was paid for it; the client price is typed or worked out from the markup, never used as the cost. |

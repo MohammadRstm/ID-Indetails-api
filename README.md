@@ -27,7 +27,7 @@ The backend of Hourline, the company's internal management system: an ASP.NET Co
 | Notifications | [notifications.md](docs/notifications.md) |
 | Messaging and live updates | [messaging.md](docs/messaging.md) |
 | Uploads, photos and the logo | [files.md](docs/files.md) |
-| PDFs and emailing invoices and statements | [documents.md](docs/documents.md) |
+| PDFs and emailing invoices, quotes and BOQs | [documents.md](docs/documents.md) |
 | Search | [search.md](docs/search.md) |
 | Proton, the company assistant (reads, analyses, proposes changes) | [proton.md](docs/proton.md) |
 | Production: Docker images, CI, the manual deploy and rollback | [deployment.md](docs/deployment.md) |

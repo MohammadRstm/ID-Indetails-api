@@ -134,11 +134,11 @@ Every client project carries a TVA rate (`projects.tva_rate`, `0.11` is 11%). A 
   - Making a project internal sets its rate to 0.
 - **Net inside, gross for the client:**
   - Revenue, profit, margins, expected revenue and the money reports are **net**: TVA is collected for the state, never earned. Revenue in a period counts each payment less its TVA share, and the domain summary shows `tvaCollected` apart.
-  - What the client sees and owes is **gross**, with TVA never shown as a line: the billing figures (owed, paid ahead, left to invoice, not yet invoiced), invoices, statements (each price and the agreed amount) and quotes.
+  - What the client sees and owes is **gross**, with TVA never shown as a line: the billing figures (owed, paid ahead, left to invoice, not yet invoiced), invoices, BOQs (the total to pay, with supervision and TVA) and quotes.
   - A project's money carries `tvaRate`, `paymentWithTva` (the payment, or a site's work price plus supervision, with TVA) and `revenueWithTva`.
 - **Execution:** a site's **work price** is the agreed BOQs' total; **supervision** is the work price × the supervision rate (default 10%).
-  - Revenue (the agreed amount) is work + supervision, plus for now the materials sent to the client. The client pays that plus TVA.
-  - **TVA is on the work (and those materials), never on supervision.** Example: 787,646.20 of work at 8% supervision and 11% TVA gives supervision 63,011.70, revenue 850,657.90, TVA 86,641.08 and 937,298.98 to pay.
+  - Revenue (the agreed amount) is work + supervision. The client pays that plus TVA on the work.
+  - **TVA is on the work, never on supervision.** Example: 787,646.20 of work at 8% supervision and 11% TVA gives supervision 63,011.70, revenue 850,657.90, TVA 86,641.08 and 937,298.98 to pay.
   - A payment's TVA share is its share of the project's TVA by its share of what the client pays (`ExecutionPricing.TvaShareOf`); before any price is agreed it is the plain share of the rate.
   - Its cash profit counts payments net.
 
