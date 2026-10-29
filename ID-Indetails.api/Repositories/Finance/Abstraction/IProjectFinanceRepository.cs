@@ -17,11 +17,11 @@ public interface IProjectFinanceRepository
 
     Task<IReadOnlyList<GroundLabourRow>> GroundLabourAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
-    /// <summary>Live payments of one project: the day each was received and its USD value.</summary>
+    /// <summary>Live payments of one project: the day each was received and its USD value net of TVA.</summary>
     Task<IReadOnlyList<(DateOnly ReceivedOn, decimal AmountUsd)>> PaymentsAsync(long projectId, CancellationToken cancellationToken = default);
 
-    /// <summary>Live payments per project, in USD.</summary>
-    Task<IReadOnlyDictionary<long, decimal>> ReceivedAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+    /// <summary>Live payments per project, in USD: what the client paid, and the TVA inside it.</summary>
+    Task<IReadOnlyDictionary<long, (decimal Received, decimal Tva)>> ReceivedAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
     /// <summary>Per project, in USD: what was moved into the pocket money, and what the pocket paid out to it.</summary>
     Task<IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)>> PocketAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);

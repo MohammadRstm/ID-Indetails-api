@@ -72,6 +72,12 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<PocketEntry> PocketEntries => Set<PocketEntry>();
 
     public DbSet<PocketRequest> PocketRequests => Set<PocketRequest>();
+
+    public DbSet<Quote> Quotes => Set<Quote>();
+
+    public DbSet<QuoteDelivery> QuoteDeliveries => Set<QuoteDelivery>();
+
+    public DbSet<QuoteSequence> QuoteSequences => Set<QuoteSequence>();
     public DbSet<ClientStatement> ClientStatements => Set<ClientStatement>();
     public DbSet<ClientStatementLine> ClientStatementLines => Set<ClientStatementLine>();
     public DbSet<ClientStatementDelivery> ClientStatementDeliveries => Set<ClientStatementDelivery>();

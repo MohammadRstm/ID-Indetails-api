@@ -13,6 +13,13 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
     private HttpClient Client => _steps.Client;
     private ProjectTestSteps Projects => new(_steps);
 
+    private static async Task<T> OkAsync<T>(Task<HttpResponseMessage> request)
+    {
+        var response = await request;
+        response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+        return await response.ReadAsync<T>();
+    }
+
     private async Task<PaymentResponse> RecordAsync(long projectId, string token, object body)
     {
         var response = await Client.PostJsonAsync($"/api/projects/{projectId}/payments", body, token);
@@ -227,45 +234,34 @@ public class PaymentTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Execution_sites_take_one_initial_payment_when_created()
+    public async Task An_execution_site_takes_one_down_payment_recorded_right_after_it_is_created()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var client = await Projects.CreateClientAsync(admin.AccessToken, DomainCodes.Execution);
 
-        var created = await Client.PostJsonAsync("/api/projects", new
+        // the site is created with its agreed amount only: the down payment is an ordinary payment afterwards
+        var site = await OkAsync<ProjectResponse>(Client.PostJsonAsync("/api/projects", new
         {
             title = "Villa",
             clientId = client.Id,
             projectFee = 1000m,
-            materialMarkup = 0.1m,
+            tvaRate = 0m,
             staffIds = new[] { await Projects.SiteStaffAsync() },
-            initialPayment = new { amount = 1500m, currency = "USD", method = "cheque", reference = "CHQ-9" },
-        }, admin.AccessToken);
-        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
-        var site = await created.ReadAsync<ProjectResponse>();
-        site.Money!.Billing.Received.ShouldBe(1500m);
-        site.Money.Billing.PaidAhead.ShouldBe(500m);
-        site.Money.Billing.Owed.ShouldBe(0m);
-
-        var initial = (await (await Client.GetAsync($"/api/payments?projectId={site.Id}", admin.AccessToken))
-            .ReadAsync<PagedResponse<PaymentResponse>>()).Items.Single();
+        }, admin.AccessToken));
+        var initial = await RecordAsync(site.Id, admin.AccessToken, new { amount = 1500m, currency = "USD", method = "cheque", reference = "CHQ-9", isInitial = true });
         initial.IsInitial.ShouldBeTrue();
+        var money = (await OkAsync<ProjectResponse>(Client.GetAsync($"/api/projects/{site.Id}", admin.AccessToken))).Money!;
+        money.Billing.Received.ShouldBe(1500m);
+        money.Billing.PaidAhead.ShouldBe(500m);
+        money.Billing.Owed.ShouldBe(0m);
+
         await (await Client.PostJsonAsync($"/api/projects/{site.Id}/payments", new { amount = 5m, currency = "USD", isInitial = true }, admin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.InitialPaymentExists);
 
         // Voiding it frees the slot for a corrected one.
         await Client.PostJsonAsync($"/api/payments/{initial.Id}/void", new { reason = "Wrong amount" }, admin.AccessToken);
         (await RecordAsync(site.Id, admin.AccessToken, new { amount = 1400m, currency = "USD", isInitial = true })).IsInitial.ShouldBeTrue();
-
-        var designClient = await Projects.CreateClientAsync(superAdmin.AccessToken, DomainCodes.Design);
-        await (await Client.PostJsonAsync("/api/projects", new
-        {
-            title = "Office",
-            domainCode = DomainCodes.Design,
-            clientId = designClient.Id,
-            initialPayment = new { amount = 100m, currency = "USD" },
-        }, superAdmin.AccessToken)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 
     [Fact]

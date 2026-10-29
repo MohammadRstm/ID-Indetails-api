@@ -29,7 +29,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ## Rules
 
-- **Revenue in a period** is the money received in it: the projects' live payments, each counted on the day it arrived (`PeriodMoney.Received`). It moves as soon as a payment is recorded, whatever a project's progress; completing a project changes nothing but stops its amounts changing. The company overview works the same way.
+- **Revenue in a period** is the money received in it, net of TVA: the projects' live payments less each one's TVA share, each counted on the day it arrived (`PeriodMoney.Received`). The TVA itself is `tvaCollected` (see [billing.md](billing.md#tva)). It moves as soon as a payment is recorded, whatever a project's progress; completing a project changes nothing but stops its amounts changing. The company overview works the same way.
 - **Expected revenue in a period** (`expectedRevenue`, `Business/Finance/ExpectedRevenue.cs`) is what was agreed in it, kept apart from what was received:
   - a client project's payment (Design) or fee (Execution) counts on the day it was set, and a change counts its difference on the day it changed (from the `revenue_set`, `revenue_changed` and `project_fee_set` events);
   - an Execution material counts at its client price, in USD at the rate of the day it was added, on the day a statement listing it was first sent to the client.
