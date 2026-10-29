@@ -106,6 +106,10 @@ public sealed class BoqService(
         await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
         var boq = await LockedBoqAsync(actor, boqId, cancellationToken);
         Throw(BoqRules.CheckEditable(boq.Status));
+        if (request.UpdatedAt is { } loaded && !BoqRules.SameSave(boq.UpdatedAt, loaded))
+        {
+            throw new ConflictException(ErrorCodes.BoqChanged, "Someone saved this BOQ after you opened it. Reload it to see their changes.");
+        }
 
         var reason = Clean(request.Reason);
         var inputs = request.Lines.Select(l => new BoqRules.Line(l.Quantity, l.WasteRate, l.Rate)).ToList();

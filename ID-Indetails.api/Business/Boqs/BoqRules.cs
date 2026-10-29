@@ -120,6 +120,13 @@ public static class BoqRules
             : null;
 
     /// <summary>
+    /// Whether the copy an editor loaded is the BOQ's latest save. The time is stored to the millisecond (and may be
+    /// rounded there), so two times less than a millisecond apart are the same save.
+    /// </summary>
+    public static bool SameSave(DateTime saved, DateTime loaded)
+        => Math.Abs((saved - loaded).Ticks) < TimeSpan.TicksPerMillisecond;
+
+    /// <summary>
     /// What a save leaves: lines within the limit, a reason only on a VO (and there), no negative rate outside a VO, an
     /// adjustment that fits the kind, and totals that fit what is stored.
     /// </summary>

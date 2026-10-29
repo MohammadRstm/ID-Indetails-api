@@ -286,4 +286,17 @@ public class BoqRulesTests
         BoqRules.CanCreate(BoqKind.Internal, Caller(draft: true)).ShouldBeTrue();
         BoqRules.CanCreate(BoqKind.Internal, Caller(pricing: true)).ShouldBeFalse();
     }
+
+    [Fact]
+    public void A_copy_is_the_latest_save_only_within_the_millisecond_the_time_is_stored_to()
+    {
+        var saved = new DateTime(2026, 10, 29, 12, 0, 0, 123, DateTimeKind.Utc);
+
+        BoqRules.SameSave(saved, saved).ShouldBeTrue();
+        // the database keeps milliseconds: the time a save answered with may be a little finer, either way
+        BoqRules.SameSave(saved, saved.AddTicks(4_567)).ShouldBeTrue();
+        BoqRules.SameSave(saved, saved.AddTicks(-4_567)).ShouldBeTrue();
+        BoqRules.SameSave(saved, saved.AddMilliseconds(1)).ShouldBeFalse();
+        BoqRules.SameSave(saved, saved.AddSeconds(-30)).ShouldBeFalse();
+    }
 }

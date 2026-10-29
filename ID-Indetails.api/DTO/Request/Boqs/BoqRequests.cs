@@ -31,6 +31,12 @@ public sealed record SaveBoqRequest
     public decimal? AdjustmentValue { get; init; }
 
     public IReadOnlyList<SaveBoqLineRequest> Lines { get; init; } = [];
+
+    /// <summary>
+    /// The BOQ's <c>updatedAt</c> as the editor loaded it. A save made from an older copy is refused, so it can't undo
+    /// someone else's. The web editor always sends it.
+    /// </summary>
+    public DateTime? UpdatedAt { get; init; }
 }
 
 public sealed record SaveBoqLineRequest

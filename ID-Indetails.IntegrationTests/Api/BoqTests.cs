@@ -291,6 +291,27 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_save_made_from_an_older_copy_is_refused_so_it_cannot_undo_someone_elses()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await NewSiteAsync(superAdmin);
+        var opened = await Boqs.CreateAsync(superAdmin.AccessToken, site.Id);
+
+        // two people open the same BOQ, and the first saves
+        var first = await Boqs.SaveAsync(superAdmin.AccessToken, opened.Id, [Line("Walls", 10, 50m)], updatedAt: opened.UpdatedAt);
+
+        // the second, still on the copy they opened, is refused, and nothing of theirs is kept
+        await (await Client.PutJsonAsync($"/api/boqs/{opened.Id}",
+                new { title = "Mine", adjustmentType = "none", lines = new[] { Line("Floors", 5, 20m) }, updatedAt = opened.UpdatedAt }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(409, ErrorCodes.BoqChanged);
+        (await Boqs.GetAsync(superAdmin.AccessToken, opened.Id)).Lines.ShouldHaveSingleItem().Description.ShouldBe("Walls");
+
+        // saving from the copy each save answers with goes through, save after save
+        var second = await Boqs.SaveAsync(superAdmin.AccessToken, opened.Id, [Line("Walls", 12, 50m)], updatedAt: first.UpdatedAt);
+        (await Boqs.SaveAsync(superAdmin.AccessToken, opened.Id, [Line("Walls", 14, 50m)], updatedAt: second.UpdatedAt)).TotalUsd.ShouldBe(700m);
+    }
+
+    [Fact]
     public async Task Saving_replaces_the_lines_in_the_order_given_keeping_the_ones_it_names()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
