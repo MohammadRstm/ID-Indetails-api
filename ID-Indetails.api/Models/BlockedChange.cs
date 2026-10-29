@@ -3,7 +3,7 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Models;
 
 /// <summary>
-/// A change refused because it would take a project's profit to zero or below: an expense, a material, a labour week,
+/// A change refused because it would take a project's profit to zero or below: an expense (a site expense included), a labour week,
 /// logged hours, or a lower payment. Kept with the request itself, so whoever sees the project's money can force it
 /// through (once) or dismiss it.
 /// </summary>
@@ -28,7 +28,7 @@ public class BlockedChange
 
     public DateTime? DecidedAt { get; set; }
 
-    /// <summary>The id of what forcing it made (the expense, the material, the entry…), when it made one.</summary>
+    /// <summary>The id of what forcing it made (the expense, the site expense, the entry…), when it made one.</summary>
     public long? ResultId { get; set; }
 
     public Project Project { get; set; } = null!;

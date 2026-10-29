@@ -177,8 +177,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposePaymentStepTool>();
         services.AddScoped<IProtonTool, ProposeAddExpenseTool>();
         services.AddScoped<IProtonTool, ProposeDeleteExpenseTool>();
-        services.AddScoped<IProtonTool, ProposeAddMaterialsTool>();
-        services.AddScoped<IProtonTool, ProposeMaterialStepTool>();
+        services.AddScoped<IProtonTool, ProposeAddSiteExpensesTool>();
+        services.AddScoped<IProtonTool, ProposeSiteExpenseStepTool>();
         services.AddScoped<IProtonTool, ProposeSubmitLabourWeekTool>();
         services.AddScoped<IProtonTool, ProposeLabourDefaultsTool>();
         services.AddScoped<IProtonTool, ProposeBillingSettingsTool>();

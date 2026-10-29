@@ -66,9 +66,6 @@ public sealed record CreateProjectRequest
     /// <summary>Always refused: an Execution site's work price comes from its agreed BOQs, never typed in. It starts at 0.</summary>
     public decimal? ProjectFee { get; init; }
 
-    /// <summary>Execution only, and needs <c>project:pricing_manage</c>. A fraction: 0.10 is 10%, at most 5 (500%). Left out, it is 0.</summary>
-    public decimal? MaterialMarkup { get; init; }
-
     /// <summary>
     /// Execution only, and needs <c>project:pricing_manage</c>: the company's supervision on the work price, a fraction (0.10 is
     /// 10%), 0 to 1. Left out, a site starts at 10%.
@@ -126,13 +123,11 @@ public sealed record UpdateProjectPaymentRequest
     public string Description { get; init; } = string.Empty;
 }
 
-/// <summary>Execution only: the default material markup, supervision rate and TVA, and why they change.</summary>
+/// <summary>Execution only: the supervision rate and TVA, and why they change.</summary>
 public sealed record UpdateProjectPricingRequest
 {
     /// <summary>Always refused: the work price is set by agreeing a BOQ, never typed in.</summary>
     public decimal? ProjectFee { get; init; }
-
-    public decimal MaterialMarkup { get; init; }
 
     /// <summary>The supervision rate after the change, a fraction (0 to 1); left out, it stays as it is.</summary>
     public decimal? SupervisionRate { get; init; }

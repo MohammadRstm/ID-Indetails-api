@@ -3886,11 +3886,6 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(200)")
                         .HasColumnName("location");
 
-                    b.Property<decimal?>("MaterialMarkup")
-                        .HasPrecision(7, 4)
-                        .HasColumnType("decimal(7,4)")
-                        .HasColumnName("material_markup");
-
                     b.Property<long>("OwnerId")
                         .HasColumnType("bigint")
                         .HasColumnName("owner_id");
@@ -3984,11 +3979,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                             t.HasCheckConstraint("ck_projects_execution_is_client_work", "`domain_code` <> 'execution' OR `billing_type` = 'client'");
 
-                            t.HasCheckConstraint("ck_projects_execution_money_fields", "(`domain_code` = 'execution' AND `project_fee` IS NOT NULL AND `material_markup` IS NOT NULL) OR (`domain_code` <> 'execution' AND `project_fee` IS NULL AND `material_markup` IS NULL)");
+                            t.HasCheckConstraint("ck_projects_execution_money_fields", "(`domain_code` = 'execution' AND `project_fee` IS NOT NULL) OR (`domain_code` <> 'execution' AND `project_fee` IS NULL)");
 
                             t.HasCheckConstraint("ck_projects_internal_has_no_client_or_revenue", "`billing_type` = 'client' OR (`client_id` IS NULL AND `revenue` = 0)");
-
-                            t.HasCheckConstraint("ck_projects_material_markup_range", "`material_markup` IS NULL OR `material_markup` BETWEEN 0 AND 5");
 
                             t.HasCheckConstraint("ck_projects_progress_range", "`progress_pct` <= 100");
 
@@ -4203,121 +4196,6 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_project_labour_defaults_pay_non_negative", "`daily_pay` >= 0");
 
                             t.HasCheckConstraint("ck_project_labour_defaults_workers_non_negative", "`workers` >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("ID_Indetails.api.Models.ProjectMaterial", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("AddedAt")
-                        .HasPrecision(3)
-                        .HasColumnType("datetime(3)")
-                        .HasColumnName("added_at");
-
-                    b.Property<long>("AddedById")
-                        .HasColumnType("bigint")
-                        .HasColumnName("added_by_id");
-
-                    b.Property<decimal?>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("amount");
-
-                    b.Property<decimal?>("ClientPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("client_price");
-
-                    b.Property<Guid?>("ClientRef")
-                        .HasColumnType("char(36)")
-                        .HasColumnName("client_ref");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("char(3)")
-                        .HasColumnName("currency")
-                        .IsFixedLength();
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasPrecision(3)
-                        .HasColumnType("datetime(3)")
-                        .HasColumnName("deleted_at");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
-                        .HasColumnName("note");
-
-                    b.Property<long>("ProjectId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("project_id");
-
-                    b.Property<decimal?>("Quantity")
-                        .HasPrecision(14, 3)
-                        .HasColumnType("decimal(14,3)")
-                        .HasColumnName("quantity");
-
-                    b.Property<string>("Supplier")
-                        .HasMaxLength(200)
-                        .HasColumnType("varchar(200)")
-                        .HasColumnName("supplier");
-
-                    b.Property<decimal>("Total")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("total")
-                        .HasComputedColumnSql("CASE WHEN `quantity` > 0 AND `unit_cost` > 0 THEN ROUND(`quantity` * `unit_cost`, 2) ELSE `amount` END", true);
-
-                    b.Property<string>("Unit")
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("unit");
-
-                    b.Property<decimal?>("UnitCost")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)")
-                        .HasColumnName("unit_cost");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasPrecision(3)
-                        .HasColumnType("datetime(3)")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_project_materials");
-
-                    b.HasIndex("ProjectId")
-                        .HasDatabaseName("ix_project_materials_project_id");
-
-                    b.HasIndex("AddedById", "ClientRef")
-                        .IsUnique()
-                        .HasDatabaseName("ix_project_materials_added_by_id_client_ref");
-
-                    b.ToTable("project_materials", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_project_materials_amount_positive", "`amount` IS NULL OR `amount` > 0");
-
-                            t.HasCheckConstraint("ck_project_materials_client_price_non_negative", "`client_price` IS NULL OR `client_price` >= 0");
-
-                            t.HasCheckConstraint("ck_project_materials_has_cost", "(COALESCE(`quantity`, 0) > 0 AND COALESCE(`unit_cost`, 0) > 0) OR COALESCE(`amount`, 0) > 0");
-
-                            t.HasCheckConstraint("ck_project_materials_quantity_positive", "`quantity` IS NULL OR `quantity` > 0");
-
-                            t.HasCheckConstraint("ck_project_materials_unit_cost_non_negative", "`unit_cost` IS NULL OR `unit_cost` >= 0");
                         });
                 });
 
@@ -5884,6 +5762,135 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "employee",
                             PermissionCode = "proton:use"
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.SiteExpense", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AccountLabelId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("account_label_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("added_at");
+
+                    b.Property<long>("AddedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("added_by_id");
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("materials")
+                        .HasColumnName("category");
+
+                    b.Property<Guid?>("ClientRef")
+                        .HasColumnType("char(36)")
+                        .HasColumnName("client_ref");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(14, 3)
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<DateOnly>("SpentOn")
+                        .HasColumnType("date")
+                        .HasColumnName("spent_on");
+
+                    b.Property<string>("Supplier")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("supplier");
+
+                    b.Property<decimal>("Total")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("total")
+                        .HasComputedColumnSql("CASE WHEN `quantity` > 0 AND `unit_cost` > 0 THEN ROUND(`quantity` * `unit_cost`, 2) ELSE `amount` END", true);
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("unit");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("unit_cost");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_site_expenses");
+
+                    b.HasIndex("AccountLabelId")
+                        .HasDatabaseName("ix_site_expenses_account_label_id");
+
+                    b.HasIndex("ProjectId")
+                        .HasDatabaseName("ix_site_expenses_project_id");
+
+                    b.HasIndex("AddedById", "ClientRef")
+                        .IsUnique()
+                        .HasDatabaseName("ix_site_expenses_added_by_id_client_ref");
+
+                    b.ToTable("site_expenses", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_site_expenses_amount_positive", "`amount` IS NULL OR `amount` > 0");
+
+                            t.HasCheckConstraint("ck_site_expenses_category", "`category` IN ('materials', 'contractor', 'equipment', 'fees', 'other')");
+
+                            t.HasCheckConstraint("ck_site_expenses_has_cost", "(COALESCE(`quantity`, 0) > 0 AND COALESCE(`unit_cost`, 0) > 0) OR COALESCE(`amount`, 0) > 0");
+
+                            t.HasCheckConstraint("ck_site_expenses_quantity_positive", "`quantity` IS NULL OR `quantity` > 0");
+
+                            t.HasCheckConstraint("ck_site_expenses_unit_cost_non_negative", "`unit_cost` IS NULL OR `unit_cost` >= 0");
                         });
                 });
 
@@ -8236,25 +8243,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Project");
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.ProjectMaterial", b =>
-                {
-                    b.HasOne("ID_Indetails.api.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("AddedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_project_materials_users_added_by_id");
-
-                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_project_materials_projects_project_id");
-
-                    b.Navigation("Project");
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectMeeting", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -8524,6 +8512,31 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Permission");
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.SiteExpense", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.AccountLabel", null)
+                        .WithMany()
+                        .HasForeignKey("AccountLabelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_site_expenses_account_labels_account_label_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AddedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_site_expenses_users_added_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_site_expenses_projects_project_id");
+
+                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.SiteLog", b =>

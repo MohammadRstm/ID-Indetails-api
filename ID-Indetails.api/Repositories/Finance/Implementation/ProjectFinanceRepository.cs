@@ -34,11 +34,11 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
             .Select(x => new ExpenseRow(x.ProjectId, x.Currency, x.Amount, x.SpentOn))
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<MaterialRow>> MaterialsAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
-        => await db.ProjectMaterials
+    public async Task<IReadOnlyList<SiteExpenseRow>> SiteExpensesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
+        => await db.SiteExpenses
             .AsNoTracking()
-            .Where(m => projectIds.Contains(m.ProjectId) && m.DeletedAt == null)
-            .Select(m => new MaterialRow(m.ProjectId, m.Currency, m.Total, m.ClientPrice, m.AddedAt))
+            .Where(e => projectIds.Contains(e.ProjectId) && e.DeletedAt == null)
+            .Select(e => new SiteExpenseRow(e.ProjectId, e.Currency, e.Total, e.SpentOn))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<GroundLabourRow>> GroundLabourAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)

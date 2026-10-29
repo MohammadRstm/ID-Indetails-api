@@ -8,8 +8,8 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Boqs;
 using ID_Indetails.api.DTO.Request.Expenses;
 using ID_Indetails.api.DTO.Request.Labour;
-using ID_Indetails.api.DTO.Request.Materials;
 using ID_Indetails.api.DTO.Request.Projects;
+using ID_Indetails.api.DTO.Request.SiteExpenses;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Projects;
@@ -24,8 +24,8 @@ using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Labour.Abstraction;
-using ID_Indetails.api.Services.Materials.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.SiteExpenses.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Services.Projects.Implementation;
@@ -38,7 +38,7 @@ public sealed class BlockedChangeService(
     IProjectFinanceService finance,
     IProfitFloor floor,
     IExpenseService expenses,
-    IMaterialService materials,
+    ISiteExpenseService siteExpenses,
     ILabourService labour,
     IWorkEntryService workEntries,
     IProjectService projects,
@@ -92,11 +92,11 @@ public sealed class BlockedChangeService(
                 var expense = Read<CreateExpenseRequest>(change);
                 return (await expenses.CreateAsync(expense.ProjectId, expense.Request, cancellationToken)).Id;
             case BlockedChangeKind.MaterialAdd:
-                var added = Read<AddMaterialsRequest>(change);
-                return (await materials.AddAsync(added.ProjectId, added.Request, cancellationToken)).FirstOrDefault()?.Id;
+                var added = Read<AddSiteExpensesRequest>(change);
+                return (await siteExpenses.AddAsync(added.ProjectId, added.Request, cancellationToken)).FirstOrDefault()?.Id;
             case BlockedChangeKind.MaterialUpdate:
-                var material = Read<MaterialEntryRequest>(change);
-                return (await materials.UpdateAsync(material.ProjectId, material.ItemId!.Value, material.Request, cancellationToken)).Id;
+                var siteExpense = Read<SiteExpenseEntryRequest>(change);
+                return (await siteExpenses.UpdateAsync(siteExpense.ProjectId, siteExpense.ItemId!.Value, siteExpense.Request, cancellationToken)).Id;
             case BlockedChangeKind.LabourWeek:
                 var week = Read<SubmitLabourWeekRequest>(change);
                 await labour.SubmitWeekAsync(week.ProjectId, week.WeekStart!.Value, week.Request, cancellationToken);
@@ -182,10 +182,10 @@ public sealed class BlockedChangeService(
                 var expense = Read<CreateExpenseRequest>(change).Request;
                 return $"Expense: {expense.Label.Trim()}, {expense.Amount:N2} {expense.Currency.ToUpperInvariant()}";
             case BlockedChangeKind.MaterialAdd:
-                var added = Read<AddMaterialsRequest>(change).Request.Items;
-                return $"{Counted(added.Count, "material")}: {string.Join(", ", added.Select(m => m.Name.Trim()))}";
+                var added = Read<AddSiteExpensesRequest>(change).Request.Items;
+                return $"{Counted(added.Count, "expense")}: {string.Join(", ", added.Select(e => e.Name.Trim()))}";
             case BlockedChangeKind.MaterialUpdate:
-                return $"Material change: {Read<MaterialEntryRequest>(change).Request.Name.Trim()}";
+                return $"Expense change: {Read<SiteExpenseEntryRequest>(change).Request.Name.Trim()}";
             case BlockedChangeKind.LabourWeek:
                 return $"Labour of the week of {Read<SubmitLabourWeekRequest>(change).WeekStart:d MMM yyyy}";
             case BlockedChangeKind.WorkEntryCreate or BlockedChangeKind.WorkEntryUpdate:
@@ -197,7 +197,12 @@ public sealed class BlockedChangeService(
                 return $"Payment set to {Read<UpdateProjectPaymentRequest>(change).Request.Revenue:N2} USD";
             case BlockedChangeKind.Pricing:
                 var pricing = Read<UpdateProjectPricingRequest>(change).Request;
-                return $"Material profit set to {pricing.MaterialMarkup * 100:0.##}%{(pricing.SupervisionRate is { } supervision ? $", supervision {supervision * 100:0.##}%" : "")}";
+                var rates = new[]
+                {
+                    pricing.SupervisionRate is { } supervision ? $"supervision {supervision * 100:0.##}%" : null,
+                    pricing.TvaRate is { } tva ? $"TVA {tva * 100:0.##}%" : null,
+                }.OfType<string>().ToList();
+                return rates.Count == 0 ? "Pricing change" : $"Pricing set: {string.Join(", ", rates)}";
             default:
                 return change.Kind.ToString();
         }

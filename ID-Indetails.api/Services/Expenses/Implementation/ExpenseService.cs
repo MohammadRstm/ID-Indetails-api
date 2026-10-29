@@ -48,6 +48,11 @@ public sealed class ExpenseService(
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await EditableProjectAsync(actor, projectId, cancellationToken);
+        if (ExpenseRules.CheckNotExecution(project.DomainCode) is { } denial)
+        {
+            throw denial.ToException();
+        }
+
         var before = await floor.BeforeAsync(project, cancellationToken);
 
         var expense = new ProjectExpense

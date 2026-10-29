@@ -24,8 +24,7 @@ public static class MoneyAttention
     public sealed record Item(MoneyAttentionKind Kind, long ProjectId, long? InvoiceId, int? DaysOverdue, decimal? Amount, decimal? Revenue, int? UsedPct);
 
     /// <summary>
-    /// The cost warning is for Design only. An Execution site's payment includes its materials at client price while
-    /// its cost includes them at what was paid, so its cost is past 85% of the payment from the first material.
+    /// The cost warning is for Design only. An Execution site's profit is watched by the profit floor instead.
     /// </summary>
     public static bool WarnsOnCost(string domain) => domain == DomainCodes.Design;
 

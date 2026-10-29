@@ -45,7 +45,7 @@ public sealed class SiteRecordsService(
             .Select(id => new SiteSummaryResponse(
                 id,
                 activity[id].MaterialCount,
-                seesMoney ? money[id].Costs.Materials : null,
+                seesMoney ? money[id].Costs.SiteExpenses : null,
                 activity[id].ReportedWeeks,
                 seesMoney ? money[id].Costs.GroundLabour : null,
                 activity[id].LastRecordedAt))

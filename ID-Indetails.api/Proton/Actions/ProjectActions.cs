@@ -191,7 +191,7 @@ public sealed record CreateProjectInput : ProtonActionInput
 
 /// <summary>
 /// Creates a Design project, through POST /api/projects once confirmed. Without money: revenue and Execution sites
-/// (which need a fee and markup) are set up in the app.
+/// (which need BOQs and rates) are set up in the app.
 /// </summary>
 public sealed class ProposeCreateProjectTool(IProjectService projects, IClientService clients, IEmployeeService employees)
     : ProtonActionTool<CreateProjectInput, CreateProjectArgs>

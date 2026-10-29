@@ -2,7 +2,7 @@ namespace ID_Indetails.api.Models;
 
 /// <summary>
 /// One change of a client project's agreed payment, with why it changed: a Design project's customer payment, or an
-/// Execution site's project fee and material markup. The first is the payment agreed at the start. Never edited.
+/// Execution site's project fee, supervision and TVA. The first is the payment agreed at the start. Never edited.
 /// </summary>
 public class ProjectPaymentChange
 {
@@ -16,7 +16,7 @@ public class ProjectPaymentChange
     /// <summary>Null for the payment agreed at the start.</summary>
     public decimal? PreviousAmount { get; set; }
 
-    /// <summary>Execution only: the default material markup after the change, a fraction (0.125 is 12.5%).</summary>
+    /// <summary>History only: the default material markup after the change, a fraction (0.125 is 12.5%). Markups are gone; nothing writes this any more.</summary>
     public decimal? MaterialMarkup { get; set; }
 
     public decimal? PreviousMaterialMarkup { get; set; }

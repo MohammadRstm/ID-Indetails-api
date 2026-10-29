@@ -131,7 +131,7 @@ public sealed record MoneyMonthRow(
     decimal ExpectedRevenue,
     decimal Labour,
     decimal Expenses,
-    decimal Materials,
+    decimal SiteExpenses,
     decimal GroundLabour,
     decimal Cost,
     decimal CashProfit,
@@ -151,7 +151,7 @@ public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonT
 
     public override string Description =>
         "A domain's money month by month, oldest first, in USD: money received, expected revenue (agreed in the month), " +
-        "cost by source (labour, expenses, materials, ground labour) and cash profit (received − cost). Use it for monthly " +
+        "cost by source (labour, expenses, site expenses, ground labour) and cash profit (received − cost). Use it for monthly " +
         "trends of money received, cost or profit, and for money charts by month.";
 
     public override bool Heavy => true;
@@ -199,9 +199,9 @@ public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonT
             Notes: notes);
         var cost = new Ui.ProtonDataset(
             "Cost by source, by month",
-            [month, usd("labour", "Labour"), usd("expenses", "Expenses"), usd("materials", "Materials"), usd("ground_labour", "Ground labour")],
+            [month, usd("labour", "Labour"), usd("expenses", "Expenses"), usd("site_expenses", "Site expenses"), usd("ground_labour", "Ground labour")],
             rows.Select(r => new Ui.ProtonDataRow(
-                [Ui.ProtonCell.Of(r.Month), Ui.ProtonCell.Of(r.Labour), Ui.ProtonCell.Of(r.Expenses), Ui.ProtonCell.Of(r.Materials), Ui.ProtonCell.Of(r.GroundLabour)],
+                [Ui.ProtonCell.Of(r.Month), Ui.ProtonCell.Of(r.Labour), Ui.ProtonCell.Of(r.Expenses), Ui.ProtonCell.Of(r.SiteExpenses), Ui.ProtonCell.Of(r.GroundLabour)],
                 Partial: r.SoFar)).ToList(),
             words,
             Notes: notes);

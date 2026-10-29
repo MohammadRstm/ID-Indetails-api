@@ -142,7 +142,7 @@ public sealed class MoneyRollup(
     public static ProjectCostResponse CostOf(ProjectFinance.Costs costs, int unpricedMinutes) => new(
         costs.Labour,
         costs.Expenses,
-        costs.Materials,
+        costs.SiteExpenses,
         costs.GroundLabour,
         costs.Total,
         costs.Unconverted.Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount)).ToList(),
@@ -171,7 +171,7 @@ public sealed class MoneyRollup(
         var costs = new ProjectFinance.Costs(
             moneys.Sum(m => m.Costs.Labour),
             moneys.Sum(m => m.Costs.Expenses),
-            moneys.Sum(m => m.Costs.Materials),
+            moneys.Sum(m => m.Costs.SiteExpenses),
             moneys.Sum(m => m.Costs.GroundLabour),
             moneys.SelectMany(m => m.Costs.Unconverted)
                 .GroupBy(u => (u.Source, u.Currency))

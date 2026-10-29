@@ -680,7 +680,7 @@ public static class ProtonFormSpecs
         [ProtonForm.WebsiteSocialLink] = new("the website link form", W<WebsiteController>(nameof(WebsiteController.AddSocialLink)), W<WebsiteController>(nameof(WebsiteController.UpdateSocialLink)), TypedOnly: true),
         [ProtonForm.CompanyDetails] = new("the company details form", W<CompanyController>(nameof(CompanyController.UpdateSettings))),
         [ProtonForm.CompanyExpense] = new("the company expense form", W<OverheadController>(nameof(OverheadController.Create)), W<OverheadController>(nameof(OverheadController.Update))),
-        [ProtonForm.Materials] = new("the materials sheet", W<MaterialsController>(nameof(MaterialsController.Add))),
+        [ProtonForm.Materials] = new("the site expenses sheet", W<SiteExpensesController>(nameof(SiteExpensesController.Add))),
         [ProtonForm.Invoice] = new("the invoice form", W<InvoicesController>(nameof(InvoicesController.Create)), W<InvoicesController>(nameof(InvoicesController.Update))),
         [ProtonForm.Payment] = new("the record payment form", W<PaymentsController>(nameof(PaymentsController.Record)), Family: ProtonFamily.Money),
         [ProtonForm.ProjectExpense] = new("the project expense form", W<ExpensesController>(nameof(ExpensesController.Create))),
@@ -984,7 +984,7 @@ public sealed class FillFormTool(
                 return project;
             }
             case ProtonForm.ProjectExpense:
-                return await ProjectAsync(fill.Id, context, cancellationToken);
+                return await ProjectAsync(fill.Id, context, cancellationToken, DomainCodes.Design);
             case ProtonForm.Schedule or ProtonForm.HourExcuse:
                 return await Visible(ProtonRefType.Person, fill.Id!.Value, context, cancellationToken);
             default:

@@ -18,7 +18,7 @@ public static class NotificationKinds
     /// <summary>Someone who doesn't manage meetings set one (subject: the meeting). Sent to the domain's meeting managers.</summary>
     public const string MeetingScheduled = "meeting_scheduled";
 
-    /// <summary>Someone recorded materials on a site (subject: the project; the count in the payload).</summary>
+    /// <summary>Someone recorded expenses on a site (subject: the project; the count in the payload). The kind keeps its stored name.</summary>
     public const string MaterialsAdded = "materials_added";
 
     /// <summary>Someone submitted or updated a labour week (subject: the project; the week and whether it was an update in the payload).</summary>

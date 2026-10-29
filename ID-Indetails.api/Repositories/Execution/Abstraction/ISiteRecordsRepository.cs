@@ -6,9 +6,9 @@ public sealed record PersonMaterialRow(long Id, long ProjectId, string Name, dec
 
 public sealed record PersonLabourWeekRow(long Id, long ProjectId, DateOnly WeekStart, decimal Total, DateTime SubmittedAt);
 
-/// <param name="MaterialCount">Live materials of the project.</param>
+/// <param name="MaterialCount">Live expenses of the project.</param>
 /// <param name="ReportedWeeks">Labour weeks reported on the project.</param>
-/// <param name="LastMaterialAt">When the given person last added a material there.</param>
+/// <param name="LastMaterialAt">When the given person last added an expense there.</param>
 /// <param name="LastWeekAt">When the given person last submitted a labour week there.</param>
 public sealed record SiteActivityRow(long ProjectId, int MaterialCount, int ReportedWeeks, DateTime? LastMaterialAt, DateTime? LastWeekAt)
 {

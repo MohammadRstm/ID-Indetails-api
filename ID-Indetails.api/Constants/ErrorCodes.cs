@@ -198,6 +198,12 @@ public static class ErrorCodes
     /// <summary>422. The account labels changed since the new order was made.</summary>
     public const string AccountLabelOrderStale = "account_label_order_stale";
 
+    /// <summary>422. An archived account label can't be newly picked.</summary>
+    public const string AccountLabelArchived = "account_label_archived";
+
+    /// <summary>422. An Execution site keeps its costs as site expenses, not project expenses.</summary>
+    public const string ExpenseExecutionUsesSiteExpenses = "expense_execution_uses_site_expenses";
+
     // Payroll
     public const string SalaryMonthInFuture = "salary_month_in_future";
     public const string ExcuseMonthInFuture = "excuse_month_in_future";

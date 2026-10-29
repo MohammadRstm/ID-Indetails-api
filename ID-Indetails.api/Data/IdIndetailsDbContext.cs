@@ -57,7 +57,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<WorkEntryComment> WorkEntryComments => Set<WorkEntryComment>();
 
     // Execution site costs
-    public DbSet<ProjectMaterial> ProjectMaterials => Set<ProjectMaterial>();
+    public DbSet<SiteExpense> SiteExpenses => Set<SiteExpense>();
     public DbSet<LabourWeek> LabourWeeks => Set<LabourWeek>();
     public DbSet<LabourWeekDay> LabourWeekDays => Set<LabourWeekDay>();
     public DbSet<ProjectLabourDefault> ProjectLabourDefaults => Set<ProjectLabourDefault>();
@@ -171,6 +171,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<BoqKind>(configurationBuilder);
         StoreAsSnakeCase<BoqStatus>(configurationBuilder);
         StoreAsSnakeCase<BoqAdjustmentType>(configurationBuilder);
+        StoreAsSnakeCase<SiteExpenseCategory>(configurationBuilder);
         StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
         StoreAsSnakeCase<ProtonChannel>(configurationBuilder);
