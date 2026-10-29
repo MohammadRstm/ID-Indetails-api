@@ -85,7 +85,7 @@ public sealed class AuthTestSteps(ApiFactory api)
     [
         PermissionCodes.FinancialView, PermissionCodes.InvoiceCreate, PermissionCodes.InvoiceSend, PermissionCodes.InvoiceVoid,
         PermissionCodes.PaymentRecord, PermissionCodes.PaymentVoid, PermissionCodes.BillingSettingsManage, PermissionCodes.ExpenseManage,
-        PermissionCodes.ProjectPricingManage, PermissionCodes.StatementCreate, PermissionCodes.StatementSend,
+        PermissionCodes.ProjectPricingManage, PermissionCodes.BoqCreate,
         PermissionCodes.EmployeeInvite, PermissionCodes.EmployeePayManage,
     ];
 

@@ -28,7 +28,7 @@ public sealed class ProjectFinanceService(
         IReadOnlyDictionary<long, PaidOvertime> Overtime,
         ILookup<long, Cost> Breaks,
         ILookup<long, ExpenseRow> Expenses,
-        ILookup<long, MaterialRow> Materials,
+        ILookup<long, SiteExpenseRow> SiteExpenses,
         ILookup<long, GroundLabourRow> Ground,
         IReadOnlyDictionary<long, (decimal Received, decimal Tva)> Received,
         IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)> Pocket);
@@ -52,7 +52,7 @@ public sealed class ProjectFinanceService(
         return projects.ToDictionary(p => p.Id, p =>
         {
             var entries = loaded.Entries[p.Id].ToList();
-            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Overtime, loaded.Breaks[p.Id], loaded.Expenses[p.Id], loaded.Materials[p.Id], loaded.Ground[p.Id]);
+            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Overtime, loaded.Breaks[p.Id], loaded.Expenses[p.Id], loaded.SiteExpenses[p.Id], loaded.Ground[p.Id]);
             return new ProjectCostHistory(
                 Calculate(p, loaded),
                 ProjectFinance.DatedUsd(items, loaded.Rates),
@@ -74,7 +74,7 @@ public sealed class ProjectFinanceService(
             await PaidOvertimeAsync(entries, payRates, cancellationToken),
             (await PaidBreaksAsync(entries, payRates, cancellationToken)).ToLookup(b => b.ProjectId, b => b.Cost),
             (await sources.ExpensesAsync(ids, cancellationToken)).ToLookup(x => x.ProjectId),
-            (await sources.MaterialsAsync(ids, cancellationToken)).ToLookup(m => m.ProjectId),
+            (await sources.SiteExpensesAsync(ids, cancellationToken)).ToLookup(e => e.ProjectId),
             (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId),
             await sources.ReceivedAsync(ids, cancellationToken),
             await sources.PocketAsync(ids, cancellationToken));
@@ -88,7 +88,7 @@ public sealed class ProjectFinanceService(
             loaded.Overtime,
             loaded.Breaks[project.Id],
             loaded.Expenses[project.Id],
-            loaded.Materials[project.Id].ToList(),
+            loaded.SiteExpenses[project.Id].ToList(),
             loaded.Ground[project.Id],
             loaded.Received.GetValueOrDefault(project.Id),
             loaded.Pocket.GetValueOrDefault(project.Id),
@@ -111,7 +111,7 @@ public sealed class ProjectFinanceService(
             await PaidOvertimeAsync(entries, payRates, cancellationToken),
             breaks,
             await sources.ExpensesAsync(ids, cancellationToken),
-            await sources.MaterialsAsync(ids, cancellationToken),
+            await sources.SiteExpensesAsync(ids, cancellationToken),
             await sources.GroundLabourAsync(ids, cancellationToken));
         var payments = await sources.PaymentsAsync(project.Id, cancellationToken);
         // pocket money counts as cash on the day it moved: a payout in, a contribution out
@@ -208,7 +208,7 @@ public sealed class ProjectFinanceService(
         IReadOnlyDictionary<long, PaidOvertime> overtime,
         IEnumerable<Cost> breaks,
         IEnumerable<ExpenseRow> expenses,
-        IEnumerable<MaterialRow> materials,
+        IEnumerable<SiteExpenseRow> siteExpenses,
         IEnumerable<GroundLabourRow> ground)
     {
         var (labour, unpricedMinutes) = ProjectFinance.PriceLabour(
@@ -218,7 +218,7 @@ public sealed class ProjectFinanceService(
         var items = labour
             .Concat(breaks)
             .Concat(expenses.Select(x => new Cost(CostSource.Expenses, x.Currency, x.Amount, x.SpentOn)))
-            .Concat(materials.Select(m => new Cost(CostSource.Materials, m.Currency, m.Total, clock.ToCompanyDate(m.AddedAt))))
+            .Concat(siteExpenses.Select(e => new Cost(CostSource.SiteExpense, e.Currency, e.Total, e.SpentOn)))
             // Ground labour is recorded without a currency: daily pay is in USD.
             .Concat(ground.Select(d => new Cost(CostSource.GroundLabour, PaymentRules.BaseCurrency, d.Cost, d.WorkDate)))
             .ToList();
@@ -233,42 +233,31 @@ public sealed class ProjectFinanceService(
         IReadOnlyDictionary<long, PaidOvertime> overtime,
         IEnumerable<Cost> breaks,
         IEnumerable<ExpenseRow> expenses,
-        IReadOnlyList<MaterialRow> materials,
+        IReadOnlyList<SiteExpenseRow> siteExpenses,
         IEnumerable<GroundLabourRow> ground,
         (decimal Gross, decimal Tva) received,
         (decimal ToPocket, decimal FromPocket) pocket,
         ExchangeRateTable rates)
     {
-        var (items, unpricedMinutes) = CostItems(entries, payRates, overtime, breaks, expenses, materials, ground);
+        var (items, unpricedMinutes) = CostItems(entries, payRates, overtime, breaks, expenses, siteExpenses, ground);
         var costs = ProjectFinance.ToUsd(items, rates);
 
         var isExecution = project.DomainCode == DomainCodes.Execution;
-        decimal? materialCharge = null, materialProfit = null, unsentCharge = null;
-        int unconvertedMaterials = 0, unsent = 0;
         var revenue = project.Revenue;
+        var revenueWithTva = Tva.Gross(revenue, project.TvaRate);
+        var revenueTva = revenueWithTva - revenue;
+        decimal? supervision = null;
 
         if (isExecution)
         {
-            // A material is revenue once a statement listing it has been sent to the client; until then only its cost counts.
-            var markup = project.MaterialMarkup ?? 0;
-            var sentRows = materials.Where(m => m.SentAt is not null).ToList();
-            var unsentRows = materials.Where(m => m.SentAt is null).ToList();
-            IEnumerable<(ExecutionPricing.Material, string, DateOnly)> Priced(IEnumerable<MaterialRow> rows)
-                => rows.Select(m => (new ExecutionPricing.Material(m.Total, m.ClientPrice), m.Currency, clock.ToCompanyDate(m.AddedAt)));
-            var (charge, unconvertedSent) = ProjectFinance.MaterialCharge(Priced(sentRows), markup, rates);
-            var (pending, unconvertedUnsent) = ProjectFinance.MaterialCharge(Priced(unsentRows), markup, rates);
-            var sentCost = sentRows.Sum(m => rates.ToUsd(m.Total, m.Currency, clock.ToCompanyDate(m.AddedAt)) ?? 0);
-
-            materialCharge = charge;
-            materialProfit = charge - Math.Round(sentCost, 2, MidpointRounding.AwayFromZero);
-            unsentCharge = pending;
-            unsent = unsentRows.Count;
-            unconvertedMaterials = unconvertedSent + unconvertedUnsent;
-
-            // Open Execution projects are priced live; finalising freezes the agreed amount into Revenue.
+            // Open Execution projects are priced live from the agreed BOQs; finalising freezes the agreed amount into Revenue.
+            var price = ExecutionPricing.PriceOf(project.ProjectFee ?? 0, project.SupervisionRate ?? 0, project.TvaRate);
+            supervision = price.Supervision;
+            revenueWithTva = price.Gross;
+            revenueTva = price.Tva;
             if (project.RevenueLockedAt is null)
             {
-                revenue = charge + (project.ProjectFee ?? 0);
+                revenue = price.Net;
             }
         }
 
@@ -288,15 +277,13 @@ public sealed class ProjectFinanceService(
             costs,
             labourMinutes,
             unpricedMinutes,
-            materialCharge,
-            unconvertedMaterials,
             received.Gross,
             isExecution ? received.Gross - received.Tva - costs.Total - pocket.ToPocket + pocket.FromPocket : null,
-            materialProfit,
-            unsentCharge,
-            unsent,
             pocket.ToPocket,
             pocket.FromPocket,
-            received.Tva);
+            received.Tva,
+            supervision,
+            revenueWithTva,
+            revenueTva);
     }
 }

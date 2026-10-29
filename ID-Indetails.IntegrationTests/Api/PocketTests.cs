@@ -38,8 +38,8 @@ public class PocketTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<ProjectResponse> SiteWithProfitAsync(AuthResponse superAdmin, decimal profit)
     {
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
-        await OkAsync<object>(Client.PostJsonAsync($"/api/projects/{site.Id}/expenses",
-            new { label = "Scaffolding", amount = 1000m - profit, currency = "USD", spentOn = DateTime.UtcNow.ToString("yyyy-MM-dd") }, superAdmin.AccessToken));
+        await OkAsync<object>(Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
+            new { items = new[] { new { name = "Scaffolding", amount = 1000m - profit, spentOn = DateTime.UtcNow.ToString("yyyy-MM-dd") } } }, superAdmin.AccessToken));
         return site;
     }
 

@@ -57,7 +57,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<WorkEntryComment> WorkEntryComments => Set<WorkEntryComment>();
 
     // Execution site costs
-    public DbSet<ProjectMaterial> ProjectMaterials => Set<ProjectMaterial>();
+    public DbSet<SiteExpense> SiteExpenses => Set<SiteExpense>();
     public DbSet<LabourWeek> LabourWeeks => Set<LabourWeek>();
     public DbSet<LabourWeekDay> LabourWeekDays => Set<LabourWeekDay>();
     public DbSet<ProjectLabourDefault> ProjectLabourDefaults => Set<ProjectLabourDefault>();
@@ -72,6 +72,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<PocketRequest> PocketRequests => Set<PocketRequest>();
 
+    public DbSet<SupervisionWithdrawal> SupervisionWithdrawals => Set<SupervisionWithdrawal>();
+
     public DbSet<Quote> Quotes => Set<Quote>();
 
     public DbSet<QuoteDelivery> QuoteDeliveries => Set<QuoteDelivery>();
@@ -79,10 +81,11 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<QuoteSequence> QuoteSequences => Set<QuoteSequence>();
 
     public DbSet<BlockedChange> BlockedChanges => Set<BlockedChange>();
-    public DbSet<ClientStatement> ClientStatements => Set<ClientStatement>();
-    public DbSet<ClientStatementLine> ClientStatementLines => Set<ClientStatementLine>();
-    public DbSet<ClientStatementDelivery> ClientStatementDeliveries => Set<ClientStatementDelivery>();
-    public DbSet<StatementSequence> StatementSequences => Set<StatementSequence>();
+
+    public DbSet<Boq> Boqs => Set<Boq>();
+    public DbSet<BoqLine> BoqLines => Set<BoqLine>();
+    public DbSet<BoqDelivery> BoqDeliveries => Set<BoqDelivery>();
+    public DbSet<BoqSequence> BoqSequences => Set<BoqSequence>();
 
     // Working time and the hours ledger
     public DbSet<WorkingTimePolicy> WorkingTimePolicies => Set<WorkingTimePolicy>();
@@ -102,6 +105,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     // Company layer
     public DbSet<OverheadGroup> OverheadGroups => Set<OverheadGroup>();
+    public DbSet<AccountLabel> AccountLabels => Set<AccountLabel>();
 
     public DbSet<OverheadItem> OverheadItems => Set<OverheadItem>();
     public DbSet<OverheadAmount> OverheadAmounts => Set<OverheadAmount>();
@@ -166,7 +170,10 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<EditWindow>(configurationBuilder);
         StoreAsSnakeCase<EntryNotificationMode>(configurationBuilder);
         StoreAsSnakeCase<ExcuseKind>(configurationBuilder);
-        StoreAsSnakeCase<StatementMode>(configurationBuilder);
+        StoreAsSnakeCase<BoqKind>(configurationBuilder);
+        StoreAsSnakeCase<BoqStatus>(configurationBuilder);
+        StoreAsSnakeCase<BoqAdjustmentType>(configurationBuilder);
+        StoreAsSnakeCase<SiteExpenseCategory>(configurationBuilder);
         StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);
         StoreAsSnakeCase<ProtonChannel>(configurationBuilder);

@@ -25,8 +25,8 @@ public class ProjectFinanceTests
 
     private static readonly RoleHistory AnEmployee = new(RoleCodes.Employee, []);
 
-    private static Costs CostOf(decimal labour = 0, decimal expenses = 0, decimal materials = 0, decimal ground = 0)
-        => new(labour, expenses, materials, ground, []);
+    private static Costs CostOf(decimal labour = 0, decimal expenses = 0, decimal siteExpenses = 0, decimal ground = 0)
+        => new(labour, expenses, siteExpenses, ground, []);
 
     private static readonly PayRecord Salary = new(7, Jan1, PayBasis.Monthly, 1760m, "USD", 9.57m);
 
@@ -130,15 +130,15 @@ public class ProjectFinanceTests
         var costs = ToUsd([
             new CostItem(CostSource.Expenses, "USD", 100m, Mar1),
             new CostItem(CostSource.Expenses, "LBP", 900_000m, Mar1),
-            new CostItem(CostSource.Materials, "LBP", 179_000m, new DateOnly(2025, 6, 1)),
+            new CostItem(CostSource.SiteExpense, "LBP", 179_000m, new DateOnly(2025, 6, 1)),
             new CostItem(CostSource.GroundLabour, "USD", 240m, Mar1),
         ], Rates);
 
         costs.Expenses.ShouldBe(110m);
-        costs.Materials.ShouldBe(0m);
+        costs.SiteExpenses.ShouldBe(0m);
         costs.GroundLabour.ShouldBe(240m);
         costs.Total.ShouldBe(350m);
-        costs.Unconverted.ShouldHaveSingleItem().ShouldBe(new UnconvertedCost(CostSource.Materials, "LBP", 179_000m));
+        costs.Unconverted.ShouldHaveSingleItem().ShouldBe(new UnconvertedCost(CostSource.SiteExpense, "LBP", 179_000m));
     }
 
     [Fact]
@@ -147,11 +147,11 @@ public class ProjectFinanceTests
         CostItem[] items =
         [
             new(CostSource.Expenses, "LBP", 179_000m, new DateOnly(2026, 2, 15)),
-            new(CostSource.Materials, "lbp", 179_000m, new DateOnly(2025, 6, 1)),
+            new(CostSource.SiteExpense, "lbp", 179_000m, new DateOnly(2025, 6, 1)),
         ];
 
         DatedUsd(items, Rates).ShouldBe([new Recognition.DatedCost(CostSource.Expenses, new DateOnly(2026, 2, 15), 2m)]);
-        Unconvertible(items, Rates).ShouldBe([new DatedUnconverted(CostSource.Materials, "LBP", 179_000m, new DateOnly(2025, 6, 1))]);
+        Unconvertible(items, Rates).ShouldBe([new DatedUnconverted(CostSource.SiteExpense, "LBP", 179_000m, new DateOnly(2025, 6, 1))]);
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public class ProjectFinanceTests
     [Fact]
     public void An_open_project_projects_its_cost_from_progress_and_recognises_revenue_by_progress()
     {
-        var summary = Summarise(new Facts(true, false, 25, 10_000m, 0), CostOf(materials: 2000m));
+        var summary = Summarise(new Facts(true, false, 25, 10_000m, 0), CostOf(siteExpenses: 2000m));
 
         summary.Projected.ShouldBe(new Projection(8000m, 2000m, 0.2m));
         summary.RecognisedToDate.ShouldBe(2500m);
@@ -226,30 +226,12 @@ public class ProjectFinanceTests
     }
 
     [Fact]
-    public void Material_charge_converts_each_client_price_and_counts_what_it_cannot()
-    {
-        var (charge, unconverted) = MaterialCharge(
-            [
-                (new ExecutionPricing.Material(100m, null), "USD", Mar1),
-                (new ExecutionPricing.Material(900_000m, null), "LBP", Mar1),
-                (new ExecutionPricing.Material(50m, 80m), "USD", Mar1),
-                (new ExecutionPricing.Material(179_000m, null), "LBP", new DateOnly(2025, 1, 1)),
-            ],
-            markup: 0.10m,
-            Rates);
-
-        // 110 + (990,000 LBP = 11) + 80 (manual price)
-        charge.ShouldBe(201m);
-        unconverted.ShouldBe(1);
-    }
-
-    [Fact]
     public void Cash_adds_up_week_by_week_from_the_first_week()
     {
         // 2 March 2026 is a Monday.
         var weeks = CashByWeek(
             [
-                new CostItem(CostSource.Materials, "USD", 200m, new DateOnly(2026, 2, 27)),
+                new CostItem(CostSource.SiteExpense, "USD", 200m, new DateOnly(2026, 2, 27)),
                 new CostItem(CostSource.GroundLabour, "USD", 400m, new DateOnly(2026, 3, 4)),
                 new CostItem(CostSource.Expenses, "LBP", 900_000m, new DateOnly(2026, 3, 10)),
                 new CostItem(CostSource.Expenses, "LBP", 900_000m, new DateOnly(2025, 3, 10)),
@@ -260,7 +242,7 @@ public class ProjectFinanceTests
             from: new DateOnly(2026, 3, 3),
             to: new DateOnly(2026, 3, 12));
 
-        // The February material counts in the running total but not in the first week's own cost.
+        // The February expense counts in the running total but not in the first week's own cost.
         weeks.ShouldBe([
             new CashWeek(new DateOnly(2026, 3, 2), Received: 1000m, Spent: 600m, GroundLabour: 400m, ReceivedInWeek: 1000m, GroundLabourInWeek: 400m,
                 SpentInWeek: 400m, LabourInWeek: 0m, MinutesInWeek: 0),

@@ -86,7 +86,13 @@ public static class ProtonAnalysis
     /// <summary>Said in basis.omitted when a figure leaves out costs it couldn't convert, so a total isn't read as complete.</summary>
     public const string UnconvertedLeftOut = "costs in another currency with no exchange rate on their day: left out of these USD figures";
 
-    private static string SourceName(CostSource source) => source == CostSource.GroundLabour ? "ground labour" : source.ToString().ToLowerInvariant();
+    private static string SourceName(CostSource source)
+        => source switch
+        {
+            CostSource.GroundLabour => "ground labour",
+            CostSource.SiteExpense => "site expenses",
+            _ => source.ToString().ToLowerInvariant(),
+        };
 
     /// <summary>
     /// Compared groups as a table: the figure now, and when compared the figure before and the change. Every group is
@@ -347,7 +353,7 @@ public sealed record CompareMoneyInput
 
     public DateOnly? CompareTo { get; init; }
 
-    [Description("Default source: cost by labour, expenses, materials and ground labour.")]
+    [Description("Default source: cost by labour, expenses, site expenses and ground labour.")]
     public MoneyGrouping? GroupBy { get; init; }
 
     [Description("With group_by project: cost, received, profit (cash: received − cost) or cost_change. Default cost.")]
@@ -357,7 +363,7 @@ public sealed record CompareMoneyInput
     public int? Limit { get; init; }
 }
 
-/// <param name="ExpectedRevenue">Agreed in the period (a contract set or raised, an Execution material first sent), not a forecast.</param>
+/// <param name="ExpectedRevenue">Agreed in the period (a contract set or changed, an Execution BOQ agreed or withdrawn), not a forecast.</param>
 /// <param name="CashProfit">Received less cost.</param>
 /// <param name="CashMarginPct">Cash profit as a whole percentage of what was received, while anything was.</param>
 /// <param name="ProjectsWithMoney">Projects with money received or costs in either period; <paramref name="Projects"/> holds the first ones.</param>
@@ -388,13 +394,13 @@ public sealed record MoneyProjectRow(
 /// </summary>
 public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonTool<CompareMoneyInput>
 {
-    private static readonly string[] Sources = ["labour", "expenses", "materials", "ground labour"];
+    private static readonly string[] Sources = ["labour", "expenses", "site expenses", "ground labour"];
 
     public override string Name => "compare_money";
 
     public override string Description =>
         "A domain's money in a period compared with another (the previous one by default): money received, expected " +
-        "revenue (agreed in the period), cost (by source: labour, expenses, materials, ground labour), cash profit " +
+        "revenue (agreed in the period), cost (by source: labour, expenses, site expenses, ground labour), cash profit " +
         "(received − cost) and its margin, and per project with the biggest cost increases. All in USD, already " +
         "calculated. Use it for trends in money received and cost, and for which measurable costs made a change.";
 

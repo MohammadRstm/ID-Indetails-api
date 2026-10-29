@@ -89,8 +89,8 @@ public class EndpointAuthorizationTests
 
     /// <summary>Under <c>/api/portal</c>: the client's side. Staff manage a project's portal under <c>/api/projects/{id}/portal</c>.</summary>
     private static bool IsPortalRoute(Type controller)
-        => controller.GetCustomAttribute<RouteAttribute>()?.Template is { } route
-            && (route == "api/portal" || route.StartsWith("api/portal/", StringComparison.Ordinal));
+        => controller.GetCustomAttributes<RouteAttribute>()
+            .Any(r => r.Template == "api/portal" || r.Template.StartsWith("api/portal/", StringComparison.Ordinal));
 
     private static bool UsesPortalPolicy((Type Controller, MethodInfo Action) endpoint)
         => endpoint.Action.GetCustomAttributes<AuthorizeAttribute>(inherit: true)

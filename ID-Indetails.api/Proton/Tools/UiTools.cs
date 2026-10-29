@@ -400,7 +400,7 @@ public sealed record OpenSurfaceInput
     public required ProtonSurface Surface { get; init; }
 
     [Description("The record it is for, from find or another tool: a project for edit_project, project_report, " +
-                 "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment, new_statement, " +
+                 "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment, " +
                  "view_project_file, file_comments, portal_discussion and portal_preview; a client for edit_client; a person for " +
                  "message_person; a website project for edit_website_project. Leave out for the others.")]
     public long? Id { get; init; }
@@ -679,7 +679,7 @@ public static class ProtonFormSpecs
         [ProtonForm.WebsiteSocialLink] = new("the website link form", W<WebsiteController>(nameof(WebsiteController.AddSocialLink)), W<WebsiteController>(nameof(WebsiteController.UpdateSocialLink)), TypedOnly: true),
         [ProtonForm.CompanyDetails] = new("the company details form", W<CompanyController>(nameof(CompanyController.UpdateSettings))),
         [ProtonForm.CompanyExpense] = new("the company expense form", W<OverheadController>(nameof(OverheadController.Create)), W<OverheadController>(nameof(OverheadController.Update))),
-        [ProtonForm.Materials] = new("the materials sheet", W<MaterialsController>(nameof(MaterialsController.Add))),
+        [ProtonForm.Materials] = new("the site expenses sheet", W<SiteExpensesController>(nameof(SiteExpensesController.Add))),
         [ProtonForm.Invoice] = new("the invoice form", W<InvoicesController>(nameof(InvoicesController.Create)), W<InvoicesController>(nameof(InvoicesController.Update))),
         [ProtonForm.Payment] = new("the record payment form", W<PaymentsController>(nameof(PaymentsController.Record)), Family: ProtonFamily.Money),
         [ProtonForm.ProjectExpense] = new("the project expense form", W<ExpensesController>(nameof(ExpensesController.Create))),
@@ -983,7 +983,7 @@ public sealed class FillFormTool(
                 return project;
             }
             case ProtonForm.ProjectExpense:
-                return await ProjectAsync(fill.Id, context, cancellationToken);
+                return await ProjectAsync(fill.Id, context, cancellationToken, DomainCodes.Design);
             case ProtonForm.Schedule or ProtonForm.HourExcuse:
                 return await Visible(ProtonRefType.Person, fill.Id!.Value, context, cancellationToken);
             default:

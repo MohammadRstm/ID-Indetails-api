@@ -6,7 +6,7 @@ namespace ID_Indetails.api.Business.Projects;
 
 /// <summary>
 /// A client project's profit may not reach zero. It counts only once the project has an agreed amount (Design's
-/// payment, an Execution site's agreed amount); internal work is cost by nature and isn't held to it.
+/// payment, an Execution site's work price from its first agreed BOQ); internal work is cost by nature and isn't held to it.
 /// </summary>
 public static class ProfitFloorRules
 {
@@ -23,8 +23,8 @@ public static class ProfitFloorRules
     public static bool Applies(BillingType billingType, string domain, decimal revenue, decimal? projectFee)
         => billingType == BillingType.Client && (domain == DomainCodes.Execution ? projectFee ?? 0 : revenue) > 0;
 
-    /// <param name="profit">Profit on the agreed amount, counting materials not sent yet.</param>
-    /// <param name="agreed">The agreed amount, materials not sent yet included.</param>
+    /// <param name="profit">Profit on the agreed amount.</param>
+    /// <param name="agreed">The agreed amount, net of TVA (Execution: the work price plus supervision).</param>
     public static Standing StandingOf(decimal profit, decimal agreed)
         => profit <= 0 ? Standing.AtZero
             : agreed > 0 && profit / agreed <= WarnMargin ? Standing.Close
