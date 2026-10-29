@@ -5,6 +5,7 @@ using ID_Indetails.api.Business.Expenses;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Expenses;
 using ID_Indetails.api.DTO.Response.Expenses;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
@@ -14,6 +15,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Expenses.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Services.Expenses.Implementation;
 
@@ -25,6 +27,7 @@ public sealed class ExpenseService(
     IExpenseRepository expenses,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
+    IProfitFloor floor,
     IClock clock) : IExpenseService
 {
     public async Task<ExpenseListResponse> ListAsync(long projectId, CancellationToken cancellationToken = default)
@@ -45,6 +48,7 @@ public sealed class ExpenseService(
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await EditableProjectAsync(actor, projectId, cancellationToken);
+        var before = await floor.BeforeAsync(project, cancellationToken);
 
         var expense = new ProjectExpense
         {
@@ -63,6 +67,7 @@ public sealed class ExpenseService(
 
         activity.Add(ExpenseEvent(project, expense, ActivityEventKinds.ExpenseAdded, actor.UserId));
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.Expense, new BlockedRequest<CreateExpenseRequest>(project.Id, request), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return ToResponse(expense);

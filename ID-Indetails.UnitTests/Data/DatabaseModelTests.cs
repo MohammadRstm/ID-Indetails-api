@@ -20,7 +20,7 @@ public class DatabaseModelTests
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(94);
+        tables.Count.ShouldBe(95);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 

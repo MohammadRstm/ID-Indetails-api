@@ -50,7 +50,7 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
         => (await OkAsync<ProjectResponse>(Client.GetAsync($"/api/projects/{projectId}", token))).Status;
 
     [Fact]
-    public async Task A_cost_warning_goes_once_to_whoever_sees_the_money_when_cost_passes_85_percent_of_the_payment()
+    public async Task A_profit_warning_goes_once_to_whoever_sees_the_money_when_the_profit_drops_to_10_percent_or_below()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
@@ -59,24 +59,28 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        var over = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 100m);
+        var over = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 98m);
         var under = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
+        var red = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 50m);
 
         // A full Tuesday on "over" (09:00-17:00 in Beirut): 7h at 10, the 8th hour overtime at her overtime rate (1,600 ÷ 184
-        // = 8.70; February is before she joined, so it made up no short month), and the paid hour of break: 88.70 of its
-        // 100. An hour on "under".
+        // = 8.70; February is before she joined, so it made up no short month), and the paid hour of break: 88.70 of its 98,
+        // so 9% is left. An hour on "under". The same Thursday on "red", past its 50. Inserted directly, as pay and schedules
+        // would.
         await Work.InsertAsync(designer.User.Id, over.Id, "2026-02-10 07:00:00", "2026-02-10 15:00:00");
         await Work.InsertAsync(designer.User.Id, under.Id, "2026-02-11 07:00:00", "2026-02-11 08:00:00");
+        await Work.InsertAsync(designer.User.Id, red.Id, "2026-02-12 07:00:00", "2026-02-12 15:00:00");
 
-        await RunTwiceAsync(ScheduledCheck.CostWarnings);
+        await RunTwiceAsync(ScheduledCheck.ProfitWarnings);
 
-        var warning = (await OfKindAsync(admin, NotificationKinds.ProjectCostHigh, over.Id)).ShouldHaveSingleItem();
+        var warning = (await OfKindAsync(admin, NotificationKinds.ProfitLow, over.Id)).ShouldHaveSingleItem();
         warning.Actor.ShouldBeNull();
         warning.SubjectId.ShouldBe(over.Id);
-        warning.Payload!.Value.GetProperty("usedPct").GetInt32().ShouldBe(89);
-        warning.Payload.Value.TryGetProperty("cost", out _).ShouldBeFalse();
-        (await OfKindAsync(admin, NotificationKinds.ProjectCostHigh, under.Id)).ShouldBeEmpty();
-        (await OfKindAsync(designer, NotificationKinds.ProjectCostHigh, over.Id)).ShouldBeEmpty();
+        warning.Payload!.Value.GetProperty("marginPct").GetInt32().ShouldBe(9);
+        warning.Payload.Value.TryGetProperty("profit", out _).ShouldBeFalse();
+        (await OfKindAsync(admin, NotificationKinds.ProfitAtZero, red.Id)).ShouldHaveSingleItem();
+        (await OfKindAsync(admin, NotificationKinds.ProfitLow, under.Id)).ShouldBeEmpty();
+        (await OfKindAsync(designer, NotificationKinds.ProfitLow, over.Id)).ShouldBeEmpty();
     }
 
     [Fact]
