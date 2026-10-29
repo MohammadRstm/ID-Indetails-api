@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Company;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
@@ -14,6 +15,7 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
@@ -32,6 +34,7 @@ public sealed class PaymentService(
     IPaymentRepository payments,
     IProjectFinanceService finance,
     IExchangeRateRepository exchangeRates,
+    IAccountLabelRepository accountLabels,
     IActivityEventRepository activity,
     INotificationSender notifications,
     IUnitOfWork unitOfWork,
@@ -90,6 +93,10 @@ public sealed class PaymentService(
         var amountUsd = PaymentRules.ToUsd(request.Amount, rate);
         Throw(PaymentRules.CheckUsd(amountUsd));
         Throw(PaymentRules.CheckInitial(request.IsInitial, project.DomainCode, await payments.HasLiveInitialAsync(project.Id, cancellationToken)));
+        if (request.AccountLabelId is not null)
+        {
+            CheckLabel(await LabelsAsync(cancellationToken), request.AccountLabelId, current: null);
+        }
 
         Invoice? invoice = null;
         if (request.InvoiceId is { } invoiceId)
@@ -102,6 +109,7 @@ public sealed class PaymentService(
             ProjectId = project.Id,
             ClientId = project.ClientId!.Value,
             InvoiceId = invoice?.Id,
+            AccountLabelId = request.AccountLabelId,
             IsInitial = request.IsInitial,
             Amount = request.Amount,
             Currency = currency,
@@ -146,6 +154,30 @@ public sealed class PaymentService(
         return await DescribeAsync(actor, payment.Id, cancellationToken);
     }
 
+    public async Task<PaymentResponse> SetLabelAsync(long paymentId, SetPaymentLabelRequest request, CancellationToken cancellationToken = default)
+    {
+        // it answers with the whole payment, which only whoever sees the money may read
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var (payment, domain) = await VisiblePaymentForUpdateAsync(actor, paymentId, cancellationToken);
+        Throw(PaymentRules.CheckVoid(payment.VoidedAt is not null));
+
+        // the same label again changes nothing: no event
+        if (payment.AccountLabelId != request.AccountLabelId)
+        {
+            var labels = await LabelsAsync(cancellationToken);
+            CheckLabel(labels, request.AccountLabelId, payment.AccountLabelId);
+            var previous = payment.AccountLabelId is { } was ? labels[was].Name : null;
+            var now = request.AccountLabelId is { } wanted ? labels[wanted].Name : null;
+            payment.AccountLabelId = request.AccountLabelId;
+            activity.Add(PaymentEvent(domain, payment, ActivityEventKinds.PaymentLabelSet, actor.UserId, new { label = now, previousLabel = previous }));
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(actor, payment.Id, cancellationToken);
+    }
+
     public async Task<PaymentResponse> VoidAsync(long paymentId, VoidRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
@@ -176,6 +208,19 @@ public sealed class PaymentService(
 
         var money = await finance.GetAsync(project, cancellationToken);
         return ExecutionPricing.TvaShareOf(amountUsd, money.RevenueTva, money.RevenueWithTva, project.TvaRate);
+    }
+
+    private async Task<IReadOnlyDictionary<long, AccountLabel>> LabelsAsync(CancellationToken cancellationToken)
+        => (await accountLabels.ListAsync(includeArchived: true, cancellationToken)).ToDictionary(l => l.Id);
+
+    /// <summary>The label must exist, and an archived one can't be newly picked: only one the payment already has stays.</summary>
+    private static void CheckLabel(IReadOnlyDictionary<long, AccountLabel> labels, long? labelId, long? current)
+    {
+        if (labelId is { } id)
+        {
+            var found = labels.GetValueOrDefault(id);
+            Throw(AccountLabelRules.CheckPickable(found is not null, found?.ArchivedAt is not null, current == id, "accountLabelId"));
+        }
     }
 
     /// <summary>The typed rate, 1 for US dollars, or else the dated rate in force on the day received.</summary>
@@ -263,6 +308,7 @@ public sealed class PaymentService(
         InvoiceId = p.InvoiceId,
         InvoiceNumber = p.Invoice?.Number,
         IsInitial = p.IsInitial,
+        AccountLabel = p.AccountLabel is { } label ? new AccountLabelRefResponse(label.Id, label.Name) : null,
         Amount = p.Amount,
         Currency = p.Currency,
         FxRate = p.FxRate,

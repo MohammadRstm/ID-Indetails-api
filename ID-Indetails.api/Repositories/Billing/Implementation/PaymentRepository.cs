@@ -54,6 +54,7 @@ public sealed class PaymentRepository(IdIndetailsDbContext db) : IPaymentReposit
             .Include(p => p.Project)
             .Include(p => p.Client)
             .Include(p => p.Invoice)
+            .Include(p => p.AccountLabel)
             .OrderByDescending(p => p.ReceivedOn)
             .ThenByDescending(p => p.Id)
             .Skip((search.Page - 1) * search.PageSize)
@@ -69,6 +70,7 @@ public sealed class PaymentRepository(IdIndetailsDbContext db) : IPaymentReposit
             .Include(p => p.Project)
             .Include(p => p.Client)
             .Include(p => p.Invoice)
+            .Include(p => p.AccountLabel)
             .SingleOrDefaultAsync(p => p.Id == id, cancellationToken);
 
     public async Task<Payment?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default)

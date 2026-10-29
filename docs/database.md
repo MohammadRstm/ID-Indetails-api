@@ -39,7 +39,7 @@ The database is the second line of defence. The API must still filter every quer
 | Clients | `clients`, `client_contacts` |
 | Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses` (Design's), `blocked_changes` |
 | Design work | `work_entries`, `work_entry_comments` |
-| Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
+| Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
 | Working time and hours ledger | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days` |
 | Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `account_labels`, `company_settings`, `domain_settings` |
@@ -49,6 +49,7 @@ The database is the second line of defence. The API must still filter every quer
 An Execution project has a **work price** (`projects.project_fee`, 0 until a BOQ is agreed), and a **supervision rate** (`projects.supervision_rate`, a fraction from 0 to 1, 10% by default). Design projects have neither (`project_fee` and `supervision_rate` are NULL). There is no material markup: the column went with the site expenses migration.
 
 - **Site expenses** (`site_expenses`, formerly `project_materials`) are an Execution site's costs and nothing else: no client price, no markup. The cost is quantity × unit cost when both are known, otherwise the lump-sum `amount`; the generated `total` column holds whichever applies. Each has a `spent_on` day (the day it is dated by for exchange rates), a `category` (`materials`, `contractor`, `equipment`, `fees`, `other`; `materials` by default) and an optional `account_label_id` (an account label, which may be archived later and stays). `client_ref` is the phone's idempotency key.
+- **Supervision taken** (`supervision_withdrawals`) is the company withdrawing part of a site's supervision fee from the project account: a positive `amount_usd` (check `ck_supervision_withdrawals_amount_positive`), `taken_on`, a note, who recorded it (`created_by_id`) and `created_at`; removed with `deleted_at`, never deleted. It is not a cost, so nothing in the finance calculator reads it ([execution.md](execution.md#supervision-taken)).
 - **Agreed amount:** the work price plus supervision (`project_fee × supervision_rate`). TVA is on the work, never on supervision. It is calculated live while the project is open. Finalising writes the frozen amount into `projects.revenue`.
 - **Ground labour is never billed.** The price covers it.
 - **BOQs** (`boqs`, `boq_lines`, `boq_deliveries`) price an Execution site's work: a kind (`internal`, `client`, `vo`), a status (`draft`, `agreed`), a number (`BQ-YYYY-NNN` or `VO-YYYY-NNN` from `boq_sequences`, keyed by prefix and year; null for internal drafts), an author, an adjustment and the stored `subtotal_usd` and `total_usd`, which `BoqRules` recomputes from the lines on every save. A line keeps its exact quantity, waste rate (a fraction), unit and rate; the final quantity and the line total are calculated, not stored. A delivery keeps the BOQ's total when it was sent. Drafts are soft-deleted (`deleted_at`) so what was sent stays on record. Check constraints keep a number on every kind but internal, an internal draft never agreed, a reason on VOs only, `agreed_at` with the agreed status, and negative totals to VOs. Agreeing or withdrawing sets `projects.project_fee` (see [execution.md](execution.md#boqs-and-variation-orders)). Client statements are gone.
@@ -104,6 +105,7 @@ bytes live in the content store, never in MySQL or on the server's disk. See [cl
 - A refresh token is the website's or the phone app's, and its revoke reason is one of the four known.
 - A push token belongs to one device; quiet hours are both set or both empty, each a minute of the day; a category is muted once per person.
 - A site expense's client reference is unique per person who added it.
+- A payment's and a site expense's account label must be an `account_labels` row (a label that is used can't be deleted); supervision taken is more than zero and belongs to a site.
 - `company_settings` has exactly one possible row.
 
 ## Derived, never stored
@@ -174,6 +176,12 @@ The `SiteExpenses` migration (29 Oct 2026, phase 3 of the BOQ rework, see [execu
 - An Execution site's `project_expenses` rows (an amount above zero) move into `site_expenses` and are deleted from `project_expenses`: label to `name`, `created_at` and `created_by_id` to `added_at` and `added_by_id` (the project's owner where none), the category folded in (contractor stays; assets and hardware become equipment; services and software become fees; travel and anything else become other).
 - `project_payment_changes.material_markup` and `previous_material_markup` stay as history and are no longer written.
 - Activity kinds and notification kinds keep their stored `material_*` names, so there is no data change to them. `Down` makes the materials table again (a material's client price comes back empty) and turns every other site expense into a project expense of its site.
+
+The `AccountFigures` migration (29 Oct 2026, phase 4 of the BOQ rework, see [execution-boq-plan.md](execution-boq-plan.md)) is additive:
+
+- `payments.account_label_id` (optional, a foreign key to `account_labels`, indexed): the label a payment is filed under ([billing.md](billing.md#payments)). Existing payments have none.
+- The `supervision_withdrawals` table (id, `project_id`, `amount_usd` decimal(14,2), `taken_on` date, `note` varchar(500), `created_by_id`, `created_at`, `deleted_at`), with foreign keys to `projects` and `users` (both RESTRICT) and the positive-amount check.
+- No data changes. `Down` drops the foreign key, the table, the index and the column.
 
 The `WebsiteAnalyticsPermission` migration seeds the `website_analytics:view` permission, limited to the website: super admins and the website's own staff hold it ([website.md](website.md#analytics)) (20 Oct 2026).
 

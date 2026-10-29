@@ -170,7 +170,7 @@ sum of the rows. A `contribution` is positive and a `payout` is negative. Sites 
 - **A site's money** here is its profit on its agreed amount (the work price plus supervision). Pocket money changes
   a site's **profit**, never what the client owes:
   - a contribution lowers it and a payout raises it;
-  - both show on the project as `money.toPocket` and `money.fromPocket`;
+  - both show on the project as `money.toPocket` and `money.fromPocket`, and in its [account figures](#account-figures);
   - both count in its cash profit (received − cost − to the pocket + from it) and in its weekly cash on the day they moved.
 - **In:**
   - Only by hand, for an Execution client site.
@@ -183,3 +183,55 @@ sum of the rows. A `contribution` is positive and a `payout` is negative. Sites 
   - A site has at most one pending request: asking again returns it.
   - A super admin approves the amount they choose, at most the balance (`422 pocket_short`), or denies it. Either way it is decided once (`422 pocket_request_decided`).
   - The request row is locked, and so is the pocket (`SELECT … FOR UPDATE` on `company_settings`), so a request is paid once and two payouts never spend the same balance.
+
+## Supervision taken
+
+The company's supervision on a site is its work price × the supervision rate (default 10%). What the company takes of it out of the project account is recorded as it is taken. **It is not a cost**: it never changes the site's profit (so there is no profit floor), and it only lowers the cash left in the account and what is left to take. Taking more than is due is allowed, and shows as over (a negative amount left).
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/supervision-withdrawals` | `financial:view` | The site's withdrawals that were not removed, the latest day first (the one recorded last first on the same day): `[{ id, amountUsd, takenOn, note, createdBy: { id, name }, createdAt }]` |
+| `POST /api/projects/{id}/supervision-withdrawals` | `payment:record` | `{ amountUsd, takenOn, note? }`. `201`, the withdrawal |
+| `DELETE /api/supervision-withdrawals/{id}` | `payment:record` | Removes it (`204`). Soft delete: the row stays, marked `deleted_at`, and a second removal is `404` |
+
+Rules (`Business/Execution/SupervisionRules.cs`):
+
+- Only Execution client sites: any other project the caller can see is `422 not_for_this_domain`, and a project (or withdrawal) of a domain the caller can't see reads as `404`.
+- `amountUsd` is more than zero with at most 2 decimals (up to 999,999,999,999.99); `takenOn` is a day between 2000 and 2100 and not in the future in the company time zone (`400 taken_date_in_future` naming `takenOn`); `note` is trimmed, at most 500 characters.
+- A finalised site still takes them, and they can still be removed (the user's call): they are neither cost nor revenue, so nothing frozen moves, and the last of the supervision is often taken after the client's final payment.
+- Reading needs `financial:view` and writing needs `payment:record`: neither implies the other.
+- Events (money group, project and client set, the USD amount in the `amount` column, subject type `supervision_withdrawal`): `supervision_taken` (the day and the note in the payload) and `supervision_withdrawal_removed`. Without `financial:view` the feed shows neither the amount nor the payload.
+- The write endpoints are `Never` entries in the Proton coverage.
+
+## Account figures
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/account-figures` | `financial:view` | An Execution client site's account (`AccountFiguresResponse`). Any other project the caller can see is `422 not_for_this_domain`; a domain the caller can't see reads as `404` |
+
+Everything is USD. Costs, profit, the price and the pocket money's moves come from the shared finance calculator (`IProjectFinanceService`, see [finance.md](finance.md)), so they equal the project's own `money`; `Business/Execution/AccountFiguresRules.cs` (pure) only arranges them with the payments and site expenses by label.
+
+```
+{ workUsd, supervisionRate, supervisionUsd, tvaRate, tvaUsd, clientTotalUsd,
+  receivedUsd, restToPayUsd,
+  costs: { siteExpensesUsd, groundLabourUsd, staffUsd, otherUsd, totalUsd },
+  profitUsd,
+  supervision: { dueUsd, takenUsd, leftUsd },
+  pocket: { movedToPocketUsd, paidByPocketUsd },
+  cashInAccountUsd,
+  byLabel: [{ accountLabel: { id, name } | null, receivedUsd, spentUsd, otherUsd, restUsd }],
+  byCategory: [{ category, spentUsd }],
+  byPayee: [{ payee: string | null, spentUsd }],
+  unconverted: [{ source, currency, amount }] }
+```
+
+- **Price.** `workUsd` is the work price (`projects.project_fee`), `supervisionUsd` = work × `supervisionRate`, `tvaUsd` = work × `tvaRate` (never on supervision), `clientTotalUsd` = work + supervision + TVA. They are the money response's `projectFee`, `supervisionUsd` and `revenueWithTva`.
+- **Received.** `receivedUsd` is every live payment (TVA included; voided ones are left out). `restToPayUsd` = client total − received, **below zero when the client has paid ahead**.
+- **Costs** are the project's own cost figures (`ProjectCostResponse`), so they match `money.cost`: `siteExpensesUsd`, `groundLabourUsd`, `staffUsd` (employees' labour, the cost's `labour`; site staff are paid monthly and log no hours, so it is normally 0), `otherUsd` (project expenses, the cost's `expenses`; a site records its costs as site expenses, so it is 0) and `totalUsd`. `profitUsd` is the project's profit figure, with the pocket money counted.
+- **Supervision.** `dueUsd` = `supervisionUsd`, `takenUsd` is the withdrawals that were not removed, `leftUsd` = due − taken, **negative when more was taken than is due**.
+- **Pocket.** `movedToPocketUsd` and `paidByPocketUsd`: what was moved from the site into the pocket money, and what it paid back.
+- **`cashInAccountUsd`** = received − `costs.totalUsd` − supervision taken − moved to the pocket + paid by it. The pocket's moves count because the money physically left or entered the account. It is gross: the TVA a client paid is in the account too, and can go below zero.
+- **`byLabel`** has one row for each account label with a live payment or a site expense (archived labels too), in the labels' order, then **always** the unlabelled row last (`accountLabel: null`). On a label's row, `receivedUsd` is the payments filed under it, `spentUsd` the site expenses filed under it, and `otherUsd` is 0. The unlabelled row's `spentUsd` is every cost no label holds (unlabelled site expenses, ground labour, staff and other costs) and its `otherUsd` is supervision taken + moved to the pocket − paid by it. `restUsd` = received − spent − other. **The rows always add up to `cashInAccountUsd`** (`receivedUsd`, and the cost, as well): the unlabelled row is worked out as the remainder, and the rule is covered by unit and integration tests.
+- **`byCategory`** and **`byPayee`** break down site expenses only, largest first. Categories are `materials`, `contractor`, `equipment`, `fees` and `other`, and categories with the same spend keep that order. A payee is a site expense's `supplier` grouped by its text trimmed, with single spaces, in lower case, shown as it was last typed; expenses with no supplier are one row with `payee: null` (the client shows "No payee"), last among equal totals.
+- **No rate.** Site expenses are converted at the rate of the day they were spent. One with no rate that day is left out of every sum above and listed in `unconverted` in its own currency, as the project's cost lists it (`unconverted` is exactly `money.cost.unconverted`, with `source` such as `site_expense`).
+- A site with nothing recorded answers zeros and the single unlabelled row.

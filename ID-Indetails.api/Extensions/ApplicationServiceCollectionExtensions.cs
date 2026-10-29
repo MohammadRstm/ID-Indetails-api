@@ -234,6 +234,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISiteRecordsRepository, SiteRecordsRepository>();
         services.AddScoped<ISiteTeamRepository, SiteTeamRepository>();
         services.AddScoped<IPocketRepository, PocketRepository>();
+        services.AddScoped<ISupervisionWithdrawalRepository, SupervisionWithdrawalRepository>();
+        services.AddScoped<IAccountFiguresRepository, AccountFiguresRepository>();
         services.AddScoped<IQuoteRepository, QuoteRepository>();
         services.AddScoped<IBlockedChangeRepository, BlockedChangeRepository>();
         services.AddScoped<IBoardLayoutRepository, BoardLayoutRepository>();
@@ -344,6 +346,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IBlockedChangeRecorder, BlockedChangeRecorder>();
         services.AddScoped<IBlockedChangeService, BlockedChangeService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
+        services.AddScoped<ISupervisionWithdrawalService, SupervisionWithdrawalService>();
+        services.AddScoped<IAccountFiguresService, AccountFiguresService>();
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();
         services.AddScoped<IDeviceService, DeviceService>();
         services.AddHostedService<DeviceCleanupJob>();

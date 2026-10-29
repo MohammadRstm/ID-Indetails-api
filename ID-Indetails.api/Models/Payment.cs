@@ -18,6 +18,9 @@ public class Payment
     /// <summary>Null for a payment held on account.</summary>
     public long? InvoiceId { get; set; }
 
+    /// <summary>The company account label it is filed under; null when none. An archived label stays on what carries it.</summary>
+    public long? AccountLabelId { get; set; }
+
     /// <summary>
     /// The payment taken when the project was created (Execution). At most one live
     /// initial payment per project.
@@ -69,4 +72,6 @@ public class Payment
     public Client Client { get; set; } = null!;
 
     public Invoice? Invoice { get; set; }
+
+    public AccountLabel? AccountLabel { get; set; }
 }

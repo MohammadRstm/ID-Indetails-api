@@ -72,6 +72,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<PocketRequest> PocketRequests => Set<PocketRequest>();
 
+    public DbSet<SupervisionWithdrawal> SupervisionWithdrawals => Set<SupervisionWithdrawal>();
+
     public DbSet<Quote> Quotes => Set<Quote>();
 
     public DbSet<QuoteDelivery> QuoteDeliveries => Set<QuoteDelivery>();

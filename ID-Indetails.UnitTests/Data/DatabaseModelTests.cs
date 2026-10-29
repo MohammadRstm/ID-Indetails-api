@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_96_tables_with_snake_case_names()
+    public void Model_has_all_97_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(96);
+        tables.Count.ShouldBe(97);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
