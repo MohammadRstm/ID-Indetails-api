@@ -131,9 +131,10 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { name = "Permit fee", amount = 1_500m, category = "fees" },
             new { name = "Sand", amount = 500m, category = "materials", supplier = "  Beirut Concrete" },
             // 8,950,000 LBP at 89,500 on a day with a rate: 100 USD
-            new { name = "Grout", amount = 8_950_000m, currency = "LBP", spentOn = "2026-03-10", category = "materials", supplier = "Tile House", accountLabelId = finishing.Id },
-            // no rate that day: left out of every sum, and listed apart
-            new { name = "Old invoice", amount = 1_000_000m, currency = "LBP", spentOn = "2025-12-31", category = "other" });
+            new { name = "Grout", amount = 8_950_000m, currency = "LBP", spentOn = "2026-03-10", category = "materials", supplier = "Tile House", accountLabelId = finishing.Id });
+        // no rate that day: left out of every sum, and listed apart. The API refuses such an expense now, so it is put in
+        // as one recorded before that rule.
+        await UnratedExpenseAsync(site.Id, superAdmin.User.Id, "Old invoice", 1_000_000m, "2025-12-31", "other");
         await ReportLabourAsync(site.Id, token, workers: 5, dailyPay: 40m);
 
         // 3,000 set aside in the pocket money, and 500 paid back
@@ -225,9 +226,8 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
         var label = await AddLabelAsync(token);
         var site = await SiteAsync(superAdmin, 1_000m);
         await PayAsync(site.Id, token, 100m, label.Id);
-        await SpendAsync(site.Id, token,
-            new { name = "Tiles", amount = 10m, supplier = "Tile House", accountLabelId = label.Id },
-            new { name = "Unrated", amount = 5m, currency = "LBP", spentOn = "2001-01-01" });
+        await SpendAsync(site.Id, token, new { name = "Tiles", amount = 10m, supplier = "Tile House", accountLabelId = label.Id });
+        await UnratedExpenseAsync(site.Id, superAdmin.User.Id, "Unrated", 5m, "2001-01-01", "materials");
 
         var json = JsonDocument.Parse(await (await Client.GetAsync($"/api/projects/{site.Id}/account-figures", token)).Content.ReadAsStringAsync()).RootElement;
         IEnumerable<string> Names(JsonElement element) => element.EnumerateObject().Select(p => p.Name);
@@ -368,4 +368,11 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync($"/api/projects/{design.Id}/account-figures", designMoney.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
         await (await Client.GetAsync($"/api/projects/{design.Id}/account-figures", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
     }
+
+    /// <summary>An LBP expense on a day with no rate, as recorded before the API refused them: straight into the table.</summary>
+    private Task UnratedExpenseAsync(long siteId, long addedById, string name, decimal amount, string spentOn, string category)
+        => _steps.ExecuteAsync(
+            "INSERT INTO site_expenses (project_id, name, amount, currency, spent_on, category, added_at, added_by_id) " +
+            "VALUES (@p, @name, @amount, 'LBP', @on, @category, UTC_TIMESTAMP(3), @u)",
+            ("@p", siteId), ("@name", name), ("@amount", amount), ("@on", spentOn), ("@category", category), ("@u", addedById));
 }
