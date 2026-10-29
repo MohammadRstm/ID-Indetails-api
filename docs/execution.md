@@ -128,19 +128,36 @@ A site's money (received, cost by source, cash profit, material profit, expected
 - **Weeks** run Monday to Sunday, from the project's first week to the current one (or the one it was finalised in). Each has what was received, spent and paid in ground labour up to its end, the profit so far (received − spent), and what that week added in payments and ground labour. They come from the finance calculator (`ProjectFinance.CashByWeek`): costs on their day at that day's rate, payments by the day received.
 - **Projection** (`LabourRules.ProjectZero`): at today's labour defaults (workers × daily pay a working day), how many working days (Monday to Saturday, from tomorrow) until cash profit reaches zero, and until expected profit would, once the client has paid everything agreed. `state` is `done` for a finalised site, `losing` when cash profit is already below zero, `no_defaults` without a crew and day rate, otherwise `ok`. It assumes the crew, their pay and the money received stay as they are, and no new materials.
 
-## The Execution box
+## Pocket money
 
-The box pools what Execution clients pay, so a site in the red can be kept going from what the others earned. Its ledger is `box_entries`: one signed USD row per movement, never edited; the balance is their sum. Each Execution project has a `box_state` (`in`, `pending` or `removed`; null for Design).
+Money super admins set aside from Execution sites, and pay back to sites that run short. It replaced the Execution
+box, which pooled every client payment automatically; the box never reached production and is gone, migration and
+all.
+
+Its ledger is `pocket_entries`: one row per movement, never edited, signed from the pocket's side. Its balance is the
+sum of the rows. A `contribution` is positive and a `payout` is negative. Sites ask for money in `pocket_requests`.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/execution/box` | `financial:view`, Execution visible | Balance, contributing projects (with their total), projects in the red, projects waiting for a decision |
-| `GET /api/execution/box/entries?projectId=&kind=&from=&to=&search=` | `financial:view` | Movements, newest first: of a project and kind, between company days (both inclusive), with words of the project's title, the note or the maker's name |
-| `POST /api/execution/box/transfers` | `financial:view` | `{ projectId, amount, note? }` to a project in the red |
-| `POST /api/execution/box/projects/{id}/decision` | `financial:view` | `{ decision: remove \| keep }` for a pending project |
+| `GET /api/execution/pocket` | `financial:view`, Execution visible | Balance, totals in and out, and the requests waiting for a decision (each with what it suggests today) |
+| `GET /api/execution/pocket/entries?kind=&projectId=&from=&to=&search=` | `financial:view` | Movements, newest first. `kind=contribution` is what came in and `kind=payout` is what went out. Days are company days, both inclusive. The search matches words of the site's title, the note or the maker's name. |
+| `POST /api/execution/pocket/contributions` | `financial:view` | Moves `{ projectId, amount, note? }` from a site into the pocket |
+| `POST /api/execution/pocket/requests` | `financial:view` | Asks for money for a site: `{ projectId, note? }` |
+| `POST /api/execution/pocket/requests/{id}/approve` | `financial:view` | Pays `{ amount, note? }` to the site |
+| `POST /api/execution/pocket/requests/{id}/deny` | `financial:view` | `{ note? }` |
 
-- **In:** a payment of a project that is `in` or `pending` adds a `payment_in` row; voiding a payment the box still holds adds `payment_voided`. A `removed` project's payments stay out.
-- **Out to a project in the red** (`transfer`): only while its cash profit is below zero, at most what brings it back to zero (`400`), and at most the balance (`422 box_short`); otherwise `422 box_project_not_in_red`. The box is locked (`SELECT … FOR UPDATE` on `company_settings`) while it checks and writes. What the box moved shows on the project as `money.fromBox` and counts in its cash profit (received + from the box − cost), and in its weekly cash on the day it was moved. Nothing is moved back by hand.
-- **Closing** (complete, or archive while active or on hold): `?box=remove` takes out what the project put in (`removed`, at most the balance, recorded even when that is 0), `?box=keep` leaves it in and its late payments keep coming. Only `financial:view` holders choose (`403` otherwise); without a choice the project is `pending` and waits on the Box page, its payments still going in. Archiving a completed project, and the automatic archive, change nothing.
-- **Reopening** a removed project: `?box=readd` (`financial:view` only) puts back what its last removal took (`readded`); otherwise it counts afresh from today. Either way it is `in` again.
-- **Backfill:** the migration put every active or on-hold Execution project in the box with its live payments; completed and archived ones started as `removed`.
+- **A site's money** here is its profit counting the materials not sent to the client yet. They are agreed, just not
+  billed. Pocket money changes a site's **profit**, never what the client owes:
+  - a contribution lowers it and a payout raises it;
+  - both show on the project as `money.toPocket` and `money.fromPocket`;
+  - both count in its cash profit (received − cost − to the pocket + from it) and in its weekly cash on the day they moved.
+- **In:**
+  - Only by hand, for an Execution client site.
+  - Never so much that the site's profit reaches zero (`422 pocket_would_empty_site`).
+  - The site is locked while its profit is checked.
+- **Out:**
+  - A site asks for money (`POST .../requests`); the system will also raise requests when a site gets close to zero.
+  - The request suggests what brings the site back to a 10% margin (`PocketRules.TargetMargin`); a pending request shows that suggestion as it stands today. Whoever sees Execution's money is notified (`pocket_requested`).
+  - A site has at most one pending request: asking again returns it.
+  - A super admin approves the amount they choose, at most the balance (`422 pocket_short`), or denies it. Either way it is decided once (`422 pocket_request_decided`).
+  - The request row is locked, and so is the pocket (`SELECT … FOR UPDATE` on `company_settings`), so a request is paid once and two payouts never spend the same balance.

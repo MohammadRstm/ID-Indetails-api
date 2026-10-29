@@ -17,7 +17,6 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
-using ID_Indetails.api.Services.Execution.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 
 namespace ID_Indetails.api.Services.Billing.Implementation;
@@ -32,7 +31,6 @@ public sealed class PaymentService(
     IExchangeRateRepository exchangeRates,
     IActivityEventRepository activity,
     INotificationSender notifications,
-    IBoxService box,
     IUnitOfWork unitOfWork,
     IClock clock) : IPaymentService
 {
@@ -115,7 +113,6 @@ public sealed class PaymentService(
         };
         payments.Add(payment);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        box.PaymentReceived(project, payment, actorId);
 
         activity.Add(PaymentEvent(project.DomainCode, payment, ActivityEventKinds.PaymentRecorded, actorId,
             new { invoiceNumber = invoice?.Number, currency, method = request.Method, isInitial = request.IsInitial }));
@@ -155,7 +152,6 @@ public sealed class PaymentService(
         payment.VoidedAt = clock.UtcNow;
         payment.VoidReason = request.Reason.Trim();
         payment.VoidedById = actor.UserId;
-        await box.PaymentVoidedAsync(payment, actor.UserId, cancellationToken);
         activity.Add(PaymentEvent(domain, payment, ActivityEventKinds.PaymentVoided, actor.UserId, new { reason = payment.VoidReason }));
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

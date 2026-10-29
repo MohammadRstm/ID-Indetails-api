@@ -23,11 +23,11 @@ public interface IProjectFinanceRepository
     /// <summary>Live payments per project, in USD.</summary>
     Task<IReadOnlyDictionary<long, decimal>> ReceivedAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
-    /// <summary>Money the Execution box moved to each project, in USD.</summary>
-    Task<IReadOnlyDictionary<long, decimal>> FromBoxAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+    /// <summary>Per project, in USD: what was moved into the pocket money, and what the pocket paid out to it.</summary>
+    Task<IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)>> PocketAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
-    /// <summary>Money the box moved to one project: when each move was made (UTC) and its USD value.</summary>
-    Task<IReadOnlyList<(DateTime MovedAt, decimal AmountUsd)>> BoxMovesAsync(long projectId, CancellationToken cancellationToken = default);
+    /// <summary>One project's pocket movements, as it sees them: when (UTC) and the USD it gained (a payout) or lost (a contribution).</summary>
+    Task<IReadOnlyList<(DateTime At, decimal AmountUsd)>> PocketMovesAsync(long projectId, CancellationToken cancellationToken = default);
 }
 
 public sealed record WorkEntryRow(long Id, long ProjectId, long UserId, DateTime StartedAt, int Minutes);

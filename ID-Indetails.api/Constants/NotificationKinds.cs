@@ -100,6 +100,9 @@ public static class NotificationKinds
     /// <summary>A client payment was recorded (subject: the payment). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string PaymentRecorded = "payment_recorded";
 
+    /// <summary>An Execution site asks the pocket money for money: for whoever sees Execution's money to approve or deny.</summary>
+    public const string PocketRequested = "pocket_requested";
+
     /// <summary>A client statement was sent (subject: the statement). Same recipients as <see cref="InvoiceIssued"/>.</summary>
     public const string StatementSent = "statement_sent";
 
