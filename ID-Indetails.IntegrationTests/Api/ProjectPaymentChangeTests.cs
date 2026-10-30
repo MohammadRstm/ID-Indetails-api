@@ -35,6 +35,9 @@ public class ProjectPaymentChangeTests(ApiFactory api) : IClassFixture<ApiFactor
         opening.Amount.ShouldBe(5000m);
         opening.PreviousAmount.ShouldBeNull();
         opening.MaterialMarkup.ShouldBeNull();
+        // supervision is Execution's: a Design row has none, as one from before it
+        opening.SupervisionRate.ShouldBeNull();
+        opening.PreviousSupervisionRate.ShouldBeNull();
         opening.Description.ShouldBe(ProjectRules.AgreedAtStart);
         opening.ChangedBy!.Id.ShouldBe(superAdmin.User.Id);
 
@@ -111,35 +114,54 @@ public class ProjectPaymentChangeTests(ApiFactory api) : IClassFixture<ApiFactor
     }
 
     [Fact]
-    public async Task An_execution_fee_and_markup_change_keeps_both_and_why()
+    public async Task An_execution_supervision_and_tva_change_keeps_what_changed_and_why()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var url = $"/api/projects/{site.Id}/pricing";
 
+        // the work price is set later, by agreeing a BOQ: the site starts at 0
         var opening = (await HistoryAsync(site.Id, superAdmin.AccessToken)).ShouldHaveSingleItem();
-        (opening.Amount, opening.PreviousAmount, opening.MaterialMarkup, opening.Description).ShouldBe((1000m, null, (decimal?)0.10m, ProjectRules.AgreedAtStart));
+        (opening.Amount, opening.PreviousAmount, opening.MaterialMarkup, opening.Description).ShouldBe((0m, null, null, ProjectRules.AgreedAtStart));
+        (opening.SupervisionRate, opening.PreviousSupervisionRate).ShouldBe((0m, null));
 
-        (await (await Client.PutJsonAsync(url, new { projectFee = 1500m, materialMarkup = 0.10m }, superAdmin.AccessToken))
+        (await (await Client.PutJsonAsync(url, new { supervisionRate = 0.08m }, superAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("description");
-        (await (await Client.PutJsonAsync(url, new { projectFee = 1000m, materialMarkup = 0.10m, description = "Same" }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("projectFee");
+        // nothing would change: the error is on the first rate, the supervision
+        (await (await Client.PutJsonAsync(url, new { supervisionRate = 0m, tvaRate = 0m, description = "Same" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("supervisionRate");
+        (await (await Client.PutJsonAsync(url, new { description = "Nothing" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("supervisionRate");
 
-        var priced = await (await Client.PutJsonAsync(url, new { projectFee = 1500m, materialMarkup = 0.10m, description = "An extra floor" }, superAdmin.AccessToken))
+        // supervision alone is a change; TVA then changes with the supervision left out
+        var priced = await (await Client.PutJsonAsync(url, new { supervisionRate = 0.08m, description = "Agreed at 8%" }, superAdmin.AccessToken))
             .ReadAsync<ProjectResponse>();
-        priced.Money!.ProjectFee.ShouldBe(1500m);
-        // the markup alone is a change too
-        await (await Client.PutJsonAsync(url, new { projectFee = 1500m, materialMarkup = 0.15m, description = "Imported tiles" }, superAdmin.AccessToken))
+        priced.Money!.SupervisionRate.ShouldBe(0.08m);
+        await (await Client.PutJsonAsync(url, new { tvaRate = 0.05m, description = "Lower TVA for this client" }, superAdmin.AccessToken))
             .ReadAsync<ProjectResponse>();
 
         var history = await HistoryAsync(site.Id, superAdmin.AccessToken);
         history.Count.ShouldBe(3);
-        (history[0].Amount, history[0].PreviousAmount, history[0].MaterialMarkup, history[0].PreviousMaterialMarkup, history[0].Description)
-            .ShouldBe((1500m, (decimal?)1500m, (decimal?)0.15m, (decimal?)0.10m, "Imported tiles"));
-        (history[1].Amount, history[1].PreviousAmount, history[1].MaterialMarkup, history[1].Description)
-            .ShouldBe((1500m, (decimal?)1000m, (decimal?)0.10m, "An extra floor"));
+        (history[0].Amount, history[0].PreviousAmount, history[0].Description).ShouldBe((1000m, (decimal?)1000m, "Lower TVA for this client"));
+        (history[1].Amount, history[1].Description).ShouldBe((1000m, "Agreed at 8%"));
+        // no markup is written any more
+        history.ShouldAllBe(h => h.MaterialMarkup == null && h.PreviousMaterialMarkup == null);
 
-        // an Execution site's payment is its fee: the Design payment doesn't apply
+        // supervision and TVA are kept the same way: the rate after the change and the one before it, left as it was when only the other changed
+        (history[1].SupervisionRate, history[1].PreviousSupervisionRate).ShouldBe((0.08m, (decimal?)0m));
+        (history[0].SupervisionRate, history[0].PreviousSupervisionRate).ShouldBe((0.08m, (decimal?)0.08m));
+        (history[2].SupervisionRate, history[2].PreviousSupervisionRate).ShouldBe((0m, null));
+        (history[0].TvaRate, history[0].PreviousTvaRate).ShouldBe((0.05m, (decimal?)0m));
+        (history[1].TvaRate, history[1].PreviousTvaRate).ShouldBe((0m, (decimal?)0m));
+
+        // the supervision change is in the feed, with the exact rates in its payload
+        var set = await _steps.ScalarAsync<string>(
+            "SELECT payload FROM activity_events WHERE project_id = @p AND kind = 'supervision_rate_set'", ("@p", site.Id));
+        set.ShouldContain("0.08");
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'supervision_rate_set'", ("@p", site.Id))).ShouldBe(1);
+
+        // an Execution site's payment is its BOQ price: the Design payment doesn't apply
         await (await Client.PutJsonAsync($"/api/projects/{site.Id}/payment", new { revenue = 5000m, description = "X" }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
     }

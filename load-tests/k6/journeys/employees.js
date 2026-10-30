@@ -202,7 +202,7 @@ function myPay(session) {
   get(session, `/api/me/schedule?date=${day(now)}`);
 }
 
-// ---- Execution employees: their sites, materials, labour reports and requirements ----------------------------------
+// ---- Execution employees: their sites, site expenses, labour reports and requirements ----------------------------------
 
 export async function executionEmployee(session) {
   siteHome(session);
@@ -214,7 +214,7 @@ export async function executionEmployee(session) {
 
 const EXECUTION_PAGES = [
   [25, (s) => siteHome(s)],
-  [25, (s) => recordMaterials(s)],
+  [25, (s) => recordSiteExpenses(s)],
   [16, (s) => openSite(s)],
   [8, (s) => reportLabour(s)],
   [8, (s) => myRequirements(s)],
@@ -245,7 +245,7 @@ function openSite(session, siteId) {
   const project = field(get(session, `/api/projects/${id}`), null);
   get(session, `/api/projects/${id}/requirements`);
   get(session, `/api/projects/${id}/meetings`);
-  get(session, `/api/projects/${id}/materials?page=1&pageSize=30`);
+  get(session, `/api/projects/${id}/site-expenses?page=1&pageSize=30`);
   get(session, `/api/projects/${id}/labour-weeks`);
   get(session, `/api/projects/${id}/labour-defaults`);
   get(session, `/api/projects/${id}/labour-weeks/${day(mondayOf(wallNow()))}`);
@@ -253,7 +253,7 @@ function openSite(session, siteId) {
 }
 
 /** A delivery or two, as recorded on site; now and then they fix or remove one of their own. */
-async function recordMaterials(session) {
+async function recordSiteExpenses(session) {
   const project = openSite(session);
   if (!project) {
     return;
@@ -264,20 +264,20 @@ async function recordMaterials(session) {
     const [name, unit, unitCost] = pick(MATERIALS);
     items.push({ name, quantity: between(2, 60), unit, unitCost, supplier: 'LT Supplier 01', note: runMark });
   }
-  const added = field(post(session, `/api/projects/${project.id}/materials`, { items }), null, []);
-  for (const material of added) {
-    ledger('material.created', { id: material.id, project: project.id, user: session.user.userId });
+  const added = field(post(session, `/api/projects/${project.id}/site-expenses`, { items }), null, []);
+  for (const expense of added) {
+    ledger('site_expense.created', { id: expense.id, project: project.id, user: session.user.userId });
   }
-  get(session, `/api/projects/${project.id}/materials?page=1&pageSize=30`);
+  get(session, `/api/projects/${project.id}/site-expenses?page=1&pageSize=30`);
 
-  const material = pick(added);
+  const expense = pick(added);
   await pause(3, 10);
-  if (material && chance(0.15)) {
-    put(session, `/api/projects/${project.id}/materials/${material.id}`, { ...items[0], quantity: items[0].quantity + 1 });
-    ledger('material.updated', { id: material.id, user: session.user.userId });
-  } else if (material && chance(0.1)) {
-    del(session, `/api/projects/${project.id}/materials/${material.id}`);
-    ledger('material.deleted', { id: material.id, user: session.user.userId });
+  if (expense && chance(0.15)) {
+    put(session, `/api/projects/${project.id}/site-expenses/${expense.id}`, { ...items[0], quantity: items[0].quantity + 1 });
+    ledger('site_expense.updated', { id: expense.id, user: session.user.userId });
+  } else if (expense && chance(0.1)) {
+    del(session, `/api/projects/${project.id}/site-expenses/${expense.id}`);
+    ledger('site_expense.deleted', { id: expense.id, user: session.user.userId });
   }
 }
 

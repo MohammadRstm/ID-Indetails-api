@@ -5,7 +5,6 @@ using ID_Indetails.api.DTO.Request.Labour;
 using ID_Indetails.api.DTO.Request.Meetings;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Request.Requirements;
-using ID_Indetails.api.DTO.Request.Statements;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.LoadTests.Tool.Seeding;
@@ -79,7 +78,6 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
 
         var revenue = design && !isInternal ? Random.Amount(8000m, 60000m, 500m) : 0m;
         var fee = design ? 0m : Random.Amount(2000m, 15000m, 250m);
-        var markup = design ? 0m : Random.Amount(0.10m, 0.30m, 0.05m);
         var workers = design ? 0 : Random.Next(4, 13);
         var dailyPay = design ? 0m : Random.Amount(25m, 40m, 5m);
         var initialPayment = !design && Random.Chance(0.5) ? decimal.Round(fee * 0.3m, 0) : (decimal?)null;
@@ -95,21 +93,37 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
             OwnerId = owner.Id,
             TargetDate = target,
             Revenue = design && !isInternal ? revenue : null,
-            ProjectFee = design ? null : fee,
-            MaterialMarkup = design ? null : markup,
-            InitialPayment = initialPayment is { } amount ? new InitialPaymentRequest { Amount = amount, ReceivedOn = day, Reference = $"LT-INIT-{number:000}" } : null,
             LabourDefaults = design ? null : new SetLabourDefaultsRequest { Workers = workers, DailyPay = dailyPay },
         });
         world.Tally.Add($"projects.{domain}");
-        if (initialPayment is not null)
+        // a site's down payment is an ordinary payment, recorded once the site exists
+        if (initialPayment is { } amount)
         {
+            await api.PostAsync(owner.Token, $"/api/projects/{created.Id()}/payments", new RecordPaymentRequest
+            {
+                Amount = amount, ReceivedOn = day, Reference = $"LT-INIT-{number:000}", IsInitial = true,
+            });
             world.Tally.Add("payments");
+        }
+
+        // a site's price is never typed in: its admin builds the client BOQ and agrees it
+        if (!design)
+        {
+            var boq = await api.PostAsync(owner.Token, $"/api/projects/{created.Id()}/boqs", new { kind = "client" });
+            await api.PutAsync(owner.Token, $"/api/boqs/{boq.Id()}", new
+            {
+                title = "Client BOQ",
+                adjustmentType = "none",
+                lines = new[] { new { description = "Works as agreed", quantity = 1, wasteRate = 0, unit = "lot", rate = fee } },
+            });
+            await api.PostAsync(owner.Token, $"/api/boqs/{boq.Id()}/agree");
+            world.Tally.Add("boqs");
         }
 
         var project = new SeedProject
         {
             Id = created.Id(), Domain = domain, Client = client, Owner = owner, StartedOn = day, TargetOn = target,
-            Revenue = revenue, Fee = fee, Markup = markup, Workers = workers, DailyPay = dailyPay,
+            Revenue = revenue, Fee = fee, Workers = workers, DailyPay = dailyPay,
             LastMeetingOn = day, LastInvoiceOn = day,
         };
         world.Projects.Add(project);
@@ -249,16 +263,6 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
                 project.Owner = world.AnyAdmin(project.Domain, day);
             }
 
-            // A site is only completed once the client has had every material on a statement: a final one first.
-            if (action == "complete" && project.Unstated.Count > 0)
-            {
-                var statement = await api.PostAsync(project.Owner.Token, $"/api/projects/{project.Id}/statements", new CreateStatementRequest { Mode = StatementMode.Detail });
-                await api.PostAsync(project.Owner.Token, $"/api/statements/{statement.Id()}/deliveries", new RecordDeliveryRequest { Channel = DeliveryChannel.Download });
-                project.Unstated.Clear();
-                project.LastStatementOn = day;
-                world.Tally.Add("statements");
-            }
-
             await api.PostAsync(project.Owner.Token, $"/api/projects/{project.Id}/{action}");
             project.Status = action switch { "hold" => "hold", "resume" => "active", "complete" => "completed", _ => "archived" };
             world.Tally.Add($"projects.{action}");
@@ -296,7 +300,8 @@ public sealed class Portfolio(World world, ApiClient api, SimulatedClock clock)
 
     private async Task AddExpensesAsync(DateOnly day)
     {
-        foreach (var project in world.Projects.Where(p => p.Status == "active" && Random.Chance(p.Domain == "design" ? 0.04 : 0.01)))
+        // an Execution site records its costs as site expenses (see Sites)
+        foreach (var project in world.Projects.Where(p => p.Domain == "design" && p.Status == "active" && Random.Chance(0.04)))
         {
             await api.PostAsync(world.AnyAdmin(project.Domain, day).Token, $"/api/projects/{project.Id}/expenses", new CreateExpenseRequest
             {

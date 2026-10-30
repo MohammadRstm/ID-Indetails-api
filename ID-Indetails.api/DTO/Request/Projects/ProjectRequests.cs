@@ -60,43 +60,29 @@ public sealed record CreateProjectRequest
 
     public DateOnly? TargetDate { get; init; }
 
-    /// <summary>Design client work only, and needs <c>financial:view</c>. Execution revenue is calculated from the fee and materials.</summary>
+    /// <summary>Design client work only, and needs <c>financial:view</c>. Execution revenue is calculated from the agreed work price and supervision.</summary>
     public decimal? Revenue { get; init; }
 
-    /// <summary>Execution only, and needs <c>project:pricing_manage</c>. Left out, the site starts with no fee.</summary>
+    /// <summary>Always refused: an Execution site's work price comes from its agreed BOQs, never typed in. It starts at 0.</summary>
     public decimal? ProjectFee { get; init; }
 
-    /// <summary>Execution only, and needs <c>project:pricing_manage</c>. A fraction: 0.10 is 10%, at most 5 (500%). Left out, it is 0.</summary>
-    public decimal? MaterialMarkup { get; init; }
+    /// <summary>
+    /// Execution only, and needs <c>project:pricing_manage</c>: the company's supervision on the work price, a fraction (0.10 is
+    /// 10%), 0 to 1. Left out, a site starts at 10%.
+    /// </summary>
+    public decimal? SupervisionRate { get; init; }
 
-    /// <summary>Execution only: the client's initial payment, recorded on account. Needs <c>payment:record</c>.</summary>
-    public InitialPaymentRequest? InitialPayment { get; init; }
+    /// <summary>
+    /// Client work only, and needs <c>financial:view</c>: TVA on what the client pays for the work, 0.11 is 11%, 0 to 1.
+    /// Left out, a client project starts at 11%.
+    /// </summary>
+    public decimal? TvaRate { get; init; }
 
     /// <summary>Execution only: the crew size and day rate new labour weeks start from. Needs <c>labour_report:manage</c>.</summary>
     public SetLabourDefaultsRequest? LabourDefaults { get; init; }
 
     /// <summary>Execution only, required: the employees who oversee the site (at least one).</summary>
     public IReadOnlyList<long>? StaffIds { get; init; }
-}
-
-public sealed record InitialPaymentRequest
-{
-    public decimal Amount { get; init; }
-
-    /// <summary>USD or LBP.</summary>
-    public string Currency { get; init; } = "USD";
-
-    /// <summary>Units of the currency per US dollar. Defaults to the dated rate in force on the day received.</summary>
-    public decimal? FxRate { get; init; }
-
-    /// <summary>Today or earlier. Defaults to today.</summary>
-    public DateOnly? ReceivedOn { get; init; }
-
-    public PaymentMethod Method { get; init; } = PaymentMethod.Bank;
-
-    public string? Reference { get; init; }
-
-    public string? Note { get; init; }
 }
 
 /// <summary>Replaces the project's details and owner.</summary>
@@ -131,15 +117,23 @@ public sealed record UpdateProjectPaymentRequest
 {
     public decimal Revenue { get; init; }
 
+    /// <summary>The TVA rate after the change (0 to 1); left out, it stays as it is.</summary>
+    public decimal? TvaRate { get; init; }
+
     public string Description { get; init; } = string.Empty;
 }
 
-/// <summary>Execution only: the project fee and default material markup, and why they change.</summary>
+/// <summary>Execution only: the supervision rate and TVA, and why they change.</summary>
 public sealed record UpdateProjectPricingRequest
 {
-    public decimal ProjectFee { get; init; }
+    /// <summary>Always refused: the work price is set by agreeing a BOQ, never typed in.</summary>
+    public decimal? ProjectFee { get; init; }
 
-    public decimal MaterialMarkup { get; init; }
+    /// <summary>The supervision rate after the change, a fraction (0 to 1); left out, it stays as it is.</summary>
+    public decimal? SupervisionRate { get; init; }
+
+    /// <summary>The TVA rate after the change (0 to 1); left out, it stays as it is.</summary>
+    public decimal? TvaRate { get; init; }
 
     public string Description { get; init; } = string.Empty;
 }

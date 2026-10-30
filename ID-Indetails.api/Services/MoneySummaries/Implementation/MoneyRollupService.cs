@@ -56,7 +56,7 @@ public sealed class MoneyRollupService(
             invoices,
             rows.ToDictionary(r => r.Id),
             unconverted,
-            payments.Select(p => new ProjectBilling.Payment(p.ProjectId, p.ClientId, p.InvoiceId, p.ReceivedOn, p.AmountUsd, p.Method)).ToList(),
+            payments.Select(p => new ProjectBilling.Payment(p.ProjectId, p.ClientId, p.InvoiceId, p.ReceivedOn, p.AmountUsd, p.Method, p.TvaUsd)).ToList(),
             today);
     }
 }

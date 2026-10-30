@@ -21,7 +21,7 @@ namespace ID_Indetails.api.Services.Activity.Implementation;
 
 /// <summary>
 /// The activity feed of the domains the caller can see. Work events need <c>work_entry:view_all</c>, amounts (and the
-/// markup in <c>material_markup_set</c>'s payload) need <c>financial:view</c>, and company-level events (no domain:
+/// markup (older rows) and supervision rate in the payloads of <c>material_markup_set</c> and <c>supervision_rate_set</c>) need <c>financial:view</c>, and company-level events (no domain:
 /// overhead, working time) need <c>company:view</c>.
 /// A <c>domain</c> filter keeps that domain's events only, so someone who sees both domains can look at one.
 /// </summary>
@@ -64,7 +64,8 @@ public sealed class ActivityFeedService(
                 e.SubjectId,
                 seesMoney ? e.Amount : null,
                 seesMoney ? e.PrevAmount : null,
-                e.Payload is null || (!seesMoney && e.Kind == ActivityEventKinds.MaterialMarkupSet)
+                e.Payload is null || (!seesMoney && e.Kind is ActivityEventKinds.MaterialMarkupSet or ActivityEventKinds.SupervisionRateSet or ActivityEventKinds.BoqAgreementWithdrawn
+                    or ActivityEventKinds.SupervisionTaken or ActivityEventKinds.SupervisionWithdrawalRemoved)
                     ? null
                     : JsonDocument.Parse(e.Payload).RootElement.Clone(),
                 e.SubjectType == "work_entry" && e.SubjectId is { } id && work.TryGetValue(id, out var entry)

@@ -19,6 +19,9 @@ public interface IProjectNotifier
     /// </summary>
     Task ClosedAsync(Project project, decimal? margin, long actorId, CancellationToken cancellationToken = default);
 
+    /// <summary>A client project made by someone who can't send quotes: those who can are asked whether to send one.</summary>
+    Task QuoteDueAsync(Project project, long actorId, CancellationToken cancellationToken = default);
+
     /// <summary>Notifies once, when an active project's progress crosses 90%.</summary>
     Task ProgressChangedAsync(Project project, int previousPct, long actorId, CancellationToken cancellationToken = default);
 

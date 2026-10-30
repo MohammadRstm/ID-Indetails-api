@@ -17,7 +17,7 @@ public static class PermissionExplanations
         [PermissionCodes.ProjectCreate] = "Start new projects in the business, for a client or internal.",
         [PermissionCodes.ProjectEdit] = "Change a project's name, description, dates, owner, client and the amount the client pays.",
         [PermissionCodes.ProjectChangeStatus] = "Put a project on hold, resume it, mark it completed, reopen it or archive it.",
-        [PermissionCodes.ProjectPricingManage] = "On sites: set the project fee, the default markup on materials and the price each material is charged to the client.",
+        [PermissionCodes.ProjectPricingManage] = "On sites: write, send, agree and withdraw the client BOQs and variation orders that set the work price, see every internal draft BOQ, and set the supervision and TVA rates.",
 
         // Requirements and meetings
         [PermissionCodes.RequirementView] = "See the list of requirements on each project: what has to be done, by whom and by when.",
@@ -34,14 +34,13 @@ public static class PermissionExplanations
         [PermissionCodes.ExpenseManage] = "Add and remove the expenses charged to a project, such as printing or travel.",
 
         // Sites
-        [PermissionCodes.MaterialCreate] = "Record the materials bought for a site, with their supplier and cost.",
-        [PermissionCodes.MaterialManage] = "Edit or remove material records, including ones other people added.",
+        [PermissionCodes.MaterialCreate] = "Record the site expenses of a site (materials, contractors, equipment, fees), with who was paid and what it cost.",
+        [PermissionCodes.MaterialManage] = "Edit or remove site expenses, including ones other people added.",
         [PermissionCodes.LabourReportCreate] = "Submit the weekly report of ground labour on a site: who worked and for how many days.",
         [PermissionCodes.LabourReportManage] = "Edit anyone's labour reports and change the labour defaults.",
         [PermissionCodes.SiteLogCreate] = "Write the daily logs of the sites you oversee: what arrived, what was missing, what held the work up.",
         [PermissionCodes.SiteLogViewAll] = "Read every site's daily logs, by person, site and day.",
-        [PermissionCodes.StatementCreate] = "Prepare client statements listing the materials supplied to a site.",
-        [PermissionCodes.StatementSend] = "Send client statements, by email, on WhatsApp or as a PDF. A material's price counts as revenue once a statement sends it.",
+        [PermissionCodes.BoqCreate] = "Write your own internal draft BOQs of a site: private working papers the client BOQ is built from. Nobody else sees them except whoever manages pricing, and they are never sent to the client.",
 
         // Clients
         [PermissionCodes.ClientView] = "See the business's clients and their contact details.",

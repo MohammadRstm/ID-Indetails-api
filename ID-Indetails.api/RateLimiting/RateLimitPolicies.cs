@@ -12,7 +12,7 @@ public static class RateLimitPolicies
     /// <summary>A signed-in person's own password checks (change password or sign-in address): per user.</summary>
     public const string Credential = "credential";
 
-    /// <summary>Requests that email an address the caller chooses (invoices, statements, invitations): per user.</summary>
+    /// <summary>Requests that email an address the caller chooses (invoices, quotes, BOQs, invitations): per user.</summary>
     public const string Email = "email";
 
     /// <summary>The developer-only setup endpoint.</summary>

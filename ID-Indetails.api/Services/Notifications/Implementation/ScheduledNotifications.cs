@@ -1,5 +1,7 @@
 using ID_Indetails.api.Business.Billing;
+using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
@@ -17,6 +19,7 @@ using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.Reports.Implementation;
@@ -79,7 +82,7 @@ public sealed class ScheduledNotifications(
             ScheduledCheck.RequirementDeadlines => RequirementDeadlinesAsync(today, cancellationToken),
             ScheduledCheck.OverdueInvoices => OverdueInvoicesAsync(today, cancellationToken),
             ScheduledCheck.ShortHours => ShortHoursAsync(today, cancellationToken),
-            ScheduledCheck.CostWarnings => CostWarningsAsync(cancellationToken),
+            ScheduledCheck.ProfitWarnings => ProfitWarningsAsync(cancellationToken),
             ScheduledCheck.DraftInvoices => DraftInvoicesAsync(today, cancellationToken),
             ScheduledCheck.AutoArchive => autoArchive.RunAsync(cancellationToken),
             ScheduledCheck.ScheduledInvoices => invoiceSchedule.RunAsync(cancellationToken),
@@ -255,32 +258,31 @@ public sealed class ScheduledNotifications(
             cancellationToken);
     }
 
-    private async Task CostWarningsAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// A project's profit also drops without anyone's change: pay, schedules, exchange rates, a voided payment. Whatever
+    /// the profit floor didn't see, this tells whoever sees the money, under the floor's own keys (see <c>ProfitFloor</c>).
+    /// </summary>
+    private async Task ProfitWarningsAsync(CancellationToken cancellationToken)
     {
-        foreach (var domain in DomainCodes.All.Where(MoneyAttention.WarnsOnCost))
+        foreach (var domain in DomainCodes.All)
         {
-            var clientWork = (await ActiveProjectsAsync(domain, cancellationToken)).Where(p => p.BillingType == BillingType.Client).ToList();
-            if (clientWork.Count == 0)
+            var guarded = (await ActiveProjectsAsync(domain, cancellationToken))
+                .Where(p => ProfitFloorRules.Applies(p.BillingType, p.DomainCode, p.Revenue, p.ProjectFee))
+                .ToList();
+            if (guarded.Count == 0)
             {
                 continue;
             }
 
-            var money = await finance.GetAsync(clientWork, cancellationToken);
-            var moneyPeople = await sender.HoldersAsync(domain, PermissionCodes.FinancialView, cancellationToken);
-            foreach (var project in clientWork)
+            var money = await finance.GetAsync(guarded, cancellationToken);
+            foreach (var project in guarded)
             {
-                var summary = money[project.Id].Summary;
-                if (!MoneyAttention.CostIsHigh(summary.Revenue, summary.Cost))
+                var m = money[project.Id];
+                var standing = ProfitFloorRules.StandingOf(m.Summary.Profit, m.Summary.Revenue);
+                if (standing != ProfitFloorRules.Standing.Fine)
                 {
-                    continue;
+                    await ProfitFloor.AlertAsync(sender, project, standing, m.Summary.Profit, m.Summary.Revenue, null, cancellationToken);
                 }
-
-                await sender.SendOnceAsync(
-                    new NotificationDraft(NotificationKinds.ProjectCostHigh, null, domain, project.Id, "project", project.Id,
-                        new { projectTitle = project.Title, usedPct = MoneyAttention.UsedPct(summary.Revenue, summary.Cost) }),
-                    $"project-cost-{project.Id}",
-                    moneyPeople,
-                    cancellationToken);
             }
         }
     }

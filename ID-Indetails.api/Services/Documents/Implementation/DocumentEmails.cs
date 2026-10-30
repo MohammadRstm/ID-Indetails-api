@@ -1,7 +1,8 @@
 using ID_Indetails.api.DTO.Response.Billing;
-using ID_Indetails.api.DTO.Response.Statements;
+using ID_Indetails.api.DTO.Response.Boqs;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Services.Boqs.Abstraction;
 using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using static ID_Indetails.api.Services.Email.Implementation.EmailLayout;
@@ -9,7 +10,7 @@ using static ID_Indetails.api.Services.Email.Implementation.EmailLayout;
 namespace ID_Indetails.api.Services.Documents.Implementation;
 
 /// <summary>
-/// The emails that carry an invoice or a statement to the client. The email shows the document itself, as the PDF
+/// The emails that carry an invoice, a quote or a BOQ to the client. The email shows the document itself, as the PDF
 /// does (only client-facing fields), and the PDF is attached to keep or print. Every value is HTML-encoded.
 /// </summary>
 public static class DocumentEmails
@@ -73,74 +74,48 @@ public static class DocumentEmails
             [Attachment(pdf)]);
     }
 
-    public static EmailMessage Statement(string to, StatementResponse statement, Letterhead head, string senderName, PdfFile pdf)
+    /// <summary>A client BOQ or variation order: its items as the PDF shows them (final quantities, never waste), and its totals.</summary>
+    public static EmailMessage Boq(string to, BoqDocument document, DateOnly date, Letterhead head, string senderName, PdfFile pdf)
     {
-        string M(decimal amount) => PdfLayout.Money(amount, statement.Currency);
-        var split = statement.Mode == StatementMode.Detail && statement.IncludesEarlier;
-        var intro = $"Please find below the materials statement {statement.Number} for {statement.ProjectTitle}. A PDF copy is attached for your records.";
-        var notInvoice = "This statement is for your information. It is not an invoice.";
-        var left = statement.PaidAhead > 0 ? ("Paid in advance", M(statement.PaidAhead)) : ("Remaining amount", M(statement.Remaining));
-
-        string table;
-        if (statement.Mode == StatementMode.Total)
-        {
-            var since = statement.Since is { } day ? " since " + PdfLayout.Date(day) : " to date";
-            table = Table(["Description", "Amount"], [[$"Materials supplied{since} ({Items(statement.Count)})", M(statement.Total)]], 1);
-        }
-        else if (split)
-        {
-            var rows = statement.Types.Select(t => new[] { t.Label, t.Quantity ?? "-", Amount(t.Earlier, M), Amount(t.New, M), M(t.Total) }).ToList();
-            if (Hidden(statement) is { } hidden)
+        var boq = document.Boq;
+        var label = BoqPdf.Label(boq.Kind);
+        var number = boq.Number ?? "Draft";
+        var total = PdfLayout.Money(boq.ClientTotalUsd!.Value);
+        var intro = $"Please find below the {label.ToLowerInvariant()} {number} for {document.ProjectTitle}. A PDF copy is attached for your records.";
+        var rows = boq.Lines
+            .Select(l => new[]
             {
-                rows.Add([hidden, "", "", "", M(statement.HiddenTypes!.Total)]);
-            }
+                l.Code ?? "",
+                l.Description,
+                BoqPdf.Quantity(l.FinalQuantity) + (string.IsNullOrWhiteSpace(l.Unit) ? "" : " " + l.Unit),
+                BoqPdf.Rate(l.Rate),
+                PdfLayout.Money(l.TotalUsd),
+            })
+            .ToList();
+        var totals = BoqPdf.Totals(boq);
 
-            table = Table(["Material", "Quantity", "Earlier", "New", "Total"], rows, 2, 3, 4);
-        }
-        else
-        {
-            var rows = statement.Types.Select(t => new[] { t.Label, t.Quantity ?? "-", M(t.Total) }).ToList();
-            if (Hidden(statement) is { } hidden)
-            {
-                rows.Add([hidden, "", M(statement.HiddenTypes!.Total)]);
-            }
-
-            table = Table(["Material", "Quantity", "Amount"], rows, 2);
-        }
-
-        var totals = new List<(string, string, bool)>();
-        if (split)
-        {
-            totals.Add(("On earlier statements", M(statement.EarlierTotal), false));
-            totals.Add(("New this time", M(statement.NewTotal), false));
-        }
-
-        totals.Add(("Materials total", M(statement.Total), true));
-
-        var html = Paragraph($"Hello {statement.Client.DisplayName},")
+        var html = Paragraph($"Hello {document.ClientName},")
             + Paragraph(intro)
-            + Facts(("Statement", statement.Number), ("Date", PdfLayout.Date(statement.Date)), ("Project", statement.ProjectTitle), ("Location", statement.ProjectLocation))
-            + Heading("Material type") + table + Totals([.. totals])
-            + Heading("Payment summary")
-            + Totals(("Received from you so far", M(statement.Received), false), (left.Item1, left.Item2, true))
-            + Note("The remaining amount is what is left of everything agreed on this project so far, after the payments above.")
-            + Note(notInvoice)
+            + Facts((label, number), ("Title", boq.Title), ("Date", PdfLayout.Date(date)), ("Project", document.ProjectTitle), ("Location", document.ProjectLocation))
+            + (boq.Kind == BoqKind.Vo && boq.Reason is { } reason ? Heading("Reason") + Quote(reason) : "")
+            + Heading("Items") + Table(["No.", "Description", "Quantity", "Rate", "Total"], rows, 2, 3, 4)
+            + Totals([.. totals.Select(t => (t.Label, t.Value, t.Strong))])
+            + (boq.Status == BoqStatus.Draft ? Note("This is a draft for your review. It is final once it is agreed.") : "")
             + SignOff("Kind regards,", senderName, head.CompanyName);
 
-        var lines = statement.Mode == StatementMode.Total
-            ? $"Materials supplied ({Items(statement.Count)}): {M(statement.Total)}"
-            : string.Join("\n", statement.Types.Select(t => $"- {t.Label}{(t.Quantity is null ? "" : $" ({t.Quantity})")}: {M(t.Total)}"))
-              + $"\nMaterials total: {M(statement.Total)}";
+        var lines = string.Join("\n", boq.Lines.Select(l =>
+            $"- {(string.IsNullOrWhiteSpace(l.Code) ? "" : l.Code + " ")}{l.Description}: {BoqPdf.Quantity(l.FinalQuantity)}{(string.IsNullOrWhiteSpace(l.Unit) ? "" : " " + l.Unit)} x {BoqPdf.Rate(l.Rate)} = {PdfLayout.Money(l.TotalUsd)}"));
+        var sums = string.Join("\n", totals.Select(t => $"{t.Label}: {t.Value}"));
         var text = $"""
-            Hello {statement.Client.DisplayName},
+            Hello {document.ClientName},
 
             {intro}
 
+            {boq.Title}
+            {(boq.Kind == BoqKind.Vo && boq.Reason is { } why ? $"Reason: {why}\n" : "")}
             {lines}
-            Received from you so far: {M(statement.Received)}
-            {left.Item1}: {left.Item2}
 
-            {notInvoice}
+            {sums}
 
             Kind regards,
             {senderName}
@@ -148,8 +123,38 @@ public static class DocumentEmails
             """;
 
         return Compose(
-            to, null, $"Materials statement {statement.Number} - {statement.ProjectTitle}",
-            Page(head.CompanyName, $"Materials statement {statement.Number}: materials {M(statement.Total)}, {left.Item1.ToLowerInvariant()} {left.Item2}.", html, Footer(head, null)),
+            to, null, $"{label} {number} - {document.ProjectTitle}",
+            Page(head.CompanyName, $"{label} {number}: {total} to pay for {document.ProjectTitle}.", html, Footer(head, null)),
+            text,
+            [Attachment(pdf)]);
+    }
+
+    /// <summary>A quote: the project's total for the client, TVA included and never shown apart, with its scope.</summary>
+    public static EmailMessage QuoteEmail(string to, QuoteResponse quote, DateOnly quotedOn, Letterhead head, string senderName, PdfFile pdf)
+    {
+        var total = PdfLayout.Money(quote.TotalUsd, "USD");
+        var intro = $"Please find below our quote {quote.Number} for {quote.ProjectTitle}. A PDF copy is attached.";
+        var html = Paragraph($"Hello {quote.Client.DisplayName},")
+            + Paragraph(intro)
+            + Facts(("Quote", quote.Number), ("Date", PdfLayout.Date(quotedOn)), ("Project", quote.ProjectTitle), ("Location", quote.ProjectLocation))
+            + (quote.Scope is { } scope ? Heading("Scope") + Quote(scope) : "")
+            + Heading("Price")
+            + Totals(("Total for the project", total, true))
+            + SignOff("Kind regards,", senderName, head.CompanyName);
+        var text = $"""
+            Hello {quote.Client.DisplayName},
+
+            {intro}
+
+            {(quote.Scope is { } s ? $"Scope: {s}\n" : "")}Total for the project: {total}
+
+            Kind regards,
+            {senderName}
+            {head.CompanyName}
+            """;
+        return Compose(
+            to, null, $"Quote {quote.Number} - {quote.ProjectTitle}",
+            Page(head.CompanyName, $"Quote {quote.Number}: {total} for {quote.ProjectTitle}.", html, Footer(head, null)),
             text,
             [Attachment(pdf)]);
     }
@@ -238,15 +243,6 @@ public static class DocumentEmails
     private static string Greeting(InvoiceResponse invoice) => invoice.BillToName ?? invoice.Client.DisplayName;
 
     private static string Money(decimal amount, InvoiceResponse invoice) => PdfLayout.Money(amount, invoice.Currency);
-
-    private static string Amount(decimal amount, Func<decimal, string> money) => amount == 0 ? "-" : money(amount);
-
-    private static string Items(int count) => count == 1 ? "1 item" : $"{count} items";
-
-    private static string? Hidden(StatementResponse statement)
-        => statement.HiddenTypes is { Count: > 0 } hidden
-            ? (hidden.Count == 1 ? "1 more material type" : $"{hidden.Count} more material types") + " from earlier statements, not listed again"
-            : null;
 
     private static EmailAttachment Attachment(PdfFile pdf) => new(pdf.FileName, "application/pdf", pdf.Content);
 }

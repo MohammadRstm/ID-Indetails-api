@@ -106,7 +106,6 @@ public static class ErrorCodes
     public const string PaymentExceedsBalance = "payment_exceeds_balance";
     public const string PaymentTooSmall = "payment_too_small";
     public const string ExchangeRateMissing = "exchange_rate_missing";
-    public const string MaterialsNotSent = "materials_not_sent";
     public const string ReceivedDateInFuture = "received_date_in_future";
     public const string InitialPaymentExists = "initial_payment_exists";
     public const string PaymentAlreadyVoided = "payment_already_voided";
@@ -115,7 +114,6 @@ public static class ErrorCodes
     public const string RateNotAfterLatest = "rate_not_after_latest";
 
     // Execution site costs
-    public const string MaterialStated = "material_stated";
     public const string LabourWeekOutOfRange = "labour_week_out_of_range";
     public const string LabourDayOutsideWeek = "labour_day_outside_week";
     public const string LabourDayInFuture = "labour_day_in_future";
@@ -127,15 +125,59 @@ public static class ErrorCodes
     /// <summary>422. A daily log can only be changed on the day it was written.</summary>
     public const string SiteLogLocked = "site_log_locked";
 
-    /// <summary>422. The Execution box holds less than the money asked for.</summary>
-    public const string BoxShort = "box_short";
+    /// <summary>422. The pocket money holds less than the amount asked for.</summary>
+    public const string PocketShort = "pocket_short";
 
-    /// <summary>422. The box only sends money to a project in the red.</summary>
-    public const string BoxProjectNotInRed = "box_project_not_in_red";
+    /// <summary>422. Moving that much into the pocket money would take the site's profit to zero or below.</summary>
+    public const string PocketWouldEmptySite = "pocket_would_empty_site";
 
-    /// <summary>422. The project isn't waiting for a decision on its money in the box.</summary>
-    public const string BoxNoDecision = "box_no_decision";
-    public const string StatementEmpty = "statement_empty";
+    /// <summary>422. The pocket money request was already approved or denied.</summary>
+    public const string PocketRequestDecided = "pocket_request_decided";
+
+    /// <summary>422. Internal work, or a project with no agreed amount yet, can't be quoted.</summary>
+    public const string QuoteNotPossible = "quote_not_possible";
+
+    /// <summary>422. Execution projects have no quotes: their price is built from BOQs.</summary>
+    public const string QuoteNotForExecution = "quote_not_for_execution";
+
+    /// <summary>422. The change would take the project's profit to zero or below; it was kept for forcing (see <c>blockedChangeId</c>).</summary>
+    public const string ProfitFloor = "profit_floor";
+
+    /// <summary>422. The blocked change was already forced through or dismissed.</summary>
+    public const string BlockedChangeDecided = "blocked_change_decided";
+
+    /// <summary>422. BOQs belong to Execution client projects; any other project has none.</summary>
+    public const string BoqExecutionOnly = "boq_execution_only";
+
+    /// <summary>422. An agreed BOQ can't be changed or deleted; withdraw its agreement first.</summary>
+    public const string BoqLocked = "boq_locked";
+
+    /// <summary>409. Someone saved the BOQ after the caller loaded it: saving the older copy would undo their changes.</summary>
+    public const string BoqChanged = "boq_changed";
+
+    /// <summary>422. Another client BOQ of the project is already agreed.</summary>
+    public const string BoqAlreadyAgreed = "boq_already_agreed";
+
+    /// <summary>422. A variation order needs the project's client BOQ to be agreed first.</summary>
+    public const string BoqNotAgreedYet = "boq_not_agreed_yet";
+
+    /// <summary>422. The client BOQ can't be withdrawn while variation orders are agreed on top of it.</summary>
+    public const string BoqHasAgreedVos = "boq_has_agreed_vos";
+
+    /// <summary>422. A BOQ with no lines can't be sent or agreed.</summary>
+    public const string BoqEmpty = "boq_empty";
+
+    /// <summary>422. An internal draft is never sent, agreed or withdrawn.</summary>
+    public const string BoqInternal = "boq_internal";
+
+    /// <summary>422. Only a variation order can have a negative rate.</summary>
+    public const string BoqNegativeRate = "boq_negative_rate";
+
+    /// <summary>422. Only an agreed BOQ has an agreement to withdraw.</summary>
+    public const string BoqNotAgreed = "boq_not_agreed";
+
+    /// <summary>422. The agreed BOQs would take the project's work price below zero.</summary>
+    public const string BoqPriceBelowZero = "boq_price_below_zero";
 
     // Dependencies
     public const string EmailDeliveryFailed = "email_delivery_failed";
@@ -152,6 +194,21 @@ public static class ErrorCodes
     public const string OverheadGroupNotFound = "overhead_group_not_found";
     public const string OverheadGroupExists = "overhead_group_exists";
     public const string OverheadGroupInUse = "overhead_group_in_use";
+
+    /// <summary>409. Another account label already has this name, whatever its case.</summary>
+    public const string AccountLabelTaken = "account_label_taken";
+
+    /// <summary>422. The account labels changed since the new order was made.</summary>
+    public const string AccountLabelOrderStale = "account_label_order_stale";
+
+    /// <summary>422. An archived account label can't be newly picked.</summary>
+    public const string AccountLabelArchived = "account_label_archived";
+
+    /// <summary>400. Supervision can't be recorded as taken on a day that hasn't come.</summary>
+    public const string TakenDateInFuture = "taken_date_in_future";
+
+    /// <summary>422. An Execution site keeps its costs as site expenses, not project expenses.</summary>
+    public const string ExpenseExecutionUsesSiteExpenses = "expense_execution_uses_site_expenses";
 
     // Payroll
     public const string SalaryMonthInFuture = "salary_month_in_future";

@@ -120,32 +120,18 @@ const RACES = [
     },
   },
   {
-    name: 'statements_same_project',
+    name: 'boqs_same_project',
     who: () => of('ExecutionAdmin').slice(0, 3),
-    prepare: (admin) => {
-      const project = field(get(admin, '/api/projects?domain=execution&status=active&pageSize=1'), 'items.0.id');
-      const added = field(post(admin, `/api/projects/${project}/materials`,
-        { items: [1, 2, 3].map((n) => ({ name: `Race material ${n}`, amount: 100 + n, note: runMark })) }), null, []);
-      added.forEach((m) => ledger('material.created', { id: m.id, project, user: admin.user.userId }));
-      return { project };
+    prepare: (admin) => ({ project: field(get(admin, '/api/projects?domain=execution&status=active&pageSize=1'), 'items.0.id') }),
+    act: (s, f) => post(s, `/api/projects/${f.project}/boqs`, { kind: 'client', title: `Race BOQ ${runMark}` }, { expect: [201] }),
+    afterwards: (admin, f) => {
+      const numbers = field(get(admin, `/api/projects/${f.project}/boqs`), 'client', [])
+        .filter((b) => String(b.title).includes(runMark)).map((b) => Number(String(b.number).split('-').pop())).sort((a, b) => a - b);
+      return {
+        'every raced BOQ got a number': numbers.length === 3,
+        'the numbers are distinct and consecutive': numbers.every((n, i) => i === 0 || n === numbers[i - 1] + 1),
+      };
     },
-    act: (s, f) => post(s, `/api/projects/${f.project}/statements`, { mode: 'detail' }, { expect: [201, 422] }),
-    afterwards: () => ({}),
-  },
-  {
-    name: 'material_delete_vs_statement',
-    who: () => of('ExecutionAdmin').slice(0, 2),
-    prepare: (admin) => {
-      const project = field(get(admin, '/api/projects?domain=execution&status=active&pageSize=1&page=2'), 'items.0.id');
-      const added = field(post(admin, `/api/projects/${project}/materials`, { items: [{ name: 'Race material', amount: 250, note: runMark }] }), null, []);
-      ledger('material.created', { id: added[0].id, project, user: admin.user.userId });
-      return { project, material: added[0].id };
-    },
-    act: (s, f, i) => (i === 0
-      ? post(s, `/api/projects/${f.project}/statements`, { mode: 'detail' }, { expect: [201, 422] })
-      : call(s, 'DELETE', `/api/projects/${f.project}/materials/${f.material}`, null, { expect: [204, 422] })),
-    recorded: (s, f, i) => i === 1 && ledger('material.deleted', { id: f.material, user: s.user.userId }),
-    afterwards: () => ({}),
   },
   {
     name: 'same_user_two_tabs',
@@ -272,7 +258,7 @@ export function setup() {
   const admins = { design: newSession(of('DesignAdmin')[0]), execution: newSession(of('ExecutionAdmin')[0]), super: newSession(of('SuperAdmin')[0]) };
   const fixtures = {};
   for (const race of RACES) {
-    const admin = race.name.includes('statement') || race.name.includes('labour') ? admins.execution
+    const admin = race.name.includes('boq') || race.name.includes('labour') ? admins.execution
       : race.name.includes('permission') || race.name.includes('exchange') ? admins.super : admins.design;
     fixtures[race.name] = race.prepare(admin, race.who());
   }

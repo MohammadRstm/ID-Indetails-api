@@ -37,6 +37,7 @@ public sealed class CompanyFinanceRepository(IdIndetailsDbContext db) : ICompany
         => await db.Payments
             .AsNoTracking()
             .Where(p => p.VoidedAt == null)
-            .Select(p => new ReceivedPaymentRow(p.Project.DomainCode, p.ReceivedOn, p.AmountUsd))
+            // revenue: what payments bring in, TVA left out
+            .Select(p => new ReceivedPaymentRow(p.Project.DomainCode, p.ReceivedOn, p.AmountUsd - p.TvaUsd))
             .ToListAsync(cancellationToken);
 }

@@ -23,5 +23,8 @@ public interface IPaymentService
     /// <summary>Ties a payment on account to an issued invoice of the same project.</summary>
     Task<PaymentResponse> ApplyAsync(long paymentId, ApplyPaymentRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Files a live payment under an account label (an archived one can't be newly picked), or clears the label.</summary>
+    Task<PaymentResponse> SetLabelAsync(long paymentId, SetPaymentLabelRequest request, CancellationToken cancellationToken = default);
+
     Task<PaymentResponse> VoidAsync(long paymentId, VoidRequest request, CancellationToken cancellationToken = default);
 }
