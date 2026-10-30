@@ -27,6 +27,7 @@ using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Execution.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
+using ID_Indetails.api.Repositories.Labour.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Reports.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
@@ -57,6 +58,7 @@ public sealed class ProjectService(
     IPortalAccessService portalAccess,
     IPortalPublishingService portalPublishing,
     ISiteTeamRepository siteTeams,
+    ILabourRepository labour,
     IUnitOfWork unitOfWork,
     IProfitFloor floor,
     IClock clock) : IProjectService
@@ -311,6 +313,19 @@ public sealed class ProjectService(
         project.Icon = Clean(request.Icon);
         project.Tint = Clean(request.Tint);
         project.TargetDate = request.TargetDate;
+        if (request.StartDate is { } start && start != project.StartDate)
+        {
+            var weeks = await labour.ListWeeksAsync(project.Id, cancellationToken);
+            Throw(ProjectRules.CheckStartDate(start, clock.CompanyToday, weeks.Count == 0 ? null : weeks.Min(w => w.Week.WeekStart)));
+            // a site's first crew and day rate start with it, so the weeks it now has earlier open with them too
+            if (start < project.StartDate && await labour.GetDefaultForUpdateAsync(project.Id, project.StartDate, cancellationToken) is { } first)
+            {
+                first.EffectiveFrom = start;
+            }
+
+            project.StartDate = start;
+        }
+
         project.UpdatedAt = clock.UtcNow;
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectUpdated, actor.UserId));
 

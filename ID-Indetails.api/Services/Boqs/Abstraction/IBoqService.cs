@@ -1,5 +1,6 @@
 using ID_Indetails.api.DTO.Request.Boqs;
 using ID_Indetails.api.DTO.Response.Boqs;
+using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Services.Boqs.Abstraction;
 
@@ -47,4 +48,10 @@ public interface IBoqService
     /// goes out that can't be recorded.
     /// </summary>
     Task<BoqDocument> GetDocumentForSendingAsync(long boqId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Completing a site whose client paid beyond its price: an agreed VO (a client BOQ when none was agreed) that raises
+    /// the work price to <paramref name="work"/>. Runs inside the caller's transaction, on the project it has locked.
+    /// </summary>
+    Task AddClosingPriceAsync(Project project, decimal work, long actorId, CancellationToken cancellationToken = default);
 }

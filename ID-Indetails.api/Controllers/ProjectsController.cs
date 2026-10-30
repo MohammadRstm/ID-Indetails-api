@@ -9,6 +9,7 @@ using ID_Indetails.api.RateLimiting;
 using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace ID_Indetails.api.Controllers;
@@ -101,11 +102,14 @@ public sealed class ProjectsController(
     public Task<ProjectResponse> Resume(long projectId, CancellationToken cancellationToken)
         => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Resume, cancellationToken);
 
-    /// <summary>Finalises the project: revenue is locked and open requirements are ticked.</summary>
+    /// <summary>
+    /// Finalises the project: revenue is locked and open requirements are ticked. <c>{ keepPaidAhead: true }</c> first
+    /// raises a client project's price to what the client paid beyond it. The body is optional.
+    /// </summary>
     [HttpPost("{projectId:long}/complete")]
     [HasPermission(PermissionCodes.ProjectChangeStatus)]
-    public Task<ProjectResponse> Complete(long projectId, CancellationToken cancellationToken)
-        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Complete, cancellationToken);
+    public Task<ProjectResponse> Complete(long projectId, [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CompleteProjectRequest? request, CancellationToken cancellationToken)
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Complete, cancellationToken, request?.KeepPaidAhead ?? false);
 
     /// <summary>Finalises the project too, unless it was already completed.</summary>
     [HttpPost("{projectId:long}/archive")]

@@ -80,4 +80,33 @@ public class ProjectRulesTests
         denial.Field.ShouldBe("projectFee");
         denial.Code.ShouldBe(ErrorCodes.ValidationFailed);
     }
+
+    [Fact]
+    public void A_start_date_can_move_to_any_day_that_has_come()
+    {
+        var today = new DateOnly(2026, 10, 30);
+
+        ProjectRules.CheckStartDate(today, today, firstLabourWeek: null).ShouldBeNull();
+        ProjectRules.CheckStartDate(new DateOnly(2024, 1, 15), today, firstLabourWeek: null).ShouldBeNull();
+
+        var future = ProjectRules.CheckStartDate(today.AddDays(1), today, firstLabourWeek: null)!;
+        future.Code.ShouldBe(ErrorCodes.ValidationFailed);
+        future.Field.ShouldBe("startDate");
+    }
+
+    [Fact]
+    public void A_site_cannot_start_after_the_week_of_its_first_ground_labour_reported()
+    {
+        var today = new DateOnly(2026, 10, 30);
+        var firstWeek = new DateOnly(2026, 10, 12);
+
+        // anywhere in that week, or before it, is fine
+        ProjectRules.CheckStartDate(new DateOnly(2026, 10, 12), today, firstWeek).ShouldBeNull();
+        ProjectRules.CheckStartDate(new DateOnly(2026, 10, 17), today, firstWeek).ShouldBeNull();
+        ProjectRules.CheckStartDate(new DateOnly(2026, 9, 1), today, firstWeek).ShouldBeNull();
+
+        var late = ProjectRules.CheckStartDate(new DateOnly(2026, 10, 19), today, firstWeek)!;
+        late.Field.ShouldBe("startDate");
+        late.Code.ShouldBe(ErrorCodes.ValidationFailed);
+    }
 }

@@ -186,7 +186,7 @@ sum of the rows. A `contribution` is positive and a `payout` is negative. Sites 
 
 ## Supervision taken
 
-The company's supervision on a site is its work price × the supervision rate (default 10%). What the company takes of it out of the project account is recorded as it is taken. **It is not a cost**: it never changes the site's profit (so there is no profit floor), and it only lowers the cash left in the account and what is left to take. Taking more than is due is allowed, and shows as over (a negative amount left).
+The company's supervision on a site is its work price × the supervision rate (default 10%). What the company takes of it out of the project account is recorded as it is taken. **It is not a cost**: it never changes the site's profit (so there is no profit floor), and it only lowers the cash left in the account and what is left to take. No more than is left of what is due can be taken (`400 validation_failed` on `amountUsd`). What is left can still go negative if the work price falls after some was taken (a withdrawn agreement or a negative VO); it then shows as over.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
@@ -221,7 +221,7 @@ Everything is USD. Costs, profit, the price and the pocket money's moves come fr
   cashInAccountUsd,
   byLabel: [{ accountLabel: { id, name } | null, receivedUsd, spentUsd, otherUsd, restUsd }],
   byCategory: [{ category, spentUsd }],
-  byPayee: [{ payee: string | null, spentUsd }],
+  byPayee: [{ payee: string | null, spentUsd, splits: [{ category, accountLabelId, spentUsd }] }],
   unconverted: [{ source, currency, amount }] }
 ```
 
@@ -232,6 +232,6 @@ Everything is USD. Costs, profit, the price and the pocket money's moves come fr
 - **Pocket.** `movedToPocketUsd` and `paidByPocketUsd`: what was moved from the site into the pocket money, and what it paid back.
 - **`cashInAccountUsd`** = received − `costs.totalUsd` − supervision taken − moved to the pocket + paid by it. The pocket's moves count because the money physically left or entered the account. It is gross: the TVA a client paid is in the account too, and can go below zero.
 - **`byLabel`** has one row for each account label with a live payment or a site expense (archived labels too), in the labels' order, then **always** the unlabelled row last (`accountLabel: null`). On a label's row, `receivedUsd` is the payments filed under it, `spentUsd` the site expenses filed under it, and `otherUsd` is 0. The unlabelled row's `spentUsd` is every cost no label holds (unlabelled site expenses, ground labour, staff and other costs) and its `otherUsd` is supervision taken + moved to the pocket − paid by it. `restUsd` = received − spent − other. **The rows always add up to `cashInAccountUsd`** (`receivedUsd`, and the cost, as well): the unlabelled row is worked out as the remainder, and the rule is covered by unit and integration tests.
-- **`byCategory`** and **`byPayee`** break down site expenses only, largest first. Categories are `materials`, `contractor`, `equipment`, `fees` and `other`, and categories with the same spend keep that order. A payee is a site expense's `supplier` grouped by its text trimmed, with single spaces, in lower case, shown as it was last typed; expenses with no supplier are one row with `payee: null` (the client shows "No payee"), last among equal totals.
+- **`byCategory`** and **`byPayee`** break down site expenses only, largest first. Categories are `materials`, `contractor`, `equipment`, `fees` and `other`, and categories with the same spend keep that order. A payee is a site expense's `supplier` grouped by its text trimmed, with single spaces, in lower case, shown as it was last typed; expenses with no supplier are one row with `payee: null` (the client shows "No payee"), last among equal totals. Each payee carries `splits`, what was spent with it by category and account label (`accountLabelId` null for none), largest first, so the client can filter the payees by category or label.
 - **No rate.** Site expenses are converted at the rate of the day they were spent. One with no rate that day is left out of every sum above and listed in `unconverted` in its own currency, as the project's cost lists it (`unconverted` is exactly `money.cost.unconverted`, with `source` such as `site_expense`).
 - A site with nothing recorded answers zeros and the single unlabelled row.

@@ -93,7 +93,7 @@ public sealed class BoqService(
             boq.Lines.Add(CopyOf(line, boq.Lines.Count + 1));
         }
 
-        await FinishAsync(boq, project, actor, cancellationToken);
+        await FinishAsync(boq, project, actor.UserId, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return await DescribeAsync(await boqs.GetAsync(boq.Id, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
@@ -204,7 +204,7 @@ public sealed class BoqService(
             boq.Lines.Add(CopyOf(line, boq.Lines.Count + 1));
         }
 
-        await FinishAsync(boq, project, actor, cancellationToken);
+        await FinishAsync(boq, project, actor.UserId, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return await DescribeAsync(await boqs.GetAsync(boq.Id, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
@@ -337,6 +337,24 @@ public sealed class BoqService(
         return await DocumentAsync(boq, cancellationToken);
     }
 
+    public async Task AddClosingPriceAsync(Project project, decimal work, long actorId, CancellationToken cancellationToken = default)
+    {
+        var agreed = await boqs.AgreedAsync(project.Id, cancellationToken);
+        var kind = agreed.ClientAgreed ? BoqKind.Vo : BoqKind.Client;
+        var raise = work - (project.ProjectFee ?? 0);
+        var boq = NewBoq(project, kind, BoqRules.ClosingTitle, kind == BoqKind.Vo ? BoqRules.ClosingReason : null, actorId);
+        boq.Lines.Add(new BoqLine { Position = 1, Description = BoqRules.ClosingTitle, Quantity = 1, WasteRate = 0, Unit = "L.S", Rate = raise });
+        await FinishAsync(boq, project, actorId, cancellationToken);
+
+        var now = clock.UtcNow;
+        boq.Status = BoqStatus.Agreed;
+        boq.AgreedAt = now;
+        boq.AgreedById = actorId;
+        SetWorkPrice(project, work, boq.Number!, actorId);
+        activity.Add(BoqEvent(boq, project, ActivityEventKinds.BoqAgreed, actorId, new { kind = KindOf(boq), number = boq.Number }));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
 
@@ -437,7 +455,7 @@ public sealed class BoqService(
     }
 
     /// <summary>Checks, numbers, totals and saves a new BOQ, with its first event when the client sees such BOQs.</summary>
-    private async Task FinishAsync(Boq boq, Project project, UserAccess actor, CancellationToken cancellationToken)
+    private async Task FinishAsync(Boq boq, Project project, long actorId, CancellationToken cancellationToken)
     {
         Throw(BoqRules.CheckContent(boq.Kind, boq.Reason, boq.AdjustmentType, boq.AdjustmentValue, LinesOf(boq)));
         Recompute(boq);
@@ -451,7 +469,7 @@ public sealed class BoqService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         if (boq.Kind != BoqKind.Internal)
         {
-            activity.Add(BoqEvent(boq, project, ActivityEventKinds.BoqCreated, actor.UserId, new { kind = KindOf(boq), number = boq.Number }));
+            activity.Add(BoqEvent(boq, project, ActivityEventKinds.BoqCreated, actorId, new { kind = KindOf(boq), number = boq.Number }));
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
     }

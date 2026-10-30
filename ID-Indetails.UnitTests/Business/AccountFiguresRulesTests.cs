@@ -262,11 +262,13 @@ public class AccountFiguresRulesTests
             Spent(null, payee: "Unpriced Ltd"),
         ]));
 
-        figures.ByPayee.ShouldBe(
+        figures.ByPayee.Select(p => (p.Payee, p.Spent)).ShouldBe([("Beirut Cranes", 1_000m), ("Al-Rashid Steel", 650m), ((string?)null, 100m)]);
+        // none of these had a label, and all are materials
+        figures.ByPayee.SelectMany(p => p.Splits).ShouldBe(
         [
-            new PayeeRow("Beirut Cranes", 1_000),
-            new PayeeRow("Al-Rashid Steel", 650),
-            new PayeeRow(null, 100),
+            new PayeeSplit(SiteExpenseCategory.Materials, null, 1_000),
+            new PayeeSplit(SiteExpenseCategory.Materials, null, 650),
+            new PayeeSplit(SiteExpenseCategory.Materials, null, 100),
         ]);
     }
 
@@ -296,5 +298,29 @@ public class AccountFiguresRulesTests
 
         figures.ByCategory.Sum(c => c.Spent).ShouldBe(500);
         figures.ByPayee.Sum(p => p.Spent).ShouldBe(500);
+    }
+
+    [Fact]
+    public void Each_payee_carries_what_was_spent_with_it_by_category_and_label_largest_first()
+    {
+        var figures = Build(Account(expenses:
+        [
+            Spent(400, Concrete, SiteExpenseCategory.Materials, "  Al-Rashid Steel "),
+            Spent(250, Concrete, SiteExpenseCategory.Materials, "al-rashid  steel"),
+            Spent(900, Finishing, SiteExpenseCategory.Contractor, "Al-Rashid Steel"),
+            Spent(30, null, SiteExpenseCategory.Materials, "Al-Rashid Steel"),
+            Spent(100, null, SiteExpenseCategory.Fees, null),
+        ]));
+
+        var steel = figures.ByPayee[0];
+        steel.Payee.ShouldBe("Al-Rashid Steel");
+        steel.Splits.ShouldBe(
+        [
+            new PayeeSplit(SiteExpenseCategory.Contractor, Finishing, 900),
+            new PayeeSplit(SiteExpenseCategory.Materials, Concrete, 650),
+            new PayeeSplit(SiteExpenseCategory.Materials, null, 30),
+        ]);
+        figures.ByPayee[1].Splits.ShouldBe([new PayeeSplit(SiteExpenseCategory.Fees, null, 100)]);
+        figures.ByPayee.ShouldAllBe(p => p.Splits.Sum(s => s.Spent) == p.Spent);
     }
 }
