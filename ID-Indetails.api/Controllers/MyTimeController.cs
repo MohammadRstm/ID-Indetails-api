@@ -7,20 +7,14 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ID_Indetails.api.Controllers;
 
-/// <summary>The caller's own pay and working time. Never anyone else's: nothing here takes a user id.</summary>
+/// <summary>
+/// The caller's own working time. Never anyone else's: nothing here takes a user id. Their pay isn't shown to them.
+/// </summary>
 [ApiController]
 [Route("api/me")]
 [HasPermission(PermissionCodes.WorkEntryViewOwn)]
-public sealed class MyPayController(IMyTimeService myTime, ISalaryService salaries) : ControllerBase
+public sealed class MyTimeController(IMyTimeService myTime) : ControllerBase
 {
-    /// <summary>
-    /// The caller's pay for a month (this month by default), as the Salaries screen calculates it, with the day by
-    /// day view and, while the month runs, what has been earned so far. <c>salary</c> is null without a pay record.
-    /// </summary>
-    [HttpGet("pay")]
-    public Task<MyPayResponse> Pay([FromQuery] SalaryMonthQuery query, CancellationToken cancellationToken)
-        => salaries.GetMineAsync(query, cancellationToken);
-
     /// <summary>
     /// The caller's week, the company policy in force, and one day's hours (today by default): what logging on that
     /// day would count against.

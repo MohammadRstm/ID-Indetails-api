@@ -19,7 +19,7 @@ Proton itself never writes anything. The design and decisions are in [proton-sta
 | `proton_budget:manage` | super admins | see Proton's estimated cost and usage per person, and top up the monthly budget |
 
 Employees got Proton in Stage 5, Phase 8 (decision 26; a seed migration, `EmployeesUseProton`, that also rewords the
-permission): it reads only what they may see, opens their own pages (`my_work`, `my_pay`, `my_profile`), and proposes
+permission): it reads only what they may see, opens their own pages (`my_work`, `my_profile`; there is no pay page, since employees don't see their pay), and proposes
 changes to their own work. The plan asks for two weeks of measured cost before that migration is applied in
 production. Both are ordinary permissions (`Constants/PermissionCatalog.cs`): they can be
 granted or revoked per person like any other, and `proton_budget:manage` is a company permission.
@@ -451,7 +451,7 @@ submits or sends anything itself.
 - **Messaging reads** (D1), as the user, through an explicit allow-list of endpoints without a permission of their own
   (`ProtonEndpoint.OfRuleBased`: `Messages.Contacts`, `Messages.Conversations`, `Notifications.List`, each needing
   `proton:use`): `find_recipient` (contacts and the user's team chats, with role, position, team and business),
-  `get_my_inbox` (who, unread, mention, when; **never message bodies**), `get_my_notifications`. A new `team` ref type
+  `get_my_inbox` (who, unread, mention, when; **never message bodies**; Announcements is a row of its own, with no ref), `get_my_notifications`. Proton never writes in Announcements (`Never`). A new `team` ref type
   names a team chat the user is in; `open_surface message_team` opens it. The page context reports an open chat by id.
 - Sending (Phase 7) builds on the same pieces.
 

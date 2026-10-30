@@ -82,7 +82,9 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
 
         // 6 hours by the designer (08:00-14:00 in Beirut, so a working day with in-hours work: the paid hour of break
-        // is cost too), and 30 minutes by a colleague with no pay record.
+        // is cost too), and 30 minutes by a colleague with no pay record. The first hour is before the day's start, so
+        // overtime; it made up no short month (February is before she joined), so it costs her overtime rate, 1,600 ÷ 184
+        // = 8.70, not 10: 5h at 10, 1h at 8.70 and the break at 10.
         const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
             "VALUES (@u, @p, 'Drawings', '2026-02-10 06:00:00', @end, UTC_TIMESTAMP(3))";
         await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", project.Id), ("@end", "2026-02-10 12:00:00"));
@@ -93,11 +95,11 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var money = await MoneyAsync(project.Id, admin.AccessToken);
 
-        money.Cost.Labour.ShouldBe(70m);
+        money.Cost.Labour.ShouldBe(68.70m);
         money.Cost.Expenses.ShouldBe(110m);
-        money.Cost.Total.ShouldBe(180m);
+        money.Cost.Total.ShouldBe(178.70m);
         money.Cost.UnpricedLabourMinutes.ShouldBe(30);
-        money.Profit.ShouldBe(9820m);
+        money.Profit.ShouldBe(9821.30m);
         money.LabourHours.ShouldBe(6.5m);
 
         // No requirements done and under 10 hours: too early for a margin.

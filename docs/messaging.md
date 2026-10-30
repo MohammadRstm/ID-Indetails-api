@@ -1,14 +1,14 @@
 # Messaging
 
-Team chats and direct messages, as in the prototype (`75-messages-data.js`, `75-messages-page.js`). Chats are addressed by team or by person, never by an internal id, and a conversation is only stored once its first message is sent.
+Team chats and direct messages, as in the prototype (`75-messages-data.js`, `75-messages-page.js`), and the Announcements chat everyone reads (28 Oct 2026). Chats are addressed by team or by person, never by an internal id, and a conversation is only stored once its first message is sent; Announcements was created by its migration.
 
 ## Endpoints
 
-All of them need only a signed-in, active user. Who may read and write each chat follows role and team (below), not permissions.
+All of them need only a signed-in, active user, except writing in Announcements (`message:announce`). Who may read and write the other chats follows role and team (below), not permissions.
 
 | Method and path | Purpose |
 |---|---|
-| `GET /api/messages/conversations` | Every team chat the caller is in (with or without messages) and their direct chats with messages, most recent first. Each has the team or the person, the last message, the unread count and, for team chats, whether an unread message mentions the caller |
+| `GET /api/messages/conversations` | Announcements first (`type: announcements`, no team or person, even before anyone wrote in it), then every team chat the caller is in (with or without messages) and their direct chats with messages, most recent first. Each has the team or the person, the last message, the unread count and, for team chats, whether an unread message mentions the caller |
 | `GET /api/messages/badge` | `{ unread, mention }` for the header: every unread message, and whether any mentions the caller |
 | `GET /api/messages/contacts` | The people the caller can message directly, by name |
 | `GET /api/messages/teams/{teamId}/members` | Everyone in a team chat, for picking mentions |
@@ -18,6 +18,9 @@ All of them need only a signed-in, active user. Who may read and write each chat
 | `GET /api/messages/direct/{userId}?before=&limit=50` | The same for a direct chat with that person |
 | `POST /api/messages/direct/{userId}` | `{ body }`. Returns `201` |
 | `POST /api/messages/direct/{userId}/read` | As for team chats |
+| `GET /api/messages/announcements?before=&limit=50` | A page of Announcements, as for team chats |
+| `POST /api/messages/announcements` | `message:announce`: `{ body, attachmentIds }`, no mentions (`400`). Returns `201` |
+| `POST /api/messages/announcements/read` | As for team chats |
 
 ## Rules
 
@@ -25,6 +28,7 @@ All of them need only a signed-in, active user. Who may read and write each chat
 
 - **Team chats.** Every team has one. Its members are worked out live, never stored: the team's people, the admins of its domain, and the super admins. So employees see their own team's chat, admins every team chat of their domain, and super admins all of them. Someone moved to another team or domain loses the old chat, history included, and sees the new one's whole history. A chat the caller isn't in reads as `404`.
 - **Direct messages.** Super admins message anyone; everyone else messages their own domain and the super admins, never the other domain. Nobody messages themselves. A person the caller can't reach reads as `404`. Only active people receive messages (`422 user_deactivated`), but a chat with someone deactivated can still be read.
+- **Announcements.** One chat that every active member of staff reads: every role and domain, the website's staff included (portal clients aren't staff). Only holders of `message:announce`, the super admins by default, write in it (`403` otherwise). A new message pushes to everyone else's phone, titled "Announcements" (category `messages`), and counts in their badge; there is no bell notification. What was announced before someone joined (`users.created_at`) never counts as unread for them, though they can read it.
 - **Mentions** are only for team chats, and only of the chat's members (`400`). A mention lights up the member's badge (`mention: true`) until they read the chat.
 - **Unread** means sent by someone else after the reader's read marker. Sending marks the chat read for the sender, and read markers only move forward.
 - **Messages** are up to 4,000 characters and can't be edited or deleted. A message has text, photos or videos, or both: `attachmentIds` takes up to 10 of the sender's own uploads, each attached once, which the chat's people can then download ([files.md](files.md)). Each message lists its `attachments`.
@@ -43,7 +47,7 @@ A SignalR connection at `/hubs/live` tells signed-in clients that something chan
 | Signal | Payload | Sent to | Reload |
 |---|---|---|---|
 | `notifications` | — | Whoever got a notification, or read theirs (for their other devices) | `GET /api/notifications/unread-count`, and the open list |
-| `messages` | `{ teamId, userId }`, one of them set | Everyone in a team chat that got a message; both sides of a direct message; whoever read a chat (for their other devices) | `GET /api/messages/badge`, the conversation list, and that chat if it's open |
+| `messages` | `{ teamId, userId, announcements }`: one of `teamId` and `userId` set, or `announcements: true` | Everyone in a team chat that got a message; both sides of a direct message; every active person when Announcements gets one; whoever read a chat (for their other devices) | `GET /api/messages/badge`, the conversation list, and that chat if it's open |
 
 - **Connecting.** It needs a signed-in user. Browsers pass the access token as the `access_token` query parameter, because WebSockets can't send headers; that parameter is only read on `/hubs/live`, and request logging stays at Warning so query strings aren't logged. The React client uses `@microsoft/signalr` with `accessTokenFactory`.
 - **When.** Signals are staged while a request runs and sent only once it has succeeded (`Middlewares/LiveUpdatesMiddleware`), so a refused or failed request signals nobody. The scheduled notification checks send theirs after each check. A signal that can't be sent is logged and dropped; the request still succeeds.

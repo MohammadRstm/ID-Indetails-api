@@ -22,11 +22,11 @@ public class UserPayHistory
     public string Currency { get; set; } = "USD";
 
     /// <summary>
-    /// Hourly pay's rate (the <see cref="Amount"/>). Not used for monthly pay, whose hourly rate depends on the month and
-    /// is worked out from the schedule (<c>PayRules.HourlyRate</c>): 0 on monthly rows, or salary ÷ 173.33 on rows made
-    /// before that rule.
+    /// What an hour of overtime is paid at, before the company's multiplier: hourly pay's own rate, or the rate entered
+    /// with a salary (the salary ÷ 184 unless an admin typed another, <c>PayRules.SuggestedOvertimeRate</c>). A salary's
+    /// other hours are worth what the month gives (<c>PayRules.HourlyRate</c>).
     /// </summary>
-    public decimal HourlyCostRate { get; set; }
+    public decimal OvertimeRate { get; set; }
 
     public string? Note { get; set; }
 

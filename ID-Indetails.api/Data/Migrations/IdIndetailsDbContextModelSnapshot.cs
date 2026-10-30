@@ -888,9 +888,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("conversations", null, t =>
                         {
-                            t.HasCheckConstraint("ck_conversations_shape", "(`type` = 'dm' AND `team_id` IS NULL AND `dm_user_low_id` IS NOT NULL AND `dm_user_high_id` IS NOT NULL AND `dm_user_low_id` < `dm_user_high_id`) OR (`type` = 'group' AND `team_id` IS NOT NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL)");
+                            t.HasCheckConstraint("ck_conversations_shape", "(`type` = 'dm' AND `team_id` IS NULL AND `dm_user_low_id` IS NOT NULL AND `dm_user_high_id` IS NOT NULL AND `dm_user_low_id` < `dm_user_high_id`) OR (`type` = 'group' AND `team_id` IS NOT NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL) OR (`type` = 'announcements' AND `team_id` IS NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL)");
 
-                            t.HasCheckConstraint("ck_conversations_type", "`type` IN ('dm', 'group')");
+                            t.HasCheckConstraint("ck_conversations_type", "`type` IN ('dm', 'group', 'announcements')");
                         });
                 });
 
@@ -1597,6 +1597,25 @@ namespace ID_Indetails.api.Data.Migrations
 
                             t.HasCheckConstraint("ck_labour_week_days_workers_non_negative", "`workers` >= 0");
                         });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.MeetingAttendee", b =>
+                {
+                    b.Property<long>("MeetingId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("meeting_id");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("MeetingId", "UserId")
+                        .HasName("pk_meeting_attendees");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_meeting_attendees_user_id");
+
+                    b.ToTable("meeting_attendees", (string)null);
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Message", b =>
@@ -2538,6 +2557,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "hours:excuse",
                             Description = "Excuse hours and days off in the hours ledger"
+                        },
+                        new
+                        {
+                            Code = "message:announce",
+                            Description = "Write in Announcements, the chat everyone reads"
                         },
                         new
                         {
@@ -4234,12 +4258,17 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<string>("DomainCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("domain_code");
+
                     b.Property<DateTime>("EndsAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
                         .HasColumnName("ends_at");
 
-                    b.Property<long>("ProjectId")
+                    b.Property<long?>("ProjectId")
                         .HasColumnType("bigint")
                         .HasColumnName("project_id");
 
@@ -4268,6 +4297,9 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("CreatedById")
                         .HasDatabaseName("ix_project_meetings_created_by_id");
 
+                    b.HasIndex("DomainCode")
+                        .HasDatabaseName("ix_project_meetings_domain_code");
+
                     b.HasIndex("UpdatedById")
                         .HasDatabaseName("ix_project_meetings_updated_by_id");
 
@@ -4277,6 +4309,8 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("project_meetings", null, t =>
                         {
                             t.HasCheckConstraint("ck_project_meetings_ends_after_start", "`ends_at` > `starts_at`");
+
+                            t.HasCheckConstraint("ck_project_meetings_project_or_domain", "`project_id` IS NULL OR `domain_code` IS NULL");
                         });
                 });
 
@@ -5543,6 +5577,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "message:announce"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "website:view"
                         },
                         new
@@ -6497,15 +6536,15 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("date")
                         .HasColumnName("effective_from");
 
-                    b.Property<decimal>("HourlyCostRate")
-                        .HasPrecision(18, 4)
-                        .HasColumnType("decimal(18,4)")
-                        .HasColumnName("hourly_cost_rate");
-
                     b.Property<string>("Note")
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)")
                         .HasColumnName("note");
+
+                    b.Property<decimal>("OvertimeRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("overtime_rate");
 
                     b.Property<long>("UserId")
                         .HasColumnType("bigint")
@@ -6527,7 +6566,7 @@ namespace ID_Indetails.api.Data.Migrations
 
                             t.HasCheckConstraint("ck_user_pay_history_basis", "`basis` IN ('hourly', 'monthly')");
 
-                            t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`hourly_cost_rate` >= 0");
+                            t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`overtime_rate` >= 0");
                         });
                 });
 
@@ -7611,6 +7650,27 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("LabourWeek");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.MeetingAttendee", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.ProjectMeeting", "Meeting")
+                        .WithMany("Attendees")
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_meeting_attendees_project_meetings_meeting_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_meeting_attendees_users_user_id");
+
+                    b.Navigation("Meeting");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.Message", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.Conversation", "Conversation")
@@ -8322,11 +8382,16 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_project_meetings_users_created_by_id");
 
+                    b.HasOne("ID_Indetails.api.Models.Domain", null)
+                        .WithMany()
+                        .HasForeignKey("DomainCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_project_meetings_domains_domain_code");
+
                     b.HasOne("ID_Indetails.api.Models.Project", "Project")
                         .WithMany("Meetings")
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_project_meetings_projects_project_id");
 
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -9033,6 +9098,11 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Requirements");
 
                     b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectMeeting", b =>
+                {
+                    b.Navigation("Attendees");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectRequirement", b =>

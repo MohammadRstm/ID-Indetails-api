@@ -23,6 +23,8 @@ public static class PushCategories
         [NotificationKinds.WeeklySummary] = NotificationCategory.Work,
         [NotificationKinds.HoursExcused] = NotificationCategory.Work,
         [NotificationKinds.ScheduleChanged] = NotificationCategory.Work,
+        [NotificationKinds.HoursMissed] = NotificationCategory.Work,
+        [NotificationKinds.HoursMissedList] = NotificationCategory.Work,
 
         [NotificationKinds.RequirementAssigned] = NotificationCategory.Requirements,
         [NotificationKinds.RequirementsAdded] = NotificationCategory.Requirements,
@@ -37,6 +39,9 @@ public static class PushCategories
         [NotificationKinds.ProjectIdle] = NotificationCategory.Projects,
 
         [NotificationKinds.MeetingScheduled] = NotificationCategory.Meetings,
+        [NotificationKinds.MeetingInvited] = NotificationCategory.Meetings,
+        [NotificationKinds.MeetingMoved] = NotificationCategory.Meetings,
+        [NotificationKinds.MeetingCancelled] = NotificationCategory.Meetings,
 
         [NotificationKinds.MaterialsAdded] = NotificationCategory.Sites,
         [NotificationKinds.LabourWeekSubmitted] = NotificationCategory.Sites,

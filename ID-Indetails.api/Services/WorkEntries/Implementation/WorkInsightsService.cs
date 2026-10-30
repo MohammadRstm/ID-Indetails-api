@@ -3,6 +3,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Meetings;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -163,7 +164,7 @@ public sealed class WorkInsightsService(
         var parts = (await entries.ListAsync(new WorkEntrySearch(ProjectId: projectId), cancellationToken))
             .SelectMany(e => WorkStats.SplitByDay(clock.ToCompanyTime(e.StartedAt), e.Minutes).Select(d => (d.Day, d.Minutes, e.UserId, e.UserName)))
             .ToList();
-        var projectMeetings = (await meetings.ListAsync(new MeetingSearch([DomainCodes.Design], projectId), cancellationToken))
+        var projectMeetings = (await meetings.ListAsync(new MeetingSearch([DomainCodes.Design], MeetingRules.ViewerOf(actor), projectId), cancellationToken))
             .ToLookup(m => clock.ToCompanyDate(m.StartsAt));
         var byDay = parts.ToLookup(p => p.Day);
 

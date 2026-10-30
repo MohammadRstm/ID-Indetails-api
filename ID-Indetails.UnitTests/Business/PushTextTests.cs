@@ -31,9 +31,9 @@ public class PushTextTests
         """).RootElement;
 
     [Fact]
-    public void There_are_46_notification_kinds_and_each_has_its_own_text()
+    public void There_are_51_notification_kinds_and_each_has_its_own_text()
     {
-        AllKinds.Count.ShouldBe(46);
+        AllKinds.Count.ShouldBe(51);
         foreach (var kind in AllKinds)
         {
             var text = PushText.ForNotification(kind, "Rana Haddad", "Villa Haddad", Revealing, 2);
@@ -128,6 +128,13 @@ public class PushTextTests
         PushText.ForMessage("Rana", "Site team", "@Sami look", MessageKinds.Text, false, mentioned: true).Title.ShouldBe("Rana mentioned you in Site team");
         PushText.ForMessage("Rana", "Site team", "Fix the joint", MessageKinds.TaskComment, false, true).Title.ShouldBe("Rana commented on a task in Site team");
         PushText.ForMessage("Rana", null, null, MessageKinds.Text, hasAttachments: true, false).Body.ShouldBe("Sent a photo or video.");
+    }
+
+    [Fact]
+    public void An_announcement_is_titled_Announcements_and_names_who_wrote_it()
+    {
+        PushText.ForAnnouncement("Rana", "Closed on\nFriday", false).ShouldBe(new PushMessageText("Announcements", "Rana: Closed on Friday"));
+        PushText.ForAnnouncement("Rana", null, hasAttachments: true).Body.ShouldBe("Rana: Sent a photo or video.");
     }
 
     [Fact]

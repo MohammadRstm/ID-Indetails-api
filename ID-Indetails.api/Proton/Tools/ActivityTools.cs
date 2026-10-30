@@ -165,7 +165,8 @@ public sealed record MeetingsInput
     public ProtonDomain? Domain { get; init; }
 }
 
-public sealed record MeetingRow(long Id, ProtonNamed Project, string Starts, string Ends, int Minutes, string? Topic, string? Description, string? SetBy);
+/// <param name="Project">Null for a general meeting, which is about no project.</param>
+public sealed record MeetingRow(long Id, ProtonNamed? Project, string Starts, string Ends, int Minutes, string? Topic, string? Description, string? SetBy);
 
 public sealed record MeetingList(DateOnly From, DateOnly To, int Total, IReadOnlyList<MeetingRow> Meetings);
 
@@ -175,7 +176,8 @@ public sealed class ListMeetingsTool(IMeetingService meetings, IClock clock) : P
 
     public override string Name => "list_meetings";
 
-    public override string Description => "Project meetings in a period (past or upcoming), for a project or domain.";
+    public override string Description =>
+        "Meetings in a period (past or upcoming), for a project or domain: project meetings, and general meetings (no project) the user is in or manages.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<MeetingsController>(nameof(MeetingsController.List));
 
@@ -188,7 +190,7 @@ public sealed class ListMeetingsTool(IMeetingService meetings, IClock clock) : P
 
         var rows = list.Take(MaxRows).Select(m => new MeetingRow(
             m.Id,
-            new ProtonNamed(m.Project.Id, m.Project.Title),
+            m.Project is { } project ? new ProtonNamed(project.Id, project.Title) : null,
             clock.Local(m.StartsAt),
             clock.Local(m.EndsAt),
             m.Minutes,
@@ -197,7 +199,7 @@ public sealed class ListMeetingsTool(IMeetingService meetings, IClock clock) : P
             m.CreatedBy?.Name)).ToList();
         return new ProtonToolOutput(
             new MeetingList(range.From, range.To, list.Count, rows),
-            rows.Select(r => new ProtonRef(ProtonRefType.Project, r.Project.Id, r.Project.Name)).Distinct().ToList(),
+            rows.Where(r => r.Project is not null).Select(r => new ProtonRef(ProtonRefType.Project, r.Project!.Id, r.Project.Name)).Distinct().ToList(),
             range);
     }
 }

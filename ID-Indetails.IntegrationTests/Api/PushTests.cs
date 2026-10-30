@@ -115,6 +115,25 @@ public class PushTests(PushApiFactory api) : IClassFixture<PushApiFactory>
     }
 
     [Fact]
+    public async Task An_announcement_reaches_everyone_s_phone_titled_Announcements_but_the_sender_s()
+    {
+        var (superEmail, superPassword, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (email, password, _) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, token) = await PhoneAsync(email, password);
+        var (_, senderToken) = await PhoneAsync(superEmail, superPassword);
+
+        var sent = await Client.PostJsonAsync("/api/messages/announcements", new { body = "The office is closed on Friday" }, superAdmin.AccessToken);
+        ((int)sent.StatusCode).ShouldBe(201, await sent.Content.ReadAsStringAsync());
+
+        var push = await api.Push.WaitForAsync(token, m => m.Data.Kind == PushKinds.Message);
+        push.Title.ShouldBe("Announcements");
+        push.Body.ShouldBe("Rana Haddad: The office is closed on Friday");
+        push.Data.Target.ShouldBe(PushTarget.Announcements);
+        push.ChannelId.ShouldBe("messages");
+        api.Push.SentTo(senderToken).ShouldNotContain(m => m.Data.Kind == PushKinds.Message);
+    }
+
+    [Fact]
     public async Task Who_may_read_a_notification_is_checked_again_when_it_is_sent()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

@@ -73,6 +73,7 @@ public static class ErrorCodes
 
     // Requirements
     public const string ProjectClosed = "project_closed";
+    public const string ProjectNotActive = "project_not_active";
     public const string AssigneeNotAllowed = "assignee_not_allowed";
 
     // Work entries

@@ -9,7 +9,8 @@ namespace ID_Indetails.api.Business.Finance;
 /// A project's cost, profit and margin, in USD. Every cost is converted at the company exchange rate
 /// in force on the day it happened; a cost with no rate that day is left out and reported as unconverted.
 /// <list type="bullet">
-/// <item>Cost = employee labour (hours × the hourly cost in force that day, plus everyone's paid breaks) + expenses + site expenses + ground labour.</item>
+/// <item>Cost = employee labour (hours × the hourly cost in force that day, the hours paid as overtime at the overtime
+/// rate × the multiplier instead, plus everyone's paid breaks) + expenses + site expenses + ground labour.</item>
 /// <item>Profit = revenue − cost. Internal projects have no revenue.</item>
 /// <item>Margin = profit ÷ revenue, only once it means something: the project is done, at least 5% along,
 /// or has at least 10 hours logged.</item>
@@ -37,12 +38,15 @@ public static class ProjectFinance
         public decimal Total => Labour + Expenses + SiteExpenses + GroundLabour;
     }
 
-    public sealed record WorkedTime(long UserId, DateOnly Day, int Minutes);
+    /// <param name="OvertimeMinutes">The part paid as overtime, as Salaries pays it: not what made up a short month.</param>
+    /// <param name="OvertimeMultiplier">The company's overtime multiplier that day.</param>
+    public sealed record WorkedTime(long UserId, DateOnly Day, int Minutes, int OvertimeMinutes, decimal OvertimeMultiplier);
 
-    public sealed record PayRate(long UserId, DateOnly EffectiveFrom, decimal HourlyCost, string Currency);
+    /// <param name="OvertimeRate">What an hour of overtime costs before the multiplier: the pay's own.</param>
+    public sealed record PayRate(long UserId, DateOnly EffectiveFrom, decimal HourlyCost, string Currency, decimal OvertimeRate);
 
     /// <summary>A row of someone's pay history.</summary>
-    public sealed record PayRecord(long UserId, DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency);
+    public sealed record PayRecord(long UserId, DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency, decimal OvertimeRate);
 
     /// <param name="PocketNet">Execution: what pocket money paid to the project less what was moved from it into the pocket.</param>
     public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes, decimal PocketNet = 0);
@@ -81,8 +85,9 @@ public static class ProjectFinance
         decimal CostPerHour);
 
     /// <summary>
-    /// Prices worked time at each person's hourly cost in force that day (their earliest rate for time
-    /// before it; see <see cref="RatesOf"/>). Time of someone with no pay record can't be priced and is counted separately.
+    /// Prices worked time at each person's hourly cost in force that day (their earliest rate for time before it; see
+    /// <see cref="RatesOf"/>), and the part paid as overtime at their overtime rate × the multiplier. Time of someone with
+    /// no pay record can't be priced and is counted separately.
     /// </summary>
     public static (IReadOnlyList<CostItem> Items, int UnpricedMinutes) PriceLabour(
         IEnumerable<WorkedTime> worked,
@@ -101,7 +106,8 @@ public static class ProjectFinance
             }
 
             var rate = RateOn(history, w.Day);
-            items.Add(new CostItem(CostSource.Labour, rate.Currency, w.Minutes / 60m * rate.HourlyCost, w.Day));
+            var cost = (w.Minutes - w.OvertimeMinutes) / 60m * rate.HourlyCost + w.OvertimeMinutes / 60m * rate.OvertimeRate * w.OvertimeMultiplier;
+            items.Add(new CostItem(CostSource.Labour, rate.Currency, cost, w.Day));
         }
 
         return (items, unpriced);
@@ -127,7 +133,8 @@ public static class ProjectFinance
 
     /// <summary>
     /// One person's pay history as hourly costs over time: hourly pay at its rate, and a monthly salary at its rate in each
-    /// month (<see cref="PayRules.HourlyRate"/>), one rate a month up to <paramref name="until"/>. Ordered by date.
+    /// month (<see cref="PayRules.HourlyRate"/>), one rate a month up to <paramref name="until"/>, each with the pay's
+    /// overtime rate. Ordered by date.
     /// Months paid as a fixed salary (<see cref="RoleHistory.FixedSalaryMonth"/>) cost nothing: that salary is a company
     /// cost, counted once on the company overview, and pricing their hours would also give it away. A role change only
     /// touches the months it falls in and after, so promoting someone never changes what their earlier months cost.
@@ -144,7 +151,7 @@ public static class ProjectFinance
             var from = pay.EffectiveFrom;
             do
             {
-                rates.Add(new PayRate(pay.UserId, from, PayRules.HourlyRate(pay.Basis, pay.Amount, from, calendar), pay.Currency));
+                rates.Add(new PayRate(pay.UserId, from, PayRules.HourlyRate(pay.Basis, pay.Amount, from, calendar), pay.Currency, pay.OvertimeRate));
                 from = new DateOnly(from.Year, from.Month, 1).AddMonths(1);
             }
             while (pay.Basis == PayBasis.Monthly && from < end);
@@ -153,7 +160,7 @@ public static class ProjectFinance
         return ByRole(rates, roles);
     }
 
-    /// <summary>The rates at 0 in fixed-salary months, with a new rate where the month of a role change starts and ends.</summary>
+    /// <summary>The rates (overtime too) at 0 in fixed-salary months, with a new rate where the month of a role change starts and ends.</summary>
     private static IReadOnlyList<PayRate> ByRole(IReadOnlyList<PayRate> rates, RoleHistory roles)
     {
         if (rates.Count == 0)
@@ -173,7 +180,9 @@ public static class ProjectFinance
         return days.Distinct().Order().Select(day =>
         {
             var rate = RateOn(rates, day);
-            return rate with { EffectiveFrom = day, HourlyCost = roles.FixedSalaryMonth(day) ? 0 : rate.HourlyCost };
+            return roles.FixedSalaryMonth(day)
+                ? rate with { EffectiveFrom = day, HourlyCost = 0, OvertimeRate = 0 }
+                : rate with { EffectiveFrom = day };
         }).ToList();
     }
 

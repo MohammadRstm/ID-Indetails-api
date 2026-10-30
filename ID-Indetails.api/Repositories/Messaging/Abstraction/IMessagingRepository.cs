@@ -60,6 +60,9 @@ public interface IMessagingRepository
     /// <summary>The team's group chat, if anyone wrote in it yet. Tracked.</summary>
     Task<Conversation?> TeamConversationAsync(long teamId, CancellationToken cancellationToken = default);
 
+    /// <summary>The Announcements chat, which the migration that added it created. Tracked.</summary>
+    Task<Conversation?> AnnouncementsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The two people's direct chat, if anyone wrote in it yet. Tracked.</summary>
     Task<Conversation?> DirectConversationAsync(long userA, long userB, CancellationToken cancellationToken = default);
 
@@ -90,8 +93,9 @@ public interface IMessagingRepository
 
 
     /// <summary>
-    /// The user's existing conversations: the group chats of <paramref name="teamIds"/> and their direct chats. Unread
-    /// counts what others sent after the user's read marker; an unread mention is one of those naming the user.
+    /// The user's existing conversations: Announcements, the group chats of <paramref name="teamIds"/> and their direct
+    /// chats. Unread counts what others sent after the user's read marker, and in Announcements only since the user
+    /// joined; an unread mention is one of those naming the user.
     /// </summary>
     Task<IReadOnlyList<ConversationState>> StatesAsync(
         long userId,

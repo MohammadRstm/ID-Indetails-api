@@ -84,6 +84,8 @@ public static class PermissionCatalog
         new(P.ScheduleManage, "Set personal work schedules", Sensitivity: Pay),
         new(P.HoursExcuse, "Excuse hours and days off in the hours ledger", Sensitivity: Pay),
 
+        new(P.MessageAnnounce, "Write in Announcements, the chat everyone reads"),
+
         // the website's own: its staff hold them, and anyone given one reaches the Website area
         new(P.WebsiteView, "View the company website's content", DomainCodes.Website),
         new(P.WebsiteManage, "Edit the company website: projects, services, locations, contact details and favicon", DomainCodes.Website),
@@ -105,13 +107,13 @@ public static class PermissionCatalog
 
     /// <summary>
     /// Money and hiring are the super admins' alone: admins see no revenue, cost, profit, invoices, payments, pricing,
-    /// BOQs or pay, and invite no one.
+    /// BOQs or pay, and invite no one. So is writing to everyone in Announcements.
     /// </summary>
     private static readonly string[] SuperAdminOnly =
     [
         P.FinancialView, P.InvoiceCreate, P.InvoiceSend, P.InvoiceVoid, P.PaymentRecord, P.PaymentVoid,
         P.BillingSettingsManage, P.ExpenseManage, P.ProjectPricingManage, P.BoqCreate,
-        P.EmployeeInvite, P.EmployeePayManage,
+        P.EmployeeInvite, P.EmployeePayManage, P.MessageAnnounce,
     ];
 
     /// <summary>

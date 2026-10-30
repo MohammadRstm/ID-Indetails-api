@@ -36,8 +36,8 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     /// <summary>
-    /// Someone who joined on 1 January 2026 with 1,760 a month: 10 an hour in June (176 paid hours), and a true hourly
-    /// rate of 10.1538 for overtime (1,760 ÷ 173.33).
+    /// Someone who joined on 1 January 2026 with 1,760 a month: 10 an hour in June (176 paid hours), and overtime from
+    /// 9.57 an hour (1,760 ÷ 184, the rate suggested when no other is given).
     /// </summary>
     private async Task<AuthResponse> SalariedAsync(AuthResponse superAdmin, string domain)
     {
@@ -93,7 +93,7 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var list = await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?month=2026-06&search={designer.User.Email}", superAdmin.AccessToken));
         list.Summary.ExpectedMinutes.ShouldBe(22 * 420);
 
-        // Excusing the other days clears the shortfall; the extra hour is then paid as overtime at the true hourly rate,
+        // Excusing the other days clears the shortfall; the extra hour is then paid as overtime at the overtime rate,
         // 1x (the seeded multiplier).
         var otherDays = Enumerable.Range(2, 29).Select(d => $"2026-06-{d:00}").ToArray();
         var excuse = await OkAsync<HourExcuseResponse>(Client.PostJsonAsync($"/api/employees/{designer.User.Id}/hour-excuses",
@@ -107,8 +107,8 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var excused = await OkAsync<SalaryDetailResponse>(Client.GetAsync(url, superAdmin.AccessToken));
         excused.Salary.ShortMinutes.ShouldBe(0);
         excused.Salary.BasePay.ShouldBe(1760m);
-        excused.Salary.StandardHourlyRate.ShouldBe(10.1538m);
-        excused.Salary.OvertimePay.ShouldBe(10.15m);
+        excused.Salary.OvertimeRate.ShouldBe(9.57m);
+        excused.Salary.OvertimePay.ShouldBe(9.57m);
         excused.Excuses.ShouldHaveSingleItem();
         excused.Projects.ShouldHaveSingleItem().OvertimeMinutes.ShouldBe(60);
         excused.Projects[0].MadeUpMinutes.ShouldBe(0);
