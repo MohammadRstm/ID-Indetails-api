@@ -63,6 +63,8 @@ public class PrivilegeRulesTests
         var hidden = NotificationAccess.HiddenKinds(Actor(RoleCodes.Admin, PermissionCodes.FinancialView));
         hidden.ShouldContain(NotificationKinds.WorkLogged);
         hidden.ShouldContain(NotificationKinds.HoursShort);
+        hidden.ShouldContain(NotificationKinds.HoursMissedList);
+        hidden.ShouldNotContain(NotificationKinds.HoursMissed);
         hidden.ShouldNotContain(NotificationKinds.InvoiceIssued);
         hidden.ShouldNotContain(NotificationKinds.RequirementAssigned);
     }

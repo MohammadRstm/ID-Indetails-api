@@ -59,12 +59,14 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        var over = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 100m);
+        var over = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 98m);
         var under = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
         var red = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 50m);
 
-        // A full Tuesday on "over" (09:00-17:00 in Beirut): 80 plus the paid hour of break, 90 of its 100, so 10% is left.
-        // An hour on "under". The same Thursday on "red", past its 50. Inserted directly, as pay and schedules would.
+        // A full Tuesday on "over" (09:00-17:00 in Beirut): 7h at 10, the 8th hour overtime at her overtime rate (1,600 ÷ 184
+        // = 8.70; February is before she joined, so it made up no short month), and the paid hour of break: 88.70 of its 98,
+        // so 9% is left. An hour on "under". The same Thursday on "red", past its 50. Inserted directly, as pay and schedules
+        // would.
         await Work.InsertAsync(designer.User.Id, over.Id, "2026-02-10 07:00:00", "2026-02-10 15:00:00");
         await Work.InsertAsync(designer.User.Id, under.Id, "2026-02-11 07:00:00", "2026-02-11 08:00:00");
         await Work.InsertAsync(designer.User.Id, red.Id, "2026-02-12 07:00:00", "2026-02-12 15:00:00");
@@ -74,7 +76,7 @@ public class InsightNotificationTests(ApiFactory api) : IClassFixture<ApiFactory
         var warning = (await OfKindAsync(admin, NotificationKinds.ProfitLow, over.Id)).ShouldHaveSingleItem();
         warning.Actor.ShouldBeNull();
         warning.SubjectId.ShouldBe(over.Id);
-        warning.Payload!.Value.GetProperty("marginPct").GetInt32().ShouldBe(10);
+        warning.Payload!.Value.GetProperty("marginPct").GetInt32().ShouldBe(9);
         warning.Payload.Value.TryGetProperty("profit", out _).ShouldBeFalse();
         (await OfKindAsync(admin, NotificationKinds.ProfitAtZero, red.Id)).ShouldHaveSingleItem();
         (await OfKindAsync(admin, NotificationKinds.ProfitLow, under.Id)).ShouldBeEmpty();

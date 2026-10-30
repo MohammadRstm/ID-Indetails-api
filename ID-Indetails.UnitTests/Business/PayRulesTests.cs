@@ -44,25 +44,15 @@ public class PayRulesTests
     }
 
     [Theory]
-    [InlineData(2026, 2)]
-    [InlineData(2026, 7)]
-    [InlineData(2026, 9)]
-    public void Overtime_has_the_same_true_hourly_rate_every_month(int year, int month)
-        // 40 paid hours a week × 52 ÷ 12 = 173.33 hours a month.
-        => PayRules.StandardHourlyRate(PayBasis.Monthly, 3000m, new DateOnly(year, month, 15), Company).ShouldBe(17.3077m);
+    [InlineData(4232, 23)]     // the client's example
+    [InlineData(1000, 5.43)]
+    [InlineData(3000, 16.30)]
+    public void A_salary_s_overtime_rate_is_suggested_as_the_salary_divided_by_184_hours(decimal salary, decimal rate)
+        => PayRules.SuggestedOvertimeRate(PayBasis.Monthly, salary).ShouldBe(rate);
 
     [Fact]
-    public void The_true_hourly_rate_follows_the_weekly_hours_of_the_schedule()
-    {
-        // Monday, Wednesday and Friday, 9 to 5: 24 paid hours a week, 104 a standard month.
-        var days = new Dictionary<int, (int, int)> { [1] = (540, 1020), [3] = (540, 1020), [5] = (540, 1020) };
-        var partTime = new PersonCalendar(
-            [new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)],
-            [new PersonCalendar.Schedule(new(2026, 1, 1), false, days)]);
-
-        PayRules.StandardHourlyRate(PayBasis.Monthly, 1040m, new(2026, 7, 1), partTime).ShouldBe(10m);
-        PayRules.StandardHourlyRate(PayBasis.Hourly, 12m, new(2026, 7, 1), partTime).ShouldBe(12m);
-    }
+    public void Hourly_pay_is_its_own_overtime_rate()
+        => PayRules.SuggestedOvertimeRate(PayBasis.Hourly, 12m).ShouldBe(12m);
 
     [Fact]
     public void A_month_with_no_working_days_has_no_rate()

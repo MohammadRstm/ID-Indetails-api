@@ -69,6 +69,12 @@ public static class PushText
             NotificationKinds.EntryComment => new("New comment", $"{actor} commented on your work on {project}."),
             NotificationKinds.WeeklySummary => new("Your week", "Last week's summary is ready."),
             NotificationKinds.HoursExcused => new("Hours excused", "Some of your hours were excused."),
+            NotificationKinds.HoursMissed => new("Hours to log", Date(payload, "day") is { } day
+                ? $"You logged less than {Day(day)} asked for. You can still log it this month."
+                : "You logged less than a working day asked for. You can still log it this month."),
+            NotificationKinds.HoursMissedList => new("Hours to log", Date(payload, "day") is { } listed
+                ? $"Some people logged less than {Day(listed)} asked for."
+                : "Some people logged less than a working day asked for."),
             NotificationKinds.ScheduleChanged => new("Schedule changed", Date(payload, "effectiveFrom") is { } from
                 ? $"Your working schedule changes from {Day(from)}."
                 : "Your working schedule changed."),

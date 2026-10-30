@@ -28,11 +28,13 @@ public class ProjectFinanceTests
     private static Costs CostOf(decimal labour = 0, decimal expenses = 0, decimal siteExpenses = 0, decimal ground = 0)
         => new(labour, expenses, siteExpenses, ground, []);
 
+    private static readonly PayRecord Salary = new(7, Jan1, PayBasis.Monthly, 1760m, "USD", 9.57m);
+
     /// <summary>One hour on each day, priced at 1,760 a month from 1 January 2026 (10.4762 an hour in May, 10 in June, 9.5652 in July).</summary>
     private static IEnumerable<decimal> HourOn(RoleHistory roles, params DateOnly[] days)
         => PriceLabour(
-                days.Select(d => new WorkedTime(7, d, 60)),
-                RatesOf([new PayRecord(7, Jan1, PayBasis.Monthly, 1760m, "USD")], NineToFive, until: new DateOnly(2026, 7, 20), roles))
+                days.Select(d => new WorkedTime(7, d, 60, 0, 1m)),
+                RatesOf([Salary], NineToFive, until: new DateOnly(2026, 7, 20), roles))
             .Items.Select(i => i.Amount);
 
     [Fact]
@@ -42,16 +44,17 @@ public class ProjectFinanceTests
         var calendar = new PersonCalendar([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
         PayRecord[] history =
         [
-            new(7, new DateOnly(2026, 7, 10), PayBasis.Hourly, 12m, "USD"),
-            new(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD"),
+            new(7, new DateOnly(2026, 7, 10), PayBasis.Hourly, 12m, "USD", 12m),
+            new(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD", 9.57m),
         ];
 
+        // the overtime rate is the pay's own, whatever the month
         RatesOf(history, calendar, until: new DateOnly(2026, 8, 20), AnEmployee).ShouldBe(
         [
-            new PayRate(7, new DateOnly(2026, 5, 15), 10.4762m, "USD"),
-            new PayRate(7, new DateOnly(2026, 6, 1), 10m, "USD"),
-            new PayRate(7, new DateOnly(2026, 7, 1), 9.5652m, "USD"),
-            new PayRate(7, new DateOnly(2026, 7, 10), 12m, "USD"),
+            new PayRate(7, new DateOnly(2026, 5, 15), 10.4762m, "USD", 9.57m),
+            new PayRate(7, new DateOnly(2026, 6, 1), 10m, "USD", 9.57m),
+            new PayRate(7, new DateOnly(2026, 7, 1), 9.5652m, "USD", 9.57m),
+            new PayRate(7, new DateOnly(2026, 7, 10), 12m, "USD", 12m),
         ]);
     }
 
@@ -60,7 +63,7 @@ public class ProjectFinanceTests
     {
         var calendar = new PersonCalendar([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
 
-        RatesOf([new PayRecord(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD")], calendar, until: new DateOnly(2026, 7, 1), AnEmployee)
+        RatesOf([Salary with { EffectiveFrom = new DateOnly(2026, 5, 15) }], calendar, until: new DateOnly(2026, 7, 1), AnEmployee)
             .Select(r => r.EffectiveFrom)
             .ShouldBe([new DateOnly(2026, 5, 15), new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 1)]);
     }
@@ -73,6 +76,10 @@ public class ProjectFinanceTests
         HourOn(promoted, new DateOnly(2026, 5, 29), new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 15), new DateOnly(2026, 7, 1))
             .ShouldBe([10.4762m, 0m, 0m, 0m]);
         HourOn(promoted, new DateOnly(2026, 5, 29)).ShouldBe(HourOn(AnEmployee, new DateOnly(2026, 5, 29)));
+        // their overtime costs nothing either
+        RatesOf([Salary], NineToFive, until: new DateOnly(2026, 7, 20), promoted)
+            .Where(r => r.EffectiveFrom >= new DateOnly(2026, 6, 1))
+            .ShouldAllBe(r => r.HourlyCost == 0m && r.OvertimeRate == 0m);
     }
 
     [Fact]
@@ -99,8 +106,8 @@ public class ProjectFinanceTests
     public void Time_before_the_first_pay_record_keeps_the_role_held_then()
     {
         // Paid by the hour from 1 March; an admin until becoming an employee on 10 February, and the other way round.
-        PayRecord[] pay = [new(7, Mar1, PayBasis.Hourly, 12m, "USD")];
-        WorkedTime[] work = [new(7, new DateOnly(2026, 1, 20), 60), new(7, new DateOnly(2026, 2, 2), 60), new(7, new DateOnly(2026, 3, 5), 60)];
+        PayRecord[] pay = [new(7, Mar1, PayBasis.Hourly, 12m, "USD", 12m)];
+        WorkedTime[] work = [new(7, new DateOnly(2026, 1, 20), 60, 0, 1m), new(7, new DateOnly(2026, 2, 2), 60, 0, 1m), new(7, new DateOnly(2026, 3, 5), 60, 0, 1m)];
         var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new DateOnly(2026, 2, 10), RoleCodes.Admin, RoleCodes.Employee)]);
         var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new DateOnly(2026, 2, 10), RoleCodes.Employee, RoleCodes.Admin)]);
 
@@ -152,19 +159,28 @@ public class ProjectFinanceTests
     {
         var (items, unpriced) = PriceLabour(
             [
-                new WorkedTime(1, new DateOnly(2026, 2, 10), 120),
-                new WorkedTime(1, new DateOnly(2026, 3, 10), 60),
-                new WorkedTime(1, new DateOnly(2025, 12, 1), 60),
-                new WorkedTime(2, Mar1, 90),
+                new WorkedTime(1, new DateOnly(2026, 2, 10), 120, 0, 1m),
+                new WorkedTime(1, new DateOnly(2026, 3, 10), 60, 0, 1m),
+                new WorkedTime(1, new DateOnly(2025, 12, 1), 60, 0, 1m),
+                new WorkedTime(2, Mar1, 90, 0, 1m),
             ],
             [
-                new PayRate(1, Jan1, 10m, "USD"),
-                new PayRate(1, Mar1, 20m, "USD"),
+                new PayRate(1, Jan1, 10m, "USD", 10m),
+                new PayRate(1, Mar1, 20m, "USD", 20m),
             ]);
 
         // Time before the first pay record uses the earliest rate; someone with no pay can't be priced.
         items.Select(i => i.Amount).ShouldBe([20m, 20m, 10m]);
         unpriced.ShouldBe(90);
+    }
+
+    [Fact]
+    public void Time_paid_as_overtime_costs_the_overtime_rate_times_the_multiplier()
+    {
+        // 3 hours, one of them paid as overtime at 1.5x: 2h at June's 10, then 1h at 23 x 1.5.
+        var (items, _) = PriceLabour([new WorkedTime(1, new DateOnly(2026, 6, 10), 180, 60, 1.5m)], [new PayRate(1, Jan1, 10m, "USD", 23m)]);
+
+        items.ShouldHaveSingleItem().Amount.ShouldBe(54.5m);
     }
 
     [Fact]

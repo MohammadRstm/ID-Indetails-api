@@ -38,10 +38,14 @@ public class WorkEntryExportTests(ApiFactory api) : IClassFixture<ApiFactory>
         var entry = await Work.LogAsync(designer.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(5), 90, "Logo, second round");
 
         var lines = await LinesAsync(await Client.GetAsync($"/api/work-entries/export?projectId={project.Id}", admin.AccessToken));
-        lines[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Team,Project,Client,Task,Outside scope,Hourly rate,Currency,Labour cost,Entry id");
+        // the hours paid as overtime cost the overtime rate (the pay's own, x the multiplier): hourly pay at the seeded
+        // 1x costs the same either way
+        lines[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Team,Project,Client,Task,Outside scope," +
+            "Hourly rate,Overtime paid hours,Overtime rate,Currency,Labour cost,Entry id");
         lines.Length.ShouldBe(2);
         lines[1].ShouldContain(",1.50,");
-        lines[1].ShouldContain("\"Logo, second round\",No,20.00,USD,30.00," + entry.Id);
+        lines[1].ShouldContain("\"Logo, second round\",No,20.00,");
+        lines[1].ShouldEndWith(",20.00,USD,30.00," + entry.Id);
 
         var withoutMoney = await LinesAsync(await Client.GetAsync($"/api/work-entries/export?projectId={project.Id}", lead.AccessToken));
         withoutMoney[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Team,Project,Client,Task,Outside scope,Entry id");
