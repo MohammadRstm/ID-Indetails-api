@@ -15,7 +15,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | Execution: BOQs and variation orders, site expenses (cost-only; the old materials paths stay as a temporary alias for the phone), ground labour, site money, supervision taken and a site's account figures | [execution.md](execution.md) | #5, #12 |
 | Company: settings, working time, schedules, overhead, salaries, hours ledger, excuses, overview, project pay | [company.md](company.md) | #11, #13, #15, #23 |
 | Design work: entries, comments, meetings, settings, reports, activity, timeline, overtime, closed months, dashboards | [design.md](design.md) | #14, #22, #24 |
-| Self-service: my pay, hours, overtime, schedule, requirements, board layouts | [me.md](me.md) | #17, #22, #23, #24 |
+| Self-service: hours, overtime, schedule, requirements, board layouts (employees don't see their pay) | [me.md](me.md) | #17, #22, #23, #24 |
 | Notifications, scheduled checks, money insights, auto-archive | [notifications.md](notifications.md) | #19, #22 |
 | Messaging, live updates, online status and last seen | [messaging.md](messaging.md) | #20 |
 | Search | [search.md](search.md) | #22 |
