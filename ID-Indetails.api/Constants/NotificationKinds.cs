@@ -132,6 +132,11 @@ public static class NotificationKinds
     /// <summary>Design employees finished a closed month short of their hours (digest key <c>hours-short-YYYY-MM</c>). Sent to whoever sees salaries.</summary>
     public const string HoursShort = "hours_short";
 
+    /// <summary>You logged less than a working day asked for (digest key <c>hours-missed-YYYY-MM-DD</c>, the day). The next morning, as a reminder.</summary>
+    public const string HoursMissed = "hours_missed";
+
+    /// <summary>Who logged less than a working day asked for (digest key <c>hours-missed-list-YYYY-MM-DD</c>). The next morning, to whoever sees everyone's Design work.</summary>
+    public const string HoursMissedList = "hours_missed_list";
     /// <summary>
     /// An active client project's cost passed 85% of its payment (subject: the project). No longer sent: <see cref="ProfitLow"/>
     /// took its place; kept so the ones sent before still read.

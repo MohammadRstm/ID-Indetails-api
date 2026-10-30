@@ -83,7 +83,7 @@ public sealed record SalaryRowResponse
     public required decimal MonthlyPay { get; init; }
 
     /// <summary>
-    /// While a salaried month runs, the salary accrued so far plus overtime pay (as My pay shows it); otherwise
+    /// While a salaried month runs, the salary accrued so far plus overtime pay; otherwise
     /// <see cref="Total"/>.
     /// </summary>
     public required decimal EarnedSoFar { get; init; }

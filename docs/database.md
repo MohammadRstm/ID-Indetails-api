@@ -121,7 +121,7 @@ These are calculated by the API from the tables above, so they can never drift:
 - Group chat membership
 - Unread counts
 
-Also derived: required hours per day, overtime (outside a person's hours, on days off, and beyond the day's required hours), the monthly hours ledger (expected, short, made up, flagged), paid breaks, shortfall deductions, project pay, "my pay", and in Execution the agreed amount, what is owed or paid ahead, and cash and expected profit.
+Also derived: required hours per day, overtime (outside a person's hours, on days off, and beyond the day's required hours), the monthly hours ledger (expected, short, made up, flagged), paid breaks, shortfall deductions, project pay, and in Execution the agreed amount, what is owed or paid ahead, and cash and expected profit.
 
 These are computed **by MySQL** as stored generated columns:
 - `work_entries.duration_minutes`

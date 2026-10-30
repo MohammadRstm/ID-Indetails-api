@@ -23,31 +23,6 @@ public class MyTimeTests
         MyTime.ExpectedFullMonth(September, joinedOn: new DateOnly(2026, 9, 28), Calendar).ShouldBe(3 * 420);
     }
 
-    [Fact]
-    public void Days_show_what_each_asked_for_and_what_was_logged_newest_first()
-    {
-        var work = Overtime.Of([Work(1, 1, 540, 420), Work(2, 2, 540, 480), Work(3, 5, 600, 120), Work(4, 7, 540, 60)], Calendar);
-
-        var days = MyTime.Days(September, today: new DateOnly(2026, 9, 7), joinedOn: new DateOnly(2025, 1, 1), Calendar, work,
-            excusedDays: new HashSet<DateOnly> { new(2026, 9, 4) }, wholeMonthExcused: false);
-
-        days.Select(d => d.Date.Day).ShouldBe([7, 5, 4, 3, 2, 1]);
-        days.Single(d => d.Date.Day == 1).Difference.ShouldBe(0);
-        days.Single(d => d.Date.Day == 2).ShouldSatisfyAllConditions(d => d.Overtime.ShouldBe(60), d => d.Difference.ShouldBe(0));
-        days.Single(d => d.Date.Day == 3).Difference.ShouldBe(-420);
-        days.Single(d => d.Date.Day == 4).ShouldSatisfyAllConditions(d => d.Excused.ShouldBeTrue(), d => d.Difference.ShouldBeNull());
-        days.Single(d => d.Date.Day == 5).ShouldSatisfyAllConditions(d => d.DayOff.ShouldBeTrue(), d => d.Overtime.ShouldBe(120));
-        days[0].ShouldSatisfyAllConditions(d => d.IsToday.ShouldBeTrue(), d => d.Difference.ShouldBeNull());
-    }
-
-    [Fact]
-    public void Days_before_joining_ask_for_nothing()
-    {
-        var days = MyTime.Days(September, today: new DateOnly(2026, 9, 3), joinedOn: new DateOnly(2026, 9, 2), Calendar, [], new HashSet<DateOnly>(), false);
-
-        days.Select(d => d.Date.Day).ShouldBe([3, 2]);
-    }
-
     /// <summary>1,760 a month (10 an hour: September has 176 paid hours), worked 9 to 4 on the given days of September, as seen on <paramref name="today"/>.</summary>
     private static (SalaryCalculator.Result Pay, SalaryCalculator.Input Input) SeptemberPay(DateOnly today, bool ledgerApplies, params int[] worked)
     {
