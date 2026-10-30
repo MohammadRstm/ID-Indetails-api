@@ -27,7 +27,7 @@ don't need to open it first. The forms: a new or existing client, meeting, new p
 (the user's own work), bug report, invitation, message draft, a requirement, a reply on a work entry, report options,
 a team's name, the user's own profile, a file's title or a comment on it, the client portal's introduction, a message
 to the client in the portal, the website's projects, services, locations and social links, the company's details and
-expenses, materials on a site, an invoice draft, a client payment, a project expense, a week of site labour, a person's
+expenses, expenses on a site, an invoice draft, a client payment, a project expense, a week of site labour, a person's
 working week, and excused hours. Use only values the user gave or a tool returned, leave out anything you don't know,
 and say what you left out. You never save, submit or send: the user presses the button.
 

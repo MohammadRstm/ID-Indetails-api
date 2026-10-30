@@ -17,7 +17,8 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id]);
+        // agreed high enough that a week of labour keeps it above zero profit
+        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, staffIds: [employee.User.Id], projectFee: 50_000m);
         await SetDefaultsAsync(project.Id, admin.AccessToken, workers: 11, dailyPay: 45m);
 
         var list = await ListAsync(project.Id, employee.AccessToken);
@@ -111,7 +112,7 @@ public class LabourTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var created = await Client.PostJsonAsync("/api/projects", new
         {
-            title = "Site with a crew", domainCode = DomainCodes.Execution, clientId = client.Id, projectFee = 1000m, materialMarkup = 0.1m,
+            title = "Site with a crew", domainCode = DomainCodes.Execution, clientId = client.Id,
             labourDefaults = new { workers = 8, dailyPay = 42m }, staffIds = new[] { await Projects.SiteStaffAsync() },
         }, superAdmin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());

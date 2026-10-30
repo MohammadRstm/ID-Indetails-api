@@ -32,7 +32,12 @@ public static class ProjectBilling
         public bool IsOverdue(DateOnly today) => InvoiceRules.IsOverdue(Status, DueOn, today);
     }
 
-    public sealed record Payment(long ProjectId, long ClientId, long? InvoiceId, DateOnly ReceivedOn, decimal AmountUsd, PaymentMethod Method);
+    /// <param name="TvaUsd">The TVA inside <paramref name="AmountUsd"/>.</param>
+    public sealed record Payment(long ProjectId, long ClientId, long? InvoiceId, DateOnly ReceivedOn, decimal AmountUsd, PaymentMethod Method, decimal TvaUsd = 0)
+    {
+        /// <summary>What the payment brings in as revenue: TVA left out.</summary>
+        public decimal NetUsd => AmountUsd - TvaUsd;
+    }
 
     public sealed record Summary(
         decimal Revenue,

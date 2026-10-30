@@ -18,6 +18,9 @@ public class Payment
     /// <summary>Null for a payment held on account.</summary>
     public long? InvoiceId { get; set; }
 
+    /// <summary>The company account label it is filed under; null when none. An archived label stays on what carries it.</summary>
+    public long? AccountLabelId { get; set; }
+
     /// <summary>
     /// The payment taken when the project was created (Execution). At most one live
     /// initial payment per project.
@@ -39,6 +42,12 @@ public class Payment
     public decimal FxRate { get; set; } = 1m;
 
     public decimal AmountUsd { get; set; }
+
+    /// <summary>
+    /// The TVA inside <see cref="AmountUsd"/>, at the project's rate when it was recorded. Money reports count the
+    /// rest (net); billing counts the whole amount, since TVA is part of what the client owes.
+    /// </summary>
+    public decimal TvaUsd { get; set; }
 
     public DateOnly ReceivedOn { get; set; }
 
@@ -63,4 +72,6 @@ public class Payment
     public Client Client { get; set; } = null!;
 
     public Invoice? Invoice { get; set; }
+
+    public AccountLabel? AccountLabel { get; set; }
 }

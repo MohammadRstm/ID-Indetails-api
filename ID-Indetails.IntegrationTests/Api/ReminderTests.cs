@@ -30,7 +30,7 @@ public class ReminderTests(ApiFactory api) : IClassFixture<ApiFactory>
         var weekStart = LabourRules.WeekStartOf(DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
             TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut"))));
 
-        var added = await Client.PostJsonAsync($"/api/projects/{site.Id}/materials", new { items = new[] { new { name = "Cement", amount = 120m } } }, worker.AccessToken);
+        var added = await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses", new { items = new[] { new { name = "Cement", amount = 120m } } }, worker.AccessToken);
         added.IsSuccessStatusCode.ShouldBeTrue(await added.Content.ReadAsStringAsync());
 
         var due = await UnreportedAsync(worker.User.Id, weekStart);

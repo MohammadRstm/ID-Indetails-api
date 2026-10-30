@@ -6,6 +6,7 @@ using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.WorkEntries;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
@@ -16,6 +17,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -37,6 +39,7 @@ public sealed class WorkEntryService(
     IFileClaims fileClaims,
     IUnitOfWork unitOfWork,
     IOvertimeService overtime,
+    IProfitFloor floor,
     IClock clock) : IWorkEntryService
 {
     public async Task<WorkEntryResponse> CreateAsync(SaveWorkEntryRequest request, CancellationToken cancellationToken = default)
@@ -47,6 +50,7 @@ public sealed class WorkEntryService(
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
 
         var project = await LoggableProjectAsync(actor, request.ProjectId, settings, cancellationToken);
+        var before = await floor.BeforeAsync(project, cancellationToken);
         var entry = new WorkEntry
         {
             UserId = actor.UserId,
@@ -72,6 +76,7 @@ public sealed class WorkEntryService(
         AddMoveEvents(moved, actor.UserId);
         await notifier.NotifyAsync(entry, project.Title, currentUser.FullName, settings.NotifyEntry, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.WorkEntryCreate, new BlockedRequest<SaveWorkEntryRequest>(project.Id, request), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(entry.Id, actor, settings, cancellationToken);
@@ -95,6 +100,7 @@ public sealed class WorkEntryService(
         var project = entry.ProjectId == request.ProjectId
             ? entry.Project
             : await LoggableProjectAsync(actor, request.ProjectId, settings, cancellationToken);
+        var before = await floor.BeforeAsync(project, cancellationToken);
 
         entry.ProjectId = project.Id;
         entry.Description = request.Description?.Trim() ?? string.Empty;
@@ -116,6 +122,8 @@ public sealed class WorkEntryService(
         activity.Add(EntryEvent(entry, ActivityEventKinds.WorkEntryUpdated, actor.UserId));
         AddMoveEvents(moved, actor.UserId);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.WorkEntryUpdate,
+            new BlockedRequest<SaveWorkEntryRequest>(project.Id, request, ItemId: entry.Id), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(entry.Id, actor, settings, cancellationToken);

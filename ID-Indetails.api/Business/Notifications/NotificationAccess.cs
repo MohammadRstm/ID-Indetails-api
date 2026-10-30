@@ -20,7 +20,11 @@ public static class NotificationAccess
         [NotificationKinds.InvoiceOverdue] = PermissionCodes.FinancialView,
         [NotificationKinds.InvoiceDraftWaiting] = PermissionCodes.FinancialView,
         [NotificationKinds.PaymentRecorded] = PermissionCodes.FinancialView,
-        [NotificationKinds.StatementSent] = PermissionCodes.FinancialView,
+        [NotificationKinds.PocketRequested] = PermissionCodes.FinancialView,
+        [NotificationKinds.ChangeBlocked] = PermissionCodes.FinancialView,
+        [NotificationKinds.ProfitLow] = PermissionCodes.FinancialView,
+        [NotificationKinds.ProfitAtZero] = PermissionCodes.FinancialView,
+        [NotificationKinds.QuoteDue] = PermissionCodes.InvoiceSend,
     };
 
     /// <summary>The kinds <paramref name="reader"/> may no longer read.</summary>

@@ -181,7 +181,7 @@ public sealed class CompanyOverviewService(
             var cost = PeriodMoney.Costs(costs, month, month.AddMonths(1).AddDays(-1));
             var labour = PeriodMoney.Round(cost.Labour);
             var expenses = PeriodMoney.Round(cost.Expenses);
-            var materials = PeriodMoney.Round(cost.Materials);
+            var materials = PeriodMoney.Round(cost.SiteExpenses);
             var ground = PeriodMoney.Round(cost.GroundLabour);
             var monthRevenue = PeriodMoney.Received(received, month, month.AddMonths(1).AddDays(-1));
             var before = monthRevenue - labour - expenses - materials - ground;

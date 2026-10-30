@@ -83,6 +83,28 @@ public class ExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task An_execution_site_takes_no_project_expense_its_costs_are_site_expenses()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var design = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+
+        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/expenses", new { label = "Crane", amount = 90m, currency = "USD" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ExpenseExecutionUsesSiteExpenses);
+        (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM project_expenses WHERE project_id = @p", ("@p", site.Id))).ShouldBe(0);
+        (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'expense_added'", ("@p", site.Id))).ShouldBe(0);
+
+        // a Design project's expenses are as they were: the categories are still the project ones
+        var created = await Client.PostJsonAsync($"/api/projects/{design.Id}/expenses",
+            new { label = "Render farm", amount = 40m, currency = "USD", category = "software" }, superAdmin.AccessToken);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        (await created.ReadAsync<ExpenseResponse>()).Category.ShouldBe("software");
+        var list = await (await Client.GetAsync($"/api/projects/{design.Id}/expenses", superAdmin.AccessToken)).ReadAsync<ExpenseListResponse>();
+        list.Items.ShouldHaveSingleItem().Label.ShouldBe("Render farm");
+        list.Totals.ShouldHaveSingleItem().Total.ShouldBe(40m);
+    }
+
+    [Fact]
     public async Task Finished_projects_take_no_expense_changes_until_reopened()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

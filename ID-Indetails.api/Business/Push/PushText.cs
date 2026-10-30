@@ -24,6 +24,11 @@ public static class PushText
     private static readonly IReadOnlyDictionary<string, PushMessageText> MoneyTexts = new Dictionary<string, PushMessageText>
     {
         [NotificationKinds.PaymentRecorded] = new("Payment", "Payment recorded. Open ID InDetails to see it."),
+        [NotificationKinds.PocketRequested] = new("Pocket money", "A site asks for pocket money. Open ID InDetails to decide."),
+        [NotificationKinds.QuoteDue] = new("Quote", "A new project may need a quote. Open ID InDetails to decide."),
+        [NotificationKinds.ChangeBlocked] = new("Project money", "A change was stopped to keep a project above zero profit. Open ID InDetails to decide."),
+        [NotificationKinds.ProfitLow] = new("Project money", "A project is close to zero profit."),
+        [NotificationKinds.ProfitAtZero] = new("Project money", "A project is at zero profit or below."),
         [NotificationKinds.InvoiceOverdue] = new("Invoices", "An invoice needs your attention."),
         [NotificationKinds.InvoiceDraftWaiting] = new("Invoices", "An invoice needs your attention."),
         [NotificationKinds.InvoiceReminderDue] = new("Invoices", "An invoice needs your attention."),
@@ -31,7 +36,6 @@ public static class PushText
         [NotificationKinds.InvoiceSendFailed] = new("Invoices", "An invoice couldn't be sent automatically."),
         [NotificationKinds.InvoiceIssued] = new("Billing", "Billing update. Open ID InDetails to see it."),
         [NotificationKinds.InvoiceSentAutomatically] = new("Billing", "Billing update. Open ID InDetails to see it."),
-        [NotificationKinds.StatementSent] = new("Billing", "Billing update. Open ID InDetails to see it."),
         [NotificationKinds.ProjectClosed] = new("Project money", "A project's money needs a look."),
         [NotificationKinds.ProjectCostHigh] = new("Project money", "A project's money needs a look."),
         [NotificationKinds.ClientAdded] = new("Clients", "A new client was added."),
@@ -81,9 +85,9 @@ public static class PushText
 
             NotificationKinds.MeetingScheduled => new("Meeting set", $"{actor} set a meeting on {project}."),
 
-            NotificationKinds.MaterialsAdded => new("Materials added", Int(payload, "count") is > 1 and var materials
-                ? $"{actor} added {materials} materials on {project}."
-                : $"{actor} added a material on {project}."),
+            NotificationKinds.MaterialsAdded => new("Expenses added", Int(payload, "count") is > 1 and var expenses
+                ? $"{actor} added {expenses} expenses on {project}."
+                : $"{actor} added an expense on {project}."),
             NotificationKinds.LabourWeekSubmitted => new("Labour week", LabourWeek(payload, actor, project)),
 
             NotificationKinds.InvitationAccepted => new("New colleague", $"{actor} accepted the invitation and joined."),

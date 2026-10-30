@@ -8,12 +8,12 @@ namespace ID_Indetails.api.Business.Projects;
 /// How a project's billing and money fields fit together, and who may own it:
 /// <list type="bullet">
 /// <item><b>Design</b> projects are client work (with a client) or internal (no client, no revenue).
-/// They have no project fee or material markup.</item>
-/// <item><b>Execution</b> projects are always client work, with a project fee and a material markup.
-/// Their revenue is calculated from those (<see cref="ExecutionPricing"/>), never typed in.</item>
+/// They have no project fee.</item>
+/// <item><b>Execution</b> projects are always client work, with a work price (the project fee, set by agreeing a BOQ) and a
+/// supervision rate. Their revenue is calculated from those (<see cref="ExecutionPricing"/>), never typed in.</item>
 /// <item>A project's client belongs to its domain and is not archived when it is chosen.</item>
 /// <item>The owner is anyone in the project's domain who isn't deactivated, or a super admin.</item>
-/// <item>Once revenue is locked (the project was finalised), the billing, revenue, fee and markup
+/// <item>Once revenue is locked (the project was finalised), the billing, revenue, fee and rates
 /// can't change until the project is reopened.</item>
 /// </list>
 /// </summary>
@@ -33,8 +33,7 @@ public static class ProjectRules
         BillingType BillingType,
         long? ClientId,
         decimal? Revenue,
-        decimal? ProjectFee,
-        decimal? MaterialMarkup);
+        decimal? SupervisionRate);
 
     public sealed record Person(string Role, string? Domain, UserStatus Status);
 
@@ -50,13 +49,12 @@ public static class ProjectRules
             if (setup.Revenue is not null)
             {
                 return RuleDenial.Invalid(
-                    ErrorCodes.ValidationFailed, "revenue", "Execution revenue is calculated from the project fee and materials.");
+                    ErrorCodes.ValidationFailed, "revenue", "Execution revenue is calculated from the agreed BOQs.");
             }
         }
-        else if (setup.ProjectFee is not null || setup.MaterialMarkup is not null)
+        else if (setup.SupervisionRate is not null)
         {
-            return RuleDenial.Invalid(
-                ErrorCodes.ValidationFailed, "projectFee", "Only Execution projects have a project fee and a material markup.");
+            return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "supervisionRate", "Only Execution projects have a supervision rate.");
         }
 
         if (setup.BillingType == BillingType.Client)
@@ -89,12 +87,6 @@ public static class ProjectRules
     public static RuleDenial? CheckClient(bool isArchived)
         => isArchived
             ? RuleDenial.BusinessRule(ErrorCodes.ClientIsArchived, "This client is archived. Restore it before starting work for it.")
-            : null;
-
-    public static RuleDenial? CheckInitialPayment(string domain, bool hasInitialPayment)
-        => hasInitialPayment && domain != DomainCodes.Execution
-            ? RuleDenial.Invalid(
-                ErrorCodes.ValidationFailed, "initialPayment", "Only Execution projects take an initial payment when they are created.")
             : null;
 
     /// <summary>A project is owned by an admin of its business or a super admin, never an employee.</summary>

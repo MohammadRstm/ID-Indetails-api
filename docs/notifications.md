@@ -43,7 +43,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `work_digest` | The same, when `notifyEntry` is `digest`: one per person per day | — | `minutes`, `latestName`, `projectTitle` |
 | `entry_comment` | The work entry's author | the work entry | `authorName`, `text`, `entryDescription` |
 | `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
-| `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` |
+| `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` (someone recorded expenses on a site; the kind keeps its name, the text says "Expenses added") |
 | `labour_week_submitted` | Holders of `labour_report:manage` | the project | `weekStart`, `updated`, `projectTitle` |
 | `project_created` | The domain's people | the project | `projectTitle` |
 | `project_status_changed` | The domain's people, on hold, resume, complete and reopen (not archive) | the project | `projectTitle`, `change` (`hold`, `resume`, `complete`, `reopen`) |
@@ -62,7 +62,9 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `client_added` | Holders of `client:manage` in the client's domain | the client | `name`, `organisation` |
 | `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
-| `statement_sent` | Holders of `financial:view` | the statement | `number` |
+| `pocket_requested` | Holders of `financial:view` who see Execution | the pocket money request | none |
+| `change_blocked` | Holders of `financial:view` in the project's domain, the requester aside, when the profit floor refused a change (see [projects.md](projects.md), "Profit floor") | the blocked change | `projectTitle`, `kind` (never the amount) |
+| `quote_due` | Holders of `invoice:send` | the project | `projectTitle` |
 | `portal_client_message` | Staff taking part in a project's client portal discussion, when a client writes in its chat. Rolling per project (`portal_chat:{projectId}`) | — | `projectTitle`, `authorName` (never the text) |
 | `portal_client_comment` | The project's manager and the file's uploader (everyone taking part on the staff side when neither does), when a client comments on a file. Rolling per file (`portal_comments:{itemId}`) | the item | `projectTitle`, `authorName`, `itemTitle` |
 | `portal_mention` | Staff mentioned in a client portal message or comment, once each (`portal_mention:m{id}` / `c{id}`) | `message` or `comment` (subject id: the item, for comments) | `projectTitle`, `authorName`, `itemTitle` |
@@ -83,7 +85,9 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `requirement_overdue` | Once its deadline has passed, for deadlines up to 7 days ago (older ones are left alone, so turning this on doesn't flood anyone). Key `requirement-overdue-{id}-{deadline}` | Its assignees and holders of `requirement:manage` | the requirement | `projectTitle`, `text`, `deadline` |
 | `invoice_overdue` | An issued invoice still unpaid after its due date. Key `invoice-overdue-{id}` | Holders of `financial:view` in its domain | the invoice | `number`, `dueOn` |
 | `hours_short` | From the first of a month, when Design employees finished the month before flagged in the hours ledger. Key `hours-short-YYYY-MM` | Holders of `salary:view` | — | `month`, `count`, `people` (the 5 most short: `id`, `name`, `shortMinutes`) |
-| `project_cost_high` | An active Design client project's cost has passed 85% of its payment (its revenue). Not for Execution, whose payment includes its materials at client price. Once per project: key `project-cost-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` (the cost as a whole percentage of the payment) |
+| `profit_low` | An active client project held to the profit floor is at 10% of its agreed amount or less. Sent by the change that took it there, or by the hourly check when nobody's change did. Once per project: key `profit-low-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `marginPct` (whole percentage, never an amount) |
+| `profit_at_zero` | The same project is at zero profit or below: a forced change, or a change nobody made. Once per project: key `profit-zero-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `marginPct` |
+| `project_cost_high` | No longer sent (`profit_low` replaced it, 29 Oct 2026); the ones sent before still read. Was: a Design client project's cost past 85% of its payment | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` |
 | `invoice_draft_waiting` | A draft invoice still unissued 3 days after it was created. Key `invoice-draft-{id}` | Holders of `financial:view` in its domain | the invoice | `projectTitle`, `createdOn` |
 | `invoice_sent_automatically` | A scheduled invoice went out on its day ([billing.md](billing.md), "Auto invoice"). Each one, no key | Whoever scheduled it | the invoice | `number`, `to` (null when what was on account paid it, so it wasn't emailed) |
 | `invoice_send_due` | A scheduled invoice with no address to email reached its day, so it isn't issued. Key `invoice-send-due:{id}:{sendOn}` | Whoever scheduled it, to send it themselves | the invoice | `sendOn` |
@@ -117,7 +121,7 @@ Queued pushes live in memory: one queued when the API stops is lost, but the not
 |---|---|
 | Title and body | Short text written by the server (`Business/Push/PushText.cs`). Other kinds may name the project and who acted ("Rana assigned you a requirement on Villa Haddad"). Messages show the sender and the first 100 characters |
 | Money kinds | A fixed neutral text, never a client's name, an amount, a margin, a cost or pay, nor the project's title: "Payment recorded. Open ID InDetails to see it.", "An invoice needs your attention.", "An invoice couldn't be sent automatically.", "Billing update. Open ID InDetails to see it.", "A project's money needs a look.", "A new client was added.", "Pay and hours update." |
-| `data` | Ids only: `{ forUserId, kind, notificationId?, target }`. `kind` is a notification kind, `message`, `log_reminder` or `labour_week_reminder`. `target` is the screen to open (`Business/Push/PushTarget.cs`): a project (with `section`), a requirement, a work entry, a chat (`teamId` or the sender's `userId`), a labour week, a person, a client, an invoice, a payment, a statement, or a page (`notifications`, `work`, ...) |
+| `data` | Ids only: `{ forUserId, kind, notificationId?, target }`. `kind` is a notification kind, `message`, `log_reminder` or `labour_week_reminder`. `target` is the screen to open (`Business/Push/PushTarget.cs`): a project (with `section`), a requirement, a work entry, a chat (`teamId` or the sender's `userId`), a labour week, a person, a client, an invoice, a payment, or a page (`notifications`, `work`, ...) |
 | `badge` | Unread notifications (as the bell counts them) plus unread messages |
 | `channelId` | The Android channel: the category below, `reminders` for the log reminder, `quiet` during quiet hours |
 
@@ -132,7 +136,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
-| `money` | the `invoice_*` kinds, `payment_recorded`, `statement_sent`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
+| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `quote_due`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 
@@ -145,7 +149,7 @@ Push only: no notification row, so the website's bell is unchanged. The notifica
 | Kind | When | To |
 |---|---|---|
 | `log_reminder` | In the last hour of the person's working day (their own schedule or the company week), when what they logged within their hours is less than the day requires. Not on a day off or an excused day. While Design's `logReminder` is on | Design people who log hours (`work_entry:create`) |
-| `labour_week_reminder` | Saturday from 15:00 company time, one per site whose current week isn't reported | Execution people with `labour_report:create`, for each active site they added a material or submitted a week on in the last 4 weeks |
+| `labour_week_reminder` | Saturday from 15:00 company time, one per site whose current week isn't reported | Execution people with `labour_report:create`, for each active site they added an expense or submitted a week on in the last 4 weeks |
 
 The timing rules are in `Business/Push/ReminderRules.cs`.
 

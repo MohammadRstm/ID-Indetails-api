@@ -57,7 +57,7 @@ public class ProjectListTotalsTests(ApiFactory api) : IClassFixture<ApiFactory>
         ((int)export.StatusCode).ShouldBe(200, await export.Content.ReadAsStringAsync());
         export.Content.Headers.ContentType!.MediaType.ShouldBe("text/csv");
         var csv = await export.Content.ReadAsStringAsync();
-        csv.ShouldContain("Project,Client,Status,Billing,Revenue,Currency,Hours,Labour cost,Expenses,Materials,Ground labour,Total cost,Profit,Margin %");
+        csv.ShouldContain("Project,Client,Status,Billing,Revenue,Currency,Hours,Labour cost,Expenses,Site expenses,Ground labour,Total cost,Profit,Margin %");
         csv.ShouldContain("Studio tooling,Internal,active,Internal,0.00,USD,0.00,0.00,200.00,0.00,0.00,200.00,");
         csv.ShouldContain("Period,2026-01-01 to 2026-06-30");
         // the period's revenue is the money received in it, and says so

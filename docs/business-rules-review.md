@@ -10,8 +10,8 @@ This file records the business decisions taken at the same time, so they're appl
 |---|---|---|
 | 1 | **Working time is dated.** The company working week, the break, the overtime multiplier and personal schedules only apply from their effective date. A change never rewrites past months' overtime, hours or pay. | Schema (dated tables) |
 | 2 | **Excused time is paid** by default. Each excuse has an `is_paid` flag for unpaid leave. Leave types and a public-holiday calendar are deferred. | Schema; API / payroll calculation |
-| 3 | **A finalised Execution project is locked.** Nobody, admins included, can add, edit or delete its materials or labour until it is reopened. *(The prototype still lets admins edit after finalise; the backend won't.)* | API |
-| 4 | **A stated material's price is frozen.** Once a material appears on a statement, neither a markup change nor a manual edit changes its client price. *(The prototype reprices stated materials live; the backend won't.)* | API; statement lines keep the price shown |
+| 3 | **A finalised Execution project is locked.** Nobody, admins included, can add, edit or delete its site expenses or labour until it is reopened. *(The prototype still lets admins edit after finalise; the backend won't.)* | API |
+| 4 | ~~**A stated material's price is frozen.**~~ *Superseded (Oct 2026): client statements were removed and a site's price comes from BOQs ([execution.md](execution.md#boqs-and-variation-orders)). A site expense is a plain cost.* | gone |
 | 5 | **Execution has no internal projects.** Every site is for a client. | Schema (CHECK) |
 | 6 | **The initial payment is flagged** with `payments.is_initial`, not recognised from its note text. At most one live initial payment per project. | Schema (generated column + unique index) |
 | 7 | **Labour defaults are admin-only** (`labour_report:manage`), per the permission catalogue. *(The prototype lets employees change them; the backend won't.)* | API / permissions |
@@ -24,8 +24,8 @@ This file records the business decisions taken at the same time, so they're appl
 | 14 | **The hours ledger** applies to Design employees only, from the month they joined. Admins and Execution staff have none. | Payroll calculation |
 | 15 | **The Salaries page lists everyone with a pay record**, admins included. Super admins appear only if they have pay. | API |
 | 16 | **Company overhead:** amount changes are dated (past months keep their cost), totals are kept per currency, and "cancel" ends a line at the end of the current month. It can be resumed only before that date passes; after that, a new line is added. | API |
-| 17 | **A manual price equal to the automatic one is stored as automatic** (`client_price` NULL), so it keeps following the markup. *(Was open question 5.)* | API |
-| 18 | **No separate delivery date** for now: materials are dated by when they were added, labour by its day. *(Was open question 6.)* | Schema unchanged |
+| 17 | ~~**A manual price equal to the automatic one is stored as automatic** (`client_price` NULL), so it keeps following the markup.~~ *Superseded (Oct 2026): materials became cost-only site expenses; client prices and markups were removed ([execution.md](execution.md#site-expenses)).* | gone |
+| 18 | **No separate delivery date** for now: a site expense is dated by the day it was spent (`spent_on`, which defaults to the day it is recorded), labour by its day. *(Was open question 6.)* | Schema |
 | 19 | **Unpaid excuses** are deducted from salaried pay: unpaid minutes at the hourly rate, an unpaid day off as the full paid day, an unpaid whole month as the whole salary. | Payroll calculation |
 | 20 | **Hourly staff** are paid for what they log; excuses only clear their shortfall and never add pay. | Payroll calculation |
 | 21 | **Admins and super admins are paid a fixed monthly salary** and log no hours (6 Oct 2026): no overtime, no hours ledger; a salary is required when inviting them. Both come off the company's net profit (7 Oct 2026; until then only super admins' did), and any hours they logged cost their projects nothing. Both go by month (23 Oct 2026): a month with any day as an admin or super admin is a fixed salary, and earlier months keep their own role. Until then everything went by the role today, so a promotion wiped the past labour cost of someone's projects and changed their past pay. | Payroll calculation |
@@ -68,8 +68,8 @@ See [finance.md](finance.md).
 | M7 | **Money on the project list isn't sortable or filterable** on the server (the list is paged in the database); the Financials projects table has every project. |
 | M8 | **One billing rule** (`Business/Billing/ProjectBilling`) for the project page, the project and client lists, the client pages and Financials. Invoices are converted at the rate of their issue day everywhere, so the project page and the lists always agree. |
 | M9 | **Unconverted money is never dropped.** Costs with no rate are listed for the period they fall in (summary, each month, costs tab); list rows flag them (`hasUnconverted`); the company overview lists invoices and costs with no rate instead of counting them as 0. |
-| M10 | **Statement readers see the statement's money.** Holders of `statement:create` or `statement:send` see its received, agreed, remaining and paid-ahead figures without `financial:view`, because the statement is printed on the client's document. |
-| M11 | **The markup event keeps the exact markup** in its payload (`markup`, `prevMarkup`, as in the prototype), with no amount: the amount columns keep 2 decimals, so 12.5% was saved as 0.13. The feed shows that payload only with `financial:view`. Existing events were moved by the `MaterialMarkupEventPayload` migration: each project's latest one is exact, older ones keep their rounded value. |
+| M10 | ~~**Statement readers see the statement's money.**~~ *Superseded (Oct 2026) with the statements: client BOQs and VOs are read with `financial:view` or `project:pricing_manage`; holders of `boq:create` alone see only their own internal drafts.* |
+| M11 | **The markup event keeps the exact markup** in its payload (`markup`, `prevMarkup`, as in the prototype), with no amount: the amount columns keep 2 decimals, so 12.5% was saved as 0.13. The feed shows that payload only with `financial:view`. Existing events were moved by the `MaterialMarkupEventPayload` migration: each project's latest one is exact, older ones keep their rounded value. *Since Oct 2026 markups are gone and nothing writes this event; the supervision rate event (`supervision_rate_set`) keeps its rates in its payload the same way.* |
 
 ## Decided for the admin views (29 Sep 2026)
 
@@ -79,7 +79,7 @@ See [finance.md](finance.md).
 | A2 | **The project list keeps its newest-start default.** The prototype's default "recent activity" order is `sort=activity`; a project without work counts from when it was added (the prototype used its start date). A `year` alone filters projects open during that year (the prototype only filtered by quarter). |
 | A3 | **The client list keeps its A-to-Z default** and sorts each column one way (numbers highest first, activity newest first); the prototype also let a second click reverse it. "Last activity" is the latest work on the client's projects, or when the client was added (the prototype's column sorted by the date added). |
 | A4 | **Auto-archive needs 90 quiet days**: a completed project is archived only when its completion and its latest activity event are both 90 days old, so one still being billed stays out. *(The prototype only checked the completion date, and only when the setting was switched on.)* It runs hourly for each domain whose setting is on. |
-| A5 | **Money insights are notifications to `financial:view` holders only**, with percentages and never amounts: the cost warning (cost past 85% of the payment, once per project ever), the closing margin (when a client project is finalised) and the draft reminder (a draft still unissued 3 days after it was created; the prototype had no threshold). The prototype's monthly company-expenses notification is left out. |
+| A5 | **Money insights are notifications to `financial:view` holders only**, with percentages and never amounts: the profit warnings (profit down to 10% of the agreed amount, and at zero or below, once per project ever; they replaced the 85% cost warning on 29 Oct 2026, see [projects.md](projects.md), "Profit floor"), the closing margin (when a client project is finalised) and the draft reminder (a draft still unissued 3 days after it was created; the prototype had no threshold). The prototype's monthly company-expenses notification is left out. |
 
 ## Decided for notifications (29 Sep 2026)
 
@@ -109,16 +109,14 @@ See [messaging.md](messaging.md).
 ## Carried over from the prototype as-is
 
 - **Execution money:**
-  - The project fee plus material client prices is the agreed amount.
+  - The agreed amount is the work price from the agreed BOQs plus supervision (material client prices are gone).
   - Ground labour is never billed.
   - Invoicing is open from project creation.
   - Payments on account are normal.
   - Cash profit = received − spent.
-- **Statements:**
-  - Numbering is one sequence per year, `ST-YYYY-NNN`, across the company.
-  - A statement is not an invoice and changes nothing that is owed.
+- **Client BOQs and variation orders** (they replaced the statements in Oct 2026): numbered `BQ-YYYY-NNN` and `VO-YYYY-NNN`, one sequence per prefix and year. They set the work price; they are not invoices and owe nothing by themselves.
 - **Labour weeks** run Monday to Saturday.
-- **Materials** are grouped by their type name (trimmed, lower-case); the category field was removed.
+- **Site expenses** are grouped by their item name (trimmed, lower-case), and also carry a category (materials, contractor, equipment, fees, other) added with the cost-only rework in Oct 2026.
 - **The break** is paid, reduces only the required hours, and applies on days longer than 6 hours. The 6-hour threshold is a code constant, not a setting.
 - **Overtime** is:
   - time outside the person's hours;
@@ -134,10 +132,10 @@ Answers to the questions raised after the helper sessions' work was merged.
 
 | # | Rule |
 |---|---|
-| O3 | **PDFs are made on the server**, so invoices and statements can be emailed with them. The library is PDFsharp with MigraDoc (MIT licence, free for everyone). The layout starts plain and is refined later. The documents have no Arabic ([documents.md](documents.md)). |
+| O3 | **PDFs are made on the server**, so invoices, quotes and BOQs can be emailed with them. The library is PDFsharp with MigraDoc (MIT licence, free for everyone). The layout starts plain and is refined later. The documents have no Arabic ([documents.md](documents.md)). |
 | O4, O5 | **Employment is dated periods** (decision 24): leaving takes a last working day, and time away between two periods isn't paid unless it began that month and the admin says so. |
 | O6 | **The month just ended stays open through the 1st** (D11). |
-| O7 | **The cost warning is Design only** (A1). A material's cost is always what was paid for it; the client price is typed or worked out from the markup, never used as the cost. |
+| O7 | **The cost warning is Design only** (A1). A site expense's cost is always what was paid for it. An Execution site's profit is watched by the profit floor instead. |
 | O8 | **Auto-archive doesn't wait for payment**, but an archived project still owed money stays in the "finished but still owed" follow-up. |
 | O9 | **Overtime of work past midnight counts on the day it started**, as pay does. |
 | O10 | **Revenue always lands in a month**: with no priced cost it follows the hours logged, then the completion month. |

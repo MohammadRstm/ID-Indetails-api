@@ -96,7 +96,6 @@ public class PushRulesTests
         PushTarget.ForNotification(NotificationKinds.ClientAdded, null, null, "client", 3, null).ShouldBe(new PushTarget { Type = PushTarget.Client, Id = 3 });
         PushTarget.ForNotification(NotificationKinds.InvoiceOverdue, 7, DomainCodes.Design, "invoice", 8, null).ShouldBe(new PushTarget { Type = PushTarget.Invoice, Id = 8 });
         PushTarget.ForNotification(NotificationKinds.PaymentRecorded, 7, DomainCodes.Design, "payment", 4, null).ShouldBe(new PushTarget { Type = PushTarget.Payment, Id = 4 });
-        PushTarget.ForNotification(NotificationKinds.StatementSent, 9, DomainCodes.Execution, "statement", 2, null).ShouldBe(new PushTarget { Type = PushTarget.Statement, Id = 2 });
         PushTarget.ForNotification(NotificationKinds.WorkDigest, 7, DomainCodes.Design, null, null, null).ShouldBe(PushTarget.OfPage("work"));
     }
 

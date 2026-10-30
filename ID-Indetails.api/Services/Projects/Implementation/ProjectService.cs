@@ -50,7 +50,6 @@ public sealed class ProjectService(
     IExpenseRepository expenses,
     IWorkEntryRepository entries,
     ICompanyRepository company,
-    IPaymentService paymentService,
     IMoneyRollupService moneyRollups,
     IReportRepository reports,
     IActivityEventRepository activity,
@@ -59,6 +58,7 @@ public sealed class ProjectService(
     IPortalPublishingService portalPublishing,
     ISiteTeamRepository siteTeams,
     IUnitOfWork unitOfWork,
+    IProfitFloor floor,
     IClock clock) : IProjectService
 {
     private const string NotFoundMessage = "Project not found.";
@@ -174,21 +174,15 @@ public sealed class ProjectService(
         }
 
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
-            domain, request.BillingType, request.ClientId, request.Revenue, request.ProjectFee, request.MaterialMarkup)));
-        Throw(ProjectRules.CheckInitialPayment(domain, request.InitialPayment is not null));
-        if (request.Revenue is not null && !actor.Has(PermissionCodes.FinancialView))
+            domain, request.BillingType, request.ClientId, request.Revenue, request.SupervisionRate)));
+        if ((request.Revenue is not null || request.TvaRate is not null) && !actor.Has(PermissionCodes.FinancialView))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment needs the permission to see project money.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment or its TVA needs the permission to see project money.");
         }
 
-        if ((request.ProjectFee is not null || request.MaterialMarkup is not null) && !actor.Has(PermissionCodes.ProjectPricingManage))
+        if (request.SupervisionRate is not null && !actor.Has(PermissionCodes.ProjectPricingManage))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting a site's fee and material markup needs the permission to manage pricing.");
-        }
-
-        if (request.InitialPayment is not null && !actor.Has(PermissionCodes.PaymentRecord))
-        {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "Recording the initial payment needs the permission to record payments.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting a site's supervision needs the permission to manage pricing.");
         }
 
         if (request.LabourDefaults is not null)
@@ -234,11 +228,11 @@ public sealed class ProjectService(
             StartDate = clock.CompanyToday,
             TargetDate = request.TargetDate,
             Revenue = request.Revenue ?? 0,
-            // A site created without its pricing starts at no fee and no markup until someone with pricing sets them.
-            ProjectFee = domain == DomainCodes.Execution ? request.ProjectFee ?? 0 : null,
-            MaterialMarkup = domain == DomainCodes.Execution ? request.MaterialMarkup ?? 0 : null,
-            // a new site's client payments go into the Execution box
-            BoxState = domain == DomainCodes.Execution ? BoxState.In : null,
+            // A site starts with no work price: agreeing a BOQ sets it.
+            ProjectFee = domain == DomainCodes.Execution ? 0 : null,
+            SupervisionRate = domain == DomainCodes.Execution ? request.SupervisionRate ?? ExecutionPricing.DefaultSupervisionRate : null,
+            // TVA is on what a client pays: internal work has none
+            TvaRate = request.BillingType == BillingType.Client ? request.TvaRate ?? Tva.DefaultRate : 0,
             CreatedAt = now,
             CreatedById = actor.UserId,
         };
@@ -252,7 +246,7 @@ public sealed class ProjectService(
         {
             project.PaymentChanges.Add(PaymentChange(
                 domain == DomainCodes.Execution ? project.ProjectFee ?? 0 : project.Revenue, null,
-                project.MaterialMarkup, null, ProjectRules.AgreedAtStart, actor.UserId));
+                project.TvaRate, null, ProjectRules.AgreedAtStart, actor.UserId, project.SupervisionRate));
         }
 
         if (request.LabourDefaults is { } labour)
@@ -274,14 +268,14 @@ public sealed class ProjectService(
 
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectCreated, actor.UserId));
         await notifier.CreatedAsync(project, actor.UserId, cancellationToken);
+        if (project.BillingType == BillingType.Client && domain != DomainCodes.Execution && !actor.Has(PermissionCodes.InvoiceSend))
+        {
+            // whoever sends quotes decides whether this one gets one (Execution has none); the creator can't
+            await notifier.QuoteDueAsync(project, actor.UserId, cancellationToken);
+        }
         if (project.Revenue > 0)
         {
             activity.Add(ProjectEvent(project, ActivityEventKinds.RevenueSet, actor.UserId, amount: project.Revenue));
-        }
-
-        if (project.ProjectFee is > 0)
-        {
-            activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectFeeSet, actor.UserId, amount: project.ProjectFee));
         }
 
         if (request.LabourDefaults is { } defaults)
@@ -291,21 +285,6 @@ public sealed class ProjectService(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        if (request.InitialPayment is { } initial)
-        {
-            await paymentService.RecordForProjectAsync(project, new RecordPaymentRequest
-            {
-                Amount = initial.Amount,
-                Currency = initial.Currency,
-                FxRate = initial.FxRate,
-                ReceivedOn = initial.ReceivedOn,
-                Method = initial.Method,
-                Reference = initial.Reference,
-                Note = initial.Note,
-                IsInitial = true,
-            }, actor.UserId, cancellationToken);
-        }
-
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, project.Id, cancellationToken);
@@ -354,14 +333,14 @@ public sealed class ProjectService(
         if (project.DomainCode == DomainCodes.Execution)
         {
             throw new BusinessRuleException(
-                ErrorCodes.NotForThisDomain, "Execution projects are always client work; change their fee and markup instead.");
+                ErrorCodes.NotForThisDomain, "Execution projects are always client work; change their pricing instead.");
         }
 
         Throw(ProjectRules.CheckMoneyEditable(project.RevenueLockedAt is not null));
         // internal work has no payment; client work keeps the one it has, which is changed on its own
         var revenue = request.BillingType == BillingType.Internal ? 0 : project.Revenue;
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
-            project.DomainCode, request.BillingType, request.ClientId, revenue, null, null)));
+            project.DomainCode, request.BillingType, request.ClientId, revenue, null)));
         Throw(ProjectRules.CheckClientChange(
             project.ClientId, request.ClientId, await projects.HasBillingRecordsAsync(project.Id, cancellationToken)));
 
@@ -383,12 +362,16 @@ public sealed class ProjectService(
         if (revenue != project.Revenue)
         {
             activity.Add(ProjectEvent(project, ActivityEventKinds.RevenueChanged, actor.UserId, amount: revenue, prevAmount: project.Revenue));
-            project.PaymentChanges.Add(PaymentChange(revenue, project.Revenue, null, null, ProjectRules.MadeInternal, actor.UserId));
+            project.PaymentChanges.Add(PaymentChange(revenue, project.Revenue, 0, project.TvaRate, ProjectRules.MadeInternal, actor.UserId));
         }
 
         project.BillingType = request.BillingType;
         project.ClientId = request.ClientId;
         project.Revenue = revenue;
+        if (request.BillingType == BillingType.Internal)
+        {
+            project.TvaRate = 0;
+        }
         project.UpdatedAt = clock.UtcNow;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -408,33 +391,30 @@ public sealed class ProjectService(
 
         if (project.DomainCode != DomainCodes.Execution)
         {
-            throw new BusinessRuleException(ErrorCodes.NotForThisDomain, "Only Execution projects have a project fee and a material markup.");
+            throw new BusinessRuleException(ErrorCodes.NotForThisDomain, "Only Execution projects have a supervision rate.");
         }
 
         Throw(ProjectRules.CheckMoneyEditable(project.RevenueLockedAt is not null));
-        Throw(ProjectRules.CheckPaymentChanges(
-            request.ProjectFee != project.ProjectFee || request.MaterialMarkup != project.MaterialMarkup, "projectFee"));
-        project.PaymentChanges.Add(PaymentChange(request.ProjectFee, project.ProjectFee ?? 0, request.MaterialMarkup, project.MaterialMarkup,
-            request.Description.Trim(), actor.UserId));
+        var tva = request.TvaRate ?? project.TvaRate;
+        var supervision = request.SupervisionRate ?? project.SupervisionRate;
+        Throw(ProjectRules.CheckPaymentChanges(supervision != project.SupervisionRate || tva != project.TvaRate, "supervisionRate"));
+        var before = await floor.BeforeAsync(project, cancellationToken);
+        project.PaymentChanges.Add(PaymentChange(project.ProjectFee ?? 0, project.ProjectFee ?? 0,
+            tva, project.TvaRate, request.Description.Trim(), actor.UserId, supervision, project.SupervisionRate));
 
-        if (request.ProjectFee != project.ProjectFee)
+        // A fraction (0.125 is 12.5%) goes in the payload: the amount columns keep 2 decimals.
+        if (supervision != project.SupervisionRate)
         {
-            activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectFeeSet, actor.UserId,
-                amount: request.ProjectFee, prevAmount: project.ProjectFee));
+            activity.Add(ProjectEvent(project, ActivityEventKinds.SupervisionRateSet, actor.UserId,
+                new { rate = supervision, prevRate = project.SupervisionRate }));
         }
 
-        if (request.MaterialMarkup != project.MaterialMarkup)
-        {
-            // A fraction (0.125 is 12.5%), so it goes in the payload: the amount columns keep 2 decimals.
-            activity.Add(ProjectEvent(project, ActivityEventKinds.MaterialMarkupSet, actor.UserId,
-                new { markup = request.MaterialMarkup, prevMarkup = project.MaterialMarkup }));
-        }
-
-        project.ProjectFee = request.ProjectFee;
-        project.MaterialMarkup = request.MaterialMarkup;
+        project.SupervisionRate = supervision;
+        project.TvaRate = tva;
         project.UpdatedAt = clock.UtcNow;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.Pricing, new BlockedRequest<UpdateProjectPricingRequest>(project.Id, request), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, project.Id, cancellationToken);
@@ -452,20 +432,28 @@ public sealed class ProjectService(
         if (project.DomainCode == DomainCodes.Execution)
         {
             throw new BusinessRuleException(
-                ErrorCodes.NotForThisDomain, "An Execution project's payment is its fee and material markup; change those instead.");
+                ErrorCodes.NotForThisDomain, "An Execution project's payment is its BOQ price, supervision and TVA; change those instead.");
         }
 
         Throw(ProjectRules.CheckMoneyEditable(project.RevenueLockedAt is not null));
         Throw(ProjectRules.CheckHasPayment(project.BillingType));
-        Throw(ProjectRules.CheckPaymentChanges(request.Revenue != project.Revenue, "revenue"));
+        var tva = request.TvaRate ?? project.TvaRate;
+        Throw(ProjectRules.CheckPaymentChanges(request.Revenue != project.Revenue || tva != project.TvaRate, "revenue"));
+        var before = await floor.BeforeAsync(project, cancellationToken);
 
-        var kind = project.Revenue > 0 ? ActivityEventKinds.RevenueChanged : ActivityEventKinds.RevenueSet;
-        activity.Add(ProjectEvent(project, kind, actor.UserId, amount: request.Revenue, prevAmount: project.Revenue));
-        project.PaymentChanges.Add(PaymentChange(request.Revenue, project.Revenue, null, null, request.Description.Trim(), actor.UserId));
+        if (request.Revenue != project.Revenue)
+        {
+            var kind = project.Revenue > 0 ? ActivityEventKinds.RevenueChanged : ActivityEventKinds.RevenueSet;
+            activity.Add(ProjectEvent(project, kind, actor.UserId, amount: request.Revenue, prevAmount: project.Revenue));
+        }
+
+        project.PaymentChanges.Add(PaymentChange(request.Revenue, project.Revenue, tva, project.TvaRate, request.Description.Trim(), actor.UserId));
         project.Revenue = request.Revenue;
+        project.TvaRate = tva;
         project.UpdatedAt = clock.UtcNow;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await floor.CheckAsync(before, BlockedChangeKind.Payment, new BlockedRequest<UpdateProjectPaymentRequest>(project.Id, request), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, project.Id, cancellationToken);
@@ -524,17 +512,21 @@ public sealed class ProjectService(
             .Select(r => new ProjectPaymentChangeResponse(
                 r.Change.Id, r.Change.Amount, r.Change.PreviousAmount, r.Change.MaterialMarkup, r.Change.PreviousMaterialMarkup,
                 r.Change.Description, r.Change.ChangedAt,
-                r.Change.ChangedById is { } id && r.ChangedByName is { } name ? new ProjectOwnerResponse(id, name) : null))
+                r.Change.ChangedById is { } id && r.ChangedByName is { } name ? new ProjectOwnerResponse(id, name) : null,
+                r.Change.TvaRate, r.Change.PreviousTvaRate, r.Change.SupervisionRate, r.Change.PreviousSupervisionRate))
             .ToList();
     }
 
     private ProjectPaymentChange PaymentChange(
-        decimal amount, decimal? previousAmount, decimal? markup, decimal? previousMarkup, string description, long actorId) => new()
+        decimal amount, decimal? previousAmount, decimal tva, decimal? previousTva, string description, long actorId,
+        decimal? supervision = null, decimal? previousSupervision = null) => new()
     {
         Amount = amount,
         PreviousAmount = previousAmount,
-        MaterialMarkup = markup,
-        PreviousMaterialMarkup = previousMarkup,
+        TvaRate = tva,
+        PreviousTvaRate = previousTva,
+        SupervisionRate = supervision,
+        PreviousSupervisionRate = previousSupervision,
         Description = description,
         ChangedAt = clock.UtcNow,
         ChangedById = actorId,
@@ -627,15 +619,18 @@ public sealed class ProjectService(
             Currency = p.RevenueCurrency,
             Revenue = summary.Revenue,
             IsLocked = p.RevenueLockedAt is not null,
+            TvaRate = p.TvaRate,
+            SupervisionRate = p.SupervisionRate,
+            SupervisionUsd = money.Supervision,
+            PaymentWithTva = p.DomainCode == DomainCodes.Execution
+                ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
+                : Tva.Gross(p.Revenue, p.TvaRate),
+            RevenueWithTva = money.RevenueWithTva,
             ProjectFee = p.ProjectFee,
-            MaterialMarkup = p.MaterialMarkup,
-            MaterialCharge = money.MaterialCharge,
-            UnsentMaterialCharge = money.UnsentMaterialCharge,
-            UnsentMaterials = money.UnsentMaterials,
             ExpenseTotals = expenseTotals,
             Billing = rollup.ProjectBillingOf(p),
             Cost = new ProjectCostResponse(
-                costs.Labour, costs.Expenses, costs.Materials, costs.GroundLabour, costs.Total,
+                costs.Labour, costs.Expenses, costs.SiteExpenses, costs.GroundLabour, costs.Total,
                 costs.Unconverted.Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount)).ToList(),
                 money.UnpricedLabourMinutes),
             Profit = summary.Profit,
@@ -647,10 +642,8 @@ public sealed class ProjectService(
             LabourHours = Math.Round(money.LabourMinutes / 60m, 2),
             CostPerHour = summary.CostPerHour,
             CashProfit = money.CashProfit,
-            FromBox = money.FromBox,
-            BoxState = p.BoxState,
-            MaterialProfit = money.MaterialProfit,
-            UnconvertedMaterials = money.UnconvertedMaterials,
+            ToPocket = p.DomainCode == DomainCodes.Execution ? money.ToPocket : null,
+            FromPocket = p.DomainCode == DomainCodes.Execution ? money.FromPocket : null,
         };
     }
 

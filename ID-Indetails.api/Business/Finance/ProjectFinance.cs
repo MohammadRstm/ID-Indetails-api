@@ -9,7 +9,7 @@ namespace ID_Indetails.api.Business.Finance;
 /// A project's cost, profit and margin, in USD. Every cost is converted at the company exchange rate
 /// in force on the day it happened; a cost with no rate that day is left out and reported as unconverted.
 /// <list type="bullet">
-/// <item>Cost = employee labour (hours × the hourly cost in force that day, plus everyone's paid breaks) + expenses + materials + ground labour.</item>
+/// <item>Cost = employee labour (hours × the hourly cost in force that day, plus everyone's paid breaks) + expenses + site expenses + ground labour.</item>
 /// <item>Profit = revenue − cost. Internal projects have no revenue.</item>
 /// <item>Margin = profit ÷ revenue, only once it means something: the project is done, at least 5% along,
 /// or has at least 10 hours logged.</item>
@@ -30,11 +30,11 @@ public static class ProjectFinance
     public sealed record Costs(
         decimal Labour,
         decimal Expenses,
-        decimal Materials,
+        decimal SiteExpenses,
         decimal GroundLabour,
         IReadOnlyList<UnconvertedCost> Unconverted)
     {
-        public decimal Total => Labour + Expenses + Materials + GroundLabour;
+        public decimal Total => Labour + Expenses + SiteExpenses + GroundLabour;
     }
 
     public sealed record WorkedTime(long UserId, DateOnly Day, int Minutes);
@@ -44,7 +44,8 @@ public static class ProjectFinance
     /// <summary>A row of someone's pay history.</summary>
     public sealed record PayRecord(long UserId, DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency);
 
-    public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes);
+    /// <param name="PocketNet">Execution: what pocket money paid to the project less what was moved from it into the pocket.</param>
+    public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes, decimal PocketNet = 0);
 
     public sealed record Projection(decimal Cost, decimal Profit, decimal? Margin);
 
@@ -201,7 +202,7 @@ public static class ProjectFinance
         return new Costs(
             Round(usd.GetValueOrDefault(CostSource.Labour)),
             Round(usd.GetValueOrDefault(CostSource.Expenses)),
-            Round(usd.GetValueOrDefault(CostSource.Materials)),
+            Round(usd.GetValueOrDefault(CostSource.SiteExpense)),
             Round(usd.GetValueOrDefault(CostSource.GroundLabour)),
             unconverted.Select(u => new UnconvertedCost(u.Key.Item1, u.Key.Item2, Round(u.Value))).ToList());
     }
@@ -249,38 +250,11 @@ public static class ProjectFinance
         return weeks;
     }
 
-    /// <summary>
-    /// What an Execution client is charged for materials, in USD: each client price converted at the rate
-    /// on the day the material was added. Materials with no rate that day are left out and counted.
-    /// </summary>
-    public static (decimal ChargeUsd, int Unconverted) MaterialCharge(
-        IEnumerable<(ExecutionPricing.Material Material, string Currency, DateOnly Day)> materials,
-        decimal markup,
-        ExchangeRateTable rates)
-    {
-        var charge = 0m;
-        var unconverted = 0;
-
-        foreach (var (material, currency, day) in materials)
-        {
-            if (rates.ToUsd(ExecutionPricing.ClientPrice(material, markup), currency, day) is { } usd)
-            {
-                charge += usd;
-            }
-            else
-            {
-                unconverted++;
-            }
-        }
-
-        return (Round(charge), unconverted);
-    }
-
     public static Summary Summarise(Facts facts, Costs costs)
     {
         var revenue = facts.IsClientWork ? facts.Revenue : 0;
         var cost = costs.Total;
-        var profit = revenue - cost;
+        var profit = revenue - cost + facts.PocketNet;
         var hours = facts.LabourMinutes / 60m;
         var marginKnown = facts.IsDone || facts.ProgressPct >= MinProgressForMargin || hours >= MinHoursForMargin;
 
@@ -288,7 +262,8 @@ public static class ProjectFinance
         if (!facts.IsDone && facts.IsClientWork && facts.ProgressPct >= MinProgressForMargin)
         {
             var projectedCost = Round(cost / (facts.ProgressPct / 100m));
-            projected = new Projection(projectedCost, revenue - projectedCost, MarginOf(revenue - projectedCost, revenue));
+            var projectedProfit = revenue - projectedCost + facts.PocketNet;
+            projected = new Projection(projectedCost, projectedProfit, MarginOf(projectedProfit, revenue));
         }
 
         var progress = facts.IsDone ? 1m : Math.Clamp(facts.ProgressPct, 0, 100) / 100m;

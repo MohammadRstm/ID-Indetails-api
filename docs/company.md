@@ -6,7 +6,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices and statements), time zone, week start, time format, default currency |
+| `GET /api/company/settings` | Signed in | Name, address and website (for the letterhead of invoices, quotes and BOQs), time zone, week start, time format, default currency |
 | `PUT /api/company/settings` | `company_settings:manage` | Saves them; the first save creates the settings row. Address (up to 300 characters) and website (a web address such as `indetails.com`) are optional; leaving one out clears it |
 | `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, from the caller's upload, whether or not the rest of the settings were saved ([files.md](files.md)) |
 | `PUT /api/company/contact-email` | `company_settings:manage` or `website:manage` | `{ email }`: the company's own address, which the website shows and its contact form sends to ([website.md](website.md)). Empty clears it; it comes back as `contactEmail` on the settings |
@@ -25,6 +25,11 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `POST /api/company/overhead/{id}/amounts` | `overhead:manage` | A new monthly amount from a month |
 | `POST /api/company/overhead/{id}/currency` | `overhead:manage` | `{ currency, amount, fromMonth }`: charges it in another currency from a month (this month when empty). Returns the line charged from then |
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
+| `GET /api/account-labels?includeArchived=` | Signed in (`company_settings:manage` for `includeArchived=true`) | The account labels, first to last: `[{ id, name, position, archived }]` |
+| `POST /api/account-labels` | `company_settings:manage` | `{ name }`: a new label, last in the list |
+| `PUT /api/account-labels/{id}` | `company_settings:manage` | `{ name }`: renames it |
+| `POST /api/account-labels/{id}/archive`, `/restore` | `company_settings:manage` | Stops it being picked, or brings it back last. Repeating either changes nothing |
+| `PUT /api/account-labels/order` | `company_settings:manage` | `{ ids }`: the new order of the labels that can be picked, every one once (`422 account_label_order_stale` otherwise); answers every label, archived ones included |
 | `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
 | `GET /api/company/overview/monthly?months=13` or `?year=2026` | `company:view` | Revenue, costs, overhead and admins' and super admins' salaries per month: the profit before company expenses, after overhead, and the net profit after both, as the overview's (whole months; the last 1–36 months, or a year's months from January, up to this month in the current year; a future year, or one before 2000, is `400`) |
 | `GET /api/company/salaries?month=YYYY-MM&domain=&role=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary; `role` (super_admin, admin, employee) narrows it to one role |
@@ -40,6 +45,14 @@ Settings, working time, personal schedules and company overhead. These belong to
 - Until a super admin first saves them, `isSetUp` is false and the other values are defaults. A logo can be set before that; it creates the settings with no name, so they still read as not set up.
 - The time zone comes from configuration (`Company:TimeZone`, default `Asia/Beirut`) and is shown, not edited: every calendar date in the system depends on it.
 - The settings are cached and dropped when saved.
+
+## Account labels
+
+One company-wide list of labels (`account_labels`: Concrete, Finishing and Permits are seeded) that payments and expenses are filed under. Super admins edit it in Settings; everyone signed in can read it. `Business/Company/AccountLabelRules.cs`:
+
+- A name is trimmed, required and at most 40 characters. Names are unique whatever their case, archived labels included (`409 account_label_taken`).
+- Archiving stops a label being picked but never removes it: what already carries it keeps it. Restoring puts it last. Nothing is deleted.
+- Every change is an `account_label_changed` event (company level, `change` and `name` in the payload), so only `company:view` sees it in the feed.
 
 ## Working time
 
@@ -122,7 +135,7 @@ Always calculated, from the shared finance calculator (`Business/Finance/`), in 
 - **Invoices** are converted at the rate of their issue day. Those with no rate are left out of invoiced and outstanding and listed per currency in `unconvertedInvoices[]`, per domain and for the company.
 - **Per domain:** revenue, cost, profit and margin; projects with work or costs in the period and active projects; active employees and who logged work; clients served and all clients; invoiced (issued in the period), collected (received in the period) and outstanding today.
 - **Company:** both domains' profit less **company overhead**, charged by the calendar days of each month the period covers and converted at the rate on the first of the month, and less the **admins' and super admins' salaries** (`adminSalaries`). They are paid a fixed salary and log no hours, so no project carries their pay (hours they logged before that cost nothing): the pay of each month they were paid a fixed salary (any month they held that role on a day, see above), as Salaries works it out, counts for the share of the month's calendar days the period covers, converted at the rate on the first of the month. Someone promoted on Monday 16 February 2026 has all of February as a fixed salary: the whole February salary is a company cost, and none of their February hours cost projects anything. Their months before February stay employee months. Employees' labour is already in the domains' costs, through their hours. Overhead or salaries with no rate for their month are listed as unconverted instead of being added in.
-- **Monthly:** each month's revenue (money received), labour, expenses, materials, ground labour and overhead, with the profit before and after company expenses. This feeds the chart on the company expenses page, a year at a time.
+- **Monthly:** each month's revenue (money received), labour, expenses, site expenses (`materials` in the JSON), ground labour and overhead, with the profit before and after company expenses. This feeds the chart on the company expenses page, a year at a time.
 
 ## Project pay
 

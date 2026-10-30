@@ -313,7 +313,7 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 | `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses, and in the Website area its projects, analytics, services, locations, contact, site and staff | Each page needs its endpoint's permission, e.g. financials needs `financial:view`, the Website pages `website:view` or `website:manage` (analytics `website_analytics:view`), and the Website area must be one the user sees. |
 | `offer_choices` | Shows 2–6 matches as buttons when a name is ambiguous, or 2–6 fixed answers to Proton's question (`replies`: a period, `design` / `execution`, `yes` / `no`) | Only records a tool returned in the conversation, and only businesses the user can see; labels come from the records or the app, not from the model. No yes/no while a card is pending |
 | `suggest_replies` | Offers up to 3 short next things the user might say (60 characters each, one line) | None while a card is pending; a tap sends only its place in the list |
-| `open_surface` | Opens a form, dialog or tab on its own page (Stage 5, Phase 4); a project file to look at (`view_project_file`, `item_id`); new project, new client, invite, a project's or client's details, the project report, a project's payment, expense or site pricing, a new invoice, record payment, a new statement, a new meeting, a company expense, a chat with someone, log work, report a bug, a settings section, a company overview tab; the new and edit website project forms and the Website's invite form; a file's comments (`item_id`), the discussion with the client (optionally one file's thread, `item_id`) and the client's view of the portal draft | The endpoint it saves through (`Proton/Ui/ProtonSurfaces.cs`); a record it is for must be visible. A file's comments read through the comments endpoint, so a file of another project is `not_found`; the discussion opens only for those taking part in it; the preview only on a Design client project. Opening fills and saves nothing. The invites and the bug report email someone, so they open only on a typed turn. One-click confirm dialogs (complete, void, delete, deactivate, top-up) aren't on the list |
+| `open_surface` | Opens a form, dialog or tab on its own page (Stage 5, Phase 4); a project file to look at (`view_project_file`, `item_id`); new project, new client, invite, a project's or client's details, the project report, a project's payment, expense or site pricing, a new invoice, record payment, a new meeting, a company expense, a chat with someone, log work, report a bug, a settings section, a company overview tab; the new and edit website project forms and the Website's invite form; a file's comments (`item_id`), the discussion with the client (optionally one file's thread, `item_id`) and the client's view of the portal draft | The endpoint it saves through (`Proton/Ui/ProtonSurfaces.cs`); a record it is for must be visible. A file's comments read through the comments endpoint, so a file of another project is `not_found`; the discussion opens only for those taking part in it; the preview only on a Design client project. Opening fills and saves nothing. The invites and the bug report email someone, so they open only on a typed turn. One-click confirm dialogs (complete, void, delete, deactivate, top-up) aren't on the list |
 | `set_preference` | Light or dark theme; message sounds on or off | Sounds only on a typed turn |
 | `refresh_page` | Reloads the current page's data | — |
 
@@ -361,7 +361,7 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 - It opens only when the user asked, never because a record's text says so.
 
 **Surfaces on the client** (`surfaces.ts`): each surface maps to its page's own link (`?new=1`, `?invite=1`,
-`?details=1`, `?report=1`, `?money=`, `?invoice=new`, `?pay=1`, `?statement=new`, `?add=1`, `?with=`,
+`?details=1`, `?report=1`, `?money=`, `?invoice=new`, `?pay=1`, `?add=1`, `?with=`,
 `?section=`, `?tab=`), or to an opener a showing page registered (the bug report), or to the log work window, with the
 same permission checks the page makes before it shows the window. `?details=1` (edit project, edit client) and the
 meetings page's `?new=1` are new links (`useUrlFlag`, one list of keys so two windows never share one).
@@ -410,7 +410,7 @@ Proton can fill a form for the person to check and save, and draft a message for
 submits or sends anything itself.
 
 - **`fill_form {form, id?, <form>: values}`** (`Proton/Ui/ProtonForms.cs`): one typed record per form (decision 11b,
-  no loose dictionary). The forms are `client`, `meeting`, `new_project` (no money: revenue, fee, markup and pay don't
+  no loose dictionary). The forms are `client`, `meeting`, `new_project` (no money: revenue, rates and pay don't
   exist in it), `edit_project`, `report_bug`, `invite` (address, position and team, never role or pay) and `message`.
   - Shape problems go back to the model field by field (lengths, email format, times).
   - It needs the endpoint the form saves through, and any record it names must be visible to the user.
@@ -688,8 +688,8 @@ Three more families, each off until switched on (`Proton:Actions:Money`, `Delete
 two steps, and where money is recorded or something can't be undone the user types the amount (digits and a point,
 no separators: `2500`, `320.5`) or the invoice number, which the server stored with the proposal.
 
-Every amount a money card sets (invoice lines, a payment, an expense, materials and client prices, a day rate, a rate,
-revenue, fee, markup, overhead) must be one the user typed in this conversation (`MoneyText.RequireTyped`, read as
+Every amount a money card sets (invoice lines, a payment, an expense, site expenses, a day rate, a rate,
+revenue, overhead) must be one the user typed in this conversation (`MoneyText.RequireTyped`, read as
 people write it: `1,500`, `1.5k`, `4.5m`), never one from the data or one the model worked out; otherwise the model is
 sent back to ask. Typing the card's amount to confirm only proves it was read, not where it came from. A payment of
 an invoice's whole balance uses `full_balance`, so the server sets the amount.
@@ -698,16 +698,15 @@ an invoice's whole balance uses `full_balance`, so the server sets the amount.
 |---|---|---|
 | `propose_create_invoice`, `propose_update_invoice` | `POST /api/projects/{id}/invoices`, `PUT /api/invoices/{id}` | — (a draft is sent to nobody); the card shows every field the draft gets, the lines as one value and the notes printed for the client in full |
 | `propose_invoice_step` | `…/issue`, `…/void`, `DELETE /api/invoices/{id}` (discard), `DELETE …/schedule` | issue and discard: the total, refused at Confirm if the draft changed since the card (the issue card also shows the lines and notes); void: the invoice number (refused while payments are recorded against it) |
-| `propose_record_invoice_delivery`, `propose_record_statement_delivery` | `…/deliveries` | — (WhatsApp or by hand only: emails are sent from the app). A statement's first delivery makes its materials count toward the agreed revenue, and its card says so |
+| `propose_record_invoice_delivery` | `…/deliveries` | — (WhatsApp or by hand only: emails are sent from the app) |
 | `propose_record_payment` | `POST /api/projects/{id}/payments` | the amount (or `full_balance`); at the dated exchange rate in force, never one Proton sets; the card gives the invoice's balance before and after, and warns when the same amount was already recorded that day |
 | `propose_payment_step` | `PUT /api/payments/{id}/invoice`, `…/void` | void: the amount |
-| `propose_add_expense`, `propose_delete_expense` | project expenses | the amount; the card warns when the same amount was already recorded that day |
-| `propose_add_materials`, `propose_material_step` | a site's materials (add, correct, delete, client price) | add: the total cost; delete: its cost. A correction changes only the fields named (the update replaces the whole material, so the rest is read from it) and is refused if the material changed since the card |
+| `propose_add_expense`, `propose_delete_expense` | Design project expenses (an Execution site's costs are site expenses; the tool refuses a site) | the amount; the card warns when the same amount was already recorded that day |
+| `propose_add_site_expenses`, `propose_site_expense_step` | a site's expenses (add, correct, delete): an item, its quantity and unit cost or total, who was paid, a category and the day spent | add: the total cost; delete: its cost. A correction changes only the fields named (the update replaces the whole expense, so the rest is read from it, its currency, day, category and label included) and is refused if the expense changed since the card. Nothing about a client price or a markup: they are gone. The materials sheet (`materials` form) keeps its name and fields |
 | `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13); it sends the week's version, so a week changed since is refused (`409 labour_week_changed`) |
-| `propose_create_statement` | `POST /api/projects/{id}/statements` | its total, from `StatementService.PreviewAsync`; refused at Confirm if the preview's total or count changed since the card. Irreversible: it freezes the client prices and can't be deleted |
 | `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; prefix, terms and footer only. Bank details and overdue reminders (which email clients on their own) are never part of a proposal: they are taken from the database when the change is made |
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate; irreversible. A backdated rate changes past costs, overhead and invoices (they convert at the rate of their day when read), and the card says so; payments keep their own rate |
-| `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), `…/pricing` (Execution fee and markup), each with why it changes (`reason`, asked for when not given) | the new amount, or the new markup when only it changes. The markup is said and shown as a percentage and stored as the app's fraction (15 → 0.15) |
+| `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), with why it changes (`reason`, asked for when not given) | the new amount. An Execution site isn't priced by Proton: its price is its agreed BOQ, and its supervision and TVA are changed in the app (`PUT …/pricing` is a `Never` entry) |
 | `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
 | `propose_delete` | requirement, meeting and client deletes | the project's or client's name; a client with projects is archived instead |
 | `propose_working_time`, `propose_schedule`, `propose_hour_excuse` | the company week, someone's own week, excused hours | — ; the cards describe the effect in words and never show an amount |

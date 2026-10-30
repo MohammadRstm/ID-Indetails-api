@@ -1,6 +1,6 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Billing;
-using ID_Indetails.api.DTO.Response.Statements;
+using ID_Indetails.api.DTO.Response.Boqs;
 using ID_Indetails.api.Enums;
 using Shouldly;
 
@@ -66,29 +66,32 @@ public class DocumentTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_statement_downloads_as_a_pdf_and_is_emailed_with_it()
+    public async Task A_client_boq_downloads_as_a_pdf_and_is_emailed_with_it()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
-        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution);
-        var added = await Client.PostJsonAsync($"/api/projects/{project.Id}/materials",
-            new { items = new[] { new { name = "Cement", quantity = 40m, unit = "bag", unitCost = 7.5m } } }, admin.AccessToken);
-        ((int)added.StatusCode).ShouldBe(201, await added.Content.ReadAsStringAsync());
-        var made = await Client.PostJsonAsync($"/api/projects/{project.Id}/statements", new { mode = "detail" }, admin.AccessToken);
-        ((int)made.StatusCode).ShouldBe(201, await made.Content.ReadAsStringAsync());
-        var statement = await made.ReadAsync<StatementResponse>();
+        var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Execution, projectFee: 0m);
+        var boqs = new BoqTestSteps(_steps);
+        var boq = await boqs.CreateAsync(admin.AccessToken, project.Id);
+        await boqs.SaveAsync(admin.AccessToken, boq.Id, [BoqTestSteps.Line("Concrete slab", 10, 120.5m, waste: 0.05m, code: "2.1.1", unit: "m3")]);
 
-        (await PdfAsync($"/api/statements/{statement.Id}/pdf", admin.AccessToken)).FileName.ShouldBe(statement.Number.ToLowerInvariant() + ".pdf");
+        (await PdfAsync($"/api/boqs/{boq.Id}/pdf", admin.AccessToken)).FileName.ShouldBe(boq.Number!.ToLowerInvariant() + ".pdf");
 
-        var sent = await Client.PostJsonAsync($"/api/statements/{statement.Id}/email", new { to = "site-client@test.local" }, admin.AccessToken);
+        var sent = await Client.PostJsonAsync($"/api/boqs/{boq.Id}/email", new { to = "site-client@test.local" }, admin.AccessToken);
         ((int)sent.StatusCode).ShouldBe(200, await sent.Content.ReadAsStringAsync());
-        (await sent.ReadAsync<StatementResponse>()).Deliveries.Single().ShouldSatisfyAllConditions(
+        (await sent.ReadAsync<BoqDetailResponse>()).Deliveries.Single().ShouldSatisfyAllConditions(
             d => d.Channel.ShouldBe(DeliveryChannel.Email),
             d => d.Recipient.ShouldBe("site-client@test.local"));
 
         var email = api.Emails.LastTo("site-client@test.local");
-        email.Subject.ShouldBe($"Materials statement {statement.Number} - {project.Title}");
-        email.Attachments!.Single().FileName.ShouldBe(statement.Number.ToLowerInvariant() + ".pdf");
+        email.Subject.ShouldBe($"Bill of quantities {boq.Number} - {project.Title}");
+        email.Attachments!.Single().FileName.ShouldBe(boq.Number!.ToLowerInvariant() + ".pdf");
+
+        // A failed send records nothing.
+        api.Emails.FailNextSend = true;
+        await (await Client.PostJsonAsync($"/api/boqs/{boq.Id}/email", new { to = "site-client@test.local" }, admin.AccessToken))
+            .ShouldFailWithAsync(503, ErrorCodes.EmailDeliveryFailed);
+        (await (await Client.GetAsync($"/api/boqs/{boq.Id}", admin.AccessToken)).ReadAsync<BoqDetailResponse>()).Deliveries.Count.ShouldBe(1);
     }
 
     [Fact]

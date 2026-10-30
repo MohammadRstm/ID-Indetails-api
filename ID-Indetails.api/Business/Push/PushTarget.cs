@@ -19,7 +19,6 @@ public sealed record PushTarget
     public const string Client = "client";
     public const string Invoice = "invoice";
     public const string Payment = "payment";
-    public const string Statement = "statement";
     public const string PageType = "page";
 
     public required string Type { get; init; }
@@ -33,7 +32,7 @@ public sealed record PushTarget
     /// <summary><c>design</c> or <c>execution</c>, for projects and requirements.</summary>
     public string? Domain { get; init; }
 
-    /// <summary>A part of a project: <c>requirements</c>, <c>meetings</c>, <c>materials</c> or <c>labour</c>.</summary>
+    /// <summary>A part of a project: <c>requirements</c>, <c>meetings</c>, <c>materials</c> (the site's expenses; the phone still knows them by that name) or <c>labour</c>.</summary>
     public string? Section { get; init; }
 
     public long? TeamId { get; init; }
@@ -82,7 +81,8 @@ public sealed record PushTarget
 
             NotificationKinds.ProjectCreated or NotificationKinds.ProjectStatusChanged or NotificationKinds.ProjectOwnerSet
                 or NotificationKinds.ProjectNearlyDone or NotificationKinds.ProjectIdle
-                or NotificationKinds.ProjectClosed or NotificationKinds.ProjectCostHigh
+                or NotificationKinds.ProjectClosed or NotificationKinds.ProjectCostHigh or NotificationKinds.QuoteDue
+                or NotificationKinds.ChangeBlocked or NotificationKinds.ProfitLow or NotificationKinds.ProfitAtZero
                 => ProjectPart(projectId, projectDomain, null),
 
             NotificationKinds.WorkLogged or NotificationKinds.EntryComment => Subject(WorkEntry, "work_entry", subjectType, subjectId),
@@ -91,7 +91,6 @@ public sealed record PushTarget
             NotificationKinds.InvitationAccepted => Subject(Person, "user", subjectType, subjectId),
             NotificationKinds.ClientAdded => Subject(Client, "client", subjectType, subjectId),
             NotificationKinds.PaymentRecorded => Subject(Payment, "payment", subjectType, subjectId),
-            NotificationKinds.StatementSent => Subject(Statement, "statement", subjectType, subjectId),
             NotificationKinds.InvoiceIssued or NotificationKinds.InvoiceSentAutomatically or NotificationKinds.InvoiceSendDue
                 or NotificationKinds.InvoiceSendFailed or NotificationKinds.InvoiceReminderDue or NotificationKinds.InvoiceOverdue
                 or NotificationKinds.InvoiceDraftWaiting

@@ -16,10 +16,10 @@ public sealed record PaymentSearch(
 
 public interface IPaymentRepository
 {
-    /// <summary>Most recently received first, with project, client and invoice. Not tracked.</summary>
+    /// <summary>Most recently received first, with project, client, invoice and account label. Not tracked.</summary>
     Task<(IReadOnlyList<Payment> Items, int TotalCount)> SearchAsync(PaymentSearch search, CancellationToken cancellationToken = default);
 
-    /// <summary>Not tracked, with project, client and invoice.</summary>
+    /// <summary>Not tracked, with project, client, invoice and account label.</summary>
     Task<Payment?> GetAsync(long id, CancellationToken cancellationToken = default);
 
     /// <summary>Tracked, and locked (<c>SELECT … FOR UPDATE</c>) until the transaction ends.</summary>

@@ -1,7 +1,7 @@
 # The company
 
 The company has two domains: **Design** (a design studio: people log hours on projects, with requirements and
-meetings) and **Execution** (construction sites: materials, weekly ground labour, client statements). Above them sits
+meetings) and **Execution** (construction sites: BOQs, site expenses, weekly ground labour). Above them sits
 the company level (overhead and the company overview). Money is in USD unless a figure says otherwise; "Money"
 below says what each figure means. The context note gives the company's name when one is set.
 

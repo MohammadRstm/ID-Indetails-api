@@ -48,7 +48,7 @@ public class SearchTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { title = $"{word} rebrand", domainCode = DomainCodes.Design, clientId = client.Id }, admin.AccessToken);
         var siteClient = await Projects.CreateClientAsync(superAdmin.AccessToken, DomainCodes.Execution);
         var site = await CreatedAsync<ProjectResponse>("/api/projects",
-            new { title = $"{word} villa", domainCode = DomainCodes.Execution, clientId = siteClient.Id, projectFee = 1000m, materialMarkup = 0.1m, staffIds = new[] { await Projects.SiteStaffAsync() } },
+            new { title = $"{word} villa", domainCode = DomainCodes.Execution, clientId = siteClient.Id, staffIds = new[] { await Projects.SiteStaffAsync() } },
             superAdmin.AccessToken);
         await _steps.ScalarAsync<int>("UPDATE users SET position = @p WHERE id = @id; SELECT 1", ("@p", $"{word} designer"), ("@id", employee.User.Id));
 
