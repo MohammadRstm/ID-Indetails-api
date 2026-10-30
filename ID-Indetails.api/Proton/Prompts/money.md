@@ -27,7 +27,8 @@ its own currency and never counted as zero.
 ## Cost
 
 - A project's cost is labour + expenses + site expenses + ground labour, each counted on its own day.
-- Labour (Design): hours logged times the person's hourly cost that day, plus paid breaks. It isn't payroll.
+- Labour (Design): hours logged times the person's hourly cost that day, plus paid breaks on days the company week
+  had one (none from 1 December 2026, when the whole day is logged). It isn't payroll.
 - Expenses: costs recorded on a Design project. Site expenses (Execution): what a site spent (materials, contractors,
   equipment, fees), counted on the day they were spent.
   Ground labour (Execution): a crew's workers times its day rate, per reported week.

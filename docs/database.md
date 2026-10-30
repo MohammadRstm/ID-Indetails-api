@@ -57,7 +57,7 @@ An Execution project has a **work price** (`projects.project_fee`, 0 until a BOQ
 ## Working time
 
 - **The company working week** (days, start and end), the **break** and the **overtime multiplier** live in `working_time_policies`. Each row is dated, and the row in force on a day is the latest with `effective_from` on or before it. A change never rewrites past months. The seed row is Monday–Friday, 09:00–17:00, a 60-minute break and a 1× multiplier.
-- **The break is paid.** It only reduces the hours required on a day longer than 6 hours, never pay: a 9–5 day requires 7 hours and pays 8.
+- **The break is paid.** It only reduces the hours required on a day longer than 6 hours, never pay: a 9–5 day requires 7 hours and pays 8. From 1 December 2026 the company week's break is 0, so the whole 8-hour day is required and logged; the rows before keep their 60-minute break.
 - **Personal schedules** (`user_schedules` with their `user_schedule_days`) override the company days and hours for one person from a date onward. A weekday with no row is a day off, and a row with `follows_default` returns the person to the company week.
 - **Excuses** (`hour_excuses`) cover minutes, specific days or a whole month in a person's hours ledger. They are paid unless `is_paid` is false.
 | Activity, messaging, files | `activity_events`, `notifications`, `conversations`, `messages`, `message_mentions`, `message_attachments`, `conversation_reads`, `files`, `user_board_layouts` |

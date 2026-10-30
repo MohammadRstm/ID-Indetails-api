@@ -109,7 +109,9 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     supervision taken − moved to the pocket + paid by it. A payment's money is never edited; only its account label can
     change.
 - **Pay:**
-  - The daily one-hour break is paid, so 7 hours of required work is an 8-hour paid day.
+  - The break is a dated company setting. While it is above 0 it is paid but not logged (9–5 with a 60-minute break
+    requires 7h and pays 8h). From 1 December 2026 it is 0: the whole 8-hour day is logged and required, and earlier
+    months keep their paid break.
   - The hourly rate is the salary ÷ that month's scheduled paid hours.
   - Admins and super admins are on a fixed salary and never log hours. Super admins' salaries are a company cost.
 - **Privacy:** employees never see their colleagues' hours or pay.
