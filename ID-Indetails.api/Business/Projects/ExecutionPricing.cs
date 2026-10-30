@@ -30,6 +30,14 @@ public static class ExecutionPricing
         return new Price(supervision, net, tva, net + tva);
     }
 
+    /// <summary>The work price whose client total (work, supervision and TVA) comes to <paramref name="gross"/>, to the cent where the rounding allows.</summary>
+    public static decimal WorkFor(decimal gross, decimal supervisionRate, decimal tvaRate)
+    {
+        var guess = Math.Round(gross / (1 + supervisionRate + tvaRate), 2, MidpointRounding.AwayFromZero);
+        return new[] { 0m, -0.01m, 0.01m, -0.02m, 0.02m }.Select(step => guess + step)
+            .OrderBy(work => Math.Abs(PriceOf(work, supervisionRate, tvaRate).Gross - gross)).First();
+    }
+
     /// <summary>
     /// The TVA inside a payment: the project's TVA in proportion to what was paid of what the client pays. With no price
     /// agreed yet, it is the plain TVA share of an amount.

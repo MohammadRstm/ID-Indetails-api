@@ -18,6 +18,13 @@ public static class Tva
     /// <summary>What the client pays for <paramref name="net"/>: TVA included.</summary>
     public static decimal Gross(decimal net, decimal rate) => Math.Round(net * (1 + rate), 2, MidpointRounding.AwayFromZero);
 
+    /// <summary>The net amount whose <see cref="Gross"/> is <paramref name="gross"/>, to the cent where the rounding allows.</summary>
+    public static decimal NetFor(decimal gross, decimal rate)
+    {
+        var guess = Math.Round(gross / (1 + rate), 2, MidpointRounding.AwayFromZero);
+        return new[] { 0m, -0.01m, 0.01m }.Select(step => guess + step).OrderBy(net => Math.Abs(Gross(net, rate) - gross)).First();
+    }
+
     /// <summary>The TVA inside an amount the client paid.</summary>
     public static decimal ShareOf(decimal gross, decimal rate)
         => rate <= 0 ? 0 : Math.Round(gross * rate / (1 + rate), 2, MidpointRounding.AwayFromZero);

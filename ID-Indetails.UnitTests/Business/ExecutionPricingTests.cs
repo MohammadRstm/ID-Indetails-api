@@ -61,4 +61,32 @@ public class ExecutionPricingTests
     [Fact]
     public void A_new_site_starts_at_10_percent_supervision()
         => ExecutionPricing.DefaultSupervisionRate.ShouldBe(0.10m);
+
+    [Fact]
+    public void The_work_price_for_what_a_client_paid_makes_a_client_total_of_exactly_that()
+    {
+        // a real site that paid ahead: 174,342.11 received, 8% supervision and no TVA
+        var work = ExecutionPricing.WorkFor(174_342.11m, supervisionRate: 0.08m, tvaRate: 0m);
+
+        work.ShouldBe(161_427.88m);
+        ExecutionPricing.PriceOf(work, 0.08m, 0m).Gross.ShouldBe(174_342.11m);
+        ExecutionPricing.WorkFor(1_210m, 0.10m, 0.11m).ShouldBe(1_000m);
+        ExecutionPricing.WorkFor(500m, 0m, 0m).ShouldBe(500m);
+        ExecutionPricing.WorkFor(0m, 0.10m, 0.11m).ShouldBe(0m);
+    }
+
+    [Theory]
+    [InlineData(0.08, 0)]
+    [InlineData(0.10, 0.11)]
+    [InlineData(0.07, 0.15)]
+    public void Every_client_total_a_work_price_can_make_goes_back_to_a_work_price_that_makes_it(double supervision, double tva)
+    {
+        var (s, t) = ((decimal)supervision, (decimal)tva);
+        for (var cents = 1; cents <= 20_000; cents++)
+        {
+            var gross = ExecutionPricing.PriceOf(cents / 100m, s, t).Gross;
+
+            ExecutionPricing.PriceOf(ExecutionPricing.WorkFor(gross, s, t), s, t).Gross.ShouldBe(gross);
+        }
+    }
 }
