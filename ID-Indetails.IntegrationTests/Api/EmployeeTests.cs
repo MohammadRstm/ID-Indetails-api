@@ -250,6 +250,40 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_salary_s_overtime_rate_is_the_salary_divided_by_184_unless_one_is_given()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var url = $"/api/employees/{employee.User.Id}/pay";
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        foreach (var rate in new[] { 0m, -1m, 4232.01m })
+        {
+            await (await Client.PostJsonAsync(url, new { basis = "monthly", amount = 4232, overtimeRate = rate }, superAdmin.AccessToken))
+                .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        }
+
+        // hourly pay is its own overtime rate
+        await (await Client.PostJsonAsync(url, new { basis = "hourly", amount = 12.5, overtimeRate = 20 }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { basis = "monthly", amount = 4232, effectiveFrom = today.AddMonths(-3) }, superAdmin.AccessToken)))
+            .OvertimeRate.ShouldBe(23m);
+        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { basis = "monthly", amount = 4232, overtimeRate = 25, effectiveFrom = today.AddMonths(-2) }, superAdmin.AccessToken)))
+            .OvertimeRate.ShouldBe(25m);
+        // a raise gets a new suggestion
+        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { basis = "monthly", amount = 5520, effectiveFrom = today.AddMonths(-1) }, superAdmin.AccessToken)))
+            .OvertimeRate.ShouldBe(30m);
+        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { basis = "hourly", amount = 12.5 }, superAdmin.AccessToken)))
+            .OvertimeRate.ShouldBe(12.5m);
+
+        var history = await OkAsync<List<PayResponse>>(Client.GetAsync(url, superAdmin.AccessToken));
+        history.Select(p => p.OvertimeRate).ShouldBe([12.5m, 30m, 25m, 23m]);
+        (await OkAsync<EmployeeResponse>(Client.GetAsync($"/api/employees/{employee.User.Id}", superAdmin.AccessToken)))
+            .CurrentPay!.OvertimeRate.ShouldBe(12.5m);
+    }
+
+    [Fact]
     public async Task People_edit_their_own_name_and_phone()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

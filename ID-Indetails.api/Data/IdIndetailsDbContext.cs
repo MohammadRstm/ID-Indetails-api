@@ -50,6 +50,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<ProjectRequirement> ProjectRequirements => Set<ProjectRequirement>();
     public DbSet<RequirementAssignee> RequirementAssignees => Set<RequirementAssignee>();
     public DbSet<ProjectMeeting> ProjectMeetings => Set<ProjectMeeting>();
+    public DbSet<MeetingAttendee> MeetingAttendees => Set<MeetingAttendee>();
     public DbSet<ProjectExpense> ProjectExpenses => Set<ProjectExpense>();
 
     // Design work tracking

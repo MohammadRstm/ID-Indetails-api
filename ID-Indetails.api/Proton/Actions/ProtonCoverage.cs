@@ -152,6 +152,7 @@ public static class ProtonCoverage
         Action("Meetings.Create", "propose_schedule_meeting"),
         Action("Meetings.Update", "propose_update_meeting"),
         Action("Meetings.Delete", "propose_delete", T2, ProtonFamily.Deletes),
+        Never("Meetings.CreateGeneral", "a general meeting's attendees are chosen in its form"),
         Action("Clients.Create", "propose_create_client"),
         Action("Clients.Update", "propose_update_client"),
         Action("Clients.Archive", "propose_set_client_archived"),
@@ -220,7 +221,7 @@ public static class ProtonCoverage
         Action("Schedules.Set", "propose_schedule", T2, ProtonFamily.PayRules),
         Action("HourExcuses.Add", "propose_hour_excuse", T2, ProtonFamily.PayRules),
         Open("HourExcuses.Delete", "takes back an excuse someone may already be paid for"),
-        ReadOnly("MyPay.OvertimePreview", "an employee's own overtime preview"),
+        ReadOnly("MyTime.OvertimePreview", "an employee's own overtime preview"),
 
         // People and access
         Action("Employees.Update", "propose_update_employee", T2, ProtonFamily.Access),

@@ -37,7 +37,7 @@ The database is the second line of defence. The API must still filter every quer
 |---|---|
 | Identity and access | `domains`, `roles`, `permissions`, `role_permissions`, `user_permission_overrides`, `users`, `teams`, `employment_periods`, `user_pay_history`, `refresh_tokens`, `user_invitations`, `password_reset_tokens` |
 | Clients | `clients`, `client_contacts` |
-| Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings`, `project_expenses` (Design's), `blocked_changes` |
+| Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings` (with general meetings, about no project), `meeting_attendees`, `project_expenses` (Design's), `blocked_changes` |
 | Design work | `work_entries`, `work_entry_comments` |
 | Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
@@ -121,7 +121,7 @@ These are calculated by the API from the tables above, so they can never drift:
 - Group chat membership
 - Unread counts
 
-Also derived: required hours per day, overtime (outside a person's hours, on days off, and beyond the day's required hours), the monthly hours ledger (expected, short, made up, flagged), paid breaks, shortfall deductions, project pay, "my pay", and in Execution the agreed amount, what is owed or paid ahead, and cash and expected profit.
+Also derived: required hours per day, overtime (outside a person's hours, on days off, and beyond the day's required hours), the monthly hours ledger (expected, short, made up, flagged), paid breaks, shortfall deductions, project pay, and in Execution the agreed amount, what is owed or paid ahead, and cash and expected profit.
 
 These are computed **by MySQL** as stored generated columns:
 - `work_entries.duration_minutes`

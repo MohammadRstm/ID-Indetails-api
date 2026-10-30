@@ -15,7 +15,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | Execution: BOQs and variation orders, site expenses (cost-only; the old materials paths stay as a temporary alias for the phone), ground labour, site money, supervision taken and a site's account figures | [execution.md](execution.md) | #5, #12 |
 | Company: settings, working time, schedules, overhead, salaries, hours ledger, excuses, overview, project pay | [company.md](company.md) | #11, #13, #15, #23 |
 | Design work: entries, comments, meetings, settings, reports, activity, timeline, overtime, closed months, dashboards | [design.md](design.md) | #14, #22, #24 |
-| Self-service: my pay, hours, overtime, schedule, requirements, board layouts | [me.md](me.md) | #17, #22, #23, #24 |
+| Self-service: hours, overtime, schedule, requirements, board layouts (employees don't see their pay) | [me.md](me.md) | #17, #22, #23, #24 |
 | Notifications, scheduled checks, money insights, auto-archive | [notifications.md](notifications.md) | #19, #22 |
 | Messaging, live updates, online status and last seen | [messaging.md](messaging.md) | #20 |
 | Search | [search.md](search.md) | #22 |
@@ -40,6 +40,7 @@ These are known and harmless at today's size. Revisit them as the data grows.
 
 - **Loading too much:**
   - Paid breaks load every priced contributor's work over the whole period being priced, on project pages, lists and costs.
+  - Project cost's overtime loads every priced contributor's whole months of work, with one excuses query per month (28 Oct 2026).
   - Overtime loads each person's whole span of days, not only the days shown.
   - The money follow-ups, overdue requirements, a client's work and the draft-invoice check each load everything, then filter.
 - **Unconverted money still missing in two places:**

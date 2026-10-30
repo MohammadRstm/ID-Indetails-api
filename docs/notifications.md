@@ -26,7 +26,7 @@ Every notification goes through one sender (`INotificationSender`), which applie
 - only active people who can see the notification's domain;
 - no money in payloads, so a notification can't reveal amounts to someone who later loses `financial:view`. The page it links to checks permissions as usual.
 
-Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged` and `work_digest` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`).
+Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged`, `work_digest` and `hours_missed_list` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`).
 
 "Holders of a permission" means the active people who hold it and can see the domain, super admins and people granted it from the other domain included. "The domain's people" means the active admins and employees whose home domain it is; super admins are left out of these broadcasts.
 
@@ -43,6 +43,9 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `work_digest` | The same, when `notifyEntry` is `digest`: one per person per day | — | `minutes`, `latestName`, `projectTitle` |
 | `entry_comment` | The work entry's author | the work entry | `authorName`, `text`, `entryDescription` |
 | `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
+| `meeting_invited` | A general meeting's attendees, when they are added | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
+| `meeting_moved` | A general meeting's attendees, when its time changes | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
+| `meeting_cancelled` | A general meeting's attendees, when it is deleted or they are taken out | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
 | `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` (someone recorded expenses on a site; the kind keeps its name, the text says "Expenses added") |
 | `labour_week_submitted` | Holders of `labour_report:manage` | the project | `weekStart`, `updated`, `projectTitle` |
 | `project_created` | The domain's people | the project | `projectTitle` |
@@ -85,6 +88,8 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `requirement_overdue` | Once its deadline has passed, for deadlines up to 7 days ago (older ones are left alone, so turning this on doesn't flood anyone). Key `requirement-overdue-{id}-{deadline}` | Its assignees and holders of `requirement:manage` | the requirement | `projectTitle`, `text`, `deadline` |
 | `invoice_overdue` | An issued invoice still unpaid after its due date. Key `invoice-overdue-{id}` | Holders of `financial:view` in its domain | the invoice | `number`, `dueOn` |
 | `hours_short` | From the first of a month, when Design employees finished the month before flagged in the hours ledger. Key `hours-short-YYYY-MM` | Holders of `salary:view` | — | `month`, `count`, `people` (the 5 most short: `id`, `name`, `shortMinutes`) |
+| `hours_missed` | The morning after a working day on which a Design employee logged less than the day required (every minute logged that day counts, overtime included). From 09:00 company time it judges yesterday, before that the day before. Days off, excused days (a day or whole-month excuse; a minutes excuse names no day) and days outside their employment never count (`Business/Payroll/MissedHours.cs`). It is only a reminder: the day can still be logged for the rest of the month. Key `hours-missed-{day}` | That employee (Design members holding `work_entry:create`) | — | `day`, `loggedMinutes`, `requiredMinutes` |
+| `hours_missed_list` | With `hours_missed`: one list of everyone it went to that day. Key `hours-missed-list-{day}` | Holders of `work_entry:view_all` in Design (Design admins and super admins); never employees | — | `day`, `count`, `people` (all of them, by name: `id`, `name`, `loggedMinutes`, `requiredMinutes`) |
 | `profit_low` | An active client project held to the profit floor is at 10% of its agreed amount or less. Sent by the change that took it there, or by the hourly check when nobody's change did. Once per project: key `profit-low-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `marginPct` (whole percentage, never an amount) |
 | `profit_at_zero` | The same project is at zero profit or below: a forced change, or a change nobody made. Once per project: key `profit-zero-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `marginPct` |
 | `project_cost_high` | No longer sent (`profit_low` replaced it, 29 Oct 2026); the ones sent before still read. Was: a Design client project's cost past 85% of its payment | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` |
@@ -131,10 +136,10 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 
 | Category | Kinds |
 |---|---|
-| `work` | `work_logged`, `work_digest`, `entry_comment`, `weekly_summary`, `hours_excused`, `schedule_changed` |
+| `work` | `work_logged`, `work_digest`, `entry_comment`, `weekly_summary`, `hours_excused`, `schedule_changed`, `hours_missed`, `hours_missed_list` |
 | `requirements` | `requirement_assigned`, `requirements_added`, `requirement_done`, `requirement_due_soon`, `requirement_overdue` |
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
-| `meetings` | `meeting_scheduled` |
+| `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
 | `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `quote_due`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |

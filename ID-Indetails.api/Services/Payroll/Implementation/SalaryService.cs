@@ -193,38 +193,6 @@ public sealed class SalaryService(
             .ToList();
     }
 
-    public async Task<MyPayResponse> GetMineAsync(SalaryMonthQuery query, CancellationToken cancellationToken = default)
-    {
-        var me = (await payroll.UsersAsync([currentUser.Id], cancellationToken)).Single();
-        var today = clock.CompanyToday;
-        var joinedOn = inputs.EmploymentOf(me).JoinedOn;
-        var month = SelfService.MonthOf(query.Month, today, joinedOn);
-        var personMonth = (await inputs.ForAsync([me], [month], cancellationToken))[0];
-        var input = personMonth.Input;
-        var work = Overtime.Of(input.Work, input.Calendar);
-        var ledger = input.LedgerApplies ? SalaryCalculator.LedgerOf(input, work) : null;
-        var pay = SalaryCalculator.Calculate(input);
-        var excuses = personMonth.Excuses;
-        var days = MyTime.Days(
-            month,
-            today,
-            joinedOn,
-            input.Calendar,
-            work,
-            excuses.SelectMany(x => x.Days).Select(d => d.Day).ToHashSet(),
-            excuses.Any(x => x.Kind == ExcuseKind.WholeMonth));
-
-        return new MyPayResponse(
-            month,
-            InProgress(month),
-            joinedOn,
-            new DateOnly(joinedOn.Year, joinedOn.Month, 1),
-            pay is null ? null : MySalary(pay, input, InProgress(month)),
-            ledger is null ? null : SelfService.LedgerMonth(personMonth, ledger),
-            days.Select(d => new MyPayDayResponse(d.Date, d.Required, d.Logged, d.Inside, d.Overtime, d.Excused, d.DayOff, d.IsToday, d.Difference)).ToList(),
-            excuses.Select(SelfService.Excuse).ToList());
-    }
-
     public async Task<(string FileName, string Csv)> ExportAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
         (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
@@ -353,7 +321,7 @@ public sealed class SalaryService(
             Amount = r.Terms.Amount,
             Currency = r.Terms.Currency,
             HourlyRate = r.HourlyRate,
-            StandardHourlyRate = r.StandardHourlyRate,
+            OvertimeRate = r.OvertimeRate,
             // Design's employees log hours; Execution staff are paid their salary, and so are admins and super admins, in
             // any month they held that role
             TracksHours = c.Input.LedgerApplies,
@@ -378,39 +346,6 @@ public sealed class SalaryService(
             MonthlyPay = monthlyPay,
             EarnedSoFar = estimate.EarnedSoFar,
             FullMonthEstimate = estimate.FullMonth,
-        };
-    }
-
-    private MySalaryResponse MySalary(SalaryCalculator.Result pay, SalaryCalculator.Input input, bool inProgress)
-    {
-        var lastDay = inProgress ? clock.CompanyToday : input.Month.AddMonths(1).AddDays(-1);
-        var estimate = MyTime.EstimateOf(pay, input, inProgress);
-
-        return new MySalaryResponse
-        {
-            Basis = pay.Terms.Basis,
-            Amount = pay.Terms.Amount,
-            Currency = pay.Terms.Currency,
-            HourlyRate = pay.HourlyRate,
-            StandardHourlyRate = pay.StandardHourlyRate,
-            OvertimeMultiplier = input.Calendar.PolicyOn(lastDay).OvertimeMultiplier,
-            NormalMinutes = pay.NormalMinutes,
-            MadeUpMinutes = pay.MadeUpMinutes,
-            OvertimeMinutes = pay.OvertimePaidMinutes,
-            ExcusedMinutes = pay.ExcusedMinutes,
-            ProRated = pay.ProRated,
-            WorkingDays = pay.WorkingDays,
-            WorkingDaysPaid = pay.WorkingDaysPaid,
-            PaidBreakDays = pay.PaidBreakDays,
-            PaidBreakPay = pay.PaidBreakPay,
-            DeductionMinutes = pay.DeductionMinutes,
-            Deduction = pay.Deduction,
-            BasePay = pay.BasePay,
-            OvertimePay = pay.OvertimePay,
-            Total = pay.Total,
-            EarnedSoFar = estimate.EarnedSoFar,
-            FullMonthEstimate = estimate.FullMonth,
-            WouldLose = estimate.WouldLose,
         };
     }
 

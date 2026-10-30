@@ -7,8 +7,8 @@ namespace ID_Indetails.UnitTests.Business;
 
 public class ProjectPayTests
 {
-    // 1,760 a month is 10 an hour in June 2026 (22 days of 8 paid hours); overtime at 1.5x.
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD");
+    // 1,760 a month is 10 an hour in June 2026 (22 days of 8 paid hours); overtime from 9.57 (1,760 ÷ 184), at 1.5x.
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD", 9.57m);
     private static readonly PersonCalendar Calendar = new([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1.5m)], []);
 
     [Fact]
@@ -32,7 +32,7 @@ public class ProjectPayTests
         pay.Normal.ShouldBe(480);
         pay.Overtime.ShouldBe(120);
         pay.HourlyRate.ShouldBe(10m);
-        pay.Pay.ShouldBe(80m + 30.4614m); // 8h at June's 10, 2h at the true rate 10.1538 x 1.5
+        pay.Pay.ShouldBe(80m + 28.71m); // 8h at June's 10, 2h at the overtime rate 9.57 x 1.5
     }
 
     [Fact]

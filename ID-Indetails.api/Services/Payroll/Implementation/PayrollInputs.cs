@@ -89,7 +89,7 @@ public sealed class PayrollInputs(
         var result = new List<PersonMonth>();
         foreach (var person in people)
         {
-            var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency)).ToList();
+            var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.OvertimeRate)).ToList();
             var calendar = calendars[person.Id];
             var employment = EmploymentOf(person);
 
@@ -118,5 +118,26 @@ public sealed class PayrollInputs(
         }
 
         return result;
+    }
+
+    public async Task<IReadOnlyDictionary<long, EntrySplit>> EntrySplitsAsync(
+        IReadOnlyList<User> people,
+        IReadOnlyList<DateOnly> months,
+        CancellationToken cancellationToken = default)
+    {
+        var splits = new Dictionary<long, EntrySplit>();
+        foreach (var personMonth in await ForAsync(people, months, cancellationToken))
+        {
+            var input = personMonth.Input;
+            // a fixed salary earns no overtime: time logged in a month they were an admin counts as normal hours
+            var work = Overtime.Of(input.Work, input.Calendar).Select(w => input.FixedSalary ? w with { Overtime = 0 } : w).ToList();
+            var ledger = input.LedgerApplies ? SalaryCalculator.LedgerOf(input, work) : null;
+            foreach (var w in work)
+            {
+                splits[w.Id] = new EntrySplit(w, ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0);
+            }
+        }
+
+        return splits;
     }
 }

@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_97_tables_with_snake_case_names()
+    public void Model_has_all_98_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(97);
+        tables.Count.ShouldBe(98);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -39,6 +39,8 @@ public class DatabaseModelTests
             "project_file_comments",
             // a website project's gallery goes with it
             "website_project_images",
+            // a general meeting's people are part of it
+            "meeting_attendees",
         };
 
         var cascading = Model.GetEntityTypes()
@@ -107,6 +109,7 @@ public class DatabaseModelTests
         CheckNames<WorkEntry>().ShouldContain("ck_work_entries_ends_after_start");
         CheckNames<Invoice>().ShouldContain("ck_invoices_numbered_when_issued");
         CheckNames<Conversation>().ShouldContain("ck_conversations_shape");
+        CheckNames<ProjectMeeting>().ShouldContain("ck_project_meetings_project_or_domain");
         CheckNames<LabourWeek>().ShouldContain("ck_labour_weeks_starts_on_monday");
         CheckNames<SiteExpense>().ShouldContain("ck_site_expenses_category");
         CheckNames<ProjectFileComment>().ShouldContain("ck_project_file_comments_fixed");

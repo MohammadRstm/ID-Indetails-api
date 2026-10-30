@@ -74,6 +74,8 @@ public sealed record PushTarget
                     : null,
             NotificationKinds.RequirementsAdded => ProjectPart(projectId, projectDomain, "requirements"),
             NotificationKinds.MeetingScheduled => ProjectPart(projectId, projectDomain, "meetings"),
+            // a general meeting has no project: its people see it among their meetings
+            NotificationKinds.MeetingInvited or NotificationKinds.MeetingMoved or NotificationKinds.MeetingCancelled => OfPage("meetings"),
             NotificationKinds.MaterialsAdded => ProjectPart(projectId, projectDomain, "materials"),
             NotificationKinds.LabourWeekSubmitted => projectId is { } site && WeekStartOf(payload) is { } week
                 ? LabourWeek(site, week)
@@ -86,7 +88,8 @@ public sealed record PushTarget
                 => ProjectPart(projectId, projectDomain, null),
 
             NotificationKinds.WorkLogged or NotificationKinds.EntryComment => Subject(WorkEntry, "work_entry", subjectType, subjectId),
-            NotificationKinds.WorkDigest or NotificationKinds.WeeklySummary => OfPage("work"),
+            NotificationKinds.WorkDigest or NotificationKinds.WeeklySummary or NotificationKinds.HoursMissed => OfPage("work"),
+            NotificationKinds.HoursMissedList => OfPage("today"),
 
             NotificationKinds.InvitationAccepted => Subject(Person, "user", subjectType, subjectId),
             NotificationKinds.ClientAdded => Subject(Client, "client", subjectType, subjectId),
