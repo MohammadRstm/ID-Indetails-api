@@ -59,6 +59,11 @@ public static class BoqRules
 
     public static string Number(string prefix, int year, int sequence) => $"{prefix}-{year}-{sequence:000}";
 
+    /// <summary>The VO that keeps what a client paid beyond the price when the project is completed.</summary>
+    public const string ClosingTitle = "Paid beyond the agreed price";
+
+    public const string ClosingReason = "Kept when the project was completed: the client paid more than the agreed price.";
+
     public static string DefaultTitle(BoqKind kind) => kind switch
     {
         BoqKind.Client => "Client BOQ",

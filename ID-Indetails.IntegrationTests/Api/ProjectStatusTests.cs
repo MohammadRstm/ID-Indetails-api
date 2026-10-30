@@ -1,4 +1,5 @@
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Boqs;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using MySqlConnector;
@@ -18,6 +19,37 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<ProjectResponse>();
     }
+
+    private async Task<ProjectResponse> CompleteWithAsync(long projectId, object body, string token)
+    {
+        var response = await Client.PostJsonAsync($"/api/projects/{projectId}/complete", body, token);
+        ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+        return await response.ReadAsync<ProjectResponse>();
+    }
+
+    private async Task PayAsync(long projectId, decimal amount, string token)
+    {
+        var response = await Client.PostJsonAsync($"/api/projects/{projectId}/payments", new { amount, currency = "USD" }, token);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>A site at 10% supervision and 11% TVA; with <paramref name="work"/> above 0, a client BOQ of that is agreed.</summary>
+    private async Task<ProjectResponse> SiteAsync(string token, decimal work)
+    {
+        var site = await Projects.CreateProjectAsync(token, DomainCodes.Execution, projectFee: 0m);
+        var priced = await Client.PutJsonAsync($"/api/projects/{site.Id}/pricing",
+            new { supervisionRate = 0.10m, tvaRate = 0.11m, description = "The usual rates" }, token);
+        priced.IsSuccessStatusCode.ShouldBeTrue(await priced.Content.ReadAsStringAsync());
+        if (work > 0)
+        {
+            await Projects.AgreeWorkPriceAsync(token, site.Id, work);
+        }
+
+        return site;
+    }
+
+    private async Task<BoqListResponse> BoqsAsync(long projectId, string token)
+        => await (await Client.GetAsync($"/api/projects/{projectId}/boqs", token)).ReadAsync<BoqListResponse>();
 
     /// <summary>Requirements come through their own endpoints in the requirements phase; here they are seeded directly.</summary>
     private async Task AddRequirementsAsync(long projectId, long userId, int open, int done)
@@ -113,6 +145,163 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
         repriced.Money!.ShouldSatisfyAllConditions(
             m => m.SupervisionUsd.ShouldBe(100m),
             m => m.Revenue.ShouldBe(1100m));
+    }
+
+    [Fact]
+    public async Task Completing_a_site_that_was_paid_ahead_can_keep_it_as_a_closing_vo_so_the_price_equals_what_was_received()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        // 1,000 of work: 100 supervision, 110 TVA, 1,210 for the client; the client paid 1,500
+        var site = await SiteAsync(token, 1_000m);
+        await PayAsync(site.Id, 1_500m, token);
+
+        var completed = await CompleteWithAsync(site.Id, new { keepPaidAhead = true }, token);
+
+        // 1,239.67 of work + 123.97 supervision + 136.36 TVA = 1,500.00
+        completed.Money!.ShouldSatisfyAllConditions(
+            m => m.IsLocked.ShouldBeTrue(),
+            m => m.ProjectFee.ShouldBe(1_239.67m),
+            m => m.SupervisionUsd.ShouldBe(123.97m),
+            m => m.Revenue.ShouldBe(1_363.64m),
+            m => m.RevenueWithTva.ShouldBe(1_500m),
+            m => m.Billing.Received.ShouldBe(1_500m),
+            m => m.Billing.PaidAhead.ShouldBe(0m));
+        (await _steps.ScalarAsync<decimal>("SELECT revenue FROM projects WHERE id = @p", ("@p", site.Id))).ShouldBe(1_363.64m);
+
+        // the agreed client BOQ stays; a VO for the rest is agreed beside it, as any VO is
+        var boqs = await BoqsAsync(site.Id, token);
+        boqs.Client.ShouldHaveSingleItem().TotalUsd.ShouldBe(1_000m);
+        var vo = boqs.Vos.ShouldHaveSingleItem();
+        vo.ShouldSatisfyAllConditions(
+            b => b.Kind.ShouldBe(BoqKind.Vo),
+            b => b.Status.ShouldBe(BoqStatus.Agreed),
+            b => b.Title.ShouldBe("Paid beyond the agreed price"),
+            b => b.Reason.ShouldBe("Kept when the project was completed: the client paid more than the agreed price."),
+            b => b.TotalUsd.ShouldBe(239.67m),
+            b => b.AgreedBy!.Id.ShouldBe(superAdmin.User.Id),
+            b => b.Number.ShouldNotBeNullOrEmpty());
+        boqs.Price!.WorkUsd.ShouldBe(1_239.67m);
+
+        // written like any price change: the payment history, the feed and the BOQ's own event
+        var history = await (await Client.GetAsync($"/api/projects/{site.Id}/payment-changes", token)).ReadAsync<List<ProjectPaymentChangeResponse>>();
+        history[0].ShouldSatisfyAllConditions(
+            h => h.Amount.ShouldBe(1_239.67m),
+            h => h.PreviousAmount.ShouldBe(1_000m),
+            h => h.Description.ShouldBe(vo.Number),
+            h => h.ChangedBy!.Id.ShouldBe(superAdmin.User.Id));
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'project_fee_set' AND amount = 1239.67 AND prev_amount = 1000", ("@p", site.Id))).ShouldBe(1);
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE subject_type = 'boq' AND subject_id = @b AND kind = 'boq_agreed'", ("@b", vo.Id))).ShouldBe(1);
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'project_finalized'", ("@p", site.Id))).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_site_with_no_agreed_price_that_was_paid_keeps_it_as_a_client_boq()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var site = await SiteAsync(token, work: 0);
+        await PayAsync(site.Id, 1_210m, token);
+
+        var completed = await CompleteWithAsync(site.Id, new { keepPaidAhead = true }, token);
+
+        completed.Money!.ShouldSatisfyAllConditions(
+            m => m.ProjectFee.ShouldBe(1_000m),
+            m => m.Revenue.ShouldBe(1_100m),
+            m => m.RevenueWithTva.ShouldBe(1_210m));
+        var boqs = await BoqsAsync(site.Id, token);
+        boqs.Vos.ShouldBeEmpty();
+        var closing = boqs.Client.ShouldHaveSingleItem();
+        closing.ShouldSatisfyAllConditions(
+            b => b.Kind.ShouldBe(BoqKind.Client),
+            b => b.Status.ShouldBe(BoqStatus.Agreed),
+            b => b.Title.ShouldBe("Paid beyond the agreed price"),
+            b => b.TotalUsd.ShouldBe(1_000m));
+    }
+
+    [Fact]
+    public async Task Without_the_switch_or_a_body_a_site_paid_ahead_completes_as_before_and_the_balance_stays_owed_back()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+
+        foreach (var body in new object?[] { null, new { keepPaidAhead = false }, new { } })
+        {
+            var site = await SiteAsync(token, 1_000m);
+            await PayAsync(site.Id, 1_500m, token);
+
+            var completed = body is null ? await ChangeAsync(site.Id, "complete", token) : await CompleteWithAsync(site.Id, body, token);
+
+            completed.Status.ShouldBe(ProjectStatus.Completed);
+            completed.Money!.ShouldSatisfyAllConditions(
+                m => m.ProjectFee.ShouldBe(1_000m),
+                m => m.Revenue.ShouldBe(1_100m),
+                m => m.RevenueWithTva.ShouldBe(1_210m),
+                m => m.Billing.PaidAhead.ShouldBe(290m));
+            var boqs = await BoqsAsync(site.Id, token);
+            boqs.Vos.ShouldBeEmpty();
+            boqs.Client.ShouldHaveSingleItem();
+        }
+    }
+
+    [Fact]
+    public async Task The_switch_changes_nothing_when_the_client_did_not_pay_beyond_the_price()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var under = await SiteAsync(token, 1_000m);
+        await PayAsync(under.Id, 500m, token);
+        var exact = await SiteAsync(token, 1_000m);
+        await PayAsync(exact.Id, 1_210m, token);
+        var none = await SiteAsync(token, 1_000m);
+
+        foreach (var site in new[] { under, exact, none })
+        {
+            var completed = await CompleteWithAsync(site.Id, new { keepPaidAhead = true }, token);
+
+            completed.Money!.ProjectFee.ShouldBe(1_000m);
+            completed.Money.Revenue.ShouldBe(1_100m);
+            (await BoqsAsync(site.Id, token)).Vos.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task Completing_a_design_project_paid_ahead_can_raise_its_payment_to_what_was_received()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var client = await Projects.CreateClientAsync(token, DomainCodes.Design);
+        // 1,000 at 11% TVA: the client owes 1,110 and paid 1,500
+        var kept = await (await Client.PostJsonAsync("/api/projects",
+            new { title = "Villa interiors", domainCode = DomainCodes.Design, clientId = client.Id, revenue = 1_000m }, token)).ReadAsync<ProjectResponse>();
+        var declined = await (await Client.PostJsonAsync("/api/projects",
+            new { title = "Office interiors", domainCode = DomainCodes.Design, clientId = client.Id, revenue = 1_000m }, token)).ReadAsync<ProjectResponse>();
+        await PayAsync(kept.Id, 1_500m, token);
+        await PayAsync(declined.Id, 1_500m, token);
+
+        var completed = await CompleteWithAsync(kept.Id, new { keepPaidAhead = true }, token);
+
+        // 1,351.35 net + 11% TVA = 1,500.00
+        completed.Money!.ShouldSatisfyAllConditions(
+            m => m.IsLocked.ShouldBeTrue(),
+            m => m.Revenue.ShouldBe(1_351.35m),
+            m => m.RevenueWithTva.ShouldBe(1_500m),
+            m => m.Billing.PaidAhead.ShouldBe(0m));
+        var history = await (await Client.GetAsync($"/api/projects/{kept.Id}/payment-changes", token)).ReadAsync<List<ProjectPaymentChangeResponse>>();
+        history[0].ShouldSatisfyAllConditions(
+            h => h.Amount.ShouldBe(1_351.35m),
+            h => h.PreviousAmount.ShouldBe(1_000m),
+            h => h.TvaRate.ShouldBe(0.11m),
+            h => h.Description.ShouldBe("Kept when the project was completed: the client paid more than the agreed price."),
+            h => h.ChangedBy!.Id.ShouldBe(superAdmin.User.Id));
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'revenue_changed' AND amount = 1351.35 AND prev_amount = 1000", ("@p", kept.Id))).ShouldBe(1);
+
+        var left = await CompleteWithAsync(declined.Id, new { keepPaidAhead = false }, token);
+        left.Money!.ShouldSatisfyAllConditions(m => m.Revenue.ShouldBe(1_000m), m => m.Billing.PaidAhead.ShouldBe(390m));
     }
 
     [Fact]
