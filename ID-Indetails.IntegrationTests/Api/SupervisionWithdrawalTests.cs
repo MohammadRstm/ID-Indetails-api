@@ -23,6 +23,14 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
 
     private static string Day(int daysAgo) => CompanyToday().AddDays(-daysAgo).ToString("yyyy-MM-dd");
 
+    /// <summary>A site at 10% supervision (a plain test site has none) whose work price makes <paramref name="due"/> of supervision due.</summary>
+    private async Task<ProjectResponse> SiteDueAsync(string accessToken, decimal due)
+    {
+        var site = await Projects.CreateProjectAsync(accessToken, DomainCodes.Execution, projectFee: due * 10);
+        await _steps.ExecuteAsync("UPDATE projects SET supervision_rate = 0.1 WHERE id = @id", ("@id", site.Id));
+        return site;
+    }
+
     private async Task<SupervisionWithdrawalResponse> TakeAsync(long projectId, string accessToken, decimal amountUsd, string takenOn, string? note = null)
     {
         var response = await Client.PostJsonAsync($"/api/projects/{projectId}/supervision-withdrawals", new { amountUsd, takenOn, note }, accessToken);
@@ -54,7 +62,7 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
     public async Task Supervision_taken_is_recorded_listed_latest_day_first_and_removed_without_touching_profit()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var site = await SiteDueAsync(superAdmin.AccessToken, 1_000m);
         var before = await MoneyAsync(site.Id, superAdmin.AccessToken);
 
         var first = await TakeAsync(site.Id, superAdmin.AccessToken, 250.50m, Day(10), "  First tranche ");
@@ -72,7 +80,7 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
         // the latest day first; the same day, the one recorded last
         (await ListAsync(site.Id, superAdmin.AccessToken)).Select(w => w.Id).ShouldBe([second.Id, third.Id, first.Id]);
 
-        // nothing about the site's profit moved: it is not a cost, and more was taken than this site has due
+        // nothing about the site's profit moved: it is not a cost
         var during = await MoneyAsync(site.Id, superAdmin.AccessToken);
         during.ShouldSatisfyAllConditions(
             m => m.Profit.ShouldBe(before.Profit),
@@ -102,7 +110,7 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
     public async Task The_amount_the_day_and_the_note_are_checked()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var site = await SiteDueAsync(superAdmin.AccessToken, 1_000m);
         var url = $"/api/projects/{site.Id}/supervision-withdrawals";
         var token = superAdmin.AccessToken;
 
@@ -127,9 +135,9 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
 
         (await ListAsync(site.Id, token)).ShouldBeEmpty();
 
-        // today, the largest amount and the longest note are fine
+        // today, the smallest amount and the longest note are fine
         await TakeAsync(site.Id, token, 10m, CompanyToday().ToString("yyyy-MM-dd"), new string('x', 500));
-        await TakeAsync(site.Id, token, 999_999_999_999.99m, Day(1));
+        await TakeAsync(site.Id, token, 0.01m, Day(1));
         (await ListAsync(site.Id, token)).Count.ShouldBe(2);
     }
 
@@ -140,7 +148,7 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
         var recorder = await AdminWithAsync(superAdmin, PermissionCodes.PaymentRecord);
         var viewer = await AdminWithAsync(superAdmin, PermissionCodes.FinancialView);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var site = await SiteDueAsync(superAdmin.AccessToken, 1_000m);
         var existing = await TakeAsync(site.Id, superAdmin.AccessToken, 50m, Day(2));
         var url = $"/api/projects/{site.Id}/supervision-withdrawals";
 
@@ -169,7 +177,7 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, designMoney) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var site = await SiteDueAsync(superAdmin.AccessToken, 1_000m);
         var design = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var existing = await TakeAsync(site.Id, superAdmin.AccessToken, 50m, Day(2));
         var urlOf = (long id) => $"/api/projects/{id}/supervision-withdrawals";
@@ -192,7 +200,7 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
     public async Task A_finalised_site_still_takes_and_removes_them_since_nothing_frozen_moves()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var site = await SiteDueAsync(superAdmin.AccessToken, 1_000m);
         var kept = await TakeAsync(site.Id, superAdmin.AccessToken, 40m, Day(2));
 
         (await Client.PostEmptyAsync($"/api/projects/{site.Id}/complete", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
@@ -204,6 +212,58 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
     }
 
     [Fact]
+    public async Task No_more_than_is_left_of_the_supervision_due_can_be_taken()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var site = await SiteDueAsync(token, 500m);
+        var url = $"/api/projects/{site.Id}/supervision-withdrawals";
+
+        await TakeAsync(site.Id, token, 200m, Day(3));
+
+        // above what is left (300): refused, on the amount, and nothing is recorded
+        var above = await (await Client.PostJsonAsync(url, new { amountUsd = 300.01m, takenOn = Day(1) }, token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        above.Errors!.Keys.ShouldContain("amountUsd");
+        (await ListAsync(site.Id, token)).Count.ShouldBe(1);
+
+        // exactly what is left is allowed, and then nothing more
+        await TakeAsync(site.Id, token, 300m, Day(1));
+        var none = await (await Client.PostJsonAsync(url, new { amountUsd = 0.01m, takenOn = Day(1) }, token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        none.Errors!.Keys.ShouldContain("amountUsd");
+
+        // removing one gives its amount back
+        var list = await ListAsync(site.Id, token);
+        (await Client.DeleteAsync($"/api/supervision-withdrawals/{list.Single(w => w.AmountUsd == 300m).Id}", token)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await TakeAsync(site.Id, token, 300m, Day(1));
+    }
+
+    [Fact]
+    public async Task A_site_with_no_supervision_due_takes_none_and_a_price_that_fell_leaves_nothing_to_take()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+
+        // no price agreed: nothing is due
+        var unpriced = await Projects.CreateProjectAsync(token, DomainCodes.Execution, projectFee: 0);
+        await _steps.ExecuteAsync("UPDATE projects SET supervision_rate = 0.1 WHERE id = @id", ("@id", unpriced.Id));
+        await (await Client.PostJsonAsync($"/api/projects/{unpriced.Id}/supervision-withdrawals", new { amountUsd = 1m, takenOn = Day(1) }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        // a price but no supervision rate: nothing is due either
+        var free = await Projects.CreateProjectAsync(token, DomainCodes.Execution);
+        await (await Client.PostJsonAsync($"/api/projects/{free.Id}/supervision-withdrawals", new { amountUsd = 1m, takenOn = Day(1) }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        // the price falls after 80 of 100 was taken: 20 is now due, so 60 is over, and none more can be taken
+        var site = await SiteDueAsync(token, 100m);
+        await TakeAsync(site.Id, token, 80m, Day(2));
+        await _steps.ExecuteAsync("UPDATE projects SET project_fee = 200 WHERE id = @id", ("@id", site.Id));
+        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/supervision-withdrawals", new { amountUsd = 1m, takenOn = Day(1) }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        (await ListAsync(site.Id, token)).Count.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task The_activity_feed_shows_them_as_money_events_whose_amount_and_details_only_money_viewers_see()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
@@ -211,7 +271,7 @@ public class SupervisionWithdrawalTests(ApiFactory api) : IClassFixture<ApiFacto
         (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
             new { changes = new[] { new { code = PermissionCodes.ActivityView, action = "grant", reason = "Test" } } },
             superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
-        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var site = await SiteDueAsync(superAdmin.AccessToken, 1_000m);
         var taken = await TakeAsync(site.Id, superAdmin.AccessToken, 300m, Day(1), "Third quarter");
         (await Client.DeleteAsync($"/api/supervision-withdrawals/{taken.Id}", superAdmin.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 

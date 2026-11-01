@@ -37,4 +37,28 @@ public class SupervisionRulesTests
         SupervisionRules.Left(due: 63_011.70m, taken: 63_011.70m).ShouldBe(0);
         SupervisionRules.Left(due: 100, taken: 130.50m).ShouldBe(-30.50m);
     }
+
+    [Fact]
+    public void No_more_than_is_left_can_be_taken_so_the_limit_itself_is_allowed()
+    {
+        SupervisionRules.CheckAmount(amount: 6_000m, left: 6_000m).ShouldBeNull();
+        SupervisionRules.CheckAmount(amount: 0.01m, left: 6_000m).ShouldBeNull();
+
+        var above = SupervisionRules.CheckAmount(amount: 6_000.01m, left: 6_000m)!;
+        above.Code.ShouldBe(ErrorCodes.ValidationFailed);
+        above.Kind.ShouldBe(DenialKind.Validation);
+        above.Field.ShouldBe("amountUsd");
+        above.Message.ShouldContain("6,000.00");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-50.25)]
+    public void Nothing_can_be_taken_when_nothing_is_left_or_it_was_over_taken(double left)
+    {
+        var denial = SupervisionRules.CheckAmount(amount: 1m, left: (decimal)left)!;
+
+        denial.Field.ShouldBe("amountUsd");
+        denial.Message.ShouldBe("Nothing of the supervision is left to take.");
+    }
 }

@@ -32,4 +32,28 @@ public class TvaTests
         Tva.Of(787_646.20m, 0.11m).ShouldBe(86_641.08m);
         Tva.Of(500m, 0m).ShouldBe(0m);
     }
+
+    [Fact]
+    public void The_net_amount_for_what_a_client_paid_is_the_amount_whose_gross_it_is()
+    {
+        Tva.NetFor(370m, 0.11m).ShouldBe(333.33m);
+        Tva.NetFor(11_500m, 0.15m).ShouldBe(10_000m);
+        Tva.NetFor(500m, 0m).ShouldBe(500m);
+        Tva.NetFor(0m, 0.11m).ShouldBe(0m);
+    }
+
+    [Theory]
+    [InlineData(0.11)]
+    [InlineData(0.15)]
+    [InlineData(0.2)]
+    public void Every_gross_a_net_can_make_goes_back_to_a_net_that_makes_it(double rate)
+    {
+        var tva = (decimal)rate;
+        for (var cents = 1; cents <= 20_000; cents++)
+        {
+            var gross = Tva.Gross(cents / 100m, tva);
+
+            Tva.Gross(Tva.NetFor(gross, tva), tva).ShouldBe(gross);
+        }
+    }
 }
