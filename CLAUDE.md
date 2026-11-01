@@ -105,6 +105,11 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     every client project) is on the work only, never on supervision. Completing the site freezes that amount. Site
     expenses are costs only: no client price, no markup.
   - Execution cash profit = received − cost − money moved to the pocket + money paid by it. Pocket money moves profit, never what the client owes.
+  - TVA sits on the net: revenue, profit and margin exclude it. Billing (invoices, BOQs, what the client owes or paid)
+    is gross, and the client never sees TVA as its own line ([billing.md](docs/billing.md), "TVA").
+  - **Profit floor:** a client project with an agreed amount can't have its profit lowered to zero or below. The change
+    is refused (`profit_floor`) and kept as a blocked change, which only someone with `financial:view` can force
+    through, once. Changes that raise profit always pass ([projects.md](docs/projects.md), "Profit floor").
   - Supervision taken (the company withdrawing its supervision fee) is not a cost. Cash in account = received − cost −
     supervision taken − moved to the pocket + paid by it. A payment's money is never edited; only its account label can
     change.
