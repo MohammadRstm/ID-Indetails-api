@@ -212,6 +212,15 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
         figures.ByPayee.Select(p => (p.Payee, p.SpentUsd)).ShouldBe(
             [("Beirut Concrete", 20_500m), ("Al Nour", 8_000m), ("Tile House", 6_100m), ((string?)null, 1_500m)]);
         figures.ByCategory.Sum(c => c.SpentUsd).ShouldBe(figures.Costs.SiteExpensesUsd);
+        // what each payee was paid by category and label, largest first; the unrated expense is left out
+        figures.ByPayee.Select(p => p.Splits.Select(s => (s.Category, s.AccountLabelId, s.SpentUsd)).ToList()).ShouldBe(
+        [
+            [(SiteExpenseCategory.Materials, (long?)concrete.Id, 20_000m), (SiteExpenseCategory.Materials, (long?)null, 500m)],
+            [(SiteExpenseCategory.Contractor, (long?)concrete.Id, 8_000m)],
+            [(SiteExpenseCategory.Materials, (long?)finishing.Id, 6_100m)],
+            [(SiteExpenseCategory.Fees, (long?)null, 1_500m)],
+        ]);
+        figures.ByPayee.ShouldAllBe(p => p.Splits.Sum(s => s.SpentUsd) == p.SpentUsd);
 
         // the expense with no rate that day
         figures.Unconverted.Select(u => (u.Source, u.Currency, u.Amount)).ShouldBe([(CostSource.SiteExpense, "LBP", 1_000_000m)]);
@@ -249,7 +258,12 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
         var category = json.GetProperty("byCategory")[0];
         Names(category).ShouldBe(["category", "spentUsd"]);
         category.GetProperty("category").GetString().ShouldBe("materials");
-        Names(json.GetProperty("byPayee")[0]).ShouldBe(["payee", "spentUsd"]);
+        var payee = json.GetProperty("byPayee")[0];
+        Names(payee).ShouldBe(["payee", "spentUsd", "splits"]);
+        var split = payee.GetProperty("splits")[0];
+        Names(split).ShouldBe(["category", "accountLabelId", "spentUsd"]);
+        split.GetProperty("category").GetString().ShouldBe("materials");
+        split.GetProperty("accountLabelId").GetInt64().ShouldBe(label.Id);
 
         var unconverted = json.GetProperty("unconverted")[0];
         Names(unconverted).ShouldBe(["source", "currency", "amount"]);
@@ -286,7 +300,7 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Paying_ahead_and_taking_more_supervision_than_is_due_show_as_negative_and_supervision_never_moves_profit()
+    public async Task Paying_ahead_shows_as_negative_and_supervision_cannot_be_taken_beyond_what_is_due_but_goes_over_when_the_price_falls()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var token = superAdmin.AccessToken;
@@ -302,17 +316,24 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
             f => f.Supervision.LeftUsd.ShouldBe(100m));
         var profit = (await MoneyAsync(site.Id, token)).Profit;
 
-        // allowed: taking 150 of the 100 due
-        await TakeAsync(site.Id, token, 150m);
+        // refused: 150 of the 100 due, however much the client paid
+        var refused = await Client.PostJsonAsync($"/api/projects/{site.Id}/supervision-withdrawals", new { amountUsd = 150m, takenOn = Day(1) }, token);
+        (await refused.ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("amountUsd");
 
-        var over = await FiguresAsync(site.Id, token);
-        over.ShouldSatisfyAllConditions(
-            f => f.Supervision.ShouldBe(new AccountSupervisionResponse(100m, 150m, -50m)),
-            f => f.CashInAccountUsd.ShouldBe(1_050m),
+        await TakeAsync(site.Id, token, 100m);
+
+        var taken = await FiguresAsync(site.Id, token);
+        taken.ShouldSatisfyAllConditions(
+            f => f.Supervision.ShouldBe(new AccountSupervisionResponse(100m, 100m, 0m)),
+            f => f.CashInAccountUsd.ShouldBe(1_100m),
             f => f.ProfitUsd.ShouldBe(profit),
             f => f.Costs.TotalUsd.ShouldBe(0m));
-        over.ByLabel.Single().OtherUsd.ShouldBe(150m);
+        taken.ByLabel.Single().OtherUsd.ShouldBe(100m);
         (await MoneyAsync(site.Id, token)).Profit.ShouldBe(profit);
+
+        // a variation order that lowers the work to 500 leaves 50 due, so 50 of what was taken is over
+        await Boqs.AgreeVoAsync(token, site.Id, -500m);
+        (await FiguresAsync(site.Id, token)).Supervision.ShouldBe(new AccountSupervisionResponse(50m, 100m, -50m));
     }
 
     [Fact]

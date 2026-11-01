@@ -7,7 +7,7 @@ namespace ID_Indetails.api.Business.Execution;
 /// <summary>
 /// Supervision taken: the company withdrawing some of an Execution site's supervision fee from the project account.
 /// It is not a cost, so it never moves the site's profit (and has no profit floor); it only lowers the cash in the
-/// account and what is left to take. Taking more than is due is allowed and shows as over.
+/// account and what is left to take. No more than is left of what is due can be taken.
 /// </summary>
 public static class SupervisionRules
 {
@@ -27,6 +27,12 @@ public static class SupervisionRules
             ? RuleDenial.Invalid(ErrorCodes.TakenDateInFuture, "takenOn", "Supervision can't be recorded as taken on a future date.")
             : null;
 
-    /// <summary>What is still to take of the supervision due; negative once more was taken than is due.</summary>
+    /// <summary>What is still to take of the supervision due; negative only for what was taken before the work price fell.</summary>
     public static decimal Left(decimal due, decimal taken) => due - taken;
+
+    public static RuleDenial? CheckAmount(decimal amount, decimal left)
+        => amount <= left
+            ? null
+            : RuleDenial.Invalid(ErrorCodes.ValidationFailed, "amountUsd",
+                left > 0 ? $"Only {left:N2} USD of the supervision is left to take." : "Nothing of the supervision is left to take.");
 }

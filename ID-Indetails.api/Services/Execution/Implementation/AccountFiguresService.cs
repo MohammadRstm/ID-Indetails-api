@@ -91,7 +91,8 @@ public sealed class AccountFiguresService(
                     r.Rest))
                 .ToList(),
             result.ByCategory.Select(c => new AccountCategoryRowResponse(c.Category, c.Spent)).ToList(),
-            result.ByPayee.Select(p => new AccountPayeeRowResponse(p.Payee, p.Spent)).ToList(),
+            result.ByPayee.Select(p => new AccountPayeeRowResponse(p.Payee, p.Spent,
+                p.Splits.Select(s => new AccountPayeeSplitResponse(s.Category, s.LabelId, s.Spent)).ToList())).ToList(),
             money.Costs.Unconverted.Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount)).ToList());
     }
 }

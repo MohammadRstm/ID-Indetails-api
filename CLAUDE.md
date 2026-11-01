@@ -41,8 +41,9 @@ ID InDetails is a company of architectural engineers. This repository is the API
 
 - **Domains** are the company's businesses, and almost everything belongs to one:
   - **Design** runs on logged hours: work entries, overtime, pay by the hour.
-  - **Execution** runs construction sites on materials, weekly ground labour, client statements and site staff with
-    daily logs. **Pocket money** is money super admins set aside from Execution sites by hand and pay back, on request, to sites that run short.
+  - **Execution** runs construction sites on BOQs and VOs (which set the price of the work), cost-only site expenses,
+    weekly ground labour and site staff with daily logs. Payments and expenses are filed under company account labels,
+    and the supervision the company takes from a site is recorded. **Pocket money** is money super admins set aside from Execution sites by hand and pay back, on request, to sites that run short.
   - **Website** is a third domain for the company's public website. Its staff are admins only.
 - **The company area** sits above the domains: the overview, salaries, schedules, overhead, settings and permissions.
 - **Roles** (`super_admin`, `admin`, `employee`) only supply *default* permissions. Endpoints check **permissions**,
@@ -55,7 +56,6 @@ ID InDetails is a company of architectural engineers. This repository is the API
 | API (this one) | `C:\Users\masst\source\repos\ID-Indetails` (`master`) | ASP.NET Core .NET 10, EF Core + Pomelo MySQL 8.4 |
 | Client | `C:\Users\masst\Desktop\Ident-Internal-Management-System-client` (`main`) | React 19 + TypeScript + Vite. It has its own CLAUDE.md. |
 | Website | `C:\Users\masst\Desktop\id-indetails-website` (`master`) | The public website. It reads `/api/public/website/` only. It has its own CLAUDE.md. |
-| Prototype | `C:\Users\masst\source\repos\hourline` | The approved HTML/JS prototype. It is the source of truth for screens and business rules. **Read-only: never change, branch, commit or push it.** |
 
 Feature work usually touches the API and the client together: one `MR-<Topic>` branch and one PR in each.
 
@@ -70,15 +70,15 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
 | Permissions, roles, domain visibility | [authorization.md](docs/authorization.md) |
 | Projects, status, pricing, payment history | [projects.md](docs/projects.md) |
 | Design: work entries, meetings, work views, outside-scope hours | [design.md](docs/design.md) |
-| Execution: materials, labour, statements, site staff, daily logs, pocket money | [execution.md](docs/execution.md) |
+| Execution: BOQs and VOs, site expenses, labour, site staff, daily logs, pocket money, supervision taken, account figures | [execution.md](docs/execution.md) |
 | Money: the finance calculator, dashboards, Financials | [finance.md](docs/finance.md) |
 | Invoices and payments | [billing.md](docs/billing.md) |
 | Clients | [clients.md](docs/clients.md) |
 | People, pay, hours | [employees.md](docs/employees.md), [me.md](docs/me.md) |
-| Company settings, working time, overhead | [company.md](docs/company.md) |
+| Company settings, working time, overhead, account labels | [company.md](docs/company.md) |
 | Client portal, project files, storage | [client-portal.md](docs/client-portal.md), [content-storage.md](docs/content-storage.md), [files.md](docs/files.md) |
 | Chats, notifications, live updates, search | [messaging.md](docs/messaging.md), [notifications.md](docs/notifications.md), [search.md](docs/search.md) |
-| PDFs (invoices, statements, reports) | [documents.md](docs/documents.md) |
+| PDFs (invoices, quotes, BOQs, reports) | [documents.md](docs/documents.md) |
 | The public website and its dashboard | [website.md](docs/website.md) |
 | Proton, the assistant | [proton.md](docs/proton.md). The `proton-stage-*-plan.md` files are history. |
 | Tables, migrations, seed data | [database.md](docs/database.md) |
@@ -100,8 +100,14 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
 - **The API does every calculation.** The client never computes money, overtime or access.
 - **Money:**
   - A Design project's revenue is typed in.
-  - An open Execution project is priced live: its fee plus the client prices of materials sent on a statement. Completing it freezes that amount.
+  - An Execution site's work price is set only by agreeing or withdrawing its client BOQ and VOs (agreed BOQ + agreed
+    VOs); nobody types it in. Its revenue is work + supervision (work × rate, 10% by default), and TVA (11% by default on
+    every client project) is on the work only, never on supervision. Completing the site freezes that amount. Site
+    expenses are costs only: no client price, no markup.
   - Execution cash profit = received − cost − money moved to the pocket + money paid by it. Pocket money moves profit, never what the client owes.
+  - Supervision taken (the company withdrawing its supervision fee) is not a cost. Cash in account = received − cost −
+    supervision taken − moved to the pocket + paid by it. A payment's money is never edited; only its account label can
+    change.
 - **Pay:**
   - The daily one-hour break is paid, so 7 hours of required work is an 8-hour paid day.
   - The hourly rate is the salary ÷ that month's scheduled paid hours.
@@ -160,6 +166,11 @@ This file is how every new session learns the project, so keep it true:
 - **Enums** are snake_case in JSON (`payment_voided`). A model binder (`Middlewares/SnakeCaseEnumBinder.cs`) makes query and route enums take the same spelling.
 - **Rules are pure:** `Business/*Rules.cs` return a `RuleDenial`, and the service throws it.
 - **Pocket money ledger:** `pocket_entries`, signed from the pocket's side (a contribution is positive, a payout negative), never edited. Its balance is the sum. Sites ask for money in `pocket_requests`, each decided once.
+- **The phone's materials routes:** the phone app still records site expenses at `/api/projects/{id}/materials`, which
+  the same controller serves alongside `/site-expenses` until the phone moves. Permissions keep their `material:*` codes,
+  and stored activity, notification and blocked-change kinds keep their `material_*` names.
+- **LBP site expenses** need an exchange rate in force on their day (`exchange_rate_missing`), so no cost slips past
+  profit and the profit floor.
 
 ---
 
