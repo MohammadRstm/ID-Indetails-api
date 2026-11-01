@@ -98,6 +98,14 @@ public class PermissionCatalogTests
         => PermissionCatalog.Definitions.Where(d => d.Code.StartsWith("website:") || d.Code.StartsWith("website_")).ShouldAllBe(d => d.DomainCode == DomainCodes.Website);
 
     [Fact]
+    public void Only_super_admins_write_the_announcements()
+    {
+        GrantsOf(RoleCodes.SuperAdmin).ShouldContain(PermissionCodes.MessageAnnounce);
+        GrantsOf(RoleCodes.Admin).ShouldNotContain(PermissionCodes.MessageAnnounce);
+        GrantsOf(RoleCodes.Employee).ShouldNotContain(PermissionCodes.MessageAnnounce);
+    }
+
+    [Fact]
     public void Admins_manage_project_files_but_only_super_admins_choose_and_publish_what_clients_see()
     {
         GrantsOf(RoleCodes.Admin).ShouldContain(PermissionCodes.ProjectFilesManage);

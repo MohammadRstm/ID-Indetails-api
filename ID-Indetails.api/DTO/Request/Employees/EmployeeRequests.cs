@@ -67,6 +67,12 @@ public sealed record ChangePayRequest
     /// <summary>Hourly rate or monthly salary, depending on <see cref="Basis"/>.</summary>
     public decimal Amount { get; init; }
 
+    /// <summary>
+    /// What an hour of a salary's overtime is paid at, before the multiplier. Leave it empty for the salary ÷ 184. Hourly
+    /// pay is its own overtime rate, so it takes none.
+    /// </summary>
+    public decimal? OvertimeRate { get; init; }
+
     public string Currency { get; init; } = "USD";
 
     /// <summary>Defaults to today in the company time zone. Never in the future, and after the latest change.</summary>

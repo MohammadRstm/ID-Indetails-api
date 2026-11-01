@@ -31,6 +31,9 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
     public Task<Conversation?> TeamConversationAsync(long teamId, CancellationToken cancellationToken = default)
         => db.Conversations.SingleOrDefaultAsync(c => c.TeamId == teamId, cancellationToken);
 
+    public Task<Conversation?> AnnouncementsAsync(CancellationToken cancellationToken = default)
+        => db.Conversations.OrderBy(c => c.Id).FirstOrDefaultAsync(c => c.Type == ConversationType.Announcements, cancellationToken);
+
     public Task<Conversation?> DirectConversationAsync(long userA, long userB, CancellationToken cancellationToken = default)
     {
         var (low, high) = userA < userB ? (userA, userB) : (userB, userA);
@@ -98,7 +101,8 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
     {
         var teams = teamIds.ToList();
         var conversations = await db.Conversations.AsNoTracking()
-            .Where(c => (c.TeamId != null && teams.Contains(c.TeamId.Value)) || c.DmUserLowId == userId || c.DmUserHighId == userId)
+            .Where(c => c.Type == ConversationType.Announcements
+                || (c.TeamId != null && teams.Contains(c.TeamId.Value)) || c.DmUserLowId == userId || c.DmUserHighId == userId)
             .Select(c => new
             {
                 c.Id,
@@ -114,13 +118,14 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
         }
 
         var ids = conversations.Select(c => c.Id).ToList();
+        var joined = await db.Users.Where(u => u.Id == userId).Select(u => u.CreatedAt).SingleAsync(cancellationToken);
         var unread = await (
-                from m in Unread(userId, ids)
+                from m in Unread(userId, ids, joined)
                 group m by m.ConversationId into g
                 select new { ConversationId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.ConversationId, x => x.Count, cancellationToken);
         var mentioned = (await (
-                from m in Unread(userId, ids)
+                from m in Unread(userId, ids, joined)
                 join x in db.MessageMentions on m.Id equals x.MessageId
                 where x.UserId == userId
                 select m.ConversationId)
@@ -140,14 +145,18 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
             .ToList();
     }
 
-    /// <summary>Messages others sent in these conversations after the user's read marker.</summary>
-    private IQueryable<Message> Unread(long userId, List<long> conversationIds)
+    /// <summary>
+    /// Messages others sent in these conversations after the user's read marker. What was announced before the user
+    /// joined isn't theirs to catch up on: they can read it, but it doesn't count.
+    /// </summary>
+    private IQueryable<Message> Unread(long userId, List<long> conversationIds, DateTime joined)
         => from m in db.Messages.AsNoTracking()
            join r in db.ConversationReads.Where(r => r.UserId == userId) on m.ConversationId equals r.ConversationId into reads
            from r in reads.DefaultIfEmpty()
            where conversationIds.Contains(m.ConversationId)
                && m.SenderId != userId
                && (r == null || r.LastReadMessageId == null || m.Id > r.LastReadMessageId)
+               && (m.Conversation.Type != ConversationType.Announcements || m.CreatedAt >= joined)
            select m;
 
     private static async Task<IReadOnlyList<ChatPerson>> People(IQueryable<User> users, CancellationToken cancellationToken)

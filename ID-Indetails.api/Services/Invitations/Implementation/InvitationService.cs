@@ -111,7 +111,7 @@ public sealed class InvitationService(
                 Basis = pay.Basis,
                 Amount = pay.Amount,
                 Currency = pay.Currency.ToUpperInvariant(),
-                HourlyCostRate = pay.Basis == PayBasis.Hourly ? pay.Amount : 0,
+                OvertimeRate = pay.OvertimeRate ?? PayRules.SuggestedOvertimeRate(pay.Basis, pay.Amount),
                 Note = "Set at invitation",
                 CreatedAt = now,
                 CreatedById = currentUser.Id,

@@ -18,6 +18,15 @@ public static class NotificationKinds
     /// <summary>Someone who doesn't manage meetings set one (subject: the meeting). Sent to the domain's meeting managers.</summary>
     public const string MeetingScheduled = "meeting_scheduled";
 
+    /// <summary>You were added to a general meeting (subject: the meeting). To its attendees, from whoever set it.</summary>
+    public const string MeetingInvited = "meeting_invited";
+
+    /// <summary>A general meeting you are in moved to another time (subject: the meeting).</summary>
+    public const string MeetingMoved = "meeting_moved";
+
+    /// <summary>A general meeting you were in was cancelled, or you were taken out of it (subject: the meeting).</summary>
+    public const string MeetingCancelled = "meeting_cancelled";
+
     /// <summary>Someone recorded expenses on a site (subject: the project; the count in the payload). The kind keeps its stored name.</summary>
     public const string MaterialsAdded = "materials_added";
 
@@ -132,6 +141,11 @@ public static class NotificationKinds
     /// <summary>Design employees finished a closed month short of their hours (digest key <c>hours-short-YYYY-MM</c>). Sent to whoever sees salaries.</summary>
     public const string HoursShort = "hours_short";
 
+    /// <summary>You logged less than a working day asked for (digest key <c>hours-missed-YYYY-MM-DD</c>, the day). The next morning, as a reminder.</summary>
+    public const string HoursMissed = "hours_missed";
+
+    /// <summary>Who logged less than a working day asked for (digest key <c>hours-missed-list-YYYY-MM-DD</c>). The next morning, to whoever sees everyone's Design work.</summary>
+    public const string HoursMissedList = "hours_missed_list";
     /// <summary>
     /// An active client project's cost passed 85% of its payment (subject: the project). No longer sent: <see cref="ProfitLow"/>
     /// took its place; kept so the ones sent before still read.

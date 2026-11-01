@@ -41,12 +41,15 @@ public sealed record PushTarget
 
     public DateOnly? WeekStart { get; init; }
 
-    /// <summary><c>notifications</c>, <c>today</c>, <c>work</c>, <c>meetings</c> or <c>company</c>.</summary>
+    /// <summary><c>notifications</c>, <c>today</c>, <c>work</c>, <c>meetings</c>, <c>company</c> or <c>announcements</c>.</summary>
     public string? Page { get; init; }
 
     public static PushTarget Notifications { get; } = OfPage("notifications");
 
     public static PushTarget OfPage(string page) => new() { Type = PageType, Page = page };
+
+    /// <summary>The Announcements chat.</summary>
+    public static PushTarget Announcements { get; } = OfPage("announcements");
 
     /// <summary>A team chat, or the direct chat with <paramref name="userId"/> (whoever wrote to the reader).</summary>
     public static PushTarget Chat(long? teamId, long? userId) => new() { Type = Conversation, TeamId = teamId, UserId = teamId is null ? userId : null };
@@ -74,6 +77,8 @@ public sealed record PushTarget
                     : null,
             NotificationKinds.RequirementsAdded => ProjectPart(projectId, projectDomain, "requirements"),
             NotificationKinds.MeetingScheduled => ProjectPart(projectId, projectDomain, "meetings"),
+            // a general meeting has no project: its people see it among their meetings
+            NotificationKinds.MeetingInvited or NotificationKinds.MeetingMoved or NotificationKinds.MeetingCancelled => OfPage("meetings"),
             NotificationKinds.MaterialsAdded => ProjectPart(projectId, projectDomain, "materials"),
             NotificationKinds.LabourWeekSubmitted => projectId is { } site && WeekStartOf(payload) is { } week
                 ? LabourWeek(site, week)
@@ -86,7 +91,8 @@ public sealed record PushTarget
                 => ProjectPart(projectId, projectDomain, null),
 
             NotificationKinds.WorkLogged or NotificationKinds.EntryComment => Subject(WorkEntry, "work_entry", subjectType, subjectId),
-            NotificationKinds.WorkDigest or NotificationKinds.WeeklySummary => OfPage("work"),
+            NotificationKinds.WorkDigest or NotificationKinds.WeeklySummary or NotificationKinds.HoursMissed => OfPage("work"),
+            NotificationKinds.HoursMissedList => OfPage("today"),
 
             NotificationKinds.InvitationAccepted => Subject(Person, "user", subjectType, subjectId),
             NotificationKinds.ClientAdded => Subject(Client, "client", subjectType, subjectId),

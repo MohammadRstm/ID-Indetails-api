@@ -1,7 +1,10 @@
 namespace ID_Indetails.api.Services.Realtime.Abstraction;
 
-/// <summary>Which chat changed: a team's, or the direct chat with <paramref name="UserId"/>.</summary>
-public sealed record LiveChat(long? TeamId, long? UserId);
+/// <summary>Which chat changed: a team's, the direct chat with <paramref name="UserId"/>, or Announcements.</summary>
+public sealed record LiveChat(long? TeamId, long? UserId, bool Announcements = false)
+{
+    public static LiveChat ForAnnouncements { get; } = new(null, null, true);
+}
 
 /// <summary>
 /// "Something changed" signals for signed-in clients (see <c>Hubs/LiveHub</c>). Staged while a request runs and sent

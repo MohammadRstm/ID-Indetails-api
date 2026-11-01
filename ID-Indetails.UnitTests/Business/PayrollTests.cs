@@ -19,9 +19,10 @@ public class PayrollTests
 
     private static Work At(long id, int day, int startHour, int hours) => new(id, new DateOnly(2026, 6, day), startHour * 60, hours * 60);
 
-    // 1,760 a month is 10 an hour in June (22 days of 8 paid hours); 20 an hour for the hourly terms.
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD");
-    private static readonly SalaryCalculator.PayTerms Hourly = new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD");
+    // 1,760 a month is 10 an hour in June (22 days of 8 paid hours), with overtime from 9.57 (1,760 ÷ 184); 20 an hour
+    // for the hourly terms, overtime included.
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD", 9.57m);
+    private static readonly SalaryCalculator.PayTerms Hourly = new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD", 20m);
 
     private static SalaryCalculator.Result Pay(
         SalaryCalculator.PayTerms terms,
@@ -155,10 +156,18 @@ public class PayrollTests
     {
         var result = Pay(Monthly, new(2026, 1, 1), [At(1, 6, 10, 2)], ledger: false);
 
-        // Overtime is paid at the true hourly rate, whatever the month: 1,760 / 173.33 = 10.1538, not June's 10.
+        // Overtime is paid at the pay's overtime rate, whatever the month: 9.57 (1,760 / 184), not June's 10.
         result.BasePay.ShouldBe(1760m);
-        result.StandardHourlyRate.ShouldBe(10.1538m);
-        result.OvertimePay.ShouldBe(30.46m); // 2h on a Saturday at 10.1538 x 1.5
+        result.OvertimeRate.ShouldBe(9.57m);
+        result.OvertimePay.ShouldBe(28.71m); // 2h on a Saturday at 9.57 x 1.5
+    }
+
+    [Fact]
+    public void An_overtime_rate_set_by_hand_is_what_overtime_is_paid_at()
+    {
+        var result = Pay(Monthly with { OvertimeRate = 12m }, new(2026, 1, 1), [At(1, 6, 10, 2)], ledger: false);
+
+        result.OvertimePay.ShouldBe(36m); // 2h at 12 x 1.5
     }
 
     [Fact]

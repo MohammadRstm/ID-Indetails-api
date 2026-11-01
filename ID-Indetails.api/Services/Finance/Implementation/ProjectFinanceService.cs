@@ -1,6 +1,8 @@
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.WorkEntries;
+using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
@@ -23,6 +25,7 @@ public sealed class ProjectFinanceService(
         ExchangeRateTable Rates,
         ILookup<long, WorkEntryRow> Entries,
         IReadOnlyList<ProjectFinance.PayRate> PayRates,
+        IReadOnlyDictionary<long, PaidOvertime> Overtime,
         ILookup<long, Cost> Breaks,
         ILookup<long, ExpenseRow> Expenses,
         ILookup<long, SiteExpenseRow> SiteExpenses,
@@ -49,7 +52,7 @@ public sealed class ProjectFinanceService(
         return projects.ToDictionary(p => p.Id, p =>
         {
             var entries = loaded.Entries[p.Id].ToList();
-            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Breaks[p.Id], loaded.Expenses[p.Id], loaded.SiteExpenses[p.Id], loaded.Ground[p.Id]);
+            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Overtime, loaded.Breaks[p.Id], loaded.Expenses[p.Id], loaded.SiteExpenses[p.Id], loaded.Ground[p.Id]);
             return new ProjectCostHistory(
                 Calculate(p, loaded),
                 ProjectFinance.DatedUsd(items, loaded.Rates),
@@ -68,6 +71,7 @@ public sealed class ProjectFinanceService(
             new ExchangeRateTable(await sources.ExchangeRatesAsync(cancellationToken)),
             entries.ToLookup(e => e.ProjectId),
             payRates,
+            await PaidOvertimeAsync(entries, payRates, cancellationToken),
             (await PaidBreaksAsync(entries, payRates, cancellationToken)).ToLookup(b => b.ProjectId, b => b.Cost),
             (await sources.ExpensesAsync(ids, cancellationToken)).ToLookup(x => x.ProjectId),
             (await sources.SiteExpensesAsync(ids, cancellationToken)).ToLookup(e => e.ProjectId),
@@ -81,6 +85,7 @@ public sealed class ProjectFinanceService(
             project,
             loaded.Entries[project.Id].ToList(),
             loaded.PayRates,
+            loaded.Overtime,
             loaded.Breaks[project.Id],
             loaded.Expenses[project.Id],
             loaded.SiteExpenses[project.Id].ToList(),
@@ -103,6 +108,7 @@ public sealed class ProjectFinanceService(
         var (items, _) = CostItems(
             entries,
             payRates,
+            await PaidOvertimeAsync(entries, payRates, cancellationToken),
             breaks,
             await sources.ExpensesAsync(ids, cancellationToken),
             await sources.SiteExpensesAsync(ids, cancellationToken),
@@ -171,20 +177,42 @@ public sealed class ProjectFinanceService(
         return costs;
     }
 
+    public async Task<IReadOnlyDictionary<long, PaidOvertime>> PaidOvertimeAsync(
+        IReadOnlyCollection<WorkEntryRow> work,
+        IReadOnlyList<ProjectFinance.PayRate> payRates,
+        CancellationToken cancellationToken = default)
+    {
+        var priced = payRates.Select(r => r.UserId).ToHashSet();
+        var theirs = work.Where(e => priced.Contains(e.UserId)).ToList();
+        if (theirs.Count == 0)
+        {
+            return new Dictionary<long, PaidOvertime>();
+        }
+
+        var people = await payroll.UsersAsync(theirs.Select(e => e.UserId).Distinct().ToList(), cancellationToken);
+        var months = theirs.Select(e => WorkStats.MonthStartOf(clock.ToCompanyDate(e.StartedAt))).Distinct().ToList();
+        var company = new PersonCalendar(await payrollInputs.PoliciesAsync(cancellationToken), []);
+
+        return (await payrollInputs.EntrySplitsAsync(people, months, cancellationToken))
+            .Where(s => s.Value.PaidOvertime > 0)
+            .ToDictionary(s => s.Key, s => new PaidOvertime(s.Value.PaidOvertime, company.PolicyOn(s.Value.Work.Day).OvertimeMultiplier));
+    }
+
     /// <summary>
-    /// Every cost of a project on its day, in its own currency; worked time is priced at each person's rate, and their
-    /// paid breaks are added as labour.
+    /// Every cost of a project on its day, in its own currency; worked time is priced at each person's rate, the part
+    /// paid as overtime at their overtime rate × the multiplier, and their paid breaks are added as labour.
     /// </summary>
     private (IReadOnlyList<Cost> Items, int UnpricedMinutes) CostItems(
         IEnumerable<WorkEntryRow> entries,
         IReadOnlyList<ProjectFinance.PayRate> payRates,
+        IReadOnlyDictionary<long, PaidOvertime> overtime,
         IEnumerable<Cost> breaks,
         IEnumerable<ExpenseRow> expenses,
         IEnumerable<SiteExpenseRow> siteExpenses,
         IEnumerable<GroundLabourRow> ground)
     {
         var (labour, unpricedMinutes) = ProjectFinance.PriceLabour(
-            entries.Select(e => new ProjectFinance.WorkedTime(e.UserId, clock.ToCompanyDate(e.StartedAt), e.Minutes)),
+            entries.Select(e => PaidOvertime.Of(e.UserId, clock.ToCompanyDate(e.StartedAt), e.Minutes, overtime.GetValueOrDefault(e.Id))),
             payRates);
 
         var items = labour
@@ -202,6 +230,7 @@ public sealed class ProjectFinanceService(
         Project project,
         IReadOnlyList<WorkEntryRow> entries,
         IReadOnlyList<ProjectFinance.PayRate> payRates,
+        IReadOnlyDictionary<long, PaidOvertime> overtime,
         IEnumerable<Cost> breaks,
         IEnumerable<ExpenseRow> expenses,
         IReadOnlyList<SiteExpenseRow> siteExpenses,
@@ -210,7 +239,7 @@ public sealed class ProjectFinanceService(
         (decimal ToPocket, decimal FromPocket) pocket,
         ExchangeRateTable rates)
     {
-        var (items, unpricedMinutes) = CostItems(entries, payRates, breaks, expenses, siteExpenses, ground);
+        var (items, unpricedMinutes) = CostItems(entries, payRates, overtime, breaks, expenses, siteExpenses, ground);
         var costs = ProjectFinance.ToUsd(items, rates);
 
         var isExecution = project.DomainCode == DomainCodes.Execution;

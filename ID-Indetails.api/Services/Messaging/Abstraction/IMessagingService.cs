@@ -3,10 +3,10 @@ using ID_Indetails.api.DTO.Response.Messaging;
 
 namespace ID_Indetails.api.Services.Messaging.Abstraction;
 
-/// <summary>Team chats and direct messages (see <c>Business/Messaging/MessagingRules</c>).</summary>
+/// <summary>Team chats, direct messages and Announcements (see <c>Business/Messaging/MessagingRules</c>).</summary>
 public interface IMessagingService
 {
-    /// <summary>Every team chat the caller is in, and their direct chats with messages; most recent first.</summary>
+    /// <summary>Announcements first, then every team chat the caller is in and their direct chats with messages, most recent first.</summary>
     Task<IReadOnlyList<ConversationResponse>> ConversationsAsync(CancellationToken cancellationToken = default);
 
     Task<MessagesBadgeResponse> BadgeAsync(CancellationToken cancellationToken = default);
@@ -39,7 +39,19 @@ public interface IMessagingService
     /// <inheritdoc cref="MarkTeamReadAsync"/>
     Task<MessagesBadgeResponse> MarkDirectReadAsync(long userId, CancellationToken cancellationToken = default);
 
-    /// <summary>Whether the caller may read this conversation now: a team chat they are in, or their direct chat with someone they can reach.</summary>
+    /// <summary>The Announcements chat, which every active person reads.</summary>
+    Task<MessagePageResponse> AnnouncementsAsync(MessagePageQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>Writes in Announcements (message:announce, checked by the endpoint): everyone else is told on their phone.</summary>
+    Task<MessageResponse> AnnounceAsync(SendMessageRequest request, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="MarkTeamReadAsync"/>
+    Task<MessagesBadgeResponse> MarkAnnouncementsReadAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether the caller may read this conversation now: Announcements, a team chat they are in, or their direct chat
+    /// with someone they can reach.
+    /// </summary>
     Task<bool> CanReadConversationAsync(long conversationId, CancellationToken cancellationToken = default);
 
     /// <summary>

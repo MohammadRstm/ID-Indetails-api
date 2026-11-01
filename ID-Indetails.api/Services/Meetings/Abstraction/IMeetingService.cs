@@ -11,6 +11,9 @@ public interface IMeetingService
 
     Task<MeetingResponse> CreateAsync(long projectId, SaveMeetingRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>A meeting about no project, for the people chosen (see <c>MeetingRules</c>).</summary>
+    Task<MeetingResponse> CreateGeneralAsync(SaveGeneralMeetingRequest request, CancellationToken cancellationToken = default);
+
     Task<MeetingResponse> UpdateAsync(long id, SaveMeetingRequest request, CancellationToken cancellationToken = default);
 
     Task DeleteAsync(long id, CancellationToken cancellationToken = default);

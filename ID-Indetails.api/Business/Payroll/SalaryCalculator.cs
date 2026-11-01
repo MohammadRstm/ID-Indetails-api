@@ -7,8 +7,8 @@ namespace ID_Indetails.api.Business.Payroll;
 /// <summary>
 /// What someone is owed for a month. Terms are the pay in force at the end of the month (or today,
 /// while it is in progress). An hour of monthly pay is the salary ÷ the month's paid hours (<see cref="PayRules.HourlyRate"/>),
-/// which keeps the salary fixed; overtime is paid at the true hourly rate of a standard month instead
-/// (<see cref="PayRules.StandardHourlyRate"/>), whatever the month.
+/// which keeps the salary fixed; overtime is paid at the pay's own overtime rate instead (the salary ÷ 184 unless set
+/// otherwise, <see cref="PayRules.SuggestedOvertimeRate"/>), whatever the month.
 /// <list type="bullet">
 /// <item><b>Monthly:</b> the salary, pro-rated on the paid hours of the days they were employed if they joined, left or came back
 /// mid-month (days away between two periods of employment aren't paid), plus overtime at the multiplier. In a closed month the hours ledger's shortfall is deducted at the
@@ -20,11 +20,10 @@ namespace ID_Indetails.api.Business.Payroll;
 /// </summary>
 public static class SalaryCalculator
 {
-    public sealed record PayTerms(DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency)
+    /// <param name="OvertimeRate">What an hour of overtime is paid at, before the multiplier: stored with the pay.</param>
+    public sealed record PayTerms(DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency, decimal OvertimeRate)
     {
         public decimal HourlyRateOn(DateOnly day, PersonCalendar calendar) => PayRules.HourlyRate(Basis, Amount, day, calendar);
-
-        public decimal StandardHourlyRateOn(DateOnly day, PersonCalendar calendar) => PayRules.StandardHourlyRate(Basis, Amount, day, calendar);
     }
 
     public sealed record Excuse(ExcuseKind Kind, int? Minutes, IReadOnlyList<DateOnly> Days, bool IsPaid);
@@ -43,11 +42,11 @@ public static class SalaryCalculator
         bool FixedSalary = false);
 
     /// <param name="HourlyRate">What an hour of <paramref name="Terms"/> is worth this month: it prices deductions.</param>
-    /// <param name="StandardHourlyRate">The true hourly rate of <paramref name="Terms"/>: overtime is paid at it × the multiplier.</param>
+    /// <param name="OvertimeRate">The overtime rate of <paramref name="Terms"/>: overtime is paid at it × the multiplier.</param>
     public sealed record Result(
         PayTerms Terms,
         decimal HourlyRate,
-        decimal StandardHourlyRate,
+        decimal OvertimeRate,
         HoursLedger.Result? Ledger,
         IReadOnlyList<Overtime.Split> Work,
         int NormalMinutes,
@@ -88,7 +87,7 @@ public static class SalaryCalculator
         var ledger = input.LedgerApplies ? LedgerOf(input, work) : null;
         int MadeUp(Overtime.Split w) => ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
         decimal OvertimePay(Overtime.Split w, PayTerms t)
-            => (w.Overtime - MadeUp(w)) / 60m * t.StandardHourlyRateOn(w.Day, input.Calendar) * input.Calendar.PolicyOn(w.Day).OvertimeMultiplier;
+            => (w.Overtime - MadeUp(w)) / 60m * t.OvertimeRate * input.Calendar.PolicyOn(w.Day).OvertimeMultiplier;
 
         var monthDays = HoursLedger.Days(input.Month, next)
             .Select(d => (Day: d, Hours: input.Calendar.HoursOn(d)))
@@ -135,7 +134,7 @@ public static class SalaryCalculator
         return new Result(
             terms,
             rate,
-            terms.StandardHourlyRateOn(termsDay, input.Calendar),
+            terms.OvertimeRate,
             ledger,
             work,
             work.Sum(w => w.Normal),

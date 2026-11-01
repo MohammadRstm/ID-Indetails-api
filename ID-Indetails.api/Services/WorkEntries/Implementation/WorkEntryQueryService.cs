@@ -3,6 +3,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Common;
@@ -91,16 +92,19 @@ public sealed class WorkEntryQueryService(
         var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var overtimeById = await overtime.OvertimeOfAsync(rows, cancellationToken);
         var withMoney = actor.Has(PermissionCodes.FinancialView);
-        var rates = withMoney
-            ? (await projectFinance.PayRatesAsync(userIds, cancellationToken))
-                .GroupBy(r => r.UserId)
-                .ToDictionary(g => g.Key, g => (IReadOnlyList<ProjectFinance.PayRate>)g.OrderBy(r => r.EffectiveFrom).ToList())
-            : [];
+        var payRates = withMoney ? await projectFinance.PayRatesAsync(userIds, cancellationToken) : [];
+        var rates = payRates
+            .GroupBy(r => r.UserId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<ProjectFinance.PayRate>)g.OrderBy(r => r.EffectiveFrom).ToList());
+        var paidOvertime = withMoney
+            ? await projectFinance.PaidOvertimeAsync(
+                rows.Select(e => new WorkEntryRow(e.Id, e.ProjectId, e.UserId, e.StartedAt, e.Minutes)).ToList(), payRates, cancellationToken)
+            : new Dictionary<long, PaidOvertime>();
 
         var header = new List<string> { "Date", "Weekday", "Start", "End", "Hours", "Overtime hours", "Employee", "Email", "Team", "Project", "Client", "Task", "Outside scope" };
         if (withMoney)
         {
-            header.AddRange(["Hourly rate", "Currency", "Labour cost"]);
+            header.AddRange(["Hourly rate", "Overtime paid hours", "Overtime rate", "Currency", "Labour cost"]);
         }
 
         header.Add("Entry id");
@@ -128,13 +132,18 @@ public sealed class WorkEntryQueryService(
 
             if (withMoney)
             {
-                var rate = rates.TryGetValue(e.UserId, out var history) ? ProjectFinance.RateOn(history, DateOnly.FromDateTime(start)) : null;
+                var day = DateOnly.FromDateTime(start);
+                var rate = rates.TryGetValue(e.UserId, out var history) ? ProjectFinance.RateOn(history, day) : null;
+                var worked = PaidOvertime.Of(e.UserId, day, e.Minutes, paidOvertime.GetValueOrDefault(e.Id));
                 line.AddRange(rate is null
-                    ? ["", "", ""]
+                    ? ["", "", "", "", ""]
                     : [
                         rate.HourlyCost.ToString("0.00", CultureInfo.InvariantCulture),
+                        (worked.OvertimeMinutes / 60m).ToString("0.00", CultureInfo.InvariantCulture),
+                        (rate.OvertimeRate * worked.OvertimeMultiplier).ToString("0.00", CultureInfo.InvariantCulture),
                         rate.Currency,
-                        Math.Round(e.Minutes / 60m * rate.HourlyCost, 2, MidpointRounding.AwayFromZero).ToString("0.00", CultureInfo.InvariantCulture),
+                        Math.Round(ProjectFinance.PriceLabour([worked], [rate]).Items.Single().Amount, 2, MidpointRounding.AwayFromZero)
+                            .ToString("0.00", CultureInfo.InvariantCulture),
                     ]);
             }
 

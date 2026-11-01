@@ -394,7 +394,7 @@ public sealed class EmployeeService(
             Basis = request.Basis,
             Amount = request.Amount,
             Currency = request.Currency.ToUpperInvariant(),
-            HourlyCostRate = request.Basis == PayBasis.Hourly ? request.Amount : 0,
+            OvertimeRate = request.OvertimeRate ?? PayRules.SuggestedOvertimeRate(request.Basis, request.Amount),
             Note = Clean(request.Note),
             CreatedAt = clock.UtcNow,
             CreatedById = actor.UserId,
@@ -626,7 +626,7 @@ public sealed class EmployeeService(
     };
 
     private static PayResponse ToPay(UserPayHistory p)
-        => new(p.Id, p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.Note, p.CreatedAt, p.CreatedById);
+        => new(p.Id, p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.OvertimeRate, p.Note, p.CreatedAt, p.CreatedById);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

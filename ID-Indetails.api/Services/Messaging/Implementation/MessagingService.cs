@@ -24,8 +24,9 @@ namespace ID_Indetails.api.Services.Messaging.Implementation;
 
 /// <summary>
 /// Chats are addressed by team or by person, never by an internal id. A conversation row is created with its first
-/// message. A team chat the caller isn't in, or a person they can't reach, reads as not found. Sending marks the chat
-/// read for the sender. Messages can't be edited or deleted.
+/// message; Announcements, the one chat everyone reads, was created with the migration that added it. A team chat the
+/// caller isn't in, or a person they can't reach, reads as not found. Sending marks the chat read for the sender.
+/// Messages can't be edited or deleted.
 /// </summary>
 public sealed class MessagingService(
     ICurrentUser currentUser,
@@ -64,11 +65,15 @@ public sealed class MessagingService(
             .Where(s => s.OtherUserId is { } other && people.ContainsKey(other))
             .Select(s => new ConversationResponse(
                 ConversationType.Dm, null, ToContact(people[s.OtherUserId!.Value]), LastOf(s), s.Unread, false));
+        var announcements = states.FirstOrDefault(s => s.Type == ConversationType.Announcements);
 
-        return teamChats.Concat(directChats)
-            .OrderByDescending(c => c.LastMessage?.CreatedAt ?? DateTime.MinValue)
-            .ThenBy(c => c.Team?.Name ?? c.Person?.Name)
-            .ToList();
+        // Announcements stays first, even before anyone wrote in it
+        return [
+            new ConversationResponse(ConversationType.Announcements, null, null, LastOf(announcements), announcements?.Unread ?? 0, false),
+            .. teamChats.Concat(directChats)
+                .OrderByDescending(c => c.LastMessage?.CreatedAt ?? DateTime.MinValue)
+                .ThenBy(c => c.Team?.Name ?? c.Person?.Name),
+        ];
     }
 
     public async Task<MessagesBadgeResponse> BadgeAsync(CancellationToken cancellationToken = default)
@@ -186,10 +191,50 @@ public sealed class MessagingService(
         return await BadgeAsync(cancellationToken);
     }
 
+    public async Task<MessagePageResponse> AnnouncementsAsync(MessagePageQuery query, CancellationToken cancellationToken = default)
+    {
+        await ViewerAsync(cancellationToken);
+        return await PageAsync(await messaging.AnnouncementsAsync(cancellationToken), query, cancellationToken);
+    }
+
+    public async Task<MessageResponse> AnnounceAsync(SendMessageRequest request, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        MessagingRules.CheckMentions(request.MentionIds, null).ThrowIfDenied();
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var conversation = await messaging.AnnouncementsAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The Announcements chat is missing: the Announcements migration creates it.");
+        var message = await PostAsync(conversation, me.Id, request.Body, MessageKinds.Text, [], request.AttachmentIds, null, null, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var everyone = (await messaging.ActivePeopleAsync(cancellationToken)).Select(p => p.Id).ToList();
+        foreach (var id in everyone)
+        {
+            live.ChatChanged(id, LiveChat.ForAnnouncements);
+        }
+
+        pushes.Message(message.Id, null, everyone.Where(id => id != me.Id), [], announcement: true);
+        return await OneAsync(message.Id, cancellationToken);
+    }
+
+    public async Task<MessagesBadgeResponse> MarkAnnouncementsReadAsync(CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        await MarkReadAsync(me, await messaging.AnnouncementsAsync(cancellationToken), cancellationToken);
+        live.ChatChanged(me.Id, LiveChat.ForAnnouncements);
+        return await BadgeAsync(cancellationToken);
+    }
+
     public async Task<bool> CanReadConversationAsync(long conversationId, CancellationToken cancellationToken = default)
     {
         var me = await ViewerAsync(cancellationToken);
         var conversation = await messaging.ConversationAsync(conversationId, cancellationToken);
+        if (conversation?.Type == ConversationType.Announcements)
+        {
+            return true;
+        }
+
         if (conversation?.TeamId is { } teamId)
         {
             return (await VisibleTeamsAsync(me, cancellationToken)).Any(t => t.Id == teamId);

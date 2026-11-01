@@ -1,6 +1,7 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Employees;
+using ID_Indetails.api.Business.Meetings;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -152,7 +153,13 @@ public sealed class MyWorkService(
         var mine = await entries.ListAsync(new WorkEntrySearch(actor.UserId, From: from, To: to), cancellationToken);
         var overtimeById = await overtime.OvertimeOfAsync(mine, cancellationToken);
         var domainMeetings = actor.CanSee(DomainCodes.Design)
-            ? await meetings.ListAsync(new MeetingSearch([DomainCodes.Design], From: from, To: to), cancellationToken)
+            ? await meetings.ListAsync(
+                new MeetingSearch(
+                    [DomainCodes.Design],
+                    MeetingRules.ViewerOf(actor),
+                    From: from,
+                    To: to),
+                cancellationToken)
             : [];
 
         return new MyDayResponse(

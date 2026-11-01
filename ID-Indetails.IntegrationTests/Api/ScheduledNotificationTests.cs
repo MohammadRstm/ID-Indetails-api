@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Billing;
@@ -186,5 +187,64 @@ public class ScheduledNotificationTests(ApiFactory api) : IClassFixture<ApiFacto
             .ShouldContain(p => p.GetProperty("id").GetInt64() == designer.User.Id);
         // Salaries are company-level: a domain admin doesn't see them.
         (await OfKindAsync(admin, NotificationKinds.HoursShort)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Someone_who_logged_less_than_a_working_day_is_reminded_and_the_admins_get_one_list()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, executionAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, shortDay) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, fullDay) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+
+        // The day the check judges (yesterday from 09:00 in Beirut). Every day of the week is a working day for these
+        // three, 8 to 4 with the paid break (7h required), so it always asks for work.
+        var beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
+        var day = MissedHours.DayToCheck(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, beirut));
+        foreach (var person in new[] { shortDay, fullDay, siteWorker })
+        {
+            await _steps.SetJoinedOnAsync(person.User.Id, day.AddDays(-30).ToString("yyyy-MM-dd"));
+            (await Client.PutJsonAsync($"/api/employees/{person.User.Id}/schedule",
+                    new { days = Enumerable.Range(0, 7).Select(d => new { weekday = d, startMinute = 480, endMinute = 960 }) }, superAdmin.AccessToken))
+                .IsSuccessStatusCode.ShouldBeTrue();
+            await ExecuteAsync("UPDATE user_schedules SET effective_from = @d WHERE user_id = @u",
+                ("@d", day.AddDays(-30).ToDateTime(TimeOnly.MinValue)), ("@u", person.User.Id));
+        }
+
+        var eight = TimeZoneInfo.ConvertTimeToUtc(day.ToDateTime(new TimeOnly(8, 0)), beirut);
+        foreach (var (person, hours) in new[] { (shortDay, 3), (fullDay, 7) })
+        {
+            await ExecuteAsync(
+                "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
+                "VALUES (@u, @p, 'Drawings', @s, @e, UTC_TIMESTAMP(3))",
+                ("@u", person.User.Id), ("@p", project.Id), ("@s", eight), ("@e", eight.AddHours(hours)));
+        }
+
+        await RunTwiceAsync(ScheduledCheck.MissedHours);
+
+        var reminder = (await OfKindAsync(shortDay, NotificationKinds.HoursMissed)).ShouldHaveSingleItem();
+        reminder.Actor.ShouldBeNull();
+        reminder.Payload!.Value.GetProperty("day").GetString().ShouldBe(day.ToString("yyyy-MM-dd"));
+        reminder.Payload!.Value.GetProperty("loggedMinutes").GetInt32().ShouldBe(180);
+        reminder.Payload!.Value.GetProperty("requiredMinutes").GetInt32().ShouldBe(420);
+        (await OfKindAsync(fullDay, NotificationKinds.HoursMissed)).ShouldBeEmpty();
+        (await OfKindAsync(siteWorker, NotificationKinds.HoursMissed)).ShouldBeEmpty();
+
+        // Other tests' people may be named too, so look at these only. Employees never see who else missed a day.
+        foreach (var reader in new[] { admin, superAdmin })
+        {
+            var list = (await OfKindAsync(reader, NotificationKinds.HoursMissedList)).ShouldHaveSingleItem();
+            list.Payload!.Value.GetProperty("day").GetString().ShouldBe(day.ToString("yyyy-MM-dd"));
+            var named = list.Payload!.Value.GetProperty("people").EnumerateArray().Select(p => p.GetProperty("id").GetInt64()).ToList();
+            named.ShouldContain(shortDay.User.Id);
+            named.ShouldNotContain(fullDay.User.Id);
+            named.ShouldNotContain(siteWorker.User.Id);
+        }
+
+        (await OfKindAsync(executionAdmin, NotificationKinds.HoursMissedList)).ShouldBeEmpty();
+        (await OfKindAsync(shortDay, NotificationKinds.HoursMissedList)).ShouldBeEmpty();
     }
 }

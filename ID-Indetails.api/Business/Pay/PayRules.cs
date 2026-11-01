@@ -8,14 +8,15 @@ namespace ID_Indetails.api.Business.Pay;
 
 public static class PayRules
 {
-    /// <summary>A standard month: 52 weeks ÷ 12.</summary>
-    private const decimal WeeksPerMonth = 52m / 12m;
+    /// <summary>The hours a month the client counts for a salary's overtime rate.</summary>
+    public const decimal OvertimeHoursPerMonth = 184m;
 
     /// <summary>
     /// What an hour of pay is worth in the month containing <paramref name="day"/>: hourly pay's own rate, or a monthly
     /// salary ÷ the paid hours (break included) the person's schedule gives that month. The salary is fixed, so a month
     /// with more working days makes each hour worth less, and a whole working day is always worth that day's share of
-    /// the salary. It prices deductions and project labour; overtime uses <see cref="StandardHourlyRate"/>. 4 decimal places.
+    /// the salary. It prices deductions and project labour; overtime is paid at the pay's own overtime rate
+    /// (<see cref="SuggestedOvertimeRate"/>). 4 decimal places.
     /// </summary>
     public static decimal HourlyRate(PayBasis basis, decimal amount, DateOnly day, PersonCalendar calendar)
     {
@@ -29,20 +30,12 @@ public static class PayRules
     }
 
     /// <summary>
-    /// The true hourly rate overtime is paid at, whatever the month: hourly pay's own rate, or a monthly salary ÷ the
-    /// paid hours of a standard month on the schedule in force that day (its weekly paid hours × 52 ÷ 12: 173.33 on a
-    /// 40-hour week). So a month with more working days never lowers what an hour of overtime earns. 4 decimal places.
+    /// The overtime rate a pay change is given when none is typed: hourly pay's own rate, or a salary ÷ 184, to the cent,
+    /// for everyone whatever their schedule. It is stored with the pay and used all the while that pay is in force;
+    /// admins may type another for a salary. Overtime is paid at it × the company's multiplier.
     /// </summary>
-    public static decimal StandardHourlyRate(PayBasis basis, decimal amount, DateOnly day, PersonCalendar calendar)
-    {
-        if (basis == PayBasis.Hourly)
-        {
-            return amount;
-        }
-
-        var minutes = calendar.PaidMinutesPerWeek(day) * WeeksPerMonth;
-        return minutes > 0 ? Math.Round(amount * 60 / minutes, 4, MidpointRounding.AwayFromZero) : 0;
-    }
+    public static decimal SuggestedOvertimeRate(PayBasis basis, decimal amount)
+        => basis == PayBasis.Hourly ? amount : Math.Round(amount / OvertimeHoursPerMonth, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>The paid minutes, break included, of every working day in the month containing <paramref name="day"/>.</summary>
     public static int PaidMinutesInMonth(DateOnly day, PersonCalendar calendar)
