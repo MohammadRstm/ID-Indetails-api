@@ -114,12 +114,14 @@ public sealed class FileService(
     {
         var me = await ActiveAsync(cancellationToken);
         var file = await files.GetAsync(id, cancellationToken) ?? throw new NotFoundException(NotFound);
-        if (file.UploadedById != me.UserId && !await CanReadAsync(me, await files.UsesAsync(id, cancellationToken), cancellationToken))
+        // most files opened are these, and the website's pictures are public anyway
+        var shared = await files.IsSharedPictureAsync(id, cancellationToken);
+        if (!shared && file.UploadedById != me.UserId && !await CanReadAsync(me, await files.UsesAsync(id, cancellationToken), cancellationToken))
         {
             throw new NotFoundException(NotFound);
         }
 
-        return await sizes.OpenAsync(file, size, cancellationToken);
+        return (await sizes.OpenAsync(file, size, cancellationToken)) with { SharedPicture = shared };
     }
 
     public async Task<int> DeleteUnusedAsync(CancellationToken cancellationToken = default)
@@ -147,14 +149,9 @@ public sealed class FileService(
         return deleted;
     }
 
+    /// <summary>Whether a file that isn't a shared picture is attached where the caller may read it.</summary>
     private async Task<bool> CanReadAsync(UserAccess me, FileUses uses, CancellationToken cancellationToken)
     {
-        // the website's pictures are public anyway
-        if (uses.IsPhoto || uses.IsLogo || uses.IsWebsite)
-        {
-            return true;
-        }
-
         if (uses.EntryIds.Count > 0
             && (await entries.ViewsByIdAsync(uses.EntryIds, cancellationToken)).Any(e => WorkEntryQueryService.CanRead(me, e)))
         {

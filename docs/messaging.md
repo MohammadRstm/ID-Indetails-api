@@ -9,7 +9,7 @@ All of them need only a signed-in, active user, except writing in Announcements 
 | Method and path | Purpose |
 |---|---|
 | `GET /api/messages/conversations` | Announcements first (`type: announcements`, no team or person, even before anyone wrote in it), then every team chat the caller is in (with or without messages) and their direct chats with messages, most recent first. Each has the team or the person, the last message, the unread count and, for team chats, whether an unread message mentions the caller |
-| `GET /api/messages/badge` | `{ unread, mention }` for the header: every unread message, and whether any mentions the caller |
+| `GET /api/messages/badge` | `{ unread, mention }` for the header: every unread message, and whether any mentions the caller. It counts as the inbox does, with fewer queries: no last messages, and no looking for mentions or people when nothing is unread |
 | `GET /api/messages/contacts` | The people the caller can message directly, by name |
 | `GET /api/messages/teams/{teamId}/members` | Everyone in a team chat, for picking mentions |
 | `GET /api/messages/teams/{teamId}?before=&limit=50` | A page of the chat, oldest first, with `hasMore`. `before` (a message id) pages back; `limit` is 1–100 |

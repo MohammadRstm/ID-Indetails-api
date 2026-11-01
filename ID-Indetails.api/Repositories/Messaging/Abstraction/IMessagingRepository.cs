@@ -43,6 +43,9 @@ public sealed record ConversationState(
     int Unread,
     bool UnreadMention);
 
+/// <summary>A conversation of the user with something unread, as <see cref="ConversationState"/> counts it.</summary>
+public sealed record UnreadChat(long Id, long? OtherUserId, int Unread, bool UnreadMention);
+
 public interface IMessagingRepository
 {
     /// <summary>Everyone, active or not, by id. Not tracked.</summary>
@@ -98,6 +101,15 @@ public interface IMessagingRepository
     /// joined; an unread mention is one of those naming the user.
     /// </summary>
     Task<IReadOnlyList<ConversationState>> StatesAsync(
+        long userId,
+        IReadOnlyCollection<long> teamIds,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The same conversations' unread counts and mentions, only those with something unread, for the badge: without
+    /// the last messages, and without looking for mentions when nothing is unread.
+    /// </summary>
+    Task<IReadOnlyList<UnreadChat>> UnreadChatsAsync(
         long userId,
         IReadOnlyCollection<long> teamIds,
         CancellationToken cancellationToken = default);

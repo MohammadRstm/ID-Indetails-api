@@ -99,10 +99,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
         IReadOnlyCollection<long> teamIds,
         CancellationToken cancellationToken = default)
     {
-        var teams = teamIds.ToList();
-        var conversations = await db.Conversations.AsNoTracking()
-            .Where(c => c.Type == ConversationType.Announcements
-                || (c.TeamId != null && teams.Contains(c.TeamId.Value)) || c.DmUserLowId == userId || c.DmUserHighId == userId)
+        var conversations = await ChatsOf(userId, teamIds)
             .Select(c => new
             {
                 c.Id,
@@ -143,6 +140,56 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
                 unread.GetValueOrDefault(c.Id),
                 mentioned.Contains(c.Id)))
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<UnreadChat>> UnreadChatsAsync(
+        long userId,
+        IReadOnlyCollection<long> teamIds,
+        CancellationToken cancellationToken = default)
+    {
+        var conversations = await ChatsOf(userId, teamIds)
+            .Select(c => new { c.Id, c.Type, OtherUserId = c.DmUserLowId == userId ? c.DmUserHighId : c.DmUserLowId })
+            .ToListAsync(cancellationToken);
+        if (conversations.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = conversations.Select(c => c.Id).ToList();
+        var joined = await db.Users.Where(u => u.Id == userId).Select(u => u.CreatedAt).SingleAsync(cancellationToken);
+        var unread = await (
+                from m in Unread(userId, ids, joined)
+                group m by m.ConversationId into g
+                select new { ConversationId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ConversationId, x => x.Count, cancellationToken);
+        if (unread.Count == 0)
+        {
+            return [];
+        }
+
+        var unreadIds = unread.Keys.ToList();
+        var mentioned = (await (
+                from m in Unread(userId, unreadIds, joined)
+                join x in db.MessageMentions on m.Id equals x.MessageId
+                where x.UserId == userId
+                select m.ConversationId)
+            .Distinct()
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+
+        return conversations
+            .Where(c => unread.ContainsKey(c.Id))
+            .Select(c => new UnreadChat(c.Id, c.Type == ConversationType.Dm ? c.OtherUserId : null, unread[c.Id], mentioned.Contains(c.Id)))
+            .ToList();
+    }
+
+    /// <summary>Announcements, the group chats of <paramref name="teamIds"/> and the user's direct chats.</summary>
+    private IQueryable<Conversation> ChatsOf(long userId, IReadOnlyCollection<long> teamIds)
+    {
+        var teams = teamIds.ToList();
+        return db.Conversations.AsNoTracking()
+            .Where(c => c.Type == ConversationType.Announcements
+                || (c.TeamId != null && teams.Contains(c.TeamId.Value)) || c.DmUserLowId == userId || c.DmUserHighId == userId);
     }
 
     /// <summary>

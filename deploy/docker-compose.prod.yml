@@ -21,6 +21,9 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
       - --default-time-zone=+00:00
+      # The data MySQL keeps in memory (the default is 128 MB): queries past it read the disk. About 1 GB in all with
+      # the connections' own memory, beside the API's 2 GB on the 4 GB server.
+      - --innodb-buffer-pool-size=768M
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?}
       MYSQL_DATABASE: ${MYSQL_DATABASE:?}

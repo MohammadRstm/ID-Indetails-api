@@ -62,6 +62,13 @@ public sealed class FilesController(IFileService fileService) : ControllerBase
     public async Task<IActionResult> Download(long id, [FromQuery] int? size, CancellationToken cancellationToken)
     {
         var file = await fileService.OpenAsync(id, size, cancellationToken);
+        if (file.SharedPicture)
+        {
+            // its content never changes under its id and everyone signed in may see it, so the browser keeps it. Never
+            // an attachment: the browser's copy doesn't know who signed in, and the next person might not see it.
+            Response.Headers.CacheControl = "private, max-age=86400";
+        }
+
         Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("inline") { FileNameStar = file.Name }.ToString();
         Response.Headers.XContentTypeOptions = "nosniff";
         return File(file.Content, file.MimeType, enableRangeProcessing: true);

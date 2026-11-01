@@ -21,7 +21,7 @@ Website visitor ──HTTPS :443──▶ caddy ──▶ website: the website's
 | `web` | `ghcr.io/mohammadrstm/id-indetails-client` | Serves the app and proxies `/api` and `/hubs` to the API, so the browser sees one origin (the refresh cookie is `SameSite=Strict`). |
 | `api` | `ghcr.io/mohammadrstm/id-indetails-api` | The API: Production environment, plain HTTP on 8080, an unprivileged user, a read-only filesystem, uploads on the `files` volume. |
 | `migrations` | `ghcr.io/mohammadrstm/id-indetails-migrations` | The EF Core migrations of that API version as one executable. The deploy runs it before starting the new API. |
-| `db` | `mysql:8.4` | The database, on the `db_data` volume, reachable only from the API and the migrations. |
+| `db` | `mysql:8.4` | The database, on the `db_data` volume, reachable only from the API and the migrations. It keeps 768 MB of data in memory (`--innodb-buffer-pool-size`, the default is 128 MB), about 1 GB in all beside the API's 2 GB. |
 
 ### The public website
 

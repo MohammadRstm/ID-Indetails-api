@@ -21,6 +21,9 @@ public interface IFileRepository
 
     Task<FileUses> UsesAsync(long id, CancellationToken cancellationToken = default);
 
+    /// <summary>A profile photo, the logo, the favicon or a website picture. Stops at the first that matches.</summary>
+    Task<bool> IsSharedPictureAsync(long id, CancellationToken cancellationToken = default);
+
     /// <summary>Up to <paramref name="limit"/> files uploaded before <paramref name="cutoff"/> and attached to nothing. Tracked.</summary>
     Task<IReadOnlyList<StoredFile>> UnusedBeforeAsync(DateTime cutoff, int limit, CancellationToken cancellationToken = default);
 
