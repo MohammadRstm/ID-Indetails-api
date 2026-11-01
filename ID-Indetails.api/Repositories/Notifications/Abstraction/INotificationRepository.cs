@@ -26,10 +26,16 @@ public interface INotificationRepository
     /// <summary>Stages a new notification; saved by the unit of work.</summary>
     void Add(Notification notification);
 
+    /// <summary>Deletes every notification created before <paramref name="cutoff"/>, read or not. Returns how many.</summary>
+    Task<int> DeleteCreatedBeforeAsync(DateTime cutoff, CancellationToken cancellationToken = default);
+
     /// <summary>A recipient's rolling digest notification. Tracked.</summary>
     Task<Notification?> GetDigestForUpdateAsync(long recipientId, string digestKey, CancellationToken cancellationToken = default);
 
-    /// <summary>Which of <paramref name="recipientIds"/> already have a notification with this digest key.</summary>
+    /// <summary>Stages the record that a once-only notification went to someone; saved by the unit of work.</summary>
+    void AddSent(NotificationSentKey sent);
+
+    /// <summary>Which of <paramref name="recipientIds"/> were already sent the once-only notification with this key.</summary>
     Task<IReadOnlySet<long>> RecipientsWithKeyAsync(
         string digestKey,
         IReadOnlyCollection<long> recipientIds,

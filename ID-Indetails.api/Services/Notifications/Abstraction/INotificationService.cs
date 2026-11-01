@@ -15,4 +15,7 @@ public interface INotificationService
     Task<UnreadCountResponse> MarkReadAsync(long id, CancellationToken cancellationToken = default);
 
     Task<UnreadCountResponse> MarkAllReadAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes everyone's notifications older than <see cref="Implementation.NotificationService.KeepFor"/>. Returns how many.</summary>
+    Task<int> DeleteOldAsync(CancellationToken cancellationToken = default);
 }

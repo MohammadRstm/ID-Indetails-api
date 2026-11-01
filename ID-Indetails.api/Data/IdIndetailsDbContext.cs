@@ -116,6 +116,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     // Activity, messaging and files
     public DbSet<ActivityEvent> ActivityEvents => Set<ActivityEvent>();
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<NotificationSentKey> NotificationSentKeys => Set<NotificationSentKey>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<MessageMention> MessageMentions => Set<MessageMention>();

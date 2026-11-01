@@ -23,8 +23,8 @@ public class Notification
     public string? Payload { get; set; }
 
     /// <summary>
-    /// Set for rolling digests (e.g. one "work logged today" notification per day) and for scheduled
-    /// notifications, so each goes to a person only once.
+    /// Set for rolling digests (e.g. one "work logged today" notification per day) and for once-only notifications.
+    /// What was sent once is remembered in <see cref="NotificationSentKey"/>, as notifications are deleted after a week.
     /// </summary>
     public string? DigestKey { get; set; }
 

@@ -17,6 +17,10 @@ All of them need only a signed-in user and act on the caller's own notifications
 - A notification about a project of a domain the person can no longer see (they moved, or lost a cross-domain grant) is hidden from the list and the count, and reads as `404`.
 - Each item has `kind`, `actor` (`id`, `name`), `project` (`id`, `title`, `domain`), `subjectType`, `subjectId`, `payload`, `count` (how many things a rolling digest sums up, otherwise 1), `createdAt` and `readAt`.
 
+## Keeping notifications
+
+A notification is kept for a week (`NotificationService.KeepFor`), read or not. `Jobs/NotificationCleanupJob` deletes older ones when the API starts and then daily; `NotificationScheduler:CleanupEnabled` switches it off, as the integration tests do. A rolling digest is dated by its latest update, so one still in use stays. A once-only notification is never sent again after it is deleted: an invoice that stays overdue is flagged once, not every week.
+
 ## Who receives one
 
 Every notification goes through one sender (`INotificationSender`), which applies the same rules everywhere:
@@ -78,7 +82,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 
 Nobody's action sends these, so they have no actor. A background timer (`Jobs/NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default); `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
 
-Every scheduled notification carries a key (`digest_key`) and goes to a person only once per key, however often the checks run. The unique recipient and key index stops a second API instance from sending it twice.
+Every scheduled notification carries a key (`digest_key`) and goes to a person only once per key, however often the checks run. What was sent is remembered in `notification_sent_keys` (person and key), not by the notification, so it still holds after the notification is deleted (see [Keeping notifications](#keeping-notifications)). Its key stops a second API instance from sending it twice. Invoice, profit and portal-mention notifications that go once (`SendOnceAsync`) work the same way.
 
 | Kind | When | Sent to | Subject | Payload |
 |---|---|---|---|---|
