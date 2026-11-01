@@ -85,7 +85,7 @@ In development the API logs every request's time and database commands, to find 
 GET /api/finance/design/overview?months=6 200 in 412 ms, 61 queries
 ```
 
-It is `Diagnostics:LogRequestCost` (`true` in `appsettings.Development.json`). Elsewhere it is off. It can be turned on for a load test with the environment variable `Diagnostics__LogRequestCost=true`.
+The live connections pass their access token in the query string; the log writes it as `access_token=hidden`. It is `Diagnostics:LogRequestCost` (`true` in `appsettings.Development.json`). Elsewhere it is off. It can be turned on for a load test with the environment variable `Diagnostics__LogRequestCost=true`.
 
 ## Tests
 
