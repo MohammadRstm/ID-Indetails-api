@@ -277,7 +277,7 @@ public sealed class ScheduledNotifications(
         }
 
         var calendars = await payrollInputs.CalendarsAsync(people, cancellationToken);
-        var excuses = (await payroll.ExcusesAsync(people, WorkStats.MonthStartOf(day), cancellationToken)).ToLookup(x => x.UserId);
+        var excuses = (await payroll.ExcusesAsync(people, [WorkStats.MonthStartOf(day)], cancellationToken)).ToLookup(x => x.UserId);
         var logged = (await entries.RowsAsync(
                 new WorkEntrySearch(From: clock.CompanyDayStartUtc(day), To: clock.CompanyDayStartUtc(day.AddDays(1))),
                 cancellationToken))

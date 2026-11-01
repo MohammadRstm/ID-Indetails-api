@@ -35,6 +35,15 @@ public sealed record BillingPositionResponse(
 /// <param name="StillToEarn">Agreed payments of client projects not received yet (each project's, never below zero).</param>
 /// <param name="Billing">As of today, whatever the period.</param>
 /// <param name="LabourMinutes">Work logged on the domain's projects in the period.</param>
+/// <summary>The dashboard and Financials money from one load (GET api/finance/{domain}/overview).</summary>
+public sealed record FinanceOverviewResponse(
+    FinanceSummaryResponse Summary,
+    IReadOnlyList<FinanceMonthResponse> Monthly,
+    FinanceProjectsResponse Projects,
+    FinanceBillingResponse Billing,
+    IReadOnlyList<MoneyAttentionResponse> Attention,
+    IReadOnlyList<FinanceClientResponse> Clients);
+
 public sealed record FinanceSummaryResponse(
     string Domain,
     DateOnly From,

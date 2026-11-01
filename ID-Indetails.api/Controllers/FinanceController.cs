@@ -16,6 +16,14 @@ namespace ID_Indetails.api.Controllers;
 [HasPermission(PermissionCodes.FinancialView)]
 public sealed class FinanceController(IDomainFinanceService financeService) : ControllerBase
 {
+    /// <summary>
+    /// The summary over a period, the last months, every project, billing, the follow-ups and the clients, from one load:
+    /// the same figures as those endpoints, for the dashboard and the Financials page.
+    /// </summary>
+    [HttpGet("overview")]
+    public Task<FinanceOverviewResponse> Overview(string domain, [FromQuery] FinanceOverviewQuery query, CancellationToken cancellationToken)
+        => financeService.OverviewAsync(domain, query, cancellationToken);
+
     /// <summary>Revenue, cost, profit and margin over a period, with the billing position as of today.</summary>
     [HttpGet("summary")]
     public Task<FinanceSummaryResponse> Summary(string domain, [FromQuery] FinancePeriodQuery query, CancellationToken cancellationToken)

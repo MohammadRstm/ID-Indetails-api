@@ -72,11 +72,7 @@ public sealed class PayrollInputs(
         var calendars = await CalendarsAsync(ids, cancellationToken);
         var roles = await RoleHistoriesAsync(ids, cancellationToken);
 
-        var excuses = new Dictionary<DateOnly, ILookup<long, HourExcuse>>();
-        foreach (var month in months.Distinct())
-        {
-            excuses[month] = (await payroll.ExcusesAsync(ids, month, cancellationToken)).ToLookup(x => x.UserId);
-        }
+        var excuses = (await payroll.ExcusesAsync(ids, months.Distinct().ToList(), cancellationToken)).ToLookup(x => (x.UserId, x.MonthStart));
 
         // A day either side covers the time-zone offset; entries are then kept by their company date.
         var work = (await payroll.WorkAsync(
@@ -85,7 +81,7 @@ public sealed class PayrollInputs(
                 months.Max().AddMonths(1).AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
                 cancellationToken))
             .Select(e => (e.UserId, Local: clock.ToCompanyTime(e.StartedAt), e.Id, e.Minutes))
-            .ToLookup(e => e.UserId);
+            .ToLookup(e => (e.UserId, Month: new DateOnly(e.Local.Year, e.Local.Month, 1)));
 
         var result = new List<PersonMonth>();
         foreach (var person in people)
@@ -96,8 +92,7 @@ public sealed class PayrollInputs(
 
             foreach (var month in months)
             {
-                var next = month.AddMonths(1);
-                var monthExcuses = excuses[month][person.Id].ToList();
+                var monthExcuses = excuses[(person.Id, month)].ToList();
                 var fixedSalary = roles[person.Id].FixedSalaryMonth(month);
                 result.Add(new PersonMonth(person, new SalaryCalculator.Input(
                     month,
@@ -106,8 +101,7 @@ public sealed class PayrollInputs(
                     person.DomainCode == DomainCodes.Design && !fixedSalary,
                     terms,
                     calendar,
-                    work[person.Id]
-                        .Where(e => DateOnly.FromDateTime(e.Local) >= month && DateOnly.FromDateTime(e.Local) < next)
+                    work[(person.Id, month)]
                         .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes))
                         .ToList(),
                     monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
@@ -127,14 +121,14 @@ public sealed class PayrollInputs(
         CancellationToken cancellationToken = default)
     {
         var splits = new Dictionary<long, EntrySplit>();
-        foreach (var personMonth in await ForAsync(people, months, cancellationToken))
+        // a month with no work has nothing to split
+        foreach (var input in (await ForAsync(people, months, cancellationToken)).Select(m => m.Input).Where(i => i.Work.Count > 0))
         {
-            var input = personMonth.Input;
             // a fixed salary earns no overtime: time logged in a month they were an admin counts as normal hours
             var work = Overtime.Of(input.Work, input.Calendar).Select(w => input.FixedSalary ? w with { Overtime = 0 } : w).ToList();
             var ledger = input.LedgerApplies ? SalaryCalculator.LedgerOf(input, work) : null;
             // past an overtime threshold the premium is paid for the month as a whole, a company cost, not by project
-            var noPremium = SalaryCalculator.Calculate(input)?.ThresholdMinutes is not null;
+            var noPremium = SalaryCalculator.HasThreshold(input);
             foreach (var w in work)
             {
                 splits[w.Id] = new EntrySplit(w, ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0, noPremium);

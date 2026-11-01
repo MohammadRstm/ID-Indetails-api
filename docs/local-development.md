@@ -77,6 +77,16 @@ docker compose logs -f mysql   # follow server logs
 
 Schema changes (EF Core migrations) are never applied without explicit approval. See CLAUDE.md §9.
 
+## Request cost log
+
+In development the API logs every request's time and database commands, to find slow endpoints:
+
+```text
+GET /api/finance/design/overview?months=6 200 in 412 ms, 61 queries
+```
+
+It is `Diagnostics:LogRequestCost` (`true` in `appsettings.Development.json`). Elsewhere it is off. It can be turned on for a load test with the environment variable `Diagnostics__LogRequestCost=true`.
+
 ## Tests
 
 ```bash

@@ -26,6 +26,12 @@ if (HostingServiceCollectionExtensions.BehindProxy(app.Configuration))
     app.UseForwardedHeaders();
 }
 
+// First, so it times the whole request.
+if (app.Configuration.GetValue<bool>(RequestCostMiddleware.SettingName))
+{
+    app.UseMiddleware<RequestCostMiddleware>();
+}
+
 // Before everything that answers, error pages included.
 app.UseMiddleware<ApiResponseHeadersMiddleware>();
 

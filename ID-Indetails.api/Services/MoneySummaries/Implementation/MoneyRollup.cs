@@ -35,6 +35,9 @@ public sealed class MoneyRollup(
     /// <summary>The project's costs with no exchange rate on their day.</summary>
     public IReadOnlyList<ProjectFinance.DatedUnconverted> Unconverted(long projectId) => history[projectId].Unconverted;
 
+    /// <summary>The project's work, by company day.</summary>
+    public IReadOnlyList<WorkDay> Work(long projectId) => history[projectId].Work;
+
     public InvoiceMoneyRow InvoiceRow(long invoiceId) => invoiceRows[invoiceId];
 
     public ProjectBilling.Summary Billing(IEnumerable<Project> projects)
