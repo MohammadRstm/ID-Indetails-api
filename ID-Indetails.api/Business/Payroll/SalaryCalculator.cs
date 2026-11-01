@@ -13,7 +13,9 @@ namespace ID_Indetails.api.Business.Payroll;
 /// <item><b>Monthly:</b> the salary, pro-rated on the paid hours of the days they were employed if they joined, left or came back
 /// mid-month (days away between two periods of employment aren't paid), plus overtime at the multiplier. In a closed month the hours ledger's shortfall is deducted at the
 /// month's hourly rate, and each missed working day also loses its paid break, so it costs the full paid day.
-/// Unpaid excuses are deducted the same way (an unpaid day off costs the full paid day).</item>
+/// Unpaid excuses are deducted the same way (an unpaid day off costs the full paid day).
+/// From 1 November 2026 (the working time's overtime threshold, 184 hours) a salary's overtime is paid only for the hours
+/// counted past the month's threshold, see <see cref="Threshold"/>.</item>
 /// <item><b>Hourly:</b> logged hours at the rate in force that day, overtime that made up a shortfall at the
 /// plain rate, the rest at the multiplier, plus the paid break of each working day they worked.</item>
 /// </list>
@@ -43,6 +45,10 @@ public static class SalaryCalculator
 
     /// <param name="HourlyRate">What an hour of <paramref name="Terms"/> is worth this month: it prices deductions.</param>
     /// <param name="OvertimeRate">The overtime rate of <paramref name="Terms"/>: overtime is paid at it × the multiplier.</param>
+    /// <param name="OvertimePaidMinutes">The overtime paid as overtime: past the threshold where one applies, otherwise what didn't make up a short month.</param>
+    /// <param name="ThresholdMinutes">A salary's overtime is paid only past this many counted minutes; null where no threshold applies.</param>
+    /// <param name="CountedMinutes">What counts toward the threshold: every logged minute plus paid excuses; 0 where none applies.</param>
+    /// <param name="PaidOvertimeByWork">The overtime paid as overtime, by work entry.</param>
     public sealed record Result(
         PayTerms Terms,
         decimal HourlyRate,
@@ -62,9 +68,25 @@ public static class SalaryCalculator
         int DeductionMinutes,
         decimal Deduction,
         decimal BasePay,
-        decimal OvertimePay)
+        decimal OvertimePay,
+        int? ThresholdMinutes = null,
+        int CountedMinutes = 0,
+        IReadOnlyDictionary<long, int>? PaidOvertimeByWork = null)
     {
         public decimal Total => BasePay + OvertimePay;
+    }
+
+    /// <summary>
+    /// When a salary's overtime is paid past a threshold: the working time's hours (184 from 1 November 2026) or the
+    /// month's expected hours if those are more, so overtime is only paid once the month's own hours are done. It is
+    /// fixed: joining or leaving mid-month doesn't lower it. Counted: every logged minute, overtime or not, plus paid
+    /// excuses (unpaid ones don't count). Paid: what is counted past the threshold, taken from the month's latest
+    /// overtime, and never more than the overtime left after making up a short month.
+    /// </summary>
+    /// <param name="Minutes">The threshold, in minutes.</param>
+    public sealed record Threshold(int Minutes, int Counted)
+    {
+        public int Past => Math.Max(0, Counted - Minutes);
     }
 
     /// <returns>Null when the person had no pay yet, or wasn't employed on any day of the month.</returns>
@@ -86,8 +108,8 @@ public static class SalaryCalculator
         IReadOnlyList<Overtime.Split> work = input.FixedSalary ? [] : Overtime.Of(input.Work, input.Calendar);
         var ledger = input.LedgerApplies ? LedgerOf(input, work) : null;
         int MadeUp(Overtime.Split w) => ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
-        decimal OvertimePay(Overtime.Split w, PayTerms t)
-            => (w.Overtime - MadeUp(w)) / 60m * t.OvertimeRate * input.Calendar.PolicyOn(w.Day).OvertimeMultiplier;
+        decimal OvertimePay(Overtime.Split w, PayTerms t, int minutes)
+            => minutes / 60m * t.OvertimeRate * input.Calendar.PolicyOn(w.Day).OvertimeMultiplier;
 
         var monthDays = HoursLedger.Days(input.Month, next)
             .Select(d => (Day: d, Hours: input.Calendar.HoursOn(d)))
@@ -100,13 +122,17 @@ public static class SalaryCalculator
 
         decimal basePay, overtimePay, paidBreakPay = 0, deduction = 0;
         int paidBreakDays = 0, deductionMinutes = 0;
+        var threshold = terms.Basis == PayBasis.Monthly && !input.FixedSalary ? ThresholdOf(input, monthDays, work) : null;
+        var paidByWork = threshold is null
+            ? work.ToDictionary(w => w.Id, w => w.Overtime - MadeUp(w))
+            : PastThreshold(work, MadeUp, threshold.Past);
 
         if (terms.Basis == PayBasis.Monthly)
         {
             var monthMinutes = monthDays.Sum(d => d.Hours!.Span);
             var employedMinutes = monthDays.Where(d => Employed(d.Day)).Sum(d => d.Hours!.Span);
             basePay = proRated && monthMinutes > 0 ? terms.Amount * employedMinutes / monthMinutes : terms.Amount;
-            overtimePay = work.Sum(w => OvertimePay(w, terms));
+            overtimePay = work.Sum(w => OvertimePay(w, terms, paidByWork.GetValueOrDefault(w.Id)));
 
             deductionMinutes = (ledger is { Flagged: true } ? ShortfallMinutes(ledger, input.Calendar) : 0) + UnpaidMinutes(input, next);
             deduction = input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth && !e.IsPaid)
@@ -128,7 +154,7 @@ public static class SalaryCalculator
             paidBreakPay = breakDays.Sum(d => d.Hours!.PaidBreak / 60m * RateOn(d.Day));
 
             basePay = work.Sum(w => (w.Normal + MadeUp(w)) / 60m * RateOn(w.Day)) + paidBreakPay;
-            overtimePay = work.Sum(w => OvertimePay(w, TermsOn(input.PayHistory, w.Day) ?? terms));
+            overtimePay = work.Sum(w => OvertimePay(w, TermsOn(input.PayHistory, w.Day) ?? terms, paidByWork.GetValueOrDefault(w.Id)));
         }
 
         return new Result(
@@ -140,7 +166,7 @@ public static class SalaryCalculator
             work.Sum(w => w.Normal),
             work.Sum(w => w.Overtime),
             ledger?.MadeUp ?? 0,
-            work.Sum(w => w.Overtime) - (ledger?.MadeUp ?? 0),
+            paidByWork.Values.Sum(),
             ledger?.Excused ?? 0,
             proRated,
             monthDays.Count,
@@ -150,7 +176,44 @@ public static class SalaryCalculator
             deductionMinutes,
             Round(deduction),
             Round(basePay),
-            Round(overtimePay));
+            Round(overtimePay),
+            threshold?.Minutes,
+            threshold?.Counted ?? 0,
+            paidByWork);
+    }
+
+    /// <summary>The month's threshold, from the working time in force on its first day; null where it is 0 (off).</summary>
+    /// <param name="monthDays">Every working day of the month on the person's calendar, employed or not.</param>
+    public static Threshold? ThresholdOf(Input input, IReadOnlyList<(DateOnly Day, WorkHours? Hours)> monthDays, IReadOnlyList<Overtime.Split> work)
+    {
+        var hours = input.Calendar.PolicyOn(input.Month).OvertimeThresholdHours;
+        if (hours <= 0)
+        {
+            return null;
+        }
+
+        var expected = monthDays.Sum(d => d.Hours!.Required);
+        var paidExcuses = input.Excuses.Where(e => e.IsPaid).Sum(e => e.Kind == ExcuseKind.WholeMonth
+            ? expected
+            : (e.Minutes ?? 0) + monthDays.Where(d => e.Days.Contains(d.Day)).Sum(d => d.Hours!.Required));
+        return new Threshold(Math.Max(hours * 60, expected), work.Sum(w => w.Minutes) + paidExcuses);
+    }
+
+    /// <summary>The overtime paid past the threshold, by work entry: <paramref name="past"/> minutes taken from the latest overtime first.</summary>
+    private static Dictionary<long, int> PastThreshold(IReadOnlyList<Overtime.Split> work, Func<Overtime.Split, int> madeUp, int past)
+    {
+        var paid = new Dictionary<long, int>();
+        foreach (var w in work.OrderByDescending(w => w.Day).ThenByDescending(w => w.Id))
+        {
+            var take = Math.Min(past, w.Overtime - madeUp(w));
+            if (take > 0)
+            {
+                paid[w.Id] = take;
+                past -= take;
+            }
+        }
+
+        return paid;
     }
 
     /// <summary>The month's hours ledger, from its work split into normal and overtime minutes.</summary>

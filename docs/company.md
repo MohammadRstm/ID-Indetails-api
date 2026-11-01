@@ -13,7 +13,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `PUT /api/company/proton-files` | `company_settings:manage` | `{ enabled }`: whether Proton may read project files, which sends their content to Anthropic, its model provider. It is off until someone turns it on, and comes back as `protonReadsFiles` on the settings ([proton.md](proton.md)) |
 | `GET /api/company/branding`, `GET /api/company/logo` | Anyone | The name and whether there is a logo, and the logo's image, for the sign-in page |
 | `GET /api/company/working-time` | Signed in | The policy in force today and every dated policy, newest first |
-| `POST /api/company/working-time` | `working_time:manage` | A new working week, break and overtime multiplier from a date |
+| `POST /api/company/working-time` | `working_time:manage` | A new working week, break, overtime multiplier and overtime threshold from a date |
 | `GET /api/company/schedules?domain=&search=` | `schedule:manage` | Everyone's week (their own or the company's) and the hours it requires |
 | `PUT /api/employees/{id}/schedule` | `schedule:manage` | A person's own week, or back to the company week, from a date |
 | `GET /api/company/overhead` | `company:view` or `overhead:manage` | Every overhead line with its category, this month's totals per currency and per category |
@@ -56,7 +56,7 @@ One company-wide list of labels (`account_labels`: Concrete, Finishing and Permi
 
 ## Working time
 
-- A policy has working days (0 = Sunday … 6 = Saturday), start and end (minutes after midnight), a break and an overtime multiplier (1–5).
+- A policy has working days (0 = Sunday … 6 = Saturday), start and end (minutes after midnight), a break, an overtime multiplier (1–5) and an overtime threshold (`overtimeThresholdHours`, 0–744; 0 is none): a salary's overtime is paid only past that many hours a month (below). Left out of a change, the threshold carries on from the working time in force that day. From 1 November 2026 it is 184 (the `OvertimeThreshold` migration added that working time).
 - **The break is paid.** It only lowers the hours required on a day longer than 6 hours: a 9–5 day with a 60-minute break requires 7 hours and pays 8.
 - **From 1 December 2026 the break is 0**, so the whole day is logged and required ([decision 25](business-rules-review.md#decided)). A 9–5 day then requires and pays 8 hours: logging all of it is no overtime, and no paid break is added to hourly pay, missed-day deductions or project cost. The rules didn't change for this: a day with no break already works this way, and November 2026 and earlier keep their paid break.
 - Policies are **dated**. The one in force on a day is the latest dated on or before it. A change starts today or later, never earlier, so past months never change (`400 working_time_in_past`). A change dated later than today can be replaced by setting the same date again. One already starting today can't (`422 working_time_already_changed`).
@@ -98,7 +98,7 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 - `earnedSoFar` is the salary accrued so far plus overtime pay. It accrues with the hours required so far (required so far ÷ the whole month's) where the hours ledger applies, otherwise with the working days passed (none on the 1st).
 - `fullMonthEstimate` is the salary plus overtime so far, less what would be deducted if the month closed as short as it is now: the shortfall plus the paid break of each whole missed day, at the hourly rate, exactly as a closed month deducts it (`SalaryCalculator.ShortfallMinutes`).
 
-**Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay (`hourlyRate`) is the salary ÷ the paid hours the person's schedule gives that month, so the salary stays fixed whatever the month's length; overtime is paid at the pay's overtime rate (`overtimeRate`): the salary ÷ 184 unless an admin set another with the pay. See [employees.md](employees.md#pay).
+**Terms** are the pay in force at the end of the month (today while it is in progress). An hour of monthly pay (`hourlyRate`) is the salary ÷ the paid hours the person's schedule gives that month, so the salary stays fixed whatever the month's length; overtime is paid at the pay's overtime rate (`overtimeRate`): the salary ÷ the overtime threshold's hours (184) unless an admin set another with the pay. See [employees.md](employees.md#pay).
 
 **Overtime** (`Overtime.cs`), day by day, using the person's schedule or the company week in force that day:
 - all time on a day off;
@@ -111,8 +111,17 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 - Overtime first *makes up* any shortfall, taken from the month's overtime in date order; the rest is paid as overtime.
 - A closed month still short is *flagged*; the month in progress is *behind*.
 
+**The overtime threshold** (decision 26, from 1 November 2026): a salary's overtime is paid only for the hours counted past the month's threshold.
+- *Threshold:* the working time's `overtimeThresholdHours` in force on the month's first day (184), or the month's expected hours on the person's calendar if those are more, so overtime is only paid once the month's own hours are done. It is fixed: joining or leaving mid-month doesn't lower it, so a joiner rarely reaches it.
+- *Counted:* every minute logged, normal or overtime, plus paid excuses (minutes, days at their required hours, a whole month at its expected hours). Unpaid excuses don't count.
+- *Paid:* what is counted past the threshold, taken from the month's latest overtime first, and never more than the overtime left after making up a short month. It is paid at the pay's overtime rate × the multiplier of its day. The month in progress pays it as soon as the running total passes the threshold.
+- Overtime still *makes up* a short month first, so deductions are unchanged; anyone past the threshold isn't short.
+- *Not for* hourly pay (overtime as before, at the rate × multiplier) or fixed salaries (no overtime). A threshold of 0 turns it off: all overtime is paid as before, as in October 2026 and earlier.
+- *Who sees it:* Salaries only. Rows carry `overtimeMinutes` (overtime logged, after making up), `overtimePaidMinutes` (paid past the threshold), `overtimeThresholdMinutes` and `countedMinutes` (null where no threshold applies); the detail's `overtimeWork[].paidMinutes` says which entries were paid; the CSV has both "Overtime" and "Overtime paid". Employees see their overtime exactly as before (My work, the Overtime panel, Hours balance), with no pay.
+- *Projects:* the premium is paid for the month as a whole, a company cost, so a salary paid past a threshold puts no overtime premium on projects: project cost, Project pay and the hours by project on Salaries price all its hours at the hourly rate (`EntrySplit.NoPremium`).
+
 **Pay** (`SalaryCalculator.cs`):
-- **Monthly:** the salary, pro-rated on the paid hours of the person's own working days if they joined or left mid-month, plus overtime at the overtime rate × the multiplier in force that day.
+- **Monthly:** the salary, pro-rated on the paid hours of the person's own working days if they joined or left mid-month, plus overtime at the overtime rate × the multiplier in force that day (only past the overtime threshold from 1 November 2026, above).
   - In a closed, flagged month the shortfall is deducted at the month's hourly rate, so a whole missed day costs exactly its share of the salary. Whole missed days still owed also lose their paid break, so each costs the full paid day (8h on a 9–5 day); a partly made-up remainder costs only its hours. Example: 21 missed days with one hour made up is 20 whole days (8h each) plus 6h.
   - Unpaid excuses are deducted too: unpaid minutes at the hourly rate, each unpaid day off as the full paid day, an unpaid whole month as the whole salary. The deduction never exceeds the salary.
 - **Hourly:** hours within schedule and made-up hours at the rate in force each day, plus the paid break of each working day they worked, plus overtime at the rate × multiplier. Excuses don't change their pay (they are paid for what they log).
@@ -144,7 +153,7 @@ Always calculated, from the shared finance calculator (`Business/Finance/`), in 
 What each Design project paid its people in a week, month or quarter (`Business/Payroll/ProjectPay.cs`).
 
 - **Period:** the week (following the company's week start), month or quarter containing `date` (today by default). Never a future period (`400 project_pay_period_in_future`).
-- **Each work entry** is paid as Salaries pays it: its hours within schedule, plus any overtime that made up a shortfall in the month, at the person's hourly rate that day (a salary's rate of that month), and the rest of its overtime at the overtime rate × the multiplier. Project cost prices labour the same way ([projects.md](projects.md)), so the two agree on every entry; Project pay leaves out the paid break.
+- **Each work entry** is paid as Salaries pays it: its hours within schedule, plus any overtime that made up a shortfall in the month, at the person's hourly rate that day (a salary's rate of that month), and the rest of its overtime at the overtime rate × the multiplier. A salary paid past an overtime threshold that month has no premium on projects: all its hours are at the hourly rate (the threshold, above). Project cost prices labour the same way ([projects.md](projects.md)), so the two agree on every entry; Project pay leaves out the paid break.
 - **Left out:** paid breaks and salary deductions. They aren't worked on any project, so project pay differs from Salaries for hourly staff by exactly their paid breaks. Project cost is different: it counts everyone's paid break as labour ([projects.md](projects.md)).
 - Overtime and made-up hours are worked out from the person's whole day and month, whichever projects they worked on. A leaver's hours ledger ends on the day they left, as in Salaries.
 - Grouped by project, then person and currency; projects are ordered by USD pay. Someone with no pay record is listed with `priced: false` and paid 0.

@@ -31,6 +31,13 @@ public class WorkingTimePolicy
     /// <summary>Pay multiplier for overtime (1 = paid at the normal rate).</summary>
     public decimal OvertimeMultiplier { get; set; } = 1m;
 
+    /// <summary>
+    /// A salary's overtime is paid only for the hours logged past this many in a month (or past the month's expected
+    /// hours, when those are more): see <c>Business/Payroll/SalaryCalculator</c>. 0 pays every hour of overtime, as before
+    /// 1 November 2026. It also divides a salary into its suggested overtime rate (<c>PayRules.SuggestedOvertimeRate</c>).
+    /// </summary>
+    public short OvertimeThresholdHours { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public long? CreatedById { get; set; }

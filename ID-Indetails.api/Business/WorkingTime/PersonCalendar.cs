@@ -18,7 +18,9 @@ public sealed record WorkHours(int Start, int End, int Break)
 /// </summary>
 public sealed class PersonCalendar
 {
-    public sealed record Policy(DateOnly EffectiveFrom, byte WorkDays, int Start, int End, int Break, decimal OvertimeMultiplier);
+    /// <param name="OvertimeThresholdHours">A salary's overtime is paid only past this many hours a month; 0 pays all of it.</param>
+    public sealed record Policy(
+        DateOnly EffectiveFrom, byte WorkDays, int Start, int End, int Break, decimal OvertimeMultiplier, int OvertimeThresholdHours = 0);
 
     public sealed record Schedule(DateOnly EffectiveFrom, bool FollowsDefault, IReadOnlyDictionary<int, (int Start, int End)> Days);
 

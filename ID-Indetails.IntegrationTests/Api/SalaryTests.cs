@@ -320,4 +320,46 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         PayBasis.Monthly.ShouldBe(PayBasis.Monthly);
     }
+
+    [Fact]
+    public async Task From_November_2026_a_salary_is_paid_only_the_overtime_past_184_hours_and_projects_carry_no_premium()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var designer = await SalariedAsync(superAdmin, DomainCodes.Design);
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var work = new WorkEntryTestSteps(_steps);
+
+        // November 2026 has 21 working days (7h required with the paid break; Beirut is UTC+2): 9 to 5 on each is 8h
+        // logged, 1h of it overtime. With two 10-hour Saturdays: 188 counted, 41 of overtime, 4 past the 184.
+        for (var day = new DateOnly(2026, 11, 1); day.Month == 11; day = day.AddDays(1))
+        {
+            if (day.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+            {
+                await work.InsertAsync(designer.User.Id, project.Id, $"{day:yyyy-MM-dd} 07:00:00", $"{day:yyyy-MM-dd} 15:00:00");
+            }
+        }
+
+        await work.InsertAsync(designer.User.Id, project.Id, "2026-11-07 07:00:00", "2026-11-07 17:00:00");
+        await work.InsertAsync(designer.User.Id, project.Id, "2026-11-14 07:00:00", "2026-11-14 17:00:00");
+
+        var row = (await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?month=2026-11&search={designer.User.Email}", superAdmin.AccessToken)))
+            .Rows.Items.ShouldHaveSingleItem();
+        row.ShouldSatisfyAllConditions(
+            r => r.OvertimeThresholdMinutes.ShouldBe(184 * 60),
+            r => r.CountedMinutes.ShouldBe(188 * 60),
+            r => r.OvertimeMinutes.ShouldBe(41 * 60),
+            r => r.OvertimePaidMinutes.ShouldBe(4 * 60),
+            // 4 hours at 9.57 (1,760 ÷ 184), × 1 (the seeded multiplier)
+            r => r.OvertimePay.ShouldBe(38.28m));
+
+        // the latest overtime is the one paid: an hour on each of the last four working days
+        var detail = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{designer.User.Id}?month=2026-11", superAdmin.AccessToken));
+        detail.OvertimeWork.Sum(w => w.PaidMinutes).ShouldBe(4 * 60);
+        detail.OvertimeWork.Where(w => w.PaidMinutes > 0).Select(w => w.Day).ShouldBe(
+            [new(2026, 11, 25), new(2026, 11, 26), new(2026, 11, 27), new(2026, 11, 30)], ignoreOrder: true);
+
+        // the project pays every hour at the hourly rate: no overtime premium
+        var onProject = detail.Projects.ShouldHaveSingleItem();
+        onProject.Pay.ShouldBe(Math.Round(188m * row.HourlyRate, 2, MidpointRounding.AwayFromZero));
+    }
 }

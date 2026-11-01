@@ -55,6 +55,7 @@ public sealed class SalaryService(
                 computed.Sum(c => c.Result.OvertimeMinutes),
                 rows.Sum(r => r.MadeUpMinutes),
                 rows.Count(r => r.ShortMinutes > 0),
+                rows.Sum(r => r.OvertimePaidMinutes),
                 rows.Sum(r => r.ShortMinutes ?? 0),
                 rows.Any(r => r.ExpectedMinutes is not null) ? rows.Sum(r => r.ExpectedMinutes ?? 0) : null),
             withoutPay.Select(u => new PersonWithoutPayResponse(u.Id, NameOf(u), u.RoleCode, u.DomainCode)).ToList());
@@ -131,7 +132,7 @@ public sealed class SalaryService(
             result.DeductionMinutes,
             result.Ledger?.MissedDays ?? [],
             result.Work.Where(w => w.Overtime > 0)
-                .Select(w => new OvertimeWorkResponse(w.Id, w.Day, w.Minutes, w.Overtime, MadeUp(w)))
+                .Select(w => new OvertimeWorkResponse(w.Id, w.Day, w.Minutes, w.Overtime, MadeUp(w), result.PaidOvertimeByWork?.GetValueOrDefault(w.Id) ?? 0))
                 .ToList(),
             person.Excuses.Select(HourExcuseService.ToResponse).ToList(),
             workingDays,
@@ -165,7 +166,7 @@ public sealed class SalaryService(
                 var madeUp = result.Ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0;
                 var terms = SalaryCalculator.TermsOn(input.PayHistory, w.Day);
                 return (ProjectId: projectOf[w.Id], Work: w, MadeUp: madeUp,
-                    Pay: ProjectPay.Of(w, madeUp, terms, input.Calendar));
+                    Pay: ProjectPay.Of(w, madeUp, terms, input.Calendar, noPremium: result.ThresholdMinutes is not null));
             })
             .ToList();
 
@@ -202,7 +203,7 @@ public sealed class SalaryService(
         var monthText = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
         Csv.Line(csv, "Month", "Employee", "Email", "Domain", "Team", "Pay basis", "Monthly salary", "Hourly rate", "Currency",
-            "Expected hours", "Hours in schedule", "Overtime made up", "Overtime paid", "Excused hours", "Short hours", "Flagged",
+            "Expected hours", "Hours in schedule", "Overtime made up", "Overtime", "Overtime paid", "Excused hours", "Short hours", "Flagged",
             "Pro-rated", "Base pay", "Deduction", "Overtime pay", "To pay");
 
         foreach (var r in rows)
@@ -210,14 +211,14 @@ public sealed class SalaryService(
             Csv.Line(csv, monthText, r.Name, r.Email, r.Domain, r.Team?.Name, r.Basis.ToString().ToLowerInvariant(),
                 r.Basis == PayBasis.Monthly ? Csv.Money(r.Amount) : null, Csv.Money(r.HourlyRate), r.Currency,
                 Csv.Hours(r.ExpectedMinutes), Csv.Hours(r.NormalMinutes), Csv.Hours(r.MadeUpMinutes), Csv.Hours(r.OvertimeMinutes),
-                Csv.Hours(r.ExcusedMinutes), Csv.Hours(r.ShortMinutes), r.Flagged ? "yes" : r.Behind ? "behind so far" : "no",
+                Csv.Hours(r.OvertimePaidMinutes), Csv.Hours(r.ExcusedMinutes), Csv.Hours(r.ShortMinutes), r.Flagged ? "yes" : r.Behind ? "behind so far" : "no",
                 r.ProRated ? $"{r.WorkingDaysPaid}/{r.WorkingDays} days" : "no",
                 Csv.Money(r.BasePay), Csv.Money(r.Deduction), Csv.Money(r.OvertimePay), Csv.Money(r.Total));
         }
 
         foreach (var t in Totals(rows))
         {
-            Csv.Line(csv, monthText, "TOTAL", null, null, null, null, null, null, t.Currency, null, null, null, null, null, null, null, null,
+            Csv.Line(csv, monthText, "TOTAL", null, null, null, null, null, null, t.Currency, null, null, null, null, null, null, null, null, null,
                 Csv.Money(t.BasePay), Csv.Money(t.Deduction), Csv.Money(t.OvertimePay), Csv.Money(t.Total));
         }
 
@@ -328,7 +329,10 @@ public sealed class SalaryService(
             ExpectedMinutes = r.Ledger?.Expected,
             NormalMinutes = r.NormalMinutes,
             MadeUpMinutes = r.MadeUpMinutes,
-            OvertimeMinutes = r.OvertimePaidMinutes,
+            OvertimeMinutes = r.OvertimeMinutes - r.MadeUpMinutes,
+            OvertimePaidMinutes = r.OvertimePaidMinutes,
+            OvertimeThresholdMinutes = r.ThresholdMinutes,
+            CountedMinutes = r.ThresholdMinutes is null ? null : r.CountedMinutes,
             ExcusedMinutes = r.ExcusedMinutes,
             ShortMinutes = r.Ledger?.Short,
             Flagged = r.Ledger?.Flagged ?? false,

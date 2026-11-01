@@ -12,4 +12,7 @@ public interface IWorkingTimeService
 
     /// <summary>Every policy, oldest first; cached, and dropped whenever a policy changes.</summary>
     Task<IReadOnlyList<WorkingTimePolicy>> GetPoliciesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The overtime threshold in force on <paramref name="day"/>, in hours; 0 when none is set.</summary>
+    Task<int> OvertimeThresholdOnAsync(DateOnly day, CancellationToken cancellationToken = default);
 }

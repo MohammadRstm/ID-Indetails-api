@@ -25,6 +25,9 @@ public class WorkingTimePolicyConfiguration : IEntityTypeConfiguration<WorkingTi
                 "`break_minutes` >= 0 AND `break_minutes` < `work_end_minute` - `work_start_minute`");
 
             t.HasCheckConstraint("ck_working_time_policies_overtime_multiplier", "`overtime_multiplier` >= 1");
+
+            // a month has at most 744 hours
+            t.HasCheckConstraint("ck_working_time_policies_overtime_threshold", "`overtime_threshold_hours` BETWEEN 0 AND 744");
         });
 
         builder.HasKey(x => x.Id);

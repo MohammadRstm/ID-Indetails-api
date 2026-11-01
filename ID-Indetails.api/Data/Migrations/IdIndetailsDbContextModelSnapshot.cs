@@ -7178,6 +7178,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("decimal(4,2)")
                         .HasColumnName("overtime_multiplier");
 
+                    b.Property<short>("OvertimeThresholdHours")
+                        .HasColumnType("smallint")
+                        .HasColumnName("overtime_threshold_hours");
+
                     b.Property<byte>("WorkDays")
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("work_days");
@@ -7208,6 +7212,8 @@ namespace ID_Indetails.api.Data.Migrations
 
                             t.HasCheckConstraint("ck_working_time_policies_overtime_multiplier", "`overtime_multiplier` >= 1");
 
+                            t.HasCheckConstraint("ck_working_time_policies_overtime_threshold", "`overtime_threshold_hours` BETWEEN 0 AND 744");
+
                             t.HasCheckConstraint("ck_working_time_policies_work_days", "`work_days` BETWEEN 1 AND 127");
                         });
 
@@ -7219,6 +7225,7 @@ namespace ID_Indetails.api.Data.Migrations
                             CreatedAt = new DateTime(2026, 9, 28, 0, 0, 0, 0, DateTimeKind.Utc),
                             EffectiveFrom = new DateOnly(2000, 1, 1),
                             OvertimeMultiplier = 1m,
+                            OvertimeThresholdHours = (short)0,
                             WorkDays = (byte)62,
                             WorkEndMinute = (short)1020,
                             WorkStartMinute = (short)540

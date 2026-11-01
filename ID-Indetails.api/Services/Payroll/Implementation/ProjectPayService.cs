@@ -159,7 +159,7 @@ public sealed class ProjectPayService(
                     e.ProjectId,
                     e.UserId,
                     split.Work.Day,
-                    ProjectPay.Of(split.Work, split.MadeUp, terms, calendars[e.UserId]),
+                    ProjectPay.Of(split.Work, split.MadeUp, terms, calendars[e.UserId], split.NoPremium),
                     terms?.Basis,
                     terms?.Basis == PayBasis.Monthly ? terms.Amount : null);
             })

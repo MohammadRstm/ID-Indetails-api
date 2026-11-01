@@ -10,10 +10,14 @@ public sealed record PersonMonth(User User, SalaryCalculator.Input Input, IReadO
 
 /// <summary>A work entry split as Salaries pays it.</summary>
 /// <param name="MadeUp">Overtime that made up a short month, paid as normal hours.</param>
-public sealed record EntrySplit(Overtime.Split Work, int MadeUp)
+/// <param name="NoPremium">
+/// A salary paid past an overtime threshold that month: its overtime premium is a company cost, so projects price all
+/// of its hours at the normal rate.
+/// </param>
+public sealed record EntrySplit(Overtime.Split Work, int MadeUp, bool NoPremium = false)
 {
-    /// <summary>The overtime paid as overtime: what didn't make up a short month.</summary>
-    public int PaidOvertime => Work.Overtime - MadeUp;
+    /// <summary>The overtime projects price as overtime: what didn't make up a short month, and none past a threshold.</summary>
+    public int PaidOvertime => NoPremium ? 0 : Work.Overtime - MadeUp;
 }
 
 /// <summary>Loads what pay and hours are calculated from: pay history, working time, schedules, work entries and excuses.</summary>
@@ -44,7 +48,8 @@ public interface IPayrollInputs
     /// <summary>
     /// Every work entry these people logged in these months, split as Salaries pays it, by entry id: overtime is decided
     /// per day across all their work, overtime that made up a short month counts as normal hours, and a month paid as a
-    /// fixed salary has no overtime. Project pay and project cost price entries from it.
+    /// fixed salary has no overtime. A salary paid past an overtime threshold puts no premium on its entries
+    /// (<see cref="EntrySplit.NoPremium"/>). Project pay and project cost price entries from it.
     /// </summary>
     Task<IReadOnlyDictionary<long, EntrySplit>> EntrySplitsAsync(IReadOnlyList<User> people, IReadOnlyList<DateOnly> months, CancellationToken cancellationToken = default);
 }

@@ -15,6 +15,7 @@ using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Common.Implementation;
+using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
@@ -35,6 +36,7 @@ public sealed class InvitationService(
     INotificationSender notifications,
     IEmailSender emailSender,
     IClock clock,
+    IWorkingTimeService workingTime,
     IOptions<InvitationOptions> invitationOptions,
     IOptions<FrontendOptions> frontendOptions,
     IOptions<EmailOptions> emailOptions,
@@ -111,7 +113,8 @@ public sealed class InvitationService(
                 Basis = pay.Basis,
                 Amount = pay.Amount,
                 Currency = pay.Currency.ToUpperInvariant(),
-                OvertimeRate = pay.OvertimeRate ?? PayRules.SuggestedOvertimeRate(pay.Basis, pay.Amount),
+                OvertimeRate = pay.OvertimeRate ?? PayRules.SuggestedOvertimeRate(
+                    pay.Basis, pay.Amount, await workingTime.OvertimeThresholdOnAsync(pay.EffectiveFrom ?? clock.CompanyToday, cancellationToken)),
                 Note = "Set at invitation",
                 CreatedAt = now,
                 CreatedById = currentUser.Id,
