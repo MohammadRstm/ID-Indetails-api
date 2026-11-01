@@ -153,4 +153,30 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.GetAsync("/api/reports/work", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.GetAsync("/api/reports/overview", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }
+
+    [Fact]
+    public async Task Each_quarter_counts_the_work_started_in_it_by_the_companys_clock()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        async Task<List<QuarterTotalResponse>> QuartersAsync()
+            => (await (await Client.GetAsync("/api/reports/work", admin.AccessToken)).ReadAsync<WorkReportResponse>()).Quarterly.ToList();
+
+        // Half an hour either side of midnight in Beirut as last quarter began: one in it, one in the quarter before.
+        var beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
+        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, beirut);
+        var lastQuarter = new DateTime(now.Year, ((now.Month - 1) / 3 * 3) + 1, 1).AddMonths(-3);
+        string Utc(DateTime local) => TimeZoneInfo.ConvertTimeToUtc(local, beirut).ToString("yyyy-MM-dd HH:mm:ss");
+
+        var before = await QuartersAsync();
+        await Work.InsertAsync(designer.User.Id, project.Id, Utc(lastQuarter.AddMinutes(-30)), Utc(lastQuarter.AddMinutes(-30).AddHours(1)));
+        await Work.InsertAsync(designer.User.Id, project.Id, Utc(lastQuarter.AddMinutes(30)), Utc(lastQuarter.AddMinutes(30).AddHours(2)));
+        var after = await QuartersAsync();
+
+        after.Select(q => q.QuarterStart).ShouldBe(before.Select(q => q.QuarterStart));
+        var added = after.Zip(before, (a, b) => a.Minutes - b.Minutes).ToList();
+        added.ShouldBe([0, 0, 0, 60, 120, 0]);
+    }
 }

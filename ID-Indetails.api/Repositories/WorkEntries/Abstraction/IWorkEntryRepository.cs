@@ -44,6 +44,12 @@ public sealed record WorkEntrySearch(
     int PageSize = 25,
     bool InternalOnly = false);
 
+/// <summary>A person's Design work over all time, counted by the database.</summary>
+public sealed record PersonWorkTotal(long UserId, int Minutes, int Entries, DateTime LastStartedAt);
+
+/// <summary>A project's work over all time: how many people logged it, and how many minutes.</summary>
+public sealed record ProjectWorkTotal(int People, int Minutes);
+
 /// <summary>The few fields totals and charts are calculated from.</summary>
 public sealed record WorkRow(long Id, long UserId, long ProjectId, DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt);
 
@@ -116,6 +122,18 @@ public interface IWorkEntryRepository
 
     /// <summary>Every matching entry's totals fields, ignoring the search's text and paging. Not tracked.</summary>
     Task<IReadOnlyList<WorkRow>> RowsAsync(WorkEntrySearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>The minutes of every matching entry, ignoring the search's text and paging, added up by the database.</summary>
+    Task<int> MinutesAsync(WorkEntrySearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>Each person's Design work over all time, by user id.</summary>
+    Task<IReadOnlyDictionary<long, PersonWorkTotal>> PersonTotalsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The project's work over all time.</summary>
+    Task<ProjectWorkTotal> ProjectTotalAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>The project's latest entries by anyone but <paramref name="exceptUserId"/>, newest first. Not tracked.</summary>
+    Task<IReadOnlyList<WorkEntryView>> LatestByOthersAsync(long projectId, long exceptUserId, int count, CancellationToken cancellationToken = default);
 
     /// <summary>Active and on-hold Design projects, newest first. Not tracked.</summary>
     Task<IReadOnlyList<WorkProject>> OpenProjectsAsync(CancellationToken cancellationToken = default);

@@ -215,13 +215,22 @@ public sealed class WorkInsightsService(
                 || (p.Position?.Contains(w, StringComparison.OrdinalIgnoreCase) ?? false)))
             .ToList();
 
-        var rows = (await entries.RowsAsync(new WorkEntrySearch(), cancellationToken)).ToLookup(r => r.UserId);
         var calendar = await CalendarAsync(cancellationToken);
         var today = clock.CompanyToday;
         var weekStart = WorkStats.WeekStartOf(today, calendar.FirstDayOfWeek);
         var quarterStart = WorkStats.QuarterStartOf(today);
         var focusFrom = today.AddDays(-(FocusDays - 1));
+        var monthStart = new DateOnly(today.Year, today.Month, 1);
+        var last30From = today.AddDays(-29);
         var money = actor.Has(PermissionCodes.FinancialView);
+
+        // The all-time figures are counted by the database. The rows go back only as far as the page's windows (this
+        // week and quarter, the sparkline, the focus, the last 30 days, this month), except for whoever sees the money:
+        // labour cost is priced entry by entry, over all time.
+        var since = new[] { weekStart.AddDays(-7 * (SparkWeeks - 1)), quarterStart, focusFrom, last30From, monthStart }.Min();
+        var rows = (await entries.RowsAsync(new WorkEntrySearch(From: money ? null : clock.CompanyDayStartUtc(since)), cancellationToken))
+            .ToLookup(r => r.UserId);
+        var totals = await entries.PersonTotalsAsync(cancellationToken);
         var pricer = money
             ? await LabourPricer.LoadAsync(financeSources, projectFinance, people.SelectMany(p => rows[p.Id]).ToList(), clock, cancellationToken)
             : null;
@@ -232,14 +241,12 @@ public sealed class WorkInsightsService(
             : new Dictionary<long, ProjectFinance.PayRate>();
 
         // This month's overtime depends on each whole day, as everywhere else.
-        var monthStart = new DateOnly(today.Year, today.Month, 1);
         var overtimeByEntry = await overtime.ByEntryAsync(
             people.SelectMany(p => rows[p.Id])
                 .Where(r => clock.ToCompanyDate(r.StartedAt) >= monthStart)
                 .Select(r => new LoggedWork(r.Id, r.UserId, r.StartedAt))
                 .ToList(),
             cancellationToken);
-        var last30From = today.AddDays(-29);
 
         var worked = people.ToDictionary(p => p.Id, p => rows[p.Id].Select(ToWorked).ToList());
         var focusOf = worked.ToDictionary(
@@ -252,6 +259,7 @@ public sealed class WorkInsightsService(
             {
                 var mine = worked[p.Id];
                 var focus = focusOf[p.Id];
+                var total = totals.GetValueOrDefault(p.Id);
                 return new PersonWorkResponse(
                     p.Id,
                     p.Name,
@@ -265,9 +273,9 @@ public sealed class WorkInsightsService(
                     p.LastSeenAt,
                     WorkStats.Minutes(mine, weekStart, today),
                     WorkStats.Minutes(mine, quarterStart, today),
-                    mine.Sum(x => x.Minutes),
-                    mine.Count,
-                    rows[p.Id].Select(r => (DateTime?)r.StartedAt).Max(),
+                    total?.Minutes ?? 0,
+                    total?.Entries ?? 0,
+                    total?.LastStartedAt,
                     focus is { } id ? new FocusProjectResponse(id, titles.GetValueOrDefault(id, "")) : null,
                     WorkStats.Weekly(mine, today, SparkWeeks, calendar.FirstDayOfWeek).Select(w => w.Minutes).ToList(),
                     WorkStats.Minutes(mine, last30From, today),
