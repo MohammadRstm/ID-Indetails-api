@@ -12,6 +12,11 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
 {
     public void Add(Notification notification) => db.Notifications.Add(notification);
 
+    public void AddSent(NotificationSentKey sent) => db.NotificationSentKeys.Add(sent);
+
+    public Task<int> DeleteCreatedBeforeAsync(DateTime cutoff, CancellationToken cancellationToken = default)
+        => db.Notifications.Where(n => n.CreatedAt < cutoff).ExecuteDeleteAsync(cancellationToken);
+
     public async Task<Notification?> GetDigestForUpdateAsync(long recipientId, string digestKey, CancellationToken cancellationToken = default)
         => (await db.Notifications
                 .FromSql($"SELECT * FROM `notifications` WHERE `recipient_id` = {recipientId} AND `digest_key` = {digestKey} FOR UPDATE")
@@ -22,9 +27,9 @@ public sealed class NotificationRepository(IdIndetailsDbContext db) : INotificat
         string digestKey,
         IReadOnlyCollection<long> recipientIds,
         CancellationToken cancellationToken = default)
-        => (await db.Notifications.AsNoTracking()
-                .Where(n => recipientIds.Contains(n.RecipientId) && n.DigestKey == digestKey)
-                .Select(n => n.RecipientId)
+        => (await db.NotificationSentKeys.AsNoTracking()
+                .Where(k => recipientIds.Contains(k.RecipientId) && k.Key == digestKey)
+                .Select(k => k.RecipientId)
                 .ToListAsync(cancellationToken))
             .ToHashSet();
 

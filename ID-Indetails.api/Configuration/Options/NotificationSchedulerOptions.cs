@@ -9,6 +9,9 @@ public sealed class NotificationSchedulerOptions
 
     public bool Enabled { get; init; } = true;
 
+    /// <summary>Deletes notifications past a week, at start-up and then daily (NotificationCleanupJob).</summary>
+    public bool CleanupEnabled { get; init; } = true;
+
     [Range(1, 1440)]
     public int IntervalMinutes { get; init; } = 60;
 }

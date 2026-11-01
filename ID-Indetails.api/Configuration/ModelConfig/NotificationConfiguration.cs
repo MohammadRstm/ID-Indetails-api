@@ -22,6 +22,10 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         // A rolling digest is upserted: one row per recipient per digest key.
         builder.HasIndex(x => new { x.RecipientId, x.DigestKey }).IsUnique();
         builder.HasIndex(x => new { x.RecipientId, x.CreatedAt });
+        // the unread count, on every live update and every read
+        builder.HasIndex(x => new { x.RecipientId, x.ReadAt, x.CreatedAt });
+        // the daily clean-up of notifications past a week
+        builder.HasIndex(x => x.CreatedAt);
 
         builder.HasOne(x => x.Recipient)
             .WithMany()

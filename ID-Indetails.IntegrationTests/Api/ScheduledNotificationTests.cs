@@ -164,6 +164,17 @@ public class ScheduledNotificationTests(ApiFactory api) : IClassFixture<ApiFacto
         overdue.Payload!.Value.TryGetProperty("amount", out _).ShouldBeFalse();
         (await OfKindAsync(admin, NotificationKinds.InvoiceOverdue)).ShouldHaveSingleItem();
         (await OfKindAsync(employee, NotificationKinds.InvoiceOverdue)).ShouldBeEmpty();
+
+        // A week on, the notifications are deleted; the invoice is still overdue, but nobody hears of it again.
+        await ExecuteAsync("UPDATE notifications SET created_at = created_at - INTERVAL 8 DAY WHERE kind = @kind", ("@kind", NotificationKinds.InvoiceOverdue));
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<INotificationService>().DeleteOldAsync()).ShouldBeGreaterThanOrEqualTo(2);
+        }
+
+        await RunTwiceAsync(ScheduledCheck.OverdueInvoices);
+        (await OfKindAsync(superAdmin, NotificationKinds.InvoiceOverdue)).ShouldBeEmpty();
+        (await OfKindAsync(admin, NotificationKinds.InvoiceOverdue)).ShouldBeEmpty();
     }
 
     [Fact]

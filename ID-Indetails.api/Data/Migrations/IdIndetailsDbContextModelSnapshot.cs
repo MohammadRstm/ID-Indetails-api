@@ -161,6 +161,9 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("Kind")
                         .HasDatabaseName("ix_activity_events_kind");
 
+                    b.HasIndex("OccurredAt")
+                        .HasDatabaseName("ix_activity_events_occurred_at");
+
                     b.HasIndex("DomainCode", "OccurredAt")
                         .HasDatabaseName("ix_activity_events_domain_code_occurred_at");
 
@@ -1788,6 +1791,9 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("ActorId")
                         .HasDatabaseName("ix_notifications_actor_id");
 
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_notifications_created_at");
+
                     b.HasIndex("ProjectId")
                         .HasDatabaseName("ix_notifications_project_id");
 
@@ -1798,10 +1804,35 @@ namespace ID_Indetails.api.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_notifications_recipient_id_digest_key");
 
+                    b.HasIndex("RecipientId", "ReadAt", "CreatedAt")
+                        .HasDatabaseName("ix_notifications_recipient_id_read_at_created_at");
+
                     b.ToTable("notifications", null, t =>
                         {
                             t.HasCheckConstraint("ck_notifications_count_positive", "`count` >= 1");
                         });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.NotificationSentKey", b =>
+                {
+                    b.Property<long>("RecipientId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recipient_id");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("sent_at");
+
+                    b.HasKey("RecipientId", "Key")
+                        .HasName("pk_notification_sent_keys");
+
+                    b.ToTable("notification_sent_keys", (string)null);
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.OverheadAmount", b =>
@@ -7779,6 +7810,18 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_notifications_users_recipient_id");
+
+                    b.Navigation("Recipient");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.NotificationSentKey", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", "Recipient")
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_sent_keys_users_recipient_id");
 
                     b.Navigation("Recipient");
                 });

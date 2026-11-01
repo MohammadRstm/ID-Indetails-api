@@ -22,6 +22,8 @@ public class ActivityEventConfiguration : IEntityTypeConfiguration<ActivityEvent
         builder.HasIndex(x => new { x.ProjectId, x.OccurredAt });
         // Domain activity feed.
         builder.HasIndex(x => new { x.DomainCode, x.OccurredAt });
+        // The feed across several domains, or with the company's own events: newest first.
+        builder.HasIndex(x => x.OccurredAt);
         builder.HasIndex(x => x.Kind);
 
         builder.HasOne<Domain>()

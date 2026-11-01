@@ -334,6 +334,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectNotifier, ProjectNotifier>();
         services.AddScoped<IScheduledNotifications, ScheduledNotifications>();
         services.AddHostedService<NotificationScheduler>();
+        services.AddHostedService<NotificationCleanupJob>();
         services.AddScoped<ISiteExpenseService, SiteExpenseService>();
         services.AddScoped<ILabourService, LabourService>();
         services.AddScoped<IBoqService, BoqService>();

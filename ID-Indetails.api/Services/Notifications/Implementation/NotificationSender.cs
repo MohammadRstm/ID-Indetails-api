@@ -85,6 +85,7 @@ public sealed class NotificationSender(
             var notification = New(draft, recipientId, payload);
             notification.DigestKey = key;
             notifications.Add(notification);
+            notifications.AddSent(new NotificationSentKey { RecipientId = recipientId, Key = key, SentAt = clock.UtcNow });
             created.Add(notification);
         }
 

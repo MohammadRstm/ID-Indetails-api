@@ -26,7 +26,13 @@ public sealed class NotificationService(
     ILiveUpdates live,
     IClock clock) : INotificationService
 {
+    /// <summary>How long a notification is kept, read or not. Once-only ones are still never sent again (NotificationSentKey).</summary>
+    public static readonly TimeSpan KeepFor = TimeSpan.FromDays(7);
+
     private const string NotFound = "Notification not found.";
+
+    public Task<int> DeleteOldAsync(CancellationToken cancellationToken = default)
+        => notifications.DeleteCreatedBeforeAsync(clock.UtcNow - KeepFor, cancellationToken);
 
     public async Task<PagedResponse<NotificationResponse>> ListAsync(NotificationListQuery query, CancellationToken cancellationToken = default)
     {

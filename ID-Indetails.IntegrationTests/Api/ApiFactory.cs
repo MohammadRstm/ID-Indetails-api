@@ -89,6 +89,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
         // Tests run the scheduled checks themselves, once their data is ready.
         builder.UseSetting("NotificationScheduler:Enabled", "false");
+        builder.UseSetting("NotificationScheduler:CleanupEnabled", "false");
         builder.UseSetting("Proton:History:CleanupEnabled", "false");
         builder.UseSetting("FileStorage:RootPath", FilesRoot);
         builder.UseSetting("FileStorage:CleanupEnabled", "false");
