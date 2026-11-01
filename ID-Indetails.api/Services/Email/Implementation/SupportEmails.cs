@@ -16,7 +16,11 @@ public sealed record BugReport(
     string Role,
     string? Domain,
     string? UserAgent,
-    DateTime ReportedAtUtc);
+    DateTime ReportedAtUtc,
+    IReadOnlyList<ReportedError>? RecentErrors = null);
+
+/// <summary>A request that failed lately in the reporter's browser: its trace id finds its lines in the log.</summary>
+public sealed record ReportedError(string Ref, int Status, string? Path, DateTime AtUtc);
 
 /// <summary>Content of the emails sent to the people who support the product. Every user-supplied value is HTML-encoded.</summary>
 public static class SupportEmails
@@ -39,8 +43,18 @@ public static class SupportEmails
             + Heading("Details")
             + Table(["Detail", "Value"], details.Select(d => new[] { d.Label, d.Value }));
 
+        // the trace ids find the failed requests' lines in the API log
+        var errors = (report.RecentErrors ?? [])
+            .Select(e => new[] { e.Ref, e.Status.ToString(CultureInfo.InvariantCulture), e.Path ?? "", e.AtUtc.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture) })
+            .ToList();
+        if (errors.Count > 0)
+        {
+            html += Heading("Recent errors in their browser") + Table(["Reference", "Status", "Request", "When"], errors);
+        }
+
         var textSteps = report.Steps is null ? "" : $"Steps:\n{report.Steps}\n\n";
-        var text = $"{report.Title}\n\nWhat happened:\n{report.Description}\n\n{textSteps}{string.Join("\n", details.Select(d => $"{d.Label}: {d.Value}"))}\n";
+        var textErrors = errors.Count == 0 ? "" : "\nRecent errors:\n" + string.Join("\n", errors.Select(e => string.Join(" · ", e))) + "\n";
+        var text = $"{report.Title}\n\nWhat happened:\n{report.Description}\n\n{textSteps}{string.Join("\n", details.Select(d => $"{d.Label}: {d.Value}"))}\n{textErrors}";
 
         return Compose(toAddress, null, subject, Page(productName, $"Bug report: {report.Title}", html, "Sent from the Report a bug window."), text);
     }

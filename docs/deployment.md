@@ -135,7 +135,28 @@ migration that removes anything.
 - The run's log and summary in Actions show what was deployed and where it failed.
 - On the server, `docker compose -f docker-compose.prod.yml ps` and `… logs api web`. API logs never contain tokens
   or passwords. nginx logs carry no query strings or referrers. Every container's log is rotated (5 × 10 MB,
-  compressed), so logs can't fill the disk.
+  compressed; the API's 5 × 50 MB, since errors are traced back from it), so logs can't fill the disk.
+- **API log lines are JSON**, one per line, with a UTC `Timestamp`, the `LogLevel`, the `Category`, the `Message` and
+  `Scopes`: the request's `TraceId`, and `UserId` (staff) or `PortalAccountId` (a client) once they are signed in.
+- **Every request that fails on the server (5xx) or takes a second or more is logged**, with its path, status, time
+  and number of database queries (`RequestCostMiddleware`; the threshold is `Diagnostics__SlowRequestMilliseconds`).
+  Quick, successful requests are not.
+
+### Tracing an error back
+
+- **From a person's report.** An error on our side shows the person a reference, such as "(ref 4bf92f35)": the start of
+  the error response's trace id. Bug reports also carry the references of the requests that failed lately in their
+  browser. Every line that request wrote has that trace id:
+
+  ```bash
+  docker compose -f docker-compose.prod.yml logs api | grep 4bf92f35
+  ```
+
+- **Everything one person did that went wrong:** `… logs api | grep '"UserId":"42"'` (a client:
+  `"PortalAccountId":"7"`).
+- **All server errors:** `… logs api | grep '"LogLevel":"Error"'`, and slow requests `'"LogLevel":"Warning"'`.
+- **Who changed what** (a project's status, a payment, a role) is in the activity feed and its `activity_events` table,
+  not in the log.
 - Security events (refused sign-ins, rate limits reached, replayed refresh tokens) are warnings under the
   `ID_Indetails.api.Security` category, with the user id or the visitor's IP: `… logs api | grep Security`.
 

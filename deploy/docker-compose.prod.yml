@@ -12,6 +12,13 @@ x-logging: &logging
     max-size: 10m
     max-file: "5"
 
+# The API's log is where an error is traced back from, so it keeps more: 5 files of 50 MB.
+x-api-logging: &api-logging
+  driver: local
+  options:
+    max-size: 50m
+    max-file: "5"
+
 services:
   db:
     image: mysql:8.4
@@ -61,7 +68,7 @@ services:
   api:
     image: ghcr.io/mohammadrstm/id-indetails-api:${API_TAG:?}
     restart: unless-stopped
-    logging: *logging
+    logging: *api-logging
     read_only: true
     tmpfs: [/tmp]
     # Half of the 4 GB server, /tmp's uploads included: whatever goes wrong in the API, it is the API that restarts,

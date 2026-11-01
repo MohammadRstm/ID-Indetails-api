@@ -39,7 +39,8 @@ public sealed class BugReportService(
             user.RoleCode,
             user.DomainCode,
             OneLine(userAgent),
-            clock.UtcNow);
+            clock.UtcNow,
+            request.RecentErrors.Select(e => new ReportedError(e.Ref, e.Status, e.Path, e.At.ToUniversalTime())).ToList());
 
         try
         {

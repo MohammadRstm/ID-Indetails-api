@@ -85,7 +85,9 @@ In development the API logs every request's time and database commands, to find 
 GET /api/finance/design/overview?months=6 200 in 412 ms, 61 queries
 ```
 
-The live connections pass their access token in the query string; the log writes it as `access_token=hidden`. It is `Diagnostics:LogRequestCost` (`true` in `appsettings.Development.json`). Elsewhere it is off. It can be turned on for a load test with the environment variable `Diagnostics__LogRequestCost=true`.
+The live connections pass their access token in the query string; the log writes it as `access_token=hidden`. Every request is logged where `Diagnostics:LogRequestCost` is true (`appsettings.Development.json`); it can be turned on for a load test with `Diagnostics__LogRequestCost=true`. Everywhere, a request that failed on the server (5xx, an error) or took a second or more (`Diagnostics:SlowRequestMilliseconds`, a warning) is logged anyway; live connections and streams only when they fail.
+
+Development logs are plain text. Elsewhere they are JSON lines (see [deployment.md](deployment.md#logs-and-status)).
 
 ## Tests
 
