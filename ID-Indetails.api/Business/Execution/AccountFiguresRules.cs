@@ -51,7 +51,10 @@ public static class AccountFiguresRules
 
     public sealed record CategoryRow(SiteExpenseCategory Category, decimal Spent);
 
-    public sealed record PayeeRow(string? Payee, decimal Spent);
+    /// <param name="Splits">What was spent with the payee by category and label, so a list of payees can be filtered by either.</param>
+    public sealed record PayeeRow(string? Payee, decimal Spent, IReadOnlyList<PayeeSplit> Splits);
+
+    public sealed record PayeeSplit(SiteExpenseCategory Category, long? LabelId, decimal Spent);
 
     /// <param name="RestToPay">The client's total less what was received; below zero when they paid ahead.</param>
     /// <param name="SupervisionLeft">Supervision due less what was taken; below zero when more was taken.</param>
@@ -82,7 +85,11 @@ public static class AccountFiguresRules
                 .OrderByDescending(c => c.Spent).ThenBy(c => c.Category)
                 .ToList(),
             priced.GroupBy(e => PayeeKey(e.Payee))
-                .Select(g => new PayeeRow(g.Key is null ? null : g.First().Payee!.Trim(), g.Sum(e => e.Usd!.Value)))
+                .Select(g => new PayeeRow(g.Key is null ? null : g.First().Payee!.Trim(), g.Sum(e => e.Usd!.Value),
+                    g.GroupBy(e => (e.Category, e.LabelId))
+                        .Select(s => new PayeeSplit(s.Key.Category, s.Key.LabelId, s.Sum(e => e.Usd!.Value)))
+                        .OrderByDescending(s => s.Spent)
+                        .ToList()))
                 .OrderByDescending(p => p.Spent).ThenBy(p => p.Payee is null).ThenBy(p => p.Payee, StringComparer.OrdinalIgnoreCase)
                 .ToList());
     }

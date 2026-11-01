@@ -169,7 +169,7 @@ The phone app's migrations (8 Oct 2026), all additive:
 - `NotificationSettings` adds `user_notification_settings` (one row per person, quiet hours in minutes after midnight, company time) and `user_notification_mutes` (one row per person and muted category). No row means the defaults ([me.md](me.md#my-notification-settings)).
 - `MaterialClientRef` adds `project_materials.client_ref` (now `site_expenses.client_ref`) with a unique index on (`added_by_id`, `client_ref`), so a batch the phone sends twice adds each expense once ([execution.md](execution.md#site-expenses)). Existing rows stay `NULL`, which the index allows any number of.
 
-The `SiteExpenses` migration (29 Oct 2026, phase 3 of the BOQ rework, see [execution-boq-plan.md](execution-boq-plan.md)) turns the materials into cost-only site expenses:
+The `SiteExpenses` migration (29 Oct 2026, phase 3 of the BOQ rework, rules in [execution.md](execution.md)) turns the materials into cost-only site expenses:
 
 - `project_materials` becomes `site_expenses`: a new table is made and filled from the old one (the rows keep their ids, which activity events point at), then the old one is dropped. It gains `spent_on` (required; each row gets the day it was added in the company time zone, read from `company_settings`, or in UTC where the server has no time zone tables), `category` (default `materials`, with a check constraint) and `account_label_id` (a foreign key to `account_labels`), and loses `client_price`.
 - `projects.material_markup` and its range check are dropped, and `ck_projects_execution_money_fields` is rewritten without it (an Execution project has a work price, a Design project has none).
@@ -177,7 +177,7 @@ The `SiteExpenses` migration (29 Oct 2026, phase 3 of the BOQ rework, see [execu
 - `project_payment_changes.material_markup` and `previous_material_markup` stay as history and are no longer written.
 - Activity kinds and notification kinds keep their stored `material_*` names, so there is no data change to them. `Down` makes the materials table again (a material's client price comes back empty) and turns every other site expense into a project expense of its site.
 
-The `AccountFigures` migration (29 Oct 2026, phase 4 of the BOQ rework, see [execution-boq-plan.md](execution-boq-plan.md)) is additive:
+The `AccountFigures` migration (29 Oct 2026, phase 4 of the BOQ rework, rules in [execution.md](execution.md)) is additive:
 
 - `payments.account_label_id` (optional, a foreign key to `account_labels`, indexed): the label a payment is filed under ([billing.md](billing.md#payments)). Existing payments have none.
 - The `supervision_withdrawals` table (id, `project_id`, `amount_usd` decimal(14,2), `taken_on` date, `note` varchar(500), `created_by_id`, `created_at`, `deleted_at`), with foreign keys to `projects` and `users` (both RESTRICT) and the positive-amount check.

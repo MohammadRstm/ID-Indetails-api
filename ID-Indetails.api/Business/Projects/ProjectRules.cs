@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Labour;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 
@@ -73,6 +74,16 @@ public static class ProjectRules
             ? RuleDenial.Invalid(ErrorCodes.ValidationFailed, "revenue", "Internal projects have no revenue.")
             : null;
     }
+
+    /// <summary>
+    /// A start date moves back to when work really began (an imported site, say), never into the future, and an
+    /// Execution site's not past the week of its first ground labour reported, which would then be out of range.
+    /// </summary>
+    public static RuleDenial? CheckStartDate(DateOnly start, DateOnly today, DateOnly? firstLabourWeek)
+        => start > today ? RuleDenial.Invalid(ErrorCodes.ValidationFailed, "startDate", "The start date can't be in the future.")
+            : firstLabourWeek is { } week && LabourRules.WeekStartOf(start) > week
+                ? RuleDenial.Invalid(ErrorCodes.ValidationFailed, "startDate", $"Ground labour is reported from the week of {week:d MMM yyyy}, so the start can't be later than that week.")
+                : null;
 
     /// <summary>Only client work has a customer payment: an internal project is made client work first.</summary>
     public static RuleDenial? CheckHasPayment(BillingType billingType)

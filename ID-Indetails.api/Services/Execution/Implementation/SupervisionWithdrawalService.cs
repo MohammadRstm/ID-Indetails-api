@@ -2,6 +2,7 @@ using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Execution;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Execution;
@@ -57,6 +58,10 @@ public sealed class SupervisionWithdrawalService(
         // a finished site takes them too (the user's call): they are neither cost nor revenue, so nothing frozen moves
         Throw(SupervisionRules.CheckSite(project.DomainCode, project.BillingType));
         Throw(SupervisionRules.CheckTakenOn(request.TakenOn, clock.CompanyToday));
+        // the project row is locked, so two takes at once can't both pass on the same amount left
+        var due = ExecutionPricing.PriceOf(project.ProjectFee ?? 0, project.SupervisionRate ?? 0, project.TvaRate).Supervision;
+        var taken = await withdrawals.TakenAsync(project.Id, cancellationToken);
+        Throw(SupervisionRules.CheckAmount(request.AmountUsd, SupervisionRules.Left(due, taken)));
 
         var withdrawal = new SupervisionWithdrawal
         {

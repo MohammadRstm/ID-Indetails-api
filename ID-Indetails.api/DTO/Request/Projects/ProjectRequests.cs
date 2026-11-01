@@ -85,6 +85,13 @@ public sealed record CreateProjectRequest
     public IReadOnlyList<long>? StaffIds { get; init; }
 }
 
+/// <summary>Completing a project.</summary>
+public sealed record CompleteProjectRequest
+{
+    /// <summary>Whether what a client paid beyond the price becomes part of it before the project closes.</summary>
+    public bool KeepPaidAhead { get; init; }
+}
+
 /// <summary>Replaces the project's details and owner.</summary>
 public sealed record UpdateProjectRequest
 {
@@ -100,6 +107,9 @@ public sealed record UpdateProjectRequest
     public string? Tint { get; init; }
 
     public DateOnly? TargetDate { get; init; }
+
+    /// <summary>Left out, the start date stays as it is.</summary>
+    public DateOnly? StartDate { get; init; }
 
     public long OwnerId { get; init; }
 }

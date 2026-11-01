@@ -1,5 +1,6 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Labour;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using Shouldly;
@@ -144,6 +145,86 @@ public class ProjectTests(ApiFactory api) : IClassFixture<ApiFactory>
             "SELECT COUNT(*) FROM activity_events WHERE project_id = @id AND kind = 'revenue_changed' AND amount = 0 AND prev_amount = 7000",
             ("@id", project.Id))).ShouldBe(1);
     }
+
+    private static DateOnly CompanyToday()
+        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut")));
+
+    private static string Iso(DateOnly day) => day.ToString("yyyy-MM-dd");
+
+    [Fact]
+    public async Task The_start_date_moves_back_but_not_into_the_future_and_a_left_out_date_keeps_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var today = CompanyToday();
+
+        foreach (var domain in new[] { DomainCodes.Design, DomainCodes.Execution })
+        {
+            var project = await Projects.CreateProjectAsync(token, domain);
+            project.StartDate.ShouldBe(today);
+            var url = $"/api/projects/{project.Id}";
+
+            // left out: it stays
+            var kept = await (await Client.PutJsonAsync(url, new { title = "Renamed", ownerId = project.Owner.Id }, token)).ReadAsync<ProjectResponse>();
+            kept.StartDate.ShouldBe(today);
+
+            var moved = await Client.PutJsonAsync(url, new { title = "Renamed", ownerId = project.Owner.Id, startDate = Iso(today.AddDays(-90)) }, token);
+            ((int)moved.StatusCode).ShouldBe(200, await moved.Content.ReadAsStringAsync());
+            (await moved.ReadAsync<ProjectResponse>()).StartDate.ShouldBe(today.AddDays(-90));
+            (await (await Client.GetAsync(url, token)).ReadAsync<ProjectResponse>()).StartDate.ShouldBe(today.AddDays(-90));
+
+            // an edit that leaves the date out afterwards still keeps the moved one
+            (await (await Client.PutJsonAsync(url, new { title = "Again", ownerId = project.Owner.Id }, token)).ReadAsync<ProjectResponse>())
+                .StartDate.ShouldBe(today.AddDays(-90));
+
+            // forward to today is fine; tomorrow is not
+            (await Client.PutJsonAsync(url, new { title = "Again", ownerId = project.Owner.Id, startDate = Iso(today) }, token)).IsSuccessStatusCode.ShouldBeTrue();
+            var future = await (await Client.PutJsonAsync(url, new { title = "Again", ownerId = project.Owner.Id, startDate = Iso(today.AddDays(1)) }, token))
+                .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+            future.Errors!.Keys.ShouldContain("startDate");
+            (await (await Client.GetAsync(url, token)).ReadAsync<ProjectResponse>()).StartDate.ShouldBe(today);
+        }
+    }
+
+    [Fact]
+    public async Task Moving_a_sites_start_back_opens_the_weeks_and_its_first_labour_default_with_it_and_stops_at_its_first_reported_week()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var today = CompanyToday();
+        var site = await Projects.CreateProjectAsync(token, DomainCodes.Execution);
+        var url = $"/api/projects/{site.Id}";
+        (await Client.PostJsonAsync($"{url}/labour-defaults", new { workers = 8, dailyPay = 40m }, token)).IsSuccessStatusCode.ShouldBeTrue();
+        var weeksBefore = (await WeeksAsync(site.Id, token)).Weeks.Count;
+
+        var start = today.AddDays(-45);
+        (await Client.PutJsonAsync(url, new { title = "Site", ownerId = site.Owner.Id, startDate = Iso(start) }, token)).IsSuccessStatusCode.ShouldBeTrue();
+
+        // the weeks from the new start can be reported, and the first crew and day rate apply from it too
+        var weeks = (await WeeksAsync(site.Id, token)).Weeks;
+        weeks.Count.ShouldBeGreaterThan(weeksBefore);
+        var firstMonday = start.AddDays(-(((int)start.DayOfWeek + 6) % 7));
+        weeks.Min(w => w.WeekStart).ShouldBe(firstMonday);
+        (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM project_labour_defaults WHERE project_id = @p", ("@p", site.Id))).ShouldBe(1);
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM project_labour_defaults WHERE project_id = @p AND effective_from = @d", ("@p", site.Id), ("@d", Iso(start)))).ShouldBe(1);
+
+        // that week is now reported, so the start can't go to a later week, but can to a later day of the same one
+        await _steps.ExecuteAsync(
+            "INSERT INTO labour_weeks (project_id, week_start, submitted_at, submitted_by_id) VALUES (@p, @w, UTC_TIMESTAMP(3), @u)",
+            ("@p", site.Id), ("@w", Iso(firstMonday)), ("@u", superAdmin.User.Id));
+        var late = await (await Client.PutJsonAsync(url, new { title = "Site", ownerId = site.Owner.Id, startDate = Iso(firstMonday.AddDays(7)) }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        late.Errors!.Keys.ShouldContain("startDate");
+        (await (await Client.GetAsync(url, token)).ReadAsync<ProjectResponse>()).StartDate.ShouldBe(start);
+
+        var sameWeek = firstMonday.AddDays(5);
+        (await Client.PutJsonAsync(url, new { title = "Site", ownerId = site.Owner.Id, startDate = Iso(sameWeek) }, token)).IsSuccessStatusCode.ShouldBeTrue();
+        (await (await Client.GetAsync(url, token)).ReadAsync<ProjectResponse>()).StartDate.ShouldBe(sameWeek);
+    }
+
+    private async Task<LabourWeekListResponse> WeeksAsync(long projectId, string token)
+        => await (await Client.GetAsync($"/api/projects/{projectId}/labour-weeks", token)).ReadAsync<LabourWeekListResponse>();
 
     [Fact]
     public async Task A_project_can_say_where_the_work_is()
