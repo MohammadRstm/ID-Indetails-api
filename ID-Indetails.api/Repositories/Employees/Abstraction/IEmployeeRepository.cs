@@ -44,7 +44,8 @@ public sealed record EmployeeSearch(
     string? Domain,
     UserStatus? Status,
     int Page,
-    int PageSize);
+    int PageSize,
+    bool CountTotal = true);
 
 public sealed record EmployeeRow(
     long Id,

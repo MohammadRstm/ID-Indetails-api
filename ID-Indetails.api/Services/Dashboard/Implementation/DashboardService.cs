@@ -31,21 +31,17 @@ public sealed class DashboardService(
     {
         (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ReportView);
         await CheckDomainAsync(domain, cancellationToken);
-        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
-        var clients = await summaries.DomainClientsAsync(domain, cancellationToken);
+        // counted by the database: the cards need no project or client loaded
+        var statuses = await summaries.StatusCountsAsync(domain, cancellationToken);
+        var running = await summaries.LongestRunningAsync(domain, LongestRunningCount, cancellationToken);
         var today = clock.CompanyToday;
 
         return new DashboardResponse(
             domain,
-            projects.Count(p => p.Status == ProjectStatus.Active),
-            clients.Count(c => c.ArchivedAt is null),
-            projects.GroupBy(p => p.Status).Select(g => new StatusTotalResponse(g.Key, g.Count())).OrderBy(s => s.Status).ToList(),
-            projects
-                .Where(p => p.Status is ProjectStatus.Active or ProjectStatus.Hold)
-                .OrderBy(p => p.StartDate)
-                .Take(LongestRunningCount)
-                .Select(p => new RunningProjectResponse(p.Id, p.Title, p.StartDate, today.DayNumber - p.StartDate.DayNumber))
-                .ToList());
+            statuses.Where(s => s.Status == ProjectStatus.Active).Sum(s => s.Count),
+            await summaries.ActiveClientCountAsync(domain, cancellationToken),
+            statuses.Select(s => new StatusTotalResponse(s.Status, s.Count)).OrderBy(s => s.Status).ToList(),
+            running.Select(p => new RunningProjectResponse(p.Id, p.Title, p.StartDate, today.DayNumber - p.StartDate.DayNumber)).ToList());
     }
 
     public async Task<UpcomingDeadlinesResponse> DeadlinesAsync(string domain, CancellationToken cancellationToken = default)

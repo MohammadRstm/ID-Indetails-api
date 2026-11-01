@@ -98,6 +98,8 @@ The check runs only when someone's permissions are changed, never on ordinary re
 
 `PermissionService` caches the catalogue and role defaults (they only change by migration) and each user's access for 10 minutes. A user's cached access is dropped whenever their overrides or role change through the API. Anything that changes a user's role, domain or status must call `IPermissionService.Forget(userId)`; the people-management endpoints already do.
 
+When a person's access isn't cached, the requests that arrive together (a page opening sends 10 to 15) share one load (`PermissionLoads`). A `Forget` during that load takes it off the list, so what it read isn't kept.
+
 The cache is in-process. Running more than one API instance would need a shared cache or a per-user version stamp.
 
 ## Client portal

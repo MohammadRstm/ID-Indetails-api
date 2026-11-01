@@ -245,6 +245,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IPasswordService, PasswordService>();
         services.AddSingleton<IAccessTokenService, AccessTokenService>();
         services.AddScoped<IPermissionService, PermissionService>();
+        services.AddSingleton<PermissionLoads>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IPasswordResetService, PasswordResetService>();

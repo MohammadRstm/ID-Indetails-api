@@ -389,7 +389,9 @@ Phase 1 of [proton-stage-5-plan.md](proton-stage-5-plan.md) (E1–E3, G6).
   the name they know. The company's name comes from its branding, in the context note.
 - **Greeting and briefing.** The panel greets the user itself (first name, time of day; no model call) and shows
   `GET /api/proton/briefing`: the three things most worth a look and how many more, from get_attention's rules and
-  read path, only for users who could ask get_attention. No model call and no question used.
+  read path, only for users who could ask get_attention. No model call and no question used. It is kept 3 minutes for
+  the person and the permissions they hold, so opening the panel again doesn't scan every project again; a change to
+  their permissions makes a new one at once.
 - **Small talk is free.** A question Proton answered without any tool doesn't count toward the monthly allowance; it
   still costs the budget.
 - **Budget held while answering.** Each text question holds `Proton:QuestionHoldUsd` (0.25 USD) of the month's budget

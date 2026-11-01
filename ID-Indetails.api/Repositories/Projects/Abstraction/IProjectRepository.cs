@@ -18,7 +18,8 @@ public sealed record ProjectSearch(
     int PageSize,
     long? OwnerId = null,
     OpenPeriod? OpenDuring = null,
-    ProjectSort Sort = ProjectSort.Start);
+    ProjectSort Sort = ProjectSort.Start,
+    bool CountTotal = true);
 
 public sealed record SiteRecorder(long ProjectId, long UserId, string Name, DateTime LastAt);
 
@@ -27,8 +28,14 @@ public sealed record PaymentChangeRow(ProjectPaymentChange Change, string? Chang
 
 public interface IProjectRepository
 {
-    /// <summary>Not tracked, with client and owner.</summary>
+    /// <summary>Not tracked, with client and owner. The total is 0 when <see cref="ProjectSearch.CountTotal"/> is off.</summary>
     Task<(IReadOnlyList<Project> Items, int TotalCount)> SearchAsync(ProjectSearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>How many projects the search matches, whatever its page.</summary>
+    Task<int> CountAsync(ProjectSearch search, CancellationToken cancellationToken = default);
+
+    /// <summary>Every project the search matches, whatever its page, without client or owner: for totals. Not tracked.</summary>
+    Task<IReadOnlyList<Project>> MatchingAsync(ProjectSearch search, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Ids of the domain's completed projects completed by <paramref name="beforeUtc"/> with no activity event, client

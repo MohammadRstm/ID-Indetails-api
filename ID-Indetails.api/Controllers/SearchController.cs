@@ -15,4 +15,9 @@ public sealed class SearchController(ISearchService searchService) : ControllerB
     [HttpGet]
     public Task<SearchResponse> Search([FromQuery] SearchQuery query, CancellationToken cancellationToken)
         => searchService.SearchAsync(query, cancellationToken);
+
+    /// <summary>The sidebar's counts beside Projects, Clients and Employees, each null where the caller may not list them.</summary>
+    [HttpGet("counts")]
+    public Task<NavCountsResponse> Counts([FromQuery] NavCountsQuery query, CancellationToken cancellationToken)
+        => searchService.CountsAsync(query, cancellationToken);
 }

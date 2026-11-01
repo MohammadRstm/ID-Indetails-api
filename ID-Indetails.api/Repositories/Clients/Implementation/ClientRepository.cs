@@ -56,7 +56,7 @@ public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepositor
             query = query.Where(c => !db.Projects.Any(p => p.ClientId == c.Id));
         }
 
-        var total = await query.CountAsync(cancellationToken);
+        var total = search.CountTotal ? await query.CountAsync(cancellationToken) : 0;
         var live = db.WorkEntries.Where(e => e.DeletedAt == null);
         // names run A to Z, the rest highest first; Reverse turns either round
         IOrderedQueryable<Client> By<TKey>(Expression<Func<Client, TKey>> key, bool descending)

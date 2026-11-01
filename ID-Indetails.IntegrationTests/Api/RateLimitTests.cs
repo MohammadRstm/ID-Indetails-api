@@ -1,4 +1,6 @@
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Auth;
+using ID_Indetails.api.DTO.Response.Portal;
 using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
@@ -59,6 +61,52 @@ public class UserRateLimitTests(UserRateLimitedApiFactory api) : IClassFixture<U
 
         await (await _steps.Client.GetAsync("/api/teams", first.AccessToken)).ShouldFailWithAsync(429, ErrorCodes.TooManyRequests);
         (await _steps.Client.GetAsync("/api/teams", second.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+    }
+}
+
+public class PortalRateLimitTests(UserRateLimitedApiFactory api) : IClassFixture<UserRateLimitedApiFactory>
+{
+    private readonly AuthTestSteps _steps = new(api);
+    private HttpClient Client => _steps.Client;
+
+    private sealed record IdOnly(long Id);
+
+    /// <summary>A client invited to a Design project who accepted: signed in to the portal.</summary>
+    private async Task<string> ClientTokenAsync(AuthResponse superAdmin)
+    {
+        var email = AuthTestSteps.NewEmail("client");
+        var client = await (await Client.PostJsonAsync("/api/clients", new
+        {
+            name = "Rita Frem", label = "Client", domainCode = DomainCodes.Design,
+            contacts = new[] { new { kind = "email", value = email, label = "Office" } },
+        }, superAdmin.AccessToken)).ReadAsync<IdOnly>();
+        var project = await (await Client.PostJsonAsync("/api/projects",
+            new { title = "Project " + Guid.NewGuid().ToString("N")[..8], domainCode = DomainCodes.Design, clientId = client.Id }, superAdmin.AccessToken))
+            .ReadAsync<IdOnly>();
+        (await Client.PostJsonAsync($"/api/projects/{project.Id}/portal/invitations", new { email }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var accepted = await Client.PostJsonAsync("/api/portal/invitations/accept",
+            new { token = api.Emails.InvitationTokenFor(email), firstName = "Rita", lastName = "Frem", password = "client-own-passphrase" });
+        accepted.IsSuccessStatusCode.ShouldBeTrue(await accepted.Content.ReadAsStringAsync());
+        return (await accepted.ReadAsync<PortalAuthResponse>()).AccessToken;
+    }
+
+    [Fact]
+    public async Task A_signed_in_client_has_their_own_request_limit_not_their_offices_address()
+    {
+        // two super admins, so neither uses up their own limit of 5 setting a client up
+        var (_, _, first) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, second) = await _steps.ActiveSuperAdminAsync();
+        var rita = await ClientTokenAsync(first);
+        var sami = await ClientTokenAsync(second);
+
+        for (var i = 0; i < 5; i++)
+        {
+            (await Client.GetAsync("/api/portal/me", rita)).IsSuccessStatusCode.ShouldBeTrue();
+        }
+
+        await (await Client.GetAsync("/api/portal/me", rita)).ShouldFailWithAsync(429, ErrorCodes.TooManyRequests);
+        // another client from the same address is unaffected
+        (await Client.GetAsync("/api/portal/me", sami)).IsSuccessStatusCode.ShouldBeTrue();
     }
 }
 

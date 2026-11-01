@@ -22,6 +22,9 @@ public static class AuthorizationPolicies
     public const char AnyOfSeparator = '|';
 
     /// <summary>The default for <c>[Authorize]</c>: signed in and not stuck on a generated password.</summary>
+    /// <summary>The default scheme: the portal's for the portal's paths, the staff one for the rest.</summary>
+    public const string ByPathScheme = "StaffOrPortal";
+
     public static AuthorizationPolicy Default { get; } = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .AddRequirements(new PasswordChangeCompletedRequirement())

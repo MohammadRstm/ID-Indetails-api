@@ -39,7 +39,11 @@ public static class AuthServiceCollectionExtensions
         var portal = configuration.GetSection(PortalOptions.SectionName).Get<PortalOptions>() ?? new PortalOptions();
 
         services
-            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddAuthentication(AuthorizationPolicies.ByPathScheme)
+            // A request is signed in the way its path expects: the portal's with the client's token, everything else
+            // with the staff token. So a client's request is checked once, and the rate limit sees the client.
+            .AddPolicyScheme(AuthorizationPolicies.ByPathScheme, null, options => options.ForwardDefaultSelector = context =>
+                IsPortalPath(context.Request.Path) ? AuthorizationPolicies.PortalScheme : JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
                 // Keep claim names exactly as issued ("sub", "role", ...).
@@ -187,8 +191,12 @@ public static class AuthServiceCollectionExtensions
                 }
 
                 var userId = context.User.FindFirst(AuthClaimTypes.UserId)?.Value;
+                // a client signed in to the portal has their own bucket, as a member of staff does: not their office's address
+                var accountId = context.User.FindFirst(AuthClaimTypes.PortalAccountId)?.Value;
                 return userId is not null
                     ? RateLimitPartition.GetFixedWindowLimiter("user:" + userId, _ => PerMinute(limits.UserPermitsPerMinute))
+                    : accountId is not null
+                    ? RateLimitPartition.GetFixedWindowLimiter("portal:" + accountId, _ => PerMinute(limits.UserPermitsPerMinute))
                     : RateLimitPartition.GetFixedWindowLimiter(
                         "ip:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                         _ => PerMinute(limits.AnonymousPermitsPerMinute));
@@ -267,6 +275,12 @@ public static class AuthServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>The client portal's endpoints and live connection: every one of them is for clients, or for anyone.</summary>
+    private static bool IsPortalPath(PathString path)
+        => path.StartsWithSegments(PortalPathPrefix) || path.StartsWithSegments(PortalHub.Path);
+
+    private const string PortalPathPrefix = "/api/portal";
 
     private static FixedWindowRateLimiterOptions PerMinute(int permits)
         => new() { PermitLimit = permits, Window = TimeSpan.FromMinutes(1) };
