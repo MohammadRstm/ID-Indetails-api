@@ -51,11 +51,14 @@ ID InDetails is a company of architectural engineers. This repository is the API
 
 ### The repositories
 
+The checkouts sit under `C:\Users\masst\` on the laptop and `C:\Users\mohammadrstm\` on the desktop:
+
 | Repo | Local checkout | What it is |
 |---|---|---|
-| API (this one) | `C:\Users\masst\source\repos\ID-Indetails` (`master`) | ASP.NET Core .NET 10, EF Core + Pomelo MySQL 8.4 |
-| Client | `C:\Users\masst\Desktop\Ident-Internal-Management-System-client` (`main`) | React 19 + TypeScript + Vite. It has its own CLAUDE.md. |
-| Website | `C:\Users\masst\Desktop\id-indetails-website` (`master`) | The public website. It reads `/api/public/website/` only. It has its own CLAUDE.md. |
+| API (this one) | `source\repos\ID-Indetails` (`master`) | ASP.NET Core .NET 10, EF Core + Pomelo MySQL 8.4 |
+| Client | `Desktop\Ident-Internal-Management-System-client` (`main`) | React 19 + TypeScript + Vite. It has its own CLAUDE.md. |
+| Website | `Desktop\id-indetails-website` (`master`) | The public website. It reads `/api/public/website/` only. It has its own CLAUDE.md. |
+| Mobile app | `Desktop\ID-Indetails-mobile` (`main`) | The phone app (Expo + React Native), a client of this API. It has its own CLAUDE.md. |
 
 Feature work usually touches the API and the client together: one `MR-<Topic>` branch and one PR in each.
 
