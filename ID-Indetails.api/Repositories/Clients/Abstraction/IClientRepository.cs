@@ -17,7 +17,8 @@ public sealed record ClientSearch(
     ClientFilter? Filter = null,
     ClientSort Sort = ClientSort.Name,
     bool IncludeArchived = false,
-    bool Reverse = false);
+    bool Reverse = false,
+    bool CountTotal = true);
 
 /// <summary>A client with its contacts and how many projects use it.</summary>
 public sealed record ClientRow(Client Client, int ProjectCount);

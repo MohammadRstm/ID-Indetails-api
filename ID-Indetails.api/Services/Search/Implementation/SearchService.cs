@@ -5,6 +5,7 @@ using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Search;
 using ID_Indetails.api.DTO.Response.Search;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Repositories.Clients.Abstraction;
 using ID_Indetails.api.Repositories.Employees.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
@@ -27,26 +28,47 @@ public sealed class SearchService(
 {
     public const int MaxResults = 12;
 
+    public async Task<NavCountsResponse> CountsAsync(NavCountsQuery query, CancellationToken cancellationToken = default)
+    {
+        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        var domain = query.Domain;
+
+        // each as its list counts it with the sidebar's filters (GET /projects?status=active, /clients, /employees?status=active)
+        int? projectCount = actor.Has(PermissionCodes.ProjectView)
+            ? await projects.CountAsync(new ProjectSearch(actor.VisibleDomains, null, ProjectStatus.Active, null, null, domain, 1, 1), cancellationToken)
+            : null;
+        int? clientCount = actor.Has(PermissionCodes.ClientView)
+            ? (await clients.SearchAsync(new ClientSearch(actor.VisibleDomains, null, null, domain, 1, 0), cancellationToken)).TotalCount
+            : null;
+        int? peopleCount = actor.Has(PermissionCodes.EmployeeView)
+            ? (await employees.SearchAsync(
+                new EmployeeSearch(actor.VisibleDomains, EmployeeRules.CanSee(actor, null), null, null, null, domain, UserStatus.Active, 1, 0),
+                cancellationToken)).TotalCount
+            : null;
+        return new NavCountsResponse(projectCount, clientCount, peopleCount);
+    }
+
     public async Task<SearchResponse> SearchAsync(SearchQuery query, CancellationToken cancellationToken = default)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
-        // With nothing typed, the palette lists everything, first results first, as in the prototype.
+        // With nothing typed, the palette lists everything, first results first, as in the prototype. It shows no totals,
+        // so none are counted.
         var text = (query.Q ?? string.Empty).Trim();
         var left = MaxResults;
 
         var foundProjects = actor.Has(PermissionCodes.ProjectView)
-            ? (await projects.SearchAsync(new ProjectSearch(actor.VisibleDomains, text, null, null, null, null, 1, left), cancellationToken)).Items
+            ? (await projects.SearchAsync(new ProjectSearch(actor.VisibleDomains, text, null, null, null, null, 1, left, CountTotal: false), cancellationToken)).Items
             : [];
         left -= foundProjects.Count;
 
         var foundClients = left > 0 && actor.Has(PermissionCodes.ClientView)
-            ? (await clients.SearchAsync(new ClientSearch(actor.VisibleDomains, text, null, null, 1, left), cancellationToken)).Items
+            ? (await clients.SearchAsync(new ClientSearch(actor.VisibleDomains, text, null, null, 1, left, CountTotal: false), cancellationToken)).Items
             : [];
         left -= foundClients.Count;
 
         var foundPeople = left > 0 && actor.Has(PermissionCodes.EmployeeView)
             ? (await employees.SearchAsync(
-                new EmployeeSearch(actor.VisibleDomains, EmployeeRules.CanSee(actor, null), text, null, null, null, null, 1, left),
+                new EmployeeSearch(actor.VisibleDomains, EmployeeRules.CanSee(actor, null), text, null, null, null, null, 1, left, CountTotal: false),
                 cancellationToken)).Items
             : [];
 

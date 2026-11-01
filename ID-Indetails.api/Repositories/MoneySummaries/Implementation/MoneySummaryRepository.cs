@@ -1,5 +1,6 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.MoneySummaries.Abstraction;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,25 @@ public sealed class MoneySummaryRepository(IdIndetailsDbContext db) : IMoneySumm
             .Include(p => p.Client)
             .Where(p => p.ClientId != null && clientIds.Contains(p.ClientId.Value))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<StatusCountRow>> StatusCountsAsync(string domainCode, CancellationToken cancellationToken = default)
+        => await db.Projects
+            .Where(p => p.DomainCode == domainCode)
+            .GroupBy(p => p.Status)
+            .Select(g => new StatusCountRow(g.Key, g.Count()))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<RunningProjectRow>> LongestRunningAsync(string domainCode, int count, CancellationToken cancellationToken = default)
+        => await db.Projects
+            .Where(p => p.DomainCode == domainCode && (p.Status == ProjectStatus.Active || p.Status == ProjectStatus.Hold))
+            .OrderBy(p => p.StartDate)
+            .ThenBy(p => p.Id)
+            .Take(count)
+            .Select(p => new RunningProjectRow(p.Id, p.Title, p.StartDate))
+            .ToListAsync(cancellationToken);
+
+    public Task<int> ActiveClientCountAsync(string domainCode, CancellationToken cancellationToken = default)
+        => db.Clients.CountAsync(c => c.DomainCode == domainCode && c.ArchivedAt == null, cancellationToken);
 
     public async Task<IReadOnlyList<Client>> DomainClientsAsync(string domainCode, CancellationToken cancellationToken = default)
         => await db.Clients.AsNoTracking().Where(c => c.DomainCode == domainCode).ToListAsync(cancellationToken);

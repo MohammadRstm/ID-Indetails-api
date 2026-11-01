@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
@@ -21,7 +22,8 @@ namespace ID_Indetails.api.Services.Auth.Implementation;
 public sealed class PermissionService(
     IPermissionRepository permissions,
     IUserRepository users,
-    IMemoryCache cache) : IPermissionService
+    IMemoryCache cache,
+    PermissionLoads loads) : IPermissionService
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(10);
     private const string CatalogKey = "permissions:catalog";
@@ -29,22 +31,45 @@ public sealed class PermissionService(
 
     public async Task<UserAccess> GetAccessAsync(long userId, CancellationToken cancellationToken = default)
     {
-        var key = AccessKey(userId);
-        if (cache.TryGetValue(key, out UserAccess? cached) && cached is not null)
+        if (cache.TryGetValue(AccessKey(userId), out UserAccess? cached) && cached is not null)
         {
             return cached;
         }
 
-        var user = await users.GetRoleSnapshotAsync(userId, cancellationToken);
-        var access = user is null
-            ? UserAccess.None(userId, string.Empty, null)
-            : user.Status == UserStatus.Deactivated
-                ? UserAccess.None(userId, user.RoleCode, user.DomainCode)
-                : await ResolveAsync(user.Id, user.RoleCode, user.DomainCode, cancellationToken);
-        access = access with { SessionsRevokedAt = user?.SessionsRevokedAt, SessionsValidFrom = user?.SessionsValidFrom };
+        // A page opening sends many requests at once: the first loads the access, the others wait for it.
+        Lazy<Task<UserAccess>>? mine = null;
+        mine = new Lazy<Task<UserAccess>>(() => LoadAccessAsync(userId, mine!));
+        var load = loads.Running.GetOrAdd(userId, mine);
 
-        cache.Set(key, access, CacheFor);
-        return access;
+        // The loader waits it out even if its caller leaves: the load runs on its request's database connection.
+        return load == mine ? await load.Value : await load.Value.WaitAsync(cancellationToken);
+    }
+
+    private async Task<UserAccess> LoadAccessAsync(long userId, Lazy<Task<UserAccess>> self)
+    {
+        try
+        {
+            var user = await users.GetRoleSnapshotAsync(userId, CancellationToken.None);
+            var access = user is null
+                ? UserAccess.None(userId, string.Empty, null)
+                : user.Status == UserStatus.Deactivated
+                    ? UserAccess.None(userId, user.RoleCode, user.DomainCode)
+                    : await ResolveAsync(user.Id, user.RoleCode, user.DomainCode, CancellationToken.None);
+            access = access with { SessionsRevokedAt = user?.SessionsRevokedAt, SessionsValidFrom = user?.SessionsValidFrom };
+
+            // a change meanwhile (Forget) took this load off the list: what it read may be out of date, so it isn't kept
+            if (loads.Running.TryRemove(KeyValuePair.Create(userId, self)))
+            {
+                cache.Set(AccessKey(userId), access, CacheFor);
+            }
+
+            return access;
+        }
+        catch
+        {
+            loads.Running.TryRemove(KeyValuePair.Create(userId, self));
+            throw;
+        }
     }
 
     public Task<UserAccess> ResolveAsync(User user, CancellationToken cancellationToken = default)
@@ -81,7 +106,11 @@ public sealed class PermissionService(
         return grants;
     }
 
-    public void Forget(long userId) => cache.Remove(AccessKey(userId));
+    public void Forget(long userId)
+    {
+        cache.Remove(AccessKey(userId));
+        loads.Running.TryRemove(userId, out _);
+    }
 
     private async Task<UserAccess> ResolveAsync(
         long userId,
@@ -103,4 +132,10 @@ public sealed class PermissionService(
     }
 
     private static string AccessKey(long userId) => $"permissions:user:{userId}";
+}
+
+/// <summary>The access loads under way, by user, shared by every request (a singleton beside the cache).</summary>
+public sealed class PermissionLoads
+{
+    public ConcurrentDictionary<long, Lazy<Task<UserAccess>>> Running { get; } = new();
 }

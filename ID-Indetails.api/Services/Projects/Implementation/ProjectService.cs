@@ -107,7 +107,7 @@ public sealed class ProjectService(
         var period = OpenPeriodOf(query.Year, query.Quarter);
         IReadOnlyList<Project> matching = period is { } future && future.From > clock.CompanyToday
             ? []
-            : (await projects.SearchAsync(SearchOf(actor, query, period, 1, int.MaxValue), cancellationToken)).Items;
+            : await projects.MatchingAsync(SearchOf(actor, query, period, 1, int.MaxValue), cancellationToken);
 
         var rollup = await moneyRollups.LoadAsync(matching, cancellationToken);
         var client = matching.Where(p => p.BillingType == BillingType.Client).ToList();

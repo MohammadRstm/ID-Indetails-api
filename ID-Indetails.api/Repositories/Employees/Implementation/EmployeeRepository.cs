@@ -47,7 +47,7 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
                 || (u.Position != null && u.Position.Contains(word)));
         }
 
-        var total = await query.CountAsync(cancellationToken);
+        var total = search.CountTotal ? await query.CountAsync(cancellationToken) : 0;
         var items = await Project(query
                 .OrderBy(u => u.FirstName == null)
                 .ThenBy(u => u.FirstName)

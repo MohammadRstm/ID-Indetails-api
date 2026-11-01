@@ -174,10 +174,11 @@ public sealed class CompanyOverviewService(
         var costs = data.History.Values.SelectMany(h => h.Costs).ToList();
         var (salaries, _) = await FixedSalariesAsync(keys.Select(m => new Recognition.MonthShare(m, 1m)).ToList(), data.Rates, cancellationToken);
 
+        var lines = await overheads.ListAsync(cancellationToken);
         var result = new List<CompanyMonthResponse>();
         foreach (var month in keys)
         {
-            var (overhead, _) = await OverheadAsync([(month, 1m)], data.Rates, cancellationToken);
+            var (overhead, _) = OverheadOf(lines, [(month, 1m)], data.Rates);
             var cost = PeriodMoney.Costs(costs, month, month.AddMonths(1).AddDays(-1));
             var labour = PeriodMoney.Round(cost.Labour);
             var expenses = PeriodMoney.Round(cost.Expenses);
@@ -209,8 +210,13 @@ public sealed class CompanyOverviewService(
         IEnumerable<(DateOnly Month, decimal Share)> months,
         ExchangeRateTable rates,
         CancellationToken cancellationToken)
+        => OverheadOf(await overheads.ListAsync(cancellationToken), months, rates);
+
+    private static (decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted) OverheadOf(
+        IReadOnlyList<OverheadItem> lines,
+        IEnumerable<(DateOnly Month, decimal Share)> months,
+        ExchangeRateTable rates)
     {
-        var lines = await overheads.ListAsync(cancellationToken);
         var usd = 0m;
         var unconverted = new Dictionary<string, decimal>();
 

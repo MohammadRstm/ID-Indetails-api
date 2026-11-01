@@ -28,6 +28,9 @@ because:
   `id-indetails-portal`):
   - Staff endpoints validate the staff audience, so they refuse a client's token.
   - Portal endpoints (`[Authorize(Policy = "Portal")]`) authenticate only the portal scheme, so they refuse a staff token.
+  - The default scheme picks by path (`StaffOrPortal`): `/api/portal/...` and `/hubs/portal` are read with the portal
+    scheme, everything else with the staff one. Every portal path is for clients or for anyone, so a client's token is
+    checked once, never first as a staff token.
 - **No staff user id in a client's token:**
   - A portal token carries the account id as `portal_account` and **no `sub`**.
   - Everything that reads a staff user id from `sub` therefore finds none: permissions, last seen, presence, the per-user
@@ -637,9 +640,9 @@ before. The web client sorts by these fields itself.
   cut-off. Only adds; the rollback drops it.
 
 ## Known limits (later phases)
-- **Rate limiting:** the global per-user limit counts a client by IP. The portal token isn't the default scheme, so a
-  signed-in client looks anonymous to the limiter (60 requests a minute per address). Discussion writes also have their
-  own per-account limit.
+- **Rate limiting:** a signed-in client has their own bucket in the global limit (`portal:{account}`, the per-user
+  limit), so clients sharing an office's address don't share one. Discussion writes also have their own per-account
+  limit.
 - **Archived projects** still appear to their clients, read-only on both sides: the published page and the
   discussion can be read, but nothing can be changed, published or written.
 - **Content activity** (uploads, renames, deletions) isn't in the activity feed: drafts are internal. Publishing is

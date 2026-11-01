@@ -14,3 +14,9 @@ public sealed record SearchResponse(
     IReadOnlyList<SearchProjectResponse> Projects,
     IReadOnlyList<SearchClientResponse> Clients,
     IReadOnlyList<SearchPersonResponse> People);
+
+/// <summary>
+/// The numbers beside Projects, Clients and Employees in the sidebar: active projects, clients that aren't archived and
+/// active people, each what its list's total would be. Null where the caller may not list them.
+/// </summary>
+public sealed record NavCountsResponse(int? Projects, int? Clients, int? People);

@@ -21,6 +21,10 @@ public sealed record PaymentMoneyRow(long ProjectId, long ClientId, long? Invoic
 /// <summary>A project's agreed payment (Design) or fee (Execution) being set or changed: the new amount, and the one before.</summary>
 public sealed record AgreedChangeRow(long ProjectId, DateTime OccurredAt, decimal Amount, decimal? PrevAmount);
 
+public sealed record StatusCountRow(ProjectStatus Status, int Count);
+
+public sealed record RunningProjectRow(long Id, string Title, DateOnly StartDate);
+
 public sealed record ExpenseDetailRow(long Id, long ProjectId, string Label, string Category, string Currency, decimal Amount, DateOnly SpentOn);
 
 /// <summary>What the money summaries read besides the shared finance calculator. One query each, whatever the number of projects.</summary>
@@ -31,6 +35,15 @@ public interface IMoneySummaryRepository
 
     /// <summary>Every project of these clients, with its client. Not tracked.</summary>
     Task<IReadOnlyList<Project>> ClientProjectsAsync(IReadOnlyCollection<long> clientIds, CancellationToken cancellationToken = default);
+
+    /// <summary>How many of the domain's projects are in each status.</summary>
+    Task<IReadOnlyList<StatusCountRow>> StatusCountsAsync(string domainCode, CancellationToken cancellationToken = default);
+
+    /// <summary>The domain's active and on-hold projects that started first, oldest first.</summary>
+    Task<IReadOnlyList<RunningProjectRow>> LongestRunningAsync(string domainCode, int count, CancellationToken cancellationToken = default);
+
+    /// <summary>How many of the domain's clients aren't archived.</summary>
+    Task<int> ActiveClientCountAsync(string domainCode, CancellationToken cancellationToken = default);
 
     /// <summary>Every client of the domain, archived ones included. Not tracked.</summary>
     Task<IReadOnlyList<Client>> DomainClientsAsync(string domainCode, CancellationToken cancellationToken = default);

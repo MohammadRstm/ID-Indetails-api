@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
@@ -54,6 +55,26 @@ public class ProtonBriefingTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         briefing.Items.Select(i => i.Project?.Id).ShouldBe(items.Select(i => i!["project"]?["id"]?.GetValue<long>()));
         briefing.Items[0].Facts.ShouldBe(items[0]!["signals"]!.AsArray().Select(s => s!["fact"]!.GetValue<string>()));
         briefing.More.ShouldBe(tool["more"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task The_briefing_is_kept_a_few_minutes_and_made_again_when_permissions_change()
+    {
+        api.Anthropic.Reset();
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        await LateAsync((await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design)).Id);
+        var first = JsonSerializer.Serialize(await BriefingAsync(admin));
+
+        // another project runs late: opening the panel again shows the briefing it had
+        await LateAsync((await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design)).Id);
+        JsonSerializer.Serialize(await BriefingAsync(admin)).ShouldBe(first);
+
+        // their permissions change: the briefing is made again, with the new project
+        var granted = await Client.PutJsonAsync($"/api/users/{admin.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.FinancialView, action = "grant", reason = "Handles the money" } } }, superAdmin.AccessToken);
+        granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
+        JsonSerializer.Serialize(await BriefingAsync(admin)).ShouldNotBe(first);
     }
 
     [Fact]
