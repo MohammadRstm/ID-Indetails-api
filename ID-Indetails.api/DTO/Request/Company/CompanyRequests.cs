@@ -49,6 +49,12 @@ public sealed record SetWorkingTimeRequest
     public int BreakMinutes { get; init; }
 
     public decimal OvertimeMultiplier { get; init; } = 1m;
+
+    /// <summary>
+    /// A salary's overtime is paid only past this many hours a month (or the month's expected hours, if more); 0 pays all
+    /// of it. Left out, it stays as it is in the working time in force on <see cref="EffectiveFrom"/>.
+    /// </summary>
+    public int? OvertimeThresholdHours { get; init; }
 }
 
 /// <summary>A person's own working week from <see cref="EffectiveFrom"/>, or back to the company week.</summary>

@@ -45,8 +45,24 @@ public sealed record SalaryRowResponse
 
     public required int MadeUpMinutes { get; init; }
 
-    /// <summary>Overtime paid at the multiplier (after any made up a shortfall).</summary>
+    /// <summary>Overtime logged, after any made up a shortfall.</summary>
     public required int OvertimeMinutes { get; init; }
+
+    /// <summary>
+    /// The overtime paid at the multiplier: past <see cref="OvertimeThresholdMinutes"/> where one applies, otherwise all of
+    /// <see cref="OvertimeMinutes"/>.
+    /// </summary>
+    public required int OvertimePaidMinutes { get; init; }
+
+    /// <summary>
+    /// A salary's overtime is paid only once <see cref="CountedMinutes"/> pass this: the working time's threshold (184
+    /// hours from 1 November 2026) or the month's expected hours, if more. Null where no threshold applies (hourly pay,
+    /// fixed salaries, months before it).
+    /// </summary>
+    public int? OvertimeThresholdMinutes { get; init; }
+
+    /// <summary>What counts toward the threshold: every minute logged plus paid excuses. Null where no threshold applies.</summary>
+    public int? CountedMinutes { get; init; }
 
     public required int ExcusedMinutes { get; init; }
 
@@ -103,6 +119,7 @@ public sealed record SalarySummaryResponse(
     int OvertimeMinutes,
     int MadeUpMinutes,
     int ShortPeople,
+    int OvertimePaidMinutes,
     int ShortMinutes,
     int? ExpectedMinutes);
 
@@ -150,7 +167,8 @@ public sealed record SalaryYearResponse(
     IReadOnlyList<SalaryYearRowResponse> Rows,
     IReadOnlyList<SalaryYearTotalResponse> Totals);
 
-public sealed record OvertimeWorkResponse(long WorkEntryId, DateOnly Day, int Minutes, int OvertimeMinutes, int MadeUpMinutes);
+/// <param name="PaidMinutes">Its overtime paid at the multiplier: past the threshold, the month's latest overtime first.</param>
+public sealed record OvertimeWorkResponse(long WorkEntryId, DateOnly Day, int Minutes, int OvertimeMinutes, int MadeUpMinutes, int PaidMinutes);
 
 public sealed record HourExcuseResponse(
     long Id,
@@ -168,7 +186,8 @@ public sealed record SalaryDayResponse(DateOnly Date, int RequiredMinutes);
 
 /// <summary>
 /// The hours someone worked on one project in the month, and what they were paid for them (as on Project pay:
-/// hours within schedule and made-up hours at their rate that day, the rest of the overtime at the multiplier).
+/// hours within schedule and made-up hours at their rate that day, the rest of the overtime at the multiplier, or at
+/// their rate too when the month's overtime is paid past a threshold).
 /// </summary>
 /// <param name="NormalMinutes">Worked within their scheduled hours.</param>
 /// <param name="MadeUpMinutes">Overtime that made up hours they were short, paid as normal hours.</param>

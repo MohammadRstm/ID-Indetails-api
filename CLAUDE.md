@@ -121,6 +121,11 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     requires 7h and pays 8h). From 1 December 2026 it is 0: the whole 8-hour day is logged and required, and earlier
     months keep their paid break.
   - The hourly rate is the salary ÷ that month's scheduled paid hours.
+  - From 1 November 2026 a salary's overtime is paid only past the month's threshold: max(the working time's
+    `overtimeThresholdHours`, 184; the month's expected hours), counting every logged hour plus paid excuses. It is
+    fixed whatever the joining date. The premium is a company cost, never put on projects. Hourly pay is unchanged.
+    Employees see their overtime minutes as before; only Salaries shows what is paid ([company.md](docs/company.md),
+    "The overtime threshold").
   - Admins and super admins are on a fixed salary and never log hours. Super admins' salaries are a company cost.
 - **Privacy:** employees never see their colleagues' hours or pay.
 - **Site staff:** an Execution site has at least one staff member, an active Execution employee. Staff write daily logs, which they can edit until midnight. Execution employees are paid monthly only.

@@ -16,7 +16,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace ID_Indetails.api.Services.Company.Implementation;
 
 /// <summary>
-/// The company working week, break and overtime multiplier, dated. Every hours and pay calculation
+/// The company working week, break, overtime multiplier and overtime threshold, dated. Every hours and pay calculation
 /// reads the policies, so they are cached and dropped whenever one changes.
 /// </summary>
 public sealed class WorkingTimeService(
@@ -36,6 +36,9 @@ public sealed class WorkingTimeService(
             return await company.GetPoliciesAsync(cancellationToken);
         }))!;
 
+    public async Task<int> OvertimeThresholdOnAsync(DateOnly day, CancellationToken cancellationToken = default)
+        => (await GetPoliciesAsync(cancellationToken)).LastOrDefault(p => p.EffectiveFrom <= day)?.OvertimeThresholdHours ?? 0;
+
     public async Task<WorkingTimeResponse> GetAsync(CancellationToken cancellationToken = default)
     {
         var policies = await GetPoliciesAsync(cancellationToken);
@@ -53,6 +56,9 @@ public sealed class WorkingTimeService(
         var policy = await company.GetPolicyForUpdateAsync(effectiveFrom, cancellationToken);
         WorkWeek.CheckEffectiveFrom(effectiveFrom, clock.CompanyToday, policy is not null).ThrowIfDenied();
 
+        // left out, the threshold carries on from the working time in force that day
+        var threshold = request.OvertimeThresholdHours ?? await OvertimeThresholdOnAsync(effectiveFrom, cancellationToken);
+
         // An existing policy on that date hasn't started yet (checked above), so it is replaced.
         if (policy is null)
         {
@@ -65,6 +71,7 @@ public sealed class WorkingTimeService(
         policy.WorkEndMinute = (short)request.EndMinute;
         policy.BreakMinutes = (short)request.BreakMinutes;
         policy.OvertimeMultiplier = request.OvertimeMultiplier;
+        policy.OvertimeThresholdHours = (short)threshold;
 
         activity.Add(new ActivityEvent
         {
@@ -86,6 +93,7 @@ public sealed class WorkingTimeService(
         var days = WorkWeek.FromMask(p.WorkDays);
         var perDay = WorkWeek.RequiredMinutes(p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes);
         return new WorkingTimePolicyResponse(
-            p.Id, p.EffectiveFrom, days, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier, perDay, perDay * days.Count);
+            p.Id, p.EffectiveFrom, days, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier, perDay, perDay * days.Count,
+            p.OvertimeThresholdHours);
     }
 }

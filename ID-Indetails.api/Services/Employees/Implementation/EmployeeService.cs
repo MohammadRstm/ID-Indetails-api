@@ -22,6 +22,7 @@ using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
@@ -45,6 +46,7 @@ public sealed class EmployeeService(
     IUnitOfWork unitOfWork,
     ISessionService sessions,
     IPresence presence,
+    IWorkingTimeService workingTime,
     IClock clock) : IEmployeeService
 {
     private const string NotFoundMessage = "Employee not found.";
@@ -394,7 +396,8 @@ public sealed class EmployeeService(
             Basis = request.Basis,
             Amount = request.Amount,
             Currency = request.Currency.ToUpperInvariant(),
-            OvertimeRate = request.OvertimeRate ?? PayRules.SuggestedOvertimeRate(request.Basis, request.Amount),
+            OvertimeRate = request.OvertimeRate ?? PayRules.SuggestedOvertimeRate(
+                request.Basis, request.Amount, await workingTime.OvertimeThresholdOnAsync(effectiveFrom, cancellationToken)),
             Note = Clean(request.Note),
             CreatedAt = clock.UtcNow,
             CreatedById = actor.UserId,

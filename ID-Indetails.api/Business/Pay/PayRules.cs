@@ -8,7 +8,10 @@ namespace ID_Indetails.api.Business.Pay;
 
 public static class PayRules
 {
-    /// <summary>The hours a month the client counts for a salary's overtime rate.</summary>
+    /// <summary>
+    /// The hours a month a salary's overtime rate is worked out from when the working time sets no overtime threshold
+    /// (with one, its hours are used: 184 from 1 November 2026).
+    /// </summary>
     public const decimal OvertimeHoursPerMonth = 184m;
 
     /// <summary>
@@ -30,12 +33,16 @@ public static class PayRules
     }
 
     /// <summary>
-    /// The overtime rate a pay change is given when none is typed: hourly pay's own rate, or a salary ÷ 184, to the cent,
-    /// for everyone whatever their schedule. It is stored with the pay and used all the while that pay is in force;
-    /// admins may type another for a salary. Overtime is paid at it × the company's multiplier.
+    /// The overtime rate a pay change is given when none is typed: hourly pay's own rate, or a salary ÷ the working
+    /// time's overtime threshold (184 hours; 184 too when it sets none), to the cent, for everyone whatever their schedule.
+    /// It is stored with the pay and used all the while that pay is in force; admins may type another for a salary.
+    /// Overtime is paid at it × the company's multiplier.
     /// </summary>
-    public static decimal SuggestedOvertimeRate(PayBasis basis, decimal amount)
-        => basis == PayBasis.Hourly ? amount : Math.Round(amount / OvertimeHoursPerMonth, 2, MidpointRounding.AwayFromZero);
+    /// <param name="thresholdHours">The working time's overtime threshold in force; 0 when it sets none.</param>
+    public static decimal SuggestedOvertimeRate(PayBasis basis, decimal amount, int thresholdHours = 0)
+        => basis == PayBasis.Hourly
+            ? amount
+            : Math.Round(amount / (thresholdHours > 0 ? thresholdHours : OvertimeHoursPerMonth), 2, MidpointRounding.AwayFromZero);
 
     /// <summary>The paid minutes, break included, of every working day in the month containing <paramref name="day"/>.</summary>
     public static int PaidMinutesInMonth(DateOnly day, PersonCalendar calendar)

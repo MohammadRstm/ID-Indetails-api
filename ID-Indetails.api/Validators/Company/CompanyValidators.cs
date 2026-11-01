@@ -50,6 +50,10 @@ public sealed class SetWorkingTimeRequestValidator : AbstractValidator<SetWorkin
         RuleFor(x => x.OvertimeMultiplier)
             .InclusiveBetween(1m, 5m).WithMessage("The overtime multiplier must be between 1 and 5.")
             .Must(m => decimal.Round(m, 2) == m).WithMessage("The overtime multiplier can have at most 2 decimals.");
+        RuleFor(x => x.OvertimeThresholdHours!.Value)
+            .InclusiveBetween(0, 744).WithMessage("The overtime threshold must be between 0 and 744 hours (0 pays all overtime).")
+            .When(x => x.OvertimeThresholdHours is not null)
+            .OverridePropertyName("overtimeThresholdHours");
     }
 }
 

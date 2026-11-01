@@ -13,7 +13,8 @@ public enum ProjectPayUnit
 /// What a Design project paid its people. Each work entry is paid as Salaries pays it: its hours within schedule,
 /// plus any overtime that made up a shortfall, at the person's hourly rate in force that day (a monthly salary's rate
 /// in that month, see <see cref="Pay.PayRules.HourlyRate"/>), and the rest of its overtime at the pay's overtime rate
-/// × the multiplier. Paid breaks and salary deductions are left out:
+/// × the multiplier. A salary paid past an overtime threshold has no premium on projects: its overtime is priced at the
+/// hourly rate too, as the premium is paid for the month as a whole. Paid breaks and salary deductions are left out:
 /// they aren't worked on any project.
 /// </summary>
 public static class ProjectPay
@@ -22,7 +23,8 @@ public static class ProjectPay
     /// <param name="Priced">False when the person had no pay record that day (paid 0).</param>
     public sealed record EntryPay(int Normal, int Overtime, decimal HourlyRate, string Currency, decimal Pay, bool Priced);
 
-    public static EntryPay Of(Overtime.Split work, int madeUp, SalaryCalculator.PayTerms? terms, PersonCalendar calendar)
+    /// <param name="noPremium">The month's salary is paid past an overtime threshold: overtime is priced at the hourly rate.</param>
+    public static EntryPay Of(Overtime.Split work, int madeUp, SalaryCalculator.PayTerms? terms, PersonCalendar calendar, bool noPremium = false)
     {
         var normal = work.Normal + madeUp;
         var overtime = work.Overtime - madeUp;
@@ -32,7 +34,7 @@ public static class ProjectPay
         }
 
         var rate = terms.HourlyRateOn(work.Day, calendar);
-        var overtimeRate = terms.OvertimeRate * calendar.PolicyOn(work.Day).OvertimeMultiplier;
+        var overtimeRate = noPremium ? rate : terms.OvertimeRate * calendar.PolicyOn(work.Day).OvertimeMultiplier;
         var pay = normal / 60m * rate + overtime / 60m * overtimeRate;
         return new EntryPay(normal, overtime, rate, terms.Currency, pay, true);
     }

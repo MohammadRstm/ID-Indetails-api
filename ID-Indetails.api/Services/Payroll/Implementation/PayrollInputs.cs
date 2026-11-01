@@ -31,7 +31,8 @@ public sealed class PayrollInputs(
 
     public async Task<IReadOnlyList<PersonCalendar.Policy>> PoliciesAsync(CancellationToken cancellationToken = default)
         => (await workingTime.GetPoliciesAsync(cancellationToken))
-            .Select(p => new PersonCalendar.Policy(p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier))
+            .Select(p => new PersonCalendar.Policy(
+                p.EffectiveFrom, p.WorkDays, p.WorkStartMinute, p.WorkEndMinute, p.BreakMinutes, p.OvertimeMultiplier, p.OvertimeThresholdHours))
             .ToList();
 
     public async Task<IReadOnlyDictionary<long, PersonCalendar>> CalendarsAsync(
@@ -132,9 +133,11 @@ public sealed class PayrollInputs(
             // a fixed salary earns no overtime: time logged in a month they were an admin counts as normal hours
             var work = Overtime.Of(input.Work, input.Calendar).Select(w => input.FixedSalary ? w with { Overtime = 0 } : w).ToList();
             var ledger = input.LedgerApplies ? SalaryCalculator.LedgerOf(input, work) : null;
+            // past an overtime threshold the premium is paid for the month as a whole, a company cost, not by project
+            var noPremium = SalaryCalculator.Calculate(input)?.ThresholdMinutes is not null;
             foreach (var w in work)
             {
-                splits[w.Id] = new EntrySplit(w, ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0);
+                splits[w.Id] = new EntrySplit(w, ledger?.MadeUpByWork.GetValueOrDefault(w.Id) ?? 0, noPremium);
             }
         }
 

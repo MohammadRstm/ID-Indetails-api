@@ -29,6 +29,7 @@ public sealed record CompanySettingsResponse(
 public sealed record BrandingResponse(string? Name, bool HasLogo, long? LogoFileId);
 
 /// <param name="RequiredMinutesPerDay">Hours required on a working day: the span minus the break (the break is paid).</param>
+/// <param name="OvertimeThresholdHours">A salary's overtime is paid only past this many hours a month; 0 pays all of it.</param>
 public sealed record WorkingTimePolicyResponse(
     long Id,
     DateOnly EffectiveFrom,
@@ -38,7 +39,8 @@ public sealed record WorkingTimePolicyResponse(
     int BreakMinutes,
     decimal OvertimeMultiplier,
     int RequiredMinutesPerDay,
-    int RequiredMinutesPerWeek);
+    int RequiredMinutesPerWeek,
+    int OvertimeThresholdHours);
 
 /// <param name="Policies">Every policy, newest first, including ones that haven't started yet.</param>
 public sealed record WorkingTimeResponse(WorkingTimePolicyResponse Current, IReadOnlyList<WorkingTimePolicyResponse> Policies);
