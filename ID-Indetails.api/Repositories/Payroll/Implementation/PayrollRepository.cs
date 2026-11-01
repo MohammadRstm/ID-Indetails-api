@@ -116,11 +116,14 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
             .Where(p => projectIds.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, p => new ProjectLook(p.Icon, p.Tint), cancellationToken);
 
-    public async Task<IReadOnlyList<HourExcuse>> ExcusesAsync(IReadOnlyCollection<long> userIds, DateOnly month, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<HourExcuse>> ExcusesAsync(
+        IReadOnlyCollection<long> userIds,
+        IReadOnlyCollection<DateOnly> months,
+        CancellationToken cancellationToken = default)
         => await db.HourExcuses
             .AsNoTracking()
             .Include(x => x.Days)
-            .Where(x => userIds.Contains(x.UserId) && x.MonthStart == month && x.DeletedAt == null)
+            .Where(x => userIds.Contains(x.UserId) && months.Contains(x.MonthStart) && x.DeletedAt == null)
             .OrderBy(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
 }

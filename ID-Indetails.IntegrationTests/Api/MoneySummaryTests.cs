@@ -147,6 +147,16 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         costs.ExpensesByCategory.Sum(c => c.Usd).ShouldBe(10m);
         costs.Unconverted.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
 
+        // The dashboard's one load carries the same figures as the separate endpoints.
+        var overview = await OkAsync<FinanceOverviewResponse>("/api/finance/design/overview?from=2025-12-01&months=36", admin.AccessToken);
+        JsonSerializer.Serialize(overview.Summary).ShouldBe(JsonSerializer.Serialize(summary));
+        JsonSerializer.Serialize(overview.Monthly).ShouldBe(JsonSerializer.Serialize(months));
+        JsonSerializer.Serialize(overview.Projects).ShouldBe(JsonSerializer.Serialize(projects));
+        JsonSerializer.Serialize(overview.Billing)
+            .ShouldBe(JsonSerializer.Serialize(await OkAsync<FinanceBillingResponse>("/api/finance/design/billing?months=36", admin.AccessToken)));
+        JsonSerializer.Serialize(overview.Attention).ShouldBe(JsonSerializer.Serialize(attention));
+        JsonSerializer.Serialize(overview.Clients).ShouldBe(JsonSerializer.Serialize(clients));
+
         // The project page's billing uses the same rule as the Financials page.
         var detailMoney = (await OkAsync<ProjectResponse>($"/api/projects/{project.Id}", admin.AccessToken)).Money!;
         detailMoney.Cost.Labour.ShouldBe(15m);
@@ -199,7 +209,7 @@ public class MoneySummaryAccessTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 
-        foreach (var path in new[] { "summary", "monthly", "projects", "billing", "clients", "costs", "attention" })
+        foreach (var path in new[] { "overview", "summary", "monthly", "projects", "billing", "clients", "costs", "attention" })
         {
             await (await Client.GetAsync($"/api/finance/design/{path}", employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.GetAsync($"/api/finance/design/{path}", executionAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);

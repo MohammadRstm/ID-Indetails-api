@@ -151,6 +151,42 @@ public class OvertimeThresholdTests
     }
 
     [Fact]
+    public void Has_threshold_answers_as_the_full_calculation_does()
+    {
+        var on = CalendarOf();
+        var off = CalendarOf(threshold: 0);
+        var cases = new List<SalaryCalculator.Input>();
+        foreach (var calendar in new[] { on, off })
+        {
+            foreach (var terms in new SalaryCalculator.PayTerms?[] { Monthly, Hourly, null })
+            {
+                foreach (var fixedSalary in new[] { false, true })
+                {
+                    SalaryCalculator.Input Of(DateOnly joinedOn, DateOnly? leftOn = null) => new(
+                        December, Today, joinedOn, true, terms is null ? [] : [terms], calendar,
+                        [.. FullDays(calendar), DayOff(6, 10)], [], leftOn, null, fixedSalary);
+                    cases.Add(Of(new(2026, 1, 1)));
+                    // joined after the month, or left before it: not employed on any of its days
+                    cases.Add(Of(new(2027, 1, 4)));
+                    cases.Add(Of(new(2026, 1, 1), new(2026, 11, 30)));
+                    // joined mid-month
+                    cases.Add(Of(new(2026, 12, 14)));
+                }
+            }
+        }
+
+        // pay set only from after the month: no terms on its days
+        cases.Add(new(December, Today, new(2026, 1, 1), true, [Monthly with { EffectiveFrom = new(2027, 2, 1) }], on, [], []));
+
+        foreach (var input in cases)
+        {
+            SalaryCalculator.HasThreshold(input).ShouldBe(SalaryCalculator.Calculate(input)?.ThresholdMinutes is not null);
+        }
+
+        cases.Count(SalaryCalculator.HasThreshold).ShouldBe(2);
+    }
+
+    [Fact]
     public void A_salarys_suggested_overtime_rate_follows_the_threshold()
     {
         PayRules.SuggestedOvertimeRate(PayBasis.Monthly, 1840m, 184).ShouldBe(10m);

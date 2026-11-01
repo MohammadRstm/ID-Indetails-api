@@ -29,7 +29,7 @@ public static class DatabaseServiceCollectionExtensions
         services.AddDbContext<IdIndetailsDbContext>(options => options
             .UseMySql(connectionString, MySqlServerVersion)
             .UseSnakeCaseNamingConvention()
-            .AddInterceptors(ProtonReadOnly.Interceptor));
+            .AddInterceptors(ProtonReadOnly.Interceptor, QueryCount.Interceptor));
 
         return services;
     }

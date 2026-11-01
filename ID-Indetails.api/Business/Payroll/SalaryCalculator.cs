@@ -93,12 +93,11 @@ public static class SalaryCalculator
     public static Result? Calculate(Input input)
     {
         var next = input.Month.AddMonths(1);
-        var lastDay = input.LeftOn is { } left && left < next ? left : next.AddDays(-1);
-        bool Employed(DateOnly day) => day >= input.JoinedOn && day <= lastDay && !Employment.InGap(input.Gaps, day);
+        var lastDay = LastDayOf(input);
+        bool Employed(DateOnly day) => EmployedOn(input, lastDay, day);
 
-        var termsDay = input.Today < lastDay ? input.Today : lastDay;
-        var terms = TermsOn(input.PayHistory, termsDay);
-        if (terms is null || !HoursLedger.Days(input.Month, next).Any(Employed))
+        var terms = PaidTermsOf(input);
+        if (terms is null)
         {
             return null;
         }
@@ -181,6 +180,33 @@ public static class SalaryCalculator
             threshold?.Counted ?? 0,
             paidByWork);
     }
+
+    /// <summary>
+    /// Whether the month's overtime is paid past a threshold: <see cref="Calculate"/>'s <see cref="Result.ThresholdMinutes"/>
+    /// is set, without working out the pay.
+    /// </summary>
+    public static bool HasThreshold(Input input)
+        => !input.FixedSalary
+            && input.Calendar.PolicyOn(input.Month).OvertimeThresholdHours > 0
+            && PaidTermsOf(input) is { Basis: PayBasis.Monthly };
+
+    /// <summary>The terms the month is paid on; null when the person had no pay yet, or wasn't employed on any day of it.</summary>
+    private static PayTerms? PaidTermsOf(Input input)
+    {
+        var lastDay = LastDayOf(input);
+        var terms = TermsOn(input.PayHistory, input.Today < lastDay ? input.Today : lastDay);
+        return terms is not null && HoursLedger.Days(input.Month, input.Month.AddMonths(1)).Any(d => EmployedOn(input, lastDay, d)) ? terms : null;
+    }
+
+    /// <summary>The month's last day, or the day they left if that's earlier.</summary>
+    private static DateOnly LastDayOf(Input input)
+    {
+        var end = input.Month.AddMonths(1).AddDays(-1);
+        return input.LeftOn is { } left && left < end ? left : end;
+    }
+
+    private static bool EmployedOn(Input input, DateOnly lastDay, DateOnly day)
+        => day >= input.JoinedOn && day <= lastDay && !Employment.InGap(input.Gaps, day);
 
     /// <summary>The month's threshold, from the working time in force on its first day; null where it is 0 (off).</summary>
     /// <param name="monthDays">Every working day of the month on the person's calendar, employed or not.</param>

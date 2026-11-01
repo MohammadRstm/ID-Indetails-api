@@ -6,6 +6,9 @@ namespace ID_Indetails.api.Services.MoneySummaries.Abstraction;
 /// <summary>A domain's money: the dashboard's money cards and the Financials page. A domain the caller can't see is not found.</summary>
 public interface IDomainFinanceService
 {
+    /// <summary>The dashboard and Financials money from one load: the summary, the months, projects, billing, follow-ups and clients.</summary>
+    Task<FinanceOverviewResponse> OverviewAsync(string domain, FinanceOverviewQuery query, CancellationToken cancellationToken = default);
+
     Task<FinanceSummaryResponse> SummaryAsync(string domain, FinancePeriodQuery query, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<FinanceMonthResponse>> MonthlyAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default);

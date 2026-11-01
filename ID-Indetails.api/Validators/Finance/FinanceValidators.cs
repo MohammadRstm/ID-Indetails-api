@@ -12,6 +12,17 @@ public sealed class FinancePeriodQueryValidator : AbstractValidator<FinancePerio
     }
 }
 
+public sealed class FinanceOverviewQueryValidator : AbstractValidator<FinanceOverviewQuery>
+{
+    public FinanceOverviewQueryValidator()
+    {
+        RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
+            .WithMessage("The period must end on or after its start.");
+        RuleFor(x => x.Months).InclusiveBetween(1, FinanceMonthsQueryValidator.MaxMonths)
+            .WithMessage($"Months must be between 1 and {FinanceMonthsQueryValidator.MaxMonths}.");
+    }
+}
+
 public sealed class FinanceMonthsQueryValidator : AbstractValidator<FinanceMonthsQuery>
 {
     public const int MaxMonths = 36;

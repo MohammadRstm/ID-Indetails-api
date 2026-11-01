@@ -30,8 +30,11 @@ public interface IPayrollRepository
         DateTime toUtc,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Live excuses of the month, with their days.</summary>
-    Task<IReadOnlyList<HourExcuse>> ExcusesAsync(IReadOnlyCollection<long> userIds, DateOnly month, CancellationToken cancellationToken = default);
+    /// <summary>Live excuses of these months, with their days.</summary>
+    Task<IReadOnlyList<HourExcuse>> ExcusesAsync(
+        IReadOnlyCollection<long> userIds,
+        IReadOnlyCollection<DateOnly> months,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Work on these projects started in the window.</summary>
     Task<IReadOnlyList<WorkEntryTime>> WorkOnProjectsAsync(

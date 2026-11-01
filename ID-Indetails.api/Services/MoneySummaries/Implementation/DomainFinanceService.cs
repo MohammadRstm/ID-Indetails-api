@@ -44,24 +44,41 @@ public sealed class DomainFinanceService(
     public const int LabourPeople = 10;
     public const int BiggestExpenses = 12;
 
+    public async Task<FinanceOverviewResponse> OverviewAsync(string domain, FinanceOverviewQuery query, CancellationToken cancellationToken = default)
+    {
+        var loaded = await LoadAsync(domain, cancellationToken);
+        var agreed = await AgreedAsync(loaded.Projects, cancellationToken);
+        return new FinanceOverviewResponse(
+            SummaryOf(domain, loaded, agreed, Period(new FinancePeriodQuery { From = query.From, To = query.To })),
+            MonthlyOf(loaded, agreed, query.Months),
+            ProjectsOf(loaded),
+            BillingOf(loaded, query.Months),
+            AttentionOf(domain, loaded),
+            ClientsOf(loaded, await summaries.DomainClientsAsync(domain, cancellationToken)));
+    }
+
     public async Task<FinanceSummaryResponse> SummaryAsync(string domain, FinancePeriodQuery query, CancellationToken cancellationToken = default)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        await CheckDomainAsync(domain, cancellationToken);
-        var (from, to) = Period(query);
-        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
-        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        var loaded = await LoadAsync(domain, cancellationToken);
+        return SummaryOf(domain, loaded, await AgreedAsync(loaded.Projects, cancellationToken), Period(query));
+    }
+
+    private static FinanceSummaryResponse SummaryOf(
+        string domain,
+        Loaded loaded,
+        IReadOnlyList<ExpectedRevenue.Agreed> agreed,
+        (DateOnly From, DateOnly To) period)
+    {
+        var (projects, rollup) = loaded;
+        var (from, to) = period;
 
         // revenue is the money received: it moves as soon as a payment is recorded, whatever the project's progress
         var received = ReceivedOn(projects, rollup);
         var revenue = PeriodMoney.Received(received, from, to);
-        var agreed = await AgreedAsync(projects, cancellationToken);
         var cost = PeriodMoney.Costs(projects.SelectMany(p => rollup.Costs(p.Id)), from, to);
         var clientWork = projects.Where(p => p.BillingType == BillingType.Client).Select(p => rollup.Money(p.Id).Summary).ToList();
         var profit = revenue - PeriodMoney.Round(cost.Total);
-        var labourMinutes = (await financeSources.WorkEntriesAsync(projects.Select(p => p.Id).ToList(), cancellationToken))
-            .Where(e => clock.ToCompanyDate(e.StartedAt) is var day && day >= from && day <= to)
-            .Sum(e => e.Minutes);
+        var labourMinutes = projects.SelectMany(p => rollup.Work(p.Id)).Where(w => w.Day >= from && w.Day <= to).Sum(w => w.Minutes);
 
         return new FinanceSummaryResponse(
             domain,
@@ -89,16 +106,18 @@ public sealed class DomainFinanceService(
 
     public async Task<IReadOnlyList<FinanceMonthResponse>> MonthlyAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        await CheckDomainAsync(domain, cancellationToken);
-        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
-        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        var loaded = await LoadAsync(domain, cancellationToken);
+        return MonthlyOf(loaded, await AgreedAsync(loaded.Projects, cancellationToken), query.Months);
+    }
+
+    private IReadOnlyList<FinanceMonthResponse> MonthlyOf(Loaded loaded, IReadOnlyList<ExpectedRevenue.Agreed> agreed, int months)
+    {
+        var (projects, rollup) = loaded;
         var received = ReceivedOn(projects, rollup);
-        var agreed = await AgreedAsync(projects, cancellationToken);
         var costs = projects.SelectMany(p => rollup.Costs(p.Id)).ToList();
         var unconverted = projects.SelectMany(p => rollup.Unconverted(p.Id)).ToList();
 
-        return Months(query.Months)
+        return Months(months)
             .Select(month =>
             {
                 var end = month.AddMonths(1).AddDays(-1);
@@ -143,9 +162,9 @@ public sealed class DomainFinanceService(
         FinancePeriodQuery query,
         CancellationToken cancellationToken = default)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        var projects = await ProjectsAsync(domain, cancellationToken);
-        var period = await SummaryAsync(domain, query, cancellationToken);
+        var loaded = await LoadAsync(domain, cancellationToken);
+        var projects = ProjectsOf(loaded);
+        var period = SummaryOf(domain, loaded, await AgreedAsync(loaded.Projects, cancellationToken), Period(query));
         static string Pct(decimal? margin) => margin is { } m ? (m * 100).ToString("0.0", CultureInfo.InvariantCulture) : string.Empty;
 
         var csv = new StringBuilder();
@@ -182,12 +201,11 @@ public sealed class DomainFinanceService(
     }
 
     public async Task<FinanceProjectsResponse> ProjectsAsync(string domain, CancellationToken cancellationToken = default)
-    {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        await CheckDomainAsync(domain, cancellationToken);
-        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
-        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        => ProjectsOf(await LoadAsync(domain, cancellationToken));
 
+    private static FinanceProjectsResponse ProjectsOf(Loaded loaded)
+    {
+        var (projects, rollup) = loaded;
         var rows = projects
             .Select(p =>
             {
@@ -227,16 +245,16 @@ public sealed class DomainFinanceService(
     }
 
     public async Task<FinanceBillingResponse> BillingAsync(string domain, FinanceMonthsQuery query, CancellationToken cancellationToken = default)
+        => BillingOf(await LoadAsync(domain, cancellationToken), query.Months);
+
+    private FinanceBillingResponse BillingOf(Loaded loaded, int months)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        await CheckDomainAsync(domain, cancellationToken);
-        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
-        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        var (projects, rollup) = loaded;
         var byId = projects.ToDictionary(p => p.Id);
         var today = rollup.Today;
 
         var issued = rollup.Invoices.Where(i => i.IsIssued && !i.IsVoided).ToList();
-        var monthly = Months(query.Months)
+        var monthly = Months(months)
             .Select(month => new BillingMonthResponse(
                 month,
                 issued.Where(i => Recognition.MonthOf(clock.ToCompanyDate(rollup.InvoiceRow(i.Id).IssuedAt!.Value)) == month).Sum(i => i.Total),
@@ -282,11 +300,13 @@ public sealed class DomainFinanceService(
 
     public async Task<IReadOnlyList<FinanceClientResponse>> ClientsAsync(string domain, CancellationToken cancellationToken = default)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        await CheckDomainAsync(domain, cancellationToken);
-        var clients = await summaries.DomainClientsAsync(domain, cancellationToken);
-        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
-        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        var loaded = await LoadAsync(domain, cancellationToken);
+        return ClientsOf(loaded, await summaries.DomainClientsAsync(domain, cancellationToken));
+    }
+
+    private static IReadOnlyList<FinanceClientResponse> ClientsOf(Loaded loaded, IReadOnlyList<Client> clients)
+    {
+        var (projects, rollup) = loaded;
         var byClient = projects.Where(p => p.ClientId is not null).ToLookup(p => p.ClientId!.Value);
 
         return clients
@@ -299,13 +319,10 @@ public sealed class DomainFinanceService(
 
     public async Task<FinanceCostsResponse> CostsAsync(string domain, FinancePeriodQuery query, CancellationToken cancellationToken = default)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        await CheckDomainAsync(domain, cancellationToken);
         var (from, to) = Period(query);
-        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
+        var (projects, rollup) = await LoadAsync(domain, cancellationToken);
         var ids = projects.Select(p => p.Id).ToList();
         var titles = projects.ToDictionary(p => p.Id, p => p.Title);
-        var rollup = await rollups.LoadAsync(projects, cancellationToken);
         var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
 
         var work = (await financeSources.WorkEntriesAsync(ids, cancellationToken))
@@ -349,12 +366,13 @@ public sealed class DomainFinanceService(
     }
 
     public async Task<IReadOnlyList<MoneyAttentionResponse>> AttentionAsync(string domain, CancellationToken cancellationToken = default)
+        => AttentionOf(domain, await LoadAsync(domain, cancellationToken));
+
+    private static IReadOnlyList<MoneyAttentionResponse> AttentionOf(string domain, Loaded loaded)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        await CheckDomainAsync(domain, cancellationToken);
-        var projects = (await summaries.DomainProjectsAsync(domain, cancellationToken)).OrderBy(p => p.StartDate).ThenBy(p => p.Id).ToList();
+        var rollup = loaded.Rollup;
+        var projects = loaded.Projects.OrderBy(p => p.StartDate).ThenBy(p => p.Id).ToList();
         var byId = projects.ToDictionary(p => p.Id);
-        var rollup = await rollups.LoadAsync(projects, cancellationToken);
         var facts = projects
             .Select(p =>
             {
@@ -385,11 +403,8 @@ public sealed class DomainFinanceService(
         IReadOnlyList<FinancePeriodQuery> periods,
         CancellationToken cancellationToken = default)
     {
-        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
-        await CheckDomainAsync(domain, cancellationToken);
         var ranges = periods.Select(Period).ToList();
-        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
-        var rollup = await rollups.LoadAsync(projects, cancellationToken);
+        var (projects, rollup) = await LoadAsync(domain, cancellationToken);
         var agreed = await AgreedAsync(projects, cancellationToken);
         var payments = rollup.Payments.ToLookup(p => p.ProjectId);
 
@@ -423,6 +438,17 @@ public sealed class DomainFinanceService(
                 .Select(p => new FinanceProjectPeriodResponse(
                     p.Id, p.Title, p.Status, p.BillingType, ranges.Select(r => MoneyOf(p, r.From, r.To)).ToList()))
                 .ToList());
+    }
+
+    /// <summary>A domain's projects and their money, loaded once for every figure a call returns.</summary>
+    private sealed record Loaded(IReadOnlyList<Project> Projects, MoneyRollup Rollup);
+
+    private async Task<Loaded> LoadAsync(string domain, CancellationToken cancellationToken)
+    {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialView);
+        await CheckDomainAsync(domain, cancellationToken);
+        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
+        return new Loaded(projects, await rollups.LoadAsync(projects, cancellationToken));
     }
 
     /// <summary>Money is shown per domain; a domain the caller can't see is not found.</summary>

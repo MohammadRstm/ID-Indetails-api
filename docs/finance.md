@@ -5,11 +5,13 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 - **Currency:** every amount is USD at the rate of its day. Anything with no rate that day is listed as unconverted, in its own currency, never dropped silently.
 - **Overhead** is never charged to a domain: it only appears at company level ([company.md](company.md)).
 - **Loading:** every endpoint loads its projects in one batch (one query per cost source, plus invoices, payments and exchange rates), never a query per project or client.
+- **One load per page:** the dashboard and the Financials page take their money from `overview`, which loads the domain once for all six parts. The separate endpoints load it each time, so a page asking for several of them loads it several times.
 
 ## Endpoints
 
 | Method and path | Needs | Purpose |
 |---|---|---|
+| `GET /api/finance/{domain}/overview?from=&to=&months=12` | `financial:view` | From one load: `summary` over the period, `monthly` and `billing` over the months, `projects`, `attention` and `clients`, each the same as its own endpoint (the dashboard and the Financials page) |
 | `GET /api/finance/{domain}/summary?from=&to=` | `financial:view` | Revenue, cost, profit and margin over a period, with the billing position (dashboard money cards, Financials header) |
 | `GET /api/finance/{domain}/monthly?months=12` | `financial:view` | Revenue against cost month by month, oldest first (1 to 36 months) |
 | `GET /api/finance/{domain}/projects` | `financial:view` | Every project's all-time money, most profitable first, with totals (Financials projects tab, dashboard "profit by project") |
