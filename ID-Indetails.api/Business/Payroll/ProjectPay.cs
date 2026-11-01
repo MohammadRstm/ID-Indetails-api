@@ -12,8 +12,8 @@ public enum ProjectPayUnit
 /// <summary>
 /// What a Design project paid its people. Each work entry is paid as Salaries pays it: its hours within schedule,
 /// plus any overtime that made up a shortfall, at the person's hourly rate in force that day (a monthly salary's rate
-/// in that month, see <see cref="Pay.PayRules.HourlyRate"/>), and the rest of its overtime at the true hourly rate
-/// (<see cref="Pay.PayRules.StandardHourlyRate"/>) × the multiplier. Paid breaks and salary deductions are left out:
+/// in that month, see <see cref="Pay.PayRules.HourlyRate"/>), and the rest of its overtime at the pay's overtime rate
+/// × the multiplier. Paid breaks and salary deductions are left out:
 /// they aren't worked on any project.
 /// </summary>
 public static class ProjectPay
@@ -32,7 +32,7 @@ public static class ProjectPay
         }
 
         var rate = terms.HourlyRateOn(work.Day, calendar);
-        var overtimeRate = terms.StandardHourlyRateOn(work.Day, calendar) * calendar.PolicyOn(work.Day).OvertimeMultiplier;
+        var overtimeRate = terms.OvertimeRate * calendar.PolicyOn(work.Day).OvertimeMultiplier;
         var pay = normal / 60m * rate + overtime / 60m * overtimeRate;
         return new EntryPay(normal, overtime, rate, terms.Currency, pay, true);
     }

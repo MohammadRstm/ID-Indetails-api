@@ -3,8 +3,9 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Models;
 
 /// <summary>
-/// A direct-message thread between two users, or a team's group chat. Group membership is
-/// not stored: it is the team's members plus the domain's admins plus super admins.
+/// A direct-message thread between two users, a team's group chat, or the single Announcements chat. Group membership
+/// is not stored: it is the team's members plus the domain's admins plus super admins. Every active person reads
+/// Announcements, and holders of <c>message:announce</c> write in it.
 /// </summary>
 public class Conversation
 {

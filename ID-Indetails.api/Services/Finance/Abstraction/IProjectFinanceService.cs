@@ -32,6 +32,16 @@ public interface IProjectFinanceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The part of each entry of the given work paid as overtime, as Salaries pays it, with the company's multiplier
+    /// that day, by entry id, for everyone with a pay record (see <c>IPayrollInputs.EntrySplitsAsync</c>). Loads the
+    /// people's whole months. An entry missing from it has none.
+    /// </summary>
+    Task<IReadOnlyDictionary<long, PaidOvertime>> PaidOvertimeAsync(
+        IReadOnlyCollection<WorkEntryRow> work,
+        IReadOnlyList<ProjectFinance.PayRate> payRates,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Each project's money plus every cost on its day (in USD, and apart those with no exchange rate that day) and
     /// who worked on which day, for period and month-by-month figures. Same loading as
     /// <see cref="GetAsync(IReadOnlyCollection{Project}, CancellationToken)"/>.
@@ -79,3 +89,10 @@ public sealed record ProjectCostHistory(
     IReadOnlyList<WorkDay> Work);
 
 public sealed record BreakCost(long UserId, long ProjectId, ProjectFinance.CostItem Cost);
+
+public sealed record PaidOvertime(int Minutes, decimal Multiplier)
+{
+    /// <summary>An entry as labour cost prices it: its minutes and the part paid as overtime.</summary>
+    public static ProjectFinance.WorkedTime Of(long userId, DateOnly day, int minutes, PaidOvertime? overtime)
+        => new(userId, day, minutes, overtime?.Minutes ?? 0, overtime?.Multiplier ?? 1m);
+}

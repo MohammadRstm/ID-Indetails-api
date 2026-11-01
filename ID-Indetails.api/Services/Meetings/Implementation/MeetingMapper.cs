@@ -7,13 +7,15 @@ internal static class MeetingMapper
 {
     public static MeetingResponse ToResponse(MeetingView m) => new(
         m.Id,
-        new MeetingProjectResponse(m.ProjectId, m.ProjectTitle, m.ProjectIcon, m.ProjectTint),
+        m.ProjectId is { } projectId ? new MeetingProjectResponse(projectId, m.ProjectTitle ?? string.Empty, m.ProjectIcon, m.ProjectTint) : null,
+        m.Domain,
         m.StartsAt,
         m.EndsAt,
         (int)(m.EndsAt - m.StartsAt).TotalMinutes,
         m.Topic,
         m.Description,
         m.CreatedById is { } id && m.CreatedByName is { } name ? new MeetingPersonResponse(id, name) : null,
+        m.Attendees.Select(a => new MeetingPersonResponse(a.Id, a.Name)).ToList(),
         m.CreatedAt,
         m.UpdatedAt);
 }

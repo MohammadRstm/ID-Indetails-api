@@ -47,7 +47,6 @@ public enum ProtonPage
     CompanyProfile,
     Launcher,
     MyWork,
-    MyPay,
     MyProfile,
     // the Website area: the company's public website, for those who may see it
     WebsiteProjects,

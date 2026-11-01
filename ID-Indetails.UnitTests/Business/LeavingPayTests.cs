@@ -20,7 +20,7 @@ public class LeavingPayTests
     private static readonly PersonCalendar Calendar = new([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
 
     // 1,760 a month is 10 an hour in June (176 paid hours).
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD");
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD", 9.57m);
 
     private static SalaryCalculator.Result? Pay(DateOnly month, DateOnly today, IEnumerable<int> workedDays, DateOnly? leftOn = null)
         => SalaryCalculator.Calculate(new SalaryCalculator.Input(

@@ -1,3 +1,5 @@
+using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Messaging;
 using ID_Indetails.api.DTO.Response.Messaging;
 using ID_Indetails.api.Services.Messaging.Abstraction;
@@ -7,8 +9,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace ID_Indetails.api.Controllers;
 
 /// <summary>
-/// Team chats and direct messages. No permission needed: who may read and write each chat follows role and team
-/// (see <c>Business/Messaging/MessagingRules</c>).
+/// Team chats, direct messages and Announcements. No permission needed to read: who may read and write each chat
+/// follows role and team (see <c>Business/Messaging/MessagingRules</c>). Every active person reads Announcements;
+/// writing in it needs <c>message:announce</c>.
 /// </summary>
 [ApiController]
 [Route("api/messages")]
@@ -54,4 +57,17 @@ public sealed class MessagesController(IMessagingService messagingService) : Con
     [HttpPost("direct/{userId:long}/read")]
     public Task<MessagesBadgeResponse> MarkDirectRead(long userId, CancellationToken cancellationToken)
         => messagingService.MarkDirectReadAsync(userId, cancellationToken);
+
+    [HttpGet("announcements")]
+    public Task<MessagePageResponse> Announcements([FromQuery] MessagePageQuery query, CancellationToken cancellationToken)
+        => messagingService.AnnouncementsAsync(query, cancellationToken);
+
+    [HttpPost("announcements")]
+    [HasPermission(PermissionCodes.MessageAnnounce)]
+    public async Task<ActionResult<MessageResponse>> SendAnnouncement(SendMessageRequest request, CancellationToken cancellationToken)
+        => StatusCode(StatusCodes.Status201Created, await messagingService.AnnounceAsync(request, cancellationToken));
+
+    [HttpPost("announcements/read")]
+    public Task<MessagesBadgeResponse> MarkAnnouncementsRead(CancellationToken cancellationToken)
+        => messagingService.MarkAnnouncementsReadAsync(cancellationToken);
 }

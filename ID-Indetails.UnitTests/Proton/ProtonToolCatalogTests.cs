@@ -141,7 +141,7 @@ public class ProtonToolCatalogTests
     {
         string[] excluded =
         [
-            "HourlyRate", "StandardHourlyRate", "LabourCost", "LabourByPerson", "CostPerHour", "AdminSalaries",
+            "HourlyRate", "OvertimeRate", "LabourCost", "LabourByPerson", "CostPerHour", "AdminSalaries",
             "UnconvertedAdminSalaries", "NetProfit", "CurrentPay", "Pay", "PayHistory", "Salary", "BankAccount",
             "BankName", "Iban", "Swift", "PasswordHash", "Token", "ApiKey",
         ];

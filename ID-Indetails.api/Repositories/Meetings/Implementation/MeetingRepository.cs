@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Meetings.Abstraction;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,16 @@ public sealed class MeetingRepository(IdIndetailsDbContext db) : IMeetingReposit
     public async Task<IReadOnlyList<MeetingView>> ListAsync(MeetingSearch search, CancellationToken cancellationToken = default)
     {
         var domains = search.Domains.ToList();
-        var query = db.ProjectMeetings.Where(m => m.DeletedAt == null && domains.Contains(m.Project.DomainCode));
+        var viewerId = search.Viewer.UserId;
+        var manages = search.Viewer.ManagesMeetings;
+        var seesCompany = search.Viewer.SeesCompany;
+        var query = db.ProjectMeetings.Where(m => m.DeletedAt == null && (
+            (m.ProjectId != null && domains.Contains(m.Project!.DomainCode))
+            || (m.ProjectId == null
+                && (m.DomainCode == null || domains.Contains(m.DomainCode))
+                && (m.CreatedById == viewerId
+                    || m.Attendees.Any(a => a.UserId == viewerId)
+                    || (manages && (m.DomainCode != null || seesCompany))))));
         if (search.ProjectId is { } projectId)
         {
             query = query.Where(m => m.ProjectId == projectId);
@@ -39,7 +49,17 @@ public sealed class MeetingRepository(IdIndetailsDbContext db) : IMeetingReposit
         => (await ViewsAsync(db.ProjectMeetings.Where(m => m.Id == id && m.DeletedAt == null), cancellationToken)).SingleOrDefault();
 
     public Task<ProjectMeeting?> GetForUpdateAsync(long id, CancellationToken cancellationToken = default)
-        => db.ProjectMeetings.Include(m => m.Project).SingleOrDefaultAsync(m => m.Id == id && m.DeletedAt == null, cancellationToken);
+        => db.ProjectMeetings
+            .Include(m => m.Project)
+            .Include(m => m.Attendees)
+            .SingleOrDefaultAsync(m => m.Id == id && m.DeletedAt == null, cancellationToken);
+
+    public async Task<IReadOnlyList<MeetingInvitee>> ActivePeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
+        => await db.Users
+            .AsNoTracking()
+            .Where(u => ids.Contains(u.Id) && u.Status == UserStatus.Active)
+            .Select(u => new MeetingInvitee(u.Id, u.DomainCode))
+            .ToListAsync(cancellationToken);
 
     public void Add(ProjectMeeting meeting) => db.ProjectMeetings.Add(meeting);
 
@@ -51,8 +71,8 @@ public sealed class MeetingRepository(IdIndetailsDbContext db) : IMeetingReposit
             {
                 m.Id,
                 m.ProjectId,
-                m.Project.Title,
-                m.Project.DomainCode,
+                Title = m.Project == null ? null : m.Project.Title,
+                Domain = m.Project == null ? m.DomainCode : m.Project.DomainCode,
                 m.StartsAt,
                 m.EndsAt,
                 m.Topic,
@@ -60,10 +80,18 @@ public sealed class MeetingRepository(IdIndetailsDbContext db) : IMeetingReposit
                 m.CreatedById,
                 m.CreatedAt,
                 m.UpdatedAt,
-                m.Project.Icon,
-                m.Project.Tint,
+                Icon = m.Project == null ? null : m.Project.Icon,
+                Tint = m.Project == null ? null : m.Project.Tint,
             })
             .ToListAsync(cancellationToken);
+
+        var ids = rows.Select(r => r.Id).ToList();
+        var attendees = (await db.MeetingAttendees
+                .AsNoTracking()
+                .Where(a => ids.Contains(a.MeetingId))
+                .Select(a => new { a.MeetingId, a.UserId, a.User.FirstName, a.User.LastName, a.User.Email })
+                .ToListAsync(cancellationToken))
+            .ToLookup(a => a.MeetingId, a => new MeetingPerson(a.UserId, PersonName.Of(a.FirstName, a.LastName, a.Email)));
 
         var creatorIds = rows.Where(r => r.CreatedById is not null).Select(r => r.CreatedById!.Value).Distinct().ToList();
         var creators = await db.Users
@@ -74,8 +102,9 @@ public sealed class MeetingRepository(IdIndetailsDbContext db) : IMeetingReposit
 
         return rows
             .Select(r => new MeetingView(
-                r.Id, r.ProjectId, r.Title, r.DomainCode, r.StartsAt, r.EndsAt, r.Topic, r.Description, r.CreatedById,
-                r.CreatedById is { } c ? creators.GetValueOrDefault(c) : null, r.CreatedAt, r.UpdatedAt, r.Icon, r.Tint))
+                r.Id, r.ProjectId, r.Title, r.Domain, r.StartsAt, r.EndsAt, r.Topic, r.Description, r.CreatedById,
+                r.CreatedById is { } c ? creators.GetValueOrDefault(c) : null, r.CreatedAt, r.UpdatedAt, r.Icon, r.Tint,
+                attendees[r.Id].OrderBy(a => a.Name).ToList()))
             .ToList();
     }
 }

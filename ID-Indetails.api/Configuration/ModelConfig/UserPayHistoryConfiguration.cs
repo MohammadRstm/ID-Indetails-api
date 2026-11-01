@@ -15,7 +15,7 @@ public class UserPayHistoryConfiguration : IEntityTypeConfiguration<UserPayHisto
         {
             t.HasCheckConstraint("ck_user_pay_history_basis", SnakeCaseEnum.CheckSql<PayBasis>("basis"));
             t.HasCheckConstraint("ck_user_pay_history_amount_positive", "`amount` > 0");
-            t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`hourly_cost_rate` >= 0");
+            t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`overtime_rate` >= 0");
         });
 
         builder.HasKey(x => x.Id);
@@ -23,7 +23,7 @@ public class UserPayHistoryConfiguration : IEntityTypeConfiguration<UserPayHisto
         builder.HasIndex(x => new { x.UserId, x.EffectiveFrom }).IsUnique();
 
         builder.Property(x => x.Currency).IsCurrencyCode();
-        builder.Property(x => x.HourlyCostRate).HasPrecision(18, 4);
+        builder.Property(x => x.OvertimeRate).HasPrecision(18, 4);
         builder.Property(x => x.Note).HasMaxLength(255);
 
         builder.HasOne(x => x.User)

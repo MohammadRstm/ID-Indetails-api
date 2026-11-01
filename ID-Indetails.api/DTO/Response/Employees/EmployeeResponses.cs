@@ -64,12 +64,14 @@ public sealed record EmployeeResponse : EmployeeSummaryResponse
 }
 
 /// <summary>One dated pay change.</summary>
+/// <param name="OvertimeRate">What an hour of overtime is paid at, before the multiplier: hourly pay's own rate, or the one set with a salary.</param>
 public sealed record PayResponse(
     long Id,
     DateOnly EffectiveFrom,
     PayBasis Basis,
     decimal Amount,
     string Currency,
+    decimal OvertimeRate,
     string? Note,
     DateTime CreatedAt,
     long? CreatedById);

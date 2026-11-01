@@ -15,11 +15,12 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
             t.HasCheckConstraint("ck_conversations_type", SnakeCaseEnum.CheckSql<ConversationType>("type"));
 
             // A DM has exactly two different users stored low-then-high (so each pair has one
-            // row); a group chat has a team and no users.
+            // row); a group chat has a team and no users; Announcements has neither.
             t.HasCheckConstraint(
                 "ck_conversations_shape",
                 "(`type` = 'dm' AND `team_id` IS NULL AND `dm_user_low_id` IS NOT NULL AND `dm_user_high_id` IS NOT NULL AND `dm_user_low_id` < `dm_user_high_id`)"
-                + " OR (`type` = 'group' AND `team_id` IS NOT NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL)");
+                + " OR (`type` = 'group' AND `team_id` IS NOT NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL)"
+                + " OR (`type` = 'announcements' AND `team_id` IS NULL AND `dm_user_low_id` IS NULL AND `dm_user_high_id` IS NULL)");
         });
 
         builder.HasKey(x => x.Id);

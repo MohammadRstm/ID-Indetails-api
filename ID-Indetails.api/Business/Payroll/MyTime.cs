@@ -4,10 +4,9 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Business.Payroll;
 
 /// <summary>
-/// What a person sees of their own hours and pay, on top of <see cref="SalaryCalculator"/> and <see cref="HoursLedger"/>:
+/// A person's month as it stands, on top of <see cref="SalaryCalculator"/> and <see cref="HoursLedger"/>:
 /// <list type="bullet">
-/// <item>Day by day: what each day asked for and what was logged, up to today.</item>
-/// <item>While a salaried month runs, "earned so far" is the salary accrued so far plus overtime pay. It accrues with
+/// <item>While a salaried month runs, Salaries' "earned so far" is the salary accrued so far plus overtime pay. It accrues with
 /// the hours required so far (required so far ÷ the month's) where the hours ledger applies, otherwise with the
 /// working days passed. The full-month estimate takes off what would be deducted if the month closed as short as it
 /// is now: the shortfall plus the paid break of each whole missed day, at the hourly rate (as Salaries deducts it).
@@ -38,18 +37,6 @@ public static class MyTime
         Complete,
     }
 
-    /// <param name="Required">Minutes the day asked for; 0 on a day off or before the person joined.</param>
-    /// <param name="Logged">Every minute logged that day.</param>
-    public sealed record Day(DateOnly Date, int Required, int Logged, int Overtime, bool Excused, bool IsToday)
-    {
-        public int Inside => Logged - Overtime;
-
-        public bool DayOff => Required == 0;
-
-        /// <summary>Inside hours − required; null where a day isn't judged (today, excused, a day off).</summary>
-        public int? Difference => IsToday || Excused || DayOff ? null : Inside - Required;
-    }
-
     public sealed record Estimate(decimal EarnedSoFar, decimal? FullMonth, decimal WouldLose);
 
     /// <summary>The required minutes of the whole month, from the day the person joined.</summary>
@@ -62,32 +49,6 @@ public static class MyTime
             : ledger.Behind ? LedgerStatus.Behind
             : ledger.InProgress ? LedgerStatus.OnTrack
             : LedgerStatus.Complete;
-
-    /// <summary>The month's days up to today, newest first, leaving out days off with nothing logged.</summary>
-    public static IReadOnlyList<Day> Days(
-        DateOnly month,
-        DateOnly today,
-        DateOnly joinedOn,
-        PersonCalendar calendar,
-        IReadOnlyList<Overtime.Split> work,
-        IReadOnlySet<DateOnly> excusedDays,
-        bool wholeMonthExcused)
-    {
-        var byDay = work.ToLookup(w => w.Day);
-        var until = today < month.AddMonths(1) ? today.AddDays(1) : month.AddMonths(1);
-
-        return HoursLedger.Days(month, until)
-            .Select(d => new Day(
-                d,
-                d < joinedOn ? 0 : calendar.HoursOn(d)?.Required ?? 0,
-                byDay[d].Sum(w => w.Minutes),
-                byDay[d].Sum(w => w.Overtime),
-                wholeMonthExcused || excusedDays.Contains(d),
-                d == today))
-            .Where(d => d.Required > 0 || d.Logged > 0)
-            .OrderByDescending(d => d.Date)
-            .ToList();
-    }
 
     public static Estimate EstimateOf(SalaryCalculator.Result pay, SalaryCalculator.Input input, bool inProgress)
     {

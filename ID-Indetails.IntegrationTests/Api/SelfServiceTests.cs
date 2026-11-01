@@ -1,3 +1,4 @@
+using System.Net;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
@@ -9,7 +10,7 @@ using Shouldly;
 namespace ID_Indetails.IntegrationTests.Api;
 
 /// <summary>
-/// The caller's own schedule, hours, overtime and pay under <c>/api/me</c>. June 2026 has 22 Monday–Friday
+/// The caller's own schedule, hours and overtime under <c>/api/me</c>. Their pay isn't shown to them. June 2026 has 22 Monday–Friday
 /// working days under the seeded 9–5 week (7h required, a paid 1h break); Beirut is UTC+3 then, so 06:00 UTC is 09:00.
 /// </summary>
 public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
@@ -137,85 +138,14 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_salaried_employee_sees_the_same_pay_as_salaries_with_the_missed_days_and_unpaid_day_deducted()
+    public async Task Employees_can_t_see_their_own_pay()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
 
-        var mine = await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay?month=2026-06", me.AccessToken));
-        var admin = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{me.User.Id}?month=2026-06", superAdmin.AccessToken));
-
-        var salary = mine.Salary!;
-        salary.ShouldSatisfyAllConditions(
-            p => p.BasePay.ShouldBe(admin.Salary.BasePay),
-            p => p.Deduction.ShouldBe(admin.Salary.Deduction),
-            p => p.OvertimePay.ShouldBe(admin.Salary.OvertimePay),
-            p => p.Total.ShouldBe(admin.Salary.Total),
-            p => p.DeductionMinutes.ShouldBe(admin.DeductionMinutes));
-
-        // 8,340 minutes short: 19 whole missed days each cost the full paid day (8h), plus 6h of the 20th, and the
-        // unpaid day off costs its full paid day too - 9,960 minutes at June's 10 an hour (1,760 ÷ 176 paid hours).
-        salary.ShouldSatisfyAllConditions(
-            p => p.HourlyRate.ShouldBe(10m),
-            p => p.StandardHourlyRate.ShouldBe(10.1538m),
-            p => p.DeductionMinutes.ShouldBe(8340 + 19 * 60 + 480),
-            p => p.Deduction.ShouldBe(1660m),
-            p => p.BasePay.ShouldBe(100m),
-            p => p.Total.ShouldBe(100m),
-            p => p.EarnedSoFar.ShouldBe(100m),
-            p => p.FullMonthEstimate.ShouldBeNull());
-        mine.InProgress.ShouldBeFalse();
-        mine.JoinedOn.ShouldBe(new DateOnly(2026, 1, 1));
-        mine.FirstMonth.ShouldBe(new DateOnly(2026, 1, 1));
-        mine.Ledger!.MissedDays.Count.ShouldBe(20);
-        mine.Excuses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
-            x => x.IsPaid.ShouldBeFalse(), x => x.Days.ShouldBe([new DateOnly(2026, 6, 2)]));
-
-        mine.Days.Count.ShouldBe(22);
-        mine.Days.Single(d => d.Date.Day == 1).ShouldSatisfyAllConditions(
-            d => d.LoggedMinutes.ShouldBe(480), d => d.OvertimeMinutes.ShouldBe(60), d => d.DifferenceMinutes.ShouldBe(0));
-        mine.Days.Single(d => d.Date.Day == 2).ShouldSatisfyAllConditions(d => d.Excused.ShouldBeTrue(), d => d.DifferenceMinutes.ShouldBeNull());
-        mine.Days.Single(d => d.Date.Day == 3).DifferenceMinutes.ShouldBe(-420);
-
-        // This month is still running: an estimate grows with the hours required so far.
-        var now = await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay", me.AccessToken));
-        now.ShouldSatisfyAllConditions(p => p.InProgress.ShouldBeTrue(), p => p.Salary!.FullMonthEstimate.ShouldNotBeNull());
-    }
-
-    [Fact]
-    public async Task An_hourly_employee_is_paid_their_logged_hours_and_the_break_of_the_day_they_worked()
-    {
-        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var me = await JuneMonthAsync(superAdmin, project.Id, "hourly", 12m);
-        var salaried = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
-
-        var mine = await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay?month=2026-06", me.AccessToken));
-        var admin = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{me.User.Id}?month=2026-06", superAdmin.AccessToken));
-
-        // 7h inside plus the made-up hour at 12, and the day's paid hour of break on top; no deduction for hourly staff.
-        mine.Salary!.ShouldSatisfyAllConditions(
-            p => p.Basis.ShouldBe(ID_Indetails.api.Enums.PayBasis.Hourly),
-            p => p.PaidBreakDays.ShouldBe(1),
-            p => p.PaidBreakPay.ShouldBe(12m),
-            p => p.BasePay.ShouldBe(108m),
-            p => p.Deduction.ShouldBe(0m),
-            p => p.Total.ShouldBe(admin.Salary.Total));
-
-        // Each person only ever gets their own figures.
-        (await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay?month=2026-06", salaried.AccessToken))).Salary!.Total.ShouldBe(100m);
-    }
-
-    [Fact]
-    public async Task Someone_without_a_pay_record_gets_no_salary()
-    {
-        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-
-        var pay = await OkAsync<MyPayResponse>(Client.GetAsync("/api/me/pay", employee.AccessToken));
-
-        pay.Salary.ShouldBeNull();
+        (await Client.GetAsync("/api/me/pay?month=2026-06", me.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Client.GetAsync("/api/me/pay", me.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -224,7 +154,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
 
-        foreach (var url in new[] { "/api/me/pay", "/api/me/schedule", "/api/me/hours", "/api/me/overtime", "/api/me/work-entries" })
+        foreach (var url in new[] { "/api/me/schedule", "/api/me/hours", "/api/me/overtime", "/api/me/work-entries" })
         {
             await (await Client.GetAsync(url, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.GetAsync(url, superAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
@@ -240,7 +170,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, siteStaff) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
 
-        foreach (var url in new[] { "/api/me/pay", "/api/me/schedule", "/api/me/hours", "/api/me/overtime" })
+        foreach (var url in new[] { "/api/me/schedule", "/api/me/hours", "/api/me/overtime" })
         {
             await (await Client.GetAsync(url, siteStaff.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         }

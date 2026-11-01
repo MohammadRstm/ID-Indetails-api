@@ -155,6 +155,13 @@ public sealed class PushDelivery(
                     return null;
                 }
 
+                if (m.Announcement)
+                {
+                    return new(
+                        PushText.ForAnnouncement(message.Sender.Name, message.Body, message.Attachments.Count > 0),
+                        new PushData(m.RecipientId, PushKinds.Message, null, PushTarget.Announcements));
+                }
+
                 return new(
                     PushText.ForMessage(message.Sender.Name, teamName, message.Body, message.Kind, message.Attachments.Count > 0, m.Mentioned),
                     new PushData(m.RecipientId, PushKinds.Message, null, PushTarget.Chat(m.TeamId, message.Sender.Id)));

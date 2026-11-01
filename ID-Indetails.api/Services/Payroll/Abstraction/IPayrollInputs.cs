@@ -8,6 +8,14 @@ namespace ID_Indetails.api.Services.Payroll.Abstraction;
 /// <summary>One person's month, ready for <see cref="SalaryCalculator"/>, with the excuses it was built from.</summary>
 public sealed record PersonMonth(User User, SalaryCalculator.Input Input, IReadOnlyList<HourExcuse> Excuses);
 
+/// <summary>A work entry split as Salaries pays it.</summary>
+/// <param name="MadeUp">Overtime that made up a short month, paid as normal hours.</param>
+public sealed record EntrySplit(Overtime.Split Work, int MadeUp)
+{
+    /// <summary>The overtime paid as overtime: what didn't make up a short month.</summary>
+    public int PaidOvertime => Work.Overtime - MadeUp;
+}
+
 /// <summary>Loads what pay and hours are calculated from: pay history, working time, schedules, work entries and excuses.</summary>
 public interface IPayrollInputs
 {
@@ -32,4 +40,11 @@ public interface IPayrollInputs
     /// whatever their role is now.
     /// </summary>
     Task<IReadOnlyList<PersonMonth>> ForAsync(IReadOnlyList<User> people, IReadOnlyList<DateOnly> months, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every work entry these people logged in these months, split as Salaries pays it, by entry id: overtime is decided
+    /// per day across all their work, overtime that made up a short month counts as normal hours, and a month paid as a
+    /// fixed salary has no overtime. Project pay and project cost price entries from it.
+    /// </summary>
+    Task<IReadOnlyDictionary<long, EntrySplit>> EntrySplitsAsync(IReadOnlyList<User> people, IReadOnlyList<DateOnly> months, CancellationToken cancellationToken = default);
 }

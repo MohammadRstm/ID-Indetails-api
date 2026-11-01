@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.Push;
 using ID_Indetails.api.Business.WorkingTime;
@@ -27,8 +28,11 @@ public class LoggedBreakTests
         []);
 
     // 1,840 a month is 10 an hour in December (23 days of 8 paid hours).
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1840m, "USD");
-    private static readonly SalaryCalculator.PayTerms Hourly = new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD");
+    // overtime at the rate a pay change is given when none is typed: the salary ÷ 184, or hourly pay's own rate
+    private static readonly SalaryCalculator.PayTerms Monthly =
+        new(new(2026, 1, 1), PayBasis.Monthly, 1840m, "USD", PayRules.SuggestedOvertimeRate(PayBasis.Monthly, 1840m));
+    private static readonly SalaryCalculator.PayTerms Hourly =
+        new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD", PayRules.SuggestedOvertimeRate(PayBasis.Hourly, 20m));
 
     private static IEnumerable<DateOnly> WorkingDays(DateOnly month)
         => HoursLedger.Days(month, month.AddMonths(1)).Where(d => Calendar.HoursOn(d) is not null);

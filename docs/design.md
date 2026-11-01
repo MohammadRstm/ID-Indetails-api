@@ -131,19 +131,29 @@ Everything is calculated from the entries on each request (`Business/WorkEntries
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/meetings?projectId=&mine=&from=&to=` | `project:view` | Meetings of every project the caller can see, earliest first. `mine=true` keeps those the caller set; `from`/`to` are company days a meeting overlaps |
+| `GET /api/meetings?domain=&projectId=&mine=&from=&to=` | `project:view` | Meetings of every project the caller can see, and the general meetings they may see, earliest first. `domain` keeps that domain's (company-wide general meetings stay in); `mine=true` keeps those the caller set; `from`/`to` are company days a meeting overlaps |
 | `GET /api/projects/{id}/meetings` | `project:view` | A project's meetings, earliest first |
 | `POST /api/projects/{id}/meetings` | `meeting:create` or `meeting:manage` | `{ startsAt, endsAt, topic, description }`. Returns `201` |
-| `PUT /api/meetings/{id}` | `meeting:manage`, or `meeting:create` for your own | Moves, resizes or renames a meeting (the same body) |
+| `POST /api/meetings` | `meeting:manage` | A general meeting: `{ startsAt, endsAt, topic, description, domain, attendeeIds }`. Returns `201` |
+| `PUT /api/meetings/{id}` | `meeting:manage`, or `meeting:create` for your own | Moves, resizes or renames a meeting (the same body); `attendeeIds` replaces a general meeting's people (left out, they stay) |
 | `DELETE /api/meetings/{id}` | `meeting:manage`, or `meeting:create` for your own | Soft delete (`deleted_at`). Returns `204` |
 
 Rules (`Business/Meetings/MeetingRules.cs`):
 
-- Meetings belong to projects of either domain that are active or on hold (`422 project_closed`). Execution sites have them too (decision D10, reversed on 29 Sep 2026).
+- Project meetings belong to projects of either domain. New ones are set on active projects only (`422 project_not_active` on hold, `422 project_closed` once finished, 28 Oct 2026); those already set can still be moved or removed while the project is on hold. Execution sites have them too (decision D10, reversed on 29 Sep 2026).
 - Times are UTC instants in whole minutes. A meeting lasts at least 5 minutes and starts and ends on the same company-time-zone day (`400`). Past days are allowed.
 - Topic up to 200 characters, description up to 2000; both optional.
-- A meeting has no attendees: it is a project-wide block. It is not work time and never counts in hours.
-- Events: `meeting_created`, `meeting_updated`, `meeting_deleted`, with the meeting as the subject and its topic and times in the payload.
+- A project meeting has no attendees: it is a project-wide block (`400` if `attendeeIds` is sent). A meeting is not work time and never counts in hours.
+- Events: `meeting_created`, `meeting_updated`, `meeting_deleted`, with the meeting as the subject and its topic and times in the payload. General meetings write none, as the domain's feed is read by people who aren't in them.
+
+**General meetings** (28 Oct 2026) are about no project. `meeting:manage` (admins and super admins) sets them, from the Overview pages' Meetings tab:
+
+- **Where it belongs** (`domain`): the domain asked for, which the caller must see (`404` otherwise); left out, the whole company for someone with `company:view`, otherwise the caller's own business. The response's `domain` is null for a company-wide meeting; `project` is null.
+- **Attendees** (`attendeeIds`, `attendees` in the response): at least one besides whoever sets it, each an active person the setter can see who belongs where the meeting does (super admins belong everywhere), up to 100 (`400` otherwise).
+- **Who sees it** (`MeetingRules.CanSeeGeneral`): its attendees and whoever set it, and holders of `meeting:manage` who see its domain; a company-wide one, those with `company:view` instead. Anyone else gets `404`. Attendees see it among their meetings and on their day (`/api/me/day`).
+- **Who changes it:** whoever set it, or holders of `meeting:manage` who see it. Attendees can't (`403`).
+- **Notifications** to attendees, from whoever acted: `meeting_invited` when added (on creation or an edit), `meeting_moved` when its time changes (to those who stay), `meeting_cancelled` when it is deleted or they are taken out.
+- Tables: `project_meetings.project_id` is null and `domain_code` set (or null company-wide) for a general meeting; `meeting_attendees` holds its people.
 
 **Who sets meetings:** everyone holds `meeting:create` by default, in both domains, so employees set meetings and move or remove the ones they set (someone else's is `403`). `meeting:manage` (admins and super admins) covers every meeting. When someone without `meeting:manage` sets a meeting, the active people of the domain who hold it (not the setter) get a `meeting_scheduled` notification with the setter's name, the project, topic and times, as in the prototype.
 

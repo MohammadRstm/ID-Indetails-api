@@ -20,6 +20,8 @@ public class PushRulesTests
 
         PushCategories.Of(NotificationKinds.RequirementOverdue).ShouldBe(NotificationCategory.Requirements);
         PushCategories.Of(NotificationKinds.HoursExcused).ShouldBe(NotificationCategory.Work);
+        PushCategories.Of(NotificationKinds.HoursMissed).ShouldBe(NotificationCategory.Work);
+        PushCategories.Of(NotificationKinds.HoursMissedList).ShouldBe(NotificationCategory.Work);
         PushCategories.Of(NotificationKinds.HoursShort).ShouldBe(NotificationCategory.Money);
         PushCategories.Of(NotificationKinds.ClientAdded).ShouldBe(NotificationCategory.Money);
         PushCategories.Of(NotificationKinds.TeamChanged).ShouldBe(NotificationCategory.People);

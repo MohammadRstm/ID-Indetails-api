@@ -56,6 +56,10 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await _steps.ScalarAsync<decimal>(
             "SELECT p.amount FROM user_pay_history p JOIN users u ON u.id = p.user_id WHERE u.email = @e AND p.basis = 'monthly'",
             ("@e", email))).ShouldBe(3000m);
+        // its overtime rate is suggested as the salary ÷ 184
+        (await _steps.ScalarAsync<decimal>(
+            "SELECT p.overtime_rate FROM user_pay_history p JOIN users u ON u.id = p.user_id WHERE u.email = @e",
+            ("@e", email))).ShouldBe(16.30m);
 
         // The link works once.
         await (await Client.PostJsonAsync("/api/invitations/validate", new { token }))

@@ -81,8 +81,16 @@ public class ProtonEmployeeTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
-        var (opened, _) = await CallAsync(designer, "open_page", new { page = "my_pay" });
-        opened.UiCommands.ShouldHaveSingleItem().Page.ShouldBe(ProtonPage.MyPay);
+        var (opened, _) = await CallAsync(designer, "open_page", new { page = "my_work" });
+        opened.UiCommands.ShouldHaveSingleItem().Page.ShouldBe(ProtonPage.MyWork);
+
+        // employees don't see their pay, so there is no pay page to open
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("open_page", new { page = "my_pay" }), FakeAnthropic.Text("Done."));
+        var response = await Client.PostJsonAsync("/api/proton/messages", new { text = "Open my pay." }, designer.AccessToken);
+        response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+        (await response.ReadAsync<ProtonReplyResponse>()).UiCommands.ShouldBeEmpty();
+        api.Anthropic.ToolResults(1).ShouldHaveSingleItem().ToJsonString().ShouldContain("invalid");
 
         api.Anthropic.ToolsOffered(0).ShouldContain("propose_log_work");
         api.Anthropic.ToolsOffered(0).ShouldNotContain("propose_create_client");
