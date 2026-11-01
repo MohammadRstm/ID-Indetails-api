@@ -78,14 +78,14 @@ public sealed class MessagingService(
 
     public async Task<MessagesBadgeResponse> BadgeAsync(CancellationToken cancellationToken = default)
     {
-        var inbox = await InboxAsync(await ViewerAsync(cancellationToken), cancellationToken);
-        return new MessagesBadgeResponse(inbox.States.Sum(s => s.Unread), inbox.States.Any(s => s.UnreadMention));
+        var unread = await UnreadAsync(await ViewerAsync(cancellationToken), cancellationToken);
+        return new MessagesBadgeResponse(unread.Sum(c => c.Unread), unread.Any(c => c.UnreadMention));
     }
 
     public async Task<int> UnreadCountForAsync(long userId, CancellationToken cancellationToken = default)
     {
         var person = (await messaging.PeopleAsync([userId], cancellationToken)).SingleOrDefault();
-        return person is { Status: UserStatus.Active } ? (await InboxAsync(person, cancellationToken)).States.Sum(s => s.Unread) : 0;
+        return person is { Status: UserStatus.Active } ? (await UnreadAsync(person, cancellationToken)).Sum(c => c.Unread) : 0;
     }
 
     public async Task<IReadOnlyList<ContactResponse>> ContactsAsync(CancellationToken cancellationToken = default)
@@ -318,6 +318,17 @@ public sealed class MessagingService(
             .ToDictionary(p => p.Id);
 
         return new Inbox(teams, states.Where(s => s.OtherUserId is null || people.ContainsKey(s.OtherUserId.Value)).ToList(), people);
+    }
+
+    /// <summary>What the inbox shows unread: in chats the caller is still in, and with people they can still reach.</summary>
+    private async Task<IReadOnlyList<UnreadChat>> UnreadAsync(ChatPerson me, CancellationToken cancellationToken)
+    {
+        var unread = await messaging.UnreadChatsAsync(me.Id, (await VisibleTeamsAsync(me, cancellationToken)).Select(t => t.Id).ToList(), cancellationToken);
+        var others = unread.Where(c => c.OtherUserId is not null).Select(c => c.OtherUserId!.Value).ToList();
+        var reachable = others.Count == 0
+            ? []
+            : (await messaging.PeopleAsync(others, cancellationToken)).Where(p => MessagingRules.CanReach(Rule(me), Rule(p))).Select(p => p.Id).ToHashSet();
+        return unread.Where(c => c.OtherUserId is null || reachable.Contains(c.OtherUserId.Value)).ToList();
     }
 
     /// <summary>The team's chat for a new message, created with the first one.</summary>

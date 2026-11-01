@@ -241,7 +241,11 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         var photo = await UploadPngAsync(Client, employee.AccessToken, "me.png");
         var me = await OkAsync<CurrentUserResponse>(Client.PutJsonAsync("/api/me/photo", new { fileId = photo.Id }, employee.AccessToken));
         me.PhotoFileId.ShouldBe(photo.Id);
-        (await Client.GetAsync($"/api/files/{photo.Id}", colleague.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var seen = await Client.GetAsync($"/api/files/{photo.Id}", colleague.AccessToken);
+        seen.StatusCode.ShouldBe(HttpStatusCode.OK);
+        // the browser keeps a profile photo: everyone signed in may see it
+        seen.Headers.CacheControl!.Private.ShouldBeTrue();
+        seen.Headers.CacheControl.MaxAge.ShouldBe(TimeSpan.FromDays(1));
         (await Client.GetAsync($"/api/files/{photo.Id}")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         // Someone else's upload, one already attached, or a video can't be a photo.
@@ -324,7 +328,10 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         var shared = await UploadPngAsync(Client, anna.AccessToken, "sketch.png");
         (await Client.PostJsonAsync($"/api/messages/direct/{ben.User.Id}", new { body = "", attachmentIds = new[] { shared.Id } }, anna.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        (await Client.GetAsync($"/api/files/{shared.Id}", ben.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var read = await Client.GetAsync($"/api/files/{shared.Id}", ben.AccessToken);
+        read.StatusCode.ShouldBe(HttpStatusCode.OK);
+        // never kept by the browser: the next person signed in there might not see it
+        read.Headers.CacheControl!.NoStore.ShouldBeTrue();
         await (await Client.GetAsync($"/api/files/{shared.Id}", carl.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.PostJsonAsync($"/api/messages/direct/{carl.User.Id}", new { body = "again", attachmentIds = new[] { shared.Id } }, anna.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.FileInUse);

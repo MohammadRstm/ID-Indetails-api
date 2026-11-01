@@ -9,7 +9,7 @@ Client portal files are separate: they go straight from the browser to the conte
 | Endpoint | Who | What |
 |---|---|---|
 | `POST /api/files` | Signed in | Multipart field `file`, read as it arrives (not buffered first). `201` with `{ id, name, mimeType, kind, sizeBytes, createdAt }`: for a photo, those of the small WebP stored ([Photos](#photos)). Its own rate limit (`RateLimiting:UploadPermitsPerMinute`, 30 a minute), and at most 2 GB a person in any 24 hours (`422 upload_quota_reached`), so nobody can fill the disk |
-| `GET /api/files/{id}?size=` | Signed in, see below | The content, shown inline, with `X-Content-Type-Options: nosniff`. Videos can be read in ranges. `size` asks for a photo's smaller copy ([Photos](#photos)) |
+| `GET /api/files/{id}?size=` | Signed in, see below | The content, shown inline, with `X-Content-Type-Options: nosniff`. Videos can be read in ranges. `size` asks for a photo's smaller copy ([Photos](#photos)). A profile photo, the logo or a website picture is sent with `Cache-Control: private, max-age=86400`, so the browser keeps it for a day: its content never changes under its id and everyone signed in may see it. Anything else is `no-store`, because the browser's copy doesn't know who is signed in |
 | `PUT /api/me/photo`, `DELETE /api/me/photo` | Signed in | `{ fileId }`: the caller's profile photo, from an upload of their own. Returns the signed-in user |
 | `PUT /api/employees/{id}/photo`, `DELETE …` | `employee:manage` | `{ fileId }`: someone's profile photo, from the caller's upload. Other domains read as `404`; a super admin's needs `employee:invite_super_admin` |
 | `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, at any time, before the rest of the settings too |

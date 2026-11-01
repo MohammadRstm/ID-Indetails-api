@@ -26,6 +26,12 @@ public sealed class FileRepository(IdIndetailsDbContext db) : IFileRepository
                 || await db.WebsiteProjectImages.AnyAsync(i => i.FileId == id, cancellationToken)
                 || await db.CompanySettings.AnyAsync(s => s.WebsiteFaviconFileId == id, cancellationToken));
 
+    public async Task<bool> IsSharedPictureAsync(long id, CancellationToken cancellationToken = default)
+        => await db.Users.AnyAsync(u => u.PhotoFileId == id, cancellationToken)
+            || await db.CompanySettings.AnyAsync(s => s.LogoFileId == id || s.WebsiteFaviconFileId == id, cancellationToken)
+            || await db.WebsiteProjects.AnyAsync(p => p.ThumbnailFileId == id || p.HeroFileId == id, cancellationToken)
+            || await db.WebsiteProjectImages.AnyAsync(i => i.FileId == id, cancellationToken);
+
     public async Task<IReadOnlyList<StoredFile>> UnusedBeforeAsync(DateTime cutoff, int limit, CancellationToken cancellationToken = default)
         => await db.Files
             .Where(f => f.CreatedAt < cutoff

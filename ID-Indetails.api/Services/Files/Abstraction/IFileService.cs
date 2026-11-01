@@ -4,7 +4,8 @@ using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Services.Files.Abstraction;
 
-public sealed record FileContent(Stream Content, string MimeType, string Name);
+/// <param name="SharedPicture">A profile photo, the logo or a website picture: anyone signed in may see it.</param>
+public sealed record FileContent(Stream Content, string MimeType, string Name, bool SharedPicture = false);
 
 /// <summary>
 /// Uploads are made first and attached afterwards (to a message, a work entry, a profile or the company). Who may
