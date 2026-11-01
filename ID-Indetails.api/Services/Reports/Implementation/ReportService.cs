@@ -348,15 +348,15 @@ public sealed class ReportService(
     private async Task<IReadOnlyList<QuarterTotalResponse>> QuarterlyAsync(DateOnly today, CancellationToken cancellationToken)
     {
         var first = WorkStats.QuarterStartOf(today).AddMonths(-3 * (QuarterCount - 1));
-        var rows = await entries.RowsAsync(new WorkEntrySearch(From: clock.CompanyDayStartUtc(first)), cancellationToken);
-        var byQuarter = rows
-            .GroupBy(r => WorkStats.QuarterStartOf(clock.ToCompanyDate(r.StartedAt)))
-            .ToDictionary(g => g.Key, g => g.Sum(r => r.Minutes));
+        // each quarter from its first company day to the next's, added up by the database: no entry is read back
+        var quarters = new List<QuarterTotalResponse>();
+        foreach (var quarter in Enumerable.Range(0, QuarterCount).Select(i => first.AddMonths(3 * i)))
+        {
+            var search = new WorkEntrySearch(From: clock.CompanyDayStartUtc(quarter), To: clock.CompanyDayStartUtc(quarter.AddMonths(3)));
+            quarters.Add(new QuarterTotalResponse(quarter, await entries.MinutesAsync(search, cancellationToken)));
+        }
 
-        return Enumerable.Range(0, QuarterCount)
-            .Select(i => first.AddMonths(3 * i))
-            .Select(q => new QuarterTotalResponse(q, byQuarter.GetValueOrDefault(q)))
-            .ToList();
+        return quarters;
     }
 
     private async Task<ReportMoneyResponse> MoneyAsync(

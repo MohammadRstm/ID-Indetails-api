@@ -71,6 +71,32 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .Select(e => new WorkRow(e.Id, e.UserId, e.ProjectId, e.StartedAt, e.EndedAt, e.DurationMinutes, e.CreatedAt))
             .ToListAsync(cancellationToken);
 
+    public async Task<int> MinutesAsync(WorkEntrySearch search, CancellationToken cancellationToken = default)
+        => await Filter(search, withText: false).SumAsync(e => (int?)e.DurationMinutes, cancellationToken) ?? 0;
+
+    public async Task<IReadOnlyDictionary<long, PersonWorkTotal>> PersonTotalsAsync(CancellationToken cancellationToken = default)
+        => await Filter(new WorkEntrySearch(), withText: false)
+            .GroupBy(e => e.UserId)
+            .Select(g => new PersonWorkTotal(g.Key, g.Sum(e => e.DurationMinutes), g.Count(), g.Max(e => e.StartedAt)))
+            .ToDictionaryAsync(t => t.UserId, cancellationToken);
+
+    public async Task<ProjectWorkTotal> ProjectTotalAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var entries = Filter(new WorkEntrySearch(ProjectId: projectId), withText: false);
+        return new ProjectWorkTotal(
+            await entries.Select(e => e.UserId).Distinct().CountAsync(cancellationToken),
+            await entries.SumAsync(e => (int?)e.DurationMinutes, cancellationToken) ?? 0);
+    }
+
+    public Task<IReadOnlyList<WorkEntryView>> LatestByOthersAsync(long projectId, long exceptUserId, int count, CancellationToken cancellationToken = default)
+        => ViewsAsync(
+            Filter(new WorkEntrySearch(ProjectId: projectId), withText: false)
+                .Where(e => e.UserId != exceptUserId)
+                .OrderByDescending(e => e.StartedAt)
+                .ThenBy(e => e.Id)
+                .Take(count),
+            cancellationToken);
+
     public async Task<IReadOnlyList<WorkProject>> OpenProjectsAsync(CancellationToken cancellationToken = default)
         => await db.Projects
             .AsNoTracking()

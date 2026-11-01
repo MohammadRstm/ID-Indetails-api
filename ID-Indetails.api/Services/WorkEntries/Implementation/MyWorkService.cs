@@ -122,8 +122,10 @@ public sealed class MyWorkService(
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         var calendar = CompanyCalendar.Of(await company.GetSettingsAsync(cancellationToken: cancellationToken));
         var today = clock.CompanyToday;
-        var all = await entries.ListAsync(new WorkEntrySearch(ProjectId: projectId), cancellationToken);
-        var mine = all.Where(e => e.UserId == actor.UserId).ToList();
+        // only my own entries are read: the project's totals and the team's latest come from the database
+        var mine = await entries.ListAsync(new WorkEntrySearch(UserId: actor.UserId, ProjectId: projectId), cancellationToken);
+        var total = await entries.ProjectTotalAsync(projectId, cancellationToken);
+        var team = await entries.LatestByOthersAsync(projectId, actor.UserId, TeamActivityOnProject, cancellationToken);
         var myWorked = mine.Select(ToWorked).ToList();
         var overtimeById = await overtime.OvertimeOfAsync(mine, cancellationToken);
 
@@ -134,13 +136,12 @@ public sealed class MyWorkService(
             mine.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
             mine.Count,
             WorkStats.Minutes(myWorked, WorkStats.WeekStartOf(today, calendar.FirstDayOfWeek), today),
-            all.Select(e => e.UserId).Distinct().Count(),
-            all.Sum(e => e.Minutes),
+            total.People,
+            total.Minutes,
             mine.OrderByDescending(e => e.StartedAt).Take(RecentOnProject)
                 .Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
             ToWeeks(WorkStats.Weekly(myWorked, today, WeeksOnProject, calendar.FirstDayOfWeek)),
-            all.Where(e => e.UserId != actor.UserId).OrderByDescending(e => e.StartedAt).Take(TeamActivityOnProject)
-                .Select(e => new TeamActivityResponse(e.UserId, e.UserName, e.StartedAt, e.Description)).ToList());
+            team.Select(e => new TeamActivityResponse(e.UserId, e.UserName, e.StartedAt, e.Description)).ToList());
     }
 
     public async Task<MyDayResponse> MyDayAsync(DateOnly? date, CancellationToken cancellationToken = default)

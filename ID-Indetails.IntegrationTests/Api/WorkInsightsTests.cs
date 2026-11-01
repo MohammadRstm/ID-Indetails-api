@@ -92,6 +92,29 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task The_people_lists_all_time_totals_include_work_from_long_ago_for_viewers_without_money()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
+        // a plain admin sees everyone's work but not the money, so the page reads back only recent entries
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        await Work.InsertAsync(designer.User.Id, project.Id, "2024-03-05 07:00:00", "2024-03-05 09:00:00");
+        await Work.LogAsync(designer.AccessToken, project.Id, WorkEntryTestSteps.HoursAgo(3), 90);
+
+        var row = (await (await Client.GetAsync("/api/work/people", admin.AccessToken)).ReadAsync<List<PersonWorkResponse>>())
+            .Single(p => p.Id == designer.User.Id);
+        row.TotalMinutes.ShouldBe(210);
+        row.Entries.ShouldBe(2);
+        row.QuarterMinutes.ShouldBe(90);
+        row.MinutesLast30Days.ShouldBe(90);
+        row.LastStartedAt.ShouldNotBeNull();
+        row.LastStartedAt!.Value.ShouldBeGreaterThan(new DateTime(2024, 3, 6, 0, 0, 0, DateTimeKind.Utc));
+        row.LabourCost.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task People_rows_carry_the_last_30_days_this_month_s_overtime_and_the_rate_for_money_viewers()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
