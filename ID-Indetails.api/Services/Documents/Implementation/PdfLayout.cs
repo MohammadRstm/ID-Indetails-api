@@ -38,7 +38,8 @@ public static class PdfLayout
     }
 
     /// <param name="footer">Shown at the bottom of every page, beside the page number.</param>
-    public static (Document Document, Section Section) NewDocument(string title, string footer)
+    /// <param name="forClient">A document the client receives: the company's mark goes behind every page (<see cref="PdfWatermark"/>).</param>
+    public static (Document Document, Section Section) NewDocument(string title, string footer, bool forClient = false)
     {
         var document = new Document();
         document.Info.Title = title;
@@ -66,6 +67,11 @@ public static class PdfLayout
         foot.AddPageField();
         foot.AddText(" of ");
         foot.AddNumPagesField();
+
+        if (forClient)
+        {
+            PdfWatermark.AddTo(section);
+        }
 
         return (document, section);
     }
@@ -164,6 +170,15 @@ public static class PdfLayout
         var heading = Text(section.AddParagraph(title), 16, bold: true);
         heading.Format.SpaceBefore = Unit.FromPoint(12);
         Text(section.AddParagraph(subtitle), 9, color: Muted);
+    }
+
+    /// <summary>A short opening note to the client, in grey, between the title and the content.</summary>
+    public static void AddIntro(Section section, string text)
+    {
+        var intro = Text(section.AddParagraph(text), 9.5, color: Muted);
+        intro.Format.SpaceBefore = Unit.FromPoint(10);
+        intro.Format.LineSpacingRule = LineSpacingRule.Multiple;
+        intro.Format.LineSpacing = 1.25;
     }
 
     public static void AddHeading(Section section, string text)

@@ -49,7 +49,8 @@ public static class ProjectReportPdf
         var footer = client
             ? $"{head.CompanyName} · Prepared for {project.Client?.DisplayName ?? "the client"}"
             : $"{head.CompanyName} · Internal: contains cost and profit information";
-        var (document, section) = PdfLayout.NewDocument($"{title} · {project.Title}", footer);
+        // the client summary goes to the client; the internal report stays plain
+        var (document, section) = PdfLayout.NewDocument($"{title} · {project.Title}", footer, forClient: client);
         PdfLayout.AddLetterhead(section, head, title, "Generated " + PdfLayout.Date(report.Today));
         PdfLayout.AddTitle(section, project.Title, $"{PdfLayout.Date(report.From)} to {PdfLayout.Date(report.To)} · Reference {project.Id}");
 

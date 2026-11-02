@@ -15,12 +15,17 @@ public static class BoqPdf
 
     public static string Label(BoqKind kind) => kind == BoqKind.Vo ? "Variation order" : "Bill of quantities";
 
+    /// <summary>The note that opens a client BOQ, above its items.</summary>
+    public static string Welcome(BoqDocument document)
+        => $"Dear {document.ClientName}, thank you for trusting us with your {document.ProjectTitle}. "
+            + "This bill of quantities sets out the work we discussed, item by item, for your review.";
+
     public static byte[] Render(BoqDocument document, DateOnly date, Letterhead head)
     {
         var boq = document.Boq;
         var label = Label(boq.Kind);
         var number = boq.Number ?? "Draft";
-        var (pdf, section) = PdfLayout.NewDocument($"{label} {number}", $"{head.CompanyName} · {label} {number}");
+        var (pdf, section) = PdfLayout.NewDocument($"{label} {number}", $"{head.CompanyName} · {label} {number}", forClient: true);
         PdfLayout.AddLetterhead(section, head, label, number, boq.Status == BoqStatus.Draft ? "DRAFT" : null);
         PdfLayout.AddFacts(
             section,
@@ -28,6 +33,10 @@ public static class BoqPdf
             [new Fact("Project", document.ProjectTitle, document.ProjectLocation)],
             [new Fact("Date", PdfLayout.Date(date))]);
         PdfLayout.AddTitle(section, boq.Title, $"{label} {number}");
+        if (boq.Kind == BoqKind.Client)
+        {
+            PdfLayout.AddIntro(section, Welcome(document));
+        }
 
         if (boq.Kind == BoqKind.Vo && boq.Reason is { } reason)
         {
