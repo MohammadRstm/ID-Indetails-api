@@ -26,11 +26,10 @@ if (HostingServiceCollectionExtensions.BehindProxy(app.Configuration))
     app.UseForwardedHeaders();
 }
 
-// First, so it times the whole request.
-if (app.Configuration.GetValue<bool>(RequestCostMiddleware.SettingName))
-{
-    app.UseMiddleware<RequestCostMiddleware>();
-}
+// Who the request is from, on every line it logs; first, so the error handler's lines have it too.
+app.UseMiddleware<RequestLogScopeMiddleware>();
+// Then its cost, timing the whole request: failed and slow ones always, every one in development.
+app.UseMiddleware<RequestCostMiddleware>();
 
 // Before everything that answers, error pages included.
 app.UseMiddleware<ApiResponseHeadersMiddleware>();

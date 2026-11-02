@@ -39,6 +39,26 @@ public class BugReportTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task The_recent_errors_in_their_browser_come_with_the_report_so_the_log_lines_can_be_found()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        const string reference = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+        var sent = await Client.PostJsonAsync("/api/bug-reports", new
+        {
+            title = "The overview went blank",
+            description = "It said something went wrong.",
+            page = "/design/overview",
+            recentErrors = new[] { new { @ref = reference, status = 500, path = "/api/finance/design/overview", at = "2026-11-02T09:00:00Z" } },
+        }, superAdmin.AccessToken);
+        ((int)sent.StatusCode).ShouldBe(204, await sent.Content.ReadAsStringAsync());
+
+        var message = api.Emails.LastTo(SupportAddress);
+        message.TextBody.ShouldContain($"{reference} · 500 · /api/finance/design/overview · 2026-11-02 09:00:00 UTC");
+        message.HtmlBody.ShouldContain("Recent errors in their browser");
+    }
+
+    [Fact]
     public async Task Nobody_signed_out_reports_and_no_link_token_can_travel_with_the_page()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
