@@ -10,7 +10,7 @@ public static class QuotePdf
 {
     public static byte[] Render(QuoteResponse quote, DateOnly quotedOn, Letterhead head)
     {
-        var (document, section) = PdfLayout.NewDocument($"Quote {quote.Number}", $"{head.CompanyName} · Quote {quote.Number}");
+        var (document, section) = PdfLayout.NewDocument($"Quote {quote.Number}", $"{head.CompanyName} · Quote {quote.Number}", forClient: true);
         PdfLayout.AddLetterhead(section, head, "Quote", quote.Number, null);
         PdfLayout.AddFacts(
             section,

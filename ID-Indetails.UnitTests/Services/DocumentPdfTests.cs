@@ -23,6 +23,14 @@ public class DocumentPdfTests
         return PdfReader.Open(stream, PdfDocumentOpenMode.Import).PageCount;
     }
 
+    /// <summary>The pictures drawn on a page: the company's mark is two (Head has no logo, so nothing else).</summary>
+    private static int Pictures(byte[] pdf, int page)
+    {
+        using var stream = new MemoryStream(pdf);
+        var document = PdfReader.Open(stream, PdfDocumentOpenMode.Import);
+        return document.Pages[page].Resources.Elements.GetDictionary("/XObject")?.Elements.Count ?? 0;
+    }
+
     private static InvoiceResponse Invoice(int lines) => new()
     {
         Id = 7,
@@ -140,5 +148,33 @@ public class DocumentPdfTests
             utc => utc.AddHours(3));
 
         Pages(ProjectReportPdf.Render(report, Head)).ShouldBe(1);
+
+        // the internal report stays plain; the summary the client gets has the company's mark
+        Pictures(ProjectReportPdf.Render(report, Head), 0).ShouldBe(0);
+        Pictures(ProjectReportPdf.Render(report with { Kind = ProjectReportKind.Client }, Head), 0).ShouldBe(2);
+    }
+
+    [Fact]
+    public void Every_page_the_client_gets_has_the_companys_mark_behind_it()
+    {
+        var billing = new BillingSettings { BankAccount = "ID InDetails SAL", BankName = "Bank Audi", Iban = "LB00 0000" };
+        var longInvoice = InvoicePdf.Render(Invoice(80), new DateOnly(2026, 9, 30), Head, billing);
+        Enumerable.Range(0, Pages(longInvoice)).ShouldAllBe(page => Pictures(longInvoice, page) == 2);
+
+        var longBoq = BoqPdf.Render(Boq(BoqKind.Client, BoqStatus.Draft, 120), new DateOnly(2026, 9, 30), Head);
+        Enumerable.Range(0, Pages(longBoq)).ShouldAllBe(page => Pictures(longBoq, page) == 2);
+        Pictures(BoqPdf.Render(Boq(BoqKind.Vo, BoqStatus.Draft, 3), new DateOnly(2026, 9, 30), Head), 0).ShouldBe(2);
+    }
+
+    [Fact]
+    public void A_client_boq_opens_with_a_welcome_to_the_client_and_its_project()
+    {
+        var document = Boq(BoqKind.Client, BoqStatus.Draft, 3);
+
+        BoqPdf.Welcome(document).ShouldBe(
+            "Dear Haddad Holdings, thank you for trusting us with your Site 12. "
+            + "This bill of quantities sets out the work we discussed, item by item, for your review.");
+        // the welcome doesn't push a short BOQ onto a second page
+        Pages(BoqPdf.Render(document, new DateOnly(2026, 9, 30), Head)).ShouldBe(1);
     }
 }

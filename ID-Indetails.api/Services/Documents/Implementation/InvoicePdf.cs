@@ -25,7 +25,7 @@ public static class InvoicePdf
     public static byte[] Render(InvoiceResponse invoice, DateOnly? issuedOn, Letterhead head, BillingSettings? billing, InvoiceProjectPosition? position = null)
     {
         var number = invoice.Number ?? "Draft";
-        var (document, section) = PdfLayout.NewDocument($"Invoice {number}", $"{head.CompanyName} · Invoice {number}");
+        var (document, section) = PdfLayout.NewDocument($"Invoice {number}", $"{head.CompanyName} · Invoice {number}", forClient: true);
         var stamp = invoice.VoidedAt is not null ? "VOID" : invoice.Number is null ? "DRAFT" : null;
         PdfLayout.AddLetterhead(section, head, "Invoice", number, stamp);
 

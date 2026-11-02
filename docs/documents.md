@@ -41,7 +41,7 @@ payment or TVA.
 
 ## What each document shows
 
-Every document opens with the company's letterhead (name, website and address from the company settings, and the logo when it is a PNG or JPEG). Every page ends with a footer line and "Page X of Y". Long tables run onto more pages and repeat their header row. Money is written in full (`$1,250.00`, `1,500,000 LBP`), and dates as `Sep 30, 2026` in the company time zone.
+Every document opens with the company's letterhead (name, website and address from the company settings, and the logo when it is a PNG or JPEG). Every page of what the client receives (invoices, quotes, client BOQs and VOs, and the client project summary) has the company's mark behind it (`PdfWatermark`): the split "0" of the logo in pale green, half of it at the middle of the right edge and a quarter of it in the bottom-left corner, both fading out from the page edge before the content. It is drawn once as a faded picture behind the text, which stays text. The internal project report has none. Every page ends with a footer line and "Page X of Y". Long tables run onto more pages and repeat their header row. Money is written in full (`$1,250.00`, `1,500,000 LBP`), and dates as `Sep 30, 2026` in the company time zone.
 
 - **Invoice:**
   - Billed to (`billToName` or the client, and `billToContact`), the project, the issue date and the due date.
@@ -50,6 +50,7 @@ Every document opens with the company's letterhead (name, website and address fr
   - Only client-facing fields are read: never rates, labour, hours, expenses, profit or margin.
 - **BOQ or VO:**
   - The company header, the client and project, the number, the date (the day it was agreed, or today for a draft) and the title; a VO also its reason. A draft is stamped DRAFT.
+  - A client BOQ opens, above its items, with a fixed welcome naming the client and the project: "Dear {client}, thank you for trusting us with your {project}. This bill of quantities sets out the work we discussed, item by item, for your review." A VO has none.
   - One row per line: its code, description, **final quantity** (the quantity plus waste), unit, rate and total. The exact quantity and the waste are never shown, in the PDF or the email.
   - Then the subtotal and the adjustment (only when there is one), the total, supervision (x%), TVA (y%) and the total to pay, from the same figures as `GET /api/boqs/{id}`. See [execution.md](execution.md#boqs-and-variation-orders).
 - **Project report** (Design projects only; an Execution site answers `422 not_for_this_domain`):
