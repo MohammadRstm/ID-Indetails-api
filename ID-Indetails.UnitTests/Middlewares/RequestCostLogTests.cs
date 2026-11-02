@@ -68,4 +68,19 @@ public class RequestCostLogTests
         scope.Single(f => f.Key == "PortalAccountId").Value.ShouldBe("7");
         scope.Single(f => f.Key == "UserId").Value.ShouldBeNull();
     }
+
+    [Fact]
+    public void Work_logging_after_its_request_ended_keeps_who_it_was_from_and_never_reads_the_reused_request()
+    {
+        var context = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthClaimTypes.UserId, "42")], "Bearer")),
+        };
+        var scope = new RequestLogScope(context);
+        scope.Complete();
+
+        // the server hands the same request object to someone else's request
+        context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthClaimTypes.UserId, "99")], "Bearer"));
+        scope.Single(f => f.Key == "UserId").Value.ShouldBe("42");
+    }
 }

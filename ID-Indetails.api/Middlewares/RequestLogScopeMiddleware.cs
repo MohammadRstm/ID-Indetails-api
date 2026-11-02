@@ -13,21 +13,56 @@ public sealed class RequestLogScopeMiddleware(RequestDelegate next, ILogger<Requ
 {
     public async Task InvokeAsync(HttpContext context)
     {
-        using (logger.BeginScope(new RequestLogScope(context)))
+        var scope = new RequestLogScope(context);
+        using (logger.BeginScope(scope))
         {
-            await next(context);
+            try
+            {
+                await next(context);
+            }
+            finally
+            {
+                scope.Complete();
+            }
         }
     }
 }
 
-/// <summary>The request's caller as log scope fields, read at the moment each line is written.</summary>
+/// <summary>
+/// The request's caller as log scope fields, read at the moment each line is written. Work the request started in the
+/// background carries the scope on after it ends, so it then keeps who it was from and lets go of the request: the
+/// server reuses that for the next one, which may be someone else's.
+/// </summary>
 public sealed class RequestLogScope(HttpContext context) : IReadOnlyList<KeyValuePair<string, object?>>
 {
-    private KeyValuePair<string, object?>[] Fields =>
-    [
-        new("UserId", context.User.FindFirst(AuthClaimTypes.UserId)?.Value),
-        new("PortalAccountId", context.User.FindFirst(AuthClaimTypes.PortalAccountId)?.Value),
-    ];
+    private HttpContext? _context = context;
+    private string? _userId;
+    private string? _portalAccountId;
+
+    /// <summary>The request is over: keep who it was from, and stop reading it.</summary>
+    public void Complete()
+    {
+        Read();
+        _context = null;
+    }
+
+    private void Read()
+    {
+        if (_context is { } request)
+        {
+            _userId = request.User.FindFirst(AuthClaimTypes.UserId)?.Value;
+            _portalAccountId = request.User.FindFirst(AuthClaimTypes.PortalAccountId)?.Value;
+        }
+    }
+
+    private KeyValuePair<string, object?>[] Fields
+    {
+        get
+        {
+            Read();
+            return [new("UserId", _userId), new("PortalAccountId", _portalAccountId)];
+        }
+    }
 
     public int Count => 2;
 
