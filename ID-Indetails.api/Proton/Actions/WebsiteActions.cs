@@ -14,7 +14,9 @@ namespace ID_Indetails.api.Proton.Actions;
 /*
  * The Website family: changes to the company's public website, which anyone on the internet sees. Every one is strong
  * (the user types a phrase), only on a turn the user typed, and the family is off until it is switched on
- * (Proton:Actions:Website). Pictures, the favicon and social links stay the person's own (ProtonCoverage).
+ * (Proton:Actions:Website). Adding a picture or setting the favicon needs a file from the person's own device, so they stay
+ * theirs (ProtonCoverage); the moving strip, a picture's description, removal and order, the order of lists, social links
+ * and removing the favicon are in WebsitePictureActions and WebsiteListActions.
  */
 
 public enum ProtonWebsiteStep
@@ -463,6 +465,38 @@ public sealed class ProposeWebsiteLocationTool(IWebsiteContentService content) :
 internal static class WebsiteText
 {
     public static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+
+    /// <summary>An address reaches everyone who opens the website: only one the user typed in this conversation (as the website link form requires).</summary>
+    public static void RequireTyped(string address, ProtonToolContext context)
+    {
+        if (!context.TypedText.Contains(address.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ProtonToolInputException("Use an address only when the user typed it in this conversation; ask them for the full https:// address.");
+        }
+    }
+
+    /// <summary>The card's lines for a new order: each item that moved, joined or left, with its place before and after.</summary>
+    public static IReadOnlyList<ProtonChange> OrderLines(IReadOnlyList<(long Id, string Name)> before, IReadOnlyList<(long Id, string Name)> after)
+    {
+        var was = before.Select((item, index) => (item.Id, Place: index + 1)).ToDictionary(x => x.Id, x => x.Place);
+        var lines = new List<ProtonChange>();
+        for (var index = 0; index < after.Count; index++)
+        {
+            var (id, name) = after[index];
+            if (!was.TryGetValue(id, out var place))
+            {
+                lines.Add(new ProtonChange(name, "not in it", $"position {index + 1}"));
+            }
+            else if (place != index + 1)
+            {
+                lines.Add(new ProtonChange(name, $"position {place}", $"position {index + 1}"));
+            }
+        }
+
+        var kept = after.Select(x => x.Id).ToHashSet();
+        lines.AddRange(before.Where(x => !kept.Contains(x.Id)).Select(x => new ProtonChange(x.Name, $"position {was[x.Id]}", "taken out")));
+        return lines;
+    }
 
     /// <summary>The project as its form would send it back unchanged: pictures, point and link included.</summary>
     public static WebsiteProjectRequest RequestOf(WebsiteProjectResponse p) => new()

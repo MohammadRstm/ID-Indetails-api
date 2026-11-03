@@ -13,13 +13,22 @@ public sealed record WebsiteProjectsInput
 {
     [Description("Only published ones (true) or only drafts (false). Leave out for all.")]
     public bool? Published { get; init; }
+
+    [Description("One website project's id: its row then also lists its pictures with their ids, to change or order them.")]
+    public long? WebsiteProjectId { get; init; }
 }
+
+/// <summary>One of a project's pictures: its id (to target a change) and the description read out to people who can't see it.</summary>
+public sealed record WebsitePictureRow(long Id, string Alt);
 
 /// <param name="Missing">What it still needs before it can be published.</param>
 /// <param name="StripPosition">Its place in the moving strip on the home page, if it is in it.</param>
+/// <param name="Gallery">Its gallery pictures in order, when one project was asked for.</param>
+/// <param name="ConceptPictures">Its concept pictures in order, when one project was asked for.</param>
 public sealed record WebsiteProjectRow(
     long Id, string Title, string Type, string? Status, int? Year, string? Client, string? Place, bool Published, int? StripPosition,
-    int Pictures, IReadOnlyList<string> Missing, string? LinkedProject, string Updated);
+    int Pictures, IReadOnlyList<string> Missing, string? LinkedProject, string Updated,
+    IReadOnlyList<WebsitePictureRow>? Gallery = null, IReadOnlyList<WebsitePictureRow>? ConceptPictures = null);
 
 public sealed record WebsiteProjectsList(int Count, int Published, int StripLimit, IReadOnlyList<WebsiteProjectRow> Projects);
 
@@ -32,7 +41,8 @@ public sealed class GetWebsiteProjectsTool(IWebsiteProjectService projects, IClo
 
     public override string Description =>
         "The projects on the company's public website (the Website area, not Design or Execution projects): title, type, " +
-        "status and year, client and place, published or draft and what a draft still needs, and the home page's moving strip.";
+        "status and year, client and place, published or draft and what a draft still needs, and the home page's moving strip. " +
+        "With website_project_id, that project's pictures with their ids.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<WebsiteController>(nameof(WebsiteController.Projects));
 
@@ -42,12 +52,14 @@ public sealed class GetWebsiteProjectsTool(IWebsiteProjectService projects, IClo
     {
         var list = await projects.ListAsync(cancellationToken);
         var rows = list.Projects
-            .Where(p => input.Published is null || p.Published == input.Published)
+            .Where(p => (input.Published is null || p.Published == input.Published) && (input.WebsiteProjectId is null || p.Id == input.WebsiteProjectId))
             .Select(p => new WebsiteProjectRow(
                 p.Id, p.Title, p.Type, p.ShownStatus is { } status ? System.Text.Json.JsonNamingPolicy.SnakeCaseLower.ConvertName(status.ToString()) : null, p.ShownYear, p.Client,
                 string.Join(", ", new[] { p.City, p.Country }.Where(s => !string.IsNullOrWhiteSpace(s))) is { Length: > 0 } place ? place : null,
                 p.Published, p.ConveyorOrder, p.Gallery.Count + p.ConceptImages.Count + (p.HeroFileId is null ? 0 : 1),
-                p.MissingToPublish, p.LinkedProject?.Title, clock.Local(p.UpdatedAt ?? p.CreatedAt)))
+                p.MissingToPublish, p.LinkedProject?.Title, clock.Local(p.UpdatedAt ?? p.CreatedAt),
+                input.WebsiteProjectId is null ? null : p.Gallery.Select(i => new WebsitePictureRow(i.Id, i.Alt)).ToList(),
+                input.WebsiteProjectId is null ? null : p.ConceptImages.Select(i => new WebsitePictureRow(i.Id, i.Alt)).ToList()))
             .ToList();
         var shown = rows.Take(Max).ToList();
         return new ProtonToolOutput(
@@ -58,9 +70,10 @@ public sealed class GetWebsiteProjectsTool(IWebsiteProjectService projects, IClo
 
 public sealed record WebsiteContentInput;
 
+/// <param name="SocialLinks">The footer's links in order, each with its id: the address is public on the website.</param>
 /// <param name="UnderConstruction">Since when the website shows its under-construction page, when it does.</param>
 public sealed record WebsiteContent(
-    IReadOnlyList<WebsiteServiceResponse> Services, IReadOnlyList<WebsiteLocationRow> Locations, IReadOnlyList<string> SocialLinks,
+    IReadOnlyList<WebsiteServiceResponse> Services, IReadOnlyList<WebsiteLocationRow> Locations, IReadOnlyList<WebsiteSocialLinkResponse> SocialLinks,
     string? ContactEmail, bool HasFavicon, string? UnderConstruction);
 
 public sealed record WebsiteLocationRow(long Id, string City, string Country, string Address, string Phone);
@@ -71,8 +84,9 @@ public sealed class GetWebsiteContentTool(IWebsiteContentService content, IClock
     public override string Name => "get_website_content";
 
     public override string Description =>
-        "What the company's public website says: its services, its offices (city, address, phone), the contact email, " +
-        "social links, and whether it is under construction.";
+        "What the company's public website says, in the order it shows it: its services, its offices (city, address, phone), " +
+        "the contact email, social links (name and address), whether it has a favicon, and whether it is under construction. " +
+        "Every item has the id to target a change at.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<WebsiteController>(nameof(WebsiteController.Projects));
 
@@ -84,7 +98,7 @@ public sealed class GetWebsiteContentTool(IWebsiteContentService content, IClock
         return new ProtonToolOutput(new WebsiteContent(
             shown.Services,
             shown.Locations.Select(l => new WebsiteLocationRow(l.Id, l.City, l.Country, l.Address, l.Phone)).ToList(),
-            shown.SocialLinks.Select(l => l.Label).ToList(),
+            shown.SocialLinks,
             shown.ContactEmail,
             shown.FaviconFileId is not null,
             clock.Local(shown.UnderConstructionSince)), []);
