@@ -3,6 +3,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Notifications;
 using ID_Indetails.api.Business.Push;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Messaging.Abstraction;
 using ID_Indetails.api.Repositories.Notifications.Abstraction;
@@ -16,10 +17,10 @@ using ID_Indetails.api.Services.Push.Abstraction;
 namespace ID_Indetails.api.Services.Push.Implementation;
 
 /// <summary>
-/// Everything is decided at send time, not when the push was queued: only phones whose session still has a valid
-/// refresh token receive anything, a deactivated person gets nothing, and a notification goes out only while its
-/// reader may still read it (the same check as the in-app list: <see cref="NotificationAccess"/> and the domains they
-/// see), unless the person muted its category. During their quiet hours a push is delivered silently on the
+/// Everything is decided at send time, not when the push was queued: only phones and browsers whose session still has
+/// a valid refresh token receive anything, a deactivated person gets nothing, and a notification goes out only while
+/// its reader may still read it (the same check as the in-app list: <see cref="NotificationAccess"/> and the domains
+/// they see), unless the person muted its category. During their quiet hours a push is delivered silently on the
 /// <c>quiet</c> channel.
 /// </summary>
 public sealed class PushDelivery(
@@ -77,7 +78,10 @@ public sealed class PushDelivery(
 
                 badge ??= await BadgeAsync(access, cancellationToken);
                 var full = job is not NotificationPushJob { Digest: true } || throttle.TakeFull(forPerson.Key, push.Data.Kind, now);
-                outgoing.AddRange(personPhones.Select(phone => (phone, Build(phone, push, badge.Value, quiet, full))));
+                // a browser shows every push it gets, so it gets no push that only updates the badge
+                outgoing.AddRange(personPhones
+                    .Where(phone => full || phone.Provider != PushProvider.WebPush)
+                    .Select(phone => (phone, Build(phone, push, badge.Value, quiet, full))));
             }
         }
 
@@ -189,5 +193,6 @@ public sealed class PushDelivery(
         Sound: full && !quiet,
         badge,
         quiet ? PushCategories.QuietChannel : PushCategories.ChannelOf(push.Data.Kind),
-        Quiet: quiet || !full);
+        Quiet: quiet || !full,
+        phone.Provider == PushProvider.WebPush ? new WebPushSubscription(phone.WebPushEndpoint!, phone.WebPushP256dh!, phone.WebPushAuth!) : null);
 }

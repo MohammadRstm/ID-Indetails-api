@@ -39,7 +39,7 @@ public sealed class DeviceService(
         var appVersion = string.IsNullOrWhiteSpace(request.AppVersion) ? null : request.AppVersion.Trim();
         await using (var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken))
         {
-            await devices.SaveAsync(currentUser.Id, sessionId, token, request.Platform!.Value, appVersion, now, cancellationToken);
+            await devices.SaveAsync(currentUser.Id, sessionId, token, request.Platform!.Value, appVersion, null, now, cancellationToken);
             await devices.DeleteOtherTokensOfSessionAsync(sessionId, token, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }

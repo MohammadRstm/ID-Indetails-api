@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Push;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 
@@ -11,7 +12,7 @@ public interface IUserDeviceRepository
 {
     /// <summary>
     /// Registers <paramref name="pushToken"/> for the person's session in one statement: a token registered before,
-    /// to anyone, moves to them.
+    /// to anyone, moves to them. A browser's comes with its <paramref name="webPush"/> subscription; a phone's goes through Expo.
     /// </summary>
     Task SaveAsync(
         long userId,
@@ -19,6 +20,7 @@ public interface IUserDeviceRepository
         string pushToken,
         DevicePlatform platform,
         string? appVersion,
+        WebPushSubscription? webPush,
         DateTime at,
         CancellationToken cancellationToken = default);
 
