@@ -27,7 +27,8 @@ public interface ISessionService
     /// <summary>
     /// Like <see cref="StartAsync(User, CancellationToken)"/>, for <paramref name="client"/>'s session
     /// <paramref name="sessionId"/>: a new one, or the next token of one being refreshed. A phone's token lasts
-    /// <c>MobileSession:RefreshTokenDays</c> and its access token carries the session id.
+    /// <c>MobileSession:RefreshTokenDays</c> and its access token carries the session id; the installed app's lasts
+    /// <c>RefreshToken:InstalledExpirationDays</c>.
     /// </summary>
     Task<AuthSession> StartAsync(User user, RefreshTokenClient client, Guid sessionId, CancellationToken cancellationToken = default);
 

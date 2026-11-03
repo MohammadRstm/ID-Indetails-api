@@ -39,12 +39,13 @@ public sealed class AuthService(
     public async Task<AuthSession> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         var user = await AuthenticateAsync(request, cancellationToken);
-        var session = await sessions.StartAsync(user, cancellationToken);
+        var client = request.InstalledApp ? RefreshTokenClient.Installed : RefreshTokenClient.Web;
+        var session = await sessions.StartAsync(user, client, Guid.NewGuid(), cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return session;
     }
 
-    public async Task<AuthSession> RefreshAsync(string? refreshCookieValue, CancellationToken cancellationToken = default)
+    public async Task<AuthSession> RefreshAsync(string? refreshCookieValue, bool installedApp, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(refreshCookieValue))
         {
@@ -55,7 +56,7 @@ public sealed class AuthService(
         var presented = await refreshTokens.GetByHashAsync(SecureTokens.Hash(refreshCookieValue), cancellationToken);
 
         // The phone's tokens follow their own rules (MobileRefreshAsync), never the cookie's.
-        if (presented is not { Client: RefreshTokenClient.Web })
+        if (presented is not { Client: RefreshTokenClient.Web or RefreshTokenClient.Installed })
         {
             throw SessionExpired();
         }
@@ -88,7 +89,8 @@ public sealed class AuthService(
         }
 
         user.LastSeenAt = now;
-        var session = await sessions.StartAsync(user, RefreshTokenClient.Web, presented.SessionId ?? Guid.NewGuid(), cancellationToken);
+        var client = RefreshTokenRules.NextWebClient(presented.Client, installedApp);
+        var session = await sessions.StartAsync(user, client, presented.SessionId ?? Guid.NewGuid(), cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await refreshTokens.SetReplacedByAsync(presented.Id, session.StoredRefreshToken.Id, cancellationToken);
 
@@ -104,9 +106,16 @@ public sealed class AuthService(
         }
 
         var token = await refreshTokens.GetByHashAsync(SecureTokens.Hash(refreshCookieValue), cancellationToken);
-        if (token is { RevokedAt: null, Client: RefreshTokenClient.Web })
+        if (token is { RevokedAt: null, Client: RefreshTokenClient.Web or RefreshTokenClient.Installed })
         {
+            await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
             await refreshTokens.TryRevokeAsync(token.Id, clock.UtcNow, RevokeReason.SignedOut, cancellationToken);
+            if (token.SessionId is { } sessionId)
+            {
+                await devices.DeleteSessionAsync(sessionId, cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
         }
     }
 
