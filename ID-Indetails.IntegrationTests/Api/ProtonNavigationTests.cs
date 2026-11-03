@@ -132,7 +132,7 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
             Result(request)["status"]!.GetValue<string>().ShouldBe("invalid", $"request {request}");
         }
 
-        Result(1)["message"]!.GetValue<string>().ShouldContain("My sites");
+        Result(1)["message"]!.GetValue<string>().ShouldContain("my_sites");
         Result(3)["message"]!.GetValue<string>().ShouldContain("Meetings tab");
         Result(4)["message"]!.GetValue<string>().ShouldContain("Meetings tab");
         staff.UiCommands.ShouldBe([new ProtonUiCommand(ProtonUiCommandType.OpenPage, "your profile", Domain: DomainCodes.Execution, Page: ProtonPage.MyProfile)]);
@@ -146,6 +146,47 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         await AskAsync(superAdmin, new { text = "Open my profile, then the site's expense form" });
         Result(1)["message"]!.GetValue<string>().ShouldContain("company_profile");
         Result(2)["message"]!.GetValue<string>().ShouldContain("only for design projects");
+    }
+
+    [Fact]
+    public async Task A_site_opens_on_its_parts_its_boqs_and_pocket_money_and_execution_has_its_own_pages()
+    {
+        var (superAdmin, _) = await PeopleAsync();
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 0);
+        var boq = await new BoqTestSteps(_steps).AgreeClientBoqAsync(superAdmin.AccessToken, site.Id, 1000m);
+        var other = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 0);
+        var elsewhere = await new BoqTestSteps(_steps).AgreeClientBoqAsync(superAdmin.AccessToken, other.Id, 500m);
+        var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+
+        async Task<ProtonUiCommand?> OpenAsync(AuthResponse who, string tool, object input)
+        {
+            api.Anthropic.Reset();
+            api.Anthropic.Reply(FakeAnthropic.ToolUse(tool, input), FakeAnthropic.Text("Opening it."));
+            return (await AskAsync(who, new { text = "Open it" })).UiCommands.SingleOrDefault();
+        }
+
+        (await OpenAsync(superAdmin, "open_record", new { type = "project", id = site.Id, section = "financials", part = "boqs" }))!
+            .ShouldBe(new ProtonUiCommand(ProtonUiCommandType.OpenProject, site.Title, site.Id, DomainCodes.Execution, ProtonProjectSection.Financials, Part: ProtonProjectPart.Boqs));
+        // without financial:view, the money's overview isn't theirs: the tab opens on its first part; its labour is everyone's
+        var overview = await OpenAsync(siteAdmin, "open_record", new { type = "project", id = site.Id, section = "financials", part = "overview" });
+        (overview!.Section, overview.Part).ShouldBe((ProtonProjectSection.Financials, null));
+        Result(1)["data"]!["note"]!.GetValue<string>().ShouldContain("first part");
+        (await OpenAsync(siteAdmin, "open_record", new { type = "project", id = site.Id, section = "financials", part = "labour" }))!.Part.ShouldBe(ProtonProjectPart.Labour);
+
+        // a BOQ opens on its own site only; the pocket money windows on a client site
+        (await OpenAsync(superAdmin, "open_surface", new { surface = "view_boq", id = site.Id, item_id = boq.Id }))!
+            .ShouldBe(new ProtonUiCommand(ProtonUiCommandType.OpenSurface, $"the BOQ for {site.Title}", site.Id, DomainCodes.Execution, Surface: ProtonSurface.ViewBoq, ItemId: boq.Id));
+        (await OpenAsync(superAdmin, "open_surface", new { surface = "view_boq", id = site.Id, item_id = elsewhere.Id })).ShouldBeNull();
+        Result(1)["status"]!.GetValue<string>().ShouldBe("not_found");
+        (await OpenAsync(superAdmin, "open_surface", new { surface = "to_pocket", id = site.Id }))!.Surface.ShouldBe(ProtonSurface.ToPocket);
+        (await OpenAsync(siteAdmin, "open_surface", new { surface = "ask_pocket", id = site.Id })).ShouldBeNull();
+        Result(1)["status"]!.GetValue<string>().ShouldBe("forbidden");
+
+        (await OpenAsync(superAdmin, "open_page", new { page = "pocket" }))!
+            .ShouldBe(new ProtonUiCommand(ProtonUiCommandType.OpenPage, "the pocket money", Domain: DomainCodes.Execution, Page: ProtonPage.Pocket));
+        (await OpenAsync(superAdmin, "open_page", new { page = "site_logs" }))!.Page.ShouldBe(ProtonPage.SiteLogs);
+        // a site staff member's own pages are no admin's
+        (await OpenAsync(superAdmin, "open_page", new { page = "daily_log" })).ShouldBeNull();
     }
 
     [Fact]
