@@ -136,6 +136,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddSingleton<ProtonVideoFrames>();
         services.AddSingleton<ProtonFileReader>();
         services.AddScoped<IProtonTool, GetProjectFilesTool>();
+        services.AddScoped<IProtonTool, GetFileCommentsTool>();
         services.AddScoped<IProtonTool, ReadProjectFileTool>();
         services.AddScoped<IProtonTool, GetPortalStatusTool>();
         services.AddScoped<IProtonTool, ReadDiscussionTool>();
@@ -220,6 +221,18 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeRestoreFileTool>();
         services.AddScoped<IProtonTool, ProposeCommentOnFileTool>();
         services.AddScoped<IProtonTool, ProposePortalStepTool>();
+        services.AddScoped<IProtonTool, ProposePortalInvitationTool>();
+        services.AddScoped<IProtonTool, ProposePortalEndAccessTool>();
+        services.AddScoped<IProtonTool, ProposePortalHeroesTool>();
+        services.AddScoped<IProtonTool, ProposePortalSummaryTool>();
+        services.AddScoped<IProtonTool, ProposeDiscussionPostTool>();
+        services.AddScoped<IProtonTool, ProposeDiscussionChangeTool>();
+        services.AddScoped<IProtonTool, ProposeMarkDiscussionReadTool>();
+        services.AddScoped<IProtonTool, ProposeReorderFilesTool>();
+        services.AddScoped<IProtonTool, ProposeFileForClientTool>();
+        services.AddScoped<IProtonTool, ProposeEditFileCommentTool>();
+        services.AddScoped<IProtonTool, ProposeSetCommentFixedTool>();
+        services.AddScoped<IProtonTool, ProposeDeleteFileCommentTool>();
 
         // The company's public website: all strong, typed turns only, in the Website family (off by default).
         services.AddScoped<IProtonTool, ProposeWebsiteProjectTool>();

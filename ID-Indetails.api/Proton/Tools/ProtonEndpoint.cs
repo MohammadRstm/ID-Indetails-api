@@ -37,7 +37,9 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
     /// <summary>
     /// Write endpoints with no permission of their own: changing the signed-in person's own name and phone, sending a
     /// message (which their service limits to the chats the sender may write in), marking their own chats and
-    /// notifications read, their own dashboard card order, and a bug report. proton:use is their policy here.
+    /// notifications read, their own dashboard card order, a bug report, and writing in, editing, deleting from or
+    /// reading the discussion with a project's client, which its service limits to the staff taking part in it.
+    /// proton:use is their policy here.
     /// </summary>
     public static readonly IReadOnlySet<string> RuleBasedWrites = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -45,6 +47,9 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
         "Messages.MarkDirectRead", "Messages.MarkTeamRead", "Messages.MarkAnnouncementsRead",
         "Notifications.MarkRead", "Notifications.MarkAllRead", "BugReports.Report",
         "BoardLayouts.Save", "BoardLayouts.Delete",
+        "ProjectPortalDiscussion.Send", "ProjectPortalDiscussion.Comment", "ProjectPortalDiscussion.EditMessage",
+        "ProjectPortalDiscussion.EditComment", "ProjectPortalDiscussion.DeleteMessage", "ProjectPortalDiscussion.DeleteComment",
+        "ProjectPortalDiscussion.Read",
     };
 
     /// <summary>A write endpoint from <see cref="RuleBasedWrites"/>: its service decides who it may reach.</summary>
