@@ -28,17 +28,28 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
     {
         "Messages.Contacts", "Messages.Conversations", "Notifications.List", "Teams.List",
         "Company.GetSettings", "DomainSettings.Get",
+        // the person's own saved card order for a dashboard
+        "BoardLayouts.Get",
         // the discussion with a client decides who takes part in it, from the project, never from a permission
         "ProjectPortalDiscussion.Messages",
     };
 
     /// <summary>
-    /// Write endpoints with no permission of their own: changing the signed-in person's own name and phone, and sending
-    /// a message, which their service limits to the chats the sender may write in. proton:use is their policy here.
+    /// Write endpoints with no permission of their own: changing the signed-in person's own name and phone, sending a
+    /// message (which their service limits to the chats the sender may write in), marking their own chats and
+    /// notifications read, their own dashboard card order, a bug report, and writing in, editing, deleting from or
+    /// reading the discussion with a project's client, which its service limits to the staff taking part in it.
+    /// proton:use is their policy here.
     /// </summary>
     public static readonly IReadOnlySet<string> RuleBasedWrites = new HashSet<string>(StringComparer.Ordinal)
     {
         "Profile.UpdateProfile", "Messages.SendDirect", "Messages.SendToTeam",
+        "Messages.MarkDirectRead", "Messages.MarkTeamRead", "Messages.MarkAnnouncementsRead",
+        "Notifications.MarkRead", "Notifications.MarkAllRead", "BugReports.Report",
+        "BoardLayouts.Save", "BoardLayouts.Delete",
+        "ProjectPortalDiscussion.Send", "ProjectPortalDiscussion.Comment", "ProjectPortalDiscussion.EditMessage",
+        "ProjectPortalDiscussion.EditComment", "ProjectPortalDiscussion.DeleteMessage", "ProjectPortalDiscussion.DeleteComment",
+        "ProjectPortalDiscussion.Read",
     };
 
     /// <summary>A write endpoint from <see cref="RuleBasedWrites"/>: its service decides who it may reach.</summary>

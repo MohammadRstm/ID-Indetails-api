@@ -42,6 +42,15 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .Select(e => new WorkEntryRules.Span(e.Id, e.StartedAt, e.EndedAt, e.Project.Title))
             .ToListAsync(cancellationToken);
 
+    public Task<IReadOnlyList<WorkEntryView>> DeletedViewsAsync(long userId, DateTime since, int count, CancellationToken cancellationToken = default)
+        => ViewsAsync(
+            db.WorkEntries
+                .Where(e => e.UserId == userId && e.DeletedAt != null && e.DeletedAt >= since && e.Project.DomainCode == DomainCodes.Design)
+                .OrderByDescending(e => e.DeletedAt)
+                .ThenByDescending(e => e.Id)
+                .Take(count),
+            cancellationToken);
+
     public async Task<WorkEntryView?> GetViewAsync(long id, CancellationToken cancellationToken = default)
         => (await ViewsAsync(db.WorkEntries.Where(e => e.Id == id && e.DeletedAt == null), cancellationToken)).SingleOrDefault();
 

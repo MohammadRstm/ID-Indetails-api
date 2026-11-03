@@ -11,6 +11,13 @@ public interface IWorkEntryQueryService
 
     Task<PagedResponse<WorkEntryResponse>> ListMineAsync(MyWorkEntryListQuery query, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The caller's own entries deleted lately (see <see cref="Implementation.WorkEntryQueryService.RestorableFor"/>), most
+    /// recently deleted first: the ones <see cref="IWorkEntryService.RestoreAsync"/> may bring back (<c>canEdit</c> says
+    /// whether it still may). The app lists none: it restores right after a delete.
+    /// </summary>
+    Task<IReadOnlyList<WorkEntryResponse>> ListMyDeletedAsync(CancellationToken cancellationToken = default);
+
     Task<WorkEntryDetailResponse> GetAsync(long id, CancellationToken cancellationToken = default);
 
     /// <summary>Everyone's matching entries as CSV, oldest first, ignoring paging.</summary>

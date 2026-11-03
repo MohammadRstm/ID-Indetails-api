@@ -197,7 +197,10 @@ public sealed class MessagingService(
         return await PageAsync(await messaging.AnnouncementsAsync(cancellationToken), query, cancellationToken);
     }
 
-    public async Task<MessageResponse> AnnounceAsync(SendMessageRequest request, CancellationToken cancellationToken = default)
+    public Task<MessageResponse> AnnounceAsync(SendMessageRequest request, CancellationToken cancellationToken = default)
+        => AnnounceAsync(request, null, cancellationToken);
+
+    public async Task<MessageResponse> AnnounceAsync(SendMessageRequest request, long? protonActionId, CancellationToken cancellationToken)
     {
         var me = await ViewerAsync(cancellationToken);
         MessagingRules.CheckMentions(request.MentionIds, null).ThrowIfDenied();
@@ -205,7 +208,7 @@ public sealed class MessagingService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var conversation = await messaging.AnnouncementsAsync(cancellationToken)
             ?? throw new InvalidOperationException("The Announcements chat is missing: the Announcements migration creates it.");
-        var message = await PostAsync(conversation, me.Id, request.Body, MessageKinds.Text, [], request.AttachmentIds, null, null, cancellationToken);
+        var message = await PostAsync(conversation, me.Id, request.Body, MessageKinds.Text, [], request.AttachmentIds, null, null, cancellationToken, protonActionId);
         await transaction.CommitAsync(cancellationToken);
 
         var everyone = (await messaging.ActivePeopleAsync(cancellationToken)).Select(p => p.Id).ToList();

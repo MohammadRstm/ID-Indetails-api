@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
@@ -313,6 +314,128 @@ public sealed class ProposeDeleteMyWorkTool(IWorkEntryQueryService queries, IWor
     {
         await workEntries.DeleteAsync(args.EntryId, cancellationToken);
         return new ProtonActionDone("Deleted the entry.", "work_entry", args.EntryId, []);
+    }
+}
+
+public sealed record RestoreMyWorkArgs(long EntryId);
+
+public sealed record RestoreMyWorkInput : ProtonActionInput
+{
+    [Description("One of the user's own deleted entries, from list_my_deleted_work.")]
+    public required long WorkEntryId { get; init; }
+}
+
+/// <summary>
+/// Brings back one of the user's own deleted work entries, through POST /api/work-entries/{id}/restore once confirmed.
+/// Only an entry the app would still restore (inside the edit window, an open month, a project that takes work); the
+/// app's overlap rule applies at Confirm.
+/// </summary>
+public sealed class ProposeRestoreMyWorkTool(IWorkEntryQueryService queries, IWorkEntryService workEntries, IMyTimeService myTime, IClock clock)
+    : ProtonActionTool<RestoreMyWorkInput, RestoreMyWorkArgs>
+{
+    public override string Name => "propose_restore_my_work";
+
+    public override string Description =>
+        "Propose bringing back one of the user's own deleted work entries (ids from list_my_deleted_work) while it can " +
+        "still be restored. Nothing changes until they confirm the card.";
+
+    public override ProtonActionRisk Risk => ProtonActionRisk.Low;
+
+    public override string? OnlyInDomain => DomainCodes.Design;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<WorkEntriesController>(nameof(WorkEntriesController.Restore));
+
+    protected override async Task<(RestoreMyWorkArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
+        RestoreMyWorkInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        // the person's own deleted entries only: anyone else's, or one that isn't deleted, reads as not found
+        var entry = (await queries.ListMyDeletedAsync(cancellationToken)).FirstOrDefault(e => e.Id == input.WorkEntryId)
+            ?? throw new NotFoundException("Not one of the user's deleted entries.");
+        if (!entry.CanEdit)
+        {
+            throw new ProtonToolInputException(
+                "That entry can't be restored any more: it is past the edit window, in a closed month, or on a project that no longer takes work.");
+        }
+
+        var note = await WorkText.OvertimeAsync(myTime, WorkText.RequestOf(entry), null, cancellationToken);
+        return (new RestoreMyWorkArgs(entry.Id),
+            new ProtonPreview("Restore your work entry",
+                [new ProtonChange("Entry", "deleted", $"{clock.Local(entry.StartedAt)}, {entry.Project.Title}: {ProtonText.Cut(entry.Description, 120)}")],
+                note),
+            new ProtonRef(ProtonRefType.Project, entry.Project.Id, entry.Project.Title, DomainCodes.Design));
+    }
+
+    protected override object? RequestOf(RestoreMyWorkArgs args) => null;
+
+    protected override async Task<ProtonActionDone> ExecuteAsync(RestoreMyWorkArgs args, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var entry = await workEntries.RestoreAsync(args.EntryId, cancellationToken);
+        return new ProtonActionDone($"Restored your entry on {entry.Project.Title}.", "work_entry", entry.Id, []);
+    }
+}
+
+public sealed record SetWorkEntryScopeArgs(long EntryId, bool OutsideScope);
+
+public sealed record SetWorkEntryScopeInput : ProtonActionInput
+{
+    [Description("Anyone's entry, from list_work_entries or get_work_entry.")]
+    public required long WorkEntryId { get; init; }
+
+    [Description("True to mark it as work outside the project's original scope (the client asked for more than was agreed); false to count it inside the scope again.")]
+    public required bool OutsideScope { get; init; }
+}
+
+/// <summary>
+/// An admin's correction of whether someone's entry is outside the project's original scope, through
+/// PUT /api/work-entries/{id}/scope once confirmed: after the edit window too, but never in a closed month.
+/// </summary>
+public sealed class ProposeSetWorkEntryScopeTool(IWorkEntryQueryService queries, IWorkEntryService workEntries, IClock clock)
+    : ProtonActionTool<SetWorkEntryScopeInput, SetWorkEntryScopeArgs>
+{
+    public override string Name => "propose_set_work_entry_scope";
+
+    public override string Description =>
+        "Propose marking someone's logged work entry as outside the project's original scope (work the client asked for " +
+        "beyond what was agreed), or back inside it. For people who see everyone's work. Nothing changes until the user " +
+        "confirms the card.";
+
+    public override ProtonActionRisk Risk => ProtonActionRisk.Low;
+
+    public override string? OnlyInDomain => DomainCodes.Design;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<WorkEntriesController>(nameof(WorkEntriesController.SetScope));
+
+    protected override async Task<(SetWorkEntryScopeArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
+        SetWorkEntryScopeInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var entry = (await queries.GetAsync(input.WorkEntryId, cancellationToken)).Entry;
+        WorkEntryRules.CheckOpenMonth(clock.CompanyDayStartUtc(WorkEntryRules.OpenFrom(clock.CompanyToday)), entry.StartedAt).ThrowIfDenied();
+        if (entry.OutsideScope == input.OutsideScope)
+        {
+            throw new ProtonToolInputException(input.OutsideScope ? "That entry is already marked as outside the scope." : "That entry is already inside the scope.");
+        }
+
+        var changes = new List<ProtonChange>
+        {
+            new("Entry", null, $"{entry.Person.Name}, {clock.Local(entry.StartedAt)}, {entry.Project.Title}: {ProtonText.Cut(entry.Description, 120)}"),
+            new("Scope", entry.OutsideScope ? "outside the original scope" : "inside the original scope", input.OutsideScope ? "outside the original scope" : "inside the original scope"),
+        };
+        return (new SetWorkEntryScopeArgs(entry.Id, input.OutsideScope),
+            new ProtonPreview(
+                input.OutsideScope ? $"Mark {entry.Person.Name}'s work as outside the scope" : $"Count {entry.Person.Name}'s work as inside the scope",
+                changes,
+                "The project's work page splits its hours by this. It's recorded in the activity feed."),
+            new ProtonRef(ProtonRefType.Project, entry.Project.Id, entry.Project.Title, DomainCodes.Design));
+    }
+
+    protected override object? RequestOf(SetWorkEntryScopeArgs args) => new SetWorkEntryScopeRequest { OutsideScope = args.OutsideScope };
+
+    protected override async Task<ProtonActionDone> ExecuteAsync(SetWorkEntryScopeArgs args, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var entry = await workEntries.SetScopeAsync(args.EntryId, new SetWorkEntryScopeRequest { OutsideScope = args.OutsideScope }, cancellationToken);
+        return new ProtonActionDone(
+            args.OutsideScope ? $"Marked the entry on {entry.Project.Title} as outside the scope." : $"Counted the entry on {entry.Project.Title} as inside the scope.",
+            "work_entry", entry.Id, []);
     }
 }
 

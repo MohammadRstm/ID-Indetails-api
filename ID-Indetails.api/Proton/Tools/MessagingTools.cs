@@ -101,8 +101,9 @@ public sealed record NotificationsInput
     public bool? UnreadOnly { get; init; }
 }
 
+/// <param name="Id">What propose_mark_notifications_read takes.</param>
 /// <param name="What">The kind of notification in words ("requirement assigned").</param>
-public sealed record NotificationRow(string What, string? From, ProtonNamed? Project, int Count, string When, bool Read);
+public sealed record NotificationRow(long Id, string What, string? From, ProtonNamed? Project, int Count, string When, bool Read);
 
 /// <summary>The user's own notifications, newest first: what happened, who did it, and on which project.</summary>
 public sealed class GetMyNotificationsTool(INotificationService notifications, IClock clock) : ProtonTool<NotificationsInput>
@@ -118,6 +119,7 @@ public sealed class GetMyNotificationsTool(INotificationService notifications, I
         var page = await notifications.ListAsync(new NotificationListQuery { UnreadOnly = input.UnreadOnly ?? true, PageSize = 15 }, cancellationToken);
         var rows = page.Items
             .Select(n => new NotificationRow(
+                n.Id,
                 n.Kind.Replace('_', ' ').Replace('.', ' '),
                 n.Actor?.Name,
                 n.Project is { } p ? new ProtonNamed(p.Id, p.Title) : null,
