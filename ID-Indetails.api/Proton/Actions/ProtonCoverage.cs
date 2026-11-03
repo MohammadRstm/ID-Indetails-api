@@ -66,8 +66,9 @@ public sealed record ProtonCoverageEntry(
 /// </summary>
 public static class ProtonCoverage
 {
-    private static ProtonCoverageEntry Action(string endpoint, string tool, ProtonTier tier = ProtonTier.Standard, ProtonFamily family = ProtonFamily.Core)
-        => new(endpoint, ProtonCoverageKind.Action, tier, family, tool);
+    private static ProtonCoverageEntry Action(
+        string endpoint, string tool, ProtonTier tier = ProtonTier.Standard, ProtonFamily family = ProtonFamily.Core, bool externalSend = false)
+        => new(endpoint, ProtonCoverageKind.Action, tier, family, tool, ExternalSend: externalSend);
 
     private static ProtonCoverageEntry Planned(string endpoint, ProtonTier tier, ProtonFamily family, bool externalSend = false)
         => new(endpoint, ProtonCoverageKind.Planned, tier, family, ExternalSend: externalSend);
