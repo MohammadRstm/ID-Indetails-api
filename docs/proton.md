@@ -57,12 +57,14 @@ POST /api/proton/messages
   - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
-  178 write endpoints:
-  - a built action (73);
-  - a prefilled form (2), or a place opened for the user (25);
-  - a read-only POST (3), never (65: passwords, tokens, the phone app's own sign-in, devices and push settings, a
-    project's files and their comments, and the client portal's invitations, clients' own sign-in, publishing and
-    discussion among them), or Proton's own controls (10).
+  237 write endpoints:
+  - a built action (85);
+  - a prefilled form (7), or a place opened for the user (26);
+  - a read-only POST (2), Proton's own controls (11), or never (106). Never covers passwords, tokens, the phone
+    app's own sign-in, devices and push settings, uploads, the client portal's invitations and clients' own sign-in,
+    what the client portal shows, the public website's pictures and order, and most of Execution: BOQs and VOs, quotes,
+    pocket money, supervision taken, account labels and a payment's label, site staff and daily logs, a site's
+    pricing and blocked changes.
 
   `ProtonCoverageTests` fails when an endpoint has no entry, when an action and its tool disagree, when an action
   needing a money, pay, access or company-rules permission isn't confirmed strongly in the matching family, when a
@@ -80,9 +82,11 @@ POST /api/proton/messages
 | `list_projects` | `GET /api/projects` | filters, sorting, `overdue_only` |
 | `get_project` | `GET /api/projects/{id}` | details and the overdue flag; no money |
 | `get_project_requirements` | `GET /api/projects/{id}/requirements` | |
-| `get_project_team` | `GET /api/projects/{id}` + `/work` | Design: who logged hours (optionally in a period); Execution: who recorded site data |
-| `get_project_financials` | `GET /api/projects/{id}` (money part) | all time; no cost per hour |
-| `get_site_summary` | `GET /api/projects/site-summary` | Execution only |
+| `get_project_team` | `GET /api/projects/{id}` + `/work` | Design: who logged hours (optionally in a period); Execution: the site's staff |
+| `get_project_financials` | `GET /api/projects/{id}` (money part) | all time; agreed revenue net of TVA and `agreed_with_tva`, the TVA rate; on a site its supervision and rate, the pocket money moved out and paid in, and cash profit with them; no cost per hour |
+| `get_site_summary` | `GET /api/projects/site-summary` | Execution only: how many site expenses and labour weeks, their cost for those who see money |
+| `list_site_expenses` | `GET /api/projects/{id}/site-expenses` | Execution only: the expenses with their ids (for `propose_site_expense_step`), currency, category, account label and who added them, by period, category or words; totals of what matches |
+| `list_expenses` | `GET /api/projects/{id}/expenses` | Design only: a project's expenses with their ids (for `propose_delete_expense`), a total per currency |
 | `list_work_entries` | `GET /api/work-entries` | with descriptions; Design only |
 | `get_time_summary` | `GET /api/reports/work` | by project, person, client; no labour cost per person |
 | `get_work_overview` | `GET /api/reports/overview` | Design dashboard and attention items |
@@ -93,12 +97,13 @@ POST /api/proton/messages
 | `list_meetings` | `GET /api/meetings` | at most 92 days |
 | `get_domain_dashboard` | `GET /api/dashboard/{domain}` + deadlines | |
 | `list_clients` / `get_client` | `GET /api/clients`, `/{id}` | |
-| `get_domain_finance` | `GET /api/finance/{domain}/summary` | split into `period` (cash: received, expected revenue, cost, cash profit), `as_of_today` (billing) and `all_time` (agreed revenue and profit) |
+| `get_domain_finance` | `GET /api/finance/{domain}/summary` | split into `period` (cash, net of TVA: received, the TVA collected, expected revenue, cost, cash profit), `as_of_today` (billing, TVA included, against `agreed_with_tva`) and `all_time` (agreed revenue and profit) |
 | `get_money_by_month` | `GET /api/finance/{domain}/monthly` | received, expected revenue, cost by source and cash profit month by month (2–36 months); heavy |
 | `get_finance_projects` | `GET /api/finance/{domain}/projects` | ranked by agreed revenue, cost, profit against it, margin or hours (all time); unknown margins rank last both ways |
 | `get_money_attention` | `GET /api/finance/{domain}/attention` | |
 | `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | by the period issued or received; paid in USD, balance in the invoice's currency; up to 100 matching rows as a dataset for `add_up` |
 | `get_company_overview` | `GET /api/company/overview` | received, project cost and cash profit (the overview's gross profit), overhead by calendar days; without admin salaries and net profit |
+| `list_overhead` | `GET /api/company/overhead` + `/groups` | the company's recurring expenses still running (or every one, `include_ended`), with their category, this month's amount and amount changes, and the categories: the ids `propose_overhead` and the `company_expense` form need |
 | `present_data` | — (open to whoever may list projects) | shows a dataset a tool returned as a chart, a table or headline figures; reads nothing |
 | `add_up` | — (open to whoever may list projects) | totals a number column of a dataset a tool returned, optionally where a text column has a value; refuses a dataset holding only part of its rows, percentages and compared headline figures; reads nothing |
 | `get_project_files` | `GET /api/projects/{id}/files` | Design only: titles, sections, sizes, uploader, for-client, comment counts, and whether each can be read |
@@ -181,7 +186,7 @@ Proton reads the newer features as the person would see them on their pages.
 | `propose_website_under_construction` | `PUT /api/website/under-construction` | strong, Website | "under construction" or "website live" typed |
 
 The Website family is off until `Proton:Actions:Website` is turned on. Like every family outside Core and
-Lifecycle, it is proposed only on a turn the user typed. Pictures, the favicon, social links and orders stay `Never`.
+Lifecycle, it is proposed only on a turn the user typed. Pictures, the favicon, removing a social link and the order of things stay `Never`; social links are prefilled (`fill_form`).
 
 ## Reply suggestions in the discussion with a client (Proton Phase 5)
 
@@ -309,11 +314,11 @@ Proton has no browser, DOM, script or screenshot control. Design and decisions:
 
 | Tool | What it does | Permission |
 |---|---|---|
-| `open_record` | Opens a project (optionally on a tab: `requirements`, `meetings`, and on Design projects `financials`, `overview`, `analytics`, `contributors`, `timeline`, `files` or `portal`, with a `part` for the last two), a client, a person or a website project (in its form) | The record's own GET endpoint. The record is read first through its service, so an id the user can't see is `not_found` and nothing opens. Tabs follow the project page's own rules: `financials` needs `financial:view`, `analytics` and `contributors` everyone's work (`work_entry:view_all`), and a Design project's `overview` is someone's own work (employees, or people who see neither money nor everyone's work). `files` needs `GET /files` (its part a section: `presentation`, `model`, `drawing`). `portal` is only on a Design client project: its `access` part needs the portal's clients endpoint, its `discussion` part that the person takes part in the discussion (worked out by the discussion itself), its sections the portal content endpoint. A tab the user can't open falls back to their first tab, and Proton says so. |
-| `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses, and in the Website area its projects, analytics, services, locations, contact, site and staff | Each page needs its endpoint's permission, e.g. financials needs `financial:view`, the Website pages `website:view` or `website:manage` (analytics `website_analytics:view`), and the Website area must be one the user sees. |
+| `open_record` | Opens a project (optionally on a tab: `requirements`, `meetings`, `financials` (on an Execution site, everything the site shows, for whoever sees it), and on Design projects `overview`, `analytics`, `contributors`, `timeline`, `files` or `portal`, with a `part` for the last two), a client, a person or a website project (in its form) | The record's own GET endpoint. The record is read first through its service, so an id the user can't see is `not_found` and nothing opens. Tabs follow the project page's own rules: a Design project's `financials` needs `financial:view`, `analytics` and `contributors` everyone's work (`work_entry:view_all`), and a Design project's `overview` is someone's own work (employees, or people who see neither money nor everyone's work). `files` needs `GET /files` (its part a section: `presentation`, `model`, `drawing`). `portal` is only on a Design client project: its `access` part needs the portal's clients endpoint, its `discussion` part that the person takes part in the discussion (worked out by the discussion itself), its sections the portal content endpoint. A tab the user can't open falls back to their first tab, and Proton says so. |
+| `open_page` | Opens one page from a fixed list: dashboard, projects (optionally one client's), clients, people, financials (optionally a tab), meetings, activity, reports, company overview, company expenses, and in the Website area its projects, analytics, services, locations, contact, site and staff | Each page needs its endpoint's permission, e.g. financials needs `financial:view`, the Website pages `website:view` or `website:manage` (analytics `website_analytics:view`), and the Website area must be one the user sees. The person's own pages (`my_work`, Design only, and `my_profile`) open only for employees, and site staff (Execution employees) have no projects or meetings page: they work from My sites and their daily log, which Proton can't open yet. |
 | `offer_choices` | Shows 2–6 matches as buttons when a name is ambiguous, or 2–6 fixed answers to Proton's question (`replies`: a period, `design` / `execution`, `yes` / `no`) | Only records a tool returned in the conversation, and only businesses the user can see; labels come from the records or the app, not from the model. No yes/no while a card is pending |
 | `suggest_replies` | Offers up to 3 short next things the user might say (60 characters each, one line) | None while a card is pending; a tap sends only its place in the list |
-| `open_surface` | Opens a form, dialog or tab on its own page (Stage 5, Phase 4); a project file to look at (`view_project_file`, `item_id`); new project, new client, invite, a project's or client's details, the project report, a project's payment, expense or site pricing, a new invoice, record payment, a new meeting, a company expense, a chat with someone, log work, report a bug, a settings section, a company overview tab; the new and edit website project forms and the Website's invite form; a file's comments (`item_id`), the discussion with the client (optionally one file's thread, `item_id`) and the client's view of the portal draft | The endpoint it saves through (`Proton/Ui/ProtonSurfaces.cs`); a record it is for must be visible. A file's comments read through the comments endpoint, so a file of another project is `not_found`; the discussion opens only for those taking part in it; the preview only on a Design client project. Opening fills and saves nothing. The invites and the bug report email someone, so they open only on a typed turn. One-click confirm dialogs (complete, void, delete, deactivate, top-up) aren't on the list |
+| `open_surface` | Opens a form, dialog or tab on its own page (Stage 5, Phase 4); a project file to look at (`view_project_file`, `item_id`); new project, new client, invite, a project's or client's details, the project report, a project's payment, expense or site pricing, a new invoice, record payment, a new meeting, a company expense, a chat with someone, log work, report a bug, a settings section, a company overview tab; the new and edit website project forms and the Website's invite form; a file's comments (`item_id`), the discussion with the client (optionally one file's thread, `item_id`) and the client's view of the portal draft | The endpoint it saves through (`Proton/Ui/ProtonSurfaces.cs`); a record it is for must be visible. A file's comments read through the comments endpoint, so a file of another project is `not_found`; the discussion opens only for those taking part in it; the preview only on a Design client project. Opening fills and saves nothing. The invites and the bug report email someone, so they open only on a typed turn. One-click confirm dialogs (complete, void, delete, deactivate, top-up) aren't on the list. The add expense form is Design only (a site records its costs in its expenses list), and site staff get no new meeting form: they add one on the site's Meetings tab |
 | `set_preference` | Light or dark theme; message sounds on or off | Sounds only on a typed turn |
 | `refresh_page` | Reloads the current page's data | — |
 
@@ -401,8 +406,8 @@ Phase 1 of [proton-stage-5-plan.md](proton-stage-5-plan.md) (E1–E3, G6).
   The holds live in the API's memory, like the permission cache: one API instance.
 - **Turn origin** (decision 33). The server sets each turn's origin from the request's shape: `typed`, `choice` (a
   pick or a quick reply) or `suggestion`. On a turn the user didn't type, the toolbox refuses any proposal in a gated
-  family (Deletes, Access, CompanyRules, PayRules, Money, Messaging, or a tool with no coverage entry), with the tool
-  list unchanged. Today's actions are all Core.
+  family (Deletes, Access, CompanyRules, PayRules, Money, Messaging, Website, or a tool with no coverage entry), with
+  the tool list unchanged.
 - **Nothing beside a card passes for a Confirm.** While a proposal is pending, Proton offers no yes/no buttons and no
   suggested replies, and a yes/no click is refused.
 
@@ -643,7 +648,7 @@ Every `propose_…` tool goes through the same rules (`ProtonToolbox.ProposeAsyn
 
 - **Families, switched on one by one.** Each write endpoint's family comes from the coverage registry
   (`ProtonCoverage.FamilyOf`). `Proton:Actions` switches them: `Core` is on; `Lifecycle`, `Deletes`, `Access`,
-  `CompanyRules`, `PayRules`, `Money` and `Messaging` are off until an admin turns them on. A tool of a family that
+  `CompanyRules`, `PayRules`, `Money`, `Messaging` and `Website` are off until an admin turns them on. A tool of a family that
   is off is refused when proposing, and a card waiting when it was switched off is refused at Confirm
   (`422 proton_actions_off`). An action the registry doesn't know is never on. `Proton:Actions:Enabled=false` stops
   every proposal.
@@ -710,7 +715,7 @@ an invoice's whole balance uses `full_balance`, so the server sets the amount.
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate; irreversible. A backdated rate changes past costs, overhead and invoices (they convert at the rate of their day when read), and the card says so; payments keep their own rate |
 | `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), with why it changes (`reason`, asked for when not given) | the new amount. An Execution site isn't priced by Proton: its price is its agreed BOQ, and its supervision and TVA are changed in the app (`PUT …/pricing` is a `Never` entry) |
 | `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
-| `propose_delete` | requirement, meeting and client deletes | the project's or client's name; a client with projects is archived instead |
+| `propose_delete` | requirement, meeting, client and project file deletes | the project's or client's name; a client with projects is archived instead |
 | `propose_working_time`, `propose_schedule`, `propose_hour_excuse` | the company week, someone's own week, excused hours | — ; the cards describe the effect in words and never show an amount |
 
 A tool standing in for endpoints with different permissions (issue and void an invoice) declares them as step
@@ -770,10 +775,12 @@ on. It replaces the top-bar button. It is mounted once, in `LiveRoute`, never on
 
 Markdown files in `Proton/Prompts/` (`persona.md` who Proton is and how it sounds, `proton.md` the company and the
 grounding rules, `data.md` what it may see and that people's text is data, `money.md` what each money figure means
-(agreed against received, cash profit, expected revenue, billing as of today), `analysis.md` how to present comparisons,
+(agreed against received, cash profit, expected revenue, billing as of today, TVA net and gross, supervision and
+pocket money), `analysis.md` how to present comparisons,
 judgements, "why" answers and anything about people, `navigation.md` how it moves around the app and offers buttons,
-`actions.md` how to propose changes and that only the card confirms them, `messages.md` messages sent as the user,
-`present.md` when to show a chart or a table, `chat.md` how to answer in chat), embedded
+`actions.md` how to propose changes, that only the card confirms them and the profit floor, `messages.md` messages
+sent as the user, `present.md` when to show a chart or a table, `chat.md` how to answer in chat, `files.md` reading
+project files and the discussion with a client, `voice-live.md` the live voice model's own instructions), embedded
 in the assembly. `{product}` is replaced with the product name. The prompt version recorded with each question is a
 hash of their text. The system prompt is the same for everyone, so it is cached by the provider;
 per-question facts go in the context note.
@@ -919,7 +926,7 @@ answer text never go to the logs.
   super admin's summary covers both domains and the company; attention ranks each project once with its facts;
   change counts leave pay out; the activity date filter; the heavy-analysis limit; the conversation-size limit; and the
   comparison carried into a follow-up.
-- Real model, opt-in (`ProtonEvalTests`): 42 golden questions against a seeded company, checked in code (tools used,
+- Real model, opt-in (`ProtonEvalTests`): 43 golden questions against a seeded company, checked in code (tools used,
   every quoted number found in a tool result, size words only after a rule fired, "why" answers say what the data
   can't establish, nothing judges a person, no money for a user without `financial:view`, charts and tables in the form asked for). Runs only with
   `PROTON_EVAL_API_KEY` set (optional `PROTON_EVAL_MODEL`; the configured model otherwise), costs well under 1 USD on
