@@ -108,6 +108,9 @@ public interface IWorkEntryRepository
     /// <summary>The person's live entries overlapping [from, to). Not tracked.</summary>
     Task<IReadOnlyList<WorkEntryRules.Span>> SpansAsync(long userId, DateTime from, DateTime to, CancellationToken cancellationToken = default);
 
+    /// <summary>The person's Design entries deleted since <paramref name="since"/>, most recently deleted first. Not tracked.</summary>
+    Task<IReadOnlyList<WorkEntryView>> DeletedViewsAsync(long userId, DateTime since, int count, CancellationToken cancellationToken = default);
+
     /// <summary>A live entry. Not tracked.</summary>
     Task<WorkEntryView?> GetViewAsync(long id, CancellationToken cancellationToken = default);
 

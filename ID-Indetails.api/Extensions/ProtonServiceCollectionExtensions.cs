@@ -81,6 +81,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ListWorkEntriesTool>();
         services.AddScoped<IProtonTool, GetWorkEntryTool>();
         services.AddScoped<IProtonTool, ListMyWorkTool>();
+        services.AddScoped<IProtonTool, ListMyDeletedWorkTool>();
+        services.AddScoped<IProtonTool, GetMyBoardLayoutTool>();
         services.AddScoped<IProtonTool, ListTeamsTool>();
         services.AddScoped<IProtonTool, GetCompanySettingsTool>();
         services.AddScoped<IProtonTool, GetDomainSettingsTool>();
@@ -180,6 +182,14 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeCompanySettingsTool>();
         services.AddScoped<IProtonTool, ProposeDomainSettingsTool>();
         services.AddScoped<IProtonTool, ProposeSendMessageTool>();
+        services.AddScoped<IProtonTool, ProposeMarkChatReadTool>();
+        services.AddScoped<IProtonTool, ProposeMarkNotificationsReadTool>();
+        services.AddScoped<IProtonTool, ProposeSendAnnouncementTool>();
+        services.AddScoped<IProtonTool, ProposeReportBugTool>();
+        services.AddScoped<IProtonTool, ProposeCreateGeneralMeetingTool>();
+        services.AddScoped<IProtonTool, ProposeRestoreMyWorkTool>();
+        services.AddScoped<IProtonTool, ProposeSetWorkEntryScopeTool>();
+        services.AddScoped<IProtonTool, ProposeArrangeBoardTool>();
         services.AddScoped<IProtonTool, ProposeLogWorkTool>();
         services.AddScoped<IProtonTool, ProposeUpdateMyWorkTool>();
         services.AddScoped<IProtonTool, ProposeDeleteMyWorkTool>();

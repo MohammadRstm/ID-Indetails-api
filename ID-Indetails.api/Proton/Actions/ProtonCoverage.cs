@@ -159,7 +159,7 @@ public static class ProtonCoverage
         Action("Meetings.Create", "propose_schedule_meeting"),
         Action("Meetings.Update", "propose_update_meeting"),
         Action("Meetings.Delete", "propose_delete", T2, ProtonFamily.Deletes),
-        Planned("Meetings.CreateGeneral", T1, ProtonFamily.Core),
+        Action("Meetings.CreateGeneral", "propose_create_general_meeting"),
         Action("Clients.Create", "propose_create_client"),
         Action("Clients.Update", "propose_update_client"),
         Action("Clients.Archive", "propose_set_client_archived"),
@@ -170,12 +170,12 @@ public static class ProtonCoverage
         Action("WorkEntries.Create", "propose_log_work"),
         Action("WorkEntries.Update", "propose_update_my_work"),
         Action("WorkEntries.Delete", "propose_delete_my_work"),
-        Planned("WorkEntries.Restore", T1, ProtonFamily.Core),
-        Planned("WorkEntries.SetScope", T1, ProtonFamily.Core),
+        Action("WorkEntries.Restore", "propose_restore_my_work"),
+        Action("WorkEntries.SetScope", "propose_set_work_entry_scope"),
         Action("WorkEntries.AddComment", "propose_comment_work_entry"),
-        Planned("BoardLayouts.Save", T1, ProtonFamily.Core),
+        Action("BoardLayouts.Save", "propose_arrange_board"),
         // a person's own board layout: a preference, not a record
-        Planned("BoardLayouts.Delete", T1, ProtonFamily.Core),
+        Action("BoardLayouts.Delete", "propose_arrange_board"),
         Open("Files.Upload", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
 
         // Project expenses (Design) and an Execution site's costs
@@ -257,13 +257,13 @@ public static class ProtonCoverage
         // Messages and notifications
         Action("Messages.SendDirect", "propose_send_message", T2, ProtonFamily.Messaging),
         Action("Messages.SendToTeam", "propose_send_message", T2, ProtonFamily.Messaging),
-        Planned("Messages.MarkDirectRead", T1, ProtonFamily.Core),
-        Planned("Messages.MarkTeamRead", T1, ProtonFamily.Core),
-        Planned("Messages.MarkAnnouncementsRead", T1, ProtonFamily.Core),
-        Planned("Messages.SendAnnouncement", T2, ProtonFamily.Messaging),
-        Planned("Notifications.MarkRead", T1, ProtonFamily.Core),
-        Planned("Notifications.MarkAllRead", T1, ProtonFamily.Core),
-        Planned("BugReports.Report", T2, ProtonFamily.Messaging, externalSend: true),
+        Action("Messages.MarkDirectRead", "propose_mark_chat_read"),
+        Action("Messages.MarkTeamRead", "propose_mark_chat_read"),
+        Action("Messages.MarkAnnouncementsRead", "propose_mark_chat_read"),
+        Action("Messages.SendAnnouncement", "propose_send_announcement", T2, ProtonFamily.Messaging),
+        Action("Notifications.MarkRead", "propose_mark_notifications_read"),
+        Action("Notifications.MarkAllRead", "propose_mark_notifications_read"),
+        Action("BugReports.Report", "propose_report_bug", T2, ProtonFamily.Messaging, externalSend: true),
 
         // Sign-in and setup: passwords and sign-in addresses are typed on their own forms, never in a chat
         Elsewhere("Auth.Login", "signing in happens before there is a session for Proton to run in"),
