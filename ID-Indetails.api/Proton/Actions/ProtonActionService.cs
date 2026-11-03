@@ -56,6 +56,15 @@ public sealed class ProtonActionService(
                 $"You've confirmed {settings.MaxConfirmedActionsPerHour} of my changes in the last hour. Try again a bit later, or make it in the app.");
         }
 
+        // emails to people outside the company: Proton calls the service, so this cap stands in for the endpoint's own limit
+        if (ProtonCoverage.SendsOutside(action.Tool)
+            && await actions.CountDoneSinceAsync(userId, ProtonCoverage.SendingTools, clock.CompanyDayStartUtc(clock.CompanyToday), cancellationToken)
+                >= settings.MaxExternalSendsPerDay)
+        {
+            throw new BusinessRuleException(ErrorCodes.ProtonActionLimit,
+                $"I've sent {settings.MaxExternalSendsPerDay} emails outside the company for you today. Send more from the app.");
+        }
+
         // the typed phrase is the one the server stored with the proposal, never one the client sends along
         if (Preview(action) is { Confirm: ProtonConfirm.Typed, Phrase: { } phrase }
             && !string.Equals(request.Typed?.Trim(), phrase.Trim(), StringComparison.OrdinalIgnoreCase))

@@ -262,6 +262,13 @@ public sealed class ProtonActionOptions
     [Range(1, 500)]
     public int MaxMessagesPerDay { get; init; } = 20;
 
+    /// <summary>
+    /// Emails sent outside the company per person per company day (invoices, BOQs, quotes, invitations, bug reports):
+    /// Proton calls the services, not the rate-limited endpoints, so this stands in for their limit.
+    /// </summary>
+    [Range(1, 500)]
+    public int MaxExternalSendsPerDay { get; init; } = 20;
+
     public bool IsOn(Proton.Actions.ProtonFamily family) => Enabled && family switch
     {
         Proton.Actions.ProtonFamily.Core => true,

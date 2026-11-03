@@ -36,6 +36,10 @@ public sealed class ProtonActionRepository(IdIndetailsDbContext db) : IProtonAct
         => db.ProtonActions.CountAsync(a => a.UserId == userId && a.Tool == tool && a.CreatedAt >= since.AddHours(-1) && a.DecidedAt >= since
             && (a.Status == ProtonActionStatus.Executing || a.Status == ProtonActionStatus.Succeeded), cancellationToken);
 
+    public Task<int> CountDoneSinceAsync(long userId, IReadOnlyCollection<string> tools, DateTime since, CancellationToken cancellationToken = default)
+        => db.ProtonActions.CountAsync(a => a.UserId == userId && tools.Contains(a.Tool) && a.CreatedAt >= since.AddHours(-1) && a.DecidedAt >= since
+            && (a.Status == ProtonActionStatus.Executing || a.Status == ProtonActionStatus.Succeeded), cancellationToken);
+
     public async Task<IReadOnlyList<ProtonAction>> MineAsync(long userId, int take, CancellationToken cancellationToken = default)
         => await db.ProtonActions.AsNoTracking().Where(a => a.UserId == userId).OrderByDescending(a => a.CreatedAt).Take(take).ToListAsync(cancellationToken);
 

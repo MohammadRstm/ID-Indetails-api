@@ -182,5 +182,8 @@ public class ProtonCoverageTests
 
         ProtonCoverage.Entries.Where(e => e.ExternalSend && e.Kind is ProtonCoverageKind.Action or ProtonCoverageKind.Planned)
             .ShouldAllBe(e => e.Tier == ProtonTier.Strong);
+        // a tool that emails someone does nothing else, so the daily cap counts it whole
+        ProtonCoverage.Entries.Where(e => e.Tool is not null).GroupBy(e => e.Tool)
+            .ShouldAllBe(g => g.All(e => e.ExternalSend) || g.All(e => !e.ExternalSend));
     }
 }

@@ -90,6 +90,12 @@ public static class ProtonCoverage
     public static bool NeedsTypedTurn(string tool)
         => FamilyOf(tool) is not (ProtonFamily.Core or ProtonFamily.Lifecycle);
 
+    /// <summary>Whether a built action emails someone outside the company. Such a tool does nothing else, so it counts whole.</summary>
+    public static bool SendsOutside(string tool) => Entries.Any(e => e.Tool == tool && e.ExternalSend);
+
+    /// <summary>Every built action that emails someone outside the company: their daily count is capped together.</summary>
+    public static IReadOnlyList<string> SendingTools => Entries.Where(e => e.ExternalSend && e.Tool is not null).Select(e => e.Tool!).Distinct().ToList();
+
     /// <summary>The family a built action belongs to; null for a tool with no entry, which no switch turns on.</summary>
     public static ProtonFamily? FamilyOf(string tool) => Entries.FirstOrDefault(e => e.Tool == tool)?.Family;
 
