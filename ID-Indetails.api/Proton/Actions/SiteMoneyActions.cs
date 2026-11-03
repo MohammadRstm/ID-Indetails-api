@@ -278,7 +278,7 @@ public sealed record SiteExpenseStepInput : ProtonActionInput
 {
     public required long ProjectId { get; init; }
 
-    [Description("From the site's expenses list.")]
+    [Description("From list_site_expenses.")]
     public required long ExpenseId { get; init; }
 
     [Description("update its details, or delete it.")]
@@ -314,8 +314,8 @@ public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses)
     protected override async Task<(SiteExpenseArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         SiteExpenseStepInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var expense = (await siteExpenses.ListAsync(input.ProjectId, new SiteExpenseListQuery { PageSize = 200 }, cancellationToken)).Items
-            .FirstOrDefault(m => m.Id == input.ExpenseId) ?? throw new NotFoundException("Expense not found.");
+        var expense = await SiteExpenseText.FindAsync(siteExpenses, input.ProjectId, input.ExpenseId, cancellationToken)
+            ?? throw new NotFoundException("Expense not found.");
         if (!expense.CanEdit)
         {
             throw new ProtonToolInputException("It is not the user's to change, or the site is closed.");
@@ -375,8 +375,7 @@ public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses)
         if (args.Entry is { } entry)
         {
             // the card showed the expense as it was: if it changed since, this would put back what someone else changed
-            var current = (await siteExpenses.ListAsync(args.ProjectId, new SiteExpenseListQuery { PageSize = 200 }, cancellationToken)).Items
-                .FirstOrDefault(m => m.Id == args.ExpenseId);
+            var current = await SiteExpenseText.FindAsync(siteExpenses, args.ProjectId, args.ExpenseId!.Value, cancellationToken);
             if (current is null || args.Before is null || SiteExpenseText.EntryOf(current) != args.Before)
             {
                 throw new BusinessRuleException(ErrorCodes.ProtonActionStale, "The expense changed since Proton proposed this. Ask again.");
@@ -394,6 +393,14 @@ public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses)
 
 internal static class SiteExpenseText
 {
+    /// <summary>
+    /// One of the site's expenses, however old: the service lists them all in memory (latest added first) and pages after,
+    /// so a page this size holds every one of them.
+    /// </summary>
+    public static async Task<SiteExpenseResponse?> FindAsync(ISiteExpenseService siteExpenses, long projectId, long expenseId, CancellationToken cancellationToken)
+        => (await siteExpenses.ListAsync(projectId, new SiteExpenseListQuery { PageSize = int.MaxValue }, cancellationToken)).Items
+            .FirstOrDefault(m => m.Id == expenseId);
+
     /// <summary>An expense as the update request carries it: quantity and unit cost when it has them, otherwise its total; the rest as it is.</summary>
     public static SiteExpenseEntryRequest EntryOf(SiteExpenseResponse m) => new()
     {
@@ -440,7 +447,7 @@ public sealed record SubmitLabourWeekInput : ProtonActionInput
     [Description("An Execution site.")]
     public required long ProjectId { get; init; }
 
-    [Description("The first day of the week (the company's week start).")]
+    [Description("The week's Monday: a site week runs Monday to Saturday, whatever the company's week start.")]
     public required DateOnly WeekStart { get; init; }
 
     [Description("Each day worked, as the user gave it. The week's days replace any reported before.")]

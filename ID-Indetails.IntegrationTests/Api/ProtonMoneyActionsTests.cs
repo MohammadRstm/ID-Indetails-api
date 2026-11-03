@@ -54,6 +54,16 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         return (await response.ReadAsync<ProtonReplyResponse>(), result);
     }
 
+    /// <summary>What a read tool gives the model: the ids a card needs come from here, not from the app.</summary>
+    private async Task<JsonNode> ReadAsync(AuthResponse who, string tool, object input)
+    {
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse(tool, input), FakeAnthropic.Text("Here they are."));
+        var response = await Client.PostJsonAsync("/api/proton/messages", new { text = "Show me them." }, who.AccessToken);
+        response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+        return JsonNode.Parse(api.Anthropic.ToolResults(1).Single()["content"]!.GetValue<string>())!["data"]!;
+    }
+
     private async Task<ProtonActionOutcomeResponse> ConfirmAsync(AuthResponse who, ProtonReplyResponse reply, string? typed = null)
     {
         var card = reply.PendingAction.ShouldNotBeNull();
@@ -174,6 +184,11 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
                 new { items = new[] { new { name = "Cement", quantity = 10m, unit = "bag", unitCost = 12m, supplier = "Holcim", note = "Grey", category = "materials", spentOn = "2026-09-20" } } }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var cement = (await GetAsync<SiteExpenseListResponse>(superAdmin, expenses)).Items.ShouldHaveSingleItem();
+        // the model finds the expense, and its id, through list_site_expenses
+        var listed = (await ReadAsync(superAdmin, "list_site_expenses", new { project_id = site.Id }))["expenses"]!.AsArray().ShouldHaveSingleItem()!;
+        listed["id"]!.GetValue<long>().ShouldBe(cement.Id);
+        listed["cost"]!.GetValue<decimal>().ShouldBe(120m);
+        listed["can_edit"]!.GetValue<bool>().ShouldBeTrue();
 
         var (fix, _) = await ProposeAsync(superAdmin, "propose_site_expense_step",
             new { project_id = site.Id, expense_id = cement.Id, step = "update", expense = new { quantity = 12m } }, "It was 12 bags");
@@ -243,6 +258,8 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         expense.PendingAction!.Preview.Phrase.ShouldBe("320.5");
         await ConfirmAsync(superAdmin, expense, "320.5");
         var recorded = (await GetAsync<ExpenseListResponse>(superAdmin, $"/api/projects/{project.Id}/expenses")).Items.ShouldHaveSingleItem();
+        (await ReadAsync(superAdmin, "list_expenses", new { project_id = project.Id }))["expenses"]!.AsArray().ShouldHaveSingleItem()!["id"]!
+            .GetValue<long>().ShouldBe(recorded.Id);
         var (remove, _) = await ProposeAsync(superAdmin, "propose_delete_expense", new { project_id = project.Id, expense_id = recorded.Id });
         await ConfirmAsync(superAdmin, remove, "320.5");
         (await GetAsync<ExpenseListResponse>(superAdmin, $"/api/projects/{project.Id}/expenses")).Items.ShouldBeEmpty();
@@ -252,8 +269,14 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         var (rent, _) = await ProposeAsync(superAdmin, "propose_overhead", new { step = "add", name, group_id = group.Id, amount = 1800m }, "Add the studio rent, 1,800 a month");
         await ConfirmAsync(superAdmin, rent, "1800");
         var line = (await GetAsync<OverheadResponse>(superAdmin, "/api/company/overhead")).Lines.Single(l => l.Name == name);
+        var overhead = await ReadAsync(superAdmin, "list_overhead", new { });
+        overhead["categories"]!.AsArray().Select(c => c!["id"]!.GetValue<long>()).ShouldContain(group.Id);
+        overhead["expenses"]!.AsArray().Single(e => e!["name"]!.GetValue<string>() == name)!["id"]!.GetValue<long>().ShouldBe(line.Id);
         var (cancel, _) = await ProposeAsync(superAdmin, "propose_overhead", new { step = "cancel", id = line.Id });
         await ConfirmAsync(superAdmin, cancel, name);
+        // cancelled, it still runs to the end of the month and can be resumed, so it is still listed
+        (await ReadAsync(superAdmin, "list_overhead", new { }))["expenses"]!.AsArray().Single(e => e!["name"]!.GetValue<string>() == name)!["ended_on"]
+            .ShouldNotBeNull();
 
         // a client with projects is archived, not deleted; one without is deleted with its name typed
         var used = project.Client!;

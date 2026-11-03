@@ -292,7 +292,7 @@ public sealed record CompanyExpenseFill
 {
     public string? Name { get; init; }
 
-    [Description("A category id from get_company_expenses.")]
+    [Description("A category id from list_overhead.")]
     public long? GroupId { get; init; }
 
     [ProtonMoney]
