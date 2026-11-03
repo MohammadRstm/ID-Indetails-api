@@ -104,6 +104,48 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         money.Note.ShouldContain("opens on its first tab");
         (await OpenAsync(superAdmin, project.Id, "overview")).Opened.ShouldBeNull();
         (await OpenAsync(superAdmin, site.Id, "analytics")).Opened.ShouldBeNull();
+
+        // everything a site shows is a part of its Financials tab, open to whoever sees the site; a site has no overview
+        var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        (await OpenAsync(siteAdmin, site.Id, "financials")).Opened.ShouldBe(ProtonProjectSection.Financials);
+        (await OpenAsync(superAdmin, site.Id, "overview")).Opened.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Nobody_is_sent_to_a_page_or_form_they_dont_have()
+    {
+        var (superAdmin, _) = await PeopleAsync();
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var (_, _, siteStaff) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+
+        // site staff work from My sites and their daily log: no projects or meetings page, no My work, no meeting form
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("open_page", new { page = "my_work" }),
+            FakeAnthropic.ToolUse("open_page", new { page = "projects" }),
+            FakeAnthropic.ToolUse("open_surface", new { surface = "new_meeting" }),
+            FakeAnthropic.ToolUse("fill_form", new { form = "meeting", meeting = new { topic = "Site walk" } }),
+            FakeAnthropic.ToolUse("open_page", new { page = "my_profile" }),
+            FakeAnthropic.Text("Opening your profile."));
+        var staff = await AskAsync(siteStaff, new { text = "Open my work" });
+        for (var request = 1; request <= 4; request++)
+        {
+            Result(request)["status"]!.GetValue<string>().ShouldBe("invalid", $"request {request}");
+        }
+
+        Result(1)["message"]!.GetValue<string>().ShouldContain("My sites");
+        Result(3)["message"]!.GetValue<string>().ShouldContain("Meetings tab");
+        Result(4)["message"]!.GetValue<string>().ShouldContain("Meetings tab");
+        staff.UiCommands.ShouldBe([new ProtonUiCommand(ProtonUiCommandType.OpenPage, "your profile", Domain: DomainCodes.Execution, Page: ProtonPage.MyProfile)]);
+
+        // an admin's own profile is the company area's; a site records its costs in its expenses, not the expense form
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("open_page", new { page = "my_profile" }),
+            FakeAnthropic.ToolUse("open_surface", new { surface = "add_project_expense", id = site.Id }),
+            FakeAnthropic.Text("I can't open those."));
+        await AskAsync(superAdmin, new { text = "Open my profile, then the site's expense form" });
+        Result(1)["message"]!.GetValue<string>().ShouldContain("company_profile");
+        Result(2)["message"]!.GetValue<string>().ShouldContain("only for design projects");
     }
 
     [Fact]

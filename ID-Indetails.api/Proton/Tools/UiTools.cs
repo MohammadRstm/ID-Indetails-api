@@ -43,8 +43,9 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
 
     public override string Description =>
         "Open a project, client, person or website project in the app for the user (\"take me to…\", \"open…\", \"show me " +
-        "its requirements\"). Use the id from find. Projects can open on a tab: requirements or meetings, and on Design " +
-        "projects financials (its money), analytics (charts of its work), contributors (who worked on it and how much), " +
+        "its requirements\"). Use the id from find. Projects can open on a tab: requirements, meetings or financials (on " +
+        "a Design project its money; on an Execution site everything about the site, its expenses, labour, BOQs, payments, " +
+        "supervision and staff, for whoever sees the site), and on Design projects analytics (charts of its work), contributors (who worked on it and how much), " +
         "timeline (its history as a calendar), files (the project's files, optionally one section) or portal (what its " +
         "client sees in the client portal, who of them has access, and the discussion with them). Opening needs no other " +
         "lookup; only read data too if the user also asked a question about it.";
@@ -77,10 +78,11 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
         var access = context.Access;
         return section switch
         {
-            ProtonProjectSection.Financials => design && access.Has(PermissionCodes.FinancialView),
+            // everything a site shows is a part of its Financials tab, open to everyone who sees the site
+            ProtonProjectSection.Financials => !design || access.Has(PermissionCodes.FinancialView),
             // a Design project's overview is the person's own work: those who see money or everyone's work have their own tabs
-            ProtonProjectSection.Overview => !design || access.Has(PermissionCodes.WorkEntryViewOwn)
-                || (!access.Has(PermissionCodes.FinancialView) && !access.Has(PermissionCodes.WorkEntryViewAll)),
+            ProtonProjectSection.Overview => design && (access.Has(PermissionCodes.WorkEntryViewOwn)
+                || (!access.Has(PermissionCodes.FinancialView) && !access.Has(PermissionCodes.WorkEntryViewAll))),
             ProtonProjectSection.Analytics or ProtonProjectSection.Contributors => design && await context.CanCallAsync(ProjectWork),
             ProtonProjectSection.Requirements => await context.CanCallAsync(Requirements),
             ProtonProjectSection.Timeline => design && await context.CanCallAsync(Timeline),
@@ -160,6 +162,16 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
 
     private static ProtonEndpoint WebsiteRead => ProtonEndpoint.Of<WebsiteController>(nameof(WebsiteController.Projects));
 
+    /// <summary>The person's own pages: only employees have them (an admin's profile is the company area's).</summary>
+    private static readonly IReadOnlySet<ProtonPage> EmployeePages = new HashSet<ProtonPage> { ProtonPage.MyWork, ProtonPage.MyProfile };
+
+    /// <summary>Pages an employee has only in Design: site staff work from My sites and their daily log instead.</summary>
+    private static readonly IReadOnlySet<ProtonPage> EmployeeDesignPages = new HashSet<ProtonPage> { ProtonPage.Projects, ProtonPage.Meetings, ProtonPage.MyWork };
+
+    /// <summary>An employee outside Design (site staff), who has no projects or meetings page, no My work and no new meeting form.</summary>
+    internal static bool EmployeeOutsideDesign(ProtonToolContext context, string? domain)
+        => context.Access.Role == RoleCodes.Employee && domain != DomainCodes.Design;
+
     /// <summary>The pages of the Website area: only for those who see the website, as its area is.</summary>
     internal static readonly IReadOnlySet<ProtonPage> WebsiteArea = new HashSet<ProtonPage>
     {
@@ -173,7 +185,7 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
         "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people, financials " +
         "(optionally a tab), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
         "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
-        "start page; for employees their own my_work and my_profile (they don't see their pay); in the Website area (the company's public " +
+        "start page; for employees their own my_work (Design) and my_profile (they don't see their pay); in the Website area (the company's public " +
         "website) its projects, analytics, services, locations, contact (email and social links), site (favicon, under " +
         "construction, watermark check) and staff. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
 
@@ -209,6 +221,17 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
                 ?? throw new Exceptions.Base.NotFoundException("Not found.");
             domain = client.Domain;
             label = $"{client.Name}'s projects";
+        }
+
+        if (EmployeePages.Contains(input.Page) && context.Access.Role != RoleCodes.Employee)
+        {
+            throw new ProtonToolInputException($"{label} is an employee's page. An admin's own profile is company_profile.");
+        }
+
+        if (EmployeeDesignPages.Contains(input.Page) && EmployeeOutsideDesign(context, domain))
+        {
+            throw new ProtonToolInputException(
+                $"Site staff don't have {label}: they work from My sites and their daily log, which can't be opened from here. Open one of their sites with open_record.");
         }
 
         var command = new ProtonUiCommand(
@@ -428,6 +451,10 @@ public sealed class OpenSurfaceTool(
     ProtonRecords records, ProtonPortalTab portal, IProjectFileCommentService fileComments, IPortalDiscussionService discussion)
     : ProtonTool<OpenSurfaceInput>
 {
+    /// <summary>Site staff have no meetings page: they add a meeting on the site's own Meetings tab.</summary>
+    internal const string MeetingOnSite =
+        "Site staff add a meeting on the site's Meetings tab, not in a form opened from here: open the site there with open_record, or propose the meeting on a card.";
+
     public override string Name => "open_surface";
 
     public override string Description =>
@@ -472,6 +499,11 @@ public sealed class OpenSurfaceTool(
         if (spec.OnlyIn is { } only && domain != only)
         {
             throw new ProtonToolInputException(only == DomainCodes.Website ? $"{spec.Label} is in the Website area." : $"{spec.Label} is only for {only} projects.");
+        }
+
+        if (input.Surface == ProtonSurface.NewMeeting && OpenPageTool.EmployeeOutsideDesign(context, domain))
+        {
+            throw new ProtonToolInputException(MeetingOnSite);
         }
 
         var itemId = await ItemOfAsync(input, record, context, cancellationToken);
@@ -781,6 +813,8 @@ public sealed class FillFormTool(
                 }
 
                 break;
+            case ProtonForm.Meeting when OpenPageTool.EmployeeOutsideDesign(context, OpenPageTool.HomeDomain(context)):
+                throw new ProtonToolInputException(OpenSurfaceTool.MeetingOnSite);
             case ProtonForm.Meeting when input.Meeting!.ProjectId is { } meetingProject:
                 _ = await ProjectAsync(meetingProject, context, cancellationToken);
                 break;
