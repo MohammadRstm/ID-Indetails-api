@@ -222,6 +222,11 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeUnderConstructionTool>();
         services.AddScoped<IProtonTool, ProposeWebsiteServiceTool>();
         services.AddScoped<IProtonTool, ProposeWebsiteLocationTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteConveyorTool>();
+        services.AddScoped<IProtonTool, ProposeWebsitePictureTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteOrderTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteSocialLinkTool>();
+        services.AddScoped<IProtonTool, ProposeRemoveWebsiteFaviconTool>();
         services.AddScoped<IProtonTool, ProposeChangeProjectStatusTool>();
         services.AddScoped<IProtonTool, ProposeUpdateProjectTool>();
         services.AddScoped<IProtonTool, ProposeCreateProjectTool>();
