@@ -112,9 +112,12 @@ services:
       Proton__Actions__Website: ${PROTON_ACTIONS_WEBSITE:-false}
       Proton__Voice__Enabled: ${PROTON_VOICE_ENABLED:-false}
       Proton__Voice__ApiKey: ${PROTON_VOICE_API_KEY:-}
-      # Pushes to the phone app: off unless switched on; Expo's access token is optional (docs/notifications.md).
+      # Pushes to the phone app and browsers: off unless switched on; Expo's access token is optional, and browsers get
+      # pushes once the VAPID key pair is set (docs/notifications.md).
       Push__Enabled: ${PUSH_ENABLED:-false}
       Push__Expo__AccessToken: ${EXPO_ACCESS_TOKEN:-}
+      Push__WebPush__PublicKey: ${WEB_PUSH_PUBLIC_KEY:-}
+      Push__WebPush__PrivateKey: ${WEB_PUSH_PRIVATE_KEY:-}
       # Client portal files live in a private Cloudflare R2 bucket (docs/content-storage.md).
       ContentStore__Provider: R2
       ContentStore__R2__AccountId: ${R2_ACCOUNT_ID:?}

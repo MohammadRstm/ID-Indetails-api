@@ -26,6 +26,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | TVA per project (net revenue, gross billing) and quotes | [billing.md](billing.md), [documents.md](documents.md) | #159 |
 | Profit floor: changes that take a client project to zero profit are refused, forced or dismissed; profit warnings | [projects.md](projects.md#profit-floor), [notifications.md](notifications.md) | #160 |
 | The phone app's API: 30-day mobile sessions, push devices, pushes and reminders, notification settings, duplicate-safe offline expenses and labour weeks | [authentication.md](authentication.md#mobile-sessions), [notifications.md](notifications.md#pushes), [me.md](me.md#my-devices), [execution.md](execution.md) | `MR-Mobile-Api` |
+| Pushes to browsers and the installed app (Web Push), and the installed app's 30-day sessions | [notifications.md](notifications.md#browsers-web-push), [authentication.md](authentication.md#the-installed-app) | `MR-Web-Push` |
 
 The tests: 369 unit tests and 297 integration tests against real MySQL. The integration run takes about 4 minutes ([local-development.md](local-development.md#tests)).
 

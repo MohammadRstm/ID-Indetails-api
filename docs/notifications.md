@@ -109,18 +109,18 @@ A new deadline gets a new key, so moving a requirement's deadline warns again. P
 
 ## Pushes
 
-The phone app gets pushes for every notification and every chat message, and two reminders of its own. The bell and the in-app list are unchanged.
+The phone app gets pushes for every notification and every chat message, and two reminders of its own. So does the website, in a browser or installed on a phone, once the person turns notifications on for that device ([Browsers](#browsers-web-push)). The bell and the in-app list are unchanged.
 
 ### How a push goes out
 
 1. **Staged.** `NotificationSender` (all three send methods), the work digest of `WorkLogNotifier`, and `MessagingService` (team, direct and task-comment messages) stage pushes in `IPushQueue`, next to the live signals.
 2. **Queued once committed.** `LiveUpdatesMiddleware` hands a request's pushes to an in-process queue only once it has succeeded; a failed request queues none. The scheduled checks and the invoice jobs queue theirs after their work.
 3. **Checked again and sent.** `Jobs/PushDispatcher` decides everything at send time (`Services/Push/Implementation/PushDelivery`):
-   - only phones whose session still has a valid refresh token receive anything (devices are tied to the phone app's session, see [me.md](me.md#my-devices));
+   - only phones and browsers whose session still has a valid refresh token receive anything (devices are tied to their session, see [me.md](me.md#my-devices));
    - a deactivated person gets nothing;
    - a notification goes out only while its reader may still read it: the same check as the list (the domains they see and `NotificationAccess`), so someone who lost `financial:view` gets no money pushes. One already read isn't pushed;
    - a muted category sends nothing; during quiet hours the push arrives silently.
-4. **Provider.** `ExpoPushProvider` sends through Expo's push service, 100 messages a request. It is the only part that knows Expo. Every 15 minutes `Jobs/PushReceiptsJob` checks the receipts, and a device Expo reports as `DeviceNotRegistered` (at sending or in its receipt) is deleted.
+4. **Provider.** `PushRouter` sends each push through its device's service. `ExpoPushProvider` sends the phone app's through Expo's push service, 100 messages a request; every 15 minutes `Jobs/PushReceiptsJob` checks the receipts, and a device Expo reports as `DeviceNotRegistered` (at sending or in its receipt) is deleted. `WebPushProvider` sends the browsers' ([Browsers](#browsers-web-push)).
 
 Queued pushes live in memory: one queued when the API stops is lost, but the notification row and the in-app list are not. One API instance, as for the live connection.
 
@@ -134,7 +134,7 @@ Queued pushes live in memory: one queued when the API stops is lost, but the not
 | `badge` | Unread notifications (as the bell counts them) plus unread messages |
 | `channelId` | The Android channel: the category below, `reminders` for the log reminder, `quiet` during quiet hours |
 
-A rolling digest (`work_digest`, `requirements_added`) pushes in full at most once an hour per person; the updates in between only refresh the badge (no text, no sound).
+A rolling digest (`work_digest`, `requirements_added`) pushes in full at most once an hour per person; the updates in between only refresh the badge (no text, no sound). Browsers don't get those updates, since a browser shows every push it gets.
 
 ### Categories, mutes and quiet hours
 
@@ -150,6 +150,17 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 
 `log_reminder` has no category, so it can't be muted. Each person chooses their own quiet hours and muted categories ([me.md](me.md#my-notification-settings)); until they do, quiet hours are 22:00 to 07:00 in the company's time zone and nothing is muted. A push during quiet hours is still delivered, without sound, on the `quiet` channel (passive on iOS); nothing waits on the server.
+
+### Browsers (Web Push)
+
+The website gets the phone app's pushes, with the same text, data and checks, through the browser's own push service: Google's (Chrome, most Android browsers), Apple's (Safari, and the app installed on an iPhone, iOS 16.4 or later), Mozilla's (Firefox) or Microsoft's (Edge). It is meant to replace the phone app.
+
+- **Turning it on.** The person turns on "Notifications on this device" in their notification settings; the browser asks permission and subscribes with the server's public key (`GET /api/auth/web-push`, null while browsers get no pushes). The app registers the subscription with `PUT /api/auth/web-push` and stops it with `DELETE /api/auth/web-push`. On an iPhone this only works in the installed app.
+- **Its session.** These endpoints sit under `/api/auth` because the refresh cookie, sent only there, names the browser's session: the subscription is a device of that session, the caller's own and still live, and its pushes end with it, as a phone's do. Signing out deletes it. The installed app's sessions last 30 days since last use ([authentication.md](authentication.md#the-installed-app)), so its pushes keep coming while it isn't opened.
+- **One subscription, one device.** Its push token is the endpoint's SHA-256 (`Business/Push/WebPushEndpoints.cs`); a subscription registered by someone else moves to the caller, as an Expo token does.
+- **Only push services.** The API posts to the address the browser registered, so it accepts only the four push services' hosts over HTTPS (`WebPushEndpoints.IsAllowed`), checks again when sending, and never follows a redirect.
+- **Sending.** `WebPushProvider` encrypts each push to its browser (RFC 8291, `aes128gcm`, so the push service can't read it) and signs for it with the server's VAPID key (RFC 8292), both with .NET's own cryptography (`WebPushCrypto`). The push service keeps a push for an offline browser for a day (`TTL`); quiet pushes are sent with normal urgency and marked quiet, so the app shows them without sound where the browser allows it (Safari doesn't). A `404` or `410` means the browser unsubscribed: the device is deleted. There are no receipts.
+- **What the browser gets.** `{ title, body, data, badge, quiet }`, where `data` is the phone's. The client's service worker (`src/sw.ts`) shows it and, when tapped, opens the page `data.target` names.
 
 ### Reminders
 
@@ -168,4 +179,8 @@ The timing rules are in `Business/Push/ReminderRules.cs`.
 |---|---|---|
 | `Push:Enabled` | `false` | Nothing is queued or sent while off. `PUSH_ENABLED` in the server's `.env` |
 | `Push:Expo:AccessToken` | empty | **Secret.** Expo's access token ("enhanced push security"). User secrets locally, `EXPO_ACCESS_TOKEN` in the server's `.env`. Without it, pushes are sent unauthenticated |
+| `Push:WebPush:PublicKey` | empty | The VAPID public key (base64url) browsers subscribe with. `WEB_PUSH_PUBLIC_KEY` in the server's `.env` |
+| `Push:WebPush:PrivateKey` | empty | **Secret.** The VAPID private key (base64url). User secrets locally, `WEB_PUSH_PRIVATE_KEY` in the server's `.env`. Browsers get no pushes, and aren't offered them, until both keys are set; the API won't start with half a pair or two halves that don't match |
 | `Push:DeviceCleanupEnabled` | `true` | The daily removal of devices whose session ended. Integration tests switch it off |
+
+The VAPID key pair is made once, for example with `npx web-push generate-vapid-keys`, and then never changed: push services tie every subscription to the public key, so a new pair means everyone turns their notifications on again. The `sub` of the VAPID signature is `Frontend:BaseUrl`, the site's address.
