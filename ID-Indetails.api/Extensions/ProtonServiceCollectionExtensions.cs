@@ -100,8 +100,19 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetMoneyAttentionTool>();
         services.AddScoped<IProtonTool, ListInvoicesTool>();
         services.AddScoped<IProtonTool, ListPaymentsTool>();
+        services.AddScoped<IProtonTool, GetInvoiceTool>();
+        services.AddScoped<IProtonTool, ListQuotesTool>();
         services.AddScoped<IProtonTool, ListExpensesTool>();
         services.AddScoped<IProtonTool, ListSiteExpensesTool>();
+        // An Execution site's BOQs, labour, daily logs and account, and the pocket money
+        services.AddScoped<IProtonTool, ListBoqsTool>();
+        services.AddScoped<IProtonTool, GetBoqTool>();
+        services.AddScoped<IProtonTool, GetLabourTool>();
+        services.AddScoped<IProtonTool, ListSiteLogsTool>();
+        services.AddScoped<IProtonTool, ListMySiteLogsTool>();
+        services.AddScoped<IProtonTool, ListMySitesTool>();
+        services.AddScoped<IProtonTool, GetSiteAccountTool>();
+        services.AddScoped<IProtonTool, GetPocketMoneyTool>();
         services.AddScoped<IProtonTool, GetCompanyOverviewTool>();
         services.AddScoped<IProtonTool, ListOverheadTool>();
 

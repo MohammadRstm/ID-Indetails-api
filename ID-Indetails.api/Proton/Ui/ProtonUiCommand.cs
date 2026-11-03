@@ -48,6 +48,11 @@ public enum ProtonPage
     Launcher,
     MyWork,
     MyProfile,
+    // Execution's own pages: the pocket money and everyone's daily logs (admins), a site staff member's daily log and sites
+    Pocket,
+    SiteLogs,
+    DailyLog,
+    MySites,
     // the Website area: the company's public website, for those who may see it
     WebsiteProjects,
     WebsiteAnalytics,
@@ -98,6 +103,12 @@ public enum ProtonSurface
     InviteWebsiteStaff,
     /// <summary>A project file opened to look at, on the project's files tab (its item id in <c>ItemId</c>).</summary>
     ViewProjectFile,
+    /// <summary>A BOQ or variation order opened in its editor, on its site (its id in <c>ItemId</c>).</summary>
+    ViewBoq,
+    /// <summary>The window that moves some of a site's money into the pocket money.</summary>
+    ToPocket,
+    /// <summary>The window that asks the pocket money for money for a site.</summary>
+    AskPocket,
 }
 
 public enum ProtonSettingsSection
@@ -110,6 +121,8 @@ public enum ProtonSettingsSection
     Teams,
     Admins,
     Data,
+    /// <summary>The account labels payments and site expenses are filed under.</summary>
+    Labels,
 }
 
 public enum ProtonCompanyTab
@@ -145,8 +158,9 @@ public enum ProtonProjectSection
 }
 
 /// <summary>
-/// A part of a project's files or client portal tab: a section of the files (presentation, model, drawing), and on the
-/// portal tab also who has access and the discussion.
+/// A part of a project's tab: on the files tab a section of the files (presentation, model, drawing), on the portal tab
+/// also who has access and the discussion, and on an Execution site's financials tab one of its parts (its money's
+/// overview, client payments, accounts, BOQs, supervision, expenses, ground labour, staff).
 /// </summary>
 public enum ProtonProjectPart
 {
@@ -155,6 +169,14 @@ public enum ProtonProjectPart
     Drawing,
     Access,
     Discussion,
+    Overview,
+    Payments,
+    Accounts,
+    Boqs,
+    Supervision,
+    Expenses,
+    Labour,
+    Staff,
 }
 
 public enum ProtonFinancialsTab
@@ -198,7 +220,8 @@ public sealed record ProtonUiCommand(
     public static ProtonUiCommand Open(ProtonRef record, ProtonProjectSection? section = null, ProtonProjectPart? part = null) => record.Type switch
     {
         ProtonRefType.Project => new(ProtonUiCommandType.OpenProject, record.Name, record.Id, record.Domain,
-            section is ProtonProjectSection.Overview ? null : section, Part: section is ProtonProjectSection.Files or ProtonProjectSection.Portal ? part : null),
+            section is ProtonProjectSection.Overview ? null : section,
+            Part: section is ProtonProjectSection.Files or ProtonProjectSection.Portal || (section is ProtonProjectSection.Financials && record.Domain == Constants.DomainCodes.Execution) ? part : null),
         ProtonRefType.Client => new(ProtonUiCommandType.OpenClient, record.Name, record.Id, record.Domain),
         ProtonRefType.Person => new(ProtonUiCommandType.OpenPerson, record.Name, record.Id, record.Domain),
         // a website project opens in its own form, on the Website's projects page

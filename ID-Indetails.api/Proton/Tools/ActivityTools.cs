@@ -166,7 +166,9 @@ public sealed record MeetingsInput
 }
 
 /// <param name="Project">Null for a general meeting, which is about no project.</param>
-public sealed record MeetingRow(long Id, ProtonNamed? Project, string Starts, string Ends, int Minutes, string? Topic, string? Description, string? SetBy);
+/// <param name="Attendees">A general meeting's people; a project meeting has none.</param>
+public sealed record MeetingRow(
+    long Id, ProtonNamed? Project, string Starts, string Ends, int Minutes, string? Topic, string? Description, string? SetBy, IReadOnlyList<string> Attendees);
 
 public sealed record MeetingList(DateOnly From, DateOnly To, int Total, IReadOnlyList<MeetingRow> Meetings);
 
@@ -196,7 +198,8 @@ public sealed class ListMeetingsTool(IMeetingService meetings, IClock clock) : P
             m.Minutes,
             ProtonText.Cut(m.Topic, 200),
             ProtonText.Cut(m.Description, 300),
-            m.CreatedBy?.Name)).ToList();
+            m.CreatedBy?.Name,
+            m.Attendees.Select(a => a.Name).ToList())).ToList();
         return new ProtonToolOutput(
             new MeetingList(range.From, range.To, list.Count, rows),
             rows.Where(r => r.Project is not null).Select(r => new ProtonRef(ProtonRefType.Project, r.Project!.Id, r.Project.Name)).Distinct().ToList(),

@@ -5,11 +5,15 @@ using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.DTO.Request.Expenses;
 using ID_Indetails.api.DTO.Request.Labour;
+using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Request.SiteExpenses;
+using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.SiteExpenses;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Services.Billing.Abstraction;
+using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Labour.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
@@ -164,6 +168,9 @@ public sealed record SiteExpenseInput
 
     [Description("The day it was spent. Default today.")]
     public DateOnly? SpentOn { get; init; }
+
+    [Description("The account label to file it under, by its name as the user gave it. Leave out for none.")]
+    public string? AccountLabel { get; init; }
 }
 
 /// <summary>A change to a site expense: only the fields the user named; the rest stay as they are.</summary>
@@ -191,6 +198,12 @@ public sealed record SiteExpenseChangeInput
     public SiteExpenseCategory? Category { get; init; }
 
     public DateOnly? SpentOn { get; init; }
+
+    [Description("USD or LBP: the currency its cost is in.")]
+    public string? Currency { get; init; }
+
+    [Description("The account label to file it under, by its name. An empty string removes it.")]
+    public string? AccountLabel { get; init; }
 }
 
 /// <param name="Before">For an update: the expense as the card was made from it. If it changed since, the update is refused.</param>
@@ -204,6 +217,9 @@ public sealed record AddSiteExpensesInput : ProtonActionInput
 
     [Description("Up to 20 expenses, each as the user gave it.")]
     public required IReadOnlyList<SiteExpenseInput> Items { get; init; }
+
+    [Description("USD (the default) or LBP: the currency of every expense on this card. An LBP expense needs an exchange rate in force on its day.")]
+    public string? Currency { get; init; }
 }
 
 /// <summary>
@@ -211,7 +227,9 @@ public sealed record AddSiteExpensesInput : ProtonActionInput
 /// /api/projects/{id}/site-expenses once confirmed. They are costs only: nothing is charged to the client. The user types
 /// the total cost.
 /// </summary>
-public sealed class ProposeAddSiteExpensesTool(IProjectService projects, ISiteExpenseService siteExpenses) : ProtonActionTool<AddSiteExpensesInput, SiteExpenseArgs>
+public sealed class ProposeAddSiteExpensesTool(
+    IProjectService projects, ISiteExpenseService siteExpenses, IAccountLabelService labels, IBillingSettingsService billing)
+    : ProtonActionTool<AddSiteExpensesInput, SiteExpenseArgs>
 {
     private const int Max = 20;
 
@@ -219,7 +237,7 @@ public sealed class ProposeAddSiteExpensesTool(IProjectService projects, ISiteEx
 
     public override string Description =>
         "Propose recording the costs of an Execution site: materials bought, a contractor, equipment or fees, each with its quantity " +
-        "and unit cost, or a total. The user confirms by typing the total cost.";
+        "and unit cost, or a total, in USD or LBP, optionally filed under an account label. The user confirms by typing the total cost.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -237,12 +255,14 @@ public sealed class ProposeAddSiteExpensesTool(IProjectService projects, ISiteEx
 
         MoneyText.RequireTyped(context, [.. input.Items.SelectMany(i => new[] { i.UnitCost, i.Amount })]);
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
+        var currency = SiteExpenseText.Currency(input.Currency);
+        var known = await labels.ListAsync(false, cancellationToken);
         // the cost is the app's own: quantity × unit cost when both are given, otherwise the total
         var items = input.Items.Select(i => new NewSiteExpenseRequest
         {
             Name = i.Name.Trim(), Quantity = i.Quantity, Unit = MoneyText.Clean(i.Unit), UnitCost = i.UnitCost,
             Amount = i.Amount, Supplier = MoneyText.Clean(i.Supplier), Note = MoneyText.Clean(i.Note),
-            Category = i.Category, SpentOn = i.SpentOn,
+            Category = i.Category, SpentOn = i.SpentOn, Currency = currency, AccountLabelId = SiteExpenseText.LabelId(known, i.AccountLabel),
         }).ToList();
         var costs = items.Select(SiteExpenseText.CostOf).ToList();
         if (costs.Any(c => c <= 0))
@@ -250,9 +270,10 @@ public sealed class ProposeAddSiteExpensesTool(IProjectService projects, ISiteEx
             throw new ProtonToolInputException("Each expense needs a cost: quantity and unit cost, or a total.");
         }
 
+        await SiteExpenseText.CheckRateAsync(billing, currency, items.Select(i => i.SpentOn ?? context.Today), cancellationToken);
         var total = costs.Sum();
-        var changes = items.Select((i, n) => new ProtonChange(i.Name, null, SiteExpenseText.Line(i, costs[n]))).ToList();
-        changes.Add(new ProtonChange("Total cost", null, MoneyText.Amount(total, "USD")));
+        var changes = items.Select((i, n) => new ProtonChange(i.Name, null, SiteExpenseText.Line(i, costs[n], known))).ToList();
+        changes.Add(new ProtonChange("Total cost", null, MoneyText.Amount(total, currency)));
         return (new SiteExpenseArgs(project.Id, null, new AddSiteExpensesRequest { Items = items }, null),
             new ProtonPreview($"Record expenses for {project.Title}", changes, "It lowers the site's profit.",
                 Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(total)),
@@ -264,7 +285,7 @@ public sealed class ProposeAddSiteExpensesTool(IProjectService projects, ISiteEx
     protected override async Task<ProtonActionDone> ExecuteAsync(SiteExpenseArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
         var added = await siteExpenses.AddAsync(args.ProjectId, args.Add!, cancellationToken);
-        return new ProtonActionDone($"Recorded {added.Count} expense(s), {MoneyText.Amount(added.Sum(m => m.Cost), "USD")}.", "material", added[0].Id, []);
+        return new ProtonActionDone($"Recorded {added.Count} expense(s), {MoneyText.Amount(added.Sum(m => m.Cost), added[0].Currency)}.", "material", added[0].Id, []);
     }
 }
 
@@ -292,12 +313,13 @@ public sealed record SiteExpenseStepInput : ProtonActionInput
 /// Changes or deletes a site expense, through PUT or DELETE once confirmed. Deleting can't be undone, so the user types
 /// its cost.
 /// </summary>
-public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses) : ProtonActionTool<SiteExpenseStepInput, SiteExpenseArgs>
+public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses, IAccountLabelService labels, IBillingSettingsService billing)
+    : ProtonActionTool<SiteExpenseStepInput, SiteExpenseArgs>
 {
     public override string Name => "propose_site_expense_step";
 
     public override string Description =>
-        "Propose correcting a site expense's details or cost, or deleting it. Nothing changes until the user confirms the card.";
+        "Propose correcting a site expense's details, cost, currency or account label, or deleting it. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -330,8 +352,15 @@ public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses)
                 // The update replaces the whole expense, as the app's form sends it: start from the expense as it is, so
                 // a field the user didn't mention keeps its value instead of being cleared.
                 var before = SiteExpenseText.EntryOf(expense);
+                var known = await labels.ListAsync(false, cancellationToken);
                 var entry = before with
                 {
+                    Currency = m.Currency is null ? before.Currency : SiteExpenseText.Currency(m.Currency),
+                    // the expense's own label stays its own even once archived
+                    AccountLabelId = m.AccountLabel is null ? before.AccountLabelId
+                        : m.AccountLabel.Trim().Length == 0 ? null
+                        : string.Equals(m.AccountLabel.Trim(), expense.AccountLabel?.Name, StringComparison.OrdinalIgnoreCase) ? before.AccountLabelId
+                        : SiteExpenseText.LabelId(known, m.AccountLabel),
                     Name = MoneyText.Clean(m.Name) ?? before.Name,
                     Quantity = m.Quantity ?? before.Quantity,
                     Unit = m.Unit is null ? before.Unit : MoneyText.Clean(m.Unit),
@@ -346,15 +375,19 @@ public sealed class ProposeSiteExpenseStepTool(ISiteExpenseService siteExpenses)
                 var edits = new List<ProtonChange>();
                 SettingsText.Compare(edits, "Item", before.Name, entry.Name);
                 SettingsText.Compare(edits, "Quantity", SiteExpenseText.Quantity(before), SiteExpenseText.Quantity(entry));
-                SettingsText.Compare(edits, "Cost", cost, MoneyText.Amount(SiteExpenseText.CostOf(entry), expense.Currency));
+                SettingsText.Compare(edits, "Cost", cost, MoneyText.Amount(SiteExpenseText.CostOf(entry), entry.Currency));
                 SettingsText.Compare(edits, "Supplier / payee", before.Supplier ?? "none", entry.Supplier ?? "none");
                 SettingsText.Compare(edits, "Category", SnakeCaseEnum.ToDb(expense.Category), SnakeCaseEnum.ToDb(entry.Category ?? expense.Category));
                 SettingsText.Compare(edits, "Spent on", ProjectText.Date(expense.SpentOn), ProjectText.Date(entry.SpentOn ?? expense.SpentOn));
                 SettingsText.Compare(edits, "Note", before.Note ?? "none", entry.Note ?? "none");
+                SettingsText.Compare(edits, "Account label", expense.AccountLabel?.Name ?? "none",
+                    entry.AccountLabelId == before.AccountLabelId ? expense.AccountLabel?.Name ?? "none" : SiteExpenseText.LabelName(known, entry.AccountLabelId));
                 if (edits.Count == 0)
                 {
                     throw new ProtonToolInputException("Nothing would change: say what should be different.");
                 }
+
+                await SiteExpenseText.CheckRateAsync(billing, entry.Currency ?? expense.Currency, [entry.SpentOn ?? expense.SpentOn], cancellationToken);
 
                 return (new SiteExpenseArgs(input.ProjectId, expense.Id, null, entry, before),
                     new ProtonPreview($"Correct the expense {expense.Name}", edits),
@@ -420,13 +453,58 @@ internal static class SiteExpenseText
     public static string Quantity(SiteExpenseEntryRequest e)
         => e.Quantity is { } q ? $"{q.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)} {e.Unit}".Trim() : "none";
 
-    /// <summary>One line of the card: the cost (quantity × unit cost when both were given), then the category and day if named.</summary>
-    public static string Line(SiteExpenseEntryRequest e, decimal cost)
+    /// <summary>One line of the card: the cost (quantity × unit cost when both were given), then the category, day and label if named.</summary>
+    public static string Line(SiteExpenseEntryRequest e, decimal cost, IReadOnlyList<AccountLabelResponse> labels)
     {
         var worked = e.Quantity is { } q && e.UnitCost is { } unit ? $"{q:0.###} {e.Unit} × {MoneyText.Amount(unit, null)} = " : "";
         var category = e.Category is { } c ? $", {SnakeCaseEnum.ToDb(c)}" : "";
         var day = e.SpentOn is { } d ? $", {ProjectText.Date(d)}" : "";
-        return $"{worked}{MoneyText.Amount(cost, "USD")}{category}{day}";
+        var label = e.AccountLabelId is not null ? $", under {LabelName(labels, e.AccountLabelId)}" : "";
+        return $"{worked}{MoneyText.Amount(cost, e.Currency ?? "USD")}{category}{day}{label}";
+    }
+
+    /// <summary>The currency a site expense is in: USD unless LBP is named.</summary>
+    public static string Currency(string? currency)
+    {
+        var code = MoneyText.Clean(currency)?.ToUpperInvariant() ?? "USD";
+        return code is "USD" or "LBP" ? code : throw new ProtonToolInputException("A site expense is in USD or LBP.");
+    }
+
+    /// <summary>The account label the user named, among those that can be picked; null when they named none.</summary>
+    public static long? LabelId(IReadOnlyList<AccountLabelResponse> labels, string? name)
+    {
+        if (MoneyText.Clean(name) is not { } wanted)
+        {
+            return null;
+        }
+
+        return labels.FirstOrDefault(l => string.Equals(l.Name, wanted, StringComparison.OrdinalIgnoreCase))?.Id
+            ?? throw new ProtonToolInputException(labels.Count == 0
+                ? "There are no account labels to file it under."
+                : $"There is no account label called {wanted}. The labels are: {string.Join(", ", labels.Select(l => l.Name))}.");
+    }
+
+    public static string LabelName(IReadOnlyList<AccountLabelResponse> labels, long? id)
+        => id is null ? "none" : labels.FirstOrDefault(l => l.Id == id)?.Name ?? "a label";
+
+    /// <summary>
+    /// A cost in another currency than USD counts only with an exchange rate in force on its day (exchange_rate_missing):
+    /// said before the card is made, rather than refused once the user confirms it.
+    /// </summary>
+    public static async Task CheckRateAsync(IBillingSettingsService billing, string currency, IEnumerable<DateOnly> days, CancellationToken cancellationToken)
+    {
+        if (currency == "USD")
+        {
+            return;
+        }
+
+        var rates = await billing.ListExchangeRatesAsync(new ExchangeRateListQuery { Currency = currency }, cancellationToken);
+        var missing = days.Distinct().Where(day => !rates.Any(r => r.EffectiveFrom <= day)).Order().ToList();
+        if (missing.Count > 0)
+        {
+            throw new ProtonToolInputException(
+                $"There is no {currency} exchange rate in force on {ProjectText.Date(missing[0])}: someone who manages exchange rates adds one first (propose_exchange_rate).");
+        }
     }
 }
 

@@ -5,9 +5,11 @@ change, and only their Confirm button carries it out. You can propose:
 
 - requirements: adding, editing, ticking or reopening one;
 - projects: putting one on hold or resuming it; changing its title, description, location, target date or owner;
-  creating a Design project (without revenue);
+  creating a Design project (without revenue), or an Execution site for an Execution client with the staff who
+  oversee it (its BOQs, rates and crew defaults come afterwards);
 - clients: adding one with the contacts the user gave, editing its details or contacts, archiving or restoring it;
-- meetings: setting one on a project's calendar, moving or renaming one (no invitation is emailed);
+- meetings: setting one on a project's calendar, moving or renaming one, a general meeting too (its people stay as
+  they are; no invitation is emailed);
 - teams: adding or renaming one;
 - the user's own name and phone;
 - the user's own work: logging it, changing or deleting an entry that can still be edited (`list_my_work` for ids);
@@ -19,7 +21,8 @@ change, and only their Confirm button carries it out. You can propose:
 - the company's settings and a domain's work-logging rules (the card says how many people it affects);
 - a message sent as the user (see below);
 - money, when it is switched on: draft invoices and changing them, issuing, voiding or discarding one, noting it was
-  delivered; recording, applying or voiding a payment; project expenses; a site's expenses and labour weeks;
+  delivered; recording, applying or voiding a payment (a site's initial payment, under an account label); project
+  expenses; a site's expenses (in USD or LBP, under an account label) and labour weeks;
   billing settings (never bank details); exchange rates; a Design project's revenue (a site's pricing and BOQs are done in the app, not by Proton); the
   company's recurring expenses;
 - deleting a requirement, a meeting, an unused client or a project file; the working week, someone's own schedule,

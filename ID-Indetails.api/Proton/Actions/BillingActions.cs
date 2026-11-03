@@ -9,6 +9,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Services.Billing.Abstraction;
+using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Proton.Actions;
@@ -433,21 +434,28 @@ public sealed record RecordPaymentInput : ProtonActionInput
 
     [Description("The issued invoice it pays, from list_invoices. Leave out for a payment on account.")]
     public long? InvoiceId { get; init; }
+
+    [Description("An Execution site's initial payment, when the user called it that. A site has at most one.")]
+    public bool IsInitial { get; init; }
+
+    [Description("The account label to file it under, by its name as the user gave it. Leave out for none.")]
+    public string? AccountLabel { get; init; }
 }
 
 /// <summary>
 /// Records money received, through POST /api/projects/{id}/payments once confirmed, at the dated exchange rate in force
 /// (Proton never sets a rate). The user types the amount to confirm.
 /// </summary>
-public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceService invoices, IPaymentService payments)
+public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceService invoices, IPaymentService payments, IAccountLabelService labels)
     : ProtonActionTool<RecordPaymentInput, RecordPaymentArgs>
 {
     public override string Name => "propose_record_payment";
 
     public override string Description =>
         "Propose recording a payment the client made, against an invoice or on account, at the day's exchange rate, " +
-        "with the amount the user typed (or full_balance when they said the whole balance of an invoice was paid). The " +
-        "user confirms by typing the amount. The card warns when the same amount was already recorded that day.";
+        "with the amount the user typed (or full_balance when they said the whole balance of an invoice was paid), " +
+        "optionally as an Execution site's initial payment or under an account label. The user confirms by typing the " +
+        "amount. The card warns when the same amount was already recorded that day.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -478,10 +486,14 @@ public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceS
             throw new ProtonToolInputException("The amount must be more than zero.");
         }
 
+        // the payment service refuses a second initial payment itself; only the domain is checked here
+        PaymentRules.CheckInitial(input.IsInitial, project.Domain, projectHasLiveInitial: false).ThrowIfDenied();
+        var known = await labels.ListAsync(false, cancellationToken);
         var request = new RecordPaymentRequest
         {
             Amount = amount, Currency = currency, ReceivedOn = input.ReceivedOn, Method = input.Method ?? PaymentMethod.Bank,
             Reference = MoneyText.Clean(input.Reference), Note = MoneyText.Clean(input.Note), InvoiceId = input.InvoiceId,
+            IsInitial = input.IsInitial, AccountLabelId = SiteExpenseText.LabelId(known, input.AccountLabel),
         };
         var changes = new List<ProtonChange>
         {
@@ -493,6 +505,16 @@ public sealed class ProposeRecordPaymentTool(IProjectService projects, IInvoiceS
         if (request.Reference is not null)
         {
             changes.Add(new ProtonChange("Reference", null, request.Reference));
+        }
+
+        if (request.IsInitial)
+        {
+            changes.Add(new ProtonChange("Initial payment", null, "yes"));
+        }
+
+        if (request.AccountLabelId is not null)
+        {
+            changes.Add(new ProtonChange("Account label", null, SiteExpenseText.LabelName(known, request.AccountLabelId)));
         }
 
         string note;

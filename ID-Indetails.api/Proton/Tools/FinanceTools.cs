@@ -601,6 +601,103 @@ public sealed class ListPaymentsTool(IPaymentService payments) : ProtonTool<Paym
     }
 }
 
+public sealed record InvoiceInput
+{
+    [Description("From list_invoices.")]
+    public required long InvoiceId { get; init; }
+}
+
+public sealed record InvoiceLineRow(int Position, string Description, decimal Amount);
+
+/// <param name="Reminder">An automatic reminder of an overdue invoice, sent by the app.</param>
+public sealed record InvoiceDeliveryRow(DeliveryChannel Channel, string? Recipient, DateTime SentAt, string? SentBy, bool Reminder = false);
+
+/// <param name="Total">In <paramref name="Currency"/>, TVA included, as the client is billed.</param>
+/// <param name="PaidUsd">Live payments recorded against it.</param>
+/// <param name="Balance">In <paramref name="Currency"/>.</param>
+/// <param name="Notes">Printed on the invoice for the client.</param>
+public sealed record InvoiceDetail(
+    long Id,
+    string? Number,
+    string Domain,
+    ProtonNamed Project,
+    ProtonNamed Client,
+    InvoiceStatus Status,
+    bool? Overdue,
+    string Currency,
+    decimal Total,
+    decimal? PaidUsd,
+    decimal? Balance,
+    DateTime? IssuedAt,
+    DateOnly? DueOn,
+    int TermsDays,
+    DateOnly? SendOn,
+    string? BillToName,
+    string? Notes,
+    DateTime? VoidedAt,
+    string? VoidReason,
+    string? CreatedBy,
+    IReadOnlyList<InvoiceLineRow> Lines,
+    IReadOnlyList<InvoiceDeliveryRow> Sent);
+
+/// <summary>One invoice with its lines and deliveries, as GET /api/invoices/{id} returns it.</summary>
+public sealed class GetInvoiceTool(IInvoiceService invoices) : ProtonTool<InvoiceInput>
+{
+    public override string Name => "get_invoice";
+
+    public override string Description =>
+        "One invoice in full: its lines, total (TVA included), paid and balance, status, dates and terms, who it is billed " +
+        "to, the notes printed for the client, why it was voided, and each time it was sent.";
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<InvoicesController>(nameof(InvoicesController.Get));
+
+    protected override async Task<ProtonToolOutput> RunAsync(InvoiceInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var i = await invoices.GetAsync(input.InvoiceId, cancellationToken);
+        return ProtonToolOutput.Of(
+            new InvoiceDetail(
+                i.Id, i.Number, i.Domain, new ProtonNamed(i.Project.Id, i.Project.Title), new ProtonNamed(i.Client.Id, i.Client.DisplayName),
+                i.Status, i.IsOverdue, i.Currency, i.Total, i.Paid, i.Balance, i.IssuedAt, i.DueOn, i.TermsDays, i.SendOn, i.BillToName,
+                ProtonText.Cut(i.Notes, 1000), i.VoidedAt, i.VoidReason, i.CreatedBy?.Name,
+                i.Lines.Select(l => new InvoiceLineRow(l.Position, ProtonText.Cut(l.Description, 300)!, l.Amount)).ToList(),
+                i.Deliveries.Select(d => new InvoiceDeliveryRow(d.Channel, d.Recipient, d.SentAt, null, d.IsReminder)).ToList()),
+            new ProtonRef(ProtonRefType.Project, i.Project.Id, i.Project.Title, i.Domain),
+            new ProtonRef(ProtonRefType.Client, i.Client.Id, i.Client.DisplayName, i.Domain));
+    }
+}
+
+public sealed record QuotesInput
+{
+    [Description("A client project: an id from find or another tool.")]
+    public required long ProjectId { get; init; }
+}
+
+/// <param name="TotalUsd">What the client is quoted, TVA included (the client never sees the TVA apart).</param>
+/// <param name="NetUsd">Internal: the amount before TVA.</param>
+public sealed record QuoteRow(
+    long Id, string Number, decimal TotalUsd, decimal NetUsd, decimal TvaPct, string? Scope, DateTime CreatedAt, string CreatedBy,
+    IReadOnlyList<InvoiceDeliveryRow> Sent);
+
+/// <summary>A client project's quotes, newest first, as GET /api/projects/{id}/quotes returns them.</summary>
+public sealed class ListQuotesTool(IQuoteService quotes) : ProtonTool<QuotesInput>
+{
+    public override string Name => "list_quotes";
+
+    public override string Description =>
+        "A client project's quotes, newest first: number, what the client is quoted (TVA included) and the net amount, the " +
+        "scope, who made it and each time it was sent.";
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<QuotesController>(nameof(QuotesController.List));
+
+    protected override async Task<ProtonToolOutput> RunAsync(QuotesInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var list = await quotes.ListAsync(input.ProjectId, cancellationToken);
+        return ProtonToolOutput.Of(list.Select(q => new QuoteRow(
+            q.Id, q.Number, q.TotalUsd, q.NetUsd, q.TvaRate * 100, ProtonText.Cut(q.Scope, 1000), q.CreatedAt, q.CreatedBy.Name,
+            q.Deliveries.Select(d => new InvoiceDeliveryRow(d.Channel, d.Recipient, d.SentAt, d.SentBy?.Name)).ToList())).ToList());
+    }
+}
+
 public sealed record CompanyOverviewInput
 {
     [Description("Default this_month. At most 366 days.")]

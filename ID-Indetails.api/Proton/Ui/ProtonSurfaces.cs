@@ -58,5 +58,9 @@ public static class ProtonSurfaces
         [ProtonSurface.ViewProjectFile] = new("the file", ProtonPortalTab.Files, ProtonRefType.Project, DomainCodes.Design),
         [ProtonSurface.PortalDiscussion] = new("the discussion with the client", null, ProtonRefType.Project, DomainCodes.Design),
         [ProtonSurface.PortalPreview] = new("the client's view of the portal draft", ProtonEndpoint.Of<ProjectPortalContentController>(nameof(ProjectPortalContentController.Preview)), ProtonRefType.Project, DomainCodes.Design),
+        // an Execution client site's BOQs and pocket money: the windows open, the person decides
+        [ProtonSurface.ViewBoq] = new("the BOQ", ProtonEndpoint.Of<BoqsController>(nameof(BoqsController.Get)), ProtonRefType.Project, DomainCodes.Execution),
+        [ProtonSurface.ToPocket] = new("the move to pocket money form", ProtonEndpoint.OfWrite<PocketController>(nameof(PocketController.Contribute)), ProtonRefType.Project, DomainCodes.Execution),
+        [ProtonSurface.AskPocket] = new("the ask the pocket money form", ProtonEndpoint.OfWrite<PocketController>(nameof(PocketController.Ask)), ProtonRefType.Project, DomainCodes.Execution),
     };
 }

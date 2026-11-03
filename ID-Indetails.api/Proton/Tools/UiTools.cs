@@ -5,8 +5,10 @@ using ID_Indetails.api.Controllers;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Proton.Actions;
 using ID_Indetails.api.Proton.Ui;
+using ID_Indetails.api.Services.Boqs.Abstraction;
 using ID_Indetails.api.Services.Messaging.Abstraction;
 using ID_Indetails.api.Services.Portal.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
 using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Proton.Tools;
@@ -24,7 +26,7 @@ public sealed record OpenRecordInput
     [Description("Projects only: the tab to open. Leave out for the project's first tab for this user.")]
     public ProtonProjectSection? Section { get; init; }
 
-    [Description("With the files or portal tab only: presentation, model or drawing (a section of the files), and on the portal tab also access (who of the client can see it) or discussion (the chat with the client).")]
+    [Description("With the files or portal tab: presentation, model or drawing (a section of the files), and on the portal tab also access (who of the client can see it) or discussion (the chat with the client). With an Execution site's financials tab: overview (its money), payments (the client's payments), accounts, boqs (its BOQs and VOs), supervision (supervision taken), expenses, labour (ground labour) or staff (its staff and their daily logs).")]
     public ProtonProjectPart? Part { get; init; }
 }
 
@@ -32,8 +34,24 @@ public sealed record OpenRecordInput
 /// Opens a project (optionally on a tab), a client, a person or a website project in the app. The record is read first
 /// exactly as its own page would read it, so an id the user can't see is "not found" and nothing opens.
 /// </summary>
-public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal) : ProtonTool<OpenRecordInput>
+public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal, IProjectService projects) : ProtonTool<OpenRecordInput>
 {
+    private static readonly IReadOnlySet<ProtonProjectPart> FileParts = new HashSet<ProtonProjectPart>
+    {
+        ProtonProjectPart.Presentation, ProtonProjectPart.Model, ProtonProjectPart.Drawing,
+    };
+
+    private static readonly IReadOnlySet<ProtonProjectPart> PortalParts = new HashSet<ProtonProjectPart>(FileParts)
+    {
+        ProtonProjectPart.Access, ProtonProjectPart.Discussion,
+    };
+
+    private static readonly IReadOnlySet<ProtonProjectPart> SiteParts = new HashSet<ProtonProjectPart>
+    {
+        ProtonProjectPart.Overview, ProtonProjectPart.Payments, ProtonProjectPart.Accounts, ProtonProjectPart.Boqs,
+        ProtonProjectPart.Supervision, ProtonProjectPart.Expenses, ProtonProjectPart.Labour, ProtonProjectPart.Staff,
+    };
+
     private static readonly ProtonEndpoint Requirements = ProtonEndpoint.Of<RequirementsController>(nameof(RequirementsController.List));
     private static readonly ProtonEndpoint Timeline = ProtonEndpoint.Of<WorkInsightsController>(nameof(WorkInsightsController.Timeline));
     private static readonly ProtonEndpoint ProjectWork = ProtonEndpoint.Of<WorkInsightsController>(nameof(WorkInsightsController.ProjectWork));
@@ -57,13 +75,29 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
         var record = await records.FindAsync(input.Type, input.Id, context, cancellationToken)
             ?? throw new Exceptions.Base.NotFoundException("Not found.");
         var section = input.Type == ProtonRefType.Project ? input.Section : null;
-        var part = section is ProtonProjectSection.Files or ProtonProjectSection.Portal ? input.Part : null;
+        var site = section == ProtonProjectSection.Financials && record.Domain == DomainCodes.Execution;
+        var parts = section switch
+        {
+            ProtonProjectSection.Files => FileParts,
+            ProtonProjectSection.Portal => PortalParts,
+            _ => site ? SiteParts : new HashSet<ProtonProjectPart>(),
+        };
+        var part = input.Part is { } wanted && parts.Contains(wanted) ? wanted : (ProtonProjectPart?)null;
         var note = "The app opens it when your answer is shown. Say what you opened in a few words.";
-        if (section is { } asked && !await CanOpenAsync(asked, part, record, context, cancellationToken))
+        if (section is { } asked && !await CanOpenAsync(asked, site ? null : part, record, context, cancellationToken))
         {
             note = $"The {asked.ToString().ToLowerInvariant()} tab{(part is { } p ? $" ({p.ToString().ToLowerInvariant()})" : "")} isn't available to this user here, so the project opens on its first tab. Say so.";
             section = null;
             part = null;
+        }
+        else if (site && part is { } sitePart && !await CanOpenSitePartAsync(sitePart, record, context, cancellationToken))
+        {
+            note = $"The site's {sitePart.ToString().ToLowerInvariant()} isn't available to this user, so its financials tab opens on its first part. Say so.";
+            part = null;
+        }
+        else if (input.Part is { } ignored && part is null && section is not null)
+        {
+            note = $"The {section.ToString()!.ToLowerInvariant()} tab has no {ignored.ToString().ToLowerInvariant()} part, so it opens on its first. Say so.";
         }
 
         var command = ProtonUiCommand.Open(record, section, part);
@@ -93,6 +127,33 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
         };
     }
 
+    /// <summary>
+    /// The site page's own rules for the parts of its financials tab (the client's siteParts): everyone who sees the
+    /// site has its expenses, labour and staff; its money's overview needs financial:view; payments, accounts and
+    /// supervision financial:view on a client site; the BOQs, on a client site, whoever writes drafts, sees money or
+    /// manages the pricing.
+    /// </summary>
+    private async Task<bool> CanOpenSitePartAsync(ProtonProjectPart part, ProtonRef site, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var access = context.Access;
+        var money = access.Has(PermissionCodes.FinancialView);
+        if (part is ProtonProjectPart.Expenses or ProtonProjectPart.Labour or ProtonProjectPart.Staff)
+        {
+            return true;
+        }
+
+        if (part == ProtonProjectPart.Overview)
+        {
+            return money;
+        }
+
+        var project = await projects.GetAsync(site.Id, cancellationToken);
+        var client = project.BillingType == BillingType.Client && project.Client is not null;
+        return client && (part == ProtonProjectPart.Boqs
+            ? money || access.Has(PermissionCodes.BoqCreate) || access.Has(PermissionCodes.ProjectPricingManage)
+            : money);
+    }
+
     internal static string Describe(ProtonUiCommand command)
         => command.Section is { } section
             ? $"{command.Label}: {section.ToString().ToLowerInvariant()}{(command.Part is { } part ? $", {part.ToString().ToLowerInvariant()}" : "")}"
@@ -118,52 +179,61 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
 {
     /// <summary>
     /// The endpoint behind each page, whose permission the page needs (none for pages every signed-in person has, where
-    /// the app's own route access still decides), and whether it is Design only or in the company area.
+    /// the app's own route access still decides), the one business it is in (if only one), and whether it is in the
+    /// company area.
     /// </summary>
-    private static readonly IReadOnlyDictionary<ProtonPage, (ProtonEndpoint? Endpoint, bool DesignOnly, bool Company, string Label)> Pages =
-        new Dictionary<ProtonPage, (ProtonEndpoint?, bool, bool, string)>
+    private static readonly IReadOnlyDictionary<ProtonPage, (ProtonEndpoint? Endpoint, string? OnlyIn, bool Company, string Label)> Pages =
+        new Dictionary<ProtonPage, (ProtonEndpoint?, string?, bool, string)>
         {
-            [ProtonPage.Dashboard] = (ProtonEndpoint.Of<DashboardController>(nameof(DashboardController.Get)), false, false, "the dashboard"),
-            [ProtonPage.Projects] = (ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List)), false, false, "projects"),
-            [ProtonPage.Clients] = (ProtonEndpoint.Of<ClientsController>(nameof(ClientsController.List)), false, false, "clients"),
-            [ProtonPage.People] = (ProtonEndpoint.Of<EmployeesController>(nameof(EmployeesController.List)), true, false, "people"),
-            [ProtonPage.Financials] = (ProtonEndpoint.Of<FinanceController>(nameof(FinanceController.Summary)), false, false, "financials"),
-            [ProtonPage.Meetings] = (ProtonEndpoint.Of<MeetingsController>(nameof(MeetingsController.List)), false, false, "meetings"),
-            [ProtonPage.Activity] = (ProtonEndpoint.Of<ActivityController>(nameof(ActivityController.List)), true, false, "activity"),
-            [ProtonPage.Reports] = (ProtonEndpoint.Of<ReportsController>(nameof(ReportsController.Work)), true, false, "reports"),
-            [ProtonPage.CompanyOverview] = (ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get)), false, true, "the company overview"),
-            [ProtonPage.CompanyExpenses] = (ProtonEndpoint.Of<OverheadController>(nameof(OverheadController.Get)), false, true, "company expenses"),
-            [ProtonPage.Settings] = (null, false, false, "settings"),
-            [ProtonPage.Notifications] = (null, false, false, "notifications"),
-            [ProtonPage.Messages] = (null, false, false, "messages"),
-            [ProtonPage.Help] = (null, false, false, "help"),
+            [ProtonPage.Dashboard] = (ProtonEndpoint.Of<DashboardController>(nameof(DashboardController.Get)), null, false, "the dashboard"),
+            [ProtonPage.Projects] = (ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List)), null, false, "projects"),
+            [ProtonPage.Clients] = (ProtonEndpoint.Of<ClientsController>(nameof(ClientsController.List)), null, false, "clients"),
+            [ProtonPage.People] = (ProtonEndpoint.Of<EmployeesController>(nameof(EmployeesController.List)), DomainCodes.Design, false, "people"),
+            [ProtonPage.Financials] = (ProtonEndpoint.Of<FinanceController>(nameof(FinanceController.Summary)), null, false, "financials"),
+            [ProtonPage.Meetings] = (ProtonEndpoint.Of<MeetingsController>(nameof(MeetingsController.List)), null, false, "meetings"),
+            [ProtonPage.Activity] = (ProtonEndpoint.Of<ActivityController>(nameof(ActivityController.List)), DomainCodes.Design, false, "activity"),
+            [ProtonPage.Reports] = (ProtonEndpoint.Of<ReportsController>(nameof(ReportsController.Work)), DomainCodes.Design, false, "reports"),
+            [ProtonPage.CompanyOverview] = (ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get)), null, true, "the company overview"),
+            [ProtonPage.CompanyExpenses] = (ProtonEndpoint.Of<OverheadController>(nameof(OverheadController.Get)), null, true, "company expenses"),
+            [ProtonPage.Settings] = (null, null, false, "settings"),
+            [ProtonPage.Notifications] = (null, null, false, "notifications"),
+            [ProtonPage.Messages] = (null, null, false, "messages"),
+            [ProtonPage.Help] = (null, null, false, "help"),
             // the figures on these never reach Proton: it only opens them
-            [ProtonPage.Schedules] = (ProtonEndpoint.Of<SchedulesController>(nameof(SchedulesController.List)), false, true, "schedules"),
-            [ProtonPage.Salaries] = (ProtonEndpoint.Of<SalariesController>(nameof(SalariesController.List)), false, true, "salaries"),
-            [ProtonPage.ProjectPay] = (ProtonEndpoint.Of<ProjectPayController>(nameof(ProjectPayController.Get)), false, true, "project pay"),
-            [ProtonPage.ProtonBudget] = (ProtonEndpoint.Of<ProtonController>(nameof(ProtonController.Budget)), false, true, "Proton's budget"),
-            [ProtonPage.CompanySettings] = (null, false, true, "company settings"),
-            [ProtonPage.CompanyProfile] = (null, false, true, "your profile"),
-            [ProtonPage.Launcher] = (null, false, true, "the start page"),
+            [ProtonPage.Schedules] = (ProtonEndpoint.Of<SchedulesController>(nameof(SchedulesController.List)), null, true, "schedules"),
+            [ProtonPage.Salaries] = (ProtonEndpoint.Of<SalariesController>(nameof(SalariesController.List)), null, true, "salaries"),
+            [ProtonPage.ProjectPay] = (ProtonEndpoint.Of<ProjectPayController>(nameof(ProjectPayController.Get)), null, true, "project pay"),
+            [ProtonPage.ProtonBudget] = (ProtonEndpoint.Of<ProtonController>(nameof(ProtonController.Budget)), null, true, "Proton's budget"),
+            [ProtonPage.CompanySettings] = (null, null, true, "company settings"),
+            [ProtonPage.CompanyProfile] = (null, null, true, "your profile"),
+            [ProtonPage.Launcher] = (null, null, true, "the start page"),
             // the person's own pages: their route decides who has them (employees)
-            [ProtonPage.MyWork] = (null, false, false, "your work"),
-            [ProtonPage.MyProfile] = (null, false, false, "your profile"),
+            [ProtonPage.MyWork] = (null, null, false, "your work"),
+            [ProtonPage.MyProfile] = (null, null, false, "your profile"),
+            // Execution's own: the pocket money and everyone's daily logs for admins, a site staff member's daily log and sites
+            [ProtonPage.Pocket] = (ProtonEndpoint.Of<PocketController>(nameof(PocketController.Get)), DomainCodes.Execution, false, "the pocket money"),
+            [ProtonPage.SiteLogs] = (ProtonEndpoint.Of<SiteLogsController>(nameof(SiteLogsController.List)), DomainCodes.Execution, false, "the daily logs"),
+            [ProtonPage.DailyLog] = (ProtonEndpoint.Of<SiteLogsController>(nameof(SiteLogsController.Mine)), DomainCodes.Execution, false, "your daily log"),
+            [ProtonPage.MySites] = (ProtonEndpoint.Of<SiteLogsController>(nameof(SiteLogsController.MySites)), DomainCodes.Execution, false, "your sites"),
             // the Website area: no business of its own, so like the company area it has no domain
             // its content pages read what its projects page reads, behind the same permission (Content can't be named:
             // ControllerBase has methods of that name too)
-            [ProtonPage.WebsiteProjects] = (WebsiteRead, false, true, "the website's projects"),
-            [ProtonPage.WebsiteAnalytics] = (ProtonEndpoint.Of<WebsiteAnalyticsController>(nameof(WebsiteAnalyticsController.Report)), false, true, "the website's analytics"),
-            [ProtonPage.WebsiteServices] = (WebsiteRead, false, true, "the website's services"),
-            [ProtonPage.WebsiteLocations] = (WebsiteRead, false, true, "the website's locations"),
-            [ProtonPage.WebsiteContact] = (WebsiteRead, false, true, "the website's contact and social links"),
-            [ProtonPage.WebsiteSite] = (WebsiteRead, false, true, "the website's site settings"),
-            [ProtonPage.WebsiteStaff] = (ProtonEndpoint.Of<EmployeesController>(nameof(EmployeesController.List)), false, true, "the website's staff"),
+            [ProtonPage.WebsiteProjects] = (WebsiteRead, null, true, "the website's projects"),
+            [ProtonPage.WebsiteAnalytics] = (ProtonEndpoint.Of<WebsiteAnalyticsController>(nameof(WebsiteAnalyticsController.Report)), null, true, "the website's analytics"),
+            [ProtonPage.WebsiteServices] = (WebsiteRead, null, true, "the website's services"),
+            [ProtonPage.WebsiteLocations] = (WebsiteRead, null, true, "the website's locations"),
+            [ProtonPage.WebsiteContact] = (WebsiteRead, null, true, "the website's contact and social links"),
+            [ProtonPage.WebsiteSite] = (WebsiteRead, null, true, "the website's site settings"),
+            [ProtonPage.WebsiteStaff] = (ProtonEndpoint.Of<EmployeesController>(nameof(EmployeesController.List)), null, true, "the website's staff"),
         };
 
     private static ProtonEndpoint WebsiteRead => ProtonEndpoint.Of<WebsiteController>(nameof(WebsiteController.Projects));
 
     /// <summary>The person's own pages: only employees have them (an admin's profile is the company area's).</summary>
-    private static readonly IReadOnlySet<ProtonPage> EmployeePages = new HashSet<ProtonPage> { ProtonPage.MyWork, ProtonPage.MyProfile };
+    private static readonly IReadOnlySet<ProtonPage> EmployeePages = new HashSet<ProtonPage>
+    {
+        ProtonPage.MyWork, ProtonPage.MyProfile, ProtonPage.DailyLog, ProtonPage.MySites,
+    };
 
     /// <summary>Pages an employee has only in Design: site staff work from My sites and their daily log instead.</summary>
     private static readonly IReadOnlySet<ProtonPage> EmployeeDesignPages = new HashSet<ProtonPage> { ProtonPage.Projects, ProtonPage.Meetings, ProtonPage.MyWork };
@@ -182,10 +252,11 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
     public override string Name => "open_page";
 
     public override string Description =>
-        "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people, financials " +
+        "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people (Design), financials " +
         "(optionally a tab), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
         "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
-        "start page; for employees their own my_work (Design) and my_profile (they don't see their pay); in the Website area (the company's public " +
+        "start page; in Execution the pocket money and everyone's daily logs (site_logs); for employees their own my_work (Design), " +
+        "daily_log and my_sites (Execution site staff) and my_profile (they don't see their pay); in the Website area (the company's public " +
         "website) its projects, analytics, services, locations, contact (email and social links), site (favicon, under " +
         "construction, watermark check) and staff. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
 
@@ -193,7 +264,7 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
 
     protected override async Task<ProtonToolOutput> RunAsync(OpenPageInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var (endpoint, designOnly, company, label) = Pages[input.Page];
+        var (endpoint, onlyIn, company, label) = Pages[input.Page];
         if (endpoint is not null)
         {
             await context.RequireAsync(endpoint);
@@ -207,10 +278,10 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
         string? domain = null;
         if (!company)
         {
-            domain = designOnly ? DomainCodes.Design : input.Domain?.Code() ?? HomeDomain(context);
+            domain = onlyIn ?? input.Domain?.Code() ?? HomeDomain(context);
             if (domain is null || !context.Access.VisibleDomains.Contains(domain))
             {
-                throw new ProtonToolInputException(designOnly ? $"{label} is a Design page, which this user can't see." : "This user can't see that business.");
+                throw new ProtonToolInputException(onlyIn is not null ? $"{label} is only in {onlyIn}, which this user can't see." : "This user can't see that business.");
             }
         }
 
@@ -225,13 +296,14 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
 
         if (EmployeePages.Contains(input.Page) && context.Access.Role != RoleCodes.Employee)
         {
-            throw new ProtonToolInputException($"{label} is an employee's page. An admin's own profile is company_profile.");
+            throw new ProtonToolInputException(
+                $"{label} is an employee's page.{(input.Page == ProtonPage.MyProfile ? " An admin's own profile is company_profile." : "")}");
         }
 
         if (EmployeeDesignPages.Contains(input.Page) && EmployeeOutsideDesign(context, domain))
         {
             throw new ProtonToolInputException(
-                $"Site staff don't have {label}: they work from My sites and their daily log, which can't be opened from here. Open one of their sites with open_record.");
+                $"Site staff don't have {label}: they work from my_sites and daily_log.");
         }
 
         var command = new ProtonUiCommand(
@@ -424,11 +496,12 @@ public sealed record OpenSurfaceInput
 
     [Description("The record it is for, from find or another tool: a project for edit_project, project_report, " +
                  "project_payment_terms, add_project_expense, site_pricing, new_invoice, record_payment, " +
-                 "view_project_file, file_comments, portal_discussion and portal_preview; a client for edit_client; a person for " +
+                 "view_project_file, file_comments, portal_discussion, portal_preview, and on an Execution client site view_boq, " +
+                 "to_pocket and ask_pocket; a client for edit_client; a person for " +
                  "message_person; a website project for edit_website_project. Leave out for the others.")]
     public long? Id { get; init; }
 
-    [Description("view_project_file and file_comments (required), portal_discussion (optional, to open one file's thread): the project file's item_id, from get_project_files.")]
+    [Description("view_project_file and file_comments (required), portal_discussion (optional, to open one file's thread): the project file's item_id, from get_project_files. view_boq (required): the BOQ's id, from list_boqs.")]
     public long? ItemId { get; init; }
 
     [Description("Which business, for surfaces not tied to a record (new project, new client, invite, new meeting, settings). " +
@@ -448,7 +521,8 @@ public sealed record OpenSurfaceInput
 /// emails someone opens only when the user asked in their own words.
 /// </summary>
 public sealed class OpenSurfaceTool(
-    ProtonRecords records, ProtonPortalTab portal, IProjectFileCommentService fileComments, IPortalDiscussionService discussion)
+    ProtonRecords records, ProtonPortalTab portal, IProjectFileCommentService fileComments, IPortalDiscussionService discussion,
+    IProjectService projects, IBoqService boqs)
     : ProtonTool<OpenSurfaceInput>
 {
     /// <summary>Site staff have no meetings page: they add a meeting on the site's own Meetings tab.</summary>
@@ -460,7 +534,8 @@ public sealed class OpenSurfaceTool(
     public override string Description =>
         "Open a form, dialog or tab for the user (\"open the new project form\", \"let me edit Acme's details\", \"take me " +
         "to the finance settings\", \"I want to message Sara\", \"open the comments on the floor plan\", \"show me the " +
-        "discussion with the client\", \"show me the floor plan PDF\", \"open the website project form\"). It only opens it: the user fills it in and " +
+        "discussion with the client\", \"show me the floor plan PDF\", \"open the website project form\", \"open the VO for the second " +
+        "bathroom\", \"I want to move money to the pocket money\"). It only opens it: the user fills it in and " +
         "saves it themselves. Use the record's id from find when the surface is for one. Changes you can propose go on a card instead.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
@@ -545,6 +620,23 @@ public sealed class OpenSurfaceTool(
             case ProtonSurface.PortalPreview:
                 return await portal.CanOpenPortalAsync(project!, ProtonProjectPart.Presentation, context, cancellationToken)
                     ? null
+                    : throw new Exceptions.Base.NotFoundException("Not found.");
+            case ProtonSurface.ViewBoq or ProtonSurface.ToPocket or ProtonSurface.AskPocket:
+                // a site's BOQs and pocket money are a client site's, as its page shows them
+                var site = await projects.GetAsync(project!.Id, cancellationToken);
+                if (site.BillingType != BillingType.Client || site.Client is null)
+                {
+                    throw new ProtonToolInputException($"{ProtonSurfaces.All[input.Surface].Label} is only on a site with a client.");
+                }
+
+                if (input.Surface != ProtonSurface.ViewBoq)
+                {
+                    return null;
+                }
+
+                var boq = input.ItemId ?? throw new ProtonToolInputException("Which BOQ? Give its id from list_boqs.");
+                return (await boqs.GetAsync(boq, cancellationToken)).ProjectId == project.Id
+                    ? boq
                     : throw new Exceptions.Base.NotFoundException("Not found.");
             default:
                 return null;
