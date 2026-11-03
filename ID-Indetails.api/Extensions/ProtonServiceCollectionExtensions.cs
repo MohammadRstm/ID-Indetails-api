@@ -100,7 +100,10 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetMoneyAttentionTool>();
         services.AddScoped<IProtonTool, ListInvoicesTool>();
         services.AddScoped<IProtonTool, ListPaymentsTool>();
+        services.AddScoped<IProtonTool, ListExpensesTool>();
+        services.AddScoped<IProtonTool, ListSiteExpensesTool>();
         services.AddScoped<IProtonTool, GetCompanyOverviewTool>();
+        services.AddScoped<IProtonTool, ListOverheadTool>();
 
         // Analytical tools: comparisons and signals calculated in code over the existing services, read-only like the rest.
         services.AddScoped<ProtonAnalysisService>();

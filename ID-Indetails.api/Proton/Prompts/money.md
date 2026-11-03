@@ -12,17 +12,34 @@ its own currency and never counted as zero.
   BOQ is agreed or withdrawn and is frozen once the site is finished. `agreed_profit` is agreed revenue less all the cost so far; `agreed_margin_pct` is
   that profit as a percentage of the agreed revenue, empty until it means something.
 - **Cash** (`received`, `cash_profit`, `cash_margin_pct`): money that actually arrived, client payments counted on
-  the day received. `cash_profit` is received less the cost of the same days. Execution sites also give an all-time
-  `cash_profit`.
+  the day received, less the TVA in them. `cash_profit` is received less the cost of the same days. Execution sites
+  also give an all-time `cash_profit`: received less cost, less what was moved to the pocket money, plus what the
+  pocket money paid in.
 - Figures for a period (a month, a quarter, a domain, the company) are cash. Figures for a project or a client are
   agreed, all time.
-- "Profit on a project": give the profit against the agreed revenue, say that is what it is, and add what has been
-  received when it helps ("20,000 USD against the 50,000 USD agreed; 30,000 USD received so far"). "Revenue this
-  month": the money received in it.
+- "Profit on a project": give the profit against the agreed revenue, say that is what it is, and add what the client
+  has paid when it helps, saying that includes TVA ("20,000 USD profit against the 50,000 USD agreed; the client has
+  paid 33,300 USD so far, TVA included"). "Revenue this month": the money received in it, without its TVA.
 - `expected_revenue` is what was agreed in the period (a contract set or raised, an Execution BOQ agreed).
   It is not a forecast: never present it as money that will come in.
 - `recognised_to_date` is the agreed revenue times the project's progress: an accounting view, not cash.
 - `projected` is where cost and profit are heading at the current progress: an estimate, say so.
+
+## TVA
+
+- TVA (11% by default on client projects) is collected for the state, never earned. Revenue, profit, margins,
+  expected revenue and every period figure are **net** of it: a period's `received` is its payments less their TVA,
+  and `tva_collected` is that TVA.
+- What the client is billed, pays and owes is **gross**, TVA included: `agreed_with_tva`, the billing figures
+  (`billing`, `as_of_today`), invoices and payments. Never compare a gross figure with a net one without saying so.
+- Execution: TVA is on the work price only, never on the supervision.
+
+## Execution sites
+
+- **Supervision**: the company's fee on a site, its work price × the supervision rate (10% by default), part of the
+  agreed revenue. Supervision the company takes out of a site's account isn't a cost.
+- **Pocket money**: money super admins move out of sites by hand and pay back to sites that run short. It moves a
+  site's profit (`to_pocket` lowers it, `from_pocket` raises it), never what the client owes.
 
 ## Cost
 
@@ -39,9 +56,10 @@ its own currency and never counted as zero.
 
 - `invoiced`: issued invoices not voided; drafts aren't invoiced. `outstanding`: still unpaid on issued invoices;
   `overdue`: the part past its due date.
-- `owed`: agreed revenue less received. `left_to_invoice`: agreed revenue less invoiced. `not_yet_invoiced`: agreed
-  revenue neither invoiced nor received on account. `on_account`: payments not tied to an invoice. `paid_ahead`:
-  received beyond the agreed revenue. `still_to_earn`: client projects' agreed revenue not received yet.
+- Billing is measured against what the client is agreed to pay with TVA (`agreed_with_tva`). `owed`: that less
+  received. `left_to_invoice`: that less invoiced. `not_yet_invoiced`: what is neither invoiced nor received on
+  account. `on_account`: payments not tied to an invoice. `paid_ahead`: received beyond it. `still_to_earn`: client
+  projects' agreed revenue not received yet.
 - Billing figures are as of today, whatever period was asked about (`as_of_today`, "outstanding today"). Never give
   them as the position at the end of an earlier period.
 

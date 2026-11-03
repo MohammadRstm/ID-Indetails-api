@@ -30,10 +30,10 @@ public sealed record DomainFinanceInput
     public DateOnly? To { get; init; }
 }
 
-/// <summary>The billing position as of today, in USD.</summary>
-/// <param name="AgreedRevenue">The agreed revenue of the client projects it covers.</param>
+/// <summary>The billing position as of today, in USD, TVA included, as the client is billed.</summary>
+/// <param name="AgreedWithTva">What the client projects it covers are agreed to pay, TVA included.</param>
 public sealed record BillingPosition(
-    decimal AgreedRevenue,
+    decimal AgreedWithTva,
     decimal Invoiced,
     int IssuedCount,
     decimal Received,
@@ -53,7 +53,9 @@ public sealed record BillingPosition(
 
 /// <summary>The period's money, cash basis.</summary>
 /// <param name="SoFar">The period runs to today: its figures are so far.</param>
-/// <param name="ExpectedRevenue">Agreed in the period (a contract set or raised, an Execution material first sent), not a forecast.</param>
+/// <param name="Received">The client payments of the period less the TVA in them: revenue, net.</param>
+/// <param name="TvaCollected">The TVA inside those payments: collected for the state, never revenue.</param>
+/// <param name="ExpectedRevenue">Agreed in the period (a contract set or raised, an Execution BOQ agreed), not a forecast.</param>
 /// <param name="CashProfit">Received less the period's cost.</param>
 /// <param name="Unconverted">Costs of the period left out of the USD figures for want of an exchange rate, in their own currency.</param>
 public sealed record DomainFinancePeriod(
@@ -61,12 +63,19 @@ public sealed record DomainFinancePeriod(
     DateOnly To,
     bool SoFar,
     decimal Received,
+    decimal TvaCollected,
     decimal ExpectedRevenue,
-    PeriodCostResponse Cost,
+    PeriodCost Cost,
     decimal CashProfit,
     int? CashMarginPct,
     IReadOnlyList<string>? Unconverted,
     decimal LabourHours);
+
+/// <summary>The period's cost in USD, by source.</summary>
+public sealed record PeriodCost(decimal Labour, decimal Expenses, decimal SiteExpenses, decimal GroundLabour, decimal Total)
+{
+    public static PeriodCost Of(PeriodCostResponse c) => new(c.Labour, c.Expenses, c.Materials, c.GroundLabour, c.Total);
+}
 
 /// <param name="StillToEarn">Client projects' agreed revenue not received yet, each project's never below zero.</param>
 /// <param name="UnpricedLabourHours">All time: hours of people with no pay record, left out of the labour cost.</param>
@@ -87,9 +96,10 @@ public sealed class GetDomainFinanceTool(IDomainFinanceService finance) : Proton
     public override string Name => "get_domain_finance";
 
     public override string Description =>
-        "A domain's money for a period, in USD. The period is cash: money received, expected revenue (agreed in the " +
-        "period), cost by source and cash profit (received − cost). Also today's billing position (invoiced, received, " +
-        "outstanding, overdue, not yet invoiced) and the all-time agreed revenue and profit against it.";
+        "A domain's money for a period, in USD. The period is cash: money received less its TVA, the TVA collected, " +
+        "expected revenue (agreed in the period), cost by source and cash profit (received − cost). Also today's billing " +
+        "position, TVA included (invoiced, received, outstanding, overdue, not yet invoiced), and the all-time agreed " +
+        "revenue and profit against it.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<FinanceController>(nameof(FinanceController.Summary));
 
@@ -102,12 +112,13 @@ public sealed class GetDomainFinanceTool(IDomainFinanceService finance) : Proton
         var result = new DomainFinance(
             s.Domain,
             new DomainFinancePeriod(
-                s.From, s.To, s.To >= context.Today, s.Revenue, s.ExpectedRevenue, s.Cost, s.Profit, ProtonAnalysis.Pct(s.Margin),
+                s.From, s.To, s.To >= context.Today, s.Revenue, s.TvaCollected, s.ExpectedRevenue, PeriodCost.Of(s.Cost), s.Profit, ProtonAnalysis.Pct(s.Margin),
                 s.Unconverted.Count > 0 ? ProtonAnalysis.Unconverted(s.Unconverted) : null, ProtonText.Hours(s.LabourMinutes)),
             new DomainFinanceToday(BillingPosition.Of(s.Billing), s.StillToEarn, ProtonText.Hours(s.UnpricedLabourMinutes)),
             new DomainFinanceAllTime(s.ClientProjects, s.InternalProjects, s.AllTimeClientRevenue, s.AllTimeClientProfit, s.AllTimeInternalCost),
-            "period is cash: what arrived and what was spent in it. as_of_today is today's position whatever the period. " +
-            "all_time is against the agreed amounts, not cash.");
+            "period is cash: what arrived and what was spent in it; its received leaves the TVA out (tva_collected). " +
+            "as_of_today is today's position whatever the period, as the client is billed: TVA included. " +
+            "all_time is against the agreed amounts, net of TVA, not cash.");
         return new ProtonToolOutput(result, [], new DayRange(s.From, s.To));
     }
 }
