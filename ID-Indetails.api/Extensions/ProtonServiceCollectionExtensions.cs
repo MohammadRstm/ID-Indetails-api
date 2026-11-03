@@ -198,6 +198,12 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeBillingSettingsTool>();
         services.AddScoped<IProtonTool, ProposeExchangeRateTool>();
         services.AddScoped<IProtonTool, ProposeProjectMoneyTool>();
+        services.AddScoped<IProtonTool, ProposeBoqTool>();
+        services.AddScoped<IProtonTool, ProposeEditBoqTool>();
+        services.AddScoped<IProtonTool, ProposeBoqAgreementTool>();
+        services.AddScoped<IProtonTool, ProposeSendBoqTool>();
+        services.AddScoped<IProtonTool, ProposeSitePricingTool>();
+        services.AddScoped<IProtonTool, ProposeProjectBillingTool>();
         services.AddScoped<IProtonTool, ProposeOverheadTool>();
         services.AddScoped<IProtonTool, ProposeWorkingTimeTool>();
         services.AddScoped<IProtonTool, ProposeScheduleTool>();
