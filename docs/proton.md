@@ -57,19 +57,23 @@ POST /api/proton/messages
   - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
-  237 write endpoints:
-  - a built action (85);
-  - a prefilled form (7), or a place opened for the user (26);
-  - a read-only POST (2), Proton's own controls (11), or never (106). Never covers passwords, tokens, the phone
-    app's own sign-in, devices and push settings, uploads, the client portal's invitations and clients' own sign-in,
-    what the client portal shows, the public website's pictures and order, and most of Execution: BOQs and VOs, quotes,
-    pocket money, supervision taken, account labels and a payment's label, site staff and daily logs, a site's
-    pricing and blocked changes.
+  237 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
+  - a built action (85), or one planned (93): each planned entry already has the tier and family it will be confirmed
+    with, and is built area by area;
+  - a place opened for the user (17): what takes a password or a sign-in address (typed on its own form, never in a
+    chat), someone's pay (pay amounts never reach Proton), and uploads, which need a file from the person's device;
+  - elsewhere (29): what isn't the signed-in person's to do: signing in, someone else's invitation, the client's side of
+    the portal, the phone app's own device, a website visitor's message, the development file store;
+  - a read-only POST (2), or Proton's own controls (11).
+
+  An action that emails someone outside the company (an invoice, a BOQ, a quote, an invitation, a bug report) is flagged
+  `ExternalSend` and is always strong: Proton calls the service, not the rate-limited endpoint.
 
   `ProtonCoverageTests` fails when an endpoint has no entry, when an action and its tool disagree, when an action
   needing a money, pay, access or company-rules permission isn't confirmed strongly in the matching family, when a
-  delete without a restore isn't strong, or when an endpoint that emails someone isn't flagged. The sensitivity tags
-  are a code-only property of `PermissionCatalog.Definition` (not seeded).
+  delete without a restore isn't strong, when an endpoint that emails someone isn't flagged, or when a rate-limited
+  endpoint that sends nothing (a sign-in, an upload) is an action. The sensitivity tags are a code-only property of
+  `PermissionCatalog.Definition` (not seeded).
 - **The model is replaceable, the tools aren't.** `ProtonToolbox` and the tools are provider-neutral. The chat
   (`Proton/Agent/ProtonChatAgent.cs`) is the only code that knows Claude. Voice (see [Voice](#voice)) adds no agent
   and no tools: the live model only listens and speaks, and hands every question to this same agent.
@@ -849,7 +853,7 @@ that isn't running, or isn't the caller's), `409 proton_voice_busy` (the caller 
 | `MaxHeavyToolCallsPerQuestion` | 4 | analyses that load every project's money; the next one is refused |
 | `MaxConversationInputTokens` | 80000 | a conversation past it rolls over |
 | `Insights` | 30%, 10 h, 1,000 USD, 1.5×, 0.5×, 4 periods, 14 days | `NotablePct`, `NotableHours`, `NotableUsd`, `UnusualHigh`, `UnusualLow`, `BaselinePeriods`, `TargetSoonDays` |
-| `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`, `Website`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20) |
+| `Actions` | Core on, the rest off; 3 cards, 30 an hour | `Enabled`, one switch per family (`Lifecycle`, `Deletes`, `Access`, `CompanyRules`, `PayRules`, `Money`, `Messaging`, `Website`), `MaxPendingActions`, `MaxConfirmedActionsPerHour`, `MaxMessagesPerDay` (20), `MaxExternalSendsPerDay` (20: emails outside the company, counted together). In production each family is `PROTON_ACTIONS_<FAMILY>` in the server's `.env` |
 | `Prices` | Claude Haiku 5.5 list prices: 0.10 / 0.50 USD per million input / output tokens, cache reads 0.01, cache writes 0.125; above a 100,000-token prompt 0.50 / 2.50, 0.05, 0.625 | `InputPerMillion`, `OutputPerMillion`, `CacheReadPerMillion`, `CacheWritePerMillion`, `LongPromptAboveTokens` (0 for one rate card), `LongInputPerMillion`, `LongOutputPerMillion`, `LongCacheReadPerMillion`, `LongCacheWritePerMillion` |
 
 | `Files` | 25 MB, 20 pages, 16 pictures, 60,000 characters, 2 a question; ffmpeg on the PATH | `MaxBytes`, `MaxPdfPages`, `MaxVideoFrames`, `MaxTextCharacters`, `MaxReadsPerQuestion`, `FfmpegPath` / `FfprobePath` (empty turns video reading off), `VideoTimeoutSeconds` (30). `read_project_file` has 45 seconds rather than `ToolTimeoutSeconds` |

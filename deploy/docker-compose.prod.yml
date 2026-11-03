@@ -101,6 +101,15 @@ services:
       Proton__Enabled: ${PROTON_ENABLED:-false}
       Proton__ApiKey: ${PROTON_API_KEY:-}
       Proton__MonthlyBudgetUsd: ${PROTON_MONTHLY_BUDGET_USD:-50}
+      # The kinds of change Proton may propose beyond the everyday ones: each off until switched on (docs/proton.md, "The action engine").
+      Proton__Actions__Lifecycle: ${PROTON_ACTIONS_LIFECYCLE:-false}
+      Proton__Actions__Deletes: ${PROTON_ACTIONS_DELETES:-false}
+      Proton__Actions__Access: ${PROTON_ACTIONS_ACCESS:-false}
+      Proton__Actions__CompanyRules: ${PROTON_ACTIONS_COMPANY_RULES:-false}
+      Proton__Actions__PayRules: ${PROTON_ACTIONS_PAY_RULES:-false}
+      Proton__Actions__Money: ${PROTON_ACTIONS_MONEY:-false}
+      Proton__Actions__Messaging: ${PROTON_ACTIONS_MESSAGING:-false}
+      Proton__Actions__Website: ${PROTON_ACTIONS_WEBSITE:-false}
       Proton__Voice__Enabled: ${PROTON_VOICE_ENABLED:-false}
       Proton__Voice__ApiKey: ${PROTON_VOICE_API_KEY:-}
       # Pushes to the phone app: off unless switched on; Expo's access token is optional (docs/notifications.md).

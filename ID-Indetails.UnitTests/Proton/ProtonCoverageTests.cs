@@ -57,12 +57,12 @@ public class ProtonCoverageTests
         int Count(ProtonCoverageKind kind) => ProtonCoverage.Entries.Count(e => e.Kind == kind);
 
         Count(ProtonCoverageKind.Action).ShouldBe(85);
-        Count(ProtonCoverageKind.Planned).ShouldBe(0);
-        ProtonCoverage.Entries.Count(e => e is { Kind: ProtonCoverageKind.Planned, Tier: ProtonTier.Standard }).ShouldBe(0);
-        Count(ProtonCoverageKind.Prefill).ShouldBe(7);
-        Count(ProtonCoverageKind.Open).ShouldBe(26);
+        Count(ProtonCoverageKind.Planned).ShouldBe(93);
+        ProtonCoverage.Entries.Count(e => e is { Kind: ProtonCoverageKind.Planned, Tier: ProtonTier.Standard }).ShouldBe(20);
+        Count(ProtonCoverageKind.Prefill).ShouldBe(0);
+        Count(ProtonCoverageKind.Open).ShouldBe(17);
         Count(ProtonCoverageKind.ReadOnly).ShouldBe(2);
-        Count(ProtonCoverageKind.Never).ShouldBe(106);
+        Count(ProtonCoverageKind.Elsewhere).ShouldBe(29);
         Count(ProtonCoverageKind.Own).ShouldBe(11);
     }
 
@@ -102,7 +102,7 @@ public class ProtonCoverageTests
 
         ProtonCoverage.Entries.Where(e => e.Kind is not (ProtonCoverageKind.Action or ProtonCoverageKind.Planned))
             .ShouldAllBe(e => e.Tier == null && e.Family == null && e.Tool == null);
-        ProtonCoverage.Entries.Where(e => e.Kind is ProtonCoverageKind.Prefill or ProtonCoverageKind.Open or ProtonCoverageKind.ReadOnly or ProtonCoverageKind.Never)
+        ProtonCoverage.Entries.Where(e => e.Kind is ProtonCoverageKind.Prefill or ProtonCoverageKind.Open or ProtonCoverageKind.ReadOnly or ProtonCoverageKind.Elsewhere)
             .ShouldAllBe(e => !string.IsNullOrWhiteSpace(e.Note));
     }
 
@@ -159,23 +159,31 @@ public class ProtonCoverageTests
     }
 
     /// <summary>
-    /// Endpoints with their own rate limit send something outside the app (emails, bug reports) or take credentials:
-    /// none of them is a Proton action, and every one that emails someone says so.
+    /// Endpoints with their own rate limit send something outside the app (emails, bug reports) or take credentials,
+    /// files or a visitor's message. Only the sending ones may be actions, and then flagged and strong: Proton calls the
+    /// service, not the endpoint, so its own cap on what it sends stands in for the endpoint's limit. Every endpoint that
+    /// emails someone says so.
     /// </summary>
     [Fact]
-    public void No_action_wraps_a_rate_limited_endpoint_and_every_email_is_flagged()
+    public void Only_sending_endpoints_of_the_rate_limited_ones_are_actions_and_they_are_flagged_and_strong()
     {
-        foreach (var (endpoint, _) in Actions())
+        string[] sends = [RateLimitPolicies.Email, RateLimitPolicies.BugReport];
+        foreach (var (endpoint, entry) in Actions().Where(x => x.Endpoint.RatePolicy is not null))
         {
-            endpoint.RatePolicy.ShouldBeNull(endpoint.Name);
+            sends.ShouldContain(endpoint.RatePolicy, endpoint.Name);
+            entry.ExternalSend.ShouldBeTrue(endpoint.Name);
+            entry.Tier.ShouldBe(ProtonTier.Strong, endpoint.Name);
         }
 
-        string[] sends = [RateLimitPolicies.Email, RateLimitPolicies.BugReport];
         foreach (var endpoint in Endpoints.Where(e => sends.Contains(e.RatePolicy)))
         {
             Entries[endpoint.Name].ExternalSend.ShouldBeTrue($"{endpoint.Name} emails someone: flag it ExternalSend");
         }
 
-        ProtonCoverage.Entries.Where(e => e.ExternalSend).ShouldAllBe(e => e.Kind != ProtonCoverageKind.Action && e.Kind != ProtonCoverageKind.Planned);
+        ProtonCoverage.Entries.Where(e => e.ExternalSend && e.Kind is ProtonCoverageKind.Action or ProtonCoverageKind.Planned)
+            .ShouldAllBe(e => e.Tier == ProtonTier.Strong);
+        // a tool that emails someone does nothing else, so the daily cap counts it whole
+        ProtonCoverage.Entries.Where(e => e.Tool is not null).GroupBy(e => e.Tool)
+            .ShouldAllBe(g => g.All(e => e.ExternalSend) || g.All(e => !e.ExternalSend));
     }
 }

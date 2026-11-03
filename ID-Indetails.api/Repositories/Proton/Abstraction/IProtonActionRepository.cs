@@ -35,6 +35,9 @@ public interface IProtonActionRepository
     /// <summary>How many of the user's <paramref name="tool"/> actions were carried out (or are running) since <paramref name="since"/>.</summary>
     Task<int> CountDoneSinceAsync(long userId, string tool, DateTime since, CancellationToken cancellationToken = default);
 
+    /// <summary>The same, for any of <paramref name="tools"/>.</summary>
+    Task<int> CountDoneSinceAsync(long userId, IReadOnlyCollection<string> tools, DateTime since, CancellationToken cancellationToken = default);
+
     /// <summary>The user's own proposals, newest first: what Proton proposed and what became of each.</summary>
     Task<IReadOnlyList<ProtonAction>> MineAsync(long userId, int take, CancellationToken cancellationToken = default);
 
