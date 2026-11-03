@@ -39,7 +39,7 @@ public sealed class ProposeChangeProjectStatusTool(IProjectService projects, IPr
     public override string Name => "propose_change_project_status";
 
     public override string Description =>
-        "Propose putting a project on hold or resuming it. Completing, archiving and reopening are done in the app. " +
+        "Propose putting a project on hold or resuming it (completing, archiving and reopening are propose_project_lifecycle). " +
         "Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;

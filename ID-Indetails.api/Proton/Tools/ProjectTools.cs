@@ -259,8 +259,7 @@ public sealed record ProjectCard(
     DateTime? CompletedAt,
     DateTime? HeldSince,
     DateTime CreatedAt,
-    IReadOnlyList<string>? SiteRecorders,
-    int? SiteRecorderCount);
+    IReadOnlyList<ProtonNamed>? SiteStaff);
 
 public sealed record ProtonNamed(long Id, string Name);
 
@@ -270,8 +269,9 @@ public sealed class GetProjectTool(IProjectService projects) : ProtonTool<Projec
     public override string Name => "get_project";
 
     public override string Description =>
-        "A project's details: status, client, owner, dates, progress, whether it is overdue. Use get_project_team for " +
-        "who worked on it and get_project_financials for its money.";
+        "A project's details: status, client, owner, dates, progress, whether it is overdue, and an Execution site's " +
+        "staff (the employees who oversee it and write its daily logs). Use get_project_team for who worked on a Design " +
+        "project and get_project_financials for its money.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Get));
 
@@ -287,13 +287,14 @@ public sealed class GetProjectTool(IProjectService projects) : ProtonTool<Projec
             ProjectOverdue.IsOverdue(p.TargetDate, p.Status, context.Today),
             ProjectOverdue.DaysOverdue(p.TargetDate, p.Status, context.Today),
             p.ProgressPct, p.CompletedAt, p.HeldSince, p.CreatedAt,
-            p.Team?.People.Select(x => x.Name).ToList(), p.Team?.Count);
+            p.Staff?.Select(x => new ProtonNamed(x.Id, x.Name)).ToList());
 
         var refs = new List<ProtonRef>
         {
             new(ProtonRefType.Project, p.Id, p.Title, p.Domain),
             new(ProtonRefType.Person, p.Owner.Id, p.Owner.Name),
         };
+        refs.AddRange(p.Staff?.Select(s => new ProtonRef(ProtonRefType.Person, s.Id, s.Name)) ?? []);
         if (p.Client is { } client)
         {
             refs.Add(new ProtonRef(ProtonRefType.Client, client.Id, client.DisplayName, p.Domain));
@@ -366,12 +367,12 @@ public sealed record ProjectTeam(
     decimal? HoursAllTime,
     int? PeopleAllTime,
     IReadOnlyList<TeamMember>? People,
-    IReadOnlyList<string>? SiteRecorders,
+    IReadOnlyList<ProtonNamed>? SiteStaff,
     string Note);
 
 /// <summary>
-/// Who works on a project. Projects have no member list: on Design projects it is the people who logged hours
-/// (GET /api/projects/{id}/work), on Execution sites the people who recorded materials or labour.
+/// Who works on a project: on Design projects the people who logged hours (GET /api/projects/{id}/work), which have no
+/// member list; on Execution sites their staff.
 /// </summary>
 public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsService insights) : ProtonTool<ProjectTeamInput>
 {
@@ -381,7 +382,7 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
 
     public override string Description =>
         "Who worked on a project and their hours, optionally within a period. Design projects only track hours; " +
-        "for Execution sites it lists who recorded materials and labour.";
+        "for Execution sites it lists the site's staff, who oversee it.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Get));
 
@@ -391,11 +392,11 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
         var projectRef = new ProtonRef(ProtonRefType.Project, project.Id, project.Title, project.Domain);
         if (project.Domain != DomainCodes.Design)
         {
-            var recorders = project.Team?.People.Select(p => p.Name).ToList() ?? [];
+            var staff = project.Staff?.Select(p => new ProtonNamed(p.Id, p.Name)).ToList() ?? [];
             return ProtonToolOutput.Of(
-                new ProjectTeam(project.Id, project.Title, project.Domain, null, null, null, null, project.Team?.Count, null, recorders,
-                    "Execution sites don't track hours. These people recorded materials or labour weeks, latest first."),
-                projectRef);
+                new ProjectTeam(project.Id, project.Title, project.Domain, null, null, null, null, staff.Count, null, staff,
+                    "Execution sites don't track hours. These are the site's staff: the employees who oversee it and write its daily logs, in the order they were put on it."),
+                [projectRef, .. staff.Select(s => new ProtonRef(ProtonRefType.Person, s.Id, s.Name))]);
         }
 
         await context.RequireAsync(ProjectWork);
@@ -448,19 +449,30 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
     private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 }
 
-/// <param name="AgreedRevenue">The contract value, not cash. Design: the agreed payment typed in. Execution: the work price from the
-/// agreed BOQs plus supervision.</param>
+/// <param name="AgreedRevenue">The contract value, net of TVA, not cash. Design: the agreed payment typed in. Execution: the work price
+/// from the agreed BOQs plus supervision.</param>
 /// <param name="AgreedRevenueLocked">The project is finished: its agreed revenue, fee and rates can't change until it is reopened.</param>
+/// <param name="AgreedWithTva">What the client is agreed to pay, TVA included: what billing is measured against. Execution: TVA is on
+/// the work price only, never on supervision.</param>
+/// <param name="TvaPct">The project's TVA rate, in percent.</param>
+/// <param name="SupervisionPct">Execution: the supervision rate on the work price, in percent.</param>
+/// <param name="Supervision">Execution: the supervision, part of the agreed revenue.</param>
 /// <param name="Expenses">Project expenses, one total per currency, as recorded (not converted).</param>
 /// <param name="AgreedProfit">Agreed revenue less the cost so far.</param>
-/// <param name="CashProfit">Execution: received less the cost so far.</param>
+/// <param name="CashProfit">Execution: received less the cost so far, less what was moved to the pocket money, plus what it paid in.</param>
+/// <param name="ToPocket">Execution: moved from the site into the pocket money. Lowers its profit, not what the client owes.</param>
+/// <param name="FromPocket">Execution: paid to the site by the pocket money. Raises its profit.</param>
 public sealed record ProjectFinancials(
     long ProjectId,
     string Title,
     string Currency,
     decimal AgreedRevenue,
     bool AgreedRevenueLocked,
+    decimal AgreedWithTva,
+    decimal TvaPct,
     decimal? ProjectFee,
+    decimal? SupervisionPct,
+    decimal? Supervision,
     IReadOnlyList<CurrencyTotalResponse> Expenses,
     ProjectBillingResponse Billing,
     ProjectCostResponse Cost,
@@ -470,6 +482,8 @@ public sealed record ProjectFinancials(
     ProtonProjection? Projected,
     decimal LabourHours,
     decimal? CashProfit,
+    decimal? ToPocket,
+    decimal? FromPocket,
     string Note);
 
 /// <summary>
@@ -481,9 +495,11 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
     public override string Name => "get_project_financials";
 
     public override string Description =>
-        "A project's money, all time, in USD: its agreed revenue (the contract value, not cash), what was received, " +
-        "invoiced, outstanding and overdue, cost by source (labour, expenses, site expenses, ground labour), profit and margin " +
-        "against the agreed revenue, and projection. Execution sites also give cash profit (received − cost).";
+        "A project's money, all time, in USD: its agreed revenue (the contract value net of TVA, not cash) and what the " +
+        "client pays with TVA, its TVA rate, what was received, invoiced, outstanding and overdue (TVA included), cost by " +
+        "source (labour, expenses, site expenses, ground labour), profit and margin against the agreed revenue, and " +
+        "projection. Execution sites also give their supervision and its rate, the pocket money moved out and paid in, and " +
+        "cash profit (received − cost − moved to the pocket money + paid by it).";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Get));
 
@@ -493,12 +509,14 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
         var m = p.Money ?? throw new ForbiddenException(ErrorCodes.Forbidden, "This user can't see financial figures.");
         return ProtonToolOutput.Of(
             new ProjectFinancials(
-                p.Id, p.Title, m.Currency, m.Revenue, m.IsLocked, m.ProjectFee,
+                p.Id, p.Title, m.Currency, m.Revenue, m.IsLocked, m.RevenueWithTva, m.TvaRate * 100, m.ProjectFee,
+                m.SupervisionRate * 100, m.SupervisionUsd,
                 m.ExpenseTotals, m.Billing, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.RecognisedToDate,
-                ProtonProjection.Of(m.Projected), ProtonText.Hours(m.LabourHours), m.CashProfit,
-                "All-time figures in USD. Agreed profit is against the agreed revenue, whether or not it was paid: billing.received " +
-                "is the cash in. Margin is empty until it means something (project done, 5% progress or 10 hours logged). " +
-                "Costs without an exchange rate for their day are listed as unconverted, not counted."),
+                ProtonProjection.Of(m.Projected), ProtonText.Hours(m.LabourHours), m.CashProfit, m.ToPocket, m.FromPocket,
+                "All-time figures in USD. Agreed revenue and profit are net of TVA; billing is as the client is billed, TVA " +
+                "included, and is measured against agreed_with_tva. Agreed profit is against the agreed revenue, whether or not " +
+                "it was paid: billing.received is the cash in. Margin is empty until it means something (project done, 5% " +
+                "progress or 10 hours logged). Costs without an exchange rate for their day are listed as unconverted, not counted."),
             new ProtonRef(ProtonRefType.Project, p.Id, p.Title, p.Domain)) with { Datasets = Datasets(p.Title, m) };
     }
 
@@ -539,15 +557,17 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
     }
 }
 
-/// <param name="MaterialCost">Null when the user may not see money; the counts are still given.</param>
+/// <param name="SiteExpensesCost">Null when the user may not see money; the counts are still given.</param>
 public sealed record SiteSummary(
-    long ProjectId, string Title, int MaterialCount, decimal? MaterialCost, int ReportedLabourWeeks, decimal? GroundLabourCost, string? Currency, string? Note);
+    long ProjectId, string Title, int SiteExpenses, decimal? SiteExpensesCost, int ReportedLabourWeeks, decimal? GroundLabourCost, string? Currency, string? Note);
 
 public sealed class GetSiteSummaryTool(IProjectService projects, ISiteRecordsService siteRecords) : ProtonTool<ProjectIdInput>
 {
     public override string Name => "get_site_summary";
 
-    public override string Description => "An Execution site's recorded materials and ground labour: counts, and their cost in USD for those who may see money.";
+    public override string Description =>
+        "An Execution site's expenses and ground labour: how many were recorded, and their cost in USD for those who may " +
+        "see money. list_site_expenses lists the expenses themselves.";
 
     public override string? OnlyInDomain => DomainCodes.Execution;
 
