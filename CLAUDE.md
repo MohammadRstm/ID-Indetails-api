@@ -139,6 +139,9 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
   - a migration for the seed;
   - the client's `P.*` codes and personas.
 - **A new write endpoint:** an entry in `Proton/Actions/ProtonCoverage.cs`, either `Action(...)` or `Never(...)` with a reason.
+- **A new feature or a changed one:** besides its `ProtonCoverage` entry, Proton's read tool for it, a way to open its
+  page, tab or window, and its wording in the tool descriptions and `Proton/Prompts`, or a note in
+  [docs/proton.md](docs/proton.md) of what is left out and why.
 - **Pinned counts.** Update these on purpose when they change:
   - the Proton coverage counts (`ID-Indetails.UnitTests/Proton/ProtonCoverageTests.cs`);
   - the permission count (`ID-Indetails.UnitTests/Business/PermissionExplanationsTests.cs`);
