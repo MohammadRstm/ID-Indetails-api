@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
@@ -173,14 +174,17 @@ public sealed record CreateProjectInput : ProtonActionInput
 {
     public required string Title { get; init; }
 
-    [Description("The client it is for (id from find). Required unless it is internal.")]
+    [Description("The client it is for (id from find). Required unless it is internal. An Execution client's project is an Execution site.")]
     public long? ClientId { get; init; }
 
-    [Description("An internal project, with no client and no revenue.")]
+    [Description("A Design project with no client and no revenue. Execution sites are always client work.")]
     public bool Internal { get; init; }
 
-    [Description("The owner (an admin of Design or a super admin). Leave out to make the user the owner.")]
+    [Description("The owner (an admin of the project's business or a super admin). Leave out to make the user the owner.")]
     public long? OwnerId { get; init; }
+
+    [Description("An Execution site only, required: the employees who oversee it and write its daily logs (ids from find), active Execution employees.")]
+    public IReadOnlyList<long>? StaffIds { get; init; }
 
     public DateOnly? TargetDate { get; init; }
 
@@ -190,8 +194,8 @@ public sealed record CreateProjectInput : ProtonActionInput
 }
 
 /// <summary>
-/// Creates a Design project, through POST /api/projects once confirmed. Without money: revenue and Execution sites
-/// (which need BOQs and rates) are set up in the app.
+/// Creates a Design project or an Execution site, through POST /api/projects once confirmed. Without money: a Design
+/// project's revenue, and a site's BOQs, rates and crew defaults, are set up afterwards.
 /// </summary>
 public sealed class ProposeCreateProjectTool(IProjectService projects, IClientService clients, IEmployeeService employees)
     : ProtonActionTool<CreateProjectInput, CreateProjectArgs>
@@ -199,12 +203,12 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
     public override string Name => "propose_create_project";
 
     public override string Description =>
-        "Propose creating a Design project for a client (or an internal one). Revenue isn't set here, and Execution sites " +
-        "are created in the app. Ask the user for the client if they didn't say. Nothing changes until they confirm the card.";
+        "Propose creating a Design project for a client (or an internal one), or an Execution site for an Execution client " +
+        "with the staff who oversee it. No money is set here: a Design project's revenue, and a site's BOQs, rates and crew " +
+        "defaults, come afterwards. Ask the user for the client, and for a site its staff, if they didn't say. Nothing " +
+        "changes until they confirm the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
-
-    public override string? OnlyInDomain => DomainCodes.Design;
 
     protected override bool OpensByDefault => true;
 
@@ -216,6 +220,7 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
         CreateProjectInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
         string clientName;
+        var domain = DomainCodes.Design;
         if (input.Internal)
         {
             if (input.ClientId is not null)
@@ -229,13 +234,30 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
         {
             var clientId = input.ClientId ?? throw new ProtonToolInputException("Which client is this project for? Or is it internal?");
             var client = await clients.GetAsync(clientId, cancellationToken);
-            if (client.Domain != DomainCodes.Design)
-            {
-                throw new ProtonToolInputException($"{client.DisplayName} is an Execution client; Proton creates Design projects only.");
-            }
-
             ProjectRules.CheckClient(client.IsArchived).ThrowIfDenied();
             clientName = client.DisplayName;
+            domain = client.Domain;
+        }
+
+        // a site needs its staff, each an active Execution employee; a Design project has none
+        var staffNames = new List<string>();
+        if (domain == DomainCodes.Execution)
+        {
+            var staff = input.StaffIds ?? [];
+            var candidates = new List<SiteTeamRules.Candidate>();
+            foreach (var id in staff.Distinct())
+            {
+                var person = await employees.GetAsync(id, cancellationToken);
+                var name = $"{person.FirstName} {person.LastName}".Trim();
+                candidates.Add(new SiteTeamRules.Candidate(person.Id, name, person.Role, person.Domain, person.Status));
+                staffNames.Add(name);
+            }
+
+            SiteTeamRules.CheckStaff(staff, candidates).ThrowIfDenied();
+        }
+        else if (input.StaffIds is { Count: > 0 })
+        {
+            throw new ProtonToolInputException("Only an Execution site has staff.");
         }
 
         var ownerName = "you";
@@ -250,14 +272,15 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
             Title = input.Title.Trim(),
             Description = input.Description,
             Location = input.Location,
-            DomainCode = DomainCodes.Design,
+            DomainCode = domain,
             BillingType = input.Internal ? BillingType.Internal : BillingType.Client,
             ClientId = input.ClientId,
             OwnerId = input.OwnerId,
             TargetDate = input.TargetDate,
+            StaffIds = domain == DomainCodes.Execution ? input.StaffIds : null,
         };
 
-        var sameName = await projects.ListAsync(new ProjectListQuery { Search = request.Title, Domain = DomainCodes.Design, PageSize = 25 }, cancellationToken);
+        var sameName = await projects.ListAsync(new ProjectListQuery { Search = request.Title, Domain = domain, PageSize = 25 }, cancellationToken);
         var duplicate = sameName.Items.Any(p => p.Title.Equals(request.Title, StringComparison.OrdinalIgnoreCase));
 
         var changes = new List<ProtonChange>
@@ -269,6 +292,10 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
             new("Start date", null, ProjectText.Date(context.Today)),
             new("Target date", null, ProjectText.Date(request.TargetDate)),
         };
+        if (staffNames.Count > 0)
+        {
+            changes.Add(new ProtonChange("Site staff", null, string.Join(", ", staffNames)));
+        }
         if (!string.IsNullOrWhiteSpace(request.Location))
         {
             changes.Add(new ProtonChange("Location", null, request.Location));
@@ -279,9 +306,12 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
             changes.Add(new ProtonChange("Description", null, ProtonText.Cut(request.Description, 200)!));
         }
 
-        var note = (duplicate ? $"A Design project called \"{request.Title}\" already exists. " : "")
-            + (input.Internal ? "" : "Revenue isn't set by Proton: add it on the project page.");
-        return (new CreateProjectArgs(request), new ProtonPreview("Create a Design project", changes, note.Length > 0 ? note.Trim() : null), null);
+        var site = domain == DomainCodes.Execution;
+        var kind = site ? "an Execution site" : "a Design project";
+        var note = (duplicate ? $"{(site ? "An Execution site" : "A Design project")} called \"{request.Title}\" already exists. " : "")
+            + (site ? "Its work price comes from the BOQs agreed on it; its rates and crew defaults are set on the site."
+                : input.Internal ? "" : "Revenue isn't set by Proton: add it on the project page.");
+        return (new CreateProjectArgs(request), new ProtonPreview($"Create {kind}", changes, note.Length > 0 ? note.Trim() : null), null);
     }
 
     protected override object RequestOf(CreateProjectArgs args) => args.Request;

@@ -249,7 +249,7 @@ public sealed record DeleteRecordInput : ProtonActionInput
     [Description("The requirement, meeting or client; a project file's item_id.")]
     public required long Id { get; init; }
 
-    [Description("The project, for a requirement, a meeting or a project file.")]
+    [Description("The project, for a requirement, a project file or a meeting on a project (leave it out for a general meeting).")]
     public long? ProjectId { get; init; }
 }
 
@@ -329,13 +329,15 @@ public sealed class ProposeDeleteRecordTool(
             }
             default:
             {
-                var project = await projects.GetAsync(input.ProjectId ?? throw new ProtonToolInputException("Give the project."), cancellationToken);
-                var meeting = await MeetingText.FindAsync(meetings, project.Id, input.Id, cancellationToken);
-                return (new DeleteRecordArgs(input.Kind, meeting.Id, project.Id),
-                    new ProtonPreview($"Delete a meeting of {project.Title}",
+                var project = input.ProjectId is { } projectId ? await projects.GetAsync(projectId, cancellationToken) : null;
+                var meeting = await MeetingText.FindAsync(meetings, project?.Id, input.Id, cancellationToken);
+                // a general meeting has no project: its topic is typed instead, or the words below when it has none
+                return (new DeleteRecordArgs(input.Kind, meeting.Id, project?.Id),
+                    new ProtonPreview(project is null ? "Delete a general meeting" : $"Delete a meeting of {project.Title}",
                         [new ProtonChange("Meeting", $"{meeting.Topic ?? "Meeting"}, {ProjectText.Date(DateOnly.FromDateTime(meeting.StartsAt))}", "deleted")],
-                        Confirm: ProtonConfirm.Typed, Phrase: project.Title, Irreversible: true),
-                    ProjectText.Ref(project));
+                        project is null && meeting.Attendees.Count > 0 ? $"It is taken off the calendar of {meeting.Attendees.Count} people." : null,
+                        Confirm: ProtonConfirm.Typed, Phrase: project?.Title ?? meeting.Topic ?? "delete the meeting", Irreversible: true),
+                    project is null ? null : ProjectText.Ref(project));
             }
         }
     }

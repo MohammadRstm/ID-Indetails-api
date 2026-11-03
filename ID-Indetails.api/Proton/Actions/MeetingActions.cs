@@ -16,7 +16,8 @@ using ID_Indetails.api.Services.Projects.Abstraction;
 namespace ID_Indetails.api.Proton.Actions;
 
 /// <param name="Before">The meeting as it was when proposed, for an update: if it changed since, the update is refused.</param>
-public sealed record MeetingArgs(long ProjectId, long? MeetingId, SaveMeetingRequest Request, SaveMeetingRequest? Before);
+/// <param name="ProjectId">Null for a general meeting, on no project.</param>
+public sealed record MeetingArgs(long? ProjectId, long? MeetingId, SaveMeetingRequest Request, SaveMeetingRequest? Before);
 
 public sealed record ScheduleMeetingInput : ProtonActionInput
 {
@@ -77,14 +78,15 @@ public sealed class ProposeScheduleMeetingTool(IProjectService projects, IMeetin
 
     protected override async Task<ProtonActionDone> ExecuteAsync(MeetingArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var meeting = await meetings.CreateAsync(args.ProjectId, args.Request, cancellationToken);
+        var meeting = await meetings.CreateAsync(args.ProjectId!.Value, args.Request, cancellationToken);
         return await MeetingText.DoneAsync(projects, args.ProjectId, $"Set the meeting for {MeetingText.When(clock, args.Request)}.", meeting.Id, cancellationToken);
     }
 }
 
 public sealed record UpdateMeetingInput : ProtonActionInput
 {
-    public required long ProjectId { get; init; }
+    [Description("The project the meeting is on. Leave out for a general meeting (on no project).")]
+    public long? ProjectId { get; init; }
 
     [Description("From list_meetings.")]
     public required long MeetingId { get; init; }
@@ -110,8 +112,8 @@ public sealed class ProposeUpdateMeetingTool(IProjectService projects, IMeetingS
     public override string Name => "propose_update_meeting";
 
     public override string Description =>
-        "Propose moving a meeting to another day or time, changing its length, or renaming it (use list_meetings for " +
-        "its id). Nothing changes until the user confirms the card.";
+        "Propose moving a meeting to another day or time, changing its length, or renaming it, on a project or a general " +
+        "meeting (use list_meetings for its id). A general meeting keeps its people. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
 
@@ -122,12 +124,15 @@ public sealed class ProposeUpdateMeetingTool(IProjectService projects, IMeetingS
     protected override async Task<(MeetingArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         UpdateMeetingInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var project = await projects.GetAsync(input.ProjectId, cancellationToken);
-        var current = await MeetingText.FindAsync(meetings, project.Id, input.MeetingId, cancellationToken);
+        var project = input.ProjectId is { } projectId ? await projects.GetAsync(projectId, cancellationToken) : null;
+        var current = await MeetingText.FindAsync(meetings, project?.Id, input.MeetingId, cancellationToken);
         MeetingRules.CheckChange(
             context.Access.Permissions.Contains(PermissionCodes.MeetingManage), context.Access.Permissions.Contains(PermissionCodes.MeetingCreate),
             current.CreatedBy?.Id, context.Access.UserId).ThrowIfDenied();
-        MeetingRules.CheckProject(project.Status).ThrowIfDenied();
+        if (project is not null)
+        {
+            MeetingRules.CheckProject(project.Status).ThrowIfDenied();
+        }
 
         var before = MeetingText.RequestOf(current);
         var start = clock.ToCompanyTime(current.StartsAt);
@@ -161,8 +166,9 @@ public sealed class ProposeUpdateMeetingTool(IProjectService projects, IMeetingS
             throw new ProtonToolInputException("Nothing would change: say what should be different.");
         }
 
-        return (new MeetingArgs(project.Id, current.Id, after, before),
-            new ProtonPreview($"Change the meeting {current.Topic ?? MeetingText.When(clock, before)}", changes), ProjectText.Ref(project));
+        return (new MeetingArgs(project?.Id, current.Id, after, before),
+            new ProtonPreview($"Change the meeting {current.Topic ?? MeetingText.When(clock, before)}", changes),
+            project is null ? null : ProjectText.Ref(project));
     }
 
     protected override object RequestOf(MeetingArgs args) => args.Request;
@@ -216,16 +222,25 @@ internal static class MeetingText
         return $"{start.ToString("ddd d MMM yyyy, HH:mm", CultureInfo.InvariantCulture)}–{end.ToString("HH:mm", CultureInfo.InvariantCulture)}";
     }
 
-    public static async Task<MeetingResponse> FindAsync(IMeetingService meetings, long projectId, long meetingId, CancellationToken cancellationToken)
-        => (await meetings.ListForProjectAsync(projectId, cancellationToken)).FirstOrDefault(m => m.Id == meetingId)
+    /// <summary>A meeting by its id: on its project, or, with no project, a general meeting the user may see.</summary>
+    public static async Task<MeetingResponse> FindAsync(IMeetingService meetings, long? projectId, long meetingId, CancellationToken cancellationToken)
+        => (projectId is { } project
+                ? await meetings.ListForProjectAsync(project, cancellationToken)
+                : (await meetings.ListAsync(new MeetingListQuery(), cancellationToken)).Where(m => m.Project is null).ToList())
+            .FirstOrDefault(m => m.Id == meetingId)
             ?? throw new NotFoundException("Meeting not found.");
 
     public static string? OpensLabel(ProtonRef? project) => project is null ? null : $"{project.Name}: meetings";
 
-    /// <summary>A meeting change done: it lives on its project's meetings tab.</summary>
-    public static async Task<ProtonActionDone> DoneAsync(IProjectService projects, long projectId, string message, long meetingId, CancellationToken cancellationToken)
+    /// <summary>A meeting change done: a project's lives on its meetings tab; a general meeting has no page to open.</summary>
+    public static async Task<ProtonActionDone> DoneAsync(IProjectService projects, long? projectId, string message, long meetingId, CancellationToken cancellationToken)
     {
-        var project = ProjectText.Ref(await projects.GetAsync(projectId, cancellationToken));
+        if (projectId is null)
+        {
+            return new ProtonActionDone(message, "meeting", meetingId, []);
+        }
+
+        var project = ProjectText.Ref(await projects.GetAsync(projectId.Value, cancellationToken));
         return new ProtonActionDone(message, "meeting", meetingId, [project], ProtonUiCommand.Open(project, ProtonProjectSection.Meetings));
     }
 }

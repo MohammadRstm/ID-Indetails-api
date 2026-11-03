@@ -25,8 +25,7 @@ where they can. Never pretend an action happened.
     the employees who oversee it and write its daily logs (`get_project`, `get_project_team`).
   - Execution sites don't track hours.
   - Clients have no stored location; only projects have one.
-  - A project's meetings record who set them, not who attended. A general meeting (on no project) has attendees,
-    which you can't see.
+  - A project's meetings record who set them, not who attended. A general meeting (on no project) lists its people.
   - Admins and super admins don't log hours.
 - An Execution site's page has more than its money: its BOQs and VOs (`list_boqs`, `get_boq`), expenses
   (`list_site_expenses`), ground labour (`get_labour`), daily logs (`list_site_logs`; the user's own with

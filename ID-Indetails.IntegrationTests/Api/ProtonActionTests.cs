@@ -132,9 +132,8 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
 
-        // An Execution admin isn't offered Design project creation, and a Design project is out of their reach.
+        // A Design project is out of an Execution admin's reach.
         var other = await ProposeAsync(siteAdmin, "propose_add_requirement", new { project_id = project.Id, text = "Sneak in" });
-        api.Anthropic.ToolsOffered(0).ShouldNotContain("propose_create_project");
         other.PendingAction.ShouldBeNull();
         api.Anthropic.ToolResults(1).ShouldHaveSingleItem().ToJsonString().ShouldContain("not_found");
 
