@@ -1,3 +1,5 @@
+using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -38,7 +40,8 @@ public class ProjectDepartmentChangeConfiguration : IEntityTypeConfiguration<Pro
 {
     public void Configure(EntityTypeBuilder<ProjectDepartmentChange> builder)
     {
-        builder.ToTable("project_department_share_changes");
+        builder.ToTable("project_department_share_changes", t =>
+            t.HasCheckConstraint("ck_project_department_share_changes_kind", SnakeCaseEnum.CheckSql<ProjectDepartmentChangeKind>("kind")));
 
         builder.HasKey(x => x.Id);
         builder.HasIndex(x => new { x.ProjectId, x.ChangedAt });

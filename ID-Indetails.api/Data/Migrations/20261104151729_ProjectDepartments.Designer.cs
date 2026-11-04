@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ID_Indetails.api.Data.Migrations
 {
     [DbContext(typeof(IdIndetailsDbContext))]
-    [Migration("20261104144449_ProjectDepartments")]
+    [Migration("20261104151729_ProjectDepartments")]
     partial class ProjectDepartments
     {
         /// <inheritdoc />
@@ -4160,7 +4160,10 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("ProjectId", "ChangedAt")
                         .HasDatabaseName("ix_project_department_share_changes_project_id_changed_at");
 
-                    b.ToTable("project_department_share_changes", (string)null);
+                    b.ToTable("project_department_share_changes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_department_share_changes_kind", "`kind` IN ('created', 'departments', 'shares')");
+                        });
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectExpense", b =>

@@ -43,6 +43,7 @@ namespace ID_Indetails.api.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("pk_project_department_share_changes", x => x.id);
+                    table.CheckConstraint("ck_project_department_share_changes_kind", "`kind` IN ('created', 'departments', 'shares')");
                     table.ForeignKey(
                         name: "fk_project_department_share_changes_projects_project_id",
                         column: x => x.project_id,
