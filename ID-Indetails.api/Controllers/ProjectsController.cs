@@ -70,7 +70,7 @@ public sealed class ProjectsController(
     /// <summary>Design: a client project's customer payment, with why it changes.</summary>
     [HttpPut("{projectId:long}/payment")]
     [HasPermission(PermissionCodes.ProjectEdit)]
-    [HasPermission(PermissionCodes.FinancialView)]
+    [HasPermission(PermissionCodes.FinancialWrite)]
     public Task<ProjectResponse> UpdatePayment(long projectId, UpdateProjectPaymentRequest request, CancellationToken cancellationToken)
         => projectService.UpdatePaymentAsync(projectId, request, cancellationToken);
 

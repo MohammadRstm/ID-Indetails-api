@@ -46,6 +46,9 @@ public static class PermissionCodes
 
     // Money
     public const string FinancialView = "financial:view";
+
+    /// <summary>Design for now: setting and correcting a project's price, its departments' shares and its variation orders.</summary>
+    public const string FinancialWrite = "financial:write";
     public const string InvoiceCreate = "invoice:create";
     public const string InvoiceSend = "invoice:send";
     public const string InvoiceVoid = "invoice:void";

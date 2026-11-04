@@ -121,9 +121,5 @@ public class ProtonSiteReadTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         var read = (await CallAsync(superAdmin, "get_invoice", new { invoice_id = invoice.Id }))["data"]!;
         read["lines"]!.AsArray().ShouldHaveSingleItem()!["description"]!.GetValue<string>().ShouldBe("Concept design");
         (read["terms_days"]!.GetValue<int>(), read["notes"]!.GetValue<string>()).ShouldBe((15, "Thank you"));
-
-        var quote = await (await Client.PostEmptyAsync($"/api/projects/{project.Id}/quotes", superAdmin.AccessToken)).ReadAsync<QuoteResponse>();
-        var quoted = (await CallAsync(superAdmin, "list_quotes", new { project_id = project.Id }))["data"]!.AsArray().ShouldHaveSingleItem()!;
-        (quoted["number"]!.GetValue<string>(), quoted["total_usd"]!.GetValue<decimal>()).ShouldBe((quote.Number, quote.TotalUsd));
     }
 }

@@ -103,8 +103,6 @@ public static class NotificationKinds
     /// <summary>An Execution site asks the pocket money for money: for whoever sees Execution's money to approve or deny.</summary>
     public const string PocketRequested = "pocket_requested";
 
-    /// <summary>A client project was made by someone who can't send quotes: for those who can, to send one or not.</summary>
-    public const string QuoteDue = "quote_due";
 
     /// <summary>
     /// A change was refused because it would take a client project's profit to zero or below (subject: the blocked

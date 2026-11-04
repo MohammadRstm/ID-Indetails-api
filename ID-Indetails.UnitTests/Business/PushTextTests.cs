@@ -70,7 +70,6 @@ public class PushTextTests
         Body(NotificationKinds.ChangeBlocked).ShouldBe("A change was stopped to keep a project above zero profit. Open ID InDetails to decide.");
         Body(NotificationKinds.ProfitLow).ShouldBe("A project is close to zero profit.");
         Body(NotificationKinds.ProfitAtZero).ShouldBe("A project is at zero profit or below.");
-        Body(NotificationKinds.QuoteDue).ShouldBe("A new project may need a quote. Open ID InDetails to decide.");
         Body(NotificationKinds.InvoiceOverdue).ShouldBe("An invoice needs your attention.");
         Body(NotificationKinds.InvoiceDraftWaiting).ShouldBe("An invoice needs your attention.");
         Body(NotificationKinds.InvoiceReminderDue).ShouldBe("An invoice needs your attention.");

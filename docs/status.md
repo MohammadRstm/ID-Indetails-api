@@ -21,9 +21,9 @@ This page covers what the API does today, what is in progress, and what the prot
 | Search | [search.md](search.md) | #22 |
 | Uploads: message and work-entry attachments, profile photos, the company logo and sign-in branding | [files.md](files.md) | `MR-Files` |
 | The prototype gaps: Design cost over time, client overview, list totals, CSV export, wider search, timeline entries, People columns, overtime preview, site teams | [projects.md](projects.md), [clients.md](clients.md), [design.md](design.md), [me.md](me.md) | `MR-Gaps` |
-| PDFs of invoices, quotes, BOQs and project reports; emailing invoices, quotes and BOQs | [documents.md](documents.md) | `MR-Gaps` |
+| PDFs of invoices, BOQs and project reports; emailing invoices and BOQs | [documents.md](documents.md) | `MR-Gaps` |
 | Execution pocket money: contributions from sites, requests approved or denied (replaced the box) | [execution.md](execution.md) | #158 |
-| TVA per project (net revenue, gross billing) and quotes | [billing.md](billing.md), [documents.md](documents.md) | #159 |
+| TVA per project (net revenue, gross billing); quotes were removed (`DepartmentsBase`) | [billing.md](billing.md), [documents.md](documents.md) | #159 |
 | Profit floor: changes that take a client project to zero profit are refused, forced or dismissed; profit warnings | [projects.md](projects.md#profit-floor), [notifications.md](notifications.md) | #160 |
 | The phone app's API: 30-day mobile sessions, push devices, pushes and reminders, notification settings, duplicate-safe offline expenses and labour weeks | [authentication.md](authentication.md#mobile-sessions), [notifications.md](notifications.md#pushes), [me.md](me.md#my-devices), [execution.md](execution.md) | `MR-Mobile-Api` |
 

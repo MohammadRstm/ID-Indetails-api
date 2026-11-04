@@ -25,6 +25,9 @@ public static class ErrorCodes
     public const string InvitationInvalid = "invitation_invalid";
     public const string InvitationNotAllowed = "invitation_not_allowed";
     public const string TeamNotInDomain = "team_not_in_domain";
+
+    /// <summary>400 (teamId) or 422. A Design employee belongs to a department: their hours are counted in it.</summary>
+    public const string DepartmentRequired = "department_required";
     public const string UserNotInvited = "user_not_invited";
     public const string UserDeactivated = "user_deactivated";
 
@@ -135,11 +138,6 @@ public static class ErrorCodes
     /// <summary>422. The pocket money request was already approved or denied.</summary>
     public const string PocketRequestDecided = "pocket_request_decided";
 
-    /// <summary>422. Internal work, or a project with no agreed amount yet, can't be quoted.</summary>
-    public const string QuoteNotPossible = "quote_not_possible";
-
-    /// <summary>422. Execution projects have no quotes: their price is built from BOQs.</summary>
-    public const string QuoteNotForExecution = "quote_not_for_execution";
 
     /// <summary>422. The change would take the project's profit to zero or below; it was kept for forcing (see <c>blockedChangeId</c>).</summary>
     public const string ProfitFloor = "profit_floor";

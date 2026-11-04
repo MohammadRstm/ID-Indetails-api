@@ -75,11 +75,11 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<SupervisionWithdrawal> SupervisionWithdrawals => Set<SupervisionWithdrawal>();
 
-    public DbSet<Quote> Quotes => Set<Quote>();
 
-    public DbSet<QuoteDelivery> QuoteDeliveries => Set<QuoteDelivery>();
 
-    public DbSet<QuoteSequence> QuoteSequences => Set<QuoteSequence>();
+
+
+
 
     public DbSet<BlockedChange> BlockedChanges => Set<BlockedChange>();
 

@@ -176,4 +176,13 @@ public class EmployeeRulesTests
     [Fact]
     public void Seeing_both_businesses_is_enough_to_see_super_admins_without_the_website()
         => EmployeeRules.CanSee(CrossDomainAdmin, null).ShouldBeTrue();
+
+    [Fact]
+    public void Only_a_Design_employee_needs_a_department()
+    {
+        EmployeeRules.CheckDepartment(RoleCodes.Employee, DomainCodes.Design, null)!.Code.ShouldBe(ErrorCodes.DepartmentRequired);
+        EmployeeRules.CheckDepartment(RoleCodes.Employee, DomainCodes.Design, 4).ShouldBeNull();
+        EmployeeRules.CheckDepartment(RoleCodes.Employee, DomainCodes.Execution, null).ShouldBeNull();
+        EmployeeRules.CheckDepartment(RoleCodes.Admin, DomainCodes.Design, null).ShouldBeNull();
+    }
 }

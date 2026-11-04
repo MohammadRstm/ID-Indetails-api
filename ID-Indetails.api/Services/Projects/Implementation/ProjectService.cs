@@ -177,9 +177,11 @@ public sealed class ProjectService(
 
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
             domain, request.BillingType, request.ClientId, request.Revenue, request.SupervisionRate)));
-        if ((request.Revenue is not null || request.TvaRate is not null) && !actor.Has(PermissionCodes.FinancialView))
+        // a Design price is written with financial:write; an Execution site's TVA still with financial:view
+        var setsMoney = domain == DomainCodes.Design ? PermissionCodes.FinancialWrite : PermissionCodes.FinancialView;
+        if ((request.Revenue is not null || request.TvaRate is not null) && !actor.Has(setsMoney))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment or its TVA needs the permission to see project money.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment or its TVA needs the permission to write project money.");
         }
 
         if (request.SupervisionRate is not null && !actor.Has(PermissionCodes.ProjectPricingManage))
@@ -270,11 +272,6 @@ public sealed class ProjectService(
 
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectCreated, actor.UserId));
         await notifier.CreatedAsync(project, actor.UserId, cancellationToken);
-        if (project.BillingType == BillingType.Client && domain != DomainCodes.Execution && !actor.Has(PermissionCodes.InvoiceSend))
-        {
-            // whoever sends quotes decides whether this one gets one (Execution has none); the creator can't
-            await notifier.QuoteDueAsync(project, actor.UserId, cancellationToken);
-        }
         if (project.Revenue > 0)
         {
             activity.Add(ProjectEvent(project, ActivityEventKinds.RevenueSet, actor.UserId, amount: project.Revenue));
@@ -440,7 +437,7 @@ public sealed class ProjectService(
         UpdateProjectPaymentRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialWrite);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await VisibleProjectForUpdateAsync(actor, projectId, cancellationToken);
 

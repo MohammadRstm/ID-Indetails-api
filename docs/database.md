@@ -183,6 +183,8 @@ The `AccountFigures` migration (29 Oct 2026, phase 4 of the BOQ rework, rules in
 - The `supervision_withdrawals` table (id, `project_id`, `amount_usd` decimal(14,2), `taken_on` date, `note` varchar(500), `created_by_id`, `created_at`, `deleted_at`), with foreign keys to `projects` and `users` (both RESTRICT) and the positive-amount check.
 - No data changes. `Down` drops the foreign key, the table, the index and the column.
 
+The `DepartmentsBase` migration (4 Nov 2026) drops `quotes`, `quote_deliveries` and `quote_sequences` (Design has no quotes any more), deletes the `quote_due` notifications, and seeds the `financial:write` permission, limited to Design and held by super admins: setting a Design project's price, and later its departments' shares and variation orders.
+
 The `WebsiteAnalyticsPermission` migration seeds the `website_analytics:view` permission, limited to the website: super admins and the website's own staff hold it ([website.md](website.md#analytics)) (20 Oct 2026).
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.

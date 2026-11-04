@@ -71,7 +71,6 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
 | `pocket_requested` | Holders of `financial:view` who see Execution | the pocket money request | none |
 | `change_blocked` | Holders of `financial:view` in the project's domain, the requester aside, when the profit floor refused a change (see [projects.md](projects.md), "Profit floor") | the blocked change | `projectTitle`, `kind` (never the amount) |
-| `quote_due` | Holders of `invoice:send` | the project | `projectTitle` |
 | `portal_client_message` | Staff taking part in a project's client portal discussion, when a client writes in its chat. Rolling per project (`portal_chat:{projectId}`) | — | `projectTitle`, `authorName` (never the text) |
 | `portal_client_comment` | The project's manager and the file's uploader (everyone taking part on the staff side when neither does), when a client comments on a file. Rolling per file (`portal_comments:{itemId}`) | the item | `projectTitle`, `authorName`, `itemTitle` |
 | `portal_mention` | Staff mentioned in a client portal message or comment, once each (`portal_mention:m{id}` / `c{id}`) | `message` or `comment` (subject id: the item, for comments) | `projectTitle`, `authorName`, `itemTitle` |
@@ -145,7 +144,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
-| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `quote_due`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
+| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 

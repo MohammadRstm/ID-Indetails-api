@@ -192,6 +192,34 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_Design_employee_always_belongs_to_a_department()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var department = await _steps.DesignDepartmentAsync();
+
+        await (await Client.PostJsonAsync("/api/invitations",
+                new { email = AuthTestSteps.NewEmail(), role = RoleCodes.Employee, domainCode = DomainCodes.Design }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.DepartmentRequired);
+        // Execution staff and Design admins don't need one
+        ((int)(await Client.PostJsonAsync("/api/invitations",
+                new { email = AuthTestSteps.NewEmail(), role = RoleCodes.Employee, domainCode = DomainCodes.Execution }, superAdmin.AccessToken)).StatusCode)
+            .ShouldBe(201);
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await (await Client.PutJsonAsync($"/api/employees/{employee.User.Id}", new { firstName = "Test", lastName = "Member" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.DepartmentRequired);
+
+        // an admin made an employee needs one first
+        await (await Client.PutJsonAsync($"/api/employees/{admin.User.Id}/role", new { role = RoleCodes.Employee }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.DepartmentRequired);
+        (await Client.PutJsonAsync($"/api/employees/{admin.User.Id}", new { firstName = "Test", lastName = "Admin", teamId = department }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        (await Client.PutJsonAsync($"/api/employees/{admin.User.Id}/role", new { role = RoleCodes.Employee }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Moving_someone_to_the_other_domain_needs_both_domains_and_resets_their_team()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

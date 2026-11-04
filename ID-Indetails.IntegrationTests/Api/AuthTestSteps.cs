@@ -65,7 +65,8 @@ public sealed class AuthTestSteps(ApiFactory api)
     {
         var email = NewEmail(role);
         pay ??= role == RoleCodes.Employee ? null : new { basis = "monthly", amount = 2000m, currency = "USD" };
-        var invite = await Client.PostJsonAsync("/api/invitations", new { email, role, domainCode = domain, pay }, inviter.AccessToken);
+        long? teamId = role == RoleCodes.Employee && domain == DomainCodes.Design ? await DesignDepartmentAsync() : null;
+        var invite = await Client.PostJsonAsync("/api/invitations", new { email, role, domainCode = domain, pay, teamId }, inviter.AccessToken);
         ((int)invite.StatusCode).ShouldBe(201, await invite.Content.ReadAsStringAsync());
 
         const string password = "invited-user-passphrase";
@@ -83,7 +84,7 @@ public sealed class AuthTestSteps(ApiFactory api)
     /// <summary>Money and hiring: by default only super admins hold these.</summary>
     public static readonly string[] MoneyPermissions =
     [
-        PermissionCodes.FinancialView, PermissionCodes.InvoiceCreate, PermissionCodes.InvoiceSend, PermissionCodes.InvoiceVoid,
+        PermissionCodes.FinancialView, PermissionCodes.FinancialWrite, PermissionCodes.InvoiceCreate, PermissionCodes.InvoiceSend, PermissionCodes.InvoiceVoid,
         PermissionCodes.PaymentRecord, PermissionCodes.PaymentVoid, PermissionCodes.BillingSettingsManage, PermissionCodes.ExpenseManage,
         PermissionCodes.ProjectPricingManage, PermissionCodes.BoqCreate,
         PermissionCodes.EmployeeInvite, PermissionCodes.EmployeePayManage,
@@ -116,6 +117,20 @@ public sealed class AuthTestSteps(ApiFactory api)
             new { changes = new[] { new { code = PermissionCodes.MaterialCreate, action = "grant", reason = "Records deliveries" } } }, superAdmin.AccessToken);
         granted.IsSuccessStatusCode.ShouldBeTrue(await granted.Content.ReadAsStringAsync());
         return worker;
+    }
+
+    /// <summary>A Design department (team) to put Design employees in, which they need; made the first time it's asked for.</summary>
+    public async Task<long> DesignDepartmentAsync()
+    {
+        const string first = "SELECT COALESCE(MIN(id), 0) FROM teams WHERE domain_code = 'design'";
+        var id = await ScalarAsync<long>(first);
+        if (id > 0)
+        {
+            return id;
+        }
+
+        await ExecuteAsync("INSERT INTO teams (domain_code, name, created_at) VALUES ('design', 'Architecture', UTC_TIMESTAMP(3))");
+        return await ScalarAsync<long>(first);
     }
 
     /// <summary>Puts someone in a team directly, without the fields the employee edit needs.</summary>
