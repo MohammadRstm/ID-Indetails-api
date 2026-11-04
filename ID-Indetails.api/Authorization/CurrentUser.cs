@@ -25,9 +25,12 @@ public interface ICurrentUser
 
     /// <summary>
     /// For the rest of this request, acts as another person: forcing an employee's blocked hours logs them as that
-    /// employee. Only the profit floor uses it, after checking who may force.
+    /// employee, and so does adding the department their waiting hours need. Used only after checking who may do that.
     /// </summary>
     void ActAs(long userId, string role, string? domain, string fullName) => throw new NotSupportedException();
+
+    /// <summary>Back to the signed-in person, after <see cref="ActAs"/>.</summary>
+    void StopActing() => throw new NotSupportedException();
 }
 
 public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
@@ -52,6 +55,8 @@ public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
         $"{Claim(AuthClaimTypes.FirstName)} {Claim(AuthClaimTypes.LastName)}".Trim();
 
     public void ActAs(long userId, string role, string? domain, string fullName) => actingAs = (userId, role, domain, fullName);
+
+    public void StopActing() => actingAs = null;
 
     public Guid? SessionId => Guid.TryParse(Claim(AuthClaimTypes.SessionId), out var id) ? id : null;
 

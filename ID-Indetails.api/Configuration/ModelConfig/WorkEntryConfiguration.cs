@@ -40,5 +40,10 @@ public class WorkEntryConfiguration : IEntityTypeConfiguration<WorkEntry>
             .WithMany()
             .HasForeignKey(x => x.AttachmentFileId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Team>()
+            .WithMany()
+            .HasForeignKey(x => x.TeamId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

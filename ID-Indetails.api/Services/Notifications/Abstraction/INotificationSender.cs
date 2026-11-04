@@ -38,4 +38,7 @@ public interface INotificationSender
 
     /// <summary>Active people who hold <paramref name="permission"/> and can see <paramref name="domain"/>, super admins included.</summary>
     Task<IReadOnlyList<long>> HoldersAsync(string domain, string permission, CancellationToken cancellationToken = default);
+
+    /// <summary>Every active super admin.</summary>
+    Task<IReadOnlyList<long>> SuperAdminsAsync(CancellationToken cancellationToken = default);
 }

@@ -28,6 +28,18 @@ public static class ErrorCodes
 
     /// <summary>400 (teamId) or 422. A Design employee belongs to a department: their hours are counted in it.</summary>
     public const string DepartmentRequired = "department_required";
+
+    /// <summary>422. Hours logged by someone whose department isn't on the project: kept until it is added.</summary>
+    public const string DepartmentNotOnProject = "department_not_on_project";
+
+    /// <summary>422. A department with hours logged on the project can't be taken off it.</summary>
+    public const string DepartmentHasHours = "department_has_hours";
+
+    /// <summary>422. Hours waiting for a department go through once it is added, never by forcing.</summary>
+    public const string DepartmentStillMissing = "department_still_missing";
+
+    /// <summary>422. A team that is a department of a project can't be deleted.</summary>
+    public const string TeamOnProjects = "team_on_projects";
     public const string UserNotInvited = "user_not_invited";
     public const string UserDeactivated = "user_deactivated";
 

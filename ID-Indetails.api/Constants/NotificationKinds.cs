@@ -15,6 +15,19 @@ public static class NotificationKinds
     /// <summary>Someone commented on your work entry (subject: the work entry).</summary>
     public const string EntryComment = "entry_comment";
 
+    /// <summary>
+    /// Hours logged on a project its logger's department isn't on (subject: the blocked change), kept until it is added.
+    /// One rolling notification per project and department (digest key <c>log-department-{project}-{team}</c>), to the
+    /// project's owner and every super admin.
+    /// </summary>
+    public const string LogDepartmentBlocked = "log_department_blocked";
+
+    /// <summary>
+    /// Your hours that waited for your department went through, or couldn't (payload <c>released</c>, and its
+    /// <c>reason</c>), once it was added to the project. One rolling notification per project and outcome.
+    /// </summary>
+    public const string WorkEntryReleased = "work_entry_released";
+
     /// <summary>Someone who doesn't manage meetings set one (subject: the meeting). Sent to the domain's meeting managers.</summary>
     public const string MeetingScheduled = "meeting_scheduled";
 

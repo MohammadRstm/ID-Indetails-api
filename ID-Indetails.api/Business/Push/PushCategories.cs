@@ -20,6 +20,8 @@ public static class PushCategories
         [NotificationKinds.WorkLogged] = NotificationCategory.Work,
         [NotificationKinds.WorkDigest] = NotificationCategory.Work,
         [NotificationKinds.EntryComment] = NotificationCategory.Work,
+        [NotificationKinds.LogDepartmentBlocked] = NotificationCategory.Work,
+        [NotificationKinds.WorkEntryReleased] = NotificationCategory.Work,
         [NotificationKinds.WeeklySummary] = NotificationCategory.Work,
         [NotificationKinds.HoursExcused] = NotificationCategory.Work,
         [NotificationKinds.ScheduleChanged] = NotificationCategory.Work,

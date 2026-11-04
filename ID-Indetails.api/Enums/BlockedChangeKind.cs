@@ -1,6 +1,9 @@
 namespace ID_Indetails.api.Enums;
 
-/// <summary>What a change refused by the profit floor was.</summary>
+/// <summary>
+/// What a refused change was: one the profit floor refused, or hours logged by someone whose department isn't on the
+/// project (<see cref="WorkEntryDepartment"/>), kept until it is added.
+/// </summary>
 public enum BlockedChangeKind
 {
     Expense,
@@ -18,6 +21,8 @@ public enum BlockedChangeKind
     Pricing,
     BoqAgree,
     BoqWithdraw,
+    /// <summary>Hours logged by someone whose department isn't on the project: they go through once it is added.</summary>
+    WorkEntryDepartment,
 }
 
 /// <summary>Where a refused change stands.</summary>

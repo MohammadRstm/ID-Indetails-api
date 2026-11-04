@@ -67,6 +67,10 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<ProjectStaff> ProjectStaff => Set<ProjectStaff>();
 
+    public DbSet<ProjectDepartment> ProjectDepartments => Set<ProjectDepartment>();
+
+    public DbSet<ProjectDepartmentChange> ProjectDepartmentChanges => Set<ProjectDepartmentChange>();
+
     public DbSet<SiteLog> SiteLogs => Set<SiteLog>();
 
     public DbSet<PocketEntry> PocketEntries => Set<PocketEntry>();
@@ -194,6 +198,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<PortalUploadStatus>(configurationBuilder);
         StoreAsSnakeCase<PortalNotificationKind>(configurationBuilder);
         StoreAsSnakeCase<WebsiteProjectStatus>(configurationBuilder);
+        StoreAsSnakeCase<ProjectDepartmentChangeKind>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

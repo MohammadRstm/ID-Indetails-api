@@ -26,7 +26,7 @@ public sealed class ProjectFinanceService(
         ILookup<long, WorkEntryRow> Entries,
         IReadOnlyList<ProjectFinance.PayRate> PayRates,
         IReadOnlyDictionary<long, PaidOvertime> Overtime,
-        ILookup<long, Cost> Breaks,
+        ILookup<long, BreakCost> Breaks,
         ILookup<long, ExpenseRow> Expenses,
         ILookup<long, SiteExpenseRow> SiteExpenses,
         ILookup<long, GroundLabourRow> Ground,
@@ -52,13 +52,44 @@ public sealed class ProjectFinanceService(
         return projects.ToDictionary(p => p.Id, p =>
         {
             var entries = loaded.Entries[p.Id].ToList();
-            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Overtime, loaded.Breaks[p.Id], loaded.Expenses[p.Id], loaded.SiteExpenses[p.Id], loaded.Ground[p.Id]);
+            var (items, _) = CostItems(entries, loaded.PayRates, loaded.Overtime, loaded.Breaks[p.Id].Select(b => b.Cost), loaded.Expenses[p.Id], loaded.SiteExpenses[p.Id], loaded.Ground[p.Id]);
             return new ProjectCostHistory(
                 Calculate(p, loaded),
                 ProjectFinance.DatedUsd(items, loaded.Rates),
                 ProjectFinance.Unconvertible(items, loaded.Rates),
                 entries.Select(e => new WorkDay(e.UserId, clock.ToCompanyDate(e.StartedAt), e.Minutes)).ToList());
         });
+    }
+
+    public async Task<IReadOnlyList<DepartmentLabour>> LabourByDepartmentAsync(Project project, CancellationToken cancellationToken = default)
+    {
+        var loaded = await LoadAsync([project], cancellationToken);
+        var entries = loaded.Entries[project.Id].ToList();
+        decimal Usd(IEnumerable<Cost> items) => items.Sum(i => loaded.Rates.ToUsd(i.Amount, i.Currency, i.Day) ?? 0);
+
+        var costs = entries.Select(e =>
+        {
+            var day = clock.ToCompanyDate(e.StartedAt);
+            var (items, _) = ProjectFinance.PriceLabour([PaidOvertime.Of(e.UserId, day, e.Minutes, loaded.Overtime.GetValueOrDefault(e.Id))], loaded.PayRates);
+            return (e.TeamId, e.UserId, Day: day, e.Minutes, Cost: Usd(items));
+        }).ToList();
+
+        // a paid break counts in the department that day's hours were logged in
+        var teamOn = costs.GroupBy(c => (c.UserId, c.Day)).ToDictionary(g => g.Key, g => g.First().TeamId);
+        costs.AddRange(loaded.Breaks[project.Id].Select(b =>
+            (teamOn.GetValueOrDefault((b.UserId, b.Cost.Day)), b.UserId, b.Cost.Day, Minutes: 0, Cost: Usd([b.Cost]))));
+
+        var rates = loaded.PayRates.GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => g.OrderBy(r => r.EffectiveFrom).ToList());
+        decimal? RateIn(long userId, DateOnly day)
+            => rates.TryGetValue(userId, out var history) && ProjectFinance.RateOn(history, day) is var rate
+                ? loaded.Rates.ToUsd(rate.HourlyCost, rate.Currency, day)
+                : null;
+
+        return costs
+            .GroupBy(c => (c.TeamId, c.UserId, Month: new DateOnly(c.Day.Year, c.Day.Month, 1)))
+            .Select(g => new DepartmentLabour(g.Key.TeamId, g.Key.UserId, g.Key.Month, g.Sum(c => c.Minutes), g.Sum(c => c.Cost),
+                RateIn(g.Key.UserId, g.Min(c => c.Day))))
+            .ToList();
     }
 
     private async Task<Loaded> LoadAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken)
@@ -72,7 +103,7 @@ public sealed class ProjectFinanceService(
             entries.ToLookup(e => e.ProjectId),
             payRates,
             await PaidOvertimeAsync(entries, payRates, cancellationToken),
-            (await PaidBreaksAsync(entries, payRates, cancellationToken)).ToLookup(b => b.ProjectId, b => b.Cost),
+            (await PaidBreaksAsync(entries, payRates, cancellationToken)).ToLookup(b => b.ProjectId),
             (await sources.ExpensesAsync(ids, cancellationToken)).ToLookup(x => x.ProjectId),
             (await sources.SiteExpensesAsync(ids, cancellationToken)).ToLookup(e => e.ProjectId),
             (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId),
@@ -86,7 +117,7 @@ public sealed class ProjectFinanceService(
             loaded.Entries[project.Id].ToList(),
             loaded.PayRates,
             loaded.Overtime,
-            loaded.Breaks[project.Id],
+            loaded.Breaks[project.Id].Select(b => b.Cost),
             loaded.Expenses[project.Id],
             loaded.SiteExpenses[project.Id].ToList(),
             loaded.Ground[project.Id],

@@ -46,6 +46,8 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `work_logged` | Holders of `work_entry:view_all` in Design, per `notifyEntry` (see [design.md](design.md)) | the work entry | `authorName`, `projectTitle`, `minutes`, `description` |
 | `work_digest` | The same, when `notifyEntry` is `digest`: one per person per day | — | `minutes`, `latestName`, `projectTitle` |
 | `entry_comment` | The work entry's author | the work entry | `authorName`, `text`, `entryDescription` |
+| `log_department_blocked` | The project's owner and every super admin, when someone logs hours on a project their department isn't on (see [projects.md](projects.md#departments)). Rolling per project and department (`log-department-{projectId}-{teamId}`) | the blocked change | `projectTitle`, `personName`, `departmentName`, `teamId` |
+| `work_entry_released` | The person whose hours waited for their department, once it was added. Rolling per project and outcome | the project | `projectTitle`, `released`, `reason` (when not released) |
 | `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
 | `meeting_invited` | A general meeting's attendees, when they are added | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
 | `meeting_moved` | A general meeting's attendees, when its time changes | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
@@ -139,7 +141,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 
 | Category | Kinds |
 |---|---|
-| `work` | `work_logged`, `work_digest`, `entry_comment`, `weekly_summary`, `hours_excused`, `schedule_changed`, `hours_missed`, `hours_missed_list` |
+| `work` | `work_logged`, `work_digest`, `entry_comment`, `log_department_blocked`, `work_entry_released`, `weekly_summary`, `hours_excused`, `schedule_changed`, `hours_missed`, `hours_missed_list` |
 | `requirements` | `requirement_assigned`, `requirements_added`, `requirement_done`, `requirement_due_soon`, `requirement_overdue` |
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |

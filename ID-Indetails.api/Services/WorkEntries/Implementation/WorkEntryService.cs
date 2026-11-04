@@ -2,6 +2,7 @@ using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.WorkEntries;
@@ -10,6 +11,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
+using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
@@ -18,6 +20,7 @@ using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -32,6 +35,8 @@ public sealed class WorkEntryService(
     ICurrentUser currentUser,
     IPermissionService permissions,
     IProjectRepository projects,
+    IProjectDepartmentRepository departments,
+    IUserRepository users,
     IWorkEntryRepository entries,
     IDomainSettingsService domainSettings,
     IWorkLogNotifier notifier,
@@ -50,11 +55,13 @@ public sealed class WorkEntryService(
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
 
         var project = await LoggableProjectAsync(actor, request.ProjectId, settings, cancellationToken);
+        var department = await DepartmentOnAsync(actor, project, request, cancellationToken);
         var before = await floor.BeforeAsync(project, cancellationToken);
         var entry = new WorkEntry
         {
             UserId = actor.UserId,
             ProjectId = project.Id,
+            TeamId = department,
             Description = request.Description?.Trim() ?? string.Empty,
             StartedAt = WorkEntryRules.AsUtc(request.StartedAt),
             EndedAt = WorkEntryRules.AsUtc(request.EndedAt),
@@ -100,6 +107,12 @@ public sealed class WorkEntryService(
         var project = entry.ProjectId == request.ProjectId
             ? entry.Project
             : await LoggableProjectAsync(actor, request.ProjectId, settings, cancellationToken);
+        if (project.Id != entry.ProjectId)
+        {
+            // moved to another project, the hours count in the department the logger is in now
+            entry.TeamId = await DepartmentOnAsync(actor, project, null, cancellationToken);
+        }
+
         var before = await floor.BeforeAsync(project, cancellationToken);
 
         entry.ProjectId = project.Id;
@@ -205,6 +218,37 @@ public sealed class WorkEntryService(
 
         Throw(WorkEntryRules.CheckProject(project.DomainCode, project.Status, settings.HoldLogging));
         return project;
+    }
+
+    /// <summary>
+    /// The logger's department, which their hours count in. On a project with departments it must be one of them: new
+    /// hours from another are kept until it is added (<paramref name="logged"/>, see <see cref="DepartmentBlockedException"/>);
+    /// hours moved there are refused.
+    /// </summary>
+    private async Task<long?> DepartmentOnAsync(UserAccess actor, Project project, SaveWorkEntryRequest? logged, CancellationToken cancellationToken)
+    {
+        var department = (await users.GetByIdAsync(actor.UserId, cancellationToken))?.TeamId;
+        var onProject = (await departments.ListAsync([project.Id], cancellationToken)).Select(d => d.TeamId).ToList();
+        if (ProjectDepartmentRules.MayLog(onProject, department))
+        {
+            return department;
+        }
+
+        if (department is not { } theirs)
+        {
+            throw ProjectDepartmentRules.NoDepartment().ToException();
+        }
+
+        var name = (await departments.CandidatesAsync([theirs], cancellationToken)).Single().Name;
+        if (logged is null)
+        {
+            throw new BusinessRuleException(ErrorCodes.DepartmentNotOnProject,
+                $"{name} isn't one of {project.Title}'s departments, so these hours can't be moved there. Ask its owner to add it first.");
+        }
+
+        throw new DepartmentBlockedException(project.Id, project.Title, project.DomainCode,
+            JsonSerializer.Serialize(new BlockedRequest<SaveWorkEntryRequest>(project.Id, logged), ProfitFloor.Json),
+            actor.UserId, project.OwnerId, theirs, name, currentUser.FullName);
     }
 
     /// <summary>Other people's entries read as not found, whatever the caller may view.</summary>

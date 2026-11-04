@@ -153,6 +153,9 @@ public static class ProtonSideEffectGuards
 
         public Task<IReadOnlyList<long>> HoldersAsync(string domain, string permission, CancellationToken cancellationToken = default)
             => inner.HoldersAsync(domain, permission, cancellationToken);
+
+        public Task<IReadOnlyList<long>> SuperAdminsAsync(CancellationToken cancellationToken = default)
+            => inner.SuperAdminsAsync(cancellationToken);
     }
 
     private sealed class GuardedLiveUpdates(ILiveUpdates inner) : ILiveUpdates

@@ -35,6 +35,27 @@ Employees hold `project:view`, so they see every project of their domain in any 
 - **TVA:** `tvaRate` (0 to 1, needs `financial:view`) on client work; left out, it is 11% (see [billing.md](billing.md#tva)). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
 - The client must belong to the project's domain (`400`) and not be archived (`422 client_archived`).
 - **Owner:** an admin of the project's domain who isn't deactivated, or a super admin; never an employee (`422 owner_not_allowed`). The rule applies when a project is created and when its owner changes.
+- **Departments (Design):** `departmentIds`, the Design teams working on it, in equal shares. The app asks for them on client work; left out, the project has none and works as before departments. See "Departments" below.
+
+## Departments
+
+A Design project is worked on by one or more departments (teams; the app calls them departments). Each has a **share** of the price, a fraction to four places, and the shares add up to exactly 1. One department means the whole price is its own. Every Design department on a project names it a **Full file** (`departmentsName`).
+
+| Endpoint | Permission | What it does |
+|---|---|---|
+| `GET /api/projects/{id}/departments` | `project:view` | The departments. With `financial:view`, each one's `share` and `money`: `budget` (the price before TVA × its share), `cost` and `minutes` of the hours logged in it, `left` (below zero when it is over its budget), and each person's hours and cost month by month with that month's hourly rate. `other` holds hours of people in no department, or in one no longer on the project. |
+| `GET /api/projects/{id}/departments/history` | `financial:view` | Every change of the split, newest first: `kind` (`created`, `departments`, `shares`), the departments and shares `before` and `after` (named as they were then), the reason, who and when |
+| `PUT /api/projects/{id}/departments` | `project:edit` | `{ departmentIds }`: the departments. Any change puts the shares back to equal; hours waiting for an added department go through (below). A department with hours logged on the project stays (`422 department_has_hours`). |
+| `PUT /api/projects/{id}/departments/shares` | `financial:write` | `{ shares: [{ departmentId, share }], reason }`: a share for each department, adding up to 100% (`400`) |
+
+- Execution sites have no departments (`422 not_for_this_domain`). A finished project's departments and shares are locked with its money (`422 project_locked`).
+- **Each hour stays with its department.** A work entry keeps its logger's department when it was logged (`work_entries.team_id`): their cost counts in that budget even after they move to another department. Moving an entry to another project counts it in the logger's department then. Costs are the project's labour costs as they are (pay, overtime, paid breaks), only grouped. Expenses stay with the project; the project's profit and its floor are unchanged, while a department may go over its budget.
+- **Logging on a project with departments needs one of them.**
+  - Hours logged by someone whose department isn't on the project are **kept**, not logged: `422 department_not_on_project`, as a blocked change of kind `work_entry_department`. The project's owner and every super admin get `log_department_blocked`.
+  - Once that department is added, the hours go through on their own, as the person who logged them and through the same checks. They hear it (`work_entry_released`, `released: true`). Hours that no longer fit (they overlap newer ones, the month closed, the profit floor refused them) are dropped and the person is told why (`released: false`, `reason`), to log them again.
+  - Such hours are never forced (`422 department_still_missing`); whoever sees the money may dismiss them.
+  - Someone with no department logs only on projects with none (`422 department_required`). Moving hours to a project without the logger's department is refused (`422 department_not_on_project`).
+- A team that is a department of a project can't be deleted (`422 team_on_projects`): rename it instead.
 
 ## Money
 

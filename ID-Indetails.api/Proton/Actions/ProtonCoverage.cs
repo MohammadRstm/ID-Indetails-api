@@ -123,6 +123,8 @@ public static class ProtonCoverage
         Action("Projects.UpdatePayment", "propose_project_money", T2, ProtonFamily.Money),
         Planned("Projects.UpdateBilling", T2, ProtonFamily.Money),
         Planned("Projects.UpdateStaff", T1, ProtonFamily.Core),
+        Planned("ProjectDepartments.Set", T1, ProtonFamily.Core),
+        Planned("ProjectDepartments.SetShares", T2, ProtonFamily.Money),
         Planned("SiteLogs.Create", T1, ProtonFamily.Core),
         Planned("SiteLogs.Update", T1, ProtonFamily.Core),
         Planned("Pocket.Contribute", T2, ProtonFamily.Money),

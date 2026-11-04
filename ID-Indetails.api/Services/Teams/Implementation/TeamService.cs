@@ -8,6 +8,7 @@ using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
+using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -23,6 +24,7 @@ public sealed class TeamService(
     ICurrentUser currentUser,
     IPermissionService permissions,
     ITeamRepository teams,
+    IProjectDepartmentRepository departments,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : ITeamService
@@ -90,6 +92,13 @@ public sealed class TeamService(
         {
             throw new BusinessRuleException(
                 ErrorCodes.TeamNotEmpty, "Only an empty team can be deleted. Move its people to another team first.");
+        }
+
+        // a project's budget is split between its departments: a department on one stays
+        if (await departments.ProjectCountAsync(team.Id, cancellationToken) is > 0 and var count)
+        {
+            throw new BusinessRuleException(ErrorCodes.TeamOnProjects,
+                $"{team.Name} is a department of {(count == 1 ? "a project" : $"{count} projects")}, so it can't be deleted. Rename it instead.");
         }
 
         // Its chat history is kept, and the chat can't outlive the team.

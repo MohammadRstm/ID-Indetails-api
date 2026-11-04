@@ -10,6 +10,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Proton.Ui;
+using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Clients.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
@@ -186,6 +187,9 @@ public sealed record CreateProjectInput : ProtonActionInput
     [Description("An Execution site only, required: the employees who oversee it and write its daily logs (ids from find), active Execution employees.")]
     public IReadOnlyList<long>? StaffIds { get; init; }
 
+    [Description("A Design client project only, required: the departments working on it (team ids from find), in equal shares to start.")]
+    public IReadOnlyList<long>? DepartmentIds { get; init; }
+
     public DateOnly? TargetDate { get; init; }
 
     public string? Description { get; init; }
@@ -197,7 +201,8 @@ public sealed record CreateProjectInput : ProtonActionInput
 /// Creates a Design project or an Execution site, through POST /api/projects once confirmed. Without money: a Design
 /// project's revenue, and a site's BOQs, rates and crew defaults, are set up afterwards.
 /// </summary>
-public sealed class ProposeCreateProjectTool(IProjectService projects, IClientService clients, IEmployeeService employees)
+public sealed class ProposeCreateProjectTool(
+    IProjectService projects, IClientService clients, IEmployeeService employees, IProjectDepartmentRepository departments)
     : ProtonActionTool<CreateProjectInput, CreateProjectArgs>
 {
     public override string Name => "propose_create_project";
@@ -260,6 +265,16 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
             throw new ProtonToolInputException("Only an Execution site has staff.");
         }
 
+        // a Design client project has its departments, which split its budget
+        var departmentIds = input.DepartmentIds ?? [];
+        if (domain == DomainCodes.Design && !input.Internal && departmentIds.Count == 0)
+        {
+            throw new ProtonToolInputException("Which departments work on this project? Ask the user, then pass their team ids.");
+        }
+
+        var chosenDepartments = await departments.CandidatesAsync(departmentIds, cancellationToken);
+        ProjectDepartmentRules.CheckChosen(domain, departmentIds, chosenDepartments).ThrowIfDenied();
+
         var ownerName = "you";
         if (input.OwnerId is { } ownerId)
         {
@@ -278,6 +293,7 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
             OwnerId = input.OwnerId,
             TargetDate = input.TargetDate,
             StaffIds = domain == DomainCodes.Execution ? input.StaffIds : null,
+            DepartmentIds = domain == DomainCodes.Design && departmentIds.Count > 0 ? departmentIds : null,
         };
 
         var sameName = await projects.ListAsync(new ProjectListQuery { Search = request.Title, Domain = domain, PageSize = 25 }, cancellationToken);
@@ -295,6 +311,10 @@ public sealed class ProposeCreateProjectTool(IProjectService projects, IClientSe
         if (staffNames.Count > 0)
         {
             changes.Add(new ProtonChange("Site staff", null, string.Join(", ", staffNames)));
+        }
+        if (chosenDepartments.Count > 0)
+        {
+            changes.Add(new ProtonChange("Departments", null, string.Join(", ", chosenDepartments.Select(d => d.Name).Order())));
         }
         if (!string.IsNullOrWhiteSpace(request.Location))
         {
