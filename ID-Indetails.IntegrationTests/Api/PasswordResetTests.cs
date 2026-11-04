@@ -40,7 +40,7 @@ public class PasswordResetTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (deactivatedEmail, _, deactivated) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         (await Client.PostEmptyAsync($"/api/employees/{deactivated.User.Id}/deactivate", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
         var invitedEmail = AuthTestSteps.NewEmail("invited");
-        (await Client.PostJsonAsync("/api/invitations", new { email = invitedEmail, role = RoleCodes.Employee, domainCode = DomainCodes.Design }, superAdmin.AccessToken))
+        (await Client.PostJsonAsync("/api/invitations", new { email = invitedEmail, role = RoleCodes.Employee, domainCode = DomainCodes.Design, teamId = await _steps.DesignDepartmentAsync() }, superAdmin.AccessToken))
             .StatusCode.ShouldBe(HttpStatusCode.Created);
 
         foreach (var address in new[] { deactivatedEmail, invitedEmail, AuthTestSteps.NewEmail("nobody") })

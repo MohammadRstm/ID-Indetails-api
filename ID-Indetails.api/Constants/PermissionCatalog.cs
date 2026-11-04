@@ -53,6 +53,7 @@ public static class PermissionCatalog
         new(P.ClientPortalManage, "Choose which project files a client sees, and publish the client portal", DomainCodes.Design),
 
         new(P.FinancialView, "See revenue, cost, profit, margin and rates", Sensitivity: Money),
+        new(P.FinancialWrite, "Set a Design project's price, its departments' shares and its variation orders", DomainCodes.Design, Sensitivity: Money),
         new(P.InvoiceCreate, "Create and edit draft invoices", Sensitivity: Money),
         new(P.InvoiceSend, "Issue and resend invoices", Sensitivity: Money),
         new(P.InvoiceVoid, "Void issued invoices", Sensitivity: Money),
@@ -111,7 +112,7 @@ public static class PermissionCatalog
     /// </summary>
     private static readonly string[] SuperAdminOnly =
     [
-        P.FinancialView, P.InvoiceCreate, P.InvoiceSend, P.InvoiceVoid, P.PaymentRecord, P.PaymentVoid,
+        P.FinancialView, P.FinancialWrite, P.InvoiceCreate, P.InvoiceSend, P.InvoiceVoid, P.PaymentRecord, P.PaymentVoid,
         P.BillingSettingsManage, P.ExpenseManage, P.ProjectPricingManage, P.BoqCreate,
         P.EmployeeInvite, P.EmployeePayManage, P.MessageAnnounce,
     ];

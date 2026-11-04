@@ -66,7 +66,7 @@ POST /api/proton/messages
     the portal, the phone app's own device, a website visitor's message, the development file store;
   - a read-only POST (2), or Proton's own controls (11).
 
-  An action that emails someone outside the company (an invoice, a BOQ, a quote, an invitation, a bug report) is flagged
+  An action that emails someone outside the company (an invoice, a BOQ, an invitation, a bug report) is flagged
   `ExternalSend` and is always strong: Proton calls the service, not the rate-limited endpoint.
 
   `ProtonCoverageTests` fails when an endpoint has no entry, when an action and its tool disagree, when an action

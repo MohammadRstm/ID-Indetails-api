@@ -1,5 +1,6 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
@@ -66,6 +67,11 @@ public sealed class InvitationService(
         if (request.Pay is { } terms && PayRules.CheckBasis(request.Role, request.DomainCode, terms.Basis) is { } denial)
         {
             throw denial.ToException();
+        }
+
+        if (EmployeeRules.CheckDepartment(request.Role, decision.DomainCode, request.TeamId) is { } noDepartment)
+        {
+            throw noDepartment.ToException();
         }
 
         if (request.TeamId is { } teamId)

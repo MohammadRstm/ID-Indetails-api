@@ -14,7 +14,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner. `startDate` (optional) moves the start date: never into the future, and on a site never past the week of its first ground labour reported (`400` on `startDate`); moving it earlier moves the site's first labour defaults with it |
 | `PUT /api/projects/{id}/billing` | `project:edit` and `financial:view` | Design only: client work or internal, and the client. Becoming internal drops the payment to 0 |
-| `PUT /api/projects/{id}/payment` | `project:edit` and `financial:view` | Design client projects only: `{ revenue, description }`, the customer payment and why it changes (see "Payment changes") |
+| `PUT /api/projects/{id}/payment` | `project:edit` and `financial:write` | Design client projects only: `{ revenue, description }`, the customer payment and why it changes (see "Payment changes") |
 | `PUT /api/projects/{id}/pricing` | `project:pricing_manage` | Execution only: `{ supervisionRate?, tvaRate?, description }`, the supervision rate and TVA (left out, one stays as it is), and why they change. The work price (`projectFee`) is never sent: `400`. There is no material markup any more |
 | `GET /api/projects/{id}/payment-changes` | `financial:view` | Every change of the agreed payment, newest first (see "Payment changes") |
 | `POST /api/projects/{id}/hold`, `/resume`, `/complete`, `/archive`, `/reopen` | `project:change_status` | Status changes (below) |
@@ -30,7 +30,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 ## Creating a project
 
 - The start date is today (company time zone). The owner defaults to the caller.
-- **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No work price. Sending a `revenue` needs `financial:view` (`403`): admins create the project and a super admin sets its customer payment later.
+- **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No work price. Sending a `revenue` needs `financial:write` (`403`; on an Execution site, `financial:view`): admins create the project and a super admin sets its customer payment later.
 - **Execution:** always client work, with a `clientId`, and optionally a `supervisionRate` (a fraction, 0 to 1; left out, **10%**). Sending it needs `project:pricing_manage` (`403`). There is no `materialMarkup` any more (it is ignored if sent). The **work price** (`projectFee`) starts at 0 and is set only by agreeing a BOQ: sending `projectFee` is `400`. `revenue` is never sent; it is calculated. A project takes no payment when it is created: a down payment is recorded as a payment afterwards. A `supervisionRate` on a Design project is `400`.
 - **TVA:** `tvaRate` (0 to 1, needs `financial:view`) on client work; left out, it is 11% (see [billing.md](billing.md#tva)). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
 - The client must belong to the project's domain (`400`) and not be archived (`422 client_archived`).

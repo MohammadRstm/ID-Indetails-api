@@ -86,7 +86,7 @@ public sealed record PushTarget
 
             NotificationKinds.ProjectCreated or NotificationKinds.ProjectStatusChanged or NotificationKinds.ProjectOwnerSet
                 or NotificationKinds.ProjectNearlyDone or NotificationKinds.ProjectIdle
-                or NotificationKinds.ProjectClosed or NotificationKinds.ProjectCostHigh or NotificationKinds.QuoteDue
+                or NotificationKinds.ProjectClosed or NotificationKinds.ProjectCostHigh
                 or NotificationKinds.ChangeBlocked or NotificationKinds.ProfitLow or NotificationKinds.ProfitAtZero
                 => ProjectPart(projectId, projectDomain, null),
 

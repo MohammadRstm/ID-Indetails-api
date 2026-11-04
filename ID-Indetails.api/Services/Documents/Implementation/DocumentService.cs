@@ -34,7 +34,6 @@ public sealed class DocumentService(
     IPermissionService permissions,
     IInvoiceService invoiceService,
     IBoqService boqService,
-    IQuoteService quoteService,
     IProjectService projectService,
     IProjectRepository projects,
     IMoneyRollupService moneyRollups,
@@ -106,27 +105,6 @@ public sealed class DocumentService(
 
     private PdfFile BoqFile(BoqDocument document, Letterhead head)
         => new(BoqPdf.Render(document, BoqDate(document.Boq), head), document.Boq.Number!.ToLowerInvariant() + ".pdf");
-
-    public async Task<PdfFile> QuotePdfAsync(long quoteId, CancellationToken cancellationToken = default)
-    {
-        var quote = await quoteService.GetAsync(quoteId, cancellationToken);
-        return await QuoteFileAsync(quote, cancellationToken);
-    }
-
-    public async Task<QuoteResponse> EmailQuoteAsync(long quoteId, EmailDocumentRequest request, CancellationToken cancellationToken = default)
-    {
-        var quote = await quoteService.GetAsync(quoteId, cancellationToken);
-        var to = request.To.Trim();
-        var head = await LetterheadAsync(cancellationToken);
-        var pdf = await QuoteFileAsync(quote, cancellationToken);
-        await SendAsync(DocumentEmails.QuoteEmail(to, quote, clock.ToCompanyDate(quote.CreatedAt), head, currentUser.FullName, pdf), "quote", quoteId, cancellationToken);
-
-        return await quoteService.RecordDeliveryAsync(
-            quoteId, new RecordDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = to, Note = request.Note }, cancellationToken);
-    }
-
-    private async Task<PdfFile> QuoteFileAsync(QuoteResponse quote, CancellationToken cancellationToken)
-        => new(QuotePdf.Render(quote, clock.ToCompanyDate(quote.CreatedAt), await LetterheadAsync(cancellationToken)), quote.Number.ToLowerInvariant() + ".pdf");
 
     public async Task<PdfFile> ProjectReportPdfAsync(long projectId, ProjectReportQuery query, CancellationToken cancellationToken = default)
     {

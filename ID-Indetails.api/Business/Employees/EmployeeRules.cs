@@ -215,6 +215,15 @@ public static class EmployeeRules
     }
 
     /// <summary>Moving someone to the other business. Only callers who see both businesses can; website staff aren't moved.</summary>
+    /// <summary>A Design employee must belong to a department (a team): their logged hours are counted in it.</summary>
+    public static bool NeedsDepartment(string role, string? domain) => role == RoleCodes.Employee && domain == DomainCodes.Design;
+
+    /// <summary>The 400 on <c>teamId</c> when someone who needs a department is given none.</summary>
+    public static RuleDenial? CheckDepartment(string role, string? domain, long? teamId)
+        => NeedsDepartment(role, domain) && teamId is null
+            ? RuleDenial.Invalid(ErrorCodes.DepartmentRequired, "teamId", "Choose the department they work in.")
+            : null;
+
     public static RuleDenial? CheckMove(UserAccess actor, Target target, string newDomain)
     {
         if (target.Id == actor.UserId)

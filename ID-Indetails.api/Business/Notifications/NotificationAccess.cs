@@ -25,7 +25,6 @@ public static class NotificationAccess
         [NotificationKinds.ChangeBlocked] = PermissionCodes.FinancialView,
         [NotificationKinds.ProfitLow] = PermissionCodes.FinancialView,
         [NotificationKinds.ProfitAtZero] = PermissionCodes.FinancialView,
-        [NotificationKinds.QuoteDue] = PermissionCodes.InvoiceSend,
     };
 
     /// <summary>The kinds <paramref name="reader"/> may no longer read.</summary>

@@ -22,8 +22,12 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         changed.IsSuccessStatusCode.ShouldBeTrue(await changed.Content.ReadAsStringAsync());
     }
 
-    private Task<HttpResponseMessage> InviteAsync(AuthResponse inviter, string role, object? pay = null)
-        => Client.PostJsonAsync("/api/invitations", new { email = AuthTestSteps.NewEmail(role), role, domainCode = DomainCodes.Design, pay }, inviter.AccessToken);
+    private async Task<HttpResponseMessage> InviteAsync(AuthResponse inviter, string role, object? pay = null)
+    {
+        long? teamId = role == RoleCodes.Employee ? await _steps.DesignDepartmentAsync() : null;
+        return await Client.PostJsonAsync("/api/invitations",
+            new { email = AuthTestSteps.NewEmail(role), role, domainCode = DomainCodes.Design, pay, teamId }, inviter.AccessToken);
+    }
 
     [Fact]
     public async Task Inviting_or_promoting_someone_needs_the_permissions_of_their_new_role()
@@ -51,6 +55,9 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         // meeting:create comes with the employee role too
         await ChangeAsync(superAdmin, limited.User.Id, "revoke", PermissionCodes.MeetingCreate);
         await ChangeAsync(superAdmin, demoted.User.Id, "revoke", PermissionCodes.ClientManage);
+        // a Design employee needs a department
+        await _steps.PutInTeamAsync(limited.User.Id, await _steps.DesignDepartmentAsync());
+        await _steps.PutInTeamAsync(demoted.User.Id, await _steps.DesignDepartmentAsync());
 
         await (await Client.PutJsonAsync($"/api/employees/{limited.User.Id}/role", new { role = RoleCodes.Employee }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.PermissionChangeNotAllowed);
