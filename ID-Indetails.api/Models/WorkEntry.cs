@@ -29,6 +29,12 @@ public class WorkEntry
     /// </summary>
     public bool OutsideScope { get; set; }
 
+    /// <summary>
+    /// The logger's department when the hours were logged: their cost counts in that department's budget, even after
+    /// they move to another one. Null for hours logged by someone with no department.
+    /// </summary>
+    public long? TeamId { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? UpdatedAt { get; set; }

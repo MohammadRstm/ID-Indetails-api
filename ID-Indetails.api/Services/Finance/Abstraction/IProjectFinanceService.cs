@@ -48,6 +48,12 @@ public interface IProjectFinanceService
     /// </summary>
     Task<IReadOnlyDictionary<long, ProjectCostHistory>> CostHistoryAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// A project's labour cost by the department each hour was logged in, per person and month: the same cost as the
+    /// project's labour, paid breaks included (counted where that day's hours were logged).
+    /// </summary>
+    Task<IReadOnlyList<DepartmentLabour>> LabourByDepartmentAsync(Project project, CancellationToken cancellationToken = default);
+
     /// <summary>The project's cash position week by week, from its first week to the week of <paramref name="to"/>.</summary>
     Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(
         Project project,
@@ -89,6 +95,10 @@ public sealed record ProjectCostHistory(
     IReadOnlyList<WorkDay> Work);
 
 public sealed record BreakCost(long UserId, long ProjectId, ProjectFinance.CostItem Cost);
+
+/// <summary>Someone's hours and their cost in a month, in the department they were logged in (null: none), in USD.</summary>
+/// <param name="HourlyRate">Their hourly cost that month in USD; null when they have no pay or it has no exchange rate.</param>
+public sealed record DepartmentLabour(long? TeamId, long UserId, DateOnly Month, int Minutes, decimal Cost, decimal? HourlyRate);
 
 public sealed record PaidOvertime(int Minutes, decimal Multiplier)
 {

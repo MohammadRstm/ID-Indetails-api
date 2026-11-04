@@ -119,7 +119,7 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 - The prototype's teams are seeded (`Constants/TeamSeed.cs`):
   - Design: Engineering, Design, Data, Marketing, Operations, Platform.
   - Execution: Site Operations, Procurement, Quantity Surveying, Safety, Project Management.
-- A team can only be deleted while nobody is in it, including deactivated people (`422 team_not_empty`), and while its group chat has no messages (`422 team_has_chat`), so chat history is never lost. Rename it instead.
+- A team can only be deleted while nobody is in it, including deactivated people (`422 team_not_empty`), while it is no project's department (`422 team_on_projects`, see [projects.md](projects.md#departments)), and while its group chat has no messages (`422 team_has_chat`), so chat history is never lost. Rename it instead.
 - `POST /api/teams` may leave out `domainCode` when the caller works in only one business.
 
 ## Not built yet

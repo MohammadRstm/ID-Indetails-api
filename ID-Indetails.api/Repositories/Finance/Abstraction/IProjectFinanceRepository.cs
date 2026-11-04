@@ -30,7 +30,8 @@ public interface IProjectFinanceRepository
     Task<IReadOnlyList<(DateTime At, decimal AmountUsd)>> PocketMovesAsync(long projectId, CancellationToken cancellationToken = default);
 }
 
-public sealed record WorkEntryRow(long Id, long ProjectId, long UserId, DateTime StartedAt, int Minutes);
+/// <param name="TeamId">The logger's department when the hours were logged.</param>
+public sealed record WorkEntryRow(long Id, long ProjectId, long UserId, DateTime StartedAt, int Minutes, long? TeamId = null);
 
 public sealed record ExpenseRow(long ProjectId, string Currency, decimal Amount, DateOnly SpentOn);
 

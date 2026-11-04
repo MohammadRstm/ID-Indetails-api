@@ -1,3 +1,4 @@
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
@@ -33,6 +34,12 @@ public sealed class UserRepository(IdIndetailsDbContext db) : IUserRepository
     public async Task<IReadOnlyList<long>> ActiveIdsInDomainAsync(string domain, CancellationToken cancellationToken = default)
         => await db.Users
             .Where(u => u.DomainCode == domain && u.Status == UserStatus.Active)
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<long>> ActiveSuperAdminIdsAsync(CancellationToken cancellationToken = default)
+        => await db.Users
+            .Where(u => u.RoleCode == RoleCodes.SuperAdmin && u.Status == UserStatus.Active)
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);
 

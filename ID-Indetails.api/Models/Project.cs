@@ -95,4 +95,7 @@ public class Project
 
     /// <summary>Execution only: who oversees the site, now and before.</summary>
     public ICollection<ProjectStaff> Staff { get; set; } = new List<ProjectStaff>();
+
+    /// <summary>Design only: the departments working on it and their shares of the price.</summary>
+    public ICollection<ProjectDepartment> Departments { get; set; } = new List<ProjectDepartment>();
 }

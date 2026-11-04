@@ -328,7 +328,7 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_blocked_changes_decided", "(`status` = 'pending') = (`decided_at` IS NULL)");
 
-                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw')");
+                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw', 'work_entry_department')");
 
                             t.HasCheckConstraint("ck_blocked_changes_status", "`status` IN ('pending', 'forced', 'dismissed')");
                         });
@@ -4065,6 +4065,104 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartment", b =>
+                {
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<long>("TeamId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("team_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("added_at");
+
+                    b.Property<long?>("AddedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("added_by_id");
+
+                    b.Property<decimal>("Share")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)")
+                        .HasColumnName("share");
+
+                    b.HasKey("ProjectId", "TeamId")
+                        .HasName("pk_project_departments");
+
+                    b.HasIndex("AddedById")
+                        .HasDatabaseName("ix_project_departments_added_by_id");
+
+                    b.HasIndex("TeamId")
+                        .HasDatabaseName("ix_project_departments_team_id");
+
+                    b.ToTable("project_departments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_departments_share", "`share` >= 0 AND `share` <= 1");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartmentChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("After")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("after");
+
+                    b.Property<string>("Before")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("before");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("changed_at");
+
+                    b.Property<long>("ChangedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("changed_by_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_department_share_changes");
+
+                    b.HasIndex("ChangedById")
+                        .HasDatabaseName("ix_project_department_share_changes_changed_by_id");
+
+                    b.HasIndex("ProjectId", "ChangedAt")
+                        .HasDatabaseName("ix_project_department_share_changes_project_id_changed_at");
+
+                    b.ToTable("project_department_share_changes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_department_share_changes_kind", "`kind` IN ('created', 'departments', 'shares')");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectExpense", b =>
                 {
                     b.Property<long>("Id")
@@ -6977,6 +7075,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("datetime(3)")
                         .HasColumnName("started_at");
 
+                    b.Property<long?>("TeamId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("team_id");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
@@ -6994,6 +7096,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("StartedAt")
                         .HasDatabaseName("ix_work_entries_started_at");
+
+                    b.HasIndex("TeamId")
+                        .HasDatabaseName("ix_work_entries_team_id");
 
                     b.HasIndex("ProjectId", "StartedAt")
                         .HasDatabaseName("ix_work_entries_project_id_started_at");
@@ -8238,6 +8343,52 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartment", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AddedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_project_departments_users_added_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany("Departments")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_departments_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_departments_teams_team_id");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartmentChange", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_department_share_changes_users_changed_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_department_share_changes_projects_project_id");
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectExpense", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -8869,6 +9020,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_work_entries_projects_project_id");
 
+                    b.HasOne("ID_Indetails.api.Models.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_work_entries_teams_team_id");
+
                     b.HasOne("ID_Indetails.api.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -8971,6 +9128,8 @@ namespace ID_Indetails.api.Data.Migrations
 
             modelBuilder.Entity("ID_Indetails.api.Models.Project", b =>
                 {
+                    b.Navigation("Departments");
+
                     b.Navigation("Expenses");
 
                     b.Navigation("LabourDefaults");

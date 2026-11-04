@@ -49,6 +49,27 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         RuleFor(x => x.SupervisionRate).SupervisionRate();
         RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.LabourDefaults!).SetValidator(new SetLabourDefaultsRequestValidator()).When(x => x.LabourDefaults is not null);
+        RuleForEach(x => x.DepartmentIds).GreaterThan(0).WithMessage("A department is invalid.");
+    }
+}
+
+public sealed class SetProjectDepartmentsRequestValidator : AbstractValidator<SetProjectDepartmentsRequest>
+{
+    public SetProjectDepartmentsRequestValidator()
+    {
+        RuleFor(x => x.DepartmentIds).NotNull().Must(ids => ids.Count > 0).WithMessage("Choose the departments working on it.");
+        RuleForEach(x => x.DepartmentIds).GreaterThan(0).WithMessage("A department is invalid.");
+    }
+}
+
+public sealed class SetDepartmentSharesRequestValidator : AbstractValidator<SetDepartmentSharesRequest>
+{
+    public SetDepartmentSharesRequestValidator()
+    {
+        RuleFor(x => x.Shares).NotNull().Must(s => s.Count > 0).WithMessage("Give each department its share.");
+        RuleForEach(x => x.Shares).Must(s => s.DepartmentId > 0).WithMessage("A department is invalid.");
+        RuleFor(x => (string?)x.Reason).ClientText("Reason", ProjectDepartmentRules.MaxReasonLength, required: true)
+            .OverridePropertyName("reason");
     }
 }
 

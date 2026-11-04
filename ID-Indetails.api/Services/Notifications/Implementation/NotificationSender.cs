@@ -96,6 +96,9 @@ public sealed class NotificationSender(
     public Task<IReadOnlyList<long>> DomainMembersAsync(string domain, CancellationToken cancellationToken = default)
         => users.ActiveIdsInDomainAsync(domain, cancellationToken);
 
+    public Task<IReadOnlyList<long>> SuperAdminsAsync(CancellationToken cancellationToken = default)
+        => users.ActiveSuperAdminIdsAsync(cancellationToken);
+
     public async Task<IReadOnlyList<long>> HoldersAsync(string domain, string permission, CancellationToken cancellationToken = default)
     {
         var holders = new List<long>();

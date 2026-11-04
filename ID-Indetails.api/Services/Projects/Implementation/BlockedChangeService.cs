@@ -53,6 +53,12 @@ public sealed class BlockedChangeService(
     {
         var actor = await ActorAsync(cancellationToken);
         var row = await RowAsync(actor, id, cancellationToken);
+        if (row.Change.Kind == BlockedChangeKind.WorkEntryDepartment)
+        {
+            throw new BusinessRuleException(ErrorCodes.DepartmentStillMissing,
+                "These hours go through on their own once their logger's department is added to the project.");
+        }
+
         await DecideAsync(row, BlockedChangeStatus.Forced, actor, cancellationToken);
         try
         {
@@ -188,10 +194,15 @@ public sealed class BlockedChangeService(
                 return $"Expense change: {Read<SiteExpenseEntryRequest>(change).Request.Name.Trim()}";
             case BlockedChangeKind.LabourWeek:
                 return $"Labour of the week of {Read<SubmitLabourWeekRequest>(change).WeekStart:d MMM yyyy}";
-            case BlockedChangeKind.WorkEntryCreate or BlockedChangeKind.WorkEntryUpdate:
+            case BlockedChangeKind.WorkEntryCreate or BlockedChangeKind.WorkEntryUpdate or BlockedChangeKind.WorkEntryDepartment:
                 var entry = Read<SaveWorkEntryRequest>(change).Request;
                 var minutes = (int)(entry.EndedAt - entry.StartedAt).TotalMinutes;
-                return $"{(change.Kind == BlockedChangeKind.WorkEntryCreate ? "Hours logged" : "Hours changed")}: "
+                return $"{change.Kind switch
+                {
+                    BlockedChangeKind.WorkEntryCreate => "Hours logged",
+                    BlockedChangeKind.WorkEntryDepartment => "Hours waiting for their department",
+                    _ => "Hours changed",
+                }}: "
                     + $"{minutes / 60}h {minutes % 60:00}m on {clock.ToCompanyDate(entry.StartedAt.ToUniversalTime()):d MMM yyyy}";
             case BlockedChangeKind.Payment:
                 return $"Payment set to {Read<UpdateProjectPaymentRequest>(change).Request.Revenue:N2} USD";

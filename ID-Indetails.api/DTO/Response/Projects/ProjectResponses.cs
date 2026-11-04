@@ -254,6 +254,14 @@ public sealed record ProjectResponse
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<PersonRefResponse>? Staff { get; init; }
 
+    /// <summary>Design projects only: the departments working on it, by name (empty for one made before departments).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ProjectDepartmentRefResponse>? Departments { get; init; }
+
+    /// <summary>Design projects only: "Full file" when every department works on it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DepartmentsName { get; init; }
+
     public int ProgressPct { get; init; }
 
     public DateTime CreatedAt { get; init; }

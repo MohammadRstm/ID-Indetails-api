@@ -83,6 +83,12 @@ public sealed record CreateProjectRequest
 
     /// <summary>Execution only, required: the employees who oversee the site (at least one).</summary>
     public IReadOnlyList<long>? StaffIds { get; init; }
+
+    /// <summary>
+    /// Design only: the departments (teams) working on it, in equal shares. Every Design department makes it a "Full
+    /// file". Left out, the project has none and works as before departments; the app asks for them on client work.
+    /// </summary>
+    public IReadOnlyList<long>? DepartmentIds { get; init; }
 }
 
 /// <summary>Completing a project.</summary>
