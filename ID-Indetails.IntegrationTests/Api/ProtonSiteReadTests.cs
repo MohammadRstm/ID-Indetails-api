@@ -100,7 +100,7 @@ public class ProtonSiteReadTests(ProtonApiFactory api) : IClassFixture<ProtonApi
     }
 
     [Fact]
-    public async Task The_pocket_money_a_sites_contribution_an_invoices_lines_and_a_projects_quotes_are_read()
+    public async Task The_pocket_money_a_sites_contribution_and_an_invoices_lines_are_read()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
 
