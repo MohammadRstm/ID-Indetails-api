@@ -44,6 +44,8 @@ public sealed class BlockedChangeService(
     IProjectService projects,
     IBoqService boqs,
     IBoqRepository boqRows,
+    IDesignVoService designVos,
+    IDesignVoRepository designVoRows,
     IClock clock) : IBlockedChangeService
 {
     public async Task<BlockedChangeResponse> GetAsync(long id, CancellationToken cancellationToken = default)
@@ -129,6 +131,8 @@ public sealed class BlockedChangeService(
                 var withdrawal = Read<WithdrawBoqAgreementRequest>(change);
                 await boqs.WithdrawAgreementAsync(withdrawal.ItemId!.Value, withdrawal.Request, cancellationToken);
                 return null;
+            case BlockedChangeKind.DesignVo:
+                return (await designVos.ConfirmAsync(Read<object?>(change).ItemId!.Value, cancellationToken)).Id;
             default:
                 throw new InvalidOperationException($"No replay for {change.Kind}.");
         }
@@ -168,6 +172,12 @@ public sealed class BlockedChangeService(
     /// <summary>What the change was, in words. A BOQ's number is read from the BOQ itself.</summary>
     private async Task<string> SummaryAsync(Models.BlockedChange change, CancellationToken cancellationToken)
     {
+        if (change.Kind == BlockedChangeKind.DesignVo)
+        {
+            var vo = await designVoRows.GetAsync(Read<object?>(change).ItemId!.Value, cancellationToken);
+            return vo is null ? "Variation order" : $"Variation order {vo.Number}: {vo.Title}, {vo.TotalUsd:N2} USD";
+        }
+
         if (change.Kind is not (BlockedChangeKind.BoqAgree or BlockedChangeKind.BoqWithdraw))
         {
             return Summary(change);

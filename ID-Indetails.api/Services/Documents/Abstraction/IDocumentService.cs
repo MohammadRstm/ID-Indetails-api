@@ -29,6 +29,12 @@ public interface IDocumentService
     /// <summary>A client BOQ or VO; an internal draft has none.</summary>
     Task<PdfFile> BoqPdfAsync(long boqId, CancellationToken cancellationToken = default);
 
+    /// <summary>A Design variation order's PDF (<c>financial:view</c>).</summary>
+    Task<PdfFile> DesignVoPdfAsync(long voId, CancellationToken cancellationToken = default);
+
+    /// <summary>Emails a pending or applied Design variation order to the client with its PDF (<c>financial:write</c>).</summary>
+    Task EmailDesignVoAsync(long voId, EmailDocumentRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Sends the client BOQ or VO with its PDF and records the delivery. Nothing is recorded if sending fails.</summary>
     Task<BoqDetailResponse> EmailBoqAsync(long boqId, EmailBoqRequest request, CancellationToken cancellationToken = default);
 

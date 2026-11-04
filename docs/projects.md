@@ -57,6 +57,27 @@ A Design project is worked on by one or more departments (teams; the app calls t
   - Someone with no department logs only on projects with none (`422 department_required`). Moving hours to a project without the logger's department is refused (`422 department_not_on_project`).
 - A team that is a department of a project can't be deleted (`422 team_on_projects`): rename it instead.
 
+## Design variation orders
+
+A Design client project's price changes with **variation orders** (VOs): lines before TVA that add work (above zero) or take it out (below). The pencil on the customer payment stays for correcting mistakes only. Each VO is numbered `VO-YYYY-NNN` in a series of Design's own (Execution's BOQ variation orders have theirs).
+
+| Endpoint | Permission | What it does |
+|---|---|---|
+| `GET /api/projects/{id}/design-vos` | `financial:view` | The project's VOs, newest first: lines, total before TVA, the TVA at the project's rate, each department's part, who made, sent, applied or cancelled it and when |
+| `GET /api/projects/{id}/design-vos/outside-scope` | `financial:view` | `{ from, minutes }`: the hours logged outside the agreed scope since the last applied VO, or the project's start |
+| `POST /api/projects/{id}/design-vos` | `financial:write` | `{ title, lines: [{ description, amount }], split, allocations, showOutsideScope, apply }` (`201`). `apply: true` adds it to the price now; otherwise it is **pending**, sent for the client to confirm |
+| `POST /api/design-vos/{id}/confirm` | `financial:write` | The client agreed: the pending VO joins the price (`422 design_vo_not_pending` otherwise) |
+| `POST /api/design-vos/{id}/cancel` | `financial:write` | Takes a pending VO back; its number isn't used again |
+| `GET /api/design-vos/{id}/pdf` / `POST …/email` | `financial:view` / `financial:write` | Its PDF, or emailed to the client with it (`{ to, note }`, `204`); see [documents.md](documents.md) |
+
+- **Applying** adds the VO's total to the price, with a payment change (`VO-2026-003: Guest house`) and a `revenue_changed` event, through the profit floor: a VO that lowers the price may be refused (`422 profit_floor`). It then stays pending as a blocked change of kind `design_vo`, which whoever sees the money can force. No VO takes the price below zero (`422 design_vo_below_zero`). Lines are to the cent, never zero, and can't add up to nothing.
+- **Split between the departments:**
+  - `shares` (the default) divides the total by the project's shares when it is applied, to the cent (what rounding leaves goes to the biggest share). Those amounts are kept: changing the shares later never moves money a VO already gave.
+  - `departments` gives amounts by hand (`allocations: [{ departmentId, amount }]`) to some of the project's departments, adding up to the total.
+  - A project with no departments keeps the VO's total at project level.
+- **Budgets:** a department's budget is the price before VOs × its share, plus what applied VOs gave it. A department with a VO's money stays on the project (`422 department_has_hours`).
+- **Outside-scope hours:** with `showOutsideScope`, the VO shows the hours logged outside the agreed scope since the last applied VO (or the project's start), fixed when it is made.
+
 ## Money
 
 - **Design revenue** is the agreed payment, typed in. **Execution revenue** is the agreed amount: the **work price** (`projectFee`, set only by agreeing or withdrawing BOQs and 0 until the first is agreed; see [execution.md](execution.md#boqs-and-variation-orders)) plus the company's **supervision** (`work × supervisionRate`, `money.supervisionUsd`). TVA is on the work, never on supervision (see [billing.md](billing.md#tva)): `revenueWithTva` = revenue + work × `tvaRate`. A site with no price yet is all 0. Site expenses are plain costs: nothing is charged to the client for them, and the money response has no markup or material-charge fields. Ground labour is never billed. The profit floor measures profit on this agreed amount (work plus supervision, net of TVA).

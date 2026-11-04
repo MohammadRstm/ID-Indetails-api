@@ -7,6 +7,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Services.Boqs.Abstraction;
 using ID_Indetails.api.Services.Documents.Implementation;
+using ID_Indetails.api.Services.Projects.Abstraction;
 using PdfSharp.Pdf.IO;
 using Shouldly;
 
@@ -29,6 +30,43 @@ public class DocumentPdfTests
         using var stream = new MemoryStream(pdf);
         var document = PdfReader.Open(stream, PdfDocumentOpenMode.Import);
         return document.Pages[page].Resources.Elements.GetDictionary("/XObject")?.Elements.Count ?? 0;
+    }
+
+    private static DesignVoDocument DesignVo(DesignVoStatus status, int lines) => new(
+        new DesignVoResponse
+        {
+            Id = 4,
+            ProjectId = 3,
+            Number = "VO-2026-002",
+            Title = "Guest house",
+            Status = status,
+            Split = DesignVoSplit.Shares,
+            Lines = Enumerable.Range(1, lines).Select(i => new DesignVoLineResponse(i, $"Change {i}", i % 4 == 0 ? -150m : 1200m)).ToList(),
+            Allocations = [],
+            TotalUsd = 9000m,
+            TvaRate = 0.11m,
+            TvaUsd = 990m,
+            TotalWithTvaUsd = 9990m,
+            OutsideScopeMinutes = 2550,
+            OutsideScopeFrom = new DateOnly(2026, 9, 1),
+            CreatedBy = new PersonRefResponse(1, "Rana Saab"),
+            CreatedAt = new DateTime(2026, 9, 30, 9, 0, 0, DateTimeKind.Utc),
+        },
+        "Villa Haddad", "Broummana", "Haddad Holdings");
+
+    [Fact]
+    public void A_design_variation_order_is_one_page_with_the_companys_mark_and_says_when_it_waits_for_approval()
+    {
+        var pending = DesignVoPdf.Render(DesignVo(DesignVoStatus.Pending, 6), new DateOnly(2026, 9, 30), Head);
+        Pages(pending).ShouldBe(1);
+        Pictures(pending, 0).ShouldBe(2);
+        DesignVoPdf.OutsideScope(DesignVo(DesignVoStatus.Pending, 1).Vo).ShouldBe("42h 30m logged outside the agreed scope since Sep 1, 2026.");
+        DesignVoPdf.Totals(DesignVo(DesignVoStatus.Applied, 1).Vo).Select(t => t.Label).ShouldBe(["Total before TVA", "TVA (11%)", "Total"]);
+
+        // many lines run onto more pages, each with the mark
+        var long_ = DesignVoPdf.Render(DesignVo(DesignVoStatus.Applied, 70), new DateOnly(2026, 9, 30), Head);
+        Pages(long_).ShouldBeGreaterThan(1);
+        Enumerable.Range(0, Pages(long_)).ShouldAllBe(page => Pictures(long_, page) == 2);
     }
 
     private static InvoiceResponse Invoice(int lines) => new()

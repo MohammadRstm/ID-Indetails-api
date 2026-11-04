@@ -28,6 +28,7 @@ public sealed class ProjectDepartmentService(
     IPermissionService permissions,
     IProjectRepository projects,
     IProjectDepartmentRepository departments,
+    IDesignVoRepository designVos,
     IProjectFinanceService finance,
     IBlockedChangeRepository blockedChanges,
     IBlockedChangeRecorder recorder,
@@ -82,7 +83,9 @@ public sealed class ProjectDepartmentService(
             }
 
             var removed = current.Where(d => !chosen.Contains(d.TeamId)).ToList();
-            var withHours = await departments.WithHoursAsync(project.Id, cancellationToken);
+            var withHours = (await departments.WithHoursAsync(project.Id, cancellationToken))
+                .Concat((await designVos.AppliedAsync(project.Id, cancellationToken)).ByDepartment.Keys)
+                .ToHashSet();
             Throw(ProjectDepartmentRules.CheckRemoval(removed.Where(d => withHours.Contains(d.TeamId)).Select(d => d.Team.Name).ToList()));
 
             var before = Snapshot(current.Select(d => (d.TeamId, d.Team.Name, d.Share)));
@@ -233,6 +236,9 @@ public sealed class ProjectDepartmentService(
         }
 
         var labour = await finance.LabourByDepartmentAsync(project, cancellationToken);
+        // the price before VOs is split by the shares; each applied VO's amounts go to the departments it gave them to
+        var vos = await designVos.AppliedAsync(project.Id, cancellationToken);
+        var beforeVos = project.Revenue - vos.Total;
         var people = await departments.NamesAsync(labour.Select(l => l.UserId).Distinct().ToList(), cancellationToken);
         var other = labour.Where(l => l.TeamId is not { } team || !ids.Contains(team)).ToList();
         return new ProjectDepartmentsResponse
@@ -243,7 +249,7 @@ public sealed class ProjectDepartmentService(
                 Id = r.TeamId,
                 Name = r.Name,
                 Share = r.Share,
-                Money = Money(labour.Where(l => l.TeamId == r.TeamId), Math.Round(project.Revenue * r.Share, 2), people),
+                Money = Money(labour.Where(l => l.TeamId == r.TeamId), Math.Round(beforeVos * r.Share, 2) + vos.ByDepartment.GetValueOrDefault(r.TeamId), people),
             }).ToList(),
             Other = other.Count > 0 ? Money(other, 0, people) : null,
         };

@@ -62,6 +62,21 @@ public sealed class SetProjectDepartmentsRequestValidator : AbstractValidator<Se
     }
 }
 
+public sealed class CreateDesignVoRequestValidator : AbstractValidator<CreateDesignVoRequest>
+{
+    public CreateDesignVoRequestValidator()
+    {
+        RuleFor(x => (string?)x.Title).ClientText("Title", DesignVoRules.MaxTitleLength, required: true).OverridePropertyName("title");
+        RuleFor(x => x.Split).IsInEnum().WithMessage("Split by the shares or to chosen departments.");
+        RuleFor(x => x.Lines).NotNull().Must(l => l.Count is > 0 and <= DesignVoRules.MaxLines)
+            .WithMessage($"Add between 1 and {DesignVoRules.MaxLines} lines.");
+        RuleForEach(x => x.Lines).Must(l => l.Description is { } d && d.Trim().Length <= DesignVoRules.MaxDescriptionLength)
+            .WithMessage($"A line's description is at most {DesignVoRules.MaxDescriptionLength} characters.");
+        RuleFor(x => x.Allocations).NotNull();
+        RuleForEach(x => x.Allocations).Must(a => a.DepartmentId > 0).WithMessage("A department is invalid.");
+    }
+}
+
 public sealed class SetDepartmentSharesRequestValidator : AbstractValidator<SetDepartmentSharesRequest>
 {
     public SetDepartmentSharesRequestValidator()
