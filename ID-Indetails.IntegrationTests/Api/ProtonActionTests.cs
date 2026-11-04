@@ -195,10 +195,18 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
         missing.PendingAction.ShouldBeNull();
         api.Anthropic.ToolResults(1).ShouldHaveSingleItem().ToJsonString().ShouldContain("Which client");
 
+        // a Design client project has its departments: asked for, like the client
+        var noDepartments = await ProposeAsync(superAdmin, "propose_create_project",
+            new { title = "Mobile App", client_id = project.Client!.Id }, missing.ConversationId);
+        noDepartments.PendingAction.ShouldBeNull();
+        api.Anthropic.ToolResults(3).ShouldHaveSingleItem().ToJsonString().ShouldContain("Which departments");
+
+        var department = await _steps.DesignDepartmentAsync();
         var reply = await ProposeAsync(superAdmin, "propose_create_project",
-            new { title = "Mobile App", client_id = project.Client!.Id, target_date = "2027-03-31" }, missing.ConversationId);
+            new { title = "Mobile App", client_id = project.Client!.Id, target_date = "2027-03-31", department_ids = new[] { department } }, noDepartments.ConversationId);
         var pending = reply.PendingAction.ShouldNotBeNull();
         pending.Preview.Changes.ShouldContain(c => c.Label == "Client" && c.After == project.Client.DisplayName);
+        pending.Preview.Changes.ShouldContain(c => c.Label == "Departments");
         (await CountAsync(db => db.Projects.CountAsync(p => p.Title == "Mobile App"))).ShouldBe(0);
 
         var confirmed = await ConfirmAsync(superAdmin, pending.Id, reply.ConversationId);
@@ -209,6 +217,7 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
         created.Client!.Id.ShouldBe(project.Client.Id);
         created.Status.ShouldBe(ProjectStatus.Active);
         created.TargetDate.ShouldBe(new DateOnly(2027, 3, 31));
+        created.Departments!.ShouldHaveSingleItem().Id.ShouldBe(department);
     }
 
     [Fact]
