@@ -71,6 +71,12 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<ProjectDepartmentChange> ProjectDepartmentChanges => Set<ProjectDepartmentChange>();
 
+    public DbSet<DesignVo> DesignVos => Set<DesignVo>();
+
+    public DbSet<DesignVoLine> DesignVoLines => Set<DesignVoLine>();
+
+    public DbSet<DesignVoAllocation> DesignVoAllocations => Set<DesignVoAllocation>();
+
     public DbSet<SiteLog> SiteLogs => Set<SiteLog>();
 
     public DbSet<PocketEntry> PocketEntries => Set<PocketEntry>();
@@ -199,6 +205,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<PortalNotificationKind>(configurationBuilder);
         StoreAsSnakeCase<WebsiteProjectStatus>(configurationBuilder);
         StoreAsSnakeCase<ProjectDepartmentChangeKind>(configurationBuilder);
+        StoreAsSnakeCase<DesignVoStatus>(configurationBuilder);
+        StoreAsSnakeCase<DesignVoSplit>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

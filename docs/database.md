@@ -183,6 +183,8 @@ The `AccountFigures` migration (29 Oct 2026, phase 4 of the BOQ rework, rules in
 - The `supervision_withdrawals` table (id, `project_id`, `amount_usd` decimal(14,2), `taken_on` date, `note` varchar(500), `created_by_id`, `created_at`, `deleted_at`), with foreign keys to `projects` and `users` (both RESTRICT) and the positive-amount check.
 - No data changes. `Down` drops the foreign key, the table, the index and the column.
 
+The `DesignVos` migration (4 Nov 2026) adds `design_vos` (a Design project's variation orders: number, title, status, split, total and TVA, the outside-scope hours it shows, who made, sent, applied or cancelled it), `design_vo_lines` and `design_vo_allocations` (each department's part), and the `design_vo` kind of blocked change. Its numbers use Design's own `DVO` series in `boq_sequences` ([projects.md](projects.md#design-variation-orders)).
+
 The `ProjectDepartments` migration (4 Nov 2026) adds `project_departments` (a Design project's departments and their shares, adding up to 1) and `project_department_share_changes` (the history of the split, before and after as JSON, with the reason), `work_entries.team_id` (the logger's department when the hours were logged, filled in for existing hours from each person's team now), and the `work_entry_department` kind of blocked change ([projects.md](projects.md#departments)).
 
 The `DepartmentsBase` migration (4 Nov 2026) drops `quotes`, `quote_deliveries` and `quote_sequences` (Design has no quotes any more), deletes the `quote_due` notifications, and seeds the `financial:write` permission, limited to Design and held by super admins: setting a Design project's price, and later its departments' shares and variation orders.

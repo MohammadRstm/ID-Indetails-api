@@ -40,6 +40,12 @@ public static class ErrorCodes
 
     /// <summary>422. A team that is a department of a project can't be deleted.</summary>
     public const string TeamOnProjects = "team_on_projects";
+
+    /// <summary>422. Only a pending variation order is confirmed or cancelled.</summary>
+    public const string DesignVoNotPending = "design_vo_not_pending";
+
+    /// <summary>422. A variation order can't take the price below zero.</summary>
+    public const string DesignVoBelowZero = "design_vo_below_zero";
     public const string UserNotInvited = "user_not_invited";
     public const string UserDeactivated = "user_deactivated";
 

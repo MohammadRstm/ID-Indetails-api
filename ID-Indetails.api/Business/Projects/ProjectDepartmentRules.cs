@@ -60,15 +60,15 @@ public static class ProjectDepartmentRules
             : RuleDenial.Invalid(ErrorCodes.ValidationFailed, "departmentIds", "Choose departments of Design.");
     }
 
-    /// <summary>Departments with hours logged on the project stay on it.</summary>
-    public static RuleDenial? CheckRemoval(IReadOnlyList<string> removedWithHours)
-        => removedWithHours.Count switch
+    /// <summary>Departments with hours logged on the project, or a variation order's money, stay on it.</summary>
+    public static RuleDenial? CheckRemoval(IReadOnlyList<string> removedInUse)
+        => removedInUse.Count switch
         {
             0 => null,
             1 => RuleDenial.BusinessRule(ErrorCodes.DepartmentHasHours,
-                $"{removedWithHours[0]} has hours logged on this project, so it can't be taken off it."),
+                $"{removedInUse[0]} has hours or variation orders on this project, so it can't be taken off it."),
             _ => RuleDenial.BusinessRule(ErrorCodes.DepartmentHasHours,
-                $"{string.Join(", ", removedWithHours.SkipLast(1))} and {removedWithHours[^1]} have hours logged on this project, so they can't be taken off it."),
+                $"{string.Join(", ", removedInUse.SkipLast(1))} and {removedInUse[^1]} have hours or variation orders on this project, so they can't be taken off it."),
         };
 
     /// <summary>A share for each of the project's departments and only them, each 0 to 100%, adding up to exactly 100%.</summary>

@@ -1,4 +1,5 @@
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
@@ -34,6 +35,7 @@ public sealed class DocumentService(
     IPermissionService permissions,
     IInvoiceService invoiceService,
     IBoqService boqService,
+    IDesignVoService designVoService,
     IProjectService projectService,
     IProjectRepository projects,
     IMoneyRollupService moneyRollups,
@@ -99,6 +101,33 @@ public sealed class DocumentService(
         return await boqService.RecordDeliveryAsync(
             boqId, new RecordBoqDeliveryRequest { Channel = DeliveryChannel.Email, Recipient = to, Note = request.Note }, cancellationToken);
     }
+
+    public async Task<PdfFile> DesignVoPdfAsync(long voId, CancellationToken cancellationToken = default)
+    {
+        var document = await designVoService.GetDocumentAsync(voId, cancellationToken);
+        return DesignVoFile(document, await LetterheadAsync(cancellationToken));
+    }
+
+    public async Task EmailDesignVoAsync(long voId, EmailDocumentRequest request, CancellationToken cancellationToken = default)
+    {
+        (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.FinancialWrite);
+        var document = await designVoService.GetDocumentAsync(voId, cancellationToken);
+        if (document.Vo.Status == DesignVoStatus.Cancelled)
+        {
+            throw new BusinessRuleException(ErrorCodes.DesignVoNotPending, "This variation order was cancelled, so it isn't sent.");
+        }
+
+        var head = await LetterheadAsync(cancellationToken);
+        await SendAsync(
+            DocumentEmails.DesignVo(request.To.Trim(), document, DesignVoDate(document.Vo), head, currentUser.FullName, DesignVoFile(document, head)),
+            "variation order", voId, cancellationToken);
+    }
+
+    /// <summary>The day a VO was applied; a pending one carries the day it was sent.</summary>
+    private DateOnly DesignVoDate(DesignVoResponse vo) => clock.ToCompanyDate(vo.AppliedAt ?? vo.SentAt ?? vo.CreatedAt);
+
+    private PdfFile DesignVoFile(DesignVoDocument document, Letterhead head)
+        => new(DesignVoPdf.Render(document, DesignVoDate(document.Vo), head), document.Vo.Number.ToLowerInvariant() + ".pdf");
 
     /// <summary>The day an agreed BOQ was agreed; a draft carries the day it is sent.</summary>
     private DateOnly BoqDate(BoqDetailResponse boq) => boq.AgreedAt is { } agreed ? clock.ToCompanyDate(agreed) : clock.CompanyToday;

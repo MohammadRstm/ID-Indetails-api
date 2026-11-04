@@ -60,7 +60,7 @@ public class ProjectDepartmentRulesTests
         ProjectDepartmentRules.CheckRemoval([]).ShouldBeNull();
         ProjectDepartmentRules.CheckRemoval(["Structure"])!.Code.ShouldBe(ErrorCodes.DepartmentHasHours);
         ProjectDepartmentRules.CheckRemoval(["Interior", "Structure"])!.Message
-            .ShouldBe("Interior and Structure have hours logged on this project, so they can't be taken off it.");
+            .ShouldBe("Interior and Structure have hours or variation orders on this project, so they can't be taken off it.");
     }
 
     [Fact]

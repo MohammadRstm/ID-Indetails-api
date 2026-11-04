@@ -23,6 +23,8 @@ public enum BlockedChangeKind
     BoqWithdraw,
     /// <summary>Hours logged by someone whose department isn't on the project: they go through once it is added.</summary>
     WorkEntryDepartment,
+    /// <summary>Applying a Design variation order that lowers the price.</summary>
+    DesignVo,
 }
 
 /// <summary>Where a refused change stands.</summary>

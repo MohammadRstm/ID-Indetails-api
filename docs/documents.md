@@ -10,6 +10,8 @@ Invoices, client BOQs and variation orders, and project reports are made as PDFs
 | `POST /api/invoices/{id}/email` | `invoice:send` | `{ to, note }`: emails an issued invoice with its PDF attached, then records an `email` delivery (`201`, the invoice) |
 | `GET /api/boqs/{id}/pdf` | `financial:view` or `project:pricing_manage` | A client BOQ or VO (`bq-2026-001.pdf`, `vo-2026-001.pdf`). An internal draft has none (`422 boq_internal`) |
 | `POST /api/boqs/{id}/email` | `project:pricing_manage` | `{ to, note }`: emails the BOQ with its PDF attached, then records an `email` delivery (`200`, the BOQ). Refused before anything is sent when the BOQ is internal, empty or on a finalised site |
+| `GET /api/design-vos/{id}/pdf` | `financial:view` | A Design variation order (`vo-2026-003.pdf`): its changes, the total before TVA, the TVA at the project's rate and the total, the hours outside the agreed scope when it shows them, and "FOR APPROVAL" while it is pending |
+| `POST /api/design-vos/{id}/email` | `financial:write` | `{ to, note }`: emails a pending or applied Design VO with its PDF attached (`204`); a cancelled one isn't sent |
 | `GET /api/projects/{id}/report?kind=&from=&to=&sections=` | `financial:view` and `work_entry:view_all` | A Design project's report (below) |
 
 - **Downloading a PDF records nothing.** To mark an invoice or BOQ as sent by hand, record a `download` or `whatsapp` delivery (`POST …/deliveries`), as before.
@@ -51,7 +53,7 @@ Every font resolves to Segoe WP, which ships inside the PDFsharp package (`Servi
 ## Code
 
 - `Services/Documents/Implementation/PdfLayout.cs` holds the page, letterhead, tables, totals, footer, and money and date formats.
-- Each document has its own class: `InvoicePdf`, `BoqPdf`, `ProjectReportPdf`.
+- Each document has its own class: `InvoicePdf`, `BoqPdf`, `DesignVoPdf`, `ProjectReportPdf`.
 - `DocumentEmails` builds the emails. An invoice or BOQ email shows the document itself (the same client-facing fields as the PDF: lines, totals, notes, how to pay) and attaches the PDF to keep or print.
 - Every email, account emails included, is drawn in one frame (`Services/Email/Implementation/EmailLayout.cs`): the logo, a white card and a footer, built from tables with inline styles because mail apps ignore style sheets. The logo (`Assets/email-logo.png`) is built into the assembly and travels in the email as an inline image, so it shows even where pictures from the web are blocked. Each email also has a plain-text version.
 - `DocumentService` loads the data through the invoice, BOQ and project services, so their visibility and what each caller may see still apply. It then renders the PDF and sends it.
