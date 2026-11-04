@@ -73,18 +73,18 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 
 ## My devices
 
-The phones that receive the caller's pushes ([notifications.md](notifications.md#pushes)).
+The phones that receive the caller's pushes ([notifications.md](notifications.md#pushes)). Browsers register through `/api/auth/web-push` instead ([notifications.md](notifications.md#browsers-web-push)), and are listed here too, with the platform `web`.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `PUT /api/me/devices` | The phone app's sign-in | `{ pushToken, platform: ios \| android, appVersion }`: registers this phone for pushes, or updates it |
 | `DELETE /api/me/devices/current` | Signed in | Stops pushes to this phone (`204`, also when there is nothing to remove) |
-| `GET /api/me/devices` | Signed in | The caller's phones, newest first: `{ id, platform, appVersion, createdAt, updatedAt, current }` |
+| `GET /api/me/devices` | Signed in | The caller's phones and browsers, newest first: `{ id, platform, appVersion, createdAt, updatedAt, current }` |
 | `DELETE /api/me/devices/{id}` | Signed in | Signs that phone out: its session ends and its pushes stop (`204`). Someone else's device reads as `404` |
 
 - **Tied to a session.** A device belongs to the phone app's session it was registered from (the access token's `sid`, see [authentication.md](authentication.md#mobile-sessions)). Registering needs that session: a website token is refused (`403`), and a session that has ended is `401`. `current` marks the caller's own phone.
 - **One token, one person.** A push token is unique: registered by someone else (a shared phone), it moves to the caller, so nobody gets the previous person's pushes. A session keeps one device; a new token from the same phone replaces the old one.
-- **When devices go.** Signing out on the phone deletes its device. Every other way a session ends (a password change, a super admin, deactivation, theft, 30 idle days) stops its pushes at once, because only devices whose session still has a valid refresh token are listed or sent to, and a daily job deletes them. Expo reporting a token as no longer registered deletes it too.
+- **When devices go.** Signing out on the phone, or on the website, deletes its device. Every other way a session ends (a password change, a super admin, deactivation, theft, 30 idle days) stops its pushes at once, because only devices whose session still has a valid refresh token are listed or sent to, and a daily job deletes them. Expo reporting a token as no longer registered deletes it too.
 - The push token is never returned.
 
 ## My notification settings

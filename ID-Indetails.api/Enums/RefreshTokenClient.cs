@@ -8,4 +8,10 @@ public enum RefreshTokenClient
 
     /// <summary>The phone app: the token travels in the body, lasts 30 days since last use and has the replay grace.</summary>
     Mobile,
+
+    /// <summary>
+    /// The website installed as an app on a phone: the cookie and the reuse rule of <see cref="Web"/>, but it lasts 30 days
+    /// since last use, like the phone app, so its pushes keep coming while it isn't opened.
+    /// </summary>
+    Installed,
 }

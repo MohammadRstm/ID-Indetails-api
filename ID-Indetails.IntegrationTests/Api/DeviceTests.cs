@@ -32,6 +32,24 @@ public class DeviceTests(ApiFactory api) : IClassFixture<ApiFactory>
         => await (await Client.GetAsync("/api/me/devices", accessToken)).ReadAsync<List<DeviceResponse>>();
 
     [Fact]
+    public async Task While_pushes_are_off_browsers_are_offered_none_and_can_t_register()
+    {
+        var (email, password, _) = await _steps.ActiveSuperAdminAsync();
+        var login = await Client.PostJsonAsync("/api/auth/login", new { email, password });
+        var auth = await login.ShouldSignInAsync();
+
+        (await (await Client.GetAsync("/api/auth/web-push", auth.AccessToken)).ReadAsync<WebPushKeyResponse>()).PublicKey.ShouldBeNull();
+        var subscription = new
+        {
+            endpoint = "https://fcm.googleapis.com/fcm/send/abc",
+            p256dh = "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+            auth = "BTBZMqHH6r4Tts7J_aSIgg",
+        };
+        await (await Client.PutJsonAsync("/api/auth/web-push", subscription, auth.AccessToken, login.RefreshCookie()))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    [Fact]
     public async Task A_phone_registers_once_per_session_and_a_new_token_replaces_its_old_one()
     {
         var (email, password, _) = await _steps.ActiveSuperAdminAsync();

@@ -11,6 +11,15 @@ public class RefreshTokenTests(ApiFactory api) : IClassFixture<ApiFactory>
     private async Task<string> LoginCookieAsync(string email, string password)
         => (await Client.PostJsonAsync("/api/auth/login", new { email, password })).RefreshCookie()!;
 
+    /// <summary>The client and lifetime in days of the person's newest valid refresh token, as "client:days".</summary>
+    private Task<string> NewestSessionAsync(long userId)
+        => _steps.ScalarAsync<string>(
+            """
+            SELECT CONCAT(client, ':', DATEDIFF(expires_at, created_at)) FROM refresh_tokens
+            WHERE user_id = @u AND revoked_at IS NULL ORDER BY id DESC LIMIT 1
+            """,
+            ("@u", userId));
+
     [Fact]
     public async Task Refresh_rotates_the_cookie_and_returns_a_new_access_token()
     {
@@ -25,6 +34,33 @@ public class RefreshTokenTests(ApiFactory api) : IClassFixture<ApiFactory>
         second.ShouldNotBe(first);
         auth.AccessToken.ShouldNotBeNullOrWhiteSpace();
         (await Client.GetAsync("/api/auth/me", auth.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task The_installed_app_gets_a_30_day_session_that_a_browser_tab_never_shortens()
+    {
+        var (email, password, _) = await _steps.ActiveSuperAdminAsync();
+        var login = await Client.PostJsonAsync("/api/auth/login", new { email, password, installedApp = true });
+        var userId = (await login.ShouldSignInAsync()).User.Id;
+        (await NewestSessionAsync(userId)).ShouldBe("installed:30");
+
+        // a browser tab on the same Android phone shares the cookie and doesn't say it's the installed app
+        var refreshed = await Client.PostEmptyAsync("/api/auth/refresh", refreshCookie: login.RefreshCookie());
+        await refreshed.ShouldSignInAsync();
+        (await NewestSessionAsync(userId)).ShouldBe("installed:30");
+    }
+
+    [Fact]
+    public async Task A_website_session_becomes_the_installed_apps_when_the_installed_app_refreshes_it()
+    {
+        var (email, password, _) = await _steps.ActiveSuperAdminAsync();
+        var login = await Client.PostJsonAsync("/api/auth/login", new { email, password });
+        var userId = (await login.ShouldSignInAsync()).User.Id;
+        (await NewestSessionAsync(userId)).ShouldBe("web:1");
+
+        var refreshed = await Client.PostJsonAsync("/api/auth/refresh", new { installedApp = true }, refreshCookie: login.RefreshCookie());
+        await refreshed.ShouldSignInAsync();
+        (await NewestSessionAsync(userId)).ShouldBe("installed:30");
     }
 
     [Fact]

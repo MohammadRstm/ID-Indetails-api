@@ -171,7 +171,12 @@ public static class ApplicationServiceCollectionExtensions
         services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
-        services.AddOptions<PushOptions>().BindConfiguration(PushOptions.SectionName).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<PushOptions>().BindConfiguration(PushOptions.SectionName)
+            .ValidateDataAnnotations()
+            .Validate(
+                o => o.WebPush is { PublicKey: "", PrivateKey: "" } || WebPushCrypto.IsKeyPair(o.WebPush.PublicKey, o.WebPush.PrivateKey),
+                "Push:WebPush:PublicKey and PrivateKey must both be set, to a VAPID key pair, or both be empty.")
+            .ValidateOnStart();
 
         services.AddMemoryCache();
         services.AddSignalR();
@@ -352,6 +357,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IAccountFiguresService, AccountFiguresService>();
         services.AddScoped<IBoardLayoutService, BoardLayoutService>();
         services.AddScoped<IDeviceService, DeviceService>();
+        services.AddScoped<IWebPushService, WebPushService>();
         services.AddHostedService<DeviceCleanupJob>();
         services.AddSingleton<PushChannel>();
         services.AddSingleton<PushThrottle>();
@@ -360,8 +366,12 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPushReminders, PushReminders>();
         services.AddScoped<IPushQueue, PushQueue>();
         services.AddScoped<IPushDelivery, PushDelivery>();
-        services.AddHttpClient<IPushProvider, ExpoPushProvider>(client => client.Timeout = TimeSpan.FromSeconds(20))
+        services.AddHttpClient<ExpoPushProvider>(client => client.Timeout = TimeSpan.FromSeconds(20))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        // never follows a redirect: it only ever posts to the browsers' own push services (WebPushEndpoints)
+        services.AddHttpClient<WebPushProvider>(client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddTransient<IPushProvider, PushRouter>();
         services.AddHostedService<PushDispatcher>();
         services.AddHostedService<PushReceiptsJob>();
         services.AddScoped<ISearchService, SearchService>();

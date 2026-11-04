@@ -280,6 +280,8 @@ public static class ProtonCoverage
         Open("MobileAuth.ChangePassword", "it takes a password or a sign-in address, which never go through a chat: Proton opens the form"),
         Elsewhere("Devices.Register", "the phone app registering itself for pushes"),
         Elsewhere("Devices.DeleteCurrent", "the phone app stopping its own pushes"),
+        Elsewhere("WebPush.Register", "the browser registering itself for pushes, from the notification settings' switch"),
+        Elsewhere("WebPush.Delete", "the browser stopping its own pushes, from the same switch"),
         Planned("Devices.Delete", T2, ProtonFamily.Access),
         Planned("NotificationSettings.Save", T1, ProtonFamily.Core),
         // the client portal: who outside the company may see a project, and the clients' own side
