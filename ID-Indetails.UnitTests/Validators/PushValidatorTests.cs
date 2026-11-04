@@ -58,4 +58,28 @@ public class PushValidatorTests
         => new SaveNotificationSettingsRequestValidator()
             .Validate(new SaveNotificationSettingsRequest { MutedCategories = [NotificationCategory.Money, NotificationCategory.Money] })
             .Errors.Select(e => e.PropertyName).ShouldBe(["MutedCategories"]);
+
+    /// <summary>A real browser's key and secret: an uncompressed P-256 point, and 16 bytes.</summary>
+    private static RegisterWebPushRequest Browser(string endpoint = "https://fcm.googleapis.com/fcm/send/abc:APA91b") => new()
+    {
+        Endpoint = endpoint,
+        P256dh = "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+        Auth = "BTBZMqHH6r4Tts7J_aSIgg",
+    };
+
+    [Fact]
+    public void A_browser_registers_its_push_service_address_and_its_two_keys()
+        => new RegisterWebPushRequestValidator().Validate(Browser()).IsValid.ShouldBeTrue();
+
+    [Fact]
+    public void An_address_that_isn_t_a_browser_s_push_service_or_keys_that_aren_t_keys_are_refused()
+    {
+        var validator = new RegisterWebPushRequestValidator();
+
+        validator.Validate(Browser("https://10.0.0.5/internal")).Errors.Select(e => e.PropertyName).ShouldBe(["Endpoint"]);
+        validator.Validate(Browser() with { P256dh = "BTBZMqHH6r4Tts7J_aSIgg", Auth = "c2hvcnQ" })
+            .Errors.Select(e => e.PropertyName).ShouldBe(["P256dh", "Auth"], ignoreOrder: true);
+        validator.Validate(new RegisterWebPushRequest()).Errors.Select(e => e.PropertyName)
+            .ShouldBe(["Endpoint", "P256dh", "Auth"], ignoreOrder: true);
+    }
 }

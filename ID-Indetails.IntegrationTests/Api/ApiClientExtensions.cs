@@ -25,10 +25,11 @@ public static class ApiClientExtensions
         return client.SendAsync(Authorize(request, accessToken, refreshCookie));
     }
 
-    public static Task<HttpResponseMessage> PutJsonAsync(this HttpClient client, string url, object body, string accessToken)
+    public static Task<HttpResponseMessage> PutJsonAsync(
+        this HttpClient client, string url, object body, string accessToken, string? refreshCookie = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Put, url) { Content = JsonContent.Create(body, options: Json) };
-        return client.SendAsync(Authorize(request, accessToken, null));
+        return client.SendAsync(Authorize(request, accessToken, refreshCookie));
     }
 
     public static Task<HttpResponseMessage> PatchJsonAsync(this HttpClient client, string url, object body, string accessToken)
@@ -37,8 +38,8 @@ public static class ApiClientExtensions
         return client.SendAsync(Authorize(request, accessToken, null));
     }
 
-    public static Task<HttpResponseMessage> DeleteAsync(this HttpClient client, string url, string accessToken)
-        => client.SendAsync(Authorize(new HttpRequestMessage(HttpMethod.Delete, url), accessToken, null));
+    public static Task<HttpResponseMessage> DeleteAsync(this HttpClient client, string url, string accessToken, string? refreshCookie = null)
+        => client.SendAsync(Authorize(new HttpRequestMessage(HttpMethod.Delete, url), accessToken, refreshCookie));
 
     public static Task<HttpResponseMessage> PostEmptyAsync(
         this HttpClient client, string url, string? accessToken = null, string? refreshCookie = null)

@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Push;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
@@ -14,18 +15,22 @@ public sealed class UserDeviceRepository(IdIndetailsDbContext db) : IUserDeviceR
         string pushToken,
         DevicePlatform platform,
         string? appVersion,
+        WebPushSubscription? webPush,
         DateTime at,
         CancellationToken cancellationToken = default)
     {
         var session = sessionId.ToString();
-        var provider = SnakeCaseEnum.ToDb(PushProvider.Expo);
+        var provider = SnakeCaseEnum.ToDb(webPush is null ? PushProvider.Expo : PushProvider.WebPush);
         var platformValue = SnakeCaseEnum.ToDb(platform);
+        var (endpoint, p256dh, auth) = (webPush?.Endpoint, webPush?.P256dh, webPush?.Auth);
         return db.Database.ExecuteSqlAsync(
             $"""
-            INSERT INTO `user_devices` (`user_id`, `session_id`, `provider`, `push_token`, `platform`, `app_version`, `created_at`, `updated_at`)
-            VALUES ({userId}, {session}, {provider}, {pushToken}, {platformValue}, {appVersion}, {at}, {at}) AS new
+            INSERT INTO `user_devices` (`user_id`, `session_id`, `provider`, `push_token`, `platform`, `app_version`,
+                `web_push_endpoint`, `web_push_p256dh`, `web_push_auth`, `created_at`, `updated_at`)
+            VALUES ({userId}, {session}, {provider}, {pushToken}, {platformValue}, {appVersion}, {endpoint}, {p256dh}, {auth}, {at}, {at}) AS new
             ON DUPLICATE KEY UPDATE `user_id` = new.`user_id`, `session_id` = new.`session_id`, `provider` = new.`provider`,
-                `platform` = new.`platform`, `app_version` = new.`app_version`, `updated_at` = new.`updated_at`
+                `platform` = new.`platform`, `app_version` = new.`app_version`, `web_push_endpoint` = new.`web_push_endpoint`,
+                `web_push_p256dh` = new.`web_push_p256dh`, `web_push_auth` = new.`web_push_auth`, `updated_at` = new.`updated_at`
             """,
             cancellationToken);
     }

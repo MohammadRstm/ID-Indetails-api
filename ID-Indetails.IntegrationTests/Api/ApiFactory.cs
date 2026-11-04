@@ -1,3 +1,5 @@
+using System.Buffers.Text;
+using System.Security.Cryptography;
 using ID_Indetails.api.Proton.Safety;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Geocoding.Abstraction;
@@ -34,8 +36,11 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public CapturingLivePublisher Live { get; } = new();
 
-    /// <summary>Pushes are never sent to Expo from tests; they land here when <see cref="PushEnabled"/>.</summary>
+    /// <summary>Pushes are never sent to Expo or a browser's push service from tests; they land here when <see cref="PushEnabled"/>.</summary>
     public CapturingPushProvider Push { get; } = new();
+
+    /// <summary>A VAPID key pair made for this test run, so browsers can register when pushes are on.</summary>
+    private static readonly (string Public, string Private) Vapid = NewVapidKeys();
 
     /// <summary>Uploads of this API, deleted with it.</summary>
     public string FilesRoot { get; } = Path.Combine(Path.GetTempPath(), $"idi_test_files_{Guid.NewGuid():N}");
@@ -98,6 +103,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("PortalContent:JobsEnabled", "false");
         builder.UseSetting("Push:DeviceCleanupEnabled", "false");
         builder.UseSetting("Push:Enabled", PushEnabled ? "true" : "false");
+        builder.UseSetting("Push:WebPush:PublicKey", Vapid.Public);
+        builder.UseSetting("Push:WebPush:PrivateKey", Vapid.Private);
         builder.UseSetting("WebsiteContact:FallbackAddress", ContactFallbackAddress);
 
         builder.ConfigureTestServices(services =>
@@ -117,6 +124,13 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             // the email sender was replaced above: wrap it again, as the API wraps the real one
             services.AddProtonSideEffectGuards();
         });
+    }
+
+    private static (string Public, string Private) NewVapidKeys()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var parameters = key.ExportParameters(includePrivateParameters: true);
+        return (Base64Url.EncodeToString([4, .. parameters.Q.X!, .. parameters.Q.Y!]), Base64Url.EncodeToString(parameters.D));
     }
 
     /// <summary>An HTTPS client (the refresh cookie is Secure) that does not manage cookies itself.</summary>

@@ -9,11 +9,12 @@ public interface IAuthService
 
     /// <summary>
     /// Rotates the refresh token: the presented one is revoked and replaced. Presenting a token
-    /// that was already rotated signs the user out everywhere (it may have been stolen).
+    /// that was already rotated signs the user out everywhere (it may have been stolen). From the installed app
+    /// (<paramref name="installedApp"/>) the session becomes the installed app's (<c>RefreshTokenRules.NextWebClient</c>).
     /// </summary>
-    Task<AuthSession> RefreshAsync(string? refreshCookieValue, CancellationToken cancellationToken = default);
+    Task<AuthSession> RefreshAsync(string? refreshCookieValue, bool installedApp, CancellationToken cancellationToken = default);
 
-    /// <summary>Revokes the presented refresh token. Always succeeds.</summary>
+    /// <summary>Revokes the presented refresh token and stops the browser's pushes. Always succeeds.</summary>
     Task LogoutAsync(string? refreshCookieValue, CancellationToken cancellationToken = default);
 
     /// <summary>Changes the password, clears must-change-password and signs out every other session.</summary>

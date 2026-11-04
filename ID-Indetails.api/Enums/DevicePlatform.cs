@@ -1,8 +1,11 @@
 namespace ID_Indetails.api.Enums;
 
-/// <summary>The phone a push device is on.</summary>
+/// <summary>The phone, or browser, a push device is on.</summary>
 public enum DevicePlatform
 {
     Ios,
     Android,
+
+    /// <summary>A browser, or the website installed as an app (Web Push).</summary>
+    Web,
 }

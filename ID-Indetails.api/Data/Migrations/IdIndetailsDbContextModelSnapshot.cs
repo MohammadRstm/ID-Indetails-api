@@ -5104,7 +5104,7 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("refresh_tokens", null, t =>
                         {
-                            t.HasCheckConstraint("ck_refresh_tokens_client", "`client` IN ('web', 'mobile')");
+                            t.HasCheckConstraint("ck_refresh_tokens_client", "`client` IN ('web', 'mobile', 'installed')");
 
                             t.HasCheckConstraint("ck_refresh_tokens_revoke_reason", "`revoke_reason` IN ('rotated', 'superseded', 'signed_out', 'revoked')");
                         });
@@ -6257,6 +6257,21 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
 
+                    b.Property<string>("WebPushAuth")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("web_push_auth");
+
+                    b.Property<string>("WebPushEndpoint")
+                        .HasMaxLength(2048)
+                        .HasColumnType("varchar(2048)")
+                        .HasColumnName("web_push_endpoint");
+
+                    b.Property<string>("WebPushP256dh")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("web_push_p256dh");
+
                     b.HasKey("Id")
                         .HasName("pk_user_devices");
 
@@ -6272,9 +6287,11 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("user_devices", null, t =>
                         {
-                            t.HasCheckConstraint("ck_user_devices_platform", "`platform` IN ('ios', 'android')");
+                            t.HasCheckConstraint("ck_user_devices_platform", "`platform` IN ('ios', 'android', 'web')");
 
-                            t.HasCheckConstraint("ck_user_devices_provider", "`provider` IN ('expo')");
+                            t.HasCheckConstraint("ck_user_devices_provider", "`provider` IN ('expo', 'web_push')");
+
+                            t.HasCheckConstraint("ck_user_devices_web_push", "(`provider` = 'web_push') = (`web_push_endpoint` IS NOT NULL AND `web_push_p256dh` IS NOT NULL AND `web_push_auth` IS NOT NULL)");
                         });
                 });
 
