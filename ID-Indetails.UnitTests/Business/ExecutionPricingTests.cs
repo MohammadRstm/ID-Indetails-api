@@ -49,7 +49,10 @@ public class ExecutionPricingTests
     {
         // 1,210 for the work with its supervision and TVA, and 300 of permits
         ExecutionPricing.WorkFor(1_510m, permits: 300m, supervisionRate: 0.10m, tvaRate: 0.11m).ShouldBe(1_000m);
-        ExecutionPricing.PriceOf(ExecutionPricing.WorkFor(2_000m, 300m, 0.10m, 0.11m), 300m, 0.10m, 0.11m).Gross.ShouldBe(2_000m);
+
+        // any client total a work price makes goes back to it, permits and all
+        var gross = ExecutionPricing.PriceOf(1_404.96m, 300m, 0.10m, 0.11m).Gross;
+        ExecutionPricing.PriceOf(ExecutionPricing.WorkFor(gross, 300m, 0.10m, 0.11m), 300m, 0.10m, 0.11m).Gross.ShouldBe(gross);
     }
 
     [Fact]
