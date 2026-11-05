@@ -33,11 +33,14 @@ public class Boq
     /// <summary>A fraction for a percent adjustment, the new total for a total one; null for none.</summary>
     public decimal? AdjustmentValue { get; set; }
 
-    /// <summary>The sum of the line totals, before the adjustment.</summary>
+    /// <summary>The sum of the work lines' totals, before the adjustment.</summary>
     public decimal SubtotalUsd { get; set; }
 
     /// <summary>The subtotal after the adjustment: what the client pays for the work, before supervision and TVA.</summary>
     public decimal TotalUsd { get; set; }
+
+    /// <summary>The sum of the permit lines' totals: charged as they are, with no adjustment, supervision or TVA.</summary>
+    public decimal PermitsUsd { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

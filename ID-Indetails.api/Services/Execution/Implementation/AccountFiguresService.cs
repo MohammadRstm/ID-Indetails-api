@@ -70,6 +70,7 @@ public sealed class AccountFiguresService(
         var labelNames = labels.ToDictionary(l => l.Id, l => l.Name);
         return new AccountFiguresResponse(
             project.ProjectFee ?? 0,
+            project.PermitsPrice ?? 0,
             project.SupervisionRate ?? 0,
             supervisionDue,
             project.TvaRate,

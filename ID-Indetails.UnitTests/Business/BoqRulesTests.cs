@@ -10,6 +10,8 @@ public class BoqRulesTests
 {
     private static BoqRules.Line L(decimal quantity, decimal waste, decimal rate) => new(quantity, waste, rate);
 
+    private static BoqRules.Line Permit(decimal quantity, decimal rate) => new(quantity, 0, rate, BoqLineNature.Permit);
+
     private static BoqRules.Caller Caller(long id = 1, bool draft = false, bool money = false, bool pricing = false) => new(id, draft, money, pricing);
 
     [Fact]
@@ -123,6 +125,29 @@ public class BoqRulesTests
     }
 
     [Fact]
+    public void Permit_lines_are_their_own_total_and_never_adjusted()
+    {
+        var totals = BoqRules.TotalsOf([L(10, 0, 100m), Permit(1, 64_814.81m), Permit(2, 250m)], BoqAdjustmentType.Percent, -0.1m);
+
+        totals.Subtotal.ShouldBe(1000m);
+        totals.Adjustment.ShouldBe(-100m);
+        totals.Total.ShouldBe(900m);
+        totals.Permits.ShouldBe(65_314.81m);
+        // a new total is the work's: the permits stay as they are
+        BoqRules.TotalsOf([L(10, 0, 100m), Permit(1, 300m)], BoqAdjustmentType.Total, 800m)
+            .ShouldBe(new BoqRules.Totals(1000m, -200m, 800m, 300m));
+        BoqRules.TotalsOf([Permit(1, 300m)], BoqAdjustmentType.None, null).ShouldBe(new BoqRules.Totals(0m, 0m, 0m, 300m));
+    }
+
+    [Fact]
+    public void Only_a_variation_order_takes_a_permit_off()
+    {
+        BoqRules.CheckContent(BoqKind.Client, null, BoqAdjustmentType.None, null, [L(1, 0, 100m), Permit(1, -50m)])!.Code
+            .ShouldBe(ErrorCodes.BoqNegativeRate);
+        BoqRules.CheckContent(BoqKind.Vo, "Permit no longer needed", BoqAdjustmentType.None, null, [Permit(1, -50m)]).ShouldBeNull();
+    }
+
+    [Fact]
     public void The_work_price_is_the_agreed_client_boq_and_the_agreed_vos()
     {
         BoqRules.WorkPrice(0, []).ShouldBe(0m);
@@ -133,7 +158,7 @@ public class BoqRulesTests
     [Fact]
     public void Supervision_and_tva_come_from_the_total_with_the_projects_rates()
     {
-        var price = ExecutionPricing.PriceOf(10_000m, 0.10m, 0.11m);
+        var price = ExecutionPricing.PriceOf(10_000m, 0m, 0.10m, 0.11m);
 
         price.Supervision.ShouldBe(1000m);
         price.Net.ShouldBe(11_000m);
@@ -141,9 +166,9 @@ public class BoqRulesTests
         price.Tva.ShouldBe(1100m);
         price.Gross.ShouldBe(12_100m);
 
-        var negative = ExecutionPricing.PriceOf(-500m, 0.10m, 0.11m);
+        var negative = ExecutionPricing.PriceOf(-500m, 0m, 0.10m, 0.11m);
         (negative.Supervision, negative.Tva, negative.Gross).ShouldBe((-50m, -55m, -605m));
-        ExecutionPricing.PriceOf(0, 0.10m, 0.11m).Gross.ShouldBe(0m);
+        ExecutionPricing.PriceOf(0, 0, 0.10m, 0.11m).Gross.ShouldBe(0m);
     }
 
     [Fact]
@@ -242,9 +267,10 @@ public class BoqRulesTests
     [Fact]
     public void Variation_orders_can_not_take_the_work_price_below_nothing()
     {
-        BoqRules.CheckWorkPrice(0).ShouldBeNull();
-        BoqRules.CheckWorkPrice(12_000m).ShouldBeNull();
-        BoqRules.CheckWorkPrice(-0.01m)!.Code.ShouldBe(ErrorCodes.BoqPriceBelowZero);
+        BoqRules.CheckWorkPrice(0, 0).ShouldBeNull();
+        BoqRules.CheckWorkPrice(12_000m, 500m).ShouldBeNull();
+        BoqRules.CheckWorkPrice(-0.01m, 0)!.Code.ShouldBe(ErrorCodes.BoqPriceBelowZero);
+        BoqRules.CheckWorkPrice(12_000m, -0.01m)!.Message.ShouldBe("The agreed BOQs would take the permits below zero.");
     }
 
     [Fact]

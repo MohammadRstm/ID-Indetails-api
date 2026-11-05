@@ -31,6 +31,11 @@ public class ProjectPaymentChange
 
     public decimal? PreviousSupervisionRate { get; set; }
 
+    /// <summary>Execution only: the agreed permits after the change; null on Design rows and on rows from before permits.</summary>
+    public decimal? Permits { get; set; }
+
+    public decimal? PreviousPermits { get; set; }
+
     public string Description { get; set; } = string.Empty;
 
     public DateTime ChangedAt { get; set; }

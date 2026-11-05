@@ -243,7 +243,7 @@ public class AccountFiguresTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         Names(json).ShouldBe(
         [
-            "workUsd", "supervisionRate", "supervisionUsd", "tvaRate", "tvaUsd", "clientTotalUsd", "receivedUsd", "restToPayUsd", "costs",
+            "workUsd", "permitsUsd", "supervisionRate", "supervisionUsd", "tvaRate", "tvaUsd", "clientTotalUsd", "receivedUsd", "restToPayUsd", "costs",
             "profitUsd", "supervision", "pocket", "cashInAccountUsd", "byLabel", "byCategory", "byPayee", "unconverted",
         ]);
         Names(json.GetProperty("costs")).ShouldBe(["siteExpensesUsd", "groundLabourUsd", "staffUsd", "otherUsd", "totalUsd"]);

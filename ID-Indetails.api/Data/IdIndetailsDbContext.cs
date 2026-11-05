@@ -186,6 +186,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<BoqKind>(configurationBuilder);
         StoreAsSnakeCase<BoqStatus>(configurationBuilder);
         StoreAsSnakeCase<BoqAdjustmentType>(configurationBuilder);
+        StoreAsSnakeCase<BoqLineNature>(configurationBuilder);
         StoreAsSnakeCase<SiteExpenseCategory>(configurationBuilder);
         StoreAsSnakeCase<PermissionEffect>(configurationBuilder);
         StoreAsSnakeCase<ProtonOutcome>(configurationBuilder);

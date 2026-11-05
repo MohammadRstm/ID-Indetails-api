@@ -49,11 +49,13 @@ public sealed class BoqRepository(IdIndetailsDbContext db) : IBoqRepository
         var agreed = await db.Boqs
             .AsNoTracking()
             .Where(b => b.ProjectId == projectId && b.DeletedAt == null && b.Status == BoqStatus.Agreed)
-            .Select(b => new { b.Kind, b.TotalUsd })
+            .Select(b => new { b.Kind, b.TotalUsd, b.PermitsUsd })
             .ToListAsync(cancellationToken);
         var client = agreed.Where(b => b.Kind == BoqKind.Client).ToList();
+        var vos = agreed.Where(b => b.Kind == BoqKind.Vo).ToList();
 
-        return new AgreedBoqs(client.Count > 0, client.Sum(b => b.TotalUsd), agreed.Where(b => b.Kind == BoqKind.Vo).Select(b => b.TotalUsd).ToList());
+        return new AgreedBoqs(client.Count > 0, client.Sum(b => b.TotalUsd), vos.Select(b => b.TotalUsd).ToList(),
+            client.Sum(b => b.PermitsUsd), vos.Sum(b => b.PermitsUsd));
     }
 
     public async Task<int> NextSequenceAsync(string prefix, int year, CancellationToken cancellationToken = default)

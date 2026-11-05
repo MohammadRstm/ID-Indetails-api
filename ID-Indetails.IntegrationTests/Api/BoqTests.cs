@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Boqs;
+using ID_Indetails.api.DTO.Response.Execution;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using Shouldly;
@@ -411,7 +412,7 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
             m => m.Revenue.ShouldBe(11_000m),
             m => m.RevenueWithTva.ShouldBe(12_100m),
             m => m.PaymentWithTva.ShouldBe(12_100m));
-        (await ListAsync(superAdmin, site.Id)).Price.ShouldBe(new BoqPriceResponse(10_000m, 0m, 10_000m, 0.10m, 1000m, 0.11m, 1100m, 12_100m));
+        (await ListAsync(superAdmin, site.Id)).Price.ShouldBe(new BoqPriceResponse(10_000m, 0m, 10_000m, 0.10m, 1000m, 0.11m, 1100m, 12_100m, 0m, 0m));
 
         // it is written like a fee change always was: in the payment history, with the BOQ's number as the reason, and in the feed
         var history = await OkAsync<List<ProjectPaymentChangeResponse>>(Client.GetAsync($"/api/projects/{site.Id}/payment-changes", superAdmin.AccessToken));
@@ -442,6 +443,70 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostEmptyAsync($"/api/boqs/{other.Id}/agree", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.BoqAlreadyAgreed);
         (await MoneyAsync(superAdmin, site.Id)).ProjectFee.ShouldBe(10_000m);
         (await Boqs.GetAsync(superAdmin.AccessToken, other.Id)).Status.ShouldBe(BoqStatus.Draft);
+    }
+
+    [Fact]
+    public async Task Permits_are_charged_as_they_are_with_no_supervision_or_tva_in_the_client_BOQ_and_in_a_VO()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await NewSiteAsync(superAdmin);
+        await SetRatesAsync(superAdmin, site.Id);
+
+        // a permit line is its own total: the adjustment is the work's
+        var boq = await Boqs.CreateAsync(superAdmin.AccessToken, site.Id);
+        var saved = await Boqs.SaveAsync(superAdmin.AccessToken, boq.Id,
+            [Line("Whole building", 1, 10_000m, unit: "lot"), Line("Building permit", 1, 2000m, unit: "L.S", nature: "permit")],
+            adjustmentType: "percent", adjustmentValue: 0.10m);
+        saved.ShouldSatisfyAllConditions(
+            b => b.Lines.Select(l => l.Nature).ShouldBe([BoqLineNature.Work, BoqLineNature.Permit]),
+            b => b.SubtotalUsd.ShouldBe(10_000m),
+            b => b.TotalUsd.ShouldBe(11_000m),
+            b => b.PermitsUsd.ShouldBe(2000m),
+            b => b.SupervisionUsd.ShouldBe(1100m),
+            b => b.TvaUsd.ShouldBe(1210m),
+            // 11,000 + 1,100 + 1,210, and the permit as it is
+            b => b.ClientTotalUsd.ShouldBe(15_310m));
+
+        await Boqs.AgreeAsync(superAdmin.AccessToken, boq.Id);
+        (await MoneyAsync(superAdmin, site.Id)).ShouldSatisfyAllConditions(
+            m => m.ProjectFee.ShouldBe(11_000m),
+            m => m.PermitsUsd.ShouldBe(2000m),
+            m => m.SupervisionUsd.ShouldBe(1100m),
+            m => m.Revenue.ShouldBe(14_100m),
+            m => m.RevenueWithTva.ShouldBe(15_310m),
+            m => m.PaymentWithTva.ShouldBe(15_310m));
+        (await ListAsync(superAdmin, site.Id)).Price.ShouldBe(
+            new BoqPriceResponse(11_000m, 0m, 11_000m, 0.10m, 1100m, 0.11m, 1210m, 15_310m, 2000m, 2000m));
+
+        // a VO that only takes a permit off moves the permits, never the work price, supervision or TVA
+        var vo = await Boqs.CreateAsync(superAdmin.AccessToken, site.Id, "vo", reason: "The permit came cheaper");
+        await Boqs.SaveAsync(superAdmin.AccessToken, vo.Id, [Line("Permit refund", 1, -500m, nature: "permit")], "Variation order", reason: "The permit came cheaper");
+        await Boqs.AgreeAsync(superAdmin.AccessToken, vo.Id);
+        (await MoneyAsync(superAdmin, site.Id)).ShouldSatisfyAllConditions(
+            m => m.ProjectFee.ShouldBe(11_000m),
+            m => m.PermitsUsd.ShouldBe(1500m),
+            m => m.SupervisionUsd.ShouldBe(1100m),
+            m => m.RevenueWithTva.ShouldBe(14_810m));
+        var figures = await OkAsync<AccountFiguresResponse>(Client.GetAsync($"/api/projects/{site.Id}/account-figures", superAdmin.AccessToken));
+        (figures.WorkUsd, figures.PermitsUsd, figures.TvaUsd, figures.ClientTotalUsd).ShouldBe((11_000m, 1500m, 1210m, 14_810m));
+
+        // the history keeps both, and the feed has the permits' own event
+        var history = await OkAsync<List<ProjectPaymentChangeResponse>>(Client.GetAsync($"/api/projects/{site.Id}/payment-changes", superAdmin.AccessToken));
+        history[0].ShouldSatisfyAllConditions(
+            h => (h.Amount, h.PreviousAmount).ShouldBe((11_000m, 11_000m)),
+            h => (h.Permits, h.PreviousPermits).ShouldBe((1500m, 2000m)));
+        (await CountAsync("SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'project_fee_set'", ("@p", site.Id))).ShouldBe(1);
+        (await CountAsync("SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'permits_set'", ("@p", site.Id))).ShouldBe(2);
+
+        // withdrawing the VO puts the permit back
+        await OkAsync<BoqDetailResponse>(Client.PostJsonAsync($"/api/boqs/{vo.Id}/withdraw-agreement", new { reason = "Entered by mistake" }, superAdmin.AccessToken));
+        (await MoneyAsync(superAdmin, site.Id)).PermitsUsd.ShouldBe(2000m);
+
+        // only a VO takes a permit off
+        var other = await Boqs.CreateAsync(superAdmin.AccessToken, site.Id, title: "Option B");
+        await (await Client.PutJsonAsync($"/api/boqs/{other.Id}",
+                new { title = "Option B", adjustmentType = "none", lines = new[] { Line("Refund", 1, -100m, nature: "permit") } }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.BoqNegativeRate);
     }
 
     [Fact]
@@ -476,7 +541,7 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await MoneyAsync(superAdmin, site.Id)).ProjectFee.ShouldBe(11_000m);
         credit.TotalUsd.ShouldBe(-500m);
         credit.Reason.ShouldBe("A simpler facade");
-        (await ListAsync(superAdmin, site.Id)).Price.ShouldBe(new BoqPriceResponse(10_000m, 1000m, 11_000m, 0m, 0m, 0m, 0m, 11_000m));
+        (await ListAsync(superAdmin, site.Id)).Price.ShouldBe(new BoqPriceResponse(10_000m, 1000m, 11_000m, 0m, 0m, 0m, 0m, 11_000m, 0m, 0m));
         (await ListAsync(superAdmin, site.Id)).Vos.Select(v => v.Id).ShouldBe([credit.Id, extra.Id]);
 
         // each VO is a row of the history, with the difference it made

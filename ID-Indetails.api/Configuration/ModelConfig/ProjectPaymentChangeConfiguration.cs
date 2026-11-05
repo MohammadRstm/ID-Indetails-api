@@ -24,6 +24,8 @@ public class ProjectPaymentChangeConfiguration : IEntityTypeConfiguration<Projec
         builder.Property(x => x.PreviousTvaRate).HasPrecision(5, 4);
         builder.Property(x => x.SupervisionRate).HasPrecision(5, 4);
         builder.Property(x => x.PreviousSupervisionRate).HasPrecision(5, 4);
+        builder.Property(x => x.Permits).HasPrecision(18, 2);
+        builder.Property(x => x.PreviousPermits).HasPrecision(18, 2);
         builder.Property(x => x.Description).IsRequired().HasMaxLength(ProjectRules.MaxPaymentDescriptionLength);
 
         builder.HasOne(x => x.Project)

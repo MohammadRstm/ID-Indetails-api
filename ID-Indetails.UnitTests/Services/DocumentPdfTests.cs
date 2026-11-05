@@ -95,17 +95,21 @@ public class DocumentPdfTests
         Pages(InvoicePdf.Render(Invoice(1) with { Number = null, DueOn = null }, null, Head, null)).ShouldBe(1);
     }
 
-    private static BoqDocument Boq(BoqKind kind, BoqStatus status, int lines, BoqAdjustmentType adjustment = BoqAdjustmentType.None, decimal? value = null)
+    private static BoqDocument Boq(BoqKind kind, BoqStatus status, int lines, BoqAdjustmentType adjustment = BoqAdjustmentType.None, decimal? value = null, int permits = 0)
     {
         var items = Enumerable.Range(1, lines)
-            .Select(i => new BoqLineResponse(i, i, $"2.1.{i}", $"Reinforced concrete slab, level {i}", 10m, 0.05m, 10.5m, "m3", 120.5m, 1265.25m))
+            .Select(i => new BoqLineResponse(i, i, BoqLineNature.Work, $"2.1.{i}", $"Reinforced concrete slab, level {i}", 10m, 0.05m, 10.5m, "m3", 120.5m, 1265.25m))
+            .Concat(Enumerable.Range(lines + 1, permits)
+                .Select(i => new BoqLineResponse(i, i, BoqLineNature.Permit, null, "Building permit", 1m, 0m, 1m, "L.S", 3500m, 3500m)))
             .ToList();
-        var subtotal = items.Sum(l => l.TotalUsd);
+        var subtotal = items.Where(l => l.Nature == BoqLineNature.Work).Sum(l => l.TotalUsd);
+        var permitsUsd = items.Where(l => l.Nature == BoqLineNature.Permit).Sum(l => l.TotalUsd);
         var total = adjustment == BoqAdjustmentType.Percent ? subtotal + Math.Round(subtotal * (value ?? 0), 2) : adjustment == BoqAdjustmentType.Total ? value!.Value : subtotal;
         var boq = new BoqDetailResponse(
-            9, kind, kind == BoqKind.Vo ? "VO-2026-002" : "BQ-2026-001", "Villa Mounir", new PersonRefResponse(1, "Nadia Khoury"), status, total, lines,
+            9, kind, kind == BoqKind.Vo ? "VO-2026-002" : "BQ-2026-001", "Villa Mounir", new PersonRefResponse(1, "Nadia Khoury"), status, total, items.Count,
             kind == BoqKind.Vo ? "The client added a guest house" : null, new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc),
-            null, null, null, 4, adjustment, value, items, subtotal, total - subtotal, 0.10m, total * 0.10m, 0.11m, total * 0.11m, total * 1.21m, []);
+            null, null, null, 4, adjustment, value, items, subtotal, total - subtotal, 0.10m, total * 0.10m, 0.11m, total * 0.11m, total * 1.21m + permitsUsd,
+            permitsUsd, []);
 
         return new BoqDocument(boq, "Site 12", "Beit Mery", "Haddad Holdings");
     }
@@ -120,6 +124,19 @@ public class DocumentPdfTests
 
         Pages(BoqPdf.Render(Boq(kind, status, 3, adjustment, value), new DateOnly(2026, 9, 30), Head)).ShouldBe(1);
         Pages(BoqPdf.Render(Boq(kind, status, 120, adjustment, value), new DateOnly(2026, 9, 30), Head)).ShouldBeGreaterThan(1);
+        Pages(BoqPdf.Render(Boq(kind, status, 3, adjustment, value, permits: 2), new DateOnly(2026, 9, 30), Head)).ShouldBe(1);
+    }
+
+    [Fact]
+    public void A_boqs_permits_are_added_to_what_to_pay_after_supervision_and_tva()
+    {
+        var boq = Boq(BoqKind.Vo, BoqStatus.Agreed, 2, BoqAdjustmentType.Percent, -0.05m, permits: 1).Boq;
+
+        BoqPdf.Totals(boq).Select(t => t.Label).ShouldBe(
+            ["Work subtotal", "Adjustment (-5%)", "Work total", "Supervision (10%)", "TVA (11%)", "Permits", "Total to pay"]);
+        BoqPdf.Totals(boq).Single(t => t.Label == "Permits").Value.ShouldBe(PdfLayout.Money(3500m));
+        BoqPdf.Totals(Boq(BoqKind.Client, BoqStatus.Draft, 0, permits: 1).Boq).Select(t => t.Label)
+            .ShouldBe(["Work total", "Supervision (10%)", "TVA (11%)", "Permits", "Total to pay"]);
     }
 
     [Fact]

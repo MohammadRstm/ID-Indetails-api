@@ -461,6 +461,7 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
 /// <param name="TvaPct">The project's TVA rate, in percent.</param>
 /// <param name="SupervisionPct">Execution: the supervision rate on the work price, in percent.</param>
 /// <param name="Supervision">Execution: the supervision, part of the agreed revenue.</param>
+/// <param name="Permits">Execution: the agreed permits, part of the agreed revenue, with no supervision or TVA on them.</param>
 /// <param name="Expenses">Project expenses, one total per currency, as recorded (not converted).</param>
 /// <param name="AgreedProfit">Agreed revenue less the cost so far.</param>
 /// <param name="CashProfit">Execution: received less the cost so far, less what was moved to the pocket money, plus what it paid in.</param>
@@ -477,6 +478,7 @@ public sealed record ProjectFinancials(
     decimal? ProjectFee,
     decimal? SupervisionPct,
     decimal? Supervision,
+    decimal? Permits,
     IReadOnlyList<CurrencyTotalResponse> Expenses,
     ProjectBillingResponse Billing,
     ProjectCostResponse Cost,
@@ -514,7 +516,7 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
         return ProtonToolOutput.Of(
             new ProjectFinancials(
                 p.Id, p.Title, m.Currency, m.Revenue, m.IsLocked, m.RevenueWithTva, m.TvaRate * 100, m.ProjectFee,
-                m.SupervisionRate * 100, m.SupervisionUsd,
+                m.SupervisionRate * 100, m.SupervisionUsd, m.PermitsUsd,
                 m.ExpenseTotals, m.Billing, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.RecognisedToDate,
                 ProtonProjection.Of(m.Projected), ProtonText.Hours(m.LabourHours), m.CashProfit, m.ToPocket, m.FromPocket,
                 "All-time figures in USD. Agreed revenue and profit are net of TVA; billing is as the client is billed, TVA " +

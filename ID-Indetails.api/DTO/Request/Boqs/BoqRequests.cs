@@ -44,6 +44,9 @@ public sealed record SaveBoqLineRequest
     /// <summary>The id of one of this BOQ's lines, to keep it; absent for a new line.</summary>
     public long? Id { get; init; }
 
+    /// <summary>Work (the default), or a permit: a permit carries no supervision and no TVA.</summary>
+    public BoqLineNature Nature { get; init; }
+
     /// <summary>The line's number in the BOQ, e.g. "2.1.1".</summary>
     public string? Code { get; init; }
 
