@@ -5,8 +5,11 @@ namespace ID_Indetails.api.Repositories.Boqs.Abstraction;
 /// <summary>A BOQ in a list: its deliveries, and how many lines it has.</summary>
 public sealed record BoqListRow(Boq Boq, int LineCount);
 
-/// <summary>What the project's agreed BOQs add up to: the client BOQ's total (0 when none is agreed) and each agreed VO's.</summary>
-public sealed record AgreedBoqs(bool ClientAgreed, decimal ClientTotal, IReadOnlyList<decimal> VoTotals);
+/// <summary>
+/// What the project's agreed BOQs add up to: the client BOQ's work total and permits (0 when none is agreed), each agreed
+/// VO's work total, and the agreed VOs' permits.
+/// </summary>
+public sealed record AgreedBoqs(bool ClientAgreed, decimal ClientTotal, IReadOnlyList<decimal> VoTotals, decimal ClientPermits, decimal VoPermits);
 
 public interface IBoqRepository
 {

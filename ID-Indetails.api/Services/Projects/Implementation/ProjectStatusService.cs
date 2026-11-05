@@ -107,7 +107,7 @@ public sealed class ProjectStatusService(
 
         if (project.DomainCode == DomainCodes.Execution)
         {
-            var work = ExecutionPricing.WorkFor(money.Received, project.SupervisionRate ?? 0, project.TvaRate);
+            var work = ExecutionPricing.WorkFor(money.Received, project.PermitsPrice ?? 0, project.SupervisionRate ?? 0, project.TvaRate);
             await boqs.AddClosingPriceAsync(project, work, actorId, cancellationToken);
             return;
         }

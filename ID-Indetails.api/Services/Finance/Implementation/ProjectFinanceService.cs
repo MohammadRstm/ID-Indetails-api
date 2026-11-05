@@ -282,7 +282,7 @@ public sealed class ProjectFinanceService(
         if (isExecution)
         {
             // Open Execution projects are priced live from the agreed BOQs; finalising freezes the agreed amount into Revenue.
-            var price = ExecutionPricing.PriceOf(project.ProjectFee ?? 0, project.SupervisionRate ?? 0, project.TvaRate);
+            var price = ExecutionPricing.PriceOf(project.ProjectFee ?? 0, project.PermitsPrice ?? 0, project.SupervisionRate ?? 0, project.TvaRate);
             supervision = price.Supervision;
             revenueWithTva = price.Gross;
             revenueTva = price.Tva;

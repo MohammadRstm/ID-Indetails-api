@@ -59,6 +59,7 @@ public sealed class SaveBoqLineRequestValidator : AbstractValidator<SaveBoqLineR
     public SaveBoqLineRequestValidator()
     {
         RuleFor(x => x.Id).GreaterThan(0).When(x => x.Id is not null).WithMessage("The line's id must be one of this BOQ's lines.");
+        RuleFor(x => x.Nature).IsInEnum().WithMessage("A line is work or a permit.");
         RuleFor(x => x.Code).ClientText("Code", BoqRules.MaxCodeLength);
         RuleFor(x => x.Description).ClientText("Description", BoqRules.MaxDescriptionLength, required: true);
         RuleFor(x => x.Unit).ClientText("Unit", BoqRules.MaxUnitLength);

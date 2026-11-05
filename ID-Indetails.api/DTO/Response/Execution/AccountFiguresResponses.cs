@@ -46,8 +46,9 @@ public sealed record AccountPayeeSplitResponse(SiteExpenseCategory Category, lon
 /// supervision taken and the cash that should be in the project account. Only for callers with <c>financial:view</c>.
 /// </summary>
 /// <param name="WorkUsd">The work price, set by agreeing BOQs.</param>
-/// <param name="TvaUsd">TVA on the work, never on supervision.</param>
-/// <param name="ClientTotalUsd">Work plus supervision plus TVA.</param>
+/// <param name="PermitsUsd">The agreed BOQs' permits, charged with no supervision or TVA.</param>
+/// <param name="TvaUsd">TVA on the work, never on supervision or permits.</param>
+/// <param name="ClientTotalUsd">Work plus supervision plus TVA, plus the permits.</param>
 /// <param name="ReceivedUsd">Every live payment, TVA included.</param>
 /// <param name="RestToPayUsd">The client's total less received; negative when they paid ahead.</param>
 /// <param name="ProfitUsd">The project's profit figure, as on its money.</param>
@@ -57,6 +58,7 @@ public sealed record AccountPayeeSplitResponse(SiteExpenseCategory Category, lon
 /// <param name="Unconverted">Costs with no exchange rate on their day, in their own currency: left out of every sum above.</param>
 public sealed record AccountFiguresResponse(
     decimal WorkUsd,
+    decimal PermitsUsd,
     decimal SupervisionRate,
     decimal SupervisionUsd,
     decimal TvaRate,

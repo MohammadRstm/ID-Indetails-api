@@ -388,6 +388,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(20)")
                         .HasColumnName("number");
 
+                    b.Property<decimal>("PermitsUsd")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("permits_usd");
+
                     b.Property<long>("ProjectId")
                         .HasColumnType("bigint")
                         .HasColumnName("project_id");
@@ -450,7 +455,7 @@ namespace ID_Indetails.api.Data.Migrations
 
                             t.HasCheckConstraint("ck_boqs_agreed", "(`status` = 'agreed') = (`agreed_at` IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_boqs_amounts_by_kind", "`kind` = 'vo' OR (`subtotal_usd` >= 0 AND `total_usd` >= 0 AND (`adjustment_type` <> 'total' OR `adjustment_value` >= 0))");
+                            t.HasCheckConstraint("ck_boqs_amounts_by_kind", "`kind` = 'vo' OR (`subtotal_usd` >= 0 AND `total_usd` >= 0 AND `permits_usd` >= 0 AND (`adjustment_type` <> 'total' OR `adjustment_value` >= 0))");
 
                             t.HasCheckConstraint("ck_boqs_internal_is_draft", "`kind` <> 'internal' OR `status` = 'draft'");
 
@@ -546,6 +551,14 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(500)")
                         .HasColumnName("description");
 
+                    b.Property<string>("Nature")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("work")
+                        .HasColumnName("nature");
+
                     b.Property<int>("Position")
                         .HasColumnType("int")
                         .HasColumnName("position");
@@ -578,6 +591,8 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("boq_lines", null, t =>
                         {
+                            t.HasCheckConstraint("ck_boq_lines_nature", "`nature` IN ('work', 'permit')");
+
                             t.HasCheckConstraint("ck_boq_lines_quantity_non_negative", "`quantity` >= 0");
 
                             t.HasCheckConstraint("ck_boq_lines_waste_rate_range", "`waste_rate` BETWEEN 0 AND 1");
@@ -4141,6 +4156,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("owner_id");
 
+                    b.Property<decimal?>("PermitsPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("permits_price");
+
                     b.Property<byte>("ProgressPct")
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("progress_pct");
@@ -4230,9 +4250,11 @@ namespace ID_Indetails.api.Data.Migrations
 
                             t.HasCheckConstraint("ck_projects_execution_is_client_work", "`domain_code` <> 'execution' OR `billing_type` = 'client'");
 
-                            t.HasCheckConstraint("ck_projects_execution_money_fields", "(`domain_code` = 'execution' AND `project_fee` IS NOT NULL) OR (`domain_code` <> 'execution' AND `project_fee` IS NULL)");
+                            t.HasCheckConstraint("ck_projects_execution_money_fields", "(`domain_code` = 'execution' AND `project_fee` IS NOT NULL AND `permits_price` IS NOT NULL) OR (`domain_code` <> 'execution' AND `project_fee` IS NULL AND `permits_price` IS NULL)");
 
                             t.HasCheckConstraint("ck_projects_internal_has_no_client_or_revenue", "`billing_type` = 'client' OR (`client_id` IS NULL AND `revenue` = 0)");
+
+                            t.HasCheckConstraint("ck_projects_permits_price_non_negative", "`permits_price` IS NULL OR `permits_price` >= 0");
 
                             t.HasCheckConstraint("ck_projects_progress_range", "`progress_pct` <= 100");
 
@@ -4666,6 +4688,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("decimal(7,4)")
                         .HasColumnName("material_markup");
 
+                    b.Property<decimal?>("Permits")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("permits");
+
                     b.Property<decimal?>("PreviousAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
@@ -4675,6 +4702,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasPrecision(7, 4)
                         .HasColumnType("decimal(7,4)")
                         .HasColumnName("previous_material_markup");
+
+                    b.Property<decimal?>("PreviousPermits")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("previous_permits");
 
                     b.Property<decimal?>("PreviousSupervisionRate")
                         .HasPrecision(5, 4)

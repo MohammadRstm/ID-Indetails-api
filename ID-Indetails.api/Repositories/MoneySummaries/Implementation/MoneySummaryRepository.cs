@@ -60,11 +60,11 @@ public sealed class MoneySummaryRepository(IdIndetailsDbContext db) : IMoneySumm
 
     public async Task<IReadOnlyList<AgreedChangeRow>> AgreedChangesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
     {
-        string[] kinds = [ActivityEventKinds.RevenueSet, ActivityEventKinds.RevenueChanged, ActivityEventKinds.ProjectFeeSet];
+        string[] kinds = [ActivityEventKinds.RevenueSet, ActivityEventKinds.RevenueChanged, ActivityEventKinds.ProjectFeeSet, ActivityEventKinds.PermitsSet];
         return await db.ActivityEvents
             .AsNoTracking()
             .Where(e => kinds.Contains(e.Kind) && e.SubjectType == "project" && e.SubjectId != null && projectIds.Contains(e.SubjectId.Value))
-            .Select(e => new AgreedChangeRow(e.SubjectId!.Value, e.OccurredAt, e.Amount ?? 0, e.PrevAmount))
+            .Select(e => new AgreedChangeRow(e.SubjectId!.Value, e.OccurredAt, e.Amount ?? 0, e.PrevAmount, e.Kind))
             .ToListAsync(cancellationToken);
     }
 

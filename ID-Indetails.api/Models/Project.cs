@@ -56,6 +56,12 @@ public class Project
     /// <summary>Execution only (required there, null for Design): the work price. 0 until a price is agreed.</summary>
     public decimal? ProjectFee { get; set; }
 
+    /// <summary>
+    /// Execution only (required there, null for Design): the agreed BOQs' permits. Charged as they are: no supervision
+    /// and no TVA on them. 0 until a BOQ with permits is agreed.
+    /// </summary>
+    public decimal? PermitsPrice { get; set; }
+
     /// <summary>Execution only: the company's supervision on the work price, 0.10 = 10%. Null for Design.</summary>
     public decimal? SupervisionRate { get; set; }
 

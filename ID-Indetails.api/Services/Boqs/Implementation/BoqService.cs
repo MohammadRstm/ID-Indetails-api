@@ -65,7 +65,8 @@ public sealed class BoqService(
             Of(BoqKind.Client),
             Of(BoqKind.Vo),
             caller.CanSeeMoney || caller.CanManagePricing
-                ? PriceOf(project, agreed.Where(b => b.Kind == BoqKind.Client).Sum(b => b.TotalUsd), agreed.Where(b => b.Kind == BoqKind.Vo).Sum(b => b.TotalUsd))
+                ? PriceOf(project, agreed.Where(b => b.Kind == BoqKind.Client).Sum(b => b.TotalUsd), agreed.Where(b => b.Kind == BoqKind.Vo).Sum(b => b.TotalUsd),
+                    agreed.Sum(b => b.PermitsUsd))
                 : null);
     }
 
@@ -112,7 +113,7 @@ public sealed class BoqService(
         }
 
         var reason = Clean(request.Reason);
-        var inputs = request.Lines.Select(l => new BoqRules.Line(l.Quantity, l.WasteRate, l.Rate)).ToList();
+        var inputs = request.Lines.Select(l => new BoqRules.Line(l.Quantity, l.WasteRate, l.Rate, l.Nature)).ToList();
         Throw(BoqRules.CheckContent(boq.Kind, reason, request.AdjustmentType, request.AdjustmentValue, inputs));
 
         var existing = boq.Lines.ToDictionary(l => l.Id);
@@ -132,6 +133,7 @@ public sealed class BoqService(
         {
             var target = line.Id is { } id ? existing[id] : new BoqLine();
             target.Position = index + 1;
+            target.Nature = line.Nature;
             target.Code = Clean(line.Code);
             target.Description = line.Description.Trim();
             target.Quantity = line.Quantity;
@@ -237,15 +239,18 @@ public sealed class BoqService(
         var work = boq.Kind == BoqKind.Client
             ? BoqRules.WorkPrice(boq.TotalUsd, agreed.VoTotals)
             : BoqRules.WorkPrice(agreed.ClientTotal, [.. agreed.VoTotals, boq.TotalUsd]);
-        Throw(BoqRules.CheckWorkPrice(work));
-        var before = await FloorBeforeAsync(project, work, cancellationToken);
+        var permits = boq.Kind == BoqKind.Client
+            ? BoqRules.WorkPrice(boq.PermitsUsd, [agreed.VoPermits])
+            : BoqRules.WorkPrice(agreed.ClientPermits, [agreed.VoPermits, boq.PermitsUsd]);
+        Throw(BoqRules.CheckWorkPrice(work, permits));
+        var before = await FloorBeforeAsync(project, work, permits, cancellationToken);
 
         var now = clock.UtcNow;
         boq.Status = BoqStatus.Agreed;
         boq.AgreedAt = now;
         boq.AgreedById = actor.UserId;
         boq.UpdatedAt = now;
-        SetWorkPrice(project, work, boq.Number!, actor.UserId);
+        SetPrice(project, work, permits, boq.Number!, actor.UserId);
         activity.Add(BoqEvent(boq, project, ActivityEventKinds.BoqAgreed, actor.UserId, new { kind = KindOf(boq), number = boq.Number }));
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -271,15 +276,18 @@ public sealed class BoqService(
         var work = boq.Kind == BoqKind.Client
             ? BoqRules.WorkPrice(0, agreed.VoTotals)
             : BoqRules.WorkPrice(agreed.ClientTotal, WithoutOne(agreed.VoTotals, boq.TotalUsd));
-        Throw(BoqRules.CheckWorkPrice(work));
-        var before = await FloorBeforeAsync(project, work, cancellationToken);
+        var permits = boq.Kind == BoqKind.Client
+            ? BoqRules.WorkPrice(0, [agreed.VoPermits])
+            : BoqRules.WorkPrice(agreed.ClientPermits, [agreed.VoPermits, -boq.PermitsUsd]);
+        Throw(BoqRules.CheckWorkPrice(work, permits));
+        var before = await FloorBeforeAsync(project, work, permits, cancellationToken);
 
         var reason = request.Reason.Trim();
         boq.Status = BoqStatus.Draft;
         boq.AgreedAt = null;
         boq.AgreedById = null;
         boq.UpdatedAt = clock.UtcNow;
-        SetWorkPrice(project, work, reason, actor.UserId);
+        SetPrice(project, work, permits, reason, actor.UserId);
         activity.Add(BoqEvent(boq, project, ActivityEventKinds.BoqAgreementWithdrawn, actor.UserId, new { kind = KindOf(boq), number = boq.Number, reason }));
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -307,7 +315,7 @@ public sealed class BoqService(
             Channel = request.Channel,
             Recipient = Clean(request.Recipient),
             Note = Clean(request.Note),
-            TotalUsd = boq.TotalUsd,
+            TotalUsd = boq.TotalUsd + boq.PermitsUsd,
             SentAt = clock.UtcNow,
             SentById = actor.UserId,
         });
@@ -350,7 +358,7 @@ public sealed class BoqService(
         boq.Status = BoqStatus.Agreed;
         boq.AgreedAt = now;
         boq.AgreedById = actorId;
-        SetWorkPrice(project, work, boq.Number!, actorId);
+        SetPrice(project, work, project.PermitsPrice ?? 0, boq.Number!, actorId);
         activity.Add(BoqEvent(boq, project, ActivityEventKinds.BoqAgreed, actorId, new { kind = KindOf(boq), number = boq.Number }));
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
@@ -476,16 +484,18 @@ public sealed class BoqService(
 
     /// <summary>Sets the work price and records the change as a fee change always was: in the payment history and the feed.</summary>
     /// <summary>
-    /// The profit before a change of the work price, when the floor has to judge it: only a lower price can take the
-    /// profit to zero, so a rise (the first agreement included) never needs forcing.
+    /// The profit before a change of the work price or the permits, when the floor has to judge it: only a lower price can
+    /// take the profit to zero, so a rise (the first agreement included) never needs forcing.
     /// </summary>
-    private async Task<ProfitBefore?> FloorBeforeAsync(Project project, decimal work, CancellationToken cancellationToken)
-        => work < (project.ProjectFee ?? 0) ? await floor.BeforeAsync(project, cancellationToken) : null;
+    private async Task<ProfitBefore?> FloorBeforeAsync(Project project, decimal work, decimal permits, CancellationToken cancellationToken)
+        => work < (project.ProjectFee ?? 0) || permits < (project.PermitsPrice ?? 0) ? await floor.BeforeAsync(project, cancellationToken) : null;
 
-    private void SetWorkPrice(Project project, decimal work, string description, long actorId)
+    /// <summary>Sets the work price and the permits: one row of the price history, and an event for each that changed.</summary>
+    private void SetPrice(Project project, decimal work, decimal permits, string description, long actorId)
     {
         var previous = project.ProjectFee ?? 0;
-        if (work == previous)
+        var previousPermits = project.PermitsPrice ?? 0;
+        if (work == previous && permits == previousPermits)
         {
             return;
         }
@@ -499,25 +509,39 @@ public sealed class BoqService(
             PreviousTvaRate = project.TvaRate,
             SupervisionRate = project.SupervisionRate,
             PreviousSupervisionRate = project.SupervisionRate,
+            Permits = permits,
+            PreviousPermits = previousPermits,
             Description = description,
             ChangedAt = now,
             ChangedById = actorId,
         });
-        activity.Add(new ActivityEvent
+        if (work != previous)
         {
-            DomainCode = project.DomainCode,
-            Kind = ActivityEventKinds.ProjectFeeSet,
-            OccurredAt = now,
-            ActorId = actorId,
-            ProjectId = project.Id,
-            SubjectType = "project",
-            SubjectId = project.Id,
-            Amount = work,
-            PrevAmount = previous,
-        });
+            activity.Add(PriceEvent(project, ActivityEventKinds.ProjectFeeSet, work, previous, actorId, now));
+        }
+
+        if (permits != previousPermits)
+        {
+            activity.Add(PriceEvent(project, ActivityEventKinds.PermitsSet, permits, previousPermits, actorId, now));
+        }
+
         project.ProjectFee = work;
+        project.PermitsPrice = permits;
         project.UpdatedAt = now;
     }
+
+    private static ActivityEvent PriceEvent(Project project, string kind, decimal amount, decimal previous, long actorId, DateTime now) => new()
+    {
+        DomainCode = project.DomainCode,
+        Kind = kind,
+        OccurredAt = now,
+        ActorId = actorId,
+        ProjectId = project.Id,
+        SubjectType = "project",
+        SubjectId = project.Id,
+        Amount = amount,
+        PrevAmount = previous,
+    };
 
     private ActivityEvent BoqEvent(Boq boq, Project project, string kind, long actorId, object payload) => new()
     {
@@ -529,7 +553,7 @@ public sealed class BoqService(
         ClientId = project.ClientId,
         SubjectType = "boq",
         SubjectId = boq.Id,
-        Amount = boq.TotalUsd,
+        Amount = boq.TotalUsd + boq.PermitsUsd,
         Payload = JsonSerializer.Serialize(payload),
     };
 
@@ -538,6 +562,7 @@ public sealed class BoqService(
     private static BoqLine CopyOf(BoqLine line, int position) => new()
     {
         Position = position,
+        Nature = line.Nature,
         Code = line.Code,
         Description = line.Description,
         Quantity = line.Quantity,
@@ -546,7 +571,7 @@ public sealed class BoqService(
         Rate = line.Rate,
     };
 
-    private static List<BoqRules.Line> LinesOf(Boq boq) => boq.Lines.Select(l => new BoqRules.Line(l.Quantity, l.WasteRate, l.Rate)).ToList();
+    private static List<BoqRules.Line> LinesOf(Boq boq) => boq.Lines.Select(l => new BoqRules.Line(l.Quantity, l.WasteRate, l.Rate, l.Nature)).ToList();
 
     /// <summary>The totals always come from the lines, never from the client.</summary>
     private static void Recompute(Boq boq)
@@ -554,6 +579,7 @@ public sealed class BoqService(
         var totals = BoqRules.TotalsOf(LinesOf(boq), boq.AdjustmentType, boq.AdjustmentValue);
         boq.SubtotalUsd = totals.Subtotal;
         boq.TotalUsd = totals.Total;
+        boq.PermitsUsd = totals.Permits;
     }
 
     /// <summary>The totals without one occurrence of <paramref name="total"/>: the VO being withdrawn.</summary>
@@ -590,11 +616,13 @@ public sealed class BoqService(
     /// The work price as stored, which agreeing and withdrawing keep equal to the agreed BOQ and VOs: a site priced
     /// before BOQs keeps its typed-in price until its first agreement replaces it.
     /// </summary>
-    private static BoqPriceResponse PriceOf(Project project, decimal agreedBoq, decimal agreedVos)
+    private static BoqPriceResponse PriceOf(Project project, decimal agreedBoq, decimal agreedVos, decimal agreedPermits)
     {
         var work = project.ProjectFee ?? 0;
-        var price = ExecutionPricing.PriceOf(work, project.SupervisionRate ?? 0, project.TvaRate);
-        return new BoqPriceResponse(agreedBoq, agreedVos, work, project.SupervisionRate ?? 0, price.Supervision, project.TvaRate, price.Tva, price.Gross);
+        var permits = project.PermitsPrice ?? 0;
+        var price = ExecutionPricing.PriceOf(work, permits, project.SupervisionRate ?? 0, project.TvaRate);
+        return new BoqPriceResponse(agreedBoq, agreedVos, work, project.SupervisionRate ?? 0, price.Supervision, project.TvaRate, price.Tva, price.Gross,
+            agreedPermits, permits);
     }
 
     private static PersonRefResponse PersonOf(long id, IReadOnlyDictionary<long, string> names)
@@ -621,12 +649,13 @@ public sealed class BoqService(
         boq.UpdatedAt,
         boq.AgreedAt,
         PersonOf(boq.AgreedById, names),
-        LastDeliveryOf(boq));
+        LastDeliveryOf(boq),
+        boq.PermitsUsd);
 
     private static BoqDetailResponse Detail(Boq boq, IReadOnlyDictionary<long, string> names, bool seesPrice)
     {
         var project = boq.Project;
-        var price = ExecutionPricing.PriceOf(boq.TotalUsd, project.SupervisionRate ?? 0, project.TvaRate);
+        var price = ExecutionPricing.PriceOf(boq.TotalUsd, boq.PermitsUsd, project.SupervisionRate ?? 0, project.TvaRate);
         return new BoqDetailResponse(
             boq.Id,
             boq.Kind,
@@ -648,6 +677,7 @@ public sealed class BoqService(
             boq.Lines.OrderBy(l => l.Position).Select(l => new BoqLineResponse(
                 l.Id,
                 l.Position,
+                l.Nature,
                 l.Code,
                 l.Description,
                 l.Quantity,
@@ -663,6 +693,7 @@ public sealed class BoqService(
             seesPrice ? project.TvaRate : null,
             seesPrice ? price.Tva : null,
             seesPrice ? price.Gross : null,
+            boq.PermitsUsd,
             boq.Deliveries.OrderByDescending(d => d.SentAt).ThenByDescending(d => d.Id)
                 .Select(d => new BoqDeliveryResponse(d.Id, d.Channel, d.Recipient, d.Note, d.TotalUsd, d.SentAt, PersonOf(d.SentById, names))).ToList());
     }

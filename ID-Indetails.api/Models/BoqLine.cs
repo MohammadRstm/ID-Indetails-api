@@ -1,3 +1,5 @@
+using ID_Indetails.api.Enums;
+
 namespace ID_Indetails.api.Models;
 
 /// <summary>
@@ -11,6 +13,9 @@ public class BoqLine
     public long BoqId { get; set; }
 
     public int Position { get; set; }
+
+    /// <summary>Work, or a permit: a permit carries no supervision and no TVA.</summary>
+    public BoqLineNature Nature { get; set; } = BoqLineNature.Work;
 
     /// <summary>The line's number in the BOQ, e.g. "2.1.1".</summary>
     public string? Code { get; set; }

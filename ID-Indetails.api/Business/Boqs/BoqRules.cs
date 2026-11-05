@@ -9,10 +9,11 @@ namespace ID_Indetails.api.Business.Boqs;
 /// <list type="bullet">
 /// <item>A line's final quantity is its quantity plus its waste, to 2 decimals; its total is that × the rate, to cents.
 /// The client reads the final quantity, never the exact one nor the waste.</item>
-/// <item>A BOQ's subtotal is its lines' totals. It may be adjusted by a percent of it, or to a new total.</item>
-/// <item>The work price is the agreed client BOQ's total plus the agreed VOs' totals. Agreeing or withdrawing is the only
-/// way it changes. Supervision, TVA and the client's total are worked out from it with the project's rates
-/// (<see cref="Projects.ExecutionPricing"/>).</item>
+/// <item>A line is work or a permit. A BOQ's subtotal is its work lines' totals; it may be adjusted by a percent of it, or
+/// to a new total. Its permits are its permit lines' totals, never adjusted.</item>
+/// <item>The work price is the agreed client BOQ's total plus the agreed VOs' totals, and the permits theirs likewise.
+/// Agreeing or withdrawing is the only way they change. Supervision and TVA are worked out on the work price alone, with
+/// the project's rates; the permits are charged as they are (<see cref="Projects.ExecutionPricing"/>).</item>
 /// <item>Only a VO can lower the price, with a negative rate or a lower total. A client BOQ is one per project; a VO needs
 /// the client BOQ agreed first.</item>
 /// <item>An agreed BOQ is locked. An internal draft is a private working paper: never numbered, sent or agreed.</item>
@@ -46,9 +47,12 @@ public static class BoqRules
 
     /// <param name="Quantity">The exact quantity, before waste.</param>
     /// <param name="WasteRate">A fraction: 0.05 adds 5%.</param>
-    public sealed record Line(decimal Quantity, decimal WasteRate, decimal Rate);
+    public sealed record Line(decimal Quantity, decimal WasteRate, decimal Rate, BoqLineNature Nature = BoqLineNature.Work);
 
-    public sealed record Totals(decimal Subtotal, decimal Adjustment, decimal Total);
+    /// <param name="Subtotal">The work lines' totals.</param>
+    /// <param name="Total">The work after the adjustment: what supervision and TVA are worked out on.</param>
+    /// <param name="Permits">The permit lines' totals, as they are.</param>
+    public sealed record Totals(decimal Subtotal, decimal Adjustment, decimal Total, decimal Permits);
 
     public static string? PrefixOf(BoqKind kind) => kind switch
     {
@@ -79,9 +83,11 @@ public static class BoqRules
 
     public static decimal LineTotal(decimal quantity, decimal wasteRate, decimal rate) => Round(FinalQuantity(quantity, wasteRate) * rate);
 
-    public static Totals TotalsOf(IEnumerable<Line> lines, BoqAdjustmentType adjustment, decimal? value)
+    /// <summary>The work and the permits apart: the adjustment is the work's, the permits are charged as they are.</summary>
+    public static Totals TotalsOf(IReadOnlyCollection<Line> lines, BoqAdjustmentType adjustment, decimal? value)
     {
-        var subtotal = lines.Sum(l => LineTotal(l.Quantity, l.WasteRate, l.Rate));
+        decimal SumOf(BoqLineNature nature) => lines.Where(l => l.Nature == nature).Sum(l => LineTotal(l.Quantity, l.WasteRate, l.Rate));
+        var subtotal = SumOf(BoqLineNature.Work);
         var change = adjustment switch
         {
             BoqAdjustmentType.Percent => Round(subtotal * (value ?? 0)),
@@ -89,10 +95,12 @@ public static class BoqRules
             _ => 0m,
         };
 
-        return new Totals(subtotal, change, subtotal + change);
+        return new Totals(subtotal, change, subtotal + change, SumOf(BoqLineNature.Permit));
     }
 
-    /// <summary>What the client is agreed to pay for the work: the agreed client BOQ and the agreed VOs.</summary>
+    /// <summary>
+    /// What the client is agreed to pay, the work or the permits: the agreed client BOQ's and the agreed VOs'.
+    /// </summary>
     public static decimal WorkPrice(decimal agreedClientTotal, IEnumerable<decimal> agreedVoTotals) => agreedClientTotal + agreedVoTotals.Sum();
 
     public static bool CanRead(BoqKind kind, long authorId, Caller caller)
@@ -163,7 +171,7 @@ public static class BoqRules
         }
 
         var totals = TotalsOf(lines, adjustment, value);
-        return Math.Abs(totals.Subtotal) > MaxAmount || Math.Abs(totals.Total) > MaxAmount
+        return Math.Abs(totals.Subtotal) > MaxAmount || Math.Abs(totals.Total) > MaxAmount || Math.Abs(totals.Permits) > MaxAmount
             ? RuleDenial.Invalid(ErrorCodes.ValidationFailed, "lines", "The BOQ's total is too large.")
             : null;
     }
@@ -222,10 +230,10 @@ public static class BoqRules
             : null;
     }
 
-    /// <summary>Variation orders can lower the price, but never below nothing.</summary>
-    public static RuleDenial? CheckWorkPrice(decimal work)
-        => work < 0
-            ? RuleDenial.BusinessRule(ErrorCodes.BoqPriceBelowZero, "The agreed BOQs would take the work price below zero.")
+    /// <summary>Variation orders can lower the price, but never below nothing: neither the work nor the permits.</summary>
+    public static RuleDenial? CheckWorkPrice(decimal work, decimal permits)
+        => work < 0 ? RuleDenial.BusinessRule(ErrorCodes.BoqPriceBelowZero, "The agreed BOQs would take the work price below zero.")
+            : permits < 0 ? RuleDenial.BusinessRule(ErrorCodes.BoqPriceBelowZero, "The agreed BOQs would take the permits below zero.")
             : null;
 
     private static decimal Round(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
