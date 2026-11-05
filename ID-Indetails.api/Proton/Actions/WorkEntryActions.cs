@@ -1,15 +1,19 @@
 using System.ComponentModel;
 using System.Globalization;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Request.WorkEntries;
+using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Repositories.Auth.Abstraction;
+using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
@@ -143,7 +147,9 @@ public sealed record LogWorkInput : ProtonActionInput
 /// Logs the user's own work, through POST /api/work-entries once confirmed. The card says how much of it would be
 /// overtime, from the same preview the log form shows; the app's own rules (edit window, overlaps, future entries) apply.
 /// </summary>
-public sealed class ProposeLogWorkTool(IProjectService projects, IWorkEntryService workEntries, IMyTimeService myTime, IClock clock)
+public sealed class ProposeLogWorkTool(
+    IProjectService projects, IWorkEntryService workEntries, IMyTimeService myTime, IClock clock,
+    IUserRepository users, IProjectDepartmentRepository departments)
     : ProtonActionTool<LogWorkInput, MyWorkArgs>
 {
     public override string Name => "propose_log_work";
@@ -170,6 +176,7 @@ public sealed class ProposeLogWorkTool(IProjectService projects, IWorkEntryServi
             new("Description", null, request.Description ?? "none"),
         };
         var note = await WorkText.OvertimeAsync(myTime, request, null, cancellationToken);
+        note = Join(note, await DepartmentNoteAsync(project, context, cancellationToken));
         return (new MyWorkArgs(null, request, null), new ProtonPreview("Log your work", changes, note), ProjectText.Ref(project));
     }
 
@@ -180,6 +187,32 @@ public sealed class ProposeLogWorkTool(IProjectService projects, IWorkEntryServi
         var entry = await workEntries.CreateAsync(args.Request, cancellationToken);
         return new ProtonActionDone($"Logged {WorkText.Hours(entry.Minutes)} on {entry.Project.Title}.", "work_entry", entry.Id, []);
     }
+
+    /// <summary>
+    /// On a project with departments: no department refuses, as the API would; a department the project doesn't have
+    /// keeps the card, but says the hours wait until it is added.
+    /// </summary>
+    private async Task<string?> DepartmentNoteAsync(ProjectResponse project, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var onProject = (await departments.ListAsync([project.Id], cancellationToken)).Select(d => d.TeamId).ToList();
+        if (onProject.Count == 0)
+        {
+            return null;
+        }
+
+        var department = (await users.GetByIdAsync(context.Access.UserId, cancellationToken))?.TeamId;
+        if (department is not { } theirs)
+        {
+            throw ProjectDepartmentRules.NoDepartment().ToException();
+        }
+
+        return ProjectDepartmentRules.MayLog(onProject, theirs)
+            ? null
+            : $"Your department isn't one of {project.Title}'s, so these hours wait, not logged yet, until it is added to the project.";
+    }
+
+    private static string? Join(string? first, string? second)
+        => first is null ? second : second is null ? first : $"{first} {second}";
 }
 
 public sealed record UpdateMyWorkInput : ProtonActionInput

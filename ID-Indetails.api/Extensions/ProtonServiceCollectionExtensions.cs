@@ -74,6 +74,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, FindTool>();
         services.AddScoped<IProtonTool, ListProjectsTool>();
         services.AddScoped<IProtonTool, GetProjectTool>();
+        services.AddScoped<IProtonTool, GetProjectDepartmentsTool>();
         services.AddScoped<IProtonTool, GetProjectRequirementsTool>();
         services.AddScoped<IProtonTool, GetProjectTeamTool>();
         services.AddScoped<IProtonTool, GetProjectFinancialsTool>();
@@ -269,6 +270,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeChangeProjectStatusTool>();
         services.AddScoped<IProtonTool, ProposeUpdateProjectTool>();
         services.AddScoped<IProtonTool, ProposeCreateProjectTool>();
+        services.AddScoped<IProtonTool, ProposeProjectDepartmentsTool>();
+        services.AddScoped<IProtonTool, ProposeDepartmentSharesTool>();
 
         return services;
     }
