@@ -71,6 +71,7 @@ public interface IProjectFinanceService
 /// <param name="Supervision">Execution: the company's supervision, the work price × the supervision rate; it is part of revenue.</param>
 /// <param name="RevenueWithTva">What the client is agreed to pay: revenue plus TVA (Execution: TVA on the work, never on supervision).</param>
 /// <param name="RevenueTva">The TVA inside <paramref name="RevenueWithTva"/>.</param>
+/// <param name="UntaxedUsd">Design: the applied variation orders that carry no TVA, left out of <paramref name="RevenueTva"/>.</param>
 public sealed record ProjectFinancials(
     ProjectFinance.Summary Summary,
     ProjectFinance.Costs Costs,
@@ -83,7 +84,8 @@ public sealed record ProjectFinancials(
     decimal ReceivedTva = 0,
     decimal? Supervision = null,
     decimal RevenueWithTva = 0,
-    decimal RevenueTva = 0);
+    decimal RevenueTva = 0,
+    decimal UntaxedUsd = 0);
 
 public sealed record WorkDay(long UserId, DateOnly Day, int Minutes);
 

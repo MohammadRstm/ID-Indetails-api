@@ -31,7 +31,8 @@ public sealed class ProjectFinanceService(
         ILookup<long, SiteExpenseRow> SiteExpenses,
         ILookup<long, GroundLabourRow> Ground,
         IReadOnlyDictionary<long, (decimal Received, decimal Tva)> Received,
-        IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)> Pocket);
+        IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)> Pocket,
+        IReadOnlyDictionary<long, decimal> Untaxed);
 
     public async Task<ProjectFinancials> GetAsync(Project project, CancellationToken cancellationToken = default)
         => (await GetAsync([project], cancellationToken))[project.Id];
@@ -108,7 +109,8 @@ public sealed class ProjectFinanceService(
             (await sources.SiteExpensesAsync(ids, cancellationToken)).ToLookup(e => e.ProjectId),
             (await sources.GroundLabourAsync(ids, cancellationToken)).ToLookup(d => d.ProjectId),
             await sources.ReceivedAsync(ids, cancellationToken),
-            await sources.PocketAsync(ids, cancellationToken));
+            await sources.PocketAsync(ids, cancellationToken),
+            await sources.UntaxedVosAsync(ids, cancellationToken));
     }
 
     private ProjectFinancials Calculate(Project project, Loaded loaded)
@@ -123,6 +125,7 @@ public sealed class ProjectFinanceService(
             loaded.Ground[project.Id],
             loaded.Received.GetValueOrDefault(project.Id),
             loaded.Pocket.GetValueOrDefault(project.Id),
+            loaded.Untaxed.GetValueOrDefault(project.Id),
             loaded.Rates);
 
     public async Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(
@@ -268,6 +271,7 @@ public sealed class ProjectFinanceService(
         IEnumerable<GroundLabourRow> ground,
         (decimal Gross, decimal Tva) received,
         (decimal ToPocket, decimal FromPocket) pocket,
+        decimal untaxed,
         ExchangeRateTable rates)
     {
         var (items, unpricedMinutes) = CostItems(entries, payRates, overtime, breaks, expenses, siteExpenses, ground);
@@ -275,7 +279,8 @@ public sealed class ProjectFinanceService(
 
         var isExecution = project.DomainCode == DomainCodes.Execution;
         var revenue = project.Revenue;
-        var revenueWithTva = Tva.Gross(revenue, project.TvaRate);
+        // a Design VO the super admin took the TVA off is in the price without it
+        var revenueWithTva = Tva.Gross(revenue, project.TvaRate, untaxed);
         var revenueTva = revenueWithTva - revenue;
         decimal? supervision = null;
 
@@ -315,6 +320,7 @@ public sealed class ProjectFinanceService(
             received.Tva,
             supervision,
             revenueWithTva,
-            revenueTva);
+            revenueTva,
+            isExecution ? 0 : untaxed);
     }
 }

@@ -128,6 +128,7 @@ public static class ProtonCoverage
         Action("DesignVos.Create", "propose_design_vo", T2, ProtonFamily.Money),
         Action("DesignVos.Confirm", "propose_design_vo", T2, ProtonFamily.Money),
         Action("DesignVos.Cancel", "propose_design_vo", T2, ProtonFamily.Money),
+        Planned("DesignVos.SetTva", T2, ProtonFamily.Money),
         Action("DesignVos.Email", "propose_send_design_vo", T2, ProtonFamily.Money, externalSend: true),
         Planned("SiteLogs.Create", T1, ProtonFamily.Core),
         Planned("SiteLogs.Update", T1, ProtonFamily.Core),

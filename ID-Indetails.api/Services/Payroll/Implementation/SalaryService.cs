@@ -202,7 +202,7 @@ public sealed class SalaryService(
         var csv = new StringBuilder();
         var monthText = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
-        Csv.Line(csv, "Month", "Employee", "Email", "Domain", "Team", "Pay basis", "Monthly salary", "Hourly rate", "Currency",
+        Csv.Line(csv, "Month", "Employee", "Email", "Domain", "Department", "Pay basis", "Monthly salary", "Hourly rate", "Currency",
             "Expected hours", "Hours in schedule", "Overtime made up", "Overtime", "Overtime paid", "Excused hours", "Short hours", "Flagged",
             "Pro-rated", "Base pay", "Deduction", "Overtime pay", "To pay");
 

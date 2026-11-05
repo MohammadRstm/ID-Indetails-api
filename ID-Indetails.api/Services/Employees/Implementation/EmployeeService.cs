@@ -559,7 +559,7 @@ public sealed class EmployeeService(
         var team = await teams.GetByIdAsync(id, cancellationToken);
         if (team is null || team.DomainCode != domainCode)
         {
-            throw new RequestValidationException(ErrorCodes.TeamNotInDomain, "teamId", "The team does not exist in this domain.");
+            throw new RequestValidationException(ErrorCodes.TeamNotInDomain, "teamId", "The department does not exist in this domain.");
         }
     }
 

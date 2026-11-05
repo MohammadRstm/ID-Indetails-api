@@ -26,6 +26,9 @@ public interface IProjectFinanceRepository
     /// <summary>Per project, in USD: what was moved into the pocket money, and what the pocket paid out to it.</summary>
     Task<IReadOnlyDictionary<long, (decimal ToPocket, decimal FromPocket)>> PocketAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 
+    /// <summary>Each Design project's applied variation orders that carry no TVA, their totals added up.</summary>
+    Task<IReadOnlyDictionary<long, decimal>> UntaxedVosAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+
     /// <summary>One project's pocket movements, as it sees them: when (UTC) and the USD it gained (a payout) or lost (a contribution).</summary>
     Task<IReadOnlyList<(DateTime At, decimal AmountUsd)>> PocketMovesAsync(long projectId, CancellationToken cancellationToken = default);
 }

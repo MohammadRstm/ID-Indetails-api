@@ -106,6 +106,12 @@ public static class DesignVoRules
             : RuleDenial.BusinessRule(ErrorCodes.DesignVoNotPending,
                 status == DesignVoStatus.Applied ? "This variation order is already part of the price." : "This variation order was cancelled.");
 
+    /// <summary>A cancelled variation order is kept as it was; any other can take TVA on or off.</summary>
+    public static RuleDenial? CheckNotCancelled(DesignVoStatus status)
+        => status == DesignVoStatus.Cancelled
+            ? RuleDenial.BusinessRule(ErrorCodes.DesignVoNotPending, "This variation order was cancelled.")
+            : null;
+
     /// <summary>Less work can't take the price below zero.</summary>
     public static RuleDenial? CheckPrice(decimal price, decimal total)
         => price + total >= 0

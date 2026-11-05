@@ -16,7 +16,7 @@ public sealed class EmployeeListQueryValidator : AbstractValidator<EmployeeListQ
     public EmployeeListQueryValidator()
     {
         RuleFor(x => x.Search).MaximumLength(100).WithMessage("Search must be at most 100 characters.");
-        RuleFor(x => x.TeamId).GreaterThan(0).When(x => x.TeamId is not null).WithMessage("Team is invalid.");
+        RuleFor(x => x.TeamId).GreaterThan(0).When(x => x.TeamId is not null).WithMessage("Department is invalid.");
         RuleFor(x => x.Role).ValidRole().When(x => x.Role is not null);
         RuleFor(x => x.Domain).ValidDomain().When(x => x.Domain is not null);
         RuleFor(x => x.Status).IsInEnum().WithMessage("Status must be invited, active or deactivated.");
@@ -33,7 +33,7 @@ public sealed class UpdateEmployeeRequestValidator : AbstractValidator<UpdateEmp
         RuleFor(x => x.LastName).MaximumLength(100).WithMessage("Last name must be at most 100 characters.");
         RuleFor(x => x.Phone).Phone();
         RuleFor(x => x.Position).MaximumLength(120).WithMessage("Position must be at most 120 characters.");
-        RuleFor(x => x.TeamId).GreaterThan(0).When(x => x.TeamId is not null).WithMessage("Team is invalid.");
+        RuleFor(x => x.TeamId).GreaterThan(0).When(x => x.TeamId is not null).WithMessage("Department is invalid.");
     }
 }
 
@@ -52,7 +52,7 @@ public sealed class MoveEmployeeRequestValidator : AbstractValidator<MoveEmploye
     public MoveEmployeeRequestValidator()
     {
         RuleFor(x => x.DomainCode).ValidDomain();
-        RuleFor(x => x.TeamId).GreaterThan(0).When(x => x.TeamId is not null).WithMessage("Team is invalid.");
+        RuleFor(x => x.TeamId).GreaterThan(0).When(x => x.TeamId is not null).WithMessage("Department is invalid.");
     }
 }
 

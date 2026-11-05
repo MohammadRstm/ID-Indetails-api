@@ -675,7 +675,7 @@ public sealed class ProjectService(
             SupervisionUsd = money.Supervision,
             PaymentWithTva = p.DomainCode == DomainCodes.Execution
                 ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, p.PermitsPrice ?? 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
-                : Tva.Gross(p.Revenue, p.TvaRate),
+                : money.RevenueWithTva,
             RevenueWithTva = money.RevenueWithTva,
             ProjectFee = p.ProjectFee,
             PermitsUsd = p.PermitsPrice,

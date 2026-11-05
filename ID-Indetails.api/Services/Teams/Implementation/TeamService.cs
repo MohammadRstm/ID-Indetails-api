@@ -29,7 +29,7 @@ public sealed class TeamService(
     IUnitOfWork unitOfWork,
     IClock clock) : ITeamService
 {
-    private const string NotFoundMessage = "Team not found.";
+    private const string NotFoundMessage = "Department not found.";
 
     public async Task<IReadOnlyList<TeamResponse>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -44,12 +44,12 @@ public sealed class TeamService(
         var domain = request.DomainCode ?? (actor.VisibleBusinesses.Count == 1 ? actor.VisibleBusinesses[0] : null);
         if (domain is null)
         {
-            throw new RequestValidationException(ErrorCodes.ValidationFailed, "domainCode", "Choose the domain the team belongs to.");
+            throw new RequestValidationException(ErrorCodes.ValidationFailed, "domainCode", "Choose the domain the department belongs to.");
         }
 
         if (!actor.CanSee(domain))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "You can only create teams in a domain you work in.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, "You can only create departments in a domain you work in.");
         }
 
         var name = request.Name.Trim();
@@ -91,7 +91,7 @@ public sealed class TeamService(
         if (await teams.HasPeopleAsync(team.Id, cancellationToken))
         {
             throw new BusinessRuleException(
-                ErrorCodes.TeamNotEmpty, "Only an empty team can be deleted. Move its people to another team first.");
+                ErrorCodes.TeamNotEmpty, "Only an empty department can be deleted. Move its people to another department first.");
         }
 
         // a project's budget is split between its departments: a department on one stays
@@ -105,7 +105,7 @@ public sealed class TeamService(
         if (await teams.HasChatAsync(team.Id, cancellationToken))
         {
             throw new BusinessRuleException(
-                ErrorCodes.TeamHasChat, "This team's chat has messages, so the team can't be deleted. Rename it instead.");
+                ErrorCodes.TeamHasChat, "This department's chat has messages, so the department can't be deleted. Rename it instead.");
         }
 
         activity.Add(TeamEvent(team, ActivityEventKinds.TeamDeleted, actor.UserId, new { name = team.Name }));
@@ -126,7 +126,7 @@ public sealed class TeamService(
     {
         if (await teams.NameExistsAsync(domain, name, exceptTeamId, cancellationToken))
         {
-            throw new ConflictException(ErrorCodes.TeamNameTaken, "This domain already has a team with that name.");
+            throw new ConflictException(ErrorCodes.TeamNameTaken, "This domain already has a department with that name.");
         }
     }
 

@@ -198,16 +198,16 @@ public sealed class PaymentService(
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
 
-    /// <summary>The TVA inside a payment. An Execution site's TVA is on its work price only, so the payment holds its share of that.</summary>
+    /// <summary>
+    /// The TVA inside a payment. An Execution site's TVA is on its work price only, and a Design project's leaves out its
+    /// VOs without TVA, so the payment holds its share of what TVA there is.
+    /// </summary>
     private async Task<decimal> TvaShareAsync(Project project, decimal amountUsd, CancellationToken cancellationToken)
     {
-        if (project.DomainCode != DomainCodes.Execution)
-        {
-            return Tva.ShareOf(amountUsd, project.TvaRate);
-        }
-
         var money = await finance.GetAsync(project, cancellationToken);
-        return ExecutionPricing.TvaShareOf(amountUsd, money.RevenueTva, money.RevenueWithTva, project.TvaRate);
+        return project.DomainCode != DomainCodes.Execution && money.UntaxedUsd == 0
+            ? Tva.ShareOf(amountUsd, project.TvaRate)
+            : ExecutionPricing.TvaShareOf(amountUsd, money.RevenueTva, money.RevenueWithTva, project.TvaRate);
     }
 
     private async Task<IReadOnlyDictionary<long, AccountLabel>> LabelsAsync(CancellationToken cancellationToken)

@@ -62,6 +62,9 @@ public class DocumentPdfTests
         Pictures(pending, 0).ShouldBe(2);
         DesignVoPdf.OutsideScope(DesignVo(DesignVoStatus.Pending, 1).Vo).ShouldBe("42h 30m logged outside the agreed scope since Sep 1, 2026.");
         DesignVoPdf.Totals(DesignVo(DesignVoStatus.Applied, 1).Vo).Select(t => t.Label).ShouldBe(["Total before TVA", "TVA (11%)", "Total"]);
+        // one the super admin left without TVA reads its total as it is
+        var untaxed = DesignVo(DesignVoStatus.Applied, 1).Vo with { TvaRate = 0, TvaUsd = 0 };
+        DesignVoPdf.Totals(untaxed).Select(t => (t.Label, t.Value)).ShouldBe([("TVA", "None"), ("Total", PdfLayout.Money(untaxed.TotalUsd))]);
 
         // many lines run onto more pages, each with the mark
         var long_ = DesignVoPdf.Render(DesignVo(DesignVoStatus.Applied, 70), new DateOnly(2026, 9, 30), Head);

@@ -55,6 +55,9 @@ public static class ActivityEventKinds
     /// <summary>An Execution site's permits changed, as a BOQ with permit lines was agreed or withdrawn.</summary>
     public const string PermitsSet = "permits_set";
 
+    /// <summary>A Design VO's TVA was added or taken off (subject: the VO; its number and chargesTva in the payload, its TVA now in the amount).</summary>
+    public const string DesignVoTvaSet = "design_vo_tva_set";
+
     /// <summary>History only: a site's default material markup changed. Markups are gone; nothing writes this any more, but older rows stay in the feed.</summary>
     public const string MaterialMarkupSet = "material_markup_set";
 

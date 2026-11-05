@@ -28,6 +28,9 @@ public interface IDesignVoService
 
     Task<DesignVoResponse> CancelAsync(long id, CancellationToken cancellationToken = default);
 
+    /// <summary>Adds the project's TVA to a VO that isn't cancelled, or takes it off (financial:write).</summary>
+    Task<DesignVoResponse> SetTvaAsync(long id, SetDesignVoTvaRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>For its PDF and email (<c>financial:view</c>).</summary>
     Task<DesignVoDocument> GetDocumentAsync(long id, CancellationToken cancellationToken = default);
 }

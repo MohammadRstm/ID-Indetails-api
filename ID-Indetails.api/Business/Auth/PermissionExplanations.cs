@@ -67,10 +67,10 @@ public static class PermissionExplanations
         [PermissionCodes.EmployeeInviteSuperAdmin] = "Invite super admins, and change super admins' accounts.",
         [PermissionCodes.EmployeeChangeEmail] = "Change the address people sign in with, their own included (with their password). It ends their sessions; a super admin's also needs \"Invite super admins\".",
         [PermissionCodes.SessionManage] = "Sign someone out everywhere at once and block their sign-in until it is restored, then restore it. Never your own; a super admin's also needs \"Invite super admins\".",
-        [PermissionCodes.EmployeeManage] = "Edit people's profiles, teams and positions, change their role or business, and deactivate or reactivate their accounts.",
+        [PermissionCodes.EmployeeManage] = "Edit people's profiles, departments and positions, change their role or business, and deactivate or reactivate their accounts.",
         [PermissionCodes.EmployeePayManage] = "See and change what people are paid, from a date onwards.",
         [PermissionCodes.PermissionManage] = "Give people permissions beyond their role or take some away. Anyone but a super admin can only hand out permissions they hold.",
-        [PermissionCodes.TeamManage] = "Create, rename and delete the business's teams.",
+        [PermissionCodes.TeamManage] = "Create, rename and delete the business's departments.",
 
         // The business
         [PermissionCodes.ActivityView] = "See the business's activity feed: who did what, and when.",

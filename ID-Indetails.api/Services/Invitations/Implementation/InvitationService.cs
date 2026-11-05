@@ -80,7 +80,7 @@ public sealed class InvitationService(
             if (team is null || team.DomainCode != decision.DomainCode)
             {
                 throw new RequestValidationException(
-                    ErrorCodes.TeamNotInDomain, "teamId", "The team does not exist in this domain.");
+                    ErrorCodes.TeamNotInDomain, "teamId", "The department does not exist in this domain.");
             }
         }
 

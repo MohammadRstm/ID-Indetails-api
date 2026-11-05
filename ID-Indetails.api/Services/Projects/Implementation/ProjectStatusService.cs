@@ -112,7 +112,7 @@ public sealed class ProjectStatusService(
             return;
         }
 
-        var revenue = Tva.NetFor(money.Received, project.TvaRate);
+        var revenue = Tva.NetFor(money.Received, project.TvaRate, money.UntaxedUsd);
         var now = clock.UtcNow;
         project.PaymentChanges.Add(new ProjectPaymentChange
         {

@@ -103,7 +103,7 @@ public sealed class ProposeUpdateEmployeeTool(IEmployeeService employees, ITeamS
         Compare("Position", before.Position, after.Position);
         if (after.TeamId != before.TeamId)
         {
-            changes.Add(new ProtonChange("Team", person.Team?.Name ?? "none", after.TeamId is null ? "none" : teamName!));
+            changes.Add(new ProtonChange("Department", person.Team?.Name ?? "none", after.TeamId is null ? "none" : teamName!));
         }
 
         if (changes.Count == 0)
