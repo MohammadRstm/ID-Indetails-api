@@ -132,19 +132,19 @@ public sealed class DomainFinanceService(
 
     /// <summary>
     /// What the client projects agreed, dated: payments and fees as they were set or changed (an Execution site's fee, set
-    /// by agreeing a BOQ, with its supervision on top at the rate it has now).
+    /// by agreeing a BOQ, with its supervision on top at the rate it has now; its permits as they are).
     /// </summary>
     private async Task<IReadOnlyList<ExpectedRevenue.Agreed>> AgreedAsync(IReadOnlyCollection<Project> projects, CancellationToken cancellationToken)
     {
         var client = projects.Where(p => p.BillingType == BillingType.Client).ToDictionary(p => p.Id);
         var ids = client.Keys.ToList();
-        decimal WithSupervision(long projectId, decimal amount)
-            => client[projectId].DomainCode == DomainCodes.Execution ? amount * (1 + (client[projectId].SupervisionRate ?? 0)) : amount;
+        decimal WithSupervision(AgreedChangeRow change, decimal amount)
+            => change.Kind == ActivityEventKinds.ProjectFeeSet ? amount * (1 + (client[change.ProjectId].SupervisionRate ?? 0)) : amount;
         var agreed = (await summaries.AgreedChangesAsync(ids, cancellationToken))
             .Select(c => ExpectedRevenue.Change(
                 clock.ToCompanyDate(c.OccurredAt),
-                WithSupervision(c.ProjectId, c.Amount),
-                c.PrevAmount is { } previous ? WithSupervision(c.ProjectId, previous) : null))
+                WithSupervision(c, c.Amount),
+                c.PrevAmount is { } previous ? WithSupervision(c, previous) : null))
             .ToList();
 
         return agreed;

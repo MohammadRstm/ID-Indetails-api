@@ -25,7 +25,7 @@ public class BoqConfiguration : IEntityTypeConfiguration<Boq>
             t.HasCheckConstraint("ck_boqs_adjustment_percent_range", "`adjustment_type` <> 'percent' OR `adjustment_value` BETWEEN -0.99 AND 1");
             // only a VO can lower the price: any other BOQ never goes below zero
             t.HasCheckConstraint("ck_boqs_amounts_by_kind",
-                "`kind` = 'vo' OR (`subtotal_usd` >= 0 AND `total_usd` >= 0 AND (`adjustment_type` <> 'total' OR `adjustment_value` >= 0))");
+                "`kind` = 'vo' OR (`subtotal_usd` >= 0 AND `total_usd` >= 0 AND `permits_usd` >= 0 AND (`adjustment_type` <> 'total' OR `adjustment_value` >= 0))");
         });
 
         builder.HasKey(x => x.Id);
@@ -39,6 +39,7 @@ public class BoqConfiguration : IEntityTypeConfiguration<Boq>
         builder.Property(x => x.AdjustmentValue).HasPrecision(14, 4);
         builder.Property(x => x.SubtotalUsd).HasPrecision(14, 2);
         builder.Property(x => x.TotalUsd).HasPrecision(14, 2);
+        builder.Property(x => x.PermitsUsd).HasPrecision(14, 2);
 
         builder.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Restrict);
@@ -54,10 +55,14 @@ public class BoqLineConfiguration : IEntityTypeConfiguration<BoqLine>
         {
             t.HasCheckConstraint("ck_boq_lines_quantity_non_negative", "`quantity` >= 0");
             t.HasCheckConstraint("ck_boq_lines_waste_rate_range", "`waste_rate` BETWEEN 0 AND 1");
+            t.HasCheckConstraint("ck_boq_lines_nature", SnakeCaseEnum.CheckSql<BoqLineNature>("nature"));
         });
 
         builder.HasKey(x => x.Id);
         builder.HasIndex(x => new { x.BoqId, x.Position });
+
+        // every line already written is work: permits came later
+        builder.Property(x => x.Nature).HasDefaultValue(BoqLineNature.Work);
 
         builder.Property(x => x.Code).HasMaxLength(BoqRules.MaxCodeLength);
         builder.Property(x => x.Description).IsRequired().HasMaxLength(BoqRules.MaxDescriptionLength);

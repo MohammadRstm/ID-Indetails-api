@@ -15,6 +15,7 @@ public sealed record ProjectOwnerResponse(long Id, string Name);
 /// <param name="PreviousAmount">Null for the payment agreed at the start.</param>
 /// <param name="MaterialMarkup">The default material markup after it, a fraction (0.125 is 12.5%). History only: markups are gone, so only rows written before are filled.</param>
 /// <param name="SupervisionRate">Execution only: the supervision rate after it; null on Design rows and on rows from before supervision.</param>
+/// <param name="Permits">Execution only: the agreed permits after it; null on Design rows and on rows from before permits.</param>
 /// <param name="ChangedBy">Null when the person no longer exists.</param>
 public sealed record ProjectPaymentChangeResponse(
     long Id,
@@ -28,7 +29,9 @@ public sealed record ProjectPaymentChangeResponse(
     decimal? TvaRate = null,
     decimal? PreviousTvaRate = null,
     decimal? SupervisionRate = null,
-    decimal? PreviousSupervisionRate = null);
+    decimal? PreviousSupervisionRate = null,
+    decimal? Permits = null,
+    decimal? PreviousPermits = null);
 
 /// <summary>Only for callers with <c>financial:view</c>.</summary>
 public sealed record ProjectMoneyResponse
@@ -36,8 +39,8 @@ public sealed record ProjectMoneyResponse
     public string Currency { get; init; } = "USD";
 
     /// <summary>
-    /// Design: the agreed revenue. Execution: the agreed amount (the work price from the agreed BOQs plus supervision),
-    /// calculated live while the project is open and frozen when it is finalised.
+    /// Design: the agreed revenue. Execution: the agreed amount (the work price from the agreed BOQs plus supervision, plus
+    /// the permits), calculated live while the project is open and frozen when it is finalised.
     /// </summary>
     public decimal Revenue { get; init; }
 
@@ -53,7 +56,7 @@ public sealed record ProjectMoneyResponse
     /// <summary>Execution only: the supervision, the work price × the supervision rate. Part of <see cref="Revenue"/>; no TVA on it.</summary>
     public decimal? SupervisionUsd { get; init; }
 
-    /// <summary>The agreed payment (Design) or the agreed work price plus supervision (Execution), TVA included.</summary>
+    /// <summary>The agreed payment (Design) or the agreed work price plus supervision and the permits (Execution), TVA included.</summary>
     public decimal PaymentWithTva { get; init; }
 
     /// <summary>Revenue with TVA included: what the client is agreed to pay so far. Execution: TVA is on the work price only.</summary>
@@ -61,6 +64,9 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Execution: the work price, set by agreeing a BOQ; 0 until then.</summary>
     public decimal? ProjectFee { get; init; }
+
+    /// <summary>Execution: the agreed BOQs' permits, charged with no supervision or TVA; 0 until a BOQ with permits is agreed.</summary>
+    public decimal? PermitsUsd { get; init; }
 
     /// <summary>Project expenses, one total per currency.</summary>
     public IReadOnlyList<CurrencyTotalResponse> ExpenseTotals { get; init; } = [];

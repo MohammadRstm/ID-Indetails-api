@@ -7,7 +7,8 @@ namespace ID_Indetails.api.Services.Documents.Implementation;
 
 /// <summary>
 /// A client BOQ or variation order. The client reads each line's final quantity, unit, rate and total, then the
-/// subtotal, adjustment, total, supervision, TVA and what to pay. The exact quantity and the waste are never shown.
+/// subtotal, adjustment, total, supervision, TVA and what to pay. Permits come after the items, as their own section,
+/// and are added to what to pay with no supervision or TVA. The exact quantity and the waste are never shown.
 /// </summary>
 public static class BoqPdf
 {
@@ -45,17 +46,13 @@ public static class BoqPdf
         }
 
         PdfLayout.AddHeading(section, "Items");
-        var table = PdfLayout.AddTable(
-            section,
-            new TableColumn("No.", 1.8),
-            new TableColumn("Description", 7.2),
-            new TableColumn("Quantity", 2.2, AlignRight: true),
-            new TableColumn("Unit", 1.6),
-            new TableColumn("Rate", 2.2, AlignRight: true),
-            new TableColumn("Total", 2.4, AlignRight: true));
-        foreach (var line in boq.Lines)
+        AddLines(section, boq.Lines.Where(l => l.Nature == BoqLineNature.Work));
+        var permits = boq.Lines.Where(l => l.Nature == BoqLineNature.Permit).ToList();
+        if (permits.Count > 0)
         {
-            PdfLayout.AddRow(table, false, line.Code, line.Description, Quantity(line.FinalQuantity), line.Unit, Rate(line.Rate), PdfLayout.Money(line.TotalUsd));
+            PdfLayout.AddHeading(section, "Permits");
+            PdfLayout.AddParagraph(section, "Charged as they are: no supervision and no TVA on them.");
+            AddLines(section, permits);
         }
 
         PdfLayout.AddTotals(section, [.. Totals(boq)]);
@@ -67,22 +64,47 @@ public static class BoqPdf
         return PdfLayout.Render(pdf);
     }
 
-    /// <summary>Subtotal and adjustment (when there is one), total, supervision, TVA and what the client pays.</summary>
+    private static void AddLines(MigraDoc.DocumentObjectModel.Section section, IEnumerable<BoqLineResponse> lines)
+    {
+        var table = PdfLayout.AddTable(
+            section,
+            new TableColumn("No.", 1.8),
+            new TableColumn("Description", 7.2),
+            new TableColumn("Quantity", 2.2, AlignRight: true),
+            new TableColumn("Unit", 1.6),
+            new TableColumn("Rate", 2.2, AlignRight: true),
+            new TableColumn("Total", 2.4, AlignRight: true));
+        foreach (var line in lines)
+        {
+            PdfLayout.AddRow(table, false, line.Code, line.Description, Quantity(line.FinalQuantity), line.Unit, Rate(line.Rate), PdfLayout.Money(line.TotalUsd));
+        }
+    }
+
+    /// <summary>
+    /// Subtotal and adjustment (when there is one), total, supervision, TVA, the permits (when there are any) and what the
+    /// client pays. With permits, the total is the work's.
+    /// </summary>
     public static IReadOnlyList<TotalRow> Totals(BoqDetailResponse boq)
     {
         var rows = new List<TotalRow>();
+        var hasPermits = boq.Lines.Any(l => l.Nature == BoqLineNature.Permit);
         if (boq.AdjustmentType != BoqAdjustmentType.None)
         {
-            rows.Add(new TotalRow("Subtotal", PdfLayout.Money(boq.SubtotalUsd)));
+            rows.Add(new TotalRow(hasPermits ? "Work subtotal" : "Subtotal", PdfLayout.Money(boq.SubtotalUsd)));
             rows.Add(new TotalRow(
                 boq.AdjustmentType == BoqAdjustmentType.Percent && boq.AdjustmentValue is { } fraction ? $"Adjustment ({Percent(fraction)})" : "Adjustment",
                 PdfLayout.Money(boq.AdjustmentUsd)));
         }
 
-        rows.Add(new TotalRow("Total", PdfLayout.Money(boq.TotalUsd), Strong: true));
+        rows.Add(new TotalRow(hasPermits ? "Work total" : "Total", PdfLayout.Money(boq.TotalUsd), Strong: true));
         // the PDF is only made for whoever reads client BOQs, who is always given these
         rows.Add(new TotalRow($"Supervision ({Percent(boq.SupervisionRate!.Value)})", PdfLayout.Money(boq.SupervisionUsd!.Value)));
         rows.Add(new TotalRow($"TVA ({Percent(boq.TvaRate!.Value)})", PdfLayout.Money(boq.TvaUsd!.Value)));
+        if (hasPermits)
+        {
+            rows.Add(new TotalRow("Permits", PdfLayout.Money(boq.PermitsUsd)));
+        }
+
         rows.Add(new TotalRow("Total to pay", PdfLayout.Money(boq.ClientTotalUsd!.Value), Strong: true));
         return rows;
     }

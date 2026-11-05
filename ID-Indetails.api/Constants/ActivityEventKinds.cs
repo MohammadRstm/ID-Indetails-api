@@ -52,6 +52,9 @@ public static class ActivityEventKinds
     public const string RevenueChanged = "revenue_changed";
     public const string ProjectFeeSet = "project_fee_set";
 
+    /// <summary>An Execution site's permits changed, as a BOQ with permit lines was agreed or withdrawn.</summary>
+    public const string PermitsSet = "permits_set";
+
     /// <summary>History only: a site's default material markup changed. Markups are gone; nothing writes this any more, but older rows stay in the feed.</summary>
     public const string MaterialMarkupSet = "material_markup_set";
 
@@ -144,10 +147,10 @@ public static class ActivityEventKinds
     /// <summary>The channel in the payload.</summary>
     public const string BoqSent = "boq_sent";
 
-    /// <summary>Also writes <see cref="ProjectFeeSet"/>, as the work price changes.</summary>
+    /// <summary>Also writes <see cref="ProjectFeeSet"/> and <see cref="PermitsSet"/>, as the work price and the permits change.</summary>
     public const string BoqAgreed = "boq_agreed";
 
-    /// <summary>The reason in the payload. Also writes <see cref="ProjectFeeSet"/>, as the work price changes.</summary>
+    /// <summary>The reason in the payload. Also writes <see cref="ProjectFeeSet"/> and <see cref="PermitsSet"/>, as the work price and the permits change.</summary>
     public const string BoqAgreementWithdrawn = "boq_agreement_withdrawn";
 
     // Supervision taken (subject: the withdrawal, type "supervision_withdrawal"; project_id is set; the USD amount in the amount column)

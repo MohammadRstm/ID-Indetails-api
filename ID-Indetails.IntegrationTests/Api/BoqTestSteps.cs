@@ -8,10 +8,11 @@ public sealed class BoqTestSteps(AuthTestSteps steps)
 {
     private HttpClient Client => steps.Client;
 
-    /// <summary>A line as the editor saves it.</summary>
+    /// <summary>A line as the editor saves it: work, unless it says <c>permit</c>.</summary>
     public static object Line(
-        string description, decimal quantity, decimal rate, decimal waste = 0, string? code = null, string? unit = null, long? id = null)
-        => new { id, code, description, quantity, wasteRate = waste, unit, rate };
+        string description, decimal quantity, decimal rate, decimal waste = 0, string? code = null, string? unit = null, long? id = null,
+        string nature = "work")
+        => new { id, nature, code, description, quantity, wasteRate = waste, unit, rate };
 
     /// <summary>Starts a BOQ of <paramref name="kind"/> (internal, client or vo) and returns it as made.</summary>
     public async Task<BoqDetailResponse> CreateAsync(

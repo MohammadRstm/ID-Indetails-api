@@ -19,7 +19,8 @@ public sealed record SiteInput
     public required long ProjectId { get; init; }
 }
 
-/// <param name="TotalUsd">Before supervision and TVA: what it adds to the work price once agreed.</param>
+/// <param name="TotalUsd">The work, before supervision and TVA: what it adds to the work price once agreed.</param>
+/// <param name="PermitsUsd">Its permit lines: charged as they are, with no supervision or TVA.</param>
 /// <param name="Reason">A variation order's reason.</param>
 public sealed record BoqRow(
     long Id,
@@ -28,6 +29,7 @@ public sealed record BoqRow(
     string Title,
     BoqStatus Status,
     decimal TotalUsd,
+    decimal PermitsUsd,
     int Lines,
     string? Reason,
     string Author,
@@ -37,16 +39,17 @@ public sealed record BoqRow(
     DateTime? LastSentAt)
 {
     public static BoqRow Of(BoqSummaryResponse b) => new(
-        b.Id, b.Kind, b.Number, b.Title, b.Status, b.TotalUsd, b.LineCount, b.Reason, b.Author.Name, b.AgreedAt, b.AgreedBy?.Name,
+        b.Id, b.Kind, b.Number, b.Title, b.Status, b.TotalUsd, b.PermitsUsd, b.LineCount, b.Reason, b.Author.Name, b.AgreedAt, b.AgreedBy?.Name,
         b.LastDelivery?.Channel, b.LastDelivery?.SentAt);
 }
 
 /// <summary>What the agreed BOQs make the client pay, in USD.</summary>
 /// <param name="WorkUsd">The agreed client BOQ plus the agreed VOs: the site's work price.</param>
-/// <param name="ClientTotalUsd">Work plus supervision plus TVA (on the work only).</param>
+/// <param name="PermitsUsd">The agreed BOQs' permit lines: charged as they are, with no supervision or TVA.</param>
+/// <param name="ClientTotalUsd">Work plus supervision plus TVA (on the work only), plus the permits.</param>
 public sealed record BoqPrice(
-    decimal AgreedBoqUsd, decimal AgreedVosUsd, decimal WorkUsd, decimal SupervisionPct, decimal SupervisionUsd, decimal TvaPct, decimal TvaUsd,
-    decimal ClientTotalUsd);
+    decimal AgreedBoqUsd, decimal AgreedVosUsd, decimal WorkUsd, decimal PermitsUsd, decimal SupervisionPct, decimal SupervisionUsd, decimal TvaPct,
+    decimal TvaUsd, decimal ClientTotalUsd);
 
 /// <param name="Price">Null for someone who sees neither money nor the pricing: they see only their own internal drafts.</param>
 public sealed record BoqList(BoqPrice? Price, IReadOnlyList<BoqRow> Client, IReadOnlyList<BoqRow> Vos, IReadOnlyList<BoqRow> Internal, string Note);
@@ -69,11 +72,12 @@ public sealed class ListBoqsTool(IBoqService boqs) : ProtonTool<SiteInput>
     {
         var list = await boqs.ListAsync(input.ProjectId, cancellationToken);
         var price = list.Price is { } p
-            ? new BoqPrice(p.AgreedBoqUsd, p.AgreedVosUsd, p.WorkUsd, p.SupervisionRate * 100, p.SupervisionUsd, p.TvaRate * 100, p.TvaUsd, p.ClientTotalUsd)
+            ? new BoqPrice(p.AgreedBoqUsd, p.AgreedVosUsd, p.WorkUsd, p.PermitsUsd, p.SupervisionRate * 100, p.SupervisionUsd, p.TvaRate * 100, p.TvaUsd, p.ClientTotalUsd)
             : null;
         return ProtonToolOutput.Of(new BoqList(
             price, list.Client.Select(BoqRow.Of).ToList(), list.Vos.Select(BoqRow.Of).ToList(), list.Internal.Select(BoqRow.Of).ToList(),
-            "Only agreed BOQs and VOs count towards the work price. Totals are before supervision and TVA."));
+            "Only agreed BOQs and VOs count towards the work price and the permits. Totals are the work's, before supervision and TVA; " +
+            "permits are charged as they are, with neither."));
     }
 }
 
@@ -86,11 +90,13 @@ public sealed record BoqInput
 /// <param name="Quantity">Before waste; the client sees the final quantity.</param>
 /// <param name="WastePct">Internal.</param>
 /// <param name="Rate">The price of one unit, in USD.</param>
-public sealed record BoqLineRow(int Position, string? Code, string Description, decimal Quantity, decimal WastePct, decimal FinalQuantity, string? Unit, decimal Rate, decimal TotalUsd);
+/// <param name="Nature">Work, or a permit: a permit carries no supervision and no TVA.</param>
+public sealed record BoqLineRow(int Position, BoqLineNature Nature, string? Code, string Description, decimal Quantity, decimal WastePct, decimal FinalQuantity, string? Unit, decimal Rate, decimal TotalUsd);
 
 public sealed record BoqDeliveryRow(DeliveryChannel Channel, string? Recipient, decimal TotalUsd, DateTime SentAt, string? SentBy);
 
-/// <param name="AdjustmentUsd">The whole BOQ's discount or increase, from the sum of its lines.</param>
+/// <param name="AdjustmentUsd">The work's discount or increase, from the sum of its work lines. Permits are never adjusted.</param>
+/// <param name="PermitsUsd">Its permit lines: charged as they are, with no supervision or TVA.</param>
 /// <param name="SupervisionUsd">With TVA and the client's total: at the site's rates as they are now, for those who see money or the pricing.</param>
 public sealed record BoqDetail(
     long Id,
@@ -107,6 +113,7 @@ public sealed record BoqDetail(
     BoqAdjustmentType AdjustmentType,
     decimal AdjustmentUsd,
     decimal TotalUsd,
+    decimal PermitsUsd,
     decimal? SupervisionUsd,
     decimal? TvaUsd,
     decimal? ClientTotalUsd,
@@ -122,7 +129,7 @@ public sealed class GetBoqTool(IBoqService boqs) : ProtonTool<BoqInput>
     public override string Name => "get_boq";
 
     public override string Description =>
-        "One BOQ or variation order with its lines (code, description, quantity, waste, unit, rate, total), its adjustment, " +
+        "One BOQ or variation order with its lines (work or permit, code, description, quantity, waste, unit, rate, total), its adjustment, " +
         "and the supervision, TVA and client total at the site's rates, with when and how it was sent.";
 
     public override string? OnlyInDomain => DomainCodes.Execution;
@@ -134,9 +141,9 @@ public sealed class GetBoqTool(IBoqService boqs) : ProtonTool<BoqInput>
         var b = await boqs.GetAsync(input.BoqId, cancellationToken);
         return ProtonToolOutput.Of(new BoqDetail(
             b.Id, b.ProjectId, b.Kind, b.Number, b.Title, b.Status, b.Reason, b.Author.Name, b.AgreedAt, b.AgreedBy?.Name,
-            b.SubtotalUsd, b.AdjustmentType, b.AdjustmentUsd, b.TotalUsd, b.SupervisionUsd, b.TvaUsd, b.ClientTotalUsd, b.LineCount,
+            b.SubtotalUsd, b.AdjustmentType, b.AdjustmentUsd, b.TotalUsd, b.PermitsUsd, b.SupervisionUsd, b.TvaUsd, b.ClientTotalUsd, b.LineCount,
             b.Lines.Take(MaxLines).Select(l => new BoqLineRow(
-                l.Position, l.Code, ProtonText.Cut(l.Description, 300)!, l.Quantity, l.WasteRate * 100, l.FinalQuantity, l.Unit, l.Rate, l.TotalUsd)).ToList(),
+                l.Position, l.Nature, l.Code, ProtonText.Cut(l.Description, 300)!, l.Quantity, l.WasteRate * 100, l.FinalQuantity, l.Unit, l.Rate, l.TotalUsd)).ToList(),
             b.Deliveries.Select(d => new BoqDeliveryRow(d.Channel, d.Recipient, d.TotalUsd, d.SentAt, d.SentBy?.Name)).ToList()));
     }
 }
@@ -342,6 +349,7 @@ public sealed record SupervisionTakenRow(DateOnly TakenOn, decimal AmountUsd, st
 /// <param name="Unconverted">Costs with no exchange rate on their day, in their own currency: left out of every sum.</param>
 public sealed record SiteAccount(
     decimal WorkUsd,
+    decimal PermitsUsd,
     decimal SupervisionPct,
     decimal SupervisionUsd,
     decimal TvaPct,
@@ -390,7 +398,7 @@ public sealed class GetSiteAccountTool(IAccountFiguresService figures, ISupervis
         var a = await figures.GetAsync(input.ProjectId, cancellationToken);
         var taken = await withdrawals.ListAsync(input.ProjectId, cancellationToken);
         return ProtonToolOutput.Of(new SiteAccount(
-            a.WorkUsd, a.SupervisionRate * 100, a.SupervisionUsd, a.TvaRate * 100, a.TvaUsd, a.ClientTotalUsd, a.ReceivedUsd, a.RestToPayUsd,
+            a.WorkUsd, a.PermitsUsd, a.SupervisionRate * 100, a.SupervisionUsd, a.TvaRate * 100, a.TvaUsd, a.ClientTotalUsd, a.ReceivedUsd, a.RestToPayUsd,
             a.Costs, a.ProfitUsd, a.Supervision, a.Pocket, a.CashInAccountUsd,
             a.ByLabel.Select(r => new AccountLabelRow(r.AccountLabel?.Name ?? "No label", r.ReceivedUsd, r.SpentUsd, r.OtherUsd, r.RestUsd)).ToList(),
             a.ByCategory,

@@ -7,8 +7,10 @@ namespace ID_Indetails.api.Business.Projects;
 /// <list type="bullet">
 /// <item>The work price is the project fee, set by agreeing BOQs. The company's supervision is the work price × the
 /// supervision rate.</item>
-/// <item>The agreed amount, which revenue and profit are measured on, is the work price plus supervision.</item>
-/// <item>TVA is on the work price, never on supervision. The client pays the agreed amount plus that TVA.</item>
+/// <item>The permits, the BOQs' permit lines, are charged as they are: no supervision and no TVA on them.</item>
+/// <item>The agreed amount, which revenue and profit are measured on, is the work price plus supervision plus the
+/// permits.</item>
+/// <item>TVA is on the work price, never on supervision or permits. The client pays the agreed amount plus that TVA.</item>
 /// </list>
 /// </summary>
 public static class ExecutionPricing
@@ -22,20 +24,24 @@ public static class ExecutionPricing
     public sealed record Price(decimal Supervision, decimal Net, decimal Tva, decimal Gross);
 
     /// <param name="work">The project fee, 0 until a BOQ is agreed.</param>
-    public static Price PriceOf(decimal work, decimal supervisionRate, decimal tvaRate)
+    /// <param name="permits">The agreed permits, 0 until a BOQ with permits is agreed.</param>
+    public static Price PriceOf(decimal work, decimal permits, decimal supervisionRate, decimal tvaRate)
     {
         var supervision = Math.Round(work * supervisionRate, 2, MidpointRounding.AwayFromZero);
-        var net = work + supervision;
+        var net = work + supervision + permits;
         var tva = Tva.Of(work, tvaRate);
         return new Price(supervision, net, tva, net + tva);
     }
 
-    /// <summary>The work price whose client total (work, supervision and TVA) comes to <paramref name="gross"/>, to the cent where the rounding allows.</summary>
-    public static decimal WorkFor(decimal gross, decimal supervisionRate, decimal tvaRate)
+    /// <summary>
+    /// The work price whose client total (work, supervision and TVA, plus the permits as they are) comes to
+    /// <paramref name="gross"/>, to the cent where the rounding allows.
+    /// </summary>
+    public static decimal WorkFor(decimal gross, decimal permits, decimal supervisionRate, decimal tvaRate)
     {
-        var guess = Math.Round(gross / (1 + supervisionRate + tvaRate), 2, MidpointRounding.AwayFromZero);
+        var guess = Math.Round((gross - permits) / (1 + supervisionRate + tvaRate), 2, MidpointRounding.AwayFromZero);
         return new[] { 0m, -0.01m, 0.01m, -0.02m, 0.02m }.Select(step => guess + step)
-            .OrderBy(work => Math.Abs(PriceOf(work, supervisionRate, tvaRate).Gross - gross)).First();
+            .OrderBy(work => Math.Abs(PriceOf(work, permits, supervisionRate, tvaRate).Gross - gross)).First();
     }
 
     /// <summary>

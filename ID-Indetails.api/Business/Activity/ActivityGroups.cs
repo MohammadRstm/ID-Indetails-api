@@ -19,6 +19,7 @@ public static class ActivityGroups
         [ActivityEventKinds.ExpenseAdded] = ActivityGroup.Money,
         [ActivityEventKinds.ExpenseRemoved] = ActivityGroup.Money,
         [ActivityEventKinds.ProjectFeeSet] = ActivityGroup.Money,
+        [ActivityEventKinds.PermitsSet] = ActivityGroup.Money,
         [ActivityEventKinds.MaterialMarkupSet] = ActivityGroup.Money,
         [ActivityEventKinds.SupervisionRateSet] = ActivityGroup.Money,
         [ActivityEventKinds.ProjectFinalized] = ActivityGroup.Money,

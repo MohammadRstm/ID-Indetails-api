@@ -59,7 +59,7 @@ public sealed class SupervisionWithdrawalService(
         Throw(SupervisionRules.CheckSite(project.DomainCode, project.BillingType));
         Throw(SupervisionRules.CheckTakenOn(request.TakenOn, clock.CompanyToday));
         // the project row is locked, so two takes at once can't both pass on the same amount left
-        var due = ExecutionPricing.PriceOf(project.ProjectFee ?? 0, project.SupervisionRate ?? 0, project.TvaRate).Supervision;
+        var due = ExecutionPricing.PriceOf(project.ProjectFee ?? 0, project.PermitsPrice ?? 0, project.SupervisionRate ?? 0, project.TvaRate).Supervision;
         var taken = await withdrawals.TakenAsync(project.Id, cancellationToken);
         Throw(SupervisionRules.CheckAmount(request.AmountUsd, SupervisionRules.Left(due, taken)));
 

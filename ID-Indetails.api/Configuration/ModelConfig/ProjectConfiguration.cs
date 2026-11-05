@@ -32,13 +32,14 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
                 "ck_projects_execution_is_client_work",
                 $"`domain_code` <> '{DomainCodes.Execution}' OR `billing_type` = 'client'");
 
-            // Execution projects have a work price (the project fee); Design projects have none.
+            // Execution projects have a work price (the project fee) and permits; Design projects have neither.
             t.HasCheckConstraint(
                 "ck_projects_execution_money_fields",
-                $"(`domain_code` = '{DomainCodes.Execution}' AND `project_fee` IS NOT NULL)"
-                + $" OR (`domain_code` <> '{DomainCodes.Execution}' AND `project_fee` IS NULL)");
+                $"(`domain_code` = '{DomainCodes.Execution}' AND `project_fee` IS NOT NULL AND `permits_price` IS NOT NULL)"
+                + $" OR (`domain_code` <> '{DomainCodes.Execution}' AND `project_fee` IS NULL AND `permits_price` IS NULL)");
 
             t.HasCheckConstraint("ck_projects_project_fee_non_negative", "`project_fee` IS NULL OR `project_fee` >= 0");
+            t.HasCheckConstraint("ck_projects_permits_price_non_negative", "`permits_price` IS NULL OR `permits_price` >= 0");
         });
 
         builder.HasKey(x => x.Id);

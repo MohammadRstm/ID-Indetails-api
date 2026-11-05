@@ -18,8 +18,11 @@ public sealed record InvoiceMoneyRow(
 
 public sealed record PaymentMoneyRow(long ProjectId, long ClientId, long? InvoiceId, DateOnly ReceivedOn, decimal AmountUsd, PaymentMethod Method, decimal TvaUsd);
 
-/// <summary>A project's agreed payment (Design) or fee (Execution) being set or changed: the new amount, and the one before.</summary>
-public sealed record AgreedChangeRow(long ProjectId, DateTime OccurredAt, decimal Amount, decimal? PrevAmount);
+/// <summary>
+/// A project's agreed payment (Design), or its work price or permits (Execution, by <paramref name="Kind"/>), being set or
+/// changed: the new amount, and the one before.
+/// </summary>
+public sealed record AgreedChangeRow(long ProjectId, DateTime OccurredAt, decimal Amount, decimal? PrevAmount, string Kind);
 
 public sealed record StatusCountRow(ProjectStatus Status, int Count);
 

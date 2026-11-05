@@ -10,7 +10,7 @@ public class ExecutionPricingTests
     public void Supervision_is_a_share_of_the_work_and_the_agreed_amount_is_work_plus_supervision()
     {
         // a real site: 787,646.20 of work at 8% supervision and 11% TVA
-        var price = ExecutionPricing.PriceOf(787_646.20m, supervisionRate: 0.08m, tvaRate: 0.11m);
+        var price = ExecutionPricing.PriceOf(787_646.20m, permits: 0m, supervisionRate: 0.08m, tvaRate: 0.11m);
 
         price.ShouldSatisfyAllConditions(
             p => p.Supervision.ShouldBe(63_011.70m),
@@ -22,7 +22,7 @@ public class ExecutionPricingTests
     [Fact]
     public void Tva_is_on_the_work_never_on_supervision()
     {
-        var price = ExecutionPricing.PriceOf(1000m, supervisionRate: 0.10m, tvaRate: 0.11m);
+        var price = ExecutionPricing.PriceOf(1000m, permits: 0m, supervisionRate: 0.10m, tvaRate: 0.11m);
 
         price.Supervision.ShouldBe(100m);
         price.Tva.ShouldBe(110m);
@@ -31,9 +31,34 @@ public class ExecutionPricingTests
     }
 
     [Fact]
+    public void Permits_are_charged_as_they_are_with_no_supervision_and_no_tva()
+    {
+        // the Mila 2 permits on 10,000 of work, 10% supervision and 11% TVA
+        var price = ExecutionPricing.PriceOf(10_000m, permits: 64_814.81m, supervisionRate: 0.10m, tvaRate: 0.11m);
+
+        price.ShouldSatisfyAllConditions(
+            p => p.Supervision.ShouldBe(1000m),
+            p => p.Tva.ShouldBe(1100m),
+            p => p.Net.ShouldBe(75_814.81m),
+            p => p.Gross.ShouldBe(76_914.81m));
+        ExecutionPricing.PriceOf(0m, 500m, 0.10m, 0.11m).ShouldBe(new ExecutionPricing.Price(0m, 500m, 0m, 500m));
+    }
+
+    [Fact]
+    public void The_work_price_for_what_a_client_paid_leaves_the_permits_as_they_are()
+    {
+        // 1,210 for the work with its supervision and TVA, and 300 of permits
+        ExecutionPricing.WorkFor(1_510m, permits: 300m, supervisionRate: 0.10m, tvaRate: 0.11m).ShouldBe(1_000m);
+
+        // any client total a work price makes goes back to it, permits and all
+        var gross = ExecutionPricing.PriceOf(1_404.96m, 300m, 0.10m, 0.11m).Gross;
+        ExecutionPricing.PriceOf(ExecutionPricing.WorkFor(gross, 300m, 0.10m, 0.11m), 300m, 0.10m, 0.11m).Gross.ShouldBe(gross);
+    }
+
+    [Fact]
     public void A_site_with_no_price_yet_is_all_zero()
     {
-        var price = ExecutionPricing.PriceOf(0m, supervisionRate: 0.10m, tvaRate: 0.11m);
+        var price = ExecutionPricing.PriceOf(0m, permits: 0m, supervisionRate: 0.10m, tvaRate: 0.11m);
 
         price.ShouldBe(new ExecutionPricing.Price(0m, 0m, 0m, 0m));
     }
@@ -41,7 +66,7 @@ public class ExecutionPricingTests
     [Fact]
     public void No_supervision_and_no_tva_leave_the_work_price()
     {
-        var price = ExecutionPricing.PriceOf(5000m, supervisionRate: 0m, tvaRate: 0m);
+        var price = ExecutionPricing.PriceOf(5000m, permits: 0m, supervisionRate: 0m, tvaRate: 0m);
 
         price.ShouldBe(new ExecutionPricing.Price(0m, 5000m, 0m, 5000m));
     }
@@ -66,13 +91,13 @@ public class ExecutionPricingTests
     public void The_work_price_for_what_a_client_paid_makes_a_client_total_of_exactly_that()
     {
         // a real site that paid ahead: 174,342.11 received, 8% supervision and no TVA
-        var work = ExecutionPricing.WorkFor(174_342.11m, supervisionRate: 0.08m, tvaRate: 0m);
+        var work = ExecutionPricing.WorkFor(174_342.11m, permits: 0m, supervisionRate: 0.08m, tvaRate: 0m);
 
         work.ShouldBe(161_427.88m);
-        ExecutionPricing.PriceOf(work, 0.08m, 0m).Gross.ShouldBe(174_342.11m);
-        ExecutionPricing.WorkFor(1_210m, 0.10m, 0.11m).ShouldBe(1_000m);
-        ExecutionPricing.WorkFor(500m, 0m, 0m).ShouldBe(500m);
-        ExecutionPricing.WorkFor(0m, 0.10m, 0.11m).ShouldBe(0m);
+        ExecutionPricing.PriceOf(work, 0m, 0.08m, 0m).Gross.ShouldBe(174_342.11m);
+        ExecutionPricing.WorkFor(1_210m, 0m, 0.10m, 0.11m).ShouldBe(1_000m);
+        ExecutionPricing.WorkFor(500m, 0m, 0m, 0m).ShouldBe(500m);
+        ExecutionPricing.WorkFor(0m, 0m, 0.10m, 0.11m).ShouldBe(0m);
     }
 
     [Theory]
@@ -84,9 +109,9 @@ public class ExecutionPricingTests
         var (s, t) = ((decimal)supervision, (decimal)tva);
         for (var cents = 1; cents <= 20_000; cents++)
         {
-            var gross = ExecutionPricing.PriceOf(cents / 100m, s, t).Gross;
+            var gross = ExecutionPricing.PriceOf(cents / 100m, 0m, s, t).Gross;
 
-            ExecutionPricing.PriceOf(ExecutionPricing.WorkFor(gross, s, t), s, t).Gross.ShouldBe(gross);
+            ExecutionPricing.PriceOf(ExecutionPricing.WorkFor(gross, 0m, s, t), 0m, s, t).Gross.ShouldBe(gross);
         }
     }
 }

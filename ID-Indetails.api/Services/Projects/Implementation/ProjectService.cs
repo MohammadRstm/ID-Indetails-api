@@ -239,6 +239,7 @@ public sealed class ProjectService(
             Revenue = request.Revenue ?? 0,
             // A site starts with no work price: agreeing a BOQ sets it.
             ProjectFee = domain == DomainCodes.Execution ? 0 : null,
+            PermitsPrice = domain == DomainCodes.Execution ? 0 : null,
             SupervisionRate = domain == DomainCodes.Execution ? request.SupervisionRate ?? ExecutionPricing.DefaultSupervisionRate : null,
             // TVA is on what a client pays: internal work has none
             TvaRate = request.BillingType == BillingType.Client ? request.TvaRate ?? Tva.DefaultRate : 0,
@@ -550,7 +551,8 @@ public sealed class ProjectService(
                 r.Change.Id, r.Change.Amount, r.Change.PreviousAmount, r.Change.MaterialMarkup, r.Change.PreviousMaterialMarkup,
                 r.Change.Description, r.Change.ChangedAt,
                 r.Change.ChangedById is { } id && r.ChangedByName is { } name ? new ProjectOwnerResponse(id, name) : null,
-                r.Change.TvaRate, r.Change.PreviousTvaRate, r.Change.SupervisionRate, r.Change.PreviousSupervisionRate))
+                r.Change.TvaRate, r.Change.PreviousTvaRate, r.Change.SupervisionRate, r.Change.PreviousSupervisionRate,
+                r.Change.Permits, r.Change.PreviousPermits))
             .ToList();
     }
 
@@ -672,10 +674,11 @@ public sealed class ProjectService(
             SupervisionRate = p.SupervisionRate,
             SupervisionUsd = money.Supervision,
             PaymentWithTva = p.DomainCode == DomainCodes.Execution
-                ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
+                ? ExecutionPricing.PriceOf(p.ProjectFee ?? 0, p.PermitsPrice ?? 0, p.SupervisionRate ?? 0, p.TvaRate).Gross
                 : Tva.Gross(p.Revenue, p.TvaRate),
             RevenueWithTva = money.RevenueWithTva,
             ProjectFee = p.ProjectFee,
+            PermitsUsd = p.PermitsPrice,
             ExpenseTotals = expenseTotals,
             Billing = rollup.ProjectBillingOf(p),
             Cost = new ProjectCostResponse(
