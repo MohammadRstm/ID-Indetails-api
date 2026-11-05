@@ -74,7 +74,8 @@ public sealed class ProposeSitePricingTool(IProjectService projects, IBoqService
         var tva = input.TvaPercent is { } t ? t / 100m : price.TvaRate;
         ProjectRules.CheckPaymentChanges(supervision != price.SupervisionRate || tva != price.TvaRate, "supervisionRate").ThrowIfDenied();
 
-        var after = ExecutionPricing.PriceOf(price.WorkUsd, supervision, tva);
+        // supervision and TVA are on the work only: the permits are charged as they are
+        var after = ExecutionPricing.PriceOf(price.WorkUsd, price.PermitsUsd, supervision, tva);
         var changes = new List<ProtonChange>();
         if (supervision != price.SupervisionRate)
         {
@@ -91,7 +92,8 @@ public sealed class ProposeSitePricingTool(IProjectService projects, IBoqService
         changes.Add(new ProtonChange("The client pays", BoqText.Usd(price.ClientTotalUsd), BoqText.Usd(after.Gross)));
         changes.Add(new ProtonChange("Why", null, reason));
 
-        var note = "Every BOQ and what the client pays follow the new rates from now on. The work price stays " + BoqText.Usd(price.WorkUsd) + ". "
+        var note = "Every BOQ and what the client pays follow the new rates from now on. The work price stays " + BoqText.Usd(price.WorkUsd)
+            + (price.PermitsUsd != 0 ? ", and the permits " + BoqText.Usd(price.PermitsUsd) + " with no supervision or TVA on them" : "") + ". "
             + (supervision != price.SupervisionRate ? "Supervision is part of the site's revenue, so it moves the revenue and the profit; TVA does not. " : "TVA is not part of the revenue or the profit. ")
             + (supervision < price.SupervisionRate ? "If a lower supervision would take the profit to zero or below, it is refused and kept for someone who sees the site's money to force through." : "");
         var request = new UpdateProjectPricingRequest

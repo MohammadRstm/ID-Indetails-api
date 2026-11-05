@@ -8,7 +8,8 @@ its own currency and never counted as zero.
 
 - **Agreed** (fields starting with `agreed_`): what the client agreed to pay for a project, its contract value,
   whether or not it has been paid. Design: the customer payment typed into the project plus its applied variation orders (VOs, work added or taken out). Execution: the work price
-  (set by agreeing the client BOQ and its variation orders) plus the company's supervision on it, so it changes when a
+  (set by agreeing the client BOQ and its variation orders) plus the company's supervision on it, plus the BOQs' permit
+  lines (charged as they are), so it changes when a
   BOQ is agreed or withdrawn and is frozen once the site is finished. `agreed_profit` is agreed revenue less all the cost so far; `agreed_margin_pct` is
   that profit as a percentage of the agreed revenue, empty until it means something.
 - **Cash** (`received`, `cash_profit`, `cash_margin_pct`): money that actually arrived, client payments counted on
@@ -32,12 +33,12 @@ its own currency and never counted as zero.
   and `tva_collected` is that TVA.
 - What the client is billed, pays and owes is **gross**, TVA included: `agreed_with_tva`, the billing figures
   (`billing`, `as_of_today`), invoices and payments. Never compare a gross figure with a net one without saying so.
-- Execution: TVA is on the work price only, never on the supervision.
+- Execution: TVA is on the work price only, never on the supervision or the permits.
 
 ## Execution sites
 
 - **Supervision**: the company's fee on a site, its work price × the supervision rate (10% by default), part of the
-  agreed revenue. Supervision the company takes out of a site's account isn't a cost.
+  agreed revenue. Permits carry no supervision. Supervision the company takes out of a site's account isn't a cost.
 - **Pocket money**: money super admins move out of sites by hand and pay back to sites that run short. It moves a
   site's profit (`to_pocket` lowers it, `from_pocket` raises it), never what the client owes.
 

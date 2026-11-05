@@ -173,13 +173,13 @@ public sealed class ProposeBoqTool(IProjectService projects, IBoqService boqs) :
         var before = BoqText.LinesOf(target.Lines);
         var after = before.Concat(chosen.Select(l => l with { Id = null })).ToList();
         BoqRules.CheckContent(target.Kind, target.Reason, target.AdjustmentType, target.AdjustmentValue, [.. after.Select(BoqText.RuleLine)]).ThrowIfDenied();
-        var total = BoqText.Totals(after, target.AdjustmentType, target.AdjustmentValue).Total;
+        var totals = BoqText.Totals(after, target.AdjustmentType, target.AdjustmentValue);
 
         var changes = BoqText.Capped(chosen.Select(l => new ProtonChange("Copied line", null, BoqText.LineText(l))).ToList(), MaxRows);
-        changes.Add(new ProtonChange("BOQ total", BoqText.Usd(target.TotalUsd), BoqText.Usd(total)));
+        changes.AddRange(BoqText.TotalRows(target, totals));
         var request = new CopyBoqLinesRequest { FromBoqId = source.Id, LineIds = ids };
         return (new BoqStepArgs(ProtonBoqStep.CopyLines, project.Id, project.Title, target.Id, target.UpdatedAt, null, request, source.UpdatedAt),
-            BoqText.Priced(target, total, $"Copy {chosen.Count} line(s) into {BoqText.Name(target)}", changes,
+            BoqText.Priced(target, totals, $"Copy {chosen.Count} line(s) into {BoqText.Name(target)}", changes,
                 $"The lines are copied from {BoqText.Name(source)} with their rates; they are added at the end."),
             ProjectText.Ref(project));
     }
@@ -255,6 +255,9 @@ public sealed record NewBoqLineInput
 
     [Description("The price of one unit in USD, exactly as the user gave it. Negative (a credit) only on a variation order.")]
     public required decimal Rate { get; init; }
+
+    [Description("True for a permit: charged at its price with no supervision and no TVA, never adjusted. Leave out for work.")]
+    public bool? Permit { get; init; }
 }
 
 public sealed record ChangeBoqLineInput
@@ -277,6 +280,9 @@ public sealed record ChangeBoqLineInput
 
     [Description("The new price of one unit in USD, exactly as the user gave it.")]
     public decimal? Rate { get; init; }
+
+    [Description("True makes the line a permit (no supervision, no TVA), false makes it work. Leave out to keep it.")]
+    public bool? Permit { get; init; }
 }
 
 /// <param name="Request">The whole document as it will be saved; its <c>UpdatedAt</c> is the BOQ's as the card read it.</param>
@@ -352,7 +358,8 @@ public sealed class ProposeEditBoqTool(IProjectService projects, IBoqService boq
         var title = MoneyText.Clean(input.Title) ?? boq.Title;
         var reason = input.Reason is null ? boq.Reason : MoneyText.Clean(input.Reason);
         BoqRules.CheckContent(boq.Kind, reason, type, value, [.. edit.After.Select(BoqText.RuleLine)]).ThrowIfDenied();
-        var total = BoqText.Totals(edit.After, type, value).Total;
+        var totals = BoqText.Totals(edit.After, type, value);
+        var total = totals.Total;
 
         var changes = new List<ProtonChange>();
         SettingsText.Compare(changes, "Title", boq.Title, title);
@@ -364,11 +371,12 @@ public sealed class ProposeEditBoqTool(IProjectService projects, IBoqService boq
             throw new ProtonToolInputException("Nothing would change: say what should be different.");
         }
 
-        changes.Add(new ProtonChange("BOQ total", BoqText.Usd(boq.TotalUsd), BoqText.Usd(total)));
+        changes.AddRange(BoqText.TotalRows(boq, totals));
         if (boq.SupervisionRate is { } supervision && boq.TvaRate is { } tva && boq.Kind != BoqKind.Internal)
         {
-            changes.Add(new ProtonChange("Client pays (supervision and TVA included)",
-                BoqText.Usd(ExecutionPricing.PriceOf(boq.TotalUsd, supervision, tva).Gross), BoqText.Usd(ExecutionPricing.PriceOf(total, supervision, tva).Gross)));
+            changes.Add(new ProtonChange("Client pays (supervision and TVA on the work, permits as they are)",
+                BoqText.Usd(ExecutionPricing.PriceOf(boq.TotalUsd, boq.PermitsUsd, supervision, tva).Gross),
+                BoqText.Usd(ExecutionPricing.PriceOf(total, totals.Permits, supervision, tva).Gross)));
         }
 
         var request = new SaveBoqRequest
@@ -376,7 +384,7 @@ public sealed class ProposeEditBoqTool(IProjectService projects, IBoqService boq
             Title = title, Reason = reason, AdjustmentType = type, AdjustmentValue = value, Lines = edit.After, UpdatedAt = boq.UpdatedAt,
         };
         return (new EditBoqArgs(project.Id, project.Title, boq.Id, request),
-            BoqText.Priced(boq, total, $"Change {BoqText.Name(boq)}", changes,
+            BoqText.Priced(boq, totals, $"Change {BoqText.Name(boq)}", changes,
                 boq.Kind == BoqKind.Internal ? null : "Nothing is sent: the client sees the change only when the BOQ is sent again."),
             ProjectText.Ref(project));
     }
@@ -462,6 +470,7 @@ public sealed class ProposeBoqAgreementTool(IProjectService projects, IBoqServic
         var list = await boqs.ListAsync(project.Id, cancellationToken);
         var price = BoqPricing.Of(list);
         decimal work;
+        decimal permits;
         List<ProtonChange> changes;
         ProtonPreview preview;
         if (input.Step == ProtonBoqAgreementStep.Agree)
@@ -470,11 +479,14 @@ public sealed class ProposeBoqAgreementTool(IProjectService projects, IBoqServic
             work = boq.Kind == BoqKind.Client
                 ? BoqRules.WorkPrice(boq.TotalUsd, price.VoTotals)
                 : BoqRules.WorkPrice(price.ClientTotal, [.. price.VoTotals, boq.TotalUsd]);
-            BoqRules.CheckWorkPrice(work).ThrowIfDenied();
-            changes = [new ProtonChange("BOQ", "Draft", "Agreed"), .. BoqPricing.Changes(price, work)];
+            permits = boq.Kind == BoqKind.Client
+                ? BoqRules.WorkPrice(boq.PermitsUsd, price.VoPermits)
+                : BoqRules.WorkPrice(price.ClientPermits, [.. price.VoPermits, boq.PermitsUsd]);
+            BoqRules.CheckWorkPrice(work, permits).ThrowIfDenied();
+            changes = [new ProtonChange("BOQ", "Draft", "Agreed"), .. BoqPricing.Changes(price, work, permits)];
             preview = new ProtonPreview($"Agree {name}", changes,
-                "It locks: it can't change unless its agreement is withdrawn. " + BoqPricing.FloorNote(price.Work, work),
-                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(boq.TotalUsd));
+                "It locks: it can't change unless its agreement is withdrawn. " + BoqPricing.FloorNote(price.Charged, work + permits),
+                Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(BoqText.Charged(boq)));
             return (new BoqAgreementArgs(input.Step, project.Id, project.Title, boq.Id, boq.UpdatedAt, price.Work, work, null, null), preview, ProjectText.Ref(project));
         }
 
@@ -483,11 +495,14 @@ public sealed class ProposeBoqAgreementTool(IProjectService projects, IBoqServic
         work = boq.Kind == BoqKind.Client
             ? BoqRules.WorkPrice(0, price.VoTotals)
             : BoqRules.WorkPrice(price.ClientTotal, BoqPricing.WithoutOne(price.VoTotals, boq.TotalUsd));
-        BoqRules.CheckWorkPrice(work).ThrowIfDenied();
-        changes = [new ProtonChange("BOQ", "Agreed", "Draft"), .. BoqPricing.Changes(price, work), new ProtonChange("Reason", null, reason)];
+        permits = boq.Kind == BoqKind.Client
+            ? BoqRules.WorkPrice(0, price.VoPermits)
+            : BoqRules.WorkPrice(price.ClientPermits, BoqPricing.WithoutOne(price.VoPermits, boq.PermitsUsd));
+        BoqRules.CheckWorkPrice(work, permits).ThrowIfDenied();
+        changes = [new ProtonChange("BOQ", "Agreed", "Draft"), .. BoqPricing.Changes(price, work, permits), new ProtonChange("Reason", null, reason)];
         preview = new ProtonPreview($"Withdraw the agreement of {name}", changes,
-            "It returns to draft and comes out of the work price. " + BoqPricing.FloorNote(price.Work, work),
-            Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(boq.TotalUsd));
+            "It returns to draft and comes out of the work price and the permits. " + BoqPricing.FloorNote(price.Charged, work + permits),
+            Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(BoqText.Charged(boq)));
         return (new BoqAgreementArgs(input.Step, project.Id, project.Title, boq.Id, boq.UpdatedAt, price.Work, work,
                 new WithdrawBoqAgreementRequest { Reason = reason }, null),
             preview, ProjectText.Ref(project));
@@ -599,7 +614,9 @@ public sealed class ProposeSendBoqTool(IBoqService boqs, IDocumentService docume
             new("To", null, request.To),
             new("Sends", null, $"{BoqText.KindName(boq.Kind)} {boq.Number}: {boq.Title}, with its PDF attached"),
             new("Greeting", null, $"Hello {document.ClientName},"),
-            new("Total the client reads", null, boq.ClientTotalUsd is { } total ? $"{BoqText.Usd(total)} (supervision and TVA included)" : BoqText.Usd(boq.TotalUsd)),
+            new("Total the client reads", null, boq.ClientTotalUsd is { } total
+                ? $"{BoqText.Usd(total)} (supervision and TVA on the work{(boq.PermitsUsd != 0 ? $", and {BoqText.Usd(boq.PermitsUsd)} of permits with neither" : "")})"
+                : BoqText.Usd(BoqText.Charged(boq))),
         };
         if (request.Note is not null)
         {
@@ -627,32 +644,45 @@ public sealed class ProposeSendBoqTool(IBoqService boqs, IDocumentService docume
 }
 
 /// <summary>What the agreed BOQs make the client pay, as the BOQ list shows it, for the agree and withdraw cards.</summary>
+/// <param name="ClientPermits">The agreed client BOQ's permit lines; <paramref name="VoPermits"/> each agreed VO's, in the order of <paramref name="VoTotals"/>.</param>
 internal sealed record BoqPricing(
-    bool ClientAgreed, decimal ClientTotal, IReadOnlyList<decimal> VoTotals, BoqPriceResponse Current)
+    bool ClientAgreed, decimal ClientTotal, IReadOnlyList<decimal> VoTotals, decimal ClientPermits, IReadOnlyList<decimal> VoPermits, BoqPriceResponse Current)
 {
     public decimal Work => Current.WorkUsd;
+
+    /// <summary>What the agreed BOQs charge before supervision and TVA: the work price and the permits.</summary>
+    public decimal Charged => Current.WorkUsd + Current.PermitsUsd;
 
     public static BoqPricing Of(BoqListResponse list)
     {
         var agreedClient = list.Client.Where(b => b.Status == BoqStatus.Agreed).ToList();
+        var agreedVos = list.Vos.Where(b => b.Status == BoqStatus.Agreed).ToList();
         return new BoqPricing(
             agreedClient.Count > 0,
             agreedClient.Sum(b => b.TotalUsd),
-            list.Vos.Where(b => b.Status == BoqStatus.Agreed).Select(b => b.TotalUsd).ToList(),
+            agreedVos.Select(b => b.TotalUsd).ToList(),
+            agreedClient.Sum(b => b.PermitsUsd),
+            agreedVos.Select(b => b.PermitsUsd).ToList(),
             list.Price ?? throw new ProtonToolInputException("The user can't see this site's pricing."));
     }
 
-    /// <summary>The work price, supervision, TVA and what the client pays, before and after the work price changes to <paramref name="work"/>.</summary>
-    public static IEnumerable<ProtonChange> Changes(BoqPricing price, decimal work)
+    /// <summary>
+    /// The work price, the permits, supervision, TVA and what the client pays, before and after the agreed BOQs change. Supervision
+    /// and TVA are on the work only: the permits are charged as they are.
+    /// </summary>
+    public static IEnumerable<ProtonChange> Changes(BoqPricing price, decimal work, decimal permits)
     {
-        var after = ExecutionPricing.PriceOf(work, price.Current.SupervisionRate, price.Current.TvaRate);
-        return
-        [
-            new ProtonChange("Work price", BoqText.Usd(price.Work), BoqText.Usd(work)),
-            new ProtonChange($"Supervision ({BoqText.Percent(price.Current.SupervisionRate)})", BoqText.Usd(price.Current.SupervisionUsd), BoqText.Usd(after.Supervision)),
-            new ProtonChange($"TVA ({BoqText.Percent(price.Current.TvaRate)}, on the work only)", BoqText.Usd(price.Current.TvaUsd), BoqText.Usd(after.Tva)),
-            new ProtonChange("The client pays", BoqText.Usd(price.Current.ClientTotalUsd), BoqText.Usd(after.Gross)),
-        ];
+        var after = ExecutionPricing.PriceOf(work, permits, price.Current.SupervisionRate, price.Current.TvaRate);
+        var rows = new List<ProtonChange> { new("Work price", BoqText.Usd(price.Work), BoqText.Usd(work)) };
+        if (permits != 0 || price.Current.PermitsUsd != 0)
+        {
+            rows.Add(new ProtonChange("Permits (no supervision or TVA)", BoqText.Usd(price.Current.PermitsUsd), BoqText.Usd(permits)));
+        }
+
+        rows.Add(new ProtonChange($"Supervision ({BoqText.Percent(price.Current.SupervisionRate)}, on the work only)", BoqText.Usd(price.Current.SupervisionUsd), BoqText.Usd(after.Supervision)));
+        rows.Add(new ProtonChange($"TVA ({BoqText.Percent(price.Current.TvaRate)}, on the work only)", BoqText.Usd(price.Current.TvaUsd), BoqText.Usd(after.Tva)));
+        rows.Add(new ProtonChange("The client pays", BoqText.Usd(price.Current.ClientTotalUsd), BoqText.Usd(after.Gross)));
+        return rows;
     }
 
     /// <summary>A lower price is held to the profit floor when it is made; a higher one never is.</summary>
@@ -723,13 +753,26 @@ internal static class BoqText
     public static List<SaveBoqLineRequest> LinesOf(IEnumerable<BoqLineResponse> lines)
         => lines.OrderBy(l => l.Position).Select(l => new SaveBoqLineRequest
         {
-            Id = l.Id, Code = l.Code, Description = l.Description, Quantity = l.Quantity, WasteRate = l.WasteRate, Unit = l.Unit, Rate = l.Rate,
+            Id = l.Id, Nature = l.Nature, Code = l.Code, Description = l.Description, Quantity = l.Quantity, WasteRate = l.WasteRate, Unit = l.Unit, Rate = l.Rate,
         }).ToList();
 
-    public static BoqRules.Line RuleLine(SaveBoqLineRequest l) => new(l.Quantity, l.WasteRate, l.Rate);
+    public static BoqRules.Line RuleLine(SaveBoqLineRequest l) => new(l.Quantity, l.WasteRate, l.Rate, l.Nature);
 
     public static BoqRules.Totals Totals(IEnumerable<SaveBoqLineRequest> lines, BoqAdjustmentType type, decimal? value)
-        => BoqRules.TotalsOf(lines.Select(RuleLine), type, value);
+        => BoqRules.TotalsOf([.. lines.Select(RuleLine)], type, value);
+
+    /// <summary>What a BOQ charges before supervision and TVA: its work total and its permits.</summary>
+    public static decimal Charged(BoqDetailResponse boq) => boq.TotalUsd + boq.PermitsUsd;
+
+    /// <summary>A card's totals: the work's, and the permits' when the BOQ has or gets any (they carry no supervision or TVA).</summary>
+    public static IEnumerable<ProtonChange> TotalRows(BoqDetailResponse boq, BoqRules.Totals after)
+    {
+        yield return new ProtonChange(boq.PermitsUsd != 0 || after.Permits != 0 ? "Work total" : "BOQ total", Usd(boq.TotalUsd), Usd(after.Total));
+        if (boq.PermitsUsd != 0 || after.Permits != 0)
+        {
+            yield return new ProtonChange("Permits (no supervision or TVA)", Usd(boq.PermitsUsd), Usd(after.Permits));
+        }
+    }
 
     /// <summary>One line as the card reads it: "2.1.1 Slab: 10.5 m3 × 120 = USD 1,260 (5% waste)".</summary>
     public static string LineText(SaveBoqLineRequest l)
@@ -738,7 +781,8 @@ internal static class BoqText
         var quantity = BoqRules.FinalQuantity(l.Quantity, l.WasteRate).ToString("0.####", CultureInfo.InvariantCulture);
         var unit = string.IsNullOrWhiteSpace(l.Unit) ? "" : " " + l.Unit;
         var waste = l.WasteRate > 0 ? $" ({(l.WasteRate * 100).ToString("0.##", CultureInfo.InvariantCulture)}% waste)" : "";
-        return $"{code}{ProtonText.Cut(l.Description, 80)}: {quantity}{unit} × {l.Rate.ToString("#,0.####", CultureInfo.InvariantCulture)} = {Usd(BoqRules.LineTotal(l.Quantity, l.WasteRate, l.Rate))}{waste}";
+        var permit = l.Nature == BoqLineNature.Permit ? "Permit: " : "";
+        return $"{permit}{code}{ProtonText.Cut(l.Description, 80)}: {quantity}{unit} × {l.Rate.ToString("#,0.####", CultureInfo.InvariantCulture)} = {Usd(BoqRules.LineTotal(l.Quantity, l.WasteRate, l.Rate))}{waste}";
     }
 
     public static string AdjustmentText(BoqAdjustmentType type, decimal? value) => type switch
@@ -791,6 +835,7 @@ internal static class BoqText
                 WasteRate = edit.WastePercent is { } waste ? waste / 100m : line.WasteRate,
                 Unit = edit.Unit is null ? line.Unit : MoneyText.Clean(edit.Unit),
                 Rate = edit.Rate ?? line.Rate,
+                Nature = edit.Permit is { } permit ? (permit ? BoqLineNature.Permit : BoqLineNature.Work) : line.Nature,
             };
             after.Add(changed);
             if (changed != line)
@@ -809,6 +854,7 @@ internal static class BoqText
             {
                 Code = MoneyText.Clean(added.Code), Description = added.Description.Trim(), Quantity = added.Quantity,
                 WasteRate = (added.WastePercent ?? 0) / 100m, Unit = MoneyText.Clean(added.Unit), Rate = added.Rate,
+                Nature = added.Permit == true ? BoqLineNature.Permit : BoqLineNature.Work,
             };
             after.Add(line);
             rows.Add(new ProtonChange("New line", null, LineText(line)));
@@ -843,14 +889,15 @@ internal static class BoqText
         => rows.Count <= max ? rows : [.. rows.Take(max), new ProtonChange("More", null, $"and {rows.Count - max} more line(s)")];
 
     /// <summary>
-    /// A client BOQ or variation order whose total changes asks for the new total to be typed, as every money card does; an
-    /// internal draft is a private working paper, and a change that leaves the total alone moves no money: two steps.
+    /// A client BOQ or variation order whose work total or permits change asks for what it then charges (work and permits) to
+    /// be typed, as every money card does; an internal draft is a private working paper, and a change that leaves both alone
+    /// moves no money: two steps.
     /// </summary>
-    public static ProtonPreview Priced(BoqDetailResponse boq, decimal newTotal, string title, IReadOnlyList<ProtonChange> changes, string? note)
+    public static ProtonPreview Priced(BoqDetailResponse boq, BoqRules.Totals after, string title, IReadOnlyList<ProtonChange> changes, string? note)
     {
-        var typed = boq.Kind != BoqKind.Internal && newTotal != boq.TotalUsd;
+        var typed = boq.Kind != BoqKind.Internal && (after.Total != boq.TotalUsd || after.Permits != boq.PermitsUsd);
         return new ProtonPreview(title, changes, note,
-            Confirm: typed ? ProtonConfirm.Typed : ProtonConfirm.TwoStep, Phrase: typed ? MoneyText.Phrase(newTotal) : null);
+            Confirm: typed ? ProtonConfirm.Typed : ProtonConfirm.TwoStep, Phrase: typed ? MoneyText.Phrase(after.Total + after.Permits) : null);
     }
 
     public static BusinessRuleException Stale()
