@@ -219,7 +219,7 @@ public sealed class ProposeDesignVoTool(
         }
 
         var target = ProjectText.Ref(project);
-        var open = ProtonUiCommand.Open(target, ProtonProjectSection.Financials, ProtonProjectPart.Payments);
+        var open = ProtonUiCommand.Open(target, ProtonProjectSection.Vos);
         try
         {
             switch (args.Step)

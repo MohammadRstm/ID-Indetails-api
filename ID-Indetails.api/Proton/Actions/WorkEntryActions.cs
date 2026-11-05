@@ -34,7 +34,7 @@ public sealed record CommentWorkEntryInput : ProtonActionInput
     [Description("The comment, in the user's words.")]
     public required string Body { get; init; }
 
-    [Description("Also post it to the author's team chat, mentioning everyone there. Only when the user asked for that.")]
+    [Description("Also post it to the author's department chat, mentioning everyone there. Only when the user asked for that.")]
     public bool SendToGroup { get; init; }
 }
 
@@ -79,11 +79,11 @@ public sealed class ProposeCommentWorkEntryTool(
         {
             CheckGroupAllowed(context.Turn);
             var team = (await employees.GetAsync(entry.Person.Id, cancellationToken)).Team
-                ?? throw new ProtonToolInputException($"{entry.Person.Name} isn't in a team, so there is no team chat to share it to.");
+                ?? throw new ProtonToolInputException($"{entry.Person.Name} isn't in a department, so there is no department chat to share it to.");
             var members = (await TeamText.FindAsync(teams, team.Id, cancellationToken)).MemberCount;
             preview = preview with
             {
-                Changes = [.. preview.Changes, new ProtonChange("Also posted to", null, $"{team.Name} team chat, mentioning everyone")],
+                Changes = [.. preview.Changes, new ProtonChange("Also posted to", null, $"{team.Name} department chat, mentioning everyone")],
                 Confirm = ProtonConfirm.Typed,
                 Phrase = team.Name,
                 Irreversible = true,
@@ -104,7 +104,7 @@ public sealed class ProposeCommentWorkEntryTool(
         }
 
         var comment = await comments.AddAsync(args.WorkEntryId, args.Request, cancellationToken);
-        return new ProtonActionDone(comment.SentToGroup ? "Posted the comment and shared it to the team chat." : "Posted the comment.", "work_entry_comment", comment.Id, []);
+        return new ProtonActionDone(comment.SentToGroup ? "Posted the comment and shared it to the department chat." : "Posted the comment.", "work_entry_comment", comment.Id, []);
     }
 
     /// <summary>The comment family is Core; sharing it is a message, held to the Messaging family's rules.</summary>
@@ -112,12 +112,12 @@ public sealed class ProposeCommentWorkEntryTool(
     {
         if (!options.Value.Actions.IsOn(ProtonFamily.Messaging))
         {
-            throw new ProtonToolInputException("Sharing to a team chat isn't switched on for Proton yet: post the comment alone, or share it in the app.");
+            throw new ProtonToolInputException("Sharing to a department chat isn't switched on for Proton yet: post the comment alone, or share it in the app.");
         }
 
         if (turn != ProtonTurnOrigin.Typed)
         {
-            throw new ProtonToolInputException("Sharing to a team chat needs the user to ask for it in their own words.");
+            throw new ProtonToolInputException("Sharing to a department chat needs the user to ask for it in their own words.");
         }
     }
 }

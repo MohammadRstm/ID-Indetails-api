@@ -66,7 +66,7 @@ public sealed class ProposeMarkChatReadTool(IMessagingService messaging) : Proto
             throw new ProtonToolInputException("Nothing is unread there.");
         }
 
-        var (name, target) = chat.Team is { } t ? ($"the {t.Name} team chat", new ProtonRef(ProtonRefType.Team, t.Id, t.Name, t.Domain))
+        var (name, target) = chat.Team is { } t ? ($"the {t.Name} department chat", new ProtonRef(ProtonRefType.Team, t.Id, t.Name, t.Domain))
             : chat.Person is { } p ? ($"the chat with {p.Name}", new ProtonRef(ProtonRefType.Person, p.Id, p.Name, p.Domain))
             : ("Announcements", (ProtonRef?)null);
         var preview = new ProtonPreview(
