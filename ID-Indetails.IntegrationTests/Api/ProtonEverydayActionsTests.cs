@@ -141,7 +141,7 @@ public class ProtonEverydayActionsTests(ProtonApiFactory api) : IClassFixture<Pr
         var team = (await GetAsync<List<TeamResponse>>(superAdmin, "/api/teams")).Single(t => t.Name == name);
 
         var (_, duplicate) = await ProposeAsync(superAdmin, "propose_create_team", new { name, domain = "design" });
-        duplicate["message"]!.GetValue<string>().ShouldContain("already a team");
+        duplicate["message"]!.GetValue<string>().ShouldContain("already a department");
 
         var (rename, _) = await ProposeAsync(superAdmin, "propose_rename_team", new { team_id = team.Id, name = name + " & Power" });
         await ConfirmAsync(superAdmin, rename);
