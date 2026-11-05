@@ -154,7 +154,7 @@ public sealed class ProjectDepartmentService(
             Kind = ProjectDepartmentChangeKind.Shares,
             Before = before,
             After = Snapshot(current.Select(d => (d.TeamId, d.Team.Name, d.Share))),
-            Reason = request.Reason.Trim(),
+            Reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim(),
             ChangedById = actor.UserId,
             ChangedAt = clock.UtcNow,
         });
