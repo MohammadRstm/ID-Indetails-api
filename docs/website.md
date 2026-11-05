@@ -162,7 +162,7 @@ Under `/api/public/website`. JSON is camelCase, and lists come in display order.
 | `GET /contact` | `{ email }`: null until the company sets one |
 | `GET /social-links` | `[{ id, label, url }]` |
 | `GET /settings` | `{ faviconUrl, underConstruction }`: `faviconUrl` is null until one is chosen |
-| `GET /files/{id}` | A picture the website shows: a published project's, or the favicon. Anything else is `404` |
+| `GET /files/{id}` | A picture the website shows: a published project's, or the favicon. Anything else is `404`. Always a new WebP copy, never the uploaded file. `?size=` asks for a smaller copy: its longest side, rounded up to 160, 480, 960 or 1920 px (the default) |
 | `POST /contact-messages` | `{ name, email, phone?, message, website }`. `202` once emailed |
 
 A project:
@@ -186,7 +186,10 @@ A project:
 - `location.city` is null for a project placed in its country alone. `lat` and `lng` are always set; `approximate` is true when the point was picked ([Places](#places)).
 - `conveyorOrder` is `null` outside the strip.
 
-**Caching.** Answers may be cached for a minute (`Cache-Control: public, max-age=60`), and pictures for a day: a picture's address never changes its content, since a new picture is a new file.
+**Caching.**
+- Answers may be cached for a minute (`Cache-Control: public, max-age=60`).
+- Pictures are cached for a year, and a browser doesn't ask for them again (`public, max-age=31536000, immutable`). A picture's address never changes its content: a new picture is a new file, and a copy's size is in its address (`?size=`).
+- A picture that isn't shown is a `404` that isn't cached. A picture taken off the website stops being served at once, but a browser that already downloaded it keeps its copy.
 
 **Rate limits.**
 - Every request under `/api/public/website` has its own bucket: 600 a minute per IP address (`RateLimiting:PublicWebsitePermitsPerMinute`). A page loads every picture through the API, so the 60-a-minute anonymous limit would be too tight.

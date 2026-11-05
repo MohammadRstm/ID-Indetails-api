@@ -331,9 +331,16 @@ public class WebsiteTests(ApiFactory api) : IClassFixture<ApiFactory>
         // never the file as it was uploaded: always a new copy
         picture.Content.Headers.ContentType!.MediaType.ShouldBe("image/webp");
         (await picture.Content.ReadAsByteArrayAsync()).ShouldNotBe(FileTests.Photo);
-        picture.Headers.CacheControl!.Public.ShouldBeTrue();
+        // its address never changes what it shows, so a browser keeps it a year
+        picture.Headers.CacheControl!.ShouldSatisfyAllConditions(
+            c => c.Public.ShouldBeTrue(),
+            c => c.MaxAge.ShouldBe(TimeSpan.FromDays(365)),
+            c => c.Extensions.ShouldContain(e => e.Name == "immutable"));
 
-        await (await Client.GetAsync($"{Public}/files/{draft.ThumbnailFileId}")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        // a picture that isn't shown isn't kept either, so it can be shown later
+        var hidden = await Client.GetAsync($"{Public}/files/{draft.ThumbnailFileId}");
+        hidden.Headers.CacheControl?.MaxAge.ShouldNotBe(TimeSpan.FromDays(365));
+        await hidden.ShouldFailWithAsync(404, ErrorCodes.NotFound);
         await (await Client.GetAsync($"{Public}/files/{loose}")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
         // the favicon too, once chosen
