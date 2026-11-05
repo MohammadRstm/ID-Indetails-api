@@ -83,8 +83,7 @@ public sealed class SetDepartmentSharesRequestValidator : AbstractValidator<SetD
     {
         RuleFor(x => x.Shares).NotNull().Must(s => s.Count > 0).WithMessage("Give each department its share.");
         RuleForEach(x => x.Shares).Must(s => s.DepartmentId > 0).WithMessage("A department is invalid.");
-        RuleFor(x => (string?)x.Reason).ClientText("Reason", ProjectDepartmentRules.MaxReasonLength, required: true)
-            .OverridePropertyName("reason");
+        RuleFor(x => x.Reason).ClientText("Reason", ProjectDepartmentRules.MaxReasonLength);
     }
 }
 

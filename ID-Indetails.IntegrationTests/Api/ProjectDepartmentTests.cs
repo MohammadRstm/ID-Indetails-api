@@ -75,12 +75,20 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
         reshaped.Departments.Single(d => d.Id == architecture).Money!.Budget.ShouldBe(7000m);
         reshaped.Departments.Single(d => d.Id == structure.Id).Money!.Budget.ShouldBe(3000m);
 
+        // the reason is optional
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}/departments/shares", new
+            {
+                shares = new[] { new { departmentId = architecture, share = 0.6m }, new { departmentId = structure.Id, share = 0.4m } },
+            }, superAdmin.AccessToken))
+            .ReadAsync<ProjectDepartmentsResponse>();
+
         var history = await (await Client.GetAsync($"/api/projects/{project.Id}/departments/history", superAdmin.AccessToken))
             .ReadAsync<List<ProjectDepartmentChangeResponse>>();
-        history.Select(h => h.Kind).ShouldBe([ProjectDepartmentChangeKind.Shares, ProjectDepartmentChangeKind.Created]);
-        history[0].Reason.ShouldBe("Structure is lighter than planned");
-        history[0].Before.Select(b => b.Share).ShouldBe([0.5m, 0.5m]);
-        history[0].After.Single(a => a.Id == structure.Id).Share.ShouldBe(0.3m);
+        history.Select(h => h.Kind).ShouldBe([ProjectDepartmentChangeKind.Shares, ProjectDepartmentChangeKind.Shares, ProjectDepartmentChangeKind.Created]);
+        history[0].Reason.ShouldBeNull();
+        history[1].Reason.ShouldBe("Structure is lighter than planned");
+        history[1].Before.Select(b => b.Share).ShouldBe([0.5m, 0.5m]);
+        history[1].After.Single(a => a.Id == structure.Id).Share.ShouldBe(0.3m);
 
         // adding a department starts the split again, equal
         var interior = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Interior");
