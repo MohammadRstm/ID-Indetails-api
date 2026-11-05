@@ -11,6 +11,13 @@ public sealed class RefreshTokenOptions
     [Range(1, 90)]
     public int ExpirationDays { get; init; } = 1;
 
+    /// <summary>
+    /// Lifetime of each refresh token of the installed app (<c>RefreshTokenClient.Installed</c>): each refresh moves the
+    /// session's end this many days ahead, so its pushes keep coming while it isn't opened.
+    /// </summary>
+    [Range(1, 90)]
+    public int InstalledExpirationDays { get; init; } = 30;
+
     [Required]
     public string CookieName { get; init; } = "idi_refresh";
 

@@ -4,6 +4,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Services.Boqs.Abstraction;
 using ID_Indetails.api.Services.Documents.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using static ID_Indetails.api.Services.Email.Implementation.EmailLayout;
 
@@ -129,32 +130,46 @@ public static class DocumentEmails
             [Attachment(pdf)]);
     }
 
-    /// <summary>A quote: the project's total for the client, TVA included and never shown apart, with its scope.</summary>
-    public static EmailMessage QuoteEmail(string to, QuoteResponse quote, DateOnly quotedOn, Letterhead head, string senderName, PdfFile pdf)
+    /// <summary>A Design variation order: its changes, totals and, when it shows them, the hours outside the agreed scope.</summary>
+    public static EmailMessage DesignVo(string to, DesignVoDocument document, DateOnly date, Letterhead head, string senderName, PdfFile pdf)
     {
-        var total = PdfLayout.Money(quote.TotalUsd, "USD");
-        var intro = $"Please find below our quote {quote.Number} for {quote.ProjectTitle}. A PDF copy is attached.";
-        var html = Paragraph($"Hello {quote.Client.DisplayName},")
+        var vo = document.Vo;
+        var label = DesignVoPdf.Label;
+        var intro = $"Please find below the {label.ToLowerInvariant()} {vo.Number} for {document.ProjectTitle}. A PDF copy is attached for your records.";
+        var rows = vo.Lines.Select((l, i) => new[] { (i + 1).ToString(), l.Description, PdfLayout.Money(l.Amount) }).ToList();
+        var totals = DesignVoPdf.Totals(vo);
+        var outside = DesignVoPdf.OutsideScope(vo);
+        var pending = vo.Status == DesignVoStatus.Pending;
+
+        var html = Paragraph($"Hello {document.ClientName},")
             + Paragraph(intro)
-            + Facts(("Quote", quote.Number), ("Date", PdfLayout.Date(quotedOn)), ("Project", quote.ProjectTitle), ("Location", quote.ProjectLocation))
-            + (quote.Scope is { } scope ? Heading("Scope") + Quote(scope) : "")
-            + Heading("Price")
-            + Totals(("Total for the project", total, true))
+            + Facts((label, vo.Number), ("Title", vo.Title), ("Date", PdfLayout.Date(date)), ("Project", document.ProjectTitle), ("Location", document.ProjectLocation))
+            + Heading("Changes") + Table(["No.", "Description", "Amount"], rows, 2)
+            + Totals([.. totals.Select(t => (t.Label, t.Value, t.Strong))])
+            + (outside is null ? "" : Heading("Work outside the agreed scope") + Paragraph(outside))
+            + (pending ? Note(DesignVoPdf.PendingNote) : "")
             + SignOff("Kind regards,", senderName, head.CompanyName);
+
+        var lines = string.Join("\n", vo.Lines.Select(l => $"- {l.Description}: {PdfLayout.Money(l.Amount)}"));
+        var sums = string.Join("\n", totals.Select(t => $"{t.Label}: {t.Value}"));
         var text = $"""
-            Hello {quote.Client.DisplayName},
+            Hello {document.ClientName},
 
             {intro}
 
-            {(quote.Scope is { } s ? $"Scope: {s}\n" : "")}Total for the project: {total}
+            {vo.Title}
+            {lines}
 
+            {sums}
+            {(outside is null ? "" : $"\n{outside}\n")}{(pending ? $"\n{DesignVoPdf.PendingNote}\n" : "")}
             Kind regards,
             {senderName}
             {head.CompanyName}
             """;
+
         return Compose(
-            to, null, $"Quote {quote.Number} - {quote.ProjectTitle}",
-            Page(head.CompanyName, $"Quote {quote.Number}: {total} for {quote.ProjectTitle}.", html, Footer(head, null)),
+            to, null, $"{label} {vo.Number} - {document.ProjectTitle}",
+            Page(head.CompanyName, $"{label} {vo.Number}: {PdfLayout.Money(vo.TotalWithTvaUsd)} for {document.ProjectTitle}.", html, Footer(head, null)),
             text,
             [Attachment(pdf)]);
     }

@@ -109,7 +109,7 @@ public sealed class BlockedChangeRecorder(
     IUnitOfWork unitOfWork,
     IClock clock) : IBlockedChangeRecorder
 {
-    public async Task RecordAsync(ProfitFloorException refused, CancellationToken cancellationToken = default)
+    public async Task RecordAsync(BlockedChangeException refused, CancellationToken cancellationToken = default)
     {
         // what the refused request staged was rolled back with its transaction
         unitOfWork.DiscardChanges();
@@ -123,6 +123,20 @@ public sealed class BlockedChangeRecorder(
         };
         changes.Add(change);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        refused.Id = change.Id;
+
+        if (refused is DepartmentBlockedException waiting)
+        {
+            // one alert per department and project, counting the logs waiting
+            await notifications.SendDigestAsync(
+                new NotificationDraft(NotificationKinds.LogDepartmentBlocked, refused.RequestedById, refused.Domain, refused.ProjectId, "blocked_change", change.Id,
+                    new { projectTitle = refused.ProjectTitle, personName = waiting.PersonName, departmentName = waiting.DepartmentName, teamId = waiting.TeamId }),
+                $"log-department-{refused.ProjectId}-{waiting.TeamId}",
+                (await notifications.SuperAdminsAsync(cancellationToken)).Append(waiting.OwnerId),
+                cancellationToken: cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return;
+        }
 
         // the payload never holds amounts: whoever opens it reads them under financial:view
         await notifications.SendAsync(
@@ -131,6 +145,5 @@ public sealed class BlockedChangeRecorder(
             await notifications.HoldersAsync(refused.Domain, PermissionCodes.FinancialView, cancellationToken),
             cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        refused.Id = change.Id;
     }
 }

@@ -25,6 +25,27 @@ public static class ErrorCodes
     public const string InvitationInvalid = "invitation_invalid";
     public const string InvitationNotAllowed = "invitation_not_allowed";
     public const string TeamNotInDomain = "team_not_in_domain";
+
+    /// <summary>400 (teamId) or 422. A Design employee belongs to a department: their hours are counted in it.</summary>
+    public const string DepartmentRequired = "department_required";
+
+    /// <summary>422. Hours logged by someone whose department isn't on the project: kept until it is added.</summary>
+    public const string DepartmentNotOnProject = "department_not_on_project";
+
+    /// <summary>422. A department with hours logged on the project can't be taken off it.</summary>
+    public const string DepartmentHasHours = "department_has_hours";
+
+    /// <summary>422. Hours waiting for a department go through once it is added, never by forcing.</summary>
+    public const string DepartmentStillMissing = "department_still_missing";
+
+    /// <summary>422. A team that is a department of a project can't be deleted.</summary>
+    public const string TeamOnProjects = "team_on_projects";
+
+    /// <summary>422. Only a pending variation order is confirmed or cancelled.</summary>
+    public const string DesignVoNotPending = "design_vo_not_pending";
+
+    /// <summary>422. A variation order can't take the price below zero.</summary>
+    public const string DesignVoBelowZero = "design_vo_below_zero";
     public const string UserNotInvited = "user_not_invited";
     public const string UserDeactivated = "user_deactivated";
 
@@ -135,11 +156,6 @@ public static class ErrorCodes
     /// <summary>422. The pocket money request was already approved or denied.</summary>
     public const string PocketRequestDecided = "pocket_request_decided";
 
-    /// <summary>422. Internal work, or a project with no agreed amount yet, can't be quoted.</summary>
-    public const string QuoteNotPossible = "quote_not_possible";
-
-    /// <summary>422. Execution projects have no quotes: their price is built from BOQs.</summary>
-    public const string QuoteNotForExecution = "quote_not_for_execution";
 
     /// <summary>422. The change would take the project's profit to zero or below; it was kept for forcing (see <c>blockedChangeId</c>).</summary>
     public const string ProfitFloor = "profit_floor";

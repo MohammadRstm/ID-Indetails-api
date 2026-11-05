@@ -95,7 +95,7 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // No domain given: the admin's own domain is used.
         var created = await Client.PostJsonAsync("/api/invitations",
-            new { email = AuthTestSteps.NewEmail(), role = "employee" }, designAdmin.AccessToken);
+            new { email = AuthTestSteps.NewEmail(), role = "employee", teamId = await _steps.DesignDepartmentAsync() }, designAdmin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201);
         (await created.ReadAsync<InvitationResponse>()).Domain.ShouldBe("design");
     }
@@ -133,10 +133,10 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var email = AuthTestSteps.NewEmail();
-        await Client.PostJsonAsync("/api/invitations", new { email, role = "employee", domainCode = "design" }, superAdmin.AccessToken);
+        await Client.PostJsonAsync("/api/invitations", new { email, role = "employee", domainCode = "design", teamId = await _steps.DesignDepartmentAsync() }, superAdmin.AccessToken);
 
         await (await Client.PostJsonAsync("/api/invitations",
-                new { email = email.ToUpperInvariant(), role = "employee", domainCode = "design" }, superAdmin.AccessToken))
+                new { email = email.ToUpperInvariant(), role = "employee", domainCode = "design", teamId = await _steps.DesignDepartmentAsync() }, superAdmin.AccessToken))
             .ShouldFailWithAsync(409, ErrorCodes.EmailAlreadyRegistered);
     }
 
@@ -146,7 +146,7 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var email = AuthTestSteps.NewEmail();
         var invited = await (await Client.PostJsonAsync("/api/invitations",
-            new { email, role = "employee", domainCode = "design" }, superAdmin.AccessToken)).ReadAsync<InvitationResponse>();
+            new { email, role = "employee", domainCode = "design", teamId = await _steps.DesignDepartmentAsync() }, superAdmin.AccessToken)).ReadAsync<InvitationResponse>();
         var oldToken = api.Emails.InvitationTokenFor(email);
 
         (await Client.PostEmptyAsync($"/api/invitations/{invited.UserId}/resend", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
@@ -165,11 +165,11 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
         var email = AuthTestSteps.NewEmail();
 
         api.Emails.FailNextSend = true;
-        await (await Client.PostJsonAsync("/api/invitations", new { email, role = "employee", domainCode = "design" }, superAdmin.AccessToken))
+        await (await Client.PostJsonAsync("/api/invitations", new { email, role = "employee", domainCode = "design", teamId = await _steps.DesignDepartmentAsync() }, superAdmin.AccessToken))
             .ShouldFailWithAsync(503, ErrorCodes.EmailDeliveryFailed);
 
         (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM users WHERE email = @e", ("@e", email))).ShouldBe(0);
-        ((int)(await Client.PostJsonAsync("/api/invitations", new { email, role = "employee", domainCode = "design" }, superAdmin.AccessToken)).StatusCode)
+        ((int)(await Client.PostJsonAsync("/api/invitations", new { email, role = "employee", domainCode = "design", teamId = await _steps.DesignDepartmentAsync() }, superAdmin.AccessToken)).StatusCode)
             .ShouldBe(201);
     }
 

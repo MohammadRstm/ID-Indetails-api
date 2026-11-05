@@ -83,6 +83,10 @@ public sealed class ProposeUpdateEmployeeTool(IEmployeeService employees, ITeamS
             Position = input.Position is null ? before.Position : AccessText.Clean(input.Position),
             TeamId = input.RemoveTeam ? null : input.TeamId ?? before.TeamId,
         };
+        if (after.TeamId is null && EmployeeRules.NeedsDepartment(person.Role, person.Domain))
+        {
+            throw new ProtonToolInputException($"{AccessText.Name(person)} is a Design employee and needs a department: pick another one instead.");
+        }
 
         var changes = new List<ProtonChange>();
         void Compare(string label, string? was, string? now)

@@ -67,6 +67,16 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<ProjectStaff> ProjectStaff => Set<ProjectStaff>();
 
+    public DbSet<ProjectDepartment> ProjectDepartments => Set<ProjectDepartment>();
+
+    public DbSet<ProjectDepartmentChange> ProjectDepartmentChanges => Set<ProjectDepartmentChange>();
+
+    public DbSet<DesignVo> DesignVos => Set<DesignVo>();
+
+    public DbSet<DesignVoLine> DesignVoLines => Set<DesignVoLine>();
+
+    public DbSet<DesignVoAllocation> DesignVoAllocations => Set<DesignVoAllocation>();
+
     public DbSet<SiteLog> SiteLogs => Set<SiteLog>();
 
     public DbSet<PocketEntry> PocketEntries => Set<PocketEntry>();
@@ -75,11 +85,11 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<SupervisionWithdrawal> SupervisionWithdrawals => Set<SupervisionWithdrawal>();
 
-    public DbSet<Quote> Quotes => Set<Quote>();
 
-    public DbSet<QuoteDelivery> QuoteDeliveries => Set<QuoteDelivery>();
 
-    public DbSet<QuoteSequence> QuoteSequences => Set<QuoteSequence>();
+
+
+
 
     public DbSet<BlockedChange> BlockedChanges => Set<BlockedChange>();
 
@@ -194,6 +204,9 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<PortalUploadStatus>(configurationBuilder);
         StoreAsSnakeCase<PortalNotificationKind>(configurationBuilder);
         StoreAsSnakeCase<WebsiteProjectStatus>(configurationBuilder);
+        StoreAsSnakeCase<ProjectDepartmentChangeKind>(configurationBuilder);
+        StoreAsSnakeCase<DesignVoStatus>(configurationBuilder);
+        StoreAsSnakeCase<DesignVoSplit>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

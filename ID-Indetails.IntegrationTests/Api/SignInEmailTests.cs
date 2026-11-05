@@ -56,7 +56,7 @@ public class SignInEmailTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var oldEmail = AuthTestSteps.NewEmail("typo");
-        var invite = await Client.PostJsonAsync("/api/invitations", new { email = oldEmail, role = RoleCodes.Employee, domainCode = DomainCodes.Design }, superAdmin.AccessToken);
+        var invite = await Client.PostJsonAsync("/api/invitations", new { email = oldEmail, role = RoleCodes.Employee, domainCode = DomainCodes.Design, teamId = await _steps.DesignDepartmentAsync() }, superAdmin.AccessToken);
         ((int)invite.StatusCode).ShouldBe(201, await invite.Content.ReadAsStringAsync());
         var oldToken = api.Emails.InvitationTokenFor(oldEmail);
         var id = await _steps.ScalarAsync<long>("SELECT id FROM users WHERE email = @e", ("@e", oldEmail));

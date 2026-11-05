@@ -223,7 +223,8 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
 
         // Create: opens the new project by default, and the card says so before the user confirms.
         api.Anthropic.Reply(
-            FakeAnthropic.ToolUse("propose_create_project", new { title = "Website Redesign", client_id = project.Client!.Id }),
+            FakeAnthropic.ToolUse("propose_create_project",
+                new { title = "Website Redesign", client_id = project.Client!.Id, department_ids = new[] { await _steps.DesignDepartmentAsync() } }),
             FakeAnthropic.Text("Shall I create it?"));
         var created = await AskAsync(superAdmin, new { text = "Create Website Redesign for that client" });
         created.PendingAction!.Preview.OpensAfter.ShouldBe("the new project");

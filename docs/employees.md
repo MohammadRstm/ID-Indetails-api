@@ -1,4 +1,6 @@
-# People and teams
+# People and departments
+
+The app calls teams **departments**; the API, the tables and the codes keep the name `team`.
 
 People management covers everyone with an account: super admins, admins and employees. Accounts are created by invitation (see [authentication.md](authentication.md)); this page covers what happens after that. The rules live in `Business/Employees/EmployeeRules.cs` and `Business/Pay/PayChangePolicy.cs`.
 
@@ -83,6 +85,7 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 
 - Between admin and employee the domain stays. To change domain as well, move them separately.
 - Making someone a super admin removes their domain and team.
+- A Design admin made an employee must already have a department (`422 department_required`).
 - A super admin becoming an admin or employee needs `domainCode` (a domain the caller can see).
 - Making or unmaking a super admin needs `employee:invite_super_admin`.
 - `position` optionally gives them a new job title with it (an empty one clears it); without it, the title stays. Pay is changed separately, from a date (see Pay below).
@@ -109,13 +112,14 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 - **Overtime has its own rate, stored with the pay** (`overtime_rate`, 28 Oct 2026). `overtimeRate` on a pay change or an invitation's pay is what an hour of a salary's overtime is paid at, before the company's multiplier. Left empty, it is the salary ÷ the overtime threshold's hours in force when the pay starts (184; 184 too when none is set), to the cent, for everyone whatever their schedule (`PayRules.SuggestedOvertimeRate`): 4,232 a month gives 23 an hour. It must be more than zero and no more than the salary (`400`). Hourly pay is its own overtime rate and takes none (`400` if one is sent). It follows each pay change; to change only the overtime rate, add a pay change with the same salary. Execution staff, admins and super admins earn no overtime, but their records get the suggested rate too. Pay records returned by the API carry `overtimeRate`.
 - **Admins and super admins are paid a fixed monthly salary** (`PayRules.HasFixedSalary`, by role). Hourly pay is refused for them (`400 fixed_salary_paid_monthly`), on a pay change or an invitation, and inviting one needs their salary (`400 validation_failed` on `pay`). Changing someone paid by the hour into an admin or super admin is refused until they have a monthly salary (`422 fixed_salary_needs_monthly_pay`), on a role change or an automatic one through permissions.
 
-## Teams
+## Teams (departments)
 
 - Each team belongs to one domain, and names are unique within a domain (ignoring case).
+- One department per person. A **Design employee must have one**: their hours are counted in it. Inviting one, editing their profile or moving them into Design without a `teamId` is `400 department_required`. Admins, super admins and Execution staff need none.
 - The prototype's teams are seeded (`Constants/TeamSeed.cs`):
   - Design: Engineering, Design, Data, Marketing, Operations, Platform.
   - Execution: Site Operations, Procurement, Quantity Surveying, Safety, Project Management.
-- A team can only be deleted while nobody is in it, including deactivated people (`422 team_not_empty`), and while its group chat has no messages (`422 team_has_chat`), so chat history is never lost. Rename it instead.
+- A team can only be deleted while nobody is in it, including deactivated people (`422 team_not_empty`), while it is no project's department (`422 team_on_projects`, see [projects.md](projects.md#departments)), and while its group chat has no messages (`422 team_has_chat`), so chat history is never lost. Rename it instead.
 - `POST /api/teams` may leave out `domainCode` when the caller works in only one business.
 
 ## Not built yet

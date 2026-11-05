@@ -26,7 +26,12 @@ public sealed class SessionService(
         var now = clock.UtcNow;
         var mobile = client == RefreshTokenClient.Mobile;
         var (cookieValue, storedHash) = SecureTokens.NewRefreshToken();
-        var refreshExpiresAt = now.AddDays(mobile ? mobileOptions.Value.RefreshTokenDays : refreshOptions.Value.ExpirationDays);
+        var refreshExpiresAt = now.AddDays(client switch
+        {
+            RefreshTokenClient.Mobile => mobileOptions.Value.RefreshTokenDays,
+            RefreshTokenClient.Installed => refreshOptions.Value.InstalledExpirationDays,
+            _ => refreshOptions.Value.ExpirationDays,
+        });
 
         var stored = new RefreshToken
         {

@@ -51,5 +51,13 @@ public sealed class BlockedChangeRepository(IdIndetailsDbContext db) : IBlockedC
     public Task SetResultAsync(long id, long resultId, CancellationToken cancellationToken = default)
         => db.BlockedChanges.Where(c => c.Id == id).ExecuteUpdateAsync(s => s.SetProperty(c => c.ResultId, resultId), cancellationToken);
 
+    public async Task<IReadOnlyList<BlockedChange>> PendingAsync(long projectId, BlockedChangeKind kind, CancellationToken cancellationToken = default)
+        => await db.BlockedChanges
+            .AsNoTracking()
+            .Where(c => c.ProjectId == projectId && c.Kind == kind && c.Status == BlockedChangeStatus.Pending)
+            .OrderBy(c => c.RequestedAt)
+            .ThenBy(c => c.Id)
+            .ToListAsync(cancellationToken);
+
     public void Add(BlockedChange change) => db.BlockedChanges.Add(change);
 }

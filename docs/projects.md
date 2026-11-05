@@ -14,7 +14,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 | `POST /api/projects` | `project:create` | Creates a project (below) |
 | `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner. `startDate` (optional) moves the start date: never into the future, and on a site never past the week of its first ground labour reported (`400` on `startDate`); moving it earlier moves the site's first labour defaults with it |
 | `PUT /api/projects/{id}/billing` | `project:edit` and `financial:view` | Design only: client work or internal, and the client. Becoming internal drops the payment to 0 |
-| `PUT /api/projects/{id}/payment` | `project:edit` and `financial:view` | Design client projects only: `{ revenue, description }`, the customer payment and why it changes (see "Payment changes") |
+| `PUT /api/projects/{id}/payment` | `project:edit` and `financial:write` | Design client projects only: `{ revenue, description }`, the customer payment and why it changes (see "Payment changes") |
 | `PUT /api/projects/{id}/pricing` | `project:pricing_manage` | Execution only: `{ supervisionRate?, tvaRate?, description }`, the supervision rate and TVA (left out, one stays as it is), and why they change. The work price (`projectFee`) is never sent: `400`. There is no material markup any more |
 | `GET /api/projects/{id}/payment-changes` | `financial:view` | Every change of the agreed payment, newest first (see "Payment changes") |
 | `POST /api/projects/{id}/hold`, `/resume`, `/complete`, `/archive`, `/reopen` | `project:change_status` | Status changes (below) |
@@ -30,11 +30,53 @@ Employees hold `project:view`, so they see every project of their domain in any 
 ## Creating a project
 
 - The start date is today (company time zone). The owner defaults to the caller.
-- **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No work price. Sending a `revenue` needs `financial:view` (`403`): admins create the project and a super admin sets its customer payment later.
+- **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No work price. Sending a `revenue` needs `financial:write` (`403`; on an Execution site, `financial:view`): admins create the project and a super admin sets its customer payment later.
 - **Execution:** always client work, with a `clientId`, and optionally a `supervisionRate` (a fraction, 0 to 1; left out, **10%**). Sending it needs `project:pricing_manage` (`403`). There is no `materialMarkup` any more (it is ignored if sent). The **work price** (`projectFee`) starts at 0 and is set only by agreeing a BOQ: sending `projectFee` is `400`. `revenue` is never sent; it is calculated. A project takes no payment when it is created: a down payment is recorded as a payment afterwards. A `supervisionRate` on a Design project is `400`.
 - **TVA:** `tvaRate` (0 to 1, needs `financial:view`) on client work; left out, it is 11% (see [billing.md](billing.md#tva)). Its first labour defaults can be set too (`labourDefaults: { workers, dailyPay }`, needs `labour_report:manage`; see [execution.md](execution.md)).
 - The client must belong to the project's domain (`400`) and not be archived (`422 client_archived`).
 - **Owner:** an admin of the project's domain who isn't deactivated, or a super admin; never an employee (`422 owner_not_allowed`). The rule applies when a project is created and when its owner changes.
+- **Departments (Design):** `departmentIds`, the Design teams working on it, in equal shares. The app asks for them on client work; left out, the project has none and works as before departments. See "Departments" below.
+
+## Departments
+
+A Design project is worked on by one or more departments (teams; the app calls them departments). Each has a **share** of the price, a fraction to four places, and the shares add up to exactly 1. One department means the whole price is its own. Every Design department on a project names it a **Full file** (`departmentsName`).
+
+| Endpoint | Permission | What it does |
+|---|---|---|
+| `GET /api/projects/{id}/departments` | `project:view` | The departments. With `financial:view`, each one's `share` and `money`: `budget` (the price before TVA × its share), `cost` and `minutes` of the hours logged in it, `left` (below zero when it is over its budget), and each person's hours and cost month by month with that month's hourly rate. `other` holds hours of people in no department, or in one no longer on the project. |
+| `GET /api/projects/{id}/departments/history` | `financial:view` | Every change of the split, newest first: `kind` (`created`, `departments`, `shares`), the departments and shares `before` and `after` (named as they were then), the reason, who and when |
+| `PUT /api/projects/{id}/departments` | `project:edit` | `{ departmentIds }`: the departments. Any change puts the shares back to equal; hours waiting for an added department go through (below). A department with hours logged on the project stays (`422 department_has_hours`). |
+| `PUT /api/projects/{id}/departments/shares` | `financial:write` | `{ shares: [{ departmentId, share }], reason? }`: a share for each department, adding up to 100% (`400`); the reason is optional, kept in the history when given |
+
+- Execution sites have no departments (`422 not_for_this_domain`). A finished project's departments and shares are locked with its money (`422 project_locked`).
+- **Each hour stays with its department.** A work entry keeps its logger's department when it was logged (`work_entries.team_id`): their cost counts in that budget even after they move to another department. Moving an entry to another project counts it in the logger's department then. Costs are the project's labour costs as they are (pay, overtime, paid breaks), only grouped. Expenses stay with the project; the project's profit and its floor are unchanged, while a department may go over its budget.
+- **Logging on a project with departments needs one of them.**
+  - Hours logged by someone whose department isn't on the project are **kept**, not logged: `422 department_not_on_project`, as a blocked change of kind `work_entry_department`. The project's owner and every super admin get `log_department_blocked`.
+  - Once that department is added, the hours go through on their own, as the person who logged them and through the same checks. They hear it (`work_entry_released`, `released: true`). Hours that no longer fit (they overlap newer ones, the month closed, the profit floor refused them) are dropped and the person is told why (`released: false`, `reason`), to log them again.
+  - Such hours are never forced (`422 department_still_missing`); whoever sees the money may dismiss them.
+  - Someone with no department logs only on projects with none (`422 department_required`). Moving hours to a project without the logger's department is refused (`422 department_not_on_project`).
+- A team that is a department of a project can't be deleted (`422 team_on_projects`): rename it instead.
+
+## Design variation orders
+
+A Design client project's price changes with **variation orders** (VOs): lines before TVA that add work (above zero) or take it out (below). The pencil on the customer payment stays for correcting mistakes only. Each VO is numbered `VO-YYYY-NNN` in a series of Design's own (Execution's BOQ variation orders have theirs).
+
+| Endpoint | Permission | What it does |
+|---|---|---|
+| `GET /api/projects/{id}/design-vos` | `financial:view` | The project's VOs, newest first: lines, total before TVA, the TVA at the project's rate, each department's part, who made, sent, applied or cancelled it and when |
+| `GET /api/projects/{id}/design-vos/outside-scope` | `financial:view` | `{ from, minutes }`: the hours logged outside the agreed scope since the last applied VO, or the project's start |
+| `POST /api/projects/{id}/design-vos` | `financial:write` | `{ title, lines: [{ description, amount }], split, allocations, showOutsideScope, apply }` (`201`). `apply: true` adds it to the price now; otherwise it is **pending**, sent for the client to confirm |
+| `POST /api/design-vos/{id}/confirm` | `financial:write` | The client agreed: the pending VO joins the price (`422 design_vo_not_pending` otherwise) |
+| `POST /api/design-vos/{id}/cancel` | `financial:write` | Takes a pending VO back; its number isn't used again |
+| `GET /api/design-vos/{id}/pdf` / `POST …/email` | `financial:view` / `financial:write` | Its PDF, or emailed to the client with it (`{ to, note }`, `204`); see [documents.md](documents.md) |
+
+- **Applying** adds the VO's total to the price, with a payment change (`VO-2026-003: Guest house`) and a `revenue_changed` event, through the profit floor: a VO that lowers the price may be refused (`422 profit_floor`). It then stays pending as a blocked change of kind `design_vo`, which whoever sees the money can force. No VO takes the price below zero (`422 design_vo_below_zero`). Lines are to the cent, never zero, and can't add up to nothing.
+- **Split between the departments:**
+  - `shares` (the default) divides the total by the project's shares when it is applied, to the cent (what rounding leaves goes to the biggest share). Those amounts are kept: changing the shares later never moves money a VO already gave.
+  - `departments` gives amounts by hand (`allocations: [{ departmentId, amount }]`) to some of the project's departments, adding up to the total.
+  - A project with no departments keeps the VO's total at project level.
+- **Budgets:** a department's budget is the price before VOs × its share, plus what applied VOs gave it. A department with a VO's money stays on the project (`422 department_has_hours`).
+- **Outside-scope hours:** with `showOutsideScope`, the VO shows the hours logged outside the agreed scope since the last applied VO (or the project's start), fixed when it is made.
 
 ## Money
 

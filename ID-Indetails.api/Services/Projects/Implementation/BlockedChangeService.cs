@@ -44,6 +44,8 @@ public sealed class BlockedChangeService(
     IProjectService projects,
     IBoqService boqs,
     IBoqRepository boqRows,
+    IDesignVoService designVos,
+    IDesignVoRepository designVoRows,
     IClock clock) : IBlockedChangeService
 {
     public async Task<BlockedChangeResponse> GetAsync(long id, CancellationToken cancellationToken = default)
@@ -53,6 +55,12 @@ public sealed class BlockedChangeService(
     {
         var actor = await ActorAsync(cancellationToken);
         var row = await RowAsync(actor, id, cancellationToken);
+        if (row.Change.Kind == BlockedChangeKind.WorkEntryDepartment)
+        {
+            throw new BusinessRuleException(ErrorCodes.DepartmentStillMissing,
+                "These hours go through on their own once their logger's department is added to the project.");
+        }
+
         await DecideAsync(row, BlockedChangeStatus.Forced, actor, cancellationToken);
         try
         {
@@ -123,6 +131,8 @@ public sealed class BlockedChangeService(
                 var withdrawal = Read<WithdrawBoqAgreementRequest>(change);
                 await boqs.WithdrawAgreementAsync(withdrawal.ItemId!.Value, withdrawal.Request, cancellationToken);
                 return null;
+            case BlockedChangeKind.DesignVo:
+                return (await designVos.ConfirmAsync(Read<object?>(change).ItemId!.Value, cancellationToken)).Id;
             default:
                 throw new InvalidOperationException($"No replay for {change.Kind}.");
         }
@@ -162,6 +172,12 @@ public sealed class BlockedChangeService(
     /// <summary>What the change was, in words. A BOQ's number is read from the BOQ itself.</summary>
     private async Task<string> SummaryAsync(Models.BlockedChange change, CancellationToken cancellationToken)
     {
+        if (change.Kind == BlockedChangeKind.DesignVo)
+        {
+            var vo = await designVoRows.GetAsync(Read<object?>(change).ItemId!.Value, cancellationToken);
+            return vo is null ? "Variation order" : $"Variation order {vo.Number}: {vo.Title}, {vo.TotalUsd:N2} USD";
+        }
+
         if (change.Kind is not (BlockedChangeKind.BoqAgree or BlockedChangeKind.BoqWithdraw))
         {
             return Summary(change);
@@ -188,10 +204,15 @@ public sealed class BlockedChangeService(
                 return $"Expense change: {Read<SiteExpenseEntryRequest>(change).Request.Name.Trim()}";
             case BlockedChangeKind.LabourWeek:
                 return $"Labour of the week of {Read<SubmitLabourWeekRequest>(change).WeekStart:d MMM yyyy}";
-            case BlockedChangeKind.WorkEntryCreate or BlockedChangeKind.WorkEntryUpdate:
+            case BlockedChangeKind.WorkEntryCreate or BlockedChangeKind.WorkEntryUpdate or BlockedChangeKind.WorkEntryDepartment:
                 var entry = Read<SaveWorkEntryRequest>(change).Request;
                 var minutes = (int)(entry.EndedAt - entry.StartedAt).TotalMinutes;
-                return $"{(change.Kind == BlockedChangeKind.WorkEntryCreate ? "Hours logged" : "Hours changed")}: "
+                return $"{change.Kind switch
+                {
+                    BlockedChangeKind.WorkEntryCreate => "Hours logged",
+                    BlockedChangeKind.WorkEntryDepartment => "Hours waiting for their department",
+                    _ => "Hours changed",
+                }}: "
                     + $"{minutes / 60}h {minutes % 60:00}m on {clock.ToCompanyDate(entry.StartedAt.ToUniversalTime()):d MMM yyyy}";
             case BlockedChangeKind.Payment:
                 return $"Payment set to {Read<UpdateProjectPaymentRequest>(change).Request.Revenue:N2} USD";

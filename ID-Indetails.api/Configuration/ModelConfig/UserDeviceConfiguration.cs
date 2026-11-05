@@ -14,6 +14,9 @@ public class UserDeviceConfiguration : IEntityTypeConfiguration<UserDevice>
         {
             t.HasCheckConstraint("ck_user_devices_provider", SnakeCaseEnum.CheckSql<PushProvider>("provider"));
             t.HasCheckConstraint("ck_user_devices_platform", SnakeCaseEnum.CheckSql<DevicePlatform>("platform"));
+            t.HasCheckConstraint(
+                "ck_user_devices_web_push",
+                "(`provider` = 'web_push') = (`web_push_endpoint` IS NOT NULL AND `web_push_p256dh` IS NOT NULL AND `web_push_auth` IS NOT NULL)");
         });
 
         builder.HasKey(x => x.Id);
@@ -22,6 +25,9 @@ public class UserDeviceConfiguration : IEntityTypeConfiguration<UserDevice>
         builder.Property(x => x.Platform).HasMaxLength(10);
         builder.Property(x => x.PushToken).IsRequired().HasMaxLength(255);
         builder.Property(x => x.AppVersion).HasMaxLength(32);
+        builder.Property(x => x.WebPushEndpoint).HasMaxLength(2048);
+        builder.Property(x => x.WebPushP256dh).HasMaxLength(100);
+        builder.Property(x => x.WebPushAuth).HasMaxLength(50);
 
         builder.HasIndex(x => x.PushToken).IsUnique();
         builder.HasIndex(x => x.SessionId);

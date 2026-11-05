@@ -49,6 +49,41 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         RuleFor(x => x.SupervisionRate).SupervisionRate();
         RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.LabourDefaults!).SetValidator(new SetLabourDefaultsRequestValidator()).When(x => x.LabourDefaults is not null);
+        RuleForEach(x => x.DepartmentIds).GreaterThan(0).WithMessage("A department is invalid.");
+    }
+}
+
+public sealed class SetProjectDepartmentsRequestValidator : AbstractValidator<SetProjectDepartmentsRequest>
+{
+    public SetProjectDepartmentsRequestValidator()
+    {
+        RuleFor(x => x.DepartmentIds).NotNull().Must(ids => ids.Count > 0).WithMessage("Choose the departments working on it.");
+        RuleForEach(x => x.DepartmentIds).GreaterThan(0).WithMessage("A department is invalid.");
+    }
+}
+
+public sealed class CreateDesignVoRequestValidator : AbstractValidator<CreateDesignVoRequest>
+{
+    public CreateDesignVoRequestValidator()
+    {
+        RuleFor(x => (string?)x.Title).ClientText("Title", DesignVoRules.MaxTitleLength, required: true).OverridePropertyName("title");
+        RuleFor(x => x.Split).IsInEnum().WithMessage("Split by the shares or to chosen departments.");
+        RuleFor(x => x.Lines).NotNull().Must(l => l.Count is > 0 and <= DesignVoRules.MaxLines)
+            .WithMessage($"Add between 1 and {DesignVoRules.MaxLines} lines.");
+        RuleForEach(x => x.Lines).Must(l => l.Description is { } d && d.Trim().Length <= DesignVoRules.MaxDescriptionLength)
+            .WithMessage($"A line's description is at most {DesignVoRules.MaxDescriptionLength} characters.");
+        RuleFor(x => x.Allocations).NotNull();
+        RuleForEach(x => x.Allocations).Must(a => a.DepartmentId > 0).WithMessage("A department is invalid.");
+    }
+}
+
+public sealed class SetDepartmentSharesRequestValidator : AbstractValidator<SetDepartmentSharesRequest>
+{
+    public SetDepartmentSharesRequestValidator()
+    {
+        RuleFor(x => x.Shares).NotNull().Must(s => s.Count > 0).WithMessage("Give each department its share.");
+        RuleForEach(x => x.Shares).Must(s => s.DepartmentId > 0).WithMessage("A department is invalid.");
+        RuleFor(x => x.Reason).ClientText("Reason", ProjectDepartmentRules.MaxReasonLength);
     }
 }
 

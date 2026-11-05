@@ -58,6 +58,7 @@ public sealed class ProjectService(
     IPortalAccessService portalAccess,
     IPortalPublishingService portalPublishing,
     ISiteTeamRepository siteTeams,
+    IProjectDepartmentRepository departments,
     ILabourRepository labour,
     IUnitOfWork unitOfWork,
     IProfitFloor floor,
@@ -177,9 +178,11 @@ public sealed class ProjectService(
 
         Throw(ProjectRules.CheckSetup(new ProjectRules.Setup(
             domain, request.BillingType, request.ClientId, request.Revenue, request.SupervisionRate)));
-        if ((request.Revenue is not null || request.TvaRate is not null) && !actor.Has(PermissionCodes.FinancialView))
+        // a Design price is written with financial:write; an Execution site's TVA still with financial:view
+        var setsMoney = domain == DomainCodes.Design ? PermissionCodes.FinancialWrite : PermissionCodes.FinancialView;
+        if ((request.Revenue is not null || request.TvaRate is not null) && !actor.Has(setsMoney))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment or its TVA needs the permission to see project money.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment or its TVA needs the permission to write project money.");
         }
 
         if (request.SupervisionRate is not null && !actor.Has(PermissionCodes.ProjectPricingManage))
@@ -209,6 +212,10 @@ public sealed class ProjectService(
         {
             throw new RequestValidationException(ErrorCodes.ValidationFailed, "staffIds", "Only Execution sites have staff overseeing them.");
         }
+
+        var departmentIds = request.DepartmentIds ?? [];
+        var chosenDepartments = await departments.CandidatesAsync(departmentIds, cancellationToken);
+        Throw(ProjectDepartmentRules.CheckChosen(domain, departmentIds, chosenDepartments));
 
         await EnsureClientAsync(request.ClientId, domain, cancellationToken);
         var ownerId = request.OwnerId ?? actor.UserId;
@@ -244,6 +251,14 @@ public sealed class ProjectService(
             project.Staff.Add(new ProjectStaff { UserId = staffId, AssignedAt = now, AssignedById = actor.UserId });
         }
 
+        // the departments start in equal shares, which whoever sets the money adjusts
+        var split = chosenDepartments.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var shares = ProjectDepartmentRules.EqualShares(split.Count);
+        for (var i = 0; i < split.Count; i++)
+        {
+            project.Departments.Add(new ProjectDepartment { TeamId = split[i].Id, Share = shares[i], AddedAt = now, AddedById = actor.UserId });
+        }
+
         if (project.BillingType == BillingType.Client)
         {
             project.PaymentChanges.Add(PaymentChange(
@@ -269,12 +284,19 @@ public sealed class ProjectService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectCreated, actor.UserId));
-        await notifier.CreatedAsync(project, actor.UserId, cancellationToken);
-        if (project.BillingType == BillingType.Client && domain != DomainCodes.Execution && !actor.Has(PermissionCodes.InvoiceSend))
+        if (split.Count > 0)
         {
-            // whoever sends quotes decides whether this one gets one (Execution has none); the creator can't
-            await notifier.QuoteDueAsync(project, actor.UserId, cancellationToken);
+            departments.AddChange(new ProjectDepartmentChange
+            {
+                ProjectId = project.Id,
+                Kind = ProjectDepartmentChangeKind.Created,
+                After = ProjectDepartmentService.Snapshot(split.Select((d, i) => (d.Id, d.Name, shares[i]))),
+                ChangedById = actor.UserId,
+                ChangedAt = now,
+            });
         }
+
+        await notifier.CreatedAsync(project, actor.UserId, cancellationToken);
         if (project.Revenue > 0)
         {
             activity.Add(ProjectEvent(project, ActivityEventKinds.RevenueSet, actor.UserId, amount: project.Revenue));
@@ -440,7 +462,7 @@ public sealed class ProjectService(
         UpdateProjectPaymentRequest request,
         CancellationToken cancellationToken = default)
     {
-        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialWrite);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await VisibleProjectForUpdateAsync(actor, projectId, cancellationToken);
 
@@ -588,7 +610,7 @@ public sealed class ProjectService(
             throw new NotFoundException(NotFoundMessage);
         }
 
-        return new ProjectResponse
+        var response = new ProjectResponse
         {
             Id = p.Id,
             Domain = p.DomainCode,
@@ -615,6 +637,18 @@ public sealed class ProjectService(
             ProgressPct = p.ProgressPct,
             CreatedAt = p.CreatedAt,
             Money = actor.Has(PermissionCodes.FinancialView) ? await MoneyOfAsync(p, cancellationToken) : null,
+        };
+        return p.DomainCode == DomainCodes.Design ? await WithDepartmentsAsync(response, cancellationToken) : response;
+    }
+
+    private async Task<ProjectResponse> WithDepartmentsAsync(ProjectResponse project, CancellationToken cancellationToken)
+    {
+        var split = await departments.ListAsync([project.Id], cancellationToken);
+        var full = ProjectDepartmentRules.IsFullFile(split.Select(d => d.TeamId).ToList(), await departments.AllDesignAsync(cancellationToken));
+        return project with
+        {
+            Departments = split.Select(d => new ProjectDepartmentRefResponse(d.TeamId, d.Name)).ToList(),
+            DepartmentsName = full ? ProjectDepartmentRules.FullFile : null,
         };
     }
 

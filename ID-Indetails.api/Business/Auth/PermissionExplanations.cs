@@ -51,6 +51,7 @@ public static class PermissionExplanations
         [PermissionCodes.ClientPortalManage] = "On Design client projects: choose which project files the client sees, set the hero image and introduction, and publish the client portal or go back to what the client sees.",
 
         // Money
+        [PermissionCodes.FinancialWrite] = "Set a Design project's price when it is created and correct it, divide it between the project's departments, and add its variation orders.",
         [PermissionCodes.FinancialView] = "See the money: projects' revenue, cost, profit and margin, people's cost rates, invoices and payments. Without it, these are hidden everywhere.",
         [PermissionCodes.InvoiceCreate] = "Write draft invoices for client projects and edit or discard them before they are sent.",
         [PermissionCodes.InvoiceSend] = "Issue invoices, which numbers them and starts the payment clock, send them to clients, and schedule them to go out on their own.",

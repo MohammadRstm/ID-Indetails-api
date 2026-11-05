@@ -15,15 +15,15 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         Exception exception,
         CancellationToken cancellationToken)
     {
-        if (exception is ProfitFloorException floor)
+        if (exception is BlockedChangeException blocked)
         {
-            // the refused change's transaction has rolled back: keep it for forcing, and alert whoever sees the money
-            await httpContext.RequestServices.GetRequiredService<IBlockedChangeRecorder>().RecordAsync(floor, cancellationToken);
+            // the refused change's transaction has rolled back: keep it, and alert whoever decides it
+            await httpContext.RequestServices.GetRequiredService<IBlockedChangeRecorder>().RecordAsync(blocked, cancellationToken);
         }
 
         var error = ApiErrorMapping.Of(exception, logger, httpContext);
         await ApiErrorWriter.WriteAsync(httpContext, error.Type, error.Code, error.Message, error.Errors, cancellationToken,
-            (exception as ProfitFloorException)?.Id);
+            (exception as BlockedChangeException)?.Id);
         return true;
     }
 }

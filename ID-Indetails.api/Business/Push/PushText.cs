@@ -25,7 +25,6 @@ public static class PushText
     {
         [NotificationKinds.PaymentRecorded] = new("Payment", "Payment recorded. Open ID InDetails to see it."),
         [NotificationKinds.PocketRequested] = new("Pocket money", "A site asks for pocket money. Open ID InDetails to decide."),
-        [NotificationKinds.QuoteDue] = new("Quote", "A new project may need a quote. Open ID InDetails to decide."),
         [NotificationKinds.ChangeBlocked] = new("Project money", "A change was stopped to keep a project above zero profit. Open ID InDetails to decide."),
         [NotificationKinds.ProfitLow] = new("Project money", "A project is close to zero profit."),
         [NotificationKinds.ProfitAtZero] = new("Project money", "A project is at zero profit or below."),
@@ -67,6 +66,14 @@ public static class PushText
             NotificationKinds.WorkLogged => new("Work logged", $"{actor} logged work on {project}."),
             NotificationKinds.WorkDigest => WorkDigest(payload, actor, project, count),
             NotificationKinds.EntryComment => new("New comment", $"{actor} commented on your work on {project}."),
+            NotificationKinds.LogDepartmentBlocked => new("Hours waiting", count > 1
+                ? $"{count} logs on {project} wait for {Named(Text(payload, "departmentName"), "a department")} to be added."
+                : $"{actor}'s hours on {project} wait for {Named(Text(payload, "departmentName"), "their department")} to be added."),
+            NotificationKinds.WorkEntryReleased => Bool(payload, "released") == false
+                ? new("Hours not added", $"Your hours waiting on {project} couldn't be added. Open ID InDetails to see why and log them again.")
+                : new("Hours added", count > 1
+                    ? $"{count} of your logs waiting on {project} went through."
+                    : $"Your hours waiting on {project} went through."),
             NotificationKinds.WeeklySummary => new("Your week", "Last week's summary is ready."),
             NotificationKinds.HoursExcused => new("Hours excused", "Some of your hours were excused."),
             NotificationKinds.HoursMissed => new("Hours to log", Date(payload, "day") is { } day

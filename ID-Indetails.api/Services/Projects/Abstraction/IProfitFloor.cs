@@ -34,10 +34,13 @@ public sealed record ProfitBefore(Project Project, decimal? Profit);
 /// <param name="WeekStart">A labour week's first day.</param>
 public sealed record BlockedRequest<T>(long ProjectId, T Request, long? ItemId = null, DateOnly? WeekStart = null);
 
-/// <summary>Keeps a refused change once its transaction has rolled back, and alerts whoever sees the project's money.</summary>
+/// <summary>
+/// Keeps a refused change once its transaction has rolled back, and alerts whoever decides it: whoever sees the
+/// project's money for the profit floor, its owner and the super admins for hours waiting on a department.
+/// </summary>
 public interface IBlockedChangeRecorder
 {
-    Task RecordAsync(ProfitFloorException refused, CancellationToken cancellationToken = default);
+    Task RecordAsync(BlockedChangeException refused, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Refused changes: read, forced through once, or dismissed, by whoever sees the project's money.</summary>

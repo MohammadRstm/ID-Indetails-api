@@ -328,7 +328,7 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_blocked_changes_decided", "(`status` = 'pending') = (`decided_at` IS NULL)");
 
-                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw')");
+                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw', 'work_entry_department', 'design_vo')");
 
                             t.HasCheckConstraint("ck_blocked_changes_status", "`status` IN ('pending', 'forced', 'dismissed')");
                         });
@@ -926,6 +926,189 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasDatabaseName("ix_conversation_reads_last_read_message_id");
 
                     b.ToTable("conversation_reads", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.DesignVo", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("applied_at");
+
+                    b.Property<long?>("AppliedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("applied_by_id");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<long?>("CancelledById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("cancelled_by_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("number");
+
+                    b.Property<DateOnly?>("OutsideScopeFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("outside_scope_from");
+
+                    b.Property<int?>("OutsideScopeMinutes")
+                        .HasColumnType("int")
+                        .HasColumnName("outside_scope_minutes");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("sent_at");
+
+                    b.Property<long?>("SentById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sent_by_id");
+
+                    b.Property<string>("Split")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("split");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("title");
+
+                    b.Property<decimal>("TotalUsd")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("total_usd");
+
+                    b.Property<decimal>("TvaRate")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)")
+                        .HasColumnName("tva_rate");
+
+                    b.HasKey("Id")
+                        .HasName("pk_design_vos");
+
+                    b.HasIndex("AppliedById")
+                        .HasDatabaseName("ix_design_vos_applied_by_id");
+
+                    b.HasIndex("CancelledById")
+                        .HasDatabaseName("ix_design_vos_cancelled_by_id");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_design_vos_created_by_id");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("ix_design_vos_number");
+
+                    b.HasIndex("SentById")
+                        .HasDatabaseName("ix_design_vos_sent_by_id");
+
+                    b.HasIndex("ProjectId", "Status")
+                        .HasDatabaseName("ix_design_vos_project_id_status");
+
+                    b.ToTable("design_vos", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_design_vos_split", "`split` IN ('shares', 'departments')");
+
+                            t.HasCheckConstraint("ck_design_vos_status", "`status` IN ('pending', 'applied', 'cancelled')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.DesignVoAllocation", b =>
+                {
+                    b.Property<long>("DesignVoId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("design_vo_id");
+
+                    b.Property<long>("TeamId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("team_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("amount");
+
+                    b.HasKey("DesignVoId", "TeamId")
+                        .HasName("pk_design_vo_allocations");
+
+                    b.HasIndex("TeamId")
+                        .HasDatabaseName("ix_design_vo_allocations_team_id");
+
+                    b.ToTable("design_vo_allocations", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.DesignVoLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(14, 2)
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("description");
+
+                    b.Property<long>("DesignVoId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("design_vo_id");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int")
+                        .HasColumnName("position");
+
+                    b.HasKey("Id")
+                        .HasName("pk_design_vo_lines");
+
+                    b.HasIndex("DesignVoId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("ix_design_vo_lines_design_vo_id_position");
+
+                    b.ToTable("design_vo_lines", (string)null);
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Domain", b =>
@@ -2453,6 +2636,12 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "financial:view",
                             Description = "See revenue, cost, profit, margin and rates"
+                        },
+                        new
+                        {
+                            Code = "financial:write",
+                            Description = "Set a Design project's price, its departments' shares and its variation orders",
+                            DomainCode = "design"
                         },
                         new
                         {
@@ -4059,6 +4248,104 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartment", b =>
+                {
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<long>("TeamId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("team_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("added_at");
+
+                    b.Property<long?>("AddedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("added_by_id");
+
+                    b.Property<decimal>("Share")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)")
+                        .HasColumnName("share");
+
+                    b.HasKey("ProjectId", "TeamId")
+                        .HasName("pk_project_departments");
+
+                    b.HasIndex("AddedById")
+                        .HasDatabaseName("ix_project_departments_added_by_id");
+
+                    b.HasIndex("TeamId")
+                        .HasDatabaseName("ix_project_departments_team_id");
+
+                    b.ToTable("project_departments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_departments_share", "`share` >= 0 AND `share` <= 1");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartmentChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("After")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("after");
+
+                    b.Property<string>("Before")
+                        .HasMaxLength(255)
+                        .HasColumnType("text")
+                        .HasColumnName("before");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("changed_at");
+
+                    b.Property<long>("ChangedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("changed_by_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_department_share_changes");
+
+                    b.HasIndex("ChangedById")
+                        .HasDatabaseName("ix_project_department_share_changes_changed_by_id");
+
+                    b.HasIndex("ProjectId", "ChangedAt")
+                        .HasDatabaseName("ix_project_department_share_changes_project_id_changed_at");
+
+                    b.ToTable("project_department_share_changes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_department_share_changes_kind", "`kind` IN ('created', 'departments', 'shares')");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectExpense", b =>
                 {
                     b.Property<long>("Id")
@@ -5027,154 +5314,6 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ID_Indetails.api.Models.Quote", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<long>("ClientId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("client_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasPrecision(3)
-                        .HasColumnType("datetime(3)")
-                        .HasColumnName("created_at");
-
-                    b.Property<long>("CreatedById")
-                        .HasColumnType("bigint")
-                        .HasColumnName("created_by_id");
-
-                    b.Property<decimal>("NetUsd")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("net_usd");
-
-                    b.Property<string>("Number")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("number");
-
-                    b.Property<long>("ProjectId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("project_id");
-
-                    b.Property<string>("Scope")
-                        .HasMaxLength(255)
-                        .HasColumnType("text")
-                        .HasColumnName("scope");
-
-                    b.Property<decimal>("TotalUsd")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("total_usd");
-
-                    b.Property<decimal>("TvaRate")
-                        .HasPrecision(5, 4)
-                        .HasColumnType("decimal(5,4)")
-                        .HasColumnName("tva_rate");
-
-                    b.HasKey("Id")
-                        .HasName("pk_quotes");
-
-                    b.HasIndex("ClientId")
-                        .HasDatabaseName("ix_quotes_client_id");
-
-                    b.HasIndex("CreatedById")
-                        .HasDatabaseName("ix_quotes_created_by_id");
-
-                    b.HasIndex("Number")
-                        .IsUnique()
-                        .HasDatabaseName("ix_quotes_number");
-
-                    b.HasIndex("ProjectId", "CreatedAt")
-                        .HasDatabaseName("ix_quotes_project_id_created_at");
-
-                    b.ToTable("quotes", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_quotes_amounts_positive", "`net_usd` > 0 AND `total_usd` >= `net_usd`");
-
-                            t.HasCheckConstraint("ck_quotes_tva_rate_range", "`tva_rate` >= 0 AND `tva_rate` <= 1");
-                        });
-                });
-
-            modelBuilder.Entity("ID_Indetails.api.Models.QuoteDelivery", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasColumnName("id");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("Channel")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("channel");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
-                        .HasColumnName("note");
-
-                    b.Property<long>("QuoteId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("quote_id");
-
-                    b.Property<string>("Recipient")
-                        .HasMaxLength(255)
-                        .HasColumnType("varchar(255)")
-                        .HasColumnName("recipient");
-
-                    b.Property<DateTime>("SentAt")
-                        .HasPrecision(3)
-                        .HasColumnType("datetime(3)")
-                        .HasColumnName("sent_at");
-
-                    b.Property<long?>("SentById")
-                        .HasColumnType("bigint")
-                        .HasColumnName("sent_by_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_quote_deliveries");
-
-                    b.HasIndex("QuoteId")
-                        .HasDatabaseName("ix_quote_deliveries_quote_id");
-
-                    b.HasIndex("SentById")
-                        .HasDatabaseName("ix_quote_deliveries_sent_by_id");
-
-                    b.ToTable("quote_deliveries", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_quote_deliveries_channel", "`channel` IN ('email', 'whatsapp', 'download')");
-                        });
-                });
-
-            modelBuilder.Entity("ID_Indetails.api.Models.QuoteSequence", b =>
-                {
-                    b.Property<int>("Year")
-                        .HasColumnType("int")
-                        .HasColumnName("year");
-
-                    b.Property<int>("LastNumber")
-                        .HasColumnType("int")
-                        .HasColumnName("last_number");
-
-                    b.HasKey("Year")
-                        .HasName("pk_quote_sequences");
-
-                    b.ToTable("quote_sequences", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_quote_sequences_number_non_negative", "`last_number` >= 0");
-                        });
-                });
-
             modelBuilder.Entity("ID_Indetails.api.Models.RefreshToken", b =>
                 {
                     b.Property<long>("Id")
@@ -5246,7 +5385,7 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("refresh_tokens", null, t =>
                         {
-                            t.HasCheckConstraint("ck_refresh_tokens_client", "`client` IN ('web', 'mobile')");
+                            t.HasCheckConstraint("ck_refresh_tokens_client", "`client` IN ('web', 'mobile', 'installed')");
 
                             t.HasCheckConstraint("ck_refresh_tokens_revoke_reason", "`revoke_reason` IN ('rotated', 'superseded', 'signed_out', 'revoked')");
                         });
@@ -5469,6 +5608,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "super_admin",
                             PermissionCode = "financial:view"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "financial:write"
                         },
                         new
                         {
@@ -6394,6 +6538,21 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
 
+                    b.Property<string>("WebPushAuth")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("web_push_auth");
+
+                    b.Property<string>("WebPushEndpoint")
+                        .HasMaxLength(2048)
+                        .HasColumnType("varchar(2048)")
+                        .HasColumnName("web_push_endpoint");
+
+                    b.Property<string>("WebPushP256dh")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("web_push_p256dh");
+
                     b.HasKey("Id")
                         .HasName("pk_user_devices");
 
@@ -6409,9 +6568,11 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.ToTable("user_devices", null, t =>
                         {
-                            t.HasCheckConstraint("ck_user_devices_platform", "`platform` IN ('ios', 'android')");
+                            t.HasCheckConstraint("ck_user_devices_platform", "`platform` IN ('ios', 'android', 'web')");
 
-                            t.HasCheckConstraint("ck_user_devices_provider", "`provider` IN ('expo')");
+                            t.HasCheckConstraint("ck_user_devices_provider", "`provider` IN ('expo', 'web_push')");
+
+                            t.HasCheckConstraint("ck_user_devices_web_push", "(`provider` = 'web_push') = (`web_push_endpoint` IS NOT NULL AND `web_push_p256dh` IS NOT NULL AND `web_push_auth` IS NOT NULL)");
                         });
                 });
 
@@ -7097,6 +7258,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("datetime(3)")
                         .HasColumnName("started_at");
 
+                    b.Property<long?>("TeamId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("team_id");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
@@ -7114,6 +7279,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("StartedAt")
                         .HasDatabaseName("ix_work_entries_started_at");
+
+                    b.HasIndex("TeamId")
+                        .HasDatabaseName("ix_work_entries_team_id");
 
                     b.HasIndex("ProjectId", "StartedAt")
                         .HasDatabaseName("ix_work_entries_project_id_started_at");
@@ -7493,6 +7661,72 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Conversation");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.DesignVo", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AppliedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_design_vos_users_applied_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_design_vos_users_cancelled_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_design_vos_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_design_vos_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SentById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_design_vos_users_sent_by_id");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.DesignVoAllocation", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.DesignVo", null)
+                        .WithMany("Allocations")
+                        .HasForeignKey("DesignVoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_design_vo_allocations_design_vos_design_vo_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_design_vo_allocations_teams_team_id");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.DesignVoLine", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.DesignVo", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("DesignVoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_design_vo_lines_design_vos_design_vo_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.DomainSettings", b =>
@@ -8358,6 +8592,52 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartment", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AddedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_project_departments_users_added_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany("Departments")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_departments_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_departments_teams_team_id");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartmentChange", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_department_share_changes_users_changed_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_department_share_changes_projects_project_id");
+
+                    b.Navigation("Project");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectExpense", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -8592,52 +8872,6 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_proton_usage_users_user_id");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("ID_Indetails.api.Models.Quote", b =>
-                {
-                    b.HasOne("ID_Indetails.api.Models.Client", "Client")
-                        .WithMany()
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_quotes_clients_client_id");
-
-                    b.HasOne("ID_Indetails.api.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_quotes_users_created_by_id");
-
-                    b.HasOne("ID_Indetails.api.Models.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_quotes_projects_project_id");
-
-                    b.Navigation("Client");
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("ID_Indetails.api.Models.QuoteDelivery", b =>
-                {
-                    b.HasOne("ID_Indetails.api.Models.Quote", "Quote")
-                        .WithMany("Deliveries")
-                        .HasForeignKey("QuoteId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_quote_deliveries_quotes_quote_id");
-
-                    b.HasOne("ID_Indetails.api.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("SentById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_quote_deliveries_users_sent_by_id");
-
-                    b.Navigation("Quote");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.RefreshToken", b =>
@@ -9035,6 +9269,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_work_entries_projects_project_id");
 
+                    b.HasOne("ID_Indetails.api.Models.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_work_entries_teams_team_id");
+
                     b.HasOne("ID_Indetails.api.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -9104,6 +9344,13 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Messages");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.DesignVo", b =>
+                {
+                    b.Navigation("Allocations");
+
+                    b.Navigation("Lines");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.HourExcuse", b =>
                 {
                     b.Navigation("Days");
@@ -9137,6 +9384,8 @@ namespace ID_Indetails.api.Data.Migrations
 
             modelBuilder.Entity("ID_Indetails.api.Models.Project", b =>
                 {
+                    b.Navigation("Departments");
+
                     b.Navigation("Expenses");
 
                     b.Navigation("LabourDefaults");
@@ -9163,11 +9412,6 @@ namespace ID_Indetails.api.Data.Migrations
             modelBuilder.Entity("ID_Indetails.api.Models.ProtonStoredConversation", b =>
                 {
                     b.Navigation("Messages");
-                });
-
-            modelBuilder.Entity("ID_Indetails.api.Models.Quote", b =>
-                {
-                    b.Navigation("Deliveries");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Role", b =>

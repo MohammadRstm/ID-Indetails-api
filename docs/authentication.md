@@ -10,9 +10,10 @@ Clients of Design projects sign in to the client portal with separate accounts, 
 | Method and path | Access | Purpose |
 |---|---|---|
 | `POST /api/setup/super-admin` | `X-Setup-Key` header | Creates a super admin with a generated password, emailed to them |
-| `POST /api/auth/login` | Anyone | Email and password in. Returns the access token and sets the refresh cookie |
-| `POST /api/auth/refresh` | Refresh cookie | Rotates the refresh cookie and returns a new access token |
-| `POST /api/auth/logout` | Refresh cookie | Revokes the refresh token and clears the cookie |
+| `POST /api/auth/login` | Anyone | `{ email, password, installedApp? }`. Returns the access token and sets the refresh cookie. `installedApp` comes from [the installed app](#the-installed-app) |
+| `POST /api/auth/refresh` | Refresh cookie | Rotates the refresh cookie and returns a new access token. The body is optional: `{ installedApp }` |
+| `POST /api/auth/logout` | Refresh cookie | Revokes the refresh token, clears the cookie and stops that browser's pushes |
+| `GET`, `PUT`, `DELETE /api/auth/web-push` | Signed in, with the refresh cookie | This browser's pushes ([notifications.md](notifications.md#browsers-web-push)) |
 | `POST /api/auth/change-password` | Signed in (allowed while a temporary password is pending) | Sets a new password and signs out every other session |
 | `POST /api/auth/change-email` | `employee:change_email` | `{ email, currentPassword }`. Their own new sign-in address; signs out every other session ([employees.md](employees.md#changing-a-sign-in-address)) |
 | `POST /api/auth/forgot-password` | Anyone | `{ email }`. Emails a reset link to an active account with that email. Always `204` |
@@ -32,7 +33,7 @@ Every request counts against a global limit: 300 a minute per signed-in user, or
 - Login (the website's and the phone's), forgot and reset password and the two public invitation endpoints: 10 a minute per IP, together (`auth`).
 - Refresh (the website's and the phone's): 60 a minute per IP on its own (`refresh`), since every page load refreshes and an office shares one address; the refresh token itself is the secret.
 - Change password (on either) and change sign-in address, which check the current password: 10 a minute per person (`credential`).
-- Requests that email an address the caller chooses (invoice, quote and BOQ emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
+- Requests that email an address the caller chooses (invoice and BOQ emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
 - Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Bug reports: 5 an hour per person. Setup: 5 an hour per IP.
 - The Website area's analytics, which ask Google Analytics: 30 a minute per person (`website-analytics`).
 
@@ -101,13 +102,24 @@ Permissions are **not** in the token, and the `role` claim is informational only
 
 ### Refresh token
 
-- **Lifetime:** each refresh token lasts 1 day (`RefreshToken:ExpirationDays`). Every refresh replaces it, so an active session keeps going and an idle one ends after a day.
+- **Lifetime:** each refresh token lasts 1 day (`RefreshToken:ExpirationDays`), or 30 in [the installed app](#the-installed-app). Every refresh replaces it, so an active session keeps going and an idle one ends after a day.
 - **Cookie:** `idi_refresh`, with `HttpOnly`, `Secure`, `SameSite=Strict` and `Path=/api/auth`. JavaScript can't read it, and it's only sent to the auth endpoints.
 - **Storage:** a random token is generated and discarded. The cookie carries its SHA-256 hash, and the database stores the SHA-256 of the cookie value. Nothing in the database can be replayed as a cookie.
 - **Reuse detection:** presenting a refresh cookie that was rotated more than 30 seconds ago revokes **all** of that user's sessions, because the old cookie may have been stolen. Within those 30 seconds (an answer lost on a bad connection, two tabs at once) it is only refused (`Business/Auth/RefreshTokenRules.cs`).
 - **Other revocations:** changing or resetting the password and logging out revoke refresh tokens too.
-- **Sessions and reasons:** each sign-in starts a session (`refresh_tokens.session_id`) that its refreshes continue. Every token records which app it belongs to (`client`: `web` or `mobile`) and, once it stops working, why (`revoke_reason`): `rotated` (refreshed), `superseded` (see Mobile sessions), `signed_out`, or `revoked` (a password change or reset, a super admin, deactivation, a new sign-in address, theft). Tokens from before this have neither.
+- **Sessions and reasons:** each sign-in starts a session (`refresh_tokens.session_id`) that its refreshes continue. Every token records which app it belongs to (`client`: `web`, `installed` or `mobile`) and, once it stops working, why (`revoke_reason`): `rotated` (refreshed), `superseded` (see Mobile sessions), `signed_out`, or `revoked` (a password change or reset, a super admin, deactivation, a new sign-in address, theft). Tokens from before this have neither.
 - **Each app's tokens work only there:** a phone's token sent as the cookie, or a cookie sent to the phone's endpoints, is refused like an unknown one and ends nothing.
+
+### The installed app
+
+The website installed on a phone's home screen is meant to replace the phone app, and its pushes only reach it while its session lives. So its sessions follow the phone app's lifetime with the website's transport:
+
+- **30 days since last use** (`RefreshToken:InstalledExpirationDays`), so it stays signed in, and keeps getting pushes, over a weekend or a holiday without being opened.
+- **The website's cookie and rules otherwise:** the same `idi_refresh` cookie, the same 30-second reuse rule, the same sign-out.
+- **How the server knows.** The app says so: `installedApp: true` at sign-in and on every refresh, when it runs installed (standalone). A session that is refreshed that way becomes `installed` and stays so (`Business/Auth/RefreshTokenRules.NextWebClient`): on Android a browser tab shares the installed app's cookie, and its refreshes never shorten the session again.
+- **The trade-off.** The server can't prove the request comes from the installed app, so a browser that claims to gets the longer session. That only makes an idle session last longer: a stolen cookie can already be kept alive by refreshing it daily, and the reuse rule still ends every session once the real browser and the thief both use it.
+
+Changing the password or the sign-in address in the installed app starts a website session; its next refresh makes it the installed app's again.
 
 ### Mobile sessions
 
@@ -170,6 +182,7 @@ security log. What to do about a pause is in [security-runbook.md](security-runb
 | `Jwt:Issuer` / `Jwt:Audience` | `id-indetails-api` / `id-indetails-client` | |
 | `RefreshToken:SameSite` | `Strict` | `None` only if the client is ever on another site |
 | `RefreshToken:ExpirationDays` | `1` | The website's refresh tokens |
+| `RefreshToken:InstalledExpirationDays` | `30` | The installed app's, since its last refresh (1 to 90) |
 | `MobileSession:RefreshTokenDays` | `30` | How long a phone stays signed in since its last refresh (1 to 90) |
 | `MobileSession:ReplayGraceSeconds` | `300` | How long after a rotation the phone may present the old token again (0 to 900) |
 | `Frontend:BaseUrl` | `http://localhost:5173` | Used for links in emails |

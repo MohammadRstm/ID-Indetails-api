@@ -147,7 +147,7 @@ public class ProtonStrongActionsTests(ProtonStrongApiFactory api) : IClassFixtur
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var first = "Rana" + Guid.NewGuid().ToString("N")[..5];
-        (await Client.PutJsonAsync($"/api/employees/{designer.User.Id}", new { firstName = first, lastName = "Haddad" }, superAdmin.AccessToken))
+        (await Client.PutJsonAsync($"/api/employees/{designer.User.Id}", new { firstName = first, lastName = "Haddad", teamId = await _steps.DesignDepartmentAsync() }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         // a name only the data mentioned: refused

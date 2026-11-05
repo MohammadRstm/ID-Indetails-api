@@ -96,6 +96,7 @@ public sealed class EmployeeService(
                 ErrorCodes.ValidationFailed, "firstName", "First and last name are required once someone has signed up.");
         }
 
+        Throw(EmployeeRules.CheckDepartment(user.RoleCode, user.DomainCode, request.TeamId));
         await EnsureTeamInDomainAsync(request.TeamId, user.DomainCode, cancellationToken);
 
         user.FirstName = Clean(request.FirstName);
@@ -300,6 +301,12 @@ public sealed class EmployeeService(
             user.TeamId = null;
         }
 
+        // a Design employee's hours are counted in their department: they're given one before they become one
+        if (EmployeeRules.NeedsDepartment(user.RoleCode, user.DomainCode) && user.TeamId is null)
+        {
+            throw new BusinessRuleException(ErrorCodes.DepartmentRequired, "Give them a department on their profile before making them a Design employee.");
+        }
+
         // a promotion or demotion may come with a new job title; without one, the old title stays
         if (request.Position is not null)
         {
@@ -336,6 +343,7 @@ public sealed class EmployeeService(
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckMove(actor, TargetOf(user), request.DomainCode));
         Throw(await CheckHandOutAsync(actor, user.Id, user.RoleCode, request.DomainCode, cancellationToken));
+        Throw(EmployeeRules.CheckDepartment(user.RoleCode, request.DomainCode, request.TeamId));
         await EnsureTeamInDomainAsync(request.TeamId, request.DomainCode, cancellationToken);
 
         var previousDomain = user.DomainCode;

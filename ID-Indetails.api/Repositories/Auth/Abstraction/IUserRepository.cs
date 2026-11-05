@@ -28,6 +28,8 @@ public interface IUserRepository
     /// <summary>Ids of the active people whose home domain is <paramref name="domain"/> (super admins have none).</summary>
     Task<IReadOnlyList<long>> ActiveIdsInDomainAsync(string domain, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<long>> ActiveSuperAdminIdsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The active people among these, with their domain. Not tracked.</summary>
     Task<IReadOnlyList<UserDomain>> ActiveDomainsAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
 

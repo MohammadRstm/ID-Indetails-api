@@ -9,6 +9,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace ID_Indetails.api.Controllers;
@@ -41,15 +42,21 @@ public sealed class AuthController(
         }
     }
 
-    /// <summary>Exchanges the refresh cookie for a new access token and a new refresh cookie.</summary>
+    /// <summary>
+    /// Exchanges the refresh cookie for a new access token and a new refresh cookie. The body is optional: the installed
+    /// app says so in it, and its session then lasts 30 days since last use.
+    /// </summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Refresh)]
-    public async Task<ActionResult<AuthResponse>> Refresh(CancellationToken cancellationToken)
+    public async Task<ActionResult<AuthResponse>> Refresh(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] RefreshRequest? request,
+        CancellationToken cancellationToken)
     {
         try
         {
-            return SignedIn(await authService.RefreshAsync(refreshCookie.Read(Request), cancellationToken));
+            var installedApp = request?.InstalledApp == true;
+            return SignedIn(await authService.RefreshAsync(refreshCookie.Read(Request), installedApp, cancellationToken));
         }
         catch (UnauthenticatedException)
         {

@@ -17,7 +17,7 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
         => await db.WorkEntries
             .AsNoTracking()
             .Where(e => projectIds.Contains(e.ProjectId) && e.DeletedAt == null)
-            .Select(e => new WorkEntryRow(e.Id, e.ProjectId, e.UserId, e.StartedAt, e.DurationMinutes))
+            .Select(e => new WorkEntryRow(e.Id, e.ProjectId, e.UserId, e.StartedAt, e.DurationMinutes, e.TeamId))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ProjectFinance.PayRecord>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
