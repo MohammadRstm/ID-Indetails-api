@@ -269,12 +269,12 @@ public sealed class MessagingService(
             : null;
         if (team is null)
         {
-            throw new BusinessRuleException(ErrorCodes.NoTeamChat, "The entry's author isn't in a team, so there's no team chat to post to.");
+            throw new BusinessRuleException(ErrorCodes.NoTeamChat, "The entry's author isn't in a department, so there's no department chat to post to.");
         }
 
         if (!MessagingRules.IsMember(Rule(people[commenterId]), Chat(team)))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "You aren't in that team's chat.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, "You aren't in that department's chat.");
         }
 
         // The card speaks to the whole chat (the prototype's @all).

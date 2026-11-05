@@ -86,7 +86,7 @@ public sealed class ProjectPayService(
         var to = report.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var csv = new StringBuilder();
 
-        Csv.Line(csv, "Period", "From", "To", "Project", "Client", "Team", "Employee", "Email", "Pay basis", "Entries",
+        Csv.Line(csv, "Period", "From", "To", "Project", "Client", "Department", "Employee", "Email", "Pay basis", "Entries",
             "Normal hours", "Overtime hours", "Total hours", "Hourly rate", "Currency", "Pay");
 
         foreach (var project in report.Projects)

@@ -113,9 +113,9 @@ public static class PushText
             NotificationKinds.DomainChanged => new("You moved", Domain(Text(payload, "to")) is { } domain
                 ? $"You're now in {domain}."
                 : "You moved to the other domain."),
-            NotificationKinds.TeamChanged => new("Your team changed", HasValue(payload, "teamId")
-                ? "You were moved to another team."
-                : "You were taken out of your team."),
+            NotificationKinds.TeamChanged => new("Your department changed", HasValue(payload, "teamId")
+                ? "You were moved to another department."
+                : "You were taken out of your department."),
             NotificationKinds.PermissionsChanged => new("Permissions changed", "Your permissions changed."),
 
             // the client portal: who and where, never what they wrote

@@ -119,7 +119,7 @@ public sealed class WorkEntryQueryService(
                 rows.Select(e => new WorkEntryRow(e.Id, e.ProjectId, e.UserId, e.StartedAt, e.Minutes)).ToList(), payRates, cancellationToken)
             : new Dictionary<long, PaidOvertime>();
 
-        var header = new List<string> { "Date", "Weekday", "Start", "End", "Hours", "Overtime hours", "Employee", "Email", "Team", "Project", "Client", "Task", "Outside scope" };
+        var header = new List<string> { "Date", "Weekday", "Start", "End", "Hours", "Overtime hours", "Employee", "Email", "Department", "Project", "Client", "Task", "Outside scope" };
         if (withMoney)
         {
             header.AddRange(["Hourly rate", "Overtime paid hours", "Overtime rate", "Currency", "Labour cost"]);

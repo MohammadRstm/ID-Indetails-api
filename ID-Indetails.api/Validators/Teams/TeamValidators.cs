@@ -27,6 +27,6 @@ internal static class TeamRuleExtensions
 {
     public static IRuleBuilderOptions<T, string> TeamName<T>(this IRuleBuilder<T, string> rule)
         => rule
-            .Must(n => !string.IsNullOrWhiteSpace(n)).WithMessage("Team name is required.")
-            .Must(n => n is null || n.Trim().Length <= 100).WithMessage("Team name must be at most 100 characters.");
+            .Must(n => !string.IsNullOrWhiteSpace(n)).WithMessage("Department name is required.")
+            .Must(n => n is null || n.Trim().Length <= 100).WithMessage("Department name must be at most 100 characters.");
 }

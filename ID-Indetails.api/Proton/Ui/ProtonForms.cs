@@ -159,7 +159,7 @@ public sealed record WorkEntryCommentFill
 {
     public string? Body { get; init; }
 
-    [Description("Also post it to the person's team chat.")]
+    [Description("Also post it to the person's department chat.")]
     public bool? ShareWithTeam { get; init; }
 }
 

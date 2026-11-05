@@ -63,14 +63,14 @@ public static class PermissionCatalog
         new(P.ExchangeRateManage, "Set the company-wide exchange rates used for payments", Sensitivity: Money),
 
         new(P.EmployeeView, "View employees and their work"),
-        new(P.EmployeeManage, "Edit employee profiles, teams and status", Sensitivity: Access),
+        new(P.EmployeeManage, "Edit employee profiles, departments and status", Sensitivity: Access),
         new(P.EmployeeInvite, "Invite new people", Sensitivity: Access),
         new(P.EmployeePayManage, "Set and change employee pay", Sensitivity: Pay),
         new(P.EmployeeInviteSuperAdmin, "Invite super admins", Sensitivity: Access),
         new(P.EmployeeChangeEmail, "Change sign-in addresses", Sensitivity: Access),
         new(P.SessionManage, "End people's sessions and restore their sign-in", Sensitivity: Access),
         new(P.PermissionManage, "Grant and revoke other people's permissions", Sensitivity: Access),
-        new(P.TeamManage, "Create, rename and delete teams"),
+        new(P.TeamManage, "Create, rename and delete departments"),
 
         new(P.ActivityView, "View the domain activity feed"),
         new(P.ReportView, "View domain reports"),

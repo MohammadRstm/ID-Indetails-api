@@ -30,7 +30,7 @@ public sealed class CreateInvitationRequestValidator : AbstractValidator<CreateI
 
         RuleFor(x => x.TeamId)
             .GreaterThan(0).When(x => x.TeamId is not null)
-            .WithMessage("Team is invalid.");
+            .WithMessage("Department is invalid.");
 
         RuleFor(x => x.Position)
             .MaximumLength(120).WithMessage("Position must be at most 120 characters.");

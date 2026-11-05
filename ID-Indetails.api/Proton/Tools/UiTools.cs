@@ -426,7 +426,7 @@ public sealed class OfferChoicesTool : ProtonTool<OfferChoicesInput>
 
     private static string Detail(ProtonRef record)
     {
-        var kind = record.Type switch { ProtonRefType.Project => "Project", ProtonRefType.Client => "Client", ProtonRefType.Team => "Team chat", ProtonRefType.WebsiteProject => "Website project", _ => "Person" };
+        var kind = record.Type switch { ProtonRefType.Project => "Project", ProtonRefType.Client => "Client", ProtonRefType.Team => "Department chat", ProtonRefType.WebsiteProject => "Website project", _ => "Person" };
         return record.Domain is { } domain ? $"{kind} · {char.ToUpperInvariant(domain[0])}{domain[1..]}" : kind;
     }
 }
@@ -705,7 +705,7 @@ public sealed record FillFormInput
     public required ProtonForm Form { get; init; }
 
     [Description("The record the form is for: the project for edit_project, report_options, portal_intro, portal_message, materials, " +
-                 "payment, project_expense and labour_week; the client, requirement, team, invoice, company expense, website project, " +
+                 "payment, project_expense and labour_week; the client, requirement, department, invoice, company expense, website project, " +
                  "service, office or social link being edited; the work entry for work_entry_comment; the file's item id for " +
                  "file_rename and file_comment; the person for schedule and hour_excuse. Leave out for something new.")]
     public long? Id { get; init; }
@@ -1171,7 +1171,7 @@ public sealed class FillFormTool(
         else
         {
             recipient = await records.FindAsync(ProtonRefType.Team, draft.TeamId!.Value, context, cancellationToken)
-                ?? throw new Exceptions.Base.NotFoundException("Not a team chat this user is in.");
+                ?? throw new Exceptions.Base.NotFoundException("Not a department chat this user is in.");
         }
 
         if (!Actions.MessageText.Named(recipient.Name, context.TypedText))
