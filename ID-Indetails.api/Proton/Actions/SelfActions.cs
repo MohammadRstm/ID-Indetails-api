@@ -34,7 +34,7 @@ public sealed class ProposeUpdateMyProfileTool(IAuthService auth, IEmployeeServi
     public override string Name => "propose_update_my_profile";
 
     public override string Description =>
-        "Propose changing the user's own first name, last name or phone. Email, position, team and pay are the company's " +
+        "Propose changing the user's own first name, last name or phone. Email, position, department and pay are the company's " +
         "to change. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;

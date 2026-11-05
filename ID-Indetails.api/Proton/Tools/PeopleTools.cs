@@ -39,7 +39,7 @@ public sealed class GetPersonTool(IEmployeeService employees) : ProtonTool<Perso
 {
     public override string Name => "get_person";
 
-    public override string Description => "A person's profile: role, domain, team, position, status, contact details, when they joined.";
+    public override string Description => "A person's profile: role, domain, department, position, status, contact details, when they joined.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<EmployeesController>(nameof(EmployeesController.Get));
 
@@ -246,7 +246,7 @@ public sealed class ListTeamsTool(ITeamService teams) : ProtonTool<NoTeamsInput>
 {
     public override string Name => "list_teams";
 
-    public override string Description => "The teams (departments) of each business the user can see, with how many people are in each.";
+    public override string Description => "The departments of each business the user can see, with how many people are in each. A Design employee belongs to one.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBased<TeamsController>(nameof(TeamsController.List));
 

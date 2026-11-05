@@ -25,7 +25,7 @@ public sealed record MarkChatReadInput : ProtonActionInput
     [Description("Someone the user has a direct chat with (from get_my_inbox or find_recipient). Give one of person_id, team_id or announcements.")]
     public long? PersonId { get; init; }
 
-    [Description("A team chat the user is in (from get_my_inbox or find_recipient).")]
+    [Description("A department chat the user is in (from get_my_inbox or find_recipient).")]
     public long? TeamId { get; init; }
 
     [Description("The Announcements chat.")]
@@ -41,7 +41,7 @@ public sealed class ProposeMarkChatReadTool(IMessagingService messaging) : Proto
     public override string Name => "propose_mark_chat_read";
 
     public override string Description =>
-        "Propose marking one of the user's own chats as read: a direct chat, a team chat or Announcements (ids from " +
+        "Propose marking one of the user's own chats as read: a direct chat, a department chat or Announcements (ids from " +
         "get_my_inbox). Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;

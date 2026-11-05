@@ -7,7 +7,7 @@ its own currency and never counted as zero.
 ## Two kinds of revenue and profit: never mix them
 
 - **Agreed** (fields starting with `agreed_`): what the client agreed to pay for a project, its contract value,
-  whether or not it has been paid. Design: the agreed payment typed into the project. Execution: the work price
+  whether or not it has been paid. Design: the customer payment typed into the project plus its applied variation orders (VOs, work added or taken out). Execution: the work price
   (set by agreeing the client BOQ and its variation orders) plus the company's supervision on it, so it changes when a
   BOQ is agreed or withdrawn and is frozen once the site is finished. `agreed_profit` is agreed revenue less all the cost so far; `agreed_margin_pct` is
   that profit as a percentage of the agreed revenue, empty until it means something.

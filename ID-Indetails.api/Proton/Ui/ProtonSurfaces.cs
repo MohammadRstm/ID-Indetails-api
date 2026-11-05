@@ -62,5 +62,6 @@ public static class ProtonSurfaces
         [ProtonSurface.ViewBoq] = new("the BOQ", ProtonEndpoint.Of<BoqsController>(nameof(BoqsController.Get)), ProtonRefType.Project, DomainCodes.Execution),
         [ProtonSurface.ToPocket] = new("the move to pocket money form", ProtonEndpoint.OfWrite<PocketController>(nameof(PocketController.Contribute)), ProtonRefType.Project, DomainCodes.Execution),
         [ProtonSurface.AskPocket] = new("the ask the pocket money form", ProtonEndpoint.OfWrite<PocketController>(nameof(PocketController.Ask)), ProtonRefType.Project, DomainCodes.Execution),
+        [ProtonSurface.ProjectDepartments] = new("the project's departments", ProtonEndpoint.OfWrite<ProjectDepartmentsController>(nameof(ProjectDepartmentsController.Set)), ProtonRefType.Project, DomainCodes.Design),
     };
 }

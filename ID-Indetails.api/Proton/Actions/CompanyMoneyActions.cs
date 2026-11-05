@@ -198,8 +198,9 @@ public sealed class ProposeProjectMoneyTool(IProjectService projects) : ProtonAc
     public override string Name => "propose_project_money";
 
     public override string Description =>
-        "Propose a Design project's agreed revenue, with why it changes (an Execution site's price is set by agreeing its BOQ, not here). " +
-        "Locked once the project is completed. The user confirms by typing the new amount.";
+        "Propose correcting a Design client project's customer payment, with why it changes. It is for fixing a mistake: work " +
+        "added or taken out is a variation order (propose_design_vo), which also moves the departments' budgets. An Execution " +
+        "site's price is set by agreeing its BOQ, not here. Locked once the project is completed. The user confirms by typing the new amount.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 

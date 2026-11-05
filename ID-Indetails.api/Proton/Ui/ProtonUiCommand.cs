@@ -109,6 +109,8 @@ public enum ProtonSurface
     ToPocket,
     /// <summary>The window that asks the pocket money for money for a site.</summary>
     AskPocket,
+    /// <summary>A Design client project's departments window: which departments work on it.</summary>
+    ProjectDepartments,
 }
 
 public enum ProtonSettingsSection
@@ -147,6 +149,10 @@ public enum ProtonTheme
 public enum ProtonProjectSection
 {
     Financials,
+    /// <summary>A Design client project's client payments.</summary>
+    Payments,
+    /// <summary>A Design client project's variation orders.</summary>
+    Vos,
     Overview,
     Analytics,
     Contributors,

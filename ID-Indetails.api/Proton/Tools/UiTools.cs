@@ -63,7 +63,8 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
         "Open a project, client, person or website project in the app for the user (\"take me to…\", \"open…\", \"show me " +
         "its requirements\"). Use the id from find. Projects can open on a tab: requirements, meetings or financials (on " +
         "a Design project its money; on an Execution site everything about the site, its expenses, labour, BOQs, payments, " +
-        "supervision and staff, for whoever sees the site), and on Design projects analytics (charts of its work), contributors (who worked on it and how much), " +
+        "supervision and staff, for whoever sees the site), on a Design client project payments (the client's payments) " +
+        "and vos (its variation orders) for those who see its money, and on Design projects analytics (charts of its work), contributors (who worked on it and how much), " +
         "timeline (its history as a calendar), files (the project's files, optionally one section) or portal (what its " +
         "client sees in the client portal, who of them has access, and the discussion with them). Opening needs no other " +
         "lookup; only read data too if the user also asked a question about it.";
@@ -114,6 +115,9 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
         {
             // everything a site shows is a part of its Financials tab, open to everyone who sees the site
             ProtonProjectSection.Financials => !design || access.Has(PermissionCodes.FinancialView),
+            // a Design client project's client payments and variation orders, for those who see its money
+            ProtonProjectSection.Payments or ProtonProjectSection.Vos => design && access.Has(PermissionCodes.FinancialView)
+                && (await projects.GetAsync(project.Id, cancellationToken)).BillingType == BillingType.Client,
             // a Design project's overview is the person's own work: those who see money or everyone's work have their own tabs
             ProtonProjectSection.Overview => design && (access.Has(PermissionCodes.WorkEntryViewOwn)
                 || (!access.Has(PermissionCodes.FinancialView) && !access.Has(PermissionCodes.WorkEntryViewAll))),
@@ -621,6 +625,17 @@ public sealed class OpenSurfaceTool(
                 return await portal.CanOpenPortalAsync(project!, ProtonProjectPart.Presentation, context, cancellationToken)
                     ? null
                     : throw new Exceptions.Base.NotFoundException("Not found.");
+            case ProtonSurface.ProjectDepartments:
+                // the window is on a Design client project still open to changes, as its page offers it
+                var design = await projects.GetAsync(project!.Id, cancellationToken);
+                if (design.BillingType != BillingType.Client)
+                {
+                    throw new ProtonToolInputException("Departments are only on a Design client project.");
+                }
+
+                return design.Status is ProjectStatus.Completed or ProjectStatus.Archived || design.FinalizedAt is not null
+                    ? throw new ProtonToolInputException("The project is completed, archived or finalized: its departments no longer change.")
+                    : null;
             case ProtonSurface.ViewBoq or ProtonSurface.ToPocket or ProtonSurface.AskPocket:
                 // a site's BOQs and pocket money are a client site's, as its page shows them
                 var site = await projects.GetAsync(project!.Id, cancellationToken);

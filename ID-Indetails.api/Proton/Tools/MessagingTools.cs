@@ -10,7 +10,7 @@ namespace ID_Indetails.api.Proton.Tools;
 
 public sealed record FindRecipientInput
 {
-    [Description("Part of the person's or team's name, as the user said it.")]
+    [Description("Part of the person's or department's name, as the user said it.")]
     public required string Text { get; init; }
 }
 
@@ -29,7 +29,7 @@ public sealed class FindRecipientTool(IMessagingService messaging) : ProtonTool<
     public override string Name => "find_recipient";
 
     public override string Description =>
-        "Find someone the user can message, or a team chat they are in, by name, before opening a chat or drafting a " +
+        "Find someone the user can message, or a department chat they are in, by name, before opening a chat or drafting a " +
         "message. Several matches: let the user pick with offer_choices.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBased<MessagesController>(nameof(MessagesController.Contacts));
@@ -71,7 +71,7 @@ public sealed class GetMyInboxTool(IMessagingService messaging, IClock clock) : 
     public override string Name => "get_my_inbox";
 
     public override string Description =>
-        "The user's own chats: who or which team, unread messages, whether one mentions them, and when the last came. " +
+        "The user's own chats: who or which department, unread messages, whether one mentions them, and when the last came. " +
         "You can't read what messages say; open the chat for the user instead.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBased<MessagesController>(nameof(MessagesController.Conversations));
