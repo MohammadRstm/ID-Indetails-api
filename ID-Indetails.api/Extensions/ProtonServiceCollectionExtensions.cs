@@ -74,6 +74,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, FindTool>();
         services.AddScoped<IProtonTool, ListProjectsTool>();
         services.AddScoped<IProtonTool, GetProjectTool>();
+        services.AddScoped<IProtonTool, GetProjectDepartmentsTool>();
         services.AddScoped<IProtonTool, GetProjectRequirementsTool>();
         services.AddScoped<IProtonTool, GetProjectTeamTool>();
         services.AddScoped<IProtonTool, GetProjectFinancialsTool>();
@@ -81,6 +82,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ListWorkEntriesTool>();
         services.AddScoped<IProtonTool, GetWorkEntryTool>();
         services.AddScoped<IProtonTool, ListMyWorkTool>();
+        services.AddScoped<IProtonTool, ListMyDeletedWorkTool>();
+        services.AddScoped<IProtonTool, GetMyBoardLayoutTool>();
         services.AddScoped<IProtonTool, ListTeamsTool>();
         services.AddScoped<IProtonTool, GetCompanySettingsTool>();
         services.AddScoped<IProtonTool, GetDomainSettingsTool>();
@@ -106,6 +109,7 @@ public static class ProtonServiceCollectionExtensions
         // An Execution site's BOQs, labour, daily logs and account, and the pocket money
         services.AddScoped<IProtonTool, ListBoqsTool>();
         services.AddScoped<IProtonTool, GetBoqTool>();
+        services.AddScoped<IProtonTool, ListDesignVosTool>();
         services.AddScoped<IProtonTool, GetLabourTool>();
         services.AddScoped<IProtonTool, ListSiteLogsTool>();
         services.AddScoped<IProtonTool, ListMySiteLogsTool>();
@@ -133,6 +137,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddSingleton<ProtonVideoFrames>();
         services.AddSingleton<ProtonFileReader>();
         services.AddScoped<IProtonTool, GetProjectFilesTool>();
+        services.AddScoped<IProtonTool, GetFileCommentsTool>();
         services.AddScoped<IProtonTool, ReadProjectFileTool>();
         services.AddScoped<IProtonTool, GetPortalStatusTool>();
         services.AddScoped<IProtonTool, ReadDiscussionTool>();
@@ -175,10 +180,35 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeDeactivateEmployeeTool>();
         services.AddScoped<IProtonTool, ProposeReactivateEmployeeTool>();
         services.AddScoped<IProtonTool, ProposeSessionsTool>();
+        services.AddScoped<IProtonTool, ProposeEmployeeAccessTool>();
+        services.AddScoped<IProtonTool, ProposePermissionsTool>();
+        services.AddScoped<IProtonTool, ProposeInvitationTool>();
+        services.AddScoped<IProtonTool, ProposeCompanyProtonTool>();
+        services.AddScoped<IProtonTool, ProposeCompanyContactEmailTool>();
+        services.AddScoped<IProtonTool, ProposeRemoveCompanyLogoTool>();
+        services.AddScoped<IProtonTool, ProposeAccountLabelTool>();
+        services.AddScoped<IProtonTool, ProposeProtonTopUpTool>();
+        services.AddScoped<IProtonTool, ProposeRemoveMyPhotoTool>();
+        services.AddScoped<IProtonTool, ProposeMyProtonSuggestionsTool>();
+        services.AddScoped<IProtonTool, ProposeNotificationSettingsTool>();
+        services.AddScoped<IProtonTool, ProposeRemoveDeviceTool>();
+        services.AddScoped<IProtonTool, GetPermissionsTool>();
+        services.AddScoped<IProtonTool, ListHourExcusesTool>();
+        services.AddScoped<IProtonTool, ListMyDevicesTool>();
+        services.AddScoped<IProtonTool, GetMyNotificationSettingsTool>();
+        services.AddScoped<IProtonTool, ProposeBlockedChangeTool>();
         services.AddScoped<IProtonTool, ProposeDeleteTeamTool>();
         services.AddScoped<IProtonTool, ProposeCompanySettingsTool>();
         services.AddScoped<IProtonTool, ProposeDomainSettingsTool>();
         services.AddScoped<IProtonTool, ProposeSendMessageTool>();
+        services.AddScoped<IProtonTool, ProposeMarkChatReadTool>();
+        services.AddScoped<IProtonTool, ProposeMarkNotificationsReadTool>();
+        services.AddScoped<IProtonTool, ProposeSendAnnouncementTool>();
+        services.AddScoped<IProtonTool, ProposeReportBugTool>();
+        services.AddScoped<IProtonTool, ProposeCreateGeneralMeetingTool>();
+        services.AddScoped<IProtonTool, ProposeRestoreMyWorkTool>();
+        services.AddScoped<IProtonTool, ProposeSetWorkEntryScopeTool>();
+        services.AddScoped<IProtonTool, ProposeArrangeBoardTool>();
         services.AddScoped<IProtonTool, ProposeLogWorkTool>();
         services.AddScoped<IProtonTool, ProposeUpdateMyWorkTool>();
         services.AddScoped<IProtonTool, ProposeDeleteMyWorkTool>();
@@ -197,6 +227,14 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeBillingSettingsTool>();
         services.AddScoped<IProtonTool, ProposeExchangeRateTool>();
         services.AddScoped<IProtonTool, ProposeProjectMoneyTool>();
+        services.AddScoped<IProtonTool, ProposeBoqTool>();
+        services.AddScoped<IProtonTool, ProposeEditBoqTool>();
+        services.AddScoped<IProtonTool, ProposeBoqAgreementTool>();
+        services.AddScoped<IProtonTool, ProposeSendBoqTool>();
+        services.AddScoped<IProtonTool, ProposeDesignVoTool>();
+        services.AddScoped<IProtonTool, ProposeSendDesignVoTool>();
+        services.AddScoped<IProtonTool, ProposeSitePricingTool>();
+        services.AddScoped<IProtonTool, ProposeProjectBillingTool>();
         services.AddScoped<IProtonTool, ProposeOverheadTool>();
         services.AddScoped<IProtonTool, ProposeWorkingTimeTool>();
         services.AddScoped<IProtonTool, ProposeScheduleTool>();
@@ -209,15 +247,34 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeRestoreFileTool>();
         services.AddScoped<IProtonTool, ProposeCommentOnFileTool>();
         services.AddScoped<IProtonTool, ProposePortalStepTool>();
+        services.AddScoped<IProtonTool, ProposePortalInvitationTool>();
+        services.AddScoped<IProtonTool, ProposePortalEndAccessTool>();
+        services.AddScoped<IProtonTool, ProposePortalHeroesTool>();
+        services.AddScoped<IProtonTool, ProposePortalSummaryTool>();
+        services.AddScoped<IProtonTool, ProposeDiscussionPostTool>();
+        services.AddScoped<IProtonTool, ProposeDiscussionChangeTool>();
+        services.AddScoped<IProtonTool, ProposeMarkDiscussionReadTool>();
+        services.AddScoped<IProtonTool, ProposeReorderFilesTool>();
+        services.AddScoped<IProtonTool, ProposeFileForClientTool>();
+        services.AddScoped<IProtonTool, ProposeEditFileCommentTool>();
+        services.AddScoped<IProtonTool, ProposeSetCommentFixedTool>();
+        services.AddScoped<IProtonTool, ProposeDeleteFileCommentTool>();
 
         // The company's public website: all strong, typed turns only, in the Website family (off by default).
         services.AddScoped<IProtonTool, ProposeWebsiteProjectTool>();
         services.AddScoped<IProtonTool, ProposeUnderConstructionTool>();
         services.AddScoped<IProtonTool, ProposeWebsiteServiceTool>();
         services.AddScoped<IProtonTool, ProposeWebsiteLocationTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteConveyorTool>();
+        services.AddScoped<IProtonTool, ProposeWebsitePictureTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteOrderTool>();
+        services.AddScoped<IProtonTool, ProposeWebsiteSocialLinkTool>();
+        services.AddScoped<IProtonTool, ProposeRemoveWebsiteFaviconTool>();
         services.AddScoped<IProtonTool, ProposeChangeProjectStatusTool>();
         services.AddScoped<IProtonTool, ProposeUpdateProjectTool>();
         services.AddScoped<IProtonTool, ProposeCreateProjectTool>();
+        services.AddScoped<IProtonTool, ProposeProjectDepartmentsTool>();
+        services.AddScoped<IProtonTool, ProposeDepartmentSharesTool>();
 
         return services;
     }

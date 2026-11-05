@@ -30,10 +30,10 @@ public sealed record UpdateEmployeeInput : ProtonActionInput
     [Description("Their job title; an empty string removes it.")]
     public string? Position { get; init; }
 
-    [Description("A team of their domain (from list_teams).")]
+    [Description("A department of their domain (from list_teams). A Design employee needs one.")]
     public long? TeamId { get; init; }
 
-    [Description("Take them out of their team.")]
+    [Description("Take them out of their department (not a Design employee: they need one).")]
     public bool RemoveTeam { get; init; }
 }
 
@@ -47,7 +47,7 @@ public sealed class ProposeUpdateEmployeeTool(IEmployeeService employees, ITeamS
     public override string Name => "propose_update_employee";
 
     public override string Description =>
-        "Propose changing someone's name, phone, position or team. Role, domain, sign-in email and pay are changed in " +
+        "Propose changing someone's name, phone, position or department. Role, domain, sign-in email and pay are changed in " +
         "the app. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
@@ -69,7 +69,7 @@ public sealed class ProposeUpdateEmployeeTool(IEmployeeService employees, ITeamS
             var team = await TeamText.FindAsync(teams, teamId, cancellationToken);
             if (team.Domain != person.Domain)
             {
-                throw new ProtonToolInputException($"{team.Name} is a team of another domain: pick one of {AccessText.Name(person)}'s domain.");
+                throw new ProtonToolInputException($"{team.Name} is a department of another domain: pick one of {AccessText.Name(person)}'s domain.");
             }
 
             teamName = team.Name;

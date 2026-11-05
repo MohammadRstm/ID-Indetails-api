@@ -35,6 +35,11 @@ public sealed class WorkEntryQueryService(
     IOvertimeService overtime,
     IClock clock) : IWorkEntryQueryService
 {
+    /// <summary>How far back deleted entries are listed; the edit window usually closes sooner.</summary>
+    public static readonly TimeSpan RestorableFor = TimeSpan.FromDays(14);
+
+    private const int MaxDeletedListed = 20;
+
     public async Task<PagedResponse<WorkEntryResponse>> ListAsync(WorkEntryListQuery query, CancellationToken cancellationToken = default)
     {
         var actor = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.WorkEntryViewAll);
@@ -51,6 +56,19 @@ public sealed class WorkEntryQueryService(
             actor,
             new WorkEntrySearch(actor.UserId, query.ProjectId, null, DayStart(query.From), DayEnd(query.To), query.Search, query.Page, query.PageSize),
             cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<WorkEntryResponse>> ListMyDeletedAsync(CancellationToken cancellationToken = default)
+    {
+        var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
+        if (!actor.CanSee(DomainCodes.Design))
+        {
+            return [];
+        }
+
+        var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
+        var deleted = await entries.DeletedViewsAsync(actor.UserId, clock.UtcNow - RestorableFor, MaxDeletedListed, cancellationToken);
+        return deleted.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, new Dictionary<long, int>())).ToList();
     }
 
     public async Task<WorkEntryDetailResponse> GetAsync(long id, CancellationToken cancellationToken = default)

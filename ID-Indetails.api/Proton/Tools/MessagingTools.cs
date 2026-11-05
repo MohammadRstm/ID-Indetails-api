@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Notifications;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -9,7 +10,7 @@ namespace ID_Indetails.api.Proton.Tools;
 
 public sealed record FindRecipientInput
 {
-    [Description("Part of the person's or team's name, as the user said it.")]
+    [Description("Part of the person's or department's name, as the user said it.")]
     public required string Text { get; init; }
 }
 
@@ -28,7 +29,7 @@ public sealed class FindRecipientTool(IMessagingService messaging) : ProtonTool<
     public override string Name => "find_recipient";
 
     public override string Description =>
-        "Find someone the user can message, or a team chat they are in, by name, before opening a chat or drafting a " +
+        "Find someone the user can message, or a department chat they are in, by name, before opening a chat or drafting a " +
         "message. Several matches: let the user pick with offer_choices.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBased<MessagesController>(nameof(MessagesController.Contacts));
@@ -70,7 +71,7 @@ public sealed class GetMyInboxTool(IMessagingService messaging, IClock clock) : 
     public override string Name => "get_my_inbox";
 
     public override string Description =>
-        "The user's own chats: who or which team, unread messages, whether one mentions them, and when the last came. " +
+        "The user's own chats: who or which department, unread messages, whether one mentions them, and when the last came. " +
         "You can't read what messages say; open the chat for the user instead.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfRuleBased<MessagesController>(nameof(MessagesController.Conversations));
@@ -101,8 +102,10 @@ public sealed record NotificationsInput
     public bool? UnreadOnly { get; init; }
 }
 
+/// <param name="Id">What propose_mark_notifications_read takes.</param>
 /// <param name="What">The kind of notification in words ("requirement assigned").</param>
-public sealed record NotificationRow(string What, string? From, ProtonNamed? Project, int Count, string When, bool Read);
+/// <param name="BlockedChangeId">On a "change blocked" or "log department blocked" notification: the refused change waiting for a decision (propose_blocked_change).</param>
+public sealed record NotificationRow(long Id, string What, string? From, ProtonNamed? Project, int Count, string When, bool Read, long? BlockedChangeId = null);
 
 /// <summary>The user's own notifications, newest first: what happened, who did it, and on which project.</summary>
 public sealed class GetMyNotificationsTool(INotificationService notifications, IClock clock) : ProtonTool<NotificationsInput>
@@ -118,12 +121,14 @@ public sealed class GetMyNotificationsTool(INotificationService notifications, I
         var page = await notifications.ListAsync(new NotificationListQuery { UnreadOnly = input.UnreadOnly ?? true, PageSize = 15 }, cancellationToken);
         var rows = page.Items
             .Select(n => new NotificationRow(
+                n.Id,
                 n.Kind.Replace('_', ' ').Replace('.', ' '),
                 n.Actor?.Name,
                 n.Project is { } p ? new ProtonNamed(p.Id, p.Title) : null,
                 n.Count,
                 clock.Local(n.CreatedAt),
-                n.ReadAt is not null))
+                n.ReadAt is not null,
+                n.Kind is NotificationKinds.ChangeBlocked or NotificationKinds.LogDepartmentBlocked && n.SubjectType == "blocked_change" ? n.SubjectId : null))
             .ToList();
         var refs = page.Items.Where(n => n.Project is not null)
             .Select(n => new ProtonRef(ProtonRefType.Project, n.Project!.Id, n.Project.Title, n.Project.Domain))

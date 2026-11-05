@@ -45,6 +45,9 @@ public interface IMessagingService
     /// <summary>Writes in Announcements (message:announce, checked by the endpoint): everyone else is told on their phone.</summary>
     Task<MessageResponse> AnnounceAsync(SendMessageRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>The same, sent by a confirmed Proton action: the message says it came through Proton.</summary>
+    Task<MessageResponse> AnnounceAsync(SendMessageRequest request, long? protonActionId, CancellationToken cancellationToken);
+
     /// <inheritdoc cref="MarkTeamReadAsync"/>
     Task<MessagesBadgeResponse> MarkAnnouncementsReadAsync(CancellationToken cancellationToken = default);
 

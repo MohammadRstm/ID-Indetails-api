@@ -120,7 +120,7 @@ public sealed record InviteFill
 
     public string? Position { get; init; }
 
-    [Description("A team id from find_recipient or another tool.")]
+    [Description("A department id from list_teams. A Design employee needs one.")]
     public long? TeamId { get; init; }
 }
 

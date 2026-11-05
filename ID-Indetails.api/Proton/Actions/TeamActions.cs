@@ -25,7 +25,7 @@ public sealed class ProposeCreateTeamTool(ITeamService teams) : ProtonActionTool
     public override string Name => "propose_create_team";
 
     public override string Description =>
-        "Propose adding a team (department) to Design or Execution. People are put in it from their profile, not here. " +
+        "Propose adding a department to Design or Execution. People are put in it from their profile, not here. " +
         "Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
@@ -40,10 +40,10 @@ public sealed class ProposeCreateTeamTool(ITeamService teams) : ProtonActionTool
         var taken = (await teams.ListAsync(cancellationToken)).Any(t => t.Domain == domain && t.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase));
         if (taken)
         {
-            throw new ProtonToolInputException($"There is already a team called {request.Name} there.");
+            throw new ProtonToolInputException($"There is already a department called {request.Name} there.");
         }
 
-        return (new CreateTeamArgs(request), new ProtonPreview($"Add the team {request.Name}", [new ProtonChange("Team", null, request.Name)], Area: domain), null);
+        return (new CreateTeamArgs(request), new ProtonPreview($"Add the department {request.Name}", [new ProtonChange("Department", null, request.Name)], Area: domain), null);
     }
 
     protected override object RequestOf(CreateTeamArgs args) => args.Request;
@@ -83,11 +83,11 @@ public sealed class ProposeRenameTeamTool(ITeamService teams) : ProtonActionTool
         var name = input.Name.Trim();
         if (name == team.Name)
         {
-            throw new ProtonToolInputException($"The team is already called {name}.");
+            throw new ProtonToolInputException($"The department is already called {name}.");
         }
 
         return (new RenameTeamArgs(team.Id, new RenameTeamRequest { Name = name }, team.Name),
-            new ProtonPreview($"Rename the team {team.Name}", [new ProtonChange("Name", team.Name, name)],
+            new ProtonPreview($"Rename the department {team.Name}", [new ProtonChange("Name", team.Name, name)],
                 team.MemberCount > 0 ? $"Its {team.MemberCount} member(s) see the new name everywhere." : null),
             TeamText.Ref(team));
     }
@@ -99,7 +99,7 @@ public sealed class ProposeRenameTeamTool(ITeamService teams) : ProtonActionTool
         var current = await TeamText.FindAsync(teams, args.TeamId, cancellationToken);
         if (current.Name != args.Before)
         {
-            throw new BusinessRuleException(Constants.ErrorCodes.ProtonActionStale, "The team was renamed since Proton proposed this. Ask again.");
+            throw new BusinessRuleException(Constants.ErrorCodes.ProtonActionStale, "The department was renamed since Proton proposed this. Ask again.");
         }
 
         var team = await teams.RenameAsync(args.TeamId, args.Request, cancellationToken);
@@ -113,7 +113,7 @@ internal static class TeamText
 
     /// <summary>A team of the user's visible domains; any other reads as not found.</summary>
     public static async Task<TeamResponse> FindAsync(ITeamService teams, long teamId, CancellationToken cancellationToken)
-        => (await teams.ListAsync(cancellationToken)).FirstOrDefault(t => t.Id == teamId) ?? throw new NotFoundException("Team not found.");
+        => (await teams.ListAsync(cancellationToken)).FirstOrDefault(t => t.Id == teamId) ?? throw new NotFoundException("Department not found.");
 }
 
 public sealed record DeleteTeamArgs(long TeamId);
@@ -133,8 +133,8 @@ public sealed class ProposeDeleteTeamTool(ITeamService teams) : ProtonActionTool
     public override string Name => "propose_delete_team";
 
     public override string Description =>
-        "Propose deleting a team nobody is in (move its people out first, from their profiles). It can't be undone; the " +
-        "user confirms by typing the team's name.";
+        "Propose deleting a department nobody is in (move its people out first, from their profiles). It can't be undone; the " +
+        "user confirms by typing the department's name.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -146,12 +146,12 @@ public sealed class ProposeDeleteTeamTool(ITeamService teams) : ProtonActionTool
         var team = await TeamText.FindAsync(teams, input.TeamId, cancellationToken);
         if (team.MemberCount > 0)
         {
-            throw new ProtonToolInputException($"{team.Name} still has {team.MemberCount} member(s): they move to another team from their profiles first.");
+            throw new ProtonToolInputException($"{team.Name} still has {team.MemberCount} member(s): they move to another department from their profiles first.");
         }
 
         return (new DeleteTeamArgs(team.Id),
-            new ProtonPreview($"Delete the team {team.Name}", [new ProtonChange("Team", team.Name, "deleted")],
-                "A team whose chat has messages is kept: the app refuses to delete it.", Confirm: ProtonConfirm.Typed, Phrase: team.Name, Irreversible: true),
+            new ProtonPreview($"Delete the department {team.Name}", [new ProtonChange("Department", team.Name, "deleted")],
+                "A department whose chat has messages is kept: the app refuses to delete it.", Confirm: ProtonConfirm.Typed, Phrase: team.Name, Irreversible: true),
             TeamText.Ref(team));
     }
 

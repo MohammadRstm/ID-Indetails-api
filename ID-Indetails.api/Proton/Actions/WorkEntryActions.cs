@@ -1,14 +1,19 @@
 using System.ComponentModel;
 using System.Globalization;
+using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Configuration.Options;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Request.WorkEntries;
+using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
+using ID_Indetails.api.Repositories.Auth.Abstraction;
+using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
@@ -29,7 +34,7 @@ public sealed record CommentWorkEntryInput : ProtonActionInput
     [Description("The comment, in the user's words.")]
     public required string Body { get; init; }
 
-    [Description("Also post it to the author's team chat, mentioning everyone there. Only when the user asked for that.")]
+    [Description("Also post it to the author's department chat, mentioning everyone there. Only when the user asked for that.")]
     public bool SendToGroup { get; init; }
 }
 
@@ -74,11 +79,11 @@ public sealed class ProposeCommentWorkEntryTool(
         {
             CheckGroupAllowed(context.Turn);
             var team = (await employees.GetAsync(entry.Person.Id, cancellationToken)).Team
-                ?? throw new ProtonToolInputException($"{entry.Person.Name} isn't in a team, so there is no team chat to share it to.");
+                ?? throw new ProtonToolInputException($"{entry.Person.Name} isn't in a department, so there is no department chat to share it to.");
             var members = (await TeamText.FindAsync(teams, team.Id, cancellationToken)).MemberCount;
             preview = preview with
             {
-                Changes = [.. preview.Changes, new ProtonChange("Also posted to", null, $"{team.Name} team chat, mentioning everyone")],
+                Changes = [.. preview.Changes, new ProtonChange("Also posted to", null, $"{team.Name} department chat, mentioning everyone")],
                 Confirm = ProtonConfirm.Typed,
                 Phrase = team.Name,
                 Irreversible = true,
@@ -99,7 +104,7 @@ public sealed class ProposeCommentWorkEntryTool(
         }
 
         var comment = await comments.AddAsync(args.WorkEntryId, args.Request, cancellationToken);
-        return new ProtonActionDone(comment.SentToGroup ? "Posted the comment and shared it to the team chat." : "Posted the comment.", "work_entry_comment", comment.Id, []);
+        return new ProtonActionDone(comment.SentToGroup ? "Posted the comment and shared it to the department chat." : "Posted the comment.", "work_entry_comment", comment.Id, []);
     }
 
     /// <summary>The comment family is Core; sharing it is a message, held to the Messaging family's rules.</summary>
@@ -107,12 +112,12 @@ public sealed class ProposeCommentWorkEntryTool(
     {
         if (!options.Value.Actions.IsOn(ProtonFamily.Messaging))
         {
-            throw new ProtonToolInputException("Sharing to a team chat isn't switched on for Proton yet: post the comment alone, or share it in the app.");
+            throw new ProtonToolInputException("Sharing to a department chat isn't switched on for Proton yet: post the comment alone, or share it in the app.");
         }
 
         if (turn != ProtonTurnOrigin.Typed)
         {
-            throw new ProtonToolInputException("Sharing to a team chat needs the user to ask for it in their own words.");
+            throw new ProtonToolInputException("Sharing to a department chat needs the user to ask for it in their own words.");
         }
     }
 }
@@ -142,7 +147,9 @@ public sealed record LogWorkInput : ProtonActionInput
 /// Logs the user's own work, through POST /api/work-entries once confirmed. The card says how much of it would be
 /// overtime, from the same preview the log form shows; the app's own rules (edit window, overlaps, future entries) apply.
 /// </summary>
-public sealed class ProposeLogWorkTool(IProjectService projects, IWorkEntryService workEntries, IMyTimeService myTime, IClock clock)
+public sealed class ProposeLogWorkTool(
+    IProjectService projects, IWorkEntryService workEntries, IMyTimeService myTime, IClock clock,
+    IUserRepository users, IProjectDepartmentRepository departments)
     : ProtonActionTool<LogWorkInput, MyWorkArgs>
 {
     public override string Name => "propose_log_work";
@@ -169,6 +176,7 @@ public sealed class ProposeLogWorkTool(IProjectService projects, IWorkEntryServi
             new("Description", null, request.Description ?? "none"),
         };
         var note = await WorkText.OvertimeAsync(myTime, request, null, cancellationToken);
+        note = Join(note, await DepartmentNoteAsync(project, context, cancellationToken));
         return (new MyWorkArgs(null, request, null), new ProtonPreview("Log your work", changes, note), ProjectText.Ref(project));
     }
 
@@ -179,6 +187,32 @@ public sealed class ProposeLogWorkTool(IProjectService projects, IWorkEntryServi
         var entry = await workEntries.CreateAsync(args.Request, cancellationToken);
         return new ProtonActionDone($"Logged {WorkText.Hours(entry.Minutes)} on {entry.Project.Title}.", "work_entry", entry.Id, []);
     }
+
+    /// <summary>
+    /// On a project with departments: no department refuses, as the API would; a department the project doesn't have
+    /// keeps the card, but says the hours wait until it is added.
+    /// </summary>
+    private async Task<string?> DepartmentNoteAsync(ProjectResponse project, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var onProject = (await departments.ListAsync([project.Id], cancellationToken)).Select(d => d.TeamId).ToList();
+        if (onProject.Count == 0)
+        {
+            return null;
+        }
+
+        var department = (await users.GetByIdAsync(context.Access.UserId, cancellationToken))?.TeamId;
+        if (department is not { } theirs)
+        {
+            throw ProjectDepartmentRules.NoDepartment().ToException();
+        }
+
+        return ProjectDepartmentRules.MayLog(onProject, theirs)
+            ? null
+            : $"Your department isn't one of {project.Title}'s, so these hours wait, not logged yet, until it is added to the project.";
+    }
+
+    private static string? Join(string? first, string? second)
+        => first is null ? second : second is null ? first : $"{first} {second}";
 }
 
 public sealed record UpdateMyWorkInput : ProtonActionInput
@@ -313,6 +347,128 @@ public sealed class ProposeDeleteMyWorkTool(IWorkEntryQueryService queries, IWor
     {
         await workEntries.DeleteAsync(args.EntryId, cancellationToken);
         return new ProtonActionDone("Deleted the entry.", "work_entry", args.EntryId, []);
+    }
+}
+
+public sealed record RestoreMyWorkArgs(long EntryId);
+
+public sealed record RestoreMyWorkInput : ProtonActionInput
+{
+    [Description("One of the user's own deleted entries, from list_my_deleted_work.")]
+    public required long WorkEntryId { get; init; }
+}
+
+/// <summary>
+/// Brings back one of the user's own deleted work entries, through POST /api/work-entries/{id}/restore once confirmed.
+/// Only an entry the app would still restore (inside the edit window, an open month, a project that takes work); the
+/// app's overlap rule applies at Confirm.
+/// </summary>
+public sealed class ProposeRestoreMyWorkTool(IWorkEntryQueryService queries, IWorkEntryService workEntries, IMyTimeService myTime, IClock clock)
+    : ProtonActionTool<RestoreMyWorkInput, RestoreMyWorkArgs>
+{
+    public override string Name => "propose_restore_my_work";
+
+    public override string Description =>
+        "Propose bringing back one of the user's own deleted work entries (ids from list_my_deleted_work) while it can " +
+        "still be restored. Nothing changes until they confirm the card.";
+
+    public override ProtonActionRisk Risk => ProtonActionRisk.Low;
+
+    public override string? OnlyInDomain => DomainCodes.Design;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<WorkEntriesController>(nameof(WorkEntriesController.Restore));
+
+    protected override async Task<(RestoreMyWorkArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
+        RestoreMyWorkInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        // the person's own deleted entries only: anyone else's, or one that isn't deleted, reads as not found
+        var entry = (await queries.ListMyDeletedAsync(cancellationToken)).FirstOrDefault(e => e.Id == input.WorkEntryId)
+            ?? throw new NotFoundException("Not one of the user's deleted entries.");
+        if (!entry.CanEdit)
+        {
+            throw new ProtonToolInputException(
+                "That entry can't be restored any more: it is past the edit window, in a closed month, or on a project that no longer takes work.");
+        }
+
+        var note = await WorkText.OvertimeAsync(myTime, WorkText.RequestOf(entry), null, cancellationToken);
+        return (new RestoreMyWorkArgs(entry.Id),
+            new ProtonPreview("Restore your work entry",
+                [new ProtonChange("Entry", "deleted", $"{clock.Local(entry.StartedAt)}, {entry.Project.Title}: {ProtonText.Cut(entry.Description, 120)}")],
+                note),
+            new ProtonRef(ProtonRefType.Project, entry.Project.Id, entry.Project.Title, DomainCodes.Design));
+    }
+
+    protected override object? RequestOf(RestoreMyWorkArgs args) => null;
+
+    protected override async Task<ProtonActionDone> ExecuteAsync(RestoreMyWorkArgs args, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var entry = await workEntries.RestoreAsync(args.EntryId, cancellationToken);
+        return new ProtonActionDone($"Restored your entry on {entry.Project.Title}.", "work_entry", entry.Id, []);
+    }
+}
+
+public sealed record SetWorkEntryScopeArgs(long EntryId, bool OutsideScope);
+
+public sealed record SetWorkEntryScopeInput : ProtonActionInput
+{
+    [Description("Anyone's entry, from list_work_entries or get_work_entry.")]
+    public required long WorkEntryId { get; init; }
+
+    [Description("True to mark it as work outside the project's original scope (the client asked for more than was agreed); false to count it inside the scope again.")]
+    public required bool OutsideScope { get; init; }
+}
+
+/// <summary>
+/// An admin's correction of whether someone's entry is outside the project's original scope, through
+/// PUT /api/work-entries/{id}/scope once confirmed: after the edit window too, but never in a closed month.
+/// </summary>
+public sealed class ProposeSetWorkEntryScopeTool(IWorkEntryQueryService queries, IWorkEntryService workEntries, IClock clock)
+    : ProtonActionTool<SetWorkEntryScopeInput, SetWorkEntryScopeArgs>
+{
+    public override string Name => "propose_set_work_entry_scope";
+
+    public override string Description =>
+        "Propose marking someone's logged work entry as outside the project's original scope (work the client asked for " +
+        "beyond what was agreed), or back inside it. For people who see everyone's work. Nothing changes until the user " +
+        "confirms the card.";
+
+    public override ProtonActionRisk Risk => ProtonActionRisk.Low;
+
+    public override string? OnlyInDomain => DomainCodes.Design;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<WorkEntriesController>(nameof(WorkEntriesController.SetScope));
+
+    protected override async Task<(SetWorkEntryScopeArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
+        SetWorkEntryScopeInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var entry = (await queries.GetAsync(input.WorkEntryId, cancellationToken)).Entry;
+        WorkEntryRules.CheckOpenMonth(clock.CompanyDayStartUtc(WorkEntryRules.OpenFrom(clock.CompanyToday)), entry.StartedAt).ThrowIfDenied();
+        if (entry.OutsideScope == input.OutsideScope)
+        {
+            throw new ProtonToolInputException(input.OutsideScope ? "That entry is already marked as outside the scope." : "That entry is already inside the scope.");
+        }
+
+        var changes = new List<ProtonChange>
+        {
+            new("Entry", null, $"{entry.Person.Name}, {clock.Local(entry.StartedAt)}, {entry.Project.Title}: {ProtonText.Cut(entry.Description, 120)}"),
+            new("Scope", entry.OutsideScope ? "outside the original scope" : "inside the original scope", input.OutsideScope ? "outside the original scope" : "inside the original scope"),
+        };
+        return (new SetWorkEntryScopeArgs(entry.Id, input.OutsideScope),
+            new ProtonPreview(
+                input.OutsideScope ? $"Mark {entry.Person.Name}'s work as outside the scope" : $"Count {entry.Person.Name}'s work as inside the scope",
+                changes,
+                "The project's work page splits its hours by this. It's recorded in the activity feed."),
+            new ProtonRef(ProtonRefType.Project, entry.Project.Id, entry.Project.Title, DomainCodes.Design));
+    }
+
+    protected override object? RequestOf(SetWorkEntryScopeArgs args) => new SetWorkEntryScopeRequest { OutsideScope = args.OutsideScope };
+
+    protected override async Task<ProtonActionDone> ExecuteAsync(SetWorkEntryScopeArgs args, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var entry = await workEntries.SetScopeAsync(args.EntryId, new SetWorkEntryScopeRequest { OutsideScope = args.OutsideScope }, cancellationToken);
+        return new ProtonActionDone(
+            args.OutsideScope ? $"Marked the entry on {entry.Project.Title} as outside the scope." : $"Counted the entry on {entry.Project.Title} as inside the scope.",
+            "work_entry", entry.Id, []);
     }
 }
 

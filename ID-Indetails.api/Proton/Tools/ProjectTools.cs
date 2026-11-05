@@ -259,7 +259,9 @@ public sealed record ProjectCard(
     DateTime? CompletedAt,
     DateTime? HeldSince,
     DateTime CreatedAt,
-    IReadOnlyList<ProtonNamed>? SiteStaff);
+    IReadOnlyList<ProtonNamed>? SiteStaff,
+    IReadOnlyList<string>? Departments,
+    string? DepartmentsName);
 
 public sealed record ProtonNamed(long Id, string Name);
 
@@ -270,7 +272,8 @@ public sealed class GetProjectTool(IProjectService projects) : ProtonTool<Projec
 
     public override string Description =>
         "A project's details: status, client, owner, dates, progress, whether it is overdue, and an Execution site's " +
-        "staff (the employees who oversee it and write its daily logs). Use get_project_team for who worked on a Design " +
+        "staff (the employees who oversee it and write its daily logs), and a Design project's departments by name (get_project_departments " +
+        "has their shares and budgets). Use get_project_team for who worked on a Design " +
         "project and get_project_financials for its money.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Get));
@@ -287,7 +290,8 @@ public sealed class GetProjectTool(IProjectService projects) : ProtonTool<Projec
             ProjectOverdue.IsOverdue(p.TargetDate, p.Status, context.Today),
             ProjectOverdue.DaysOverdue(p.TargetDate, p.Status, context.Today),
             p.ProgressPct, p.CompletedAt, p.HeldSince, p.CreatedAt,
-            p.Staff?.Select(x => new ProtonNamed(x.Id, x.Name)).ToList());
+            p.Staff?.Select(x => new ProtonNamed(x.Id, x.Name)).ToList(),
+            p.Departments?.Select(d => d.Name).ToList(), p.DepartmentsName);
 
         var refs = new List<ProtonRef>
         {

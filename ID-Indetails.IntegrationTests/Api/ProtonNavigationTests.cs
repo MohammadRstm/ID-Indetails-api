@@ -105,6 +105,21 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         (await OpenAsync(superAdmin, project.Id, "overview")).Opened.ShouldBeNull();
         (await OpenAsync(superAdmin, site.Id, "analytics")).Opened.ShouldBeNull();
 
+        // a Design client project's client payments and variation orders are its money's: not an admin's, nor a site's tabs
+        (await OpenAsync(superAdmin, project.Id, "payments")).Opened.ShouldBe(ProtonProjectSection.Payments);
+        (await OpenAsync(superAdmin, project.Id, "vos")).Opened.ShouldBe(ProtonProjectSection.Vos);
+        (await OpenAsync(designAdmin, project.Id, "vos")).Opened.ShouldBeNull();
+        (await OpenAsync(superAdmin, site.Id, "payments")).Opened.ShouldBeNull();
+
+        // its departments window, on a Design project only
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("open_surface", new { surface = "project_departments", id = project.Id }), FakeAnthropic.Text("Opening it."));
+        (await AskAsync(superAdmin, new { text = "Open its departments" })).UiCommands.Single()
+            .ShouldBe(new ProtonUiCommand(ProtonUiCommandType.OpenSurface, $"the project's departments for {project.Title}", project.Id, DomainCodes.Design, Surface: ProtonSurface.ProjectDepartments));
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("open_surface", new { surface = "project_departments", id = site.Id }), FakeAnthropic.Text("Opening it."));
+        (await AskAsync(superAdmin, new { text = "Open its departments" })).UiCommands.ShouldBeEmpty();
+
         // everything a site shows is a part of its Financials tab, open to whoever sees the site; a site has no overview
         var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
         (await OpenAsync(siteAdmin, site.Id, "financials")).Opened.ShouldBe(ProtonProjectSection.Financials);

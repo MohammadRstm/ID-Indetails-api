@@ -35,8 +35,9 @@ public sealed record WorkEntriesInput
     public int? Limit { get; init; }
 }
 
+/// <param name="OutsideScope">An admin marked it as work outside the project's original scope.</param>
 public sealed record WorkEntryRow(
-    long Id, ProtonNamed Person, ProtonNamed Project, string Started, string Ended, int Minutes, int OvertimeMinutes, string Description);
+    long Id, ProtonNamed Person, ProtonNamed Project, string Started, string Ended, int Minutes, int OvertimeMinutes, string Description, bool OutsideScope);
 
 public sealed record WorkEntryList(DateOnly From, DateOnly To, int Total, int Shown, IReadOnlyList<WorkEntryRow> Entries);
 
@@ -77,7 +78,8 @@ public sealed class ListWorkEntriesTool(IWorkEntryQueryService workEntries, IClo
             clock.Local(e.EndedAt),
             e.Minutes,
             e.OvertimeMinutes,
-            ProtonText.Cut(e.Description, 400)!)).ToList();
+            ProtonText.Cut(e.Description, 400)!,
+            e.OutsideScope)).ToList();
         var refs = rows.Select(r => new ProtonRef(ProtonRefType.Person, r.Person.Id, r.Person.Name))
             .Concat(rows.Select(r => new ProtonRef(ProtonRefType.Project, r.Project.Id, r.Project.Name, DomainCodes.Design)))
             .Distinct()
@@ -324,7 +326,7 @@ public sealed class GetWorkEntryTool(IWorkEntryQueryService workEntries, IClock 
         var e = detail.Entry;
         var row = new WorkEntryRow(
             e.Id, new ProtonNamed(e.Person.Id, e.Person.Name), new ProtonNamed(e.Project.Id, e.Project.Title),
-            clock.Local(e.StartedAt), clock.Local(e.EndedAt), e.Minutes, e.OvertimeMinutes, ProtonText.Cut(e.Description, 2000)!);
+            clock.Local(e.StartedAt), clock.Local(e.EndedAt), e.Minutes, e.OvertimeMinutes, ProtonText.Cut(e.Description, 2000)!, e.OutsideScope);
         var comments = detail.Comments.Select(c => new WorkEntryCommentRow(c.Author.Name, ProtonText.Cut(c.Body, 1000)!, clock.Local(c.CreatedAt))).ToList();
         return new ProtonToolOutput(new WorkEntryDetail(row, comments),
             [new ProtonRef(ProtonRefType.Person, e.Person.Id, e.Person.Name), new ProtonRef(ProtonRefType.Project, e.Project.Id, e.Project.Title, DomainCodes.Design)]);
@@ -372,6 +374,36 @@ public sealed class ListMyWorkTool(IWorkEntryQueryService workEntries, IClock cl
     }
 }
 
-public sealed record MyWorkRow(long Id, ProtonNamed Project, string Started, string Ended, int Minutes, int OvertimeMinutes, string? Description, bool Editable);
+public sealed record NoDeletedWorkInput;
+
+/// <param name="Restorable">The app would still bring it back: inside the edit window, an open month, a project that takes work.</param>
+public sealed record DeletedWorkRow(long Id, ProtonNamed Project, string Started, string Ended, int Minutes, string? Description, bool Restorable);
+
+/// <summary>
+/// The user's own work entries deleted lately, most recently deleted first, so one can be brought back. The app lists
+/// none: it restores right after a delete.
+/// </summary>
+public sealed class ListMyDeletedWorkTool(IWorkEntryQueryService workEntries, IClock clock) : ProtonTool<NoDeletedWorkInput>
+{
+    public override string Name => "list_my_deleted_work";
+
+    public override string Description =>
+        "The user's own work entries they deleted lately, most recently deleted first, with whether each can still be " +
+        "restored. Use it to find the entry to bring back. Design only.";
+
+    public override string? OnlyInDomain => DomainCodes.Design;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<MyWorkController>(nameof(MyWorkController.ListEntries));
+
+    protected override async Task<ProtonToolOutput> RunAsync(NoDeletedWorkInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var rows = (await workEntries.ListMyDeletedAsync(cancellationToken)).Select(e => new DeletedWorkRow(
+            e.Id, new ProtonNamed(e.Project.Id, e.Project.Title), clock.Local(e.StartedAt), clock.Local(e.EndedAt), e.Minutes,
+            ProtonText.Cut(e.Description, 400), e.CanEdit)).ToList();
+        return new ProtonToolOutput(rows, rows.Select(r => new ProtonRef(ProtonRefType.Project, r.Project.Id, r.Project.Name, DomainCodes.Design)).Distinct().ToList());
+    }
+}
+
+public sealed record MyWorkRow(long Id,ProtonNamed Project, string Started, string Ended, int Minutes, int OvertimeMinutes, string? Description, bool Editable);
 
 public sealed record MyWorkList(DateOnly From, DateOnly To, int Total, IReadOnlyList<MyWorkRow> Entries);

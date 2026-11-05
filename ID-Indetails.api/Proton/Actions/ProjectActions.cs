@@ -187,7 +187,7 @@ public sealed record CreateProjectInput : ProtonActionInput
     [Description("An Execution site only, required: the employees who oversee it and write its daily logs (ids from find), active Execution employees.")]
     public IReadOnlyList<long>? StaffIds { get; init; }
 
-    [Description("A Design client project only, required: the departments working on it (team ids from find), in equal shares to start.")]
+    [Description("A Design client project only, required: the departments working on it (ids from list_teams), in equal shares to start.")]
     public IReadOnlyList<long>? DepartmentIds { get; init; }
 
     public DateOnly? TargetDate { get; init; }
@@ -269,7 +269,7 @@ public sealed class ProposeCreateProjectTool(
         var departmentIds = input.DepartmentIds ?? [];
         if (domain == DomainCodes.Design && !input.Internal && departmentIds.Count == 0)
         {
-            throw new ProtonToolInputException("Which departments work on this project? Ask the user, then pass their team ids.");
+            throw new ProtonToolInputException("Which departments work on this project? Ask the user, then pass their ids (list_teams).");
         }
 
         var chosenDepartments = await departments.CandidatesAsync(departmentIds, cancellationToken);

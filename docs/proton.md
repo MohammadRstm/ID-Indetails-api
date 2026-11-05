@@ -58,11 +58,12 @@ POST /api/proton/messages
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
   237 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
-  - a built action (85), or one planned (93): each planned entry already has the tier and family it will be confirmed
-    with, and is built area by area;
+  - a built action (168), or one planned (13): each planned entry already has the tier and family it will be confirmed
+    with. The planned ones are an Execution site's staff and daily logs, the pocket money, supervision taken, emailing,
+    planning and scheduling invoices, and a payment's account label, waiting for the Execution changes to settle;
   - a place opened for the user (17): what takes a password or a sign-in address (typed on its own form, never in a
     chat), someone's pay (pay amounts never reach Proton), and uploads, which need a file from the person's device;
-  - elsewhere (29): what isn't the signed-in person's to do: signing in, someone else's invitation, the client's side of
+  - elsewhere (31): what isn't the signed-in person's to do: signing in, someone else's invitation, the client's side of
     the portal, the phone app's own device, a website visitor's message, the development file store;
   - a read-only POST (2), or Proton's own controls (11).
 
@@ -84,7 +85,11 @@ POST /api/proton/messages
 |---|---|---|
 | `find` | project, client and employee lists | name → ids; drops filler words, tries single words if the phrase matches nothing |
 | `list_projects` | `GET /api/projects` | filters, sorting, `overdue_only` |
-| `get_project` | `GET /api/projects/{id}` | details and the overdue flag; no money |
+| `get_project_departments` | `GET /api/projects/{id}/departments` (+ `/history` with `financial:view`) | Design client projects: each department's share, budget, cost, minutes, what is left and its people; money only with `financial:view`, no rates |
+| `list_design_vos` | `GET /api/projects/{id}/design-vos` (+ `/outside-scope`) | Design only, `financial:view`: the price, each VO's lines, status, split and department amounts, the hours outside the agreed scope, and the department ids for a split |
+| `get_permissions`, `list_hour_excuses` | `GET /api/users/{id}/permissions`, the month's salary detail | someone's permissions with what their role gives; the excuses in someone's month with their ids, never what they are worth |
+| `list_my_devices`, `get_my_notification_settings` | `GET /api/me/devices`, `/api/me/notification-settings` | the user's own phones and push settings |
+| `get_project` | `GET /api/projects/{id}` | details, its departments' names and the overdue flag; no money |
 | `get_project_requirements` | `GET /api/projects/{id}/requirements` | |
 | `get_project_team` | `GET /api/projects/{id}` + `/work` | Design: who logged hours (optionally in a period); Execution: the site's staff |
 | `get_project_financials` | `GET /api/projects/{id}` (money part) | all time; agreed revenue net of TVA and `agreed_with_tva`, the TVA rate; on a site its supervision and rate, the pocket money moved out and paid in, and cash profit with them; no cost per hour |
@@ -97,7 +102,6 @@ POST /api/proton/messages
 | `get_site_account` | `GET /api/projects/{id}/account-figures` + `/supervision-withdrawals` | Execution only, `financial:view`: the site's account as its Accounts part shows it (work, supervision, TVA, received, owed, costs, profit, supervision due, taken and left, pocket moves, cash in account, by label, by category, the 15 largest payees) and each time supervision was taken |
 | `get_pocket_money` | `GET /api/execution/pocket` + `/entries` | Execution only, `financial:view`: the balance, everything moved in and paid out, the requests waiting, and its movements by site or period |
 | `get_invoice` | `GET /api/invoices/{id}` | one invoice in full: lines, total, paid and balance, terms, who it is billed to, the notes printed for the client, why it was voided, each time it was sent |
-| `list_quotes` | `GET /api/projects/{id}/quotes` | a client project's quotes: what the client is quoted (TVA included) and the net amount, the scope, each time it was sent |
 | `list_work_entries` | `GET /api/work-entries` | with descriptions; Design only |
 | `get_time_summary` | `GET /api/reports/work` | by project, person, client; no labour cost per person |
 | `get_work_overview` | `GET /api/reports/overview` | Design dashboard and attention items |
@@ -145,7 +149,8 @@ Proton reads the newer features as the person would see them on their pages.
   `read_project_file` refuses until someone with `company_settings:manage` turns on "Let Proton read project files" in
   Company settings: `PUT /api/company/proton-files` sets `company_settings.proton_reads_files`, which is off by
   default. While it is off the tool stays offered, so the prompt stays cached, but it refuses and sends nothing.
-  Proton never changes this switch: it is `Never` in `ProtonCoverage`.
+  Proton changes this switch only on a strong card the user confirms by typing the company's name
+  (`propose_company_proton`, CompanyRules family).
 - **Reading a file** (`read_project_file`, `Proton/Files/ProtonFileReader.cs`). The file's bytes are read through
   `IPortalContentService.ReadAsync`, which applies the same access as the file's own link. Nothing is shown to the user
   from there, and nothing is kept beyond the conversation: the content goes to the model as blocks after the tool's
@@ -197,7 +202,9 @@ Proton reads the newer features as the person would see them on their pages.
 | `propose_website_under_construction` | `PUT /api/website/under-construction` | strong, Website | "under construction" or "website live" typed |
 
 The Website family is off until `Proton:Actions:Website` is turned on. Like every family outside Core and
-Lifecycle, it is proposed only on a turn the user typed. Pictures, the favicon, removing a social link and the order of things stay `Never`; social links are prefilled (`fill_form`).
+Lifecycle, it is proposed only on a turn the user typed. Pictures' details and order, the favicon, social links and the
+order of things are cards too (see [Everything else the user can do](#everything-else-the-user-can-do-2026-11)); new
+pictures are uploaded by a person.
 
 ## Reply suggestions in the discussion with a client (Proton Phase 5)
 
@@ -453,8 +460,8 @@ submits or sends anything itself.
   - Each form checks its record: a draft invoice and its project, the invoice a payment pays, a Design or Execution
     project as the form needs, a visible person, a requirement, file or thread on that project, a website row that
     exists.
-  - Five Website and portal actions move from Never to Prefill in `ProtonCoverage` (the social links, the portal
-    summary and the two portal messages): Proton prepares them, the person sends them.
+  - Five Website and portal actions moved from Never to Prefill in `ProtonCoverage` (the social links, the portal
+    summary and the two portal messages); they are actions now, and these forms still fill for the person to send.
 - **Client** (`formFill.ts`): a form that can be filled registers an adapter while it is open (`useProtonForm`);
   a fill that arrives before the form opens waits up to 10 s. Adapters fill **empty** fields only (`fillEmpty`); the edit
   form replaces values the user asked to change and shows what they were (`fillChange`). A note lists what was filled.
@@ -687,11 +694,11 @@ and confirmed strongly: a second step at least, and a typed phrase the server st
 | Tool | Family | Stands in for | Confirm |
 |---|---|---|---|
 | `propose_project_lifecycle` | Lifecycle | `POST /api/projects/{id}/complete`, `/archive`, `/reopen` | the project's name typed; the card says the revenue locks (or unlocks) and how many open requirements get ticked |
-| `propose_update_employee` | Access | `PUT /api/employees/{id}` | two steps; name, phone, position and team only (never role, domain, sign-in email or pay) |
+| `propose_update_employee` | Access | `PUT /api/employees/{id}` | two steps; name, phone, position and department only (role and business are `propose_employee_access`; never sign-in email or pay). A Design employee keeps a department |
 | `propose_deactivate_employee` | Access | `POST /api/employees/{id}/deactivate` | the person's name typed; never oneself |
 | `propose_reactivate_employee` | Access | `POST /api/employees/{id}/reactivate` | two steps; when they left earlier this month the tool asks Proton to ask the user whether the time away is paid, and the card shows the answer. Someone who never signed up shows as invited again |
 | `propose_end_sessions` | Access | `POST /api/employees/{id}/sessions/end` (`/restore`) | two steps; never one's own |
-| `propose_delete_team` | Deletes | `DELETE /api/teams/{id}` | the team's name typed; an empty team only (a team whose chat has messages is refused by the app) |
+| `propose_delete_team` | Deletes | `DELETE /api/teams/{id}` | the department's name typed; an empty department only (one whose chat has messages is refused by the app) |
 | `propose_company_settings` | CompanyRules | `PUT /api/company/settings` | two steps; the company's name typed for a new week start or default currency. The card says how many people it affects |
 | `propose_domain_settings` | CompanyRules | `PUT /api/domain-settings/{domain}` | two steps; the domain's name typed to hold or release logging. The card says how many people it affects |
 | `propose_send_message` | Messaging | `POST /api/messages/direct/{id}`, `/teams/{id}` | see below |
@@ -724,7 +731,7 @@ an invoice's whole balance uses `full_balance`, so the server sets the amount.
 | `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13); it sends the week's version, so a week changed since is refused (`409 labour_week_changed`) |
 | `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; prefix, terms and footer only. Bank details and overdue reminders (which email clients on their own) are never part of a proposal: they are taken from the database when the change is made |
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate; irreversible. A backdated rate changes past costs, overhead and invoices (they convert at the rate of their day when read), and the card says so; payments keep their own rate |
-| `propose_project_money` | `PUT /api/projects/{id}/payment` (Design revenue), with why it changes (`reason`, asked for when not given) | the new amount. An Execution site isn't priced by Proton: its price is its agreed BOQ, and its supervision and TVA are changed in the app (`PUT …/pricing` is a `Never` entry) |
+| `propose_project_money` | `PUT /api/projects/{id}/payment` (a Design client project's customer payment), with why it changes (`reason`, asked for when not given) | the new amount. It corrects mistakes: work added or taken out is a VO (`propose_design_vo`). An Execution site's price is its agreed BOQ; its supervision and TVA are `propose_site_pricing` |
 | `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
 | `propose_delete` | requirement, meeting, client and project file deletes | the project's or client's name, or a general meeting's topic; a client with projects is archived instead |
 | `propose_working_time`, `propose_schedule`, `propose_hour_excuse` | the company week, someone's own week, excused hours | — ; the cards describe the effect in words and never show an amount |
@@ -750,6 +757,40 @@ team chat, through the messaging service and its rules (reach, active recipient,
 - **Marked.** The message carries the confirmed action (`messages.proton_action_id`) and reads `viaProton: true`; the
   chat shows it ([messaging.md](messaging.md)). A comment shared to a team chat is not marked yet: its card in the chat
   already shows who wrote it.
+
+## Everything else the user can do (2026-11)
+
+The rest of the planned entries, built area by area. Every card here is strong (a typed phrase) unless its family is
+Core, and each family is off until switched on in `Proton:Actions`. A card that emails someone outside the company is
+`ExternalSend`: the address is one the user typed in this conversation and is typed again, and
+`MaxExternalSendsPerDay` (20) caps them per person a day (`422 proton_action_limit`).
+
+| Tool | Family | Stands in for | Notes |
+|---|---|---|---|
+| `propose_employee_access` | Access | `PUT /api/employees/{id}/role`, `/domain`, `DELETE …/photo` | the person's name typed; never oneself, never pay. A Design employee needs a department: a move into Design asks for one, and a role change that would leave a Design employee without one is refused |
+| `propose_permissions` | Access | `PUT /api/users/{id}/permissions` | grant, revoke or reset up to 20 codes with the user's reason; the name typed |
+| `propose_invitation` | Access, ExternalSend | `POST /api/invitations`, `…/{id}/resend` | employees only (an admin's invitation carries a salary); a Design employee with a department; the address typed |
+| `propose_portal_invitation`, `propose_portal_end_access` | Access (the invitation is ExternalSend) | the client portal's invitations and access | a client's contact invited, re-sent or taken off |
+| `propose_portal_heroes`, `propose_portal_summary`, `propose_file_for_client` | Access, Core | the portal draft's main pictures, introduction and files for the client | only the draft changes; the client sees it once it is published |
+| `propose_discussion_post`, `propose_discussion_change`, `propose_mark_discussion_read` | Messaging, Core | the discussion with a project's client | in the user's own words; editing or deleting only the user's own |
+| `propose_mark_chat_read`, `propose_mark_notifications_read`, `propose_send_announcement`, `propose_report_bug` | Core, Messaging (the bug report is ExternalSend) | the user's chats, notifications, Announcements, a bug report | |
+| `propose_create_general_meeting`, `propose_restore_my_work`, `propose_set_work_entry_scope`, `propose_arrange_board` | Core | a general meeting, the user's deleted work, an entry outside the original scope, a dashboard's card order | |
+| `propose_reorder_files`, `propose_edit_file_comment`, `propose_set_comment_fixed`, `propose_delete_file_comment` | Core, Deletes | a Design project's files and the team's comments on them | |
+| `propose_project_departments` | Core | `PUT /api/projects/{id}/departments` | the whole list; the shares go back to equal and hours waiting for an added department go through |
+| `propose_department_shares` | Money | `PUT …/departments/shares` | percentages the user typed, adding up to 100; the project's name typed |
+| `propose_design_vo` | Money | `POST /api/projects/{id}/design-vos`, `…/confirm`, `…/cancel` | lines the user typed (work taken out too), split by shares or by departments, pending unless the user said to apply it; the project's name typed. A VO the profit floor refuses stays pending and is kept as a blocked change |
+| `propose_send_design_vo`, `propose_send_boq` | Money, ExternalSend | `…/design-vos/{id}/email`, `/api/boqs/{id}/email` | only sends |
+| `propose_boq`, `propose_edit_boq`, `propose_boq_agreement` | Money | a site's BOQs and VOs: made, copied, duplicated, deleted, edited, agreed, withdrawn, delivered | amounts typed; a line is work or a permit, and the cards show the two apart, with supervision and TVA on the work only; agreeing sets the site's work price and its permits |
+| `propose_site_pricing`, `propose_project_billing` | Money | a site's supervision rate and TVA; a Design project's client, or internal | |
+| `propose_blocked_change` | Money | `POST /api/blocked-changes/{id}/force`, `/dismiss` | forcing types the project's name; hours waiting for their logger's department are only dropped (adding the department lets them through). Its id is on the notification (`get_my_notifications`) |
+| `propose_proton_top_up` | Money | Proton's monthly budget top-up | the amount typed |
+| `propose_company_proton`, `propose_company_contact_email`, `propose_remove_company_logo`, `propose_account_label` | CompanyRules | Proton's company switches, the contact email, the logo, account labels | the company's or the label's name typed |
+| `propose_my_proton_suggestions`, `propose_notification_settings`, `propose_remove_my_photo`, `propose_remove_device` | Core, Deletes, Access | the user's own Proton switch, push settings, photo and phones | |
+| `propose_hour_excuse` (`remove_excuse_id`) | PayRules | `DELETE /api/hour-excuses/{id}` | the person's name typed |
+| `propose_website_picture`, `propose_website_order`, `propose_website_social_link`, `propose_website_conveyor`, `propose_remove_website_favicon` | Website | the website's pictures (their details and order; new ones are uploaded by a person), order, social links, moving banner and favicon | |
+
+Navigation for them: `open_record` opens a Design client project's `payments` and `vos` tabs for those who see its
+money, and `open_surface project_departments` opens its departments window while the project is open.
 
 ## The blob (client, Stage 5 Phase 2)
 

@@ -80,12 +80,12 @@ public class ProtonToolCatalogTests
         actions.Select(a => a.Name).ShouldBe(
             ProtonCoverage.Entries.Where(e => e.Kind == ProtonCoverageKind.Action).Select(e => e.Tool!).Distinct(), ignoreOrder: true);
         // a delete or a money write only ever in its own family, which is off until switched on (decisions 4 and 5); the
-        // person's own work entry is the exception: it is restored from My work within the edit window
+        // person's own work entry is the exception: it is restored from My work within the edit window; so is signing out one of their own phones, which they sign in on again (Access)
         foreach (var action in actions)
         {
             var family = ProtonCoverage.FamilyOf(action.Name);
             // deleting a cost or a material is a money change: off with the Money family
-            if (action.Endpoint.Name.Contains("Delete", StringComparison.OrdinalIgnoreCase) && action.Endpoint.Name != "WorkEntries.Delete")
+            if (action.Endpoint.Name.Contains("Delete", StringComparison.OrdinalIgnoreCase) && action.Endpoint.Name is not ("WorkEntries.Delete" or "Devices.Delete"))
             {
                 family.ShouldBeOneOf(ProtonFamily.Deletes, ProtonFamily.Money);
             }
