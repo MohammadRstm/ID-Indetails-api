@@ -128,7 +128,7 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     "The overtime threshold").
   - Admins and super admins are on a fixed salary and never log hours. Super admins' salaries are a company cost.
 - **Privacy:** employees never see their colleagues' hours or pay.
-- **Site staff:** an Execution site has at least one staff member, an active Execution employee. Staff write daily logs, which they can edit until midnight. Execution employees are paid monthly only.
+- **Site staff:** an Execution site needs no staff to be created; staff are put on it when it needs them, and can all be taken off again. Each one is an active Execution employee. Staff write daily logs, which they can edit until midnight. Execution employees are paid monthly only.
 
 ### Changes that always come together
 
