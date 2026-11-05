@@ -46,7 +46,7 @@ public class SiteTeamTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_site_needs_at_least_one_active_execution_employee_to_oversee_it()
+    public async Task A_site_is_overseen_only_by_active_execution_employees_and_may_start_with_none()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
@@ -61,7 +61,11 @@ public class SiteTeamTests(ApiFactory api) : IClassFixture<ApiFactory>
             (await response.ShouldFailWithAsync(400, ErrorCodes.ValidationFailed)).Errors!.Keys.ShouldContain("staffIds");
         }
 
-        await RefusedAsync([]);
+        // staff are put on a site when it needs them
+        var bare = await NewSiteAsync(siteAdmin.AccessToken);
+        bare.Staff.ShouldBeEmpty();
+        bare.Team!.Count.ShouldBe(0);
+
         await RefusedAsync([designer.User.Id]);
         await RefusedAsync([siteAdmin.User.Id]);
         await RefusedAsync([rami.User.Id, rami.User.Id]);
@@ -99,8 +103,10 @@ public class SiteTeamTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM project_staff WHERE project_id = @p AND user_id = @u", ("@p", site.Id), ("@u", rami.User.Id)))
             .ShouldBe(1);
 
-        await (await Client.PutJsonAsync($"/api/projects/{site.Id}/staff", new { staffIds = Array.Empty<long>() }, siteAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        // everyone can be taken off, and their row stays
+        (await SetAsync(siteAdmin.AccessToken)).Staff.ShouldBeEmpty();
+        (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM project_staff WHERE project_id = @p AND removed_at IS NOT NULL", ("@p", site.Id)))
+            .ShouldBe(2);
         await (await Client.PutJsonAsync($"/api/projects/{site.Id}/staff", new { staffIds = new[] { rami.User.Id } }, rami.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         var design = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);

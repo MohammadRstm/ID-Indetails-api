@@ -184,7 +184,7 @@ public sealed record CreateProjectInput : ProtonActionInput
     [Description("The owner (an admin of the project's business or a super admin). Leave out to make the user the owner.")]
     public long? OwnerId { get; init; }
 
-    [Description("An Execution site only, required: the employees who oversee it and write its daily logs (ids from find), active Execution employees.")]
+    [Description("An Execution site only, optional: the employees who oversee it and write its daily logs (ids from find), active Execution employees. They can be added later.")]
     public IReadOnlyList<long>? StaffIds { get; init; }
 
     [Description("A Design client project only, required: the departments working on it (ids from list_teams), in equal shares to start.")]
@@ -208,10 +208,10 @@ public sealed class ProposeCreateProjectTool(
     public override string Name => "propose_create_project";
 
     public override string Description =>
-        "Propose creating a Design project for a client (or an internal one), or an Execution site for an Execution client " +
-        "with the staff who oversee it. No money is set here: a Design project's revenue, and a site's BOQs, rates and crew " +
-        "defaults, come afterwards. Ask the user for the client, and for a site its staff, if they didn't say. Nothing " +
-        "changes until they confirm the card.";
+        "Propose creating a Design project for a client (or an internal one), or an Execution site for an Execution client, " +
+        "with the staff who oversee it if they are known. No money is set here: a Design project's revenue, and a site's BOQs, " +
+        "rates and crew defaults, come afterwards; a site's staff can too. Ask the user for the client if they didn't say. " +
+        "Nothing changes until they confirm the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -244,7 +244,7 @@ public sealed class ProposeCreateProjectTool(
             domain = client.Domain;
         }
 
-        // a site needs its staff, each an active Execution employee; a Design project has none
+        // a site's staff, if any are named yet, are each an active Execution employee; a Design project has none
         var staffNames = new List<string>();
         if (domain == DomainCodes.Execution)
         {

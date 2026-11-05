@@ -5,8 +5,8 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Business.Execution;
 
 /// <summary>
-/// Who oversees an Execution site, and their daily logs: staff are active Execution employees, every site has at least
-/// one, and a log can be changed only on the company day it was written.
+/// Who oversees an Execution site, and their daily logs: staff are active Execution employees, put on a site when it needs
+/// them (a site may have none, from its creation on), and a log can be changed only on the company day it was written.
 /// </summary>
 public static class SiteTeamRules
 {
@@ -15,14 +15,9 @@ public static class SiteTeamRules
     /// <summary>A person being put on a site.</summary>
     public sealed record Candidate(long Id, string Name, string Role, string? Domain, UserStatus Status);
 
-    /// <summary>The staff chosen for a site: at least one, each an active Execution employee, each once.</summary>
+    /// <summary>The staff chosen for a site: none, or each an active Execution employee, each once.</summary>
     public static RuleDenial? CheckStaff(IReadOnlyList<long> chosen, IReadOnlyCollection<Candidate> found)
     {
-        if (chosen.Count == 0)
-        {
-            return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "staffIds", "Choose at least one staff member to oversee the site.");
-        }
-
         if (chosen.Distinct().Count() != chosen.Count)
         {
             return RuleDenial.Invalid(ErrorCodes.ValidationFailed, "staffIds", "Choose each staff member once.");

@@ -128,7 +128,7 @@ public class ProtonExecutionActionsTests(ProtonMoneyApiFactory api) : IClassFixt
     }
 
     [Fact]
-    public async Task An_execution_site_is_created_with_its_staff_and_without_staff_is_refused()
+    public async Task An_execution_site_is_created_with_its_staff_or_without_any_yet()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var client = await Projects.CreateClientAsync(superAdmin.AccessToken, DomainCodes.Execution);
@@ -136,8 +136,9 @@ public class ProtonExecutionActionsTests(ProtonMoneyApiFactory api) : IClassFixt
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var title = "Site " + Guid.NewGuid().ToString("N")[..8];
 
-        var (_, none) = await ProposeAsync(superAdmin, "propose_create_project", new { title, client_id = client.Id });
-        none["message"]!.GetValue<string>().ShouldContain("at least one staff member");
+        // its staff can come later
+        var (none, _) = await ProposeAsync(superAdmin, "propose_create_project", new { title = title + " later", client_id = client.Id });
+        none.PendingAction!.Preview.Title.ShouldBe("Create an Execution site");
         var (_, wrong) = await ProposeAsync(superAdmin, "propose_create_project", new { title, client_id = client.Id, staff_ids = new[] { designer.User.Id } });
         wrong["message"]!.GetValue<string>().ShouldContain("isn't an active Execution employee");
 

@@ -11,10 +11,11 @@ public class SiteTeamRulesTests
         => new(id, $"Person {id}", role, domain, status);
 
     [Fact]
-    public void A_site_is_overseen_by_at_least_one_active_execution_employee_each_once()
+    public void A_site_is_overseen_by_active_execution_employees_each_once_or_by_nobody_yet()
     {
         SiteTeamRules.CheckStaff([1, 2], [Staff(1), Staff(2)]).ShouldBeNull();
-        SiteTeamRules.CheckStaff([], []).ShouldSatisfyAllConditions(d => d!.Field.ShouldBe("staffIds"), d => d!.Message.ShouldContain("at least one"));
+        SiteTeamRules.CheckStaff([], []).ShouldBeNull();
+        SiteTeamRules.CheckStaff([1, 1], [Staff(1)])!.Field.ShouldBe("staffIds");
         SiteTeamRules.CheckStaff([1, 1], [Staff(1)])!.Message.ShouldContain("once");
         SiteTeamRules.CheckStaff([1, 9], [Staff(1)])!.Message.ShouldContain("doesn't exist");
         SiteTeamRules.CheckStaff([3], [Staff(3, domain: DomainCodes.Design)])!.Message.ShouldContain("Person 3");

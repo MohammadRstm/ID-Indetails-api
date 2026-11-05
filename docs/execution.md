@@ -111,8 +111,8 @@ Client statements, which listed materials supplied and froze their prices, are g
 Site staff are Execution employees. They log no hours (they are paid monthly: an hourly pay is refused with `400 fixed_salary_paid_monthly`), record no site expenses by default (`material:create` is no longer an employee default; admins record them, or someone given the permission), and on the sites they oversee they report ground labour and write daily logs.
 
 **Who oversees a site** (`project_staff`):
-- `POST /api/projects` for an Execution site requires `staffIds`: at least one, each an active Execution employee, each once (`400 staffIds`). A Design project takes none.
-- `PUT /api/projects/{id}/staff` (`project:edit`) `{ staffIds }` replaces the list (at least one). Someone taken off keeps their row with `removedAt`, so their past records still say who they were; put back, the same row is used again.
+- `POST /api/projects` for an Execution site takes optional `staffIds`: each an active Execution employee, each once (`400 staffIds`). A site can be created with none and get its staff when it needs them; until then nobody writes its daily logs. A Design project takes none.
+- `PUT /api/projects/{id}/staff` (`project:edit`) `{ staffIds }` replaces the list (none to 50). Someone taken off keeps their row with `removedAt`, so their past records still say who they were; put back, the same row is used again.
 - The project shows them as `staff` (everyone, in the order they were put on) and as its `team` (the first 5 and the count), Execution only.
 - Sites that existed before got, as their staff, the Execution employees who had recorded their expenses or labour.
 
