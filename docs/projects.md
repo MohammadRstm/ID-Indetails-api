@@ -65,7 +65,8 @@ A Design client project's price changes with **variation orders** (VOs): lines b
 |---|---|---|
 | `GET /api/projects/{id}/design-vos` | `financial:view` | The project's VOs, newest first: lines, total before TVA, the TVA at the project's rate, each department's part, who made, sent, applied or cancelled it and when |
 | `GET /api/projects/{id}/design-vos/outside-scope` | `financial:view` | `{ from, minutes }`: the hours logged outside the agreed scope since the last applied VO, or the project's start |
-| `POST /api/projects/{id}/design-vos` | `financial:write` | `{ title, lines: [{ description, amount }], split, allocations, showOutsideScope, apply }` (`201`). `apply: true` adds it to the price now; otherwise it is **pending**, sent for the client to confirm |
+| `POST /api/projects/{id}/design-vos` | `financial:write` | `{ title, lines: [{ description, amount }], split, allocations, showOutsideScope, apply, chargeTva? }` (`201`). `apply: true` adds it to the price now; otherwise it is **pending**, sent for the client to confirm. `chargeTva: false` leaves the TVA off it |
+| `PUT /api/design-vos/{id}/tva` | `financial:write` | `{ chargeTva }`: adds the project's TVA to a pending or applied VO, or takes it off (`422 design_vo_not_pending` on a cancelled one). Writes a `design_vo_tva_set` event when it changes |
 | `POST /api/design-vos/{id}/confirm` | `financial:write` | The client agreed: the pending VO joins the price (`422 design_vo_not_pending` otherwise) |
 | `POST /api/design-vos/{id}/cancel` | `financial:write` | Takes a pending VO back; its number isn't used again |
 | `GET /api/design-vos/{id}/pdf` / `POST …/email` | `financial:view` / `financial:write` | Its PDF, or emailed to the client with it (`{ to, note }`, `204`); see [documents.md](documents.md) |
@@ -77,6 +78,7 @@ A Design client project's price changes with **variation orders** (VOs): lines b
   - A project with no departments keeps the VO's total at project level.
 - **Budgets:** a department's budget is the price before VOs × its share, plus what applied VOs gave it. A department with a VO's money stays on the project (`422 department_has_hours`).
 - **Outside-scope hours:** with `showOutsideScope`, the VO shows the hours logged outside the agreed scope since the last applied VO (or the project's start), fixed when it is made.
+- **TVA:** a VO carries the project's TVA unless whoever writes the money (the super admin) leaves it off, when it is made or later. One without TVA (`tvaRate` 0) is in the price as it is: what the client pays is the VOs without TVA plus the rest with its TVA, each payment's TVA share is its part of the TVA there is, and its PDF reads "TVA: None".
 
 ## Money
 

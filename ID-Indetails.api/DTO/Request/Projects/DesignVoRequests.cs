@@ -19,6 +19,18 @@ public sealed record CreateDesignVoRequest
 
     /// <summary>True: part of the price now. False: pending until the client confirms it.</summary>
     public bool Apply { get; init; }
+
+    /// <summary>
+    /// Whether it carries the project's TVA (the default). False: no TVA on it, whatever the project's rate. Whoever writes
+    /// the money decides, and can change it later.
+    /// </summary>
+    public bool ChargeTva { get; init; } = true;
+}
+
+/// <summary>Adds the project's TVA to a variation order, or takes it off.</summary>
+public sealed record SetDesignVoTvaRequest
+{
+    public bool ChargeTva { get; init; }
 }
 
 /// <param name="Amount">Before TVA, in USD; below zero for work taken out.</param>

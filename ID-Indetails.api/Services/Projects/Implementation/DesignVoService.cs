@@ -1,5 +1,7 @@
 using ID_Indetails.api.Authorization;
+using System.Text.Json;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Projects;
@@ -75,7 +77,8 @@ public sealed class DesignVoService(
                 Status = DesignVoStatus.Pending,
                 Split = request.Split,
                 TotalUsd = total,
-                TvaRate = project.TvaRate,
+                // the project's TVA, unless whoever writes the money leaves it off this one
+                TvaRate = request.ChargeTva ? project.TvaRate : 0,
                 OutsideScopeFrom = outside?.Item1,
                 OutsideScopeMinutes = outside?.Item2,
                 CreatedAt = now,
@@ -175,6 +178,38 @@ public sealed class DesignVoService(
         return await DescribeAsync(vo.Id, cancellationToken);
     }
 
+    public async Task<DesignVoResponse> SetTvaAsync(long id, SetDesignVoTvaRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialWrite);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var vo = await vos.GetForUpdateAsync(id, cancellationToken) ?? throw new NotFoundException(NotFoundMessage);
+        var project = DesignClientProject(actor, await projects.GetForUpdateAsync(vo.ProjectId, cancellationToken));
+        Throw(DesignVoRules.CheckNotCancelled(vo.Status));
+        Throw(ProjectRules.CheckMoneyEditable(project.RevenueLockedAt is not null));
+
+        var rate = request.ChargeTva ? project.TvaRate : 0;
+        if (rate != vo.TvaRate)
+        {
+            vo.TvaRate = rate;
+            activity.Add(new ActivityEvent
+            {
+                DomainCode = project.DomainCode,
+                Kind = ActivityEventKinds.DesignVoTvaSet,
+                OccurredAt = clock.UtcNow,
+                ActorId = actor.UserId,
+                ProjectId = project.Id,
+                SubjectType = "design_vo",
+                SubjectId = vo.Id,
+                Amount = Tva.Of(vo.TotalUsd, rate),
+                Payload = JsonSerializer.Serialize(new { number = vo.Number, chargesTva = rate > 0 }),
+            });
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(vo.Id, cancellationToken);
+    }
+
     public async Task<DesignVoDocument> GetDocumentAsync(long id, CancellationToken cancellationToken = default)
     {
         var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
@@ -203,7 +238,7 @@ public sealed class DesignVoService(
 
         return list.Select(v =>
         {
-            var tva = Math.Round(v.TotalUsd * v.TvaRate, 2, MidpointRounding.AwayFromZero);
+            var tva = Tva.Of(v.TotalUsd, v.TvaRate);
             return new DesignVoResponse
             {
                 Id = v.Id,

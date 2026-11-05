@@ -1,5 +1,6 @@
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Data;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Repositories.Finance.Abstraction;
 using Microsoft.EntityFrameworkCore;
 
@@ -85,6 +86,14 @@ public sealed class ProjectFinanceRepository(IdIndetailsDbContext db) : IProject
             .ToListAsync(cancellationToken);
         return rows.ToDictionary(r => r.ProjectId, r => (r.In, -r.Out));
     }
+
+    public async Task<IReadOnlyDictionary<long, decimal>> UntaxedVosAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
+        => await db.DesignVos
+            .AsNoTracking()
+            .Where(v => projectIds.Contains(v.ProjectId) && v.Status == DesignVoStatus.Applied && v.TvaRate == 0)
+            .GroupBy(v => v.ProjectId)
+            .Select(g => new { ProjectId = g.Key, Total = g.Sum(v => v.TotalUsd) })
+            .ToDictionaryAsync(r => r.ProjectId, r => r.Total, cancellationToken);
 
     public async Task<IReadOnlyList<(DateTime At, decimal AmountUsd)>> PocketMovesAsync(long projectId, CancellationToken cancellationToken = default)
         => (await db.PocketEntries

@@ -137,6 +137,7 @@ Every client project carries a TVA rate (`projects.tva_rate`, `0.11` is 11%). A 
   - Setting it needs `financial:view` (`403`).
   - A change of TVA alone is a change. It is kept in the payment history with its reason (`tvaRate`, `previousTvaRate`).
   - Making a project internal sets its rate to 0.
+  - A Design variation order can carry no TVA (the super admin's call, see [projects.md](projects.md#design-variation-orders)): it is left out of the project's TVA, and its payments hold their share of the TVA there is.
 - **Net inside, gross for the client:**
   - Revenue, profit, margins, expected revenue and the money reports are **net**: TVA is collected for the state, never earned. Revenue in a period counts each payment less its TVA share, and the domain summary shows `tvaCollected` apart.
   - What the client sees and owes is **gross**, with TVA never shown as a line: the billing figures (owed, paid ahead, left to invoice, not yet invoiced), invoices, BOQs (the total to pay, with supervision and TVA).

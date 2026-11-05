@@ -48,13 +48,19 @@ public static class DesignVoPdf
         return PdfLayout.Render(pdf);
     }
 
-    /// <summary>Before TVA, the TVA at its rate, and the total.</summary>
-    public static IReadOnlyList<TotalRow> Totals(DesignVoResponse vo) =>
-    [
-        new("Total before TVA", PdfLayout.Money(vo.TotalUsd)),
-        new($"TVA ({BoqPdf.Percent(vo.TvaRate)})", PdfLayout.Money(vo.TvaUsd)),
-        new("Total", PdfLayout.Money(vo.TotalWithTvaUsd), Strong: true),
-    ];
+    /// <summary>Before TVA, the TVA at its rate, and the total; or, on one without TVA, the total with no TVA on it.</summary>
+    public static IReadOnlyList<TotalRow> Totals(DesignVoResponse vo) => vo.TvaRate > 0
+        ?
+        [
+            new("Total before TVA", PdfLayout.Money(vo.TotalUsd)),
+            new($"TVA ({BoqPdf.Percent(vo.TvaRate)})", PdfLayout.Money(vo.TvaUsd)),
+            new("Total", PdfLayout.Money(vo.TotalWithTvaUsd), Strong: true),
+        ]
+        :
+        [
+            new("TVA", "None"),
+            new("Total", PdfLayout.Money(vo.TotalUsd), Strong: true),
+        ];
 
     /// <summary>"42h 30m logged outside the agreed scope since Oct 3, 2026." when the VO shows them.</summary>
     public static string? OutsideScope(DesignVoResponse vo)

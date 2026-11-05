@@ -114,6 +114,69 @@ public class DesignVoTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task The_superadmin_leaves_tva_off_a_vo_or_puts_it_back_and_what_the_client_pays_follows()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var architecture = await _steps.DesignDepartmentAsync();
+        var project = await ProjectAsync(superAdmin, [architecture]);
+        async Task<ProjectMoneyResponse> MoneyAsync()
+            => (await (await Client.GetAsync($"/api/projects/{project.Id}", superAdmin.AccessToken)).ReadAsync<ProjectResponse>()).Money!;
+
+        // 10,000 with its 11% TVA, and 1,000 of extra visits with none
+        var visits = await CreateAsync(superAdmin, project.Id, new
+        {
+            title = "Site visits",
+            lines = new[] { new { description = "Two extra site visits", amount = 1000m } },
+            split = "shares",
+            apply = true,
+            chargeTva = false,
+        });
+        (visits.TvaRate, visits.TvaUsd, visits.TotalWithTvaUsd).ShouldBe((0m, 0m, 1000m));
+        (await MoneyAsync()).ShouldSatisfyAllConditions(
+            m => m.Revenue.ShouldBe(11_000m),
+            m => m.RevenueWithTva.ShouldBe(12_100m),
+            m => m.PaymentWithTva.ShouldBe(12_100m));
+
+        // a payment holds its share of the TVA there is: 1,100 of 12,100
+        var paid = await Client.PostJsonAsync($"/api/projects/{project.Id}/payments", new { amount = 6050m, currency = "USD" }, superAdmin.AccessToken);
+        ((int)paid.StatusCode).ShouldBe(201, await paid.Content.ReadAsStringAsync());
+        (await _steps.ScalarAsync<decimal>("SELECT tva_usd FROM payments WHERE project_id = @p", ("@p", project.Id))).ShouldBe(550m);
+
+        // put back, the visits carry the TVA again
+        async Task<DesignVoResponse> SetAsync(long voId, bool chargeTva)
+        {
+            var response = await Client.PutJsonAsync($"/api/design-vos/{voId}/tva", new { chargeTva }, superAdmin.AccessToken);
+            ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+            return await response.ReadAsync<DesignVoResponse>();
+        }
+
+        (await SetAsync(visits.Id, true)).ShouldSatisfyAllConditions(v => v.TvaRate.ShouldBe(0.11m), v => v.TotalWithTvaUsd.ShouldBe(1110m));
+        (await MoneyAsync()).RevenueWithTva.ShouldBe(12_210m);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM activity_events WHERE kind = 'design_vo_tva_set' AND subject_id = @v", ("@v", visits.Id)))
+            .ShouldBe(1);
+        // asked again, nothing changes and nothing is written
+        await SetAsync(visits.Id, true);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM activity_events WHERE kind = 'design_vo_tva_set' AND subject_id = @v", ("@v", visits.Id)))
+            .ShouldBe(1);
+
+        // a pending one changes too; a cancelled one stays as it was, and only whoever writes the money decides
+        var pending = await CreateAsync(superAdmin, project.Id, new
+        {
+            title = "Pergola",
+            lines = new[] { new { description = "Pergola design", amount = 500m } },
+            split = "shares",
+        });
+        (await SetAsync(pending.Id, false)).TotalWithTvaUsd.ShouldBe(500m);
+        (await MoneyAsync()).RevenueWithTva.ShouldBe(12_210m);
+        (await Client.PostEmptyAsync($"/api/design-vos/{pending.Id}/cancel", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PutJsonAsync($"/api/design-vos/{pending.Id}/tva", new { chargeTva = true }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.DesignVoNotPending);
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        await (await Client.PutJsonAsync($"/api/design-vos/{visits.Id}/tva", new { chargeTva = false }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+    }
+
+    [Fact]
     public async Task Its_PDF_and_email_go_to_the_client_and_a_vo_never_takes_the_price_below_zero()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

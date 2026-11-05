@@ -45,6 +45,15 @@ public sealed class DesignVosController(IDesignVoService vos, IDocumentService d
     public Task<DesignVoResponse> Confirm(long voId, CancellationToken cancellationToken)
         => vos.ConfirmAsync(voId, cancellationToken);
 
+    /// <summary>
+    /// Adds the project's TVA to a VO, or takes it off: the superadmin's call, on a pending or applied VO. An applied one
+    /// changes what the client pays in all. 422 <c>design_vo_not_pending</c> on a cancelled one.
+    /// </summary>
+    [HttpPut("design-vos/{voId:long}/tva")]
+    [HasPermission(PermissionCodes.FinancialWrite)]
+    public Task<DesignVoResponse> SetTva(long voId, SetDesignVoTvaRequest request, CancellationToken cancellationToken)
+        => vos.SetTvaAsync(voId, request, cancellationToken);
+
     /// <summary>Takes a pending VO back; its number isn't used again.</summary>
     [HttpPost("design-vos/{voId:long}/cancel")]
     [HasPermission(PermissionCodes.FinancialWrite)]

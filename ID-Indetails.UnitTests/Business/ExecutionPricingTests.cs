@@ -72,6 +72,15 @@ public class ExecutionPricingTests
     }
 
     [Fact]
+    public void An_amount_without_tva_is_paid_as_it_is_and_the_rest_carries_it()
+    {
+        // 11,000 agreed, 1,000 of it a VO without TVA
+        Tva.Gross(11_000m, 0.11m, untaxed: 1000m).ShouldBe(12_100m);
+        Tva.Gross(11_000m, 0.11m, untaxed: 0m).ShouldBe(Tva.Gross(11_000m, 0.11m));
+        Tva.NetFor(12_100m, 0.11m, untaxed: 1000m).ShouldBe(11_000m);
+    }
+
+    [Fact]
     public void A_payment_holds_its_share_of_the_projects_tva()
     {
         // the client pays 1,210 in all, 110 of it TVA: a payment of 605 holds half of it
