@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
 using ID_Indetails.api.DTO.Request.Notifications;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -103,7 +104,8 @@ public sealed record NotificationsInput
 
 /// <param name="Id">What propose_mark_notifications_read takes.</param>
 /// <param name="What">The kind of notification in words ("requirement assigned").</param>
-public sealed record NotificationRow(long Id, string What, string? From, ProtonNamed? Project, int Count, string When, bool Read);
+/// <param name="BlockedChangeId">On a "change blocked" or "log department blocked" notification: the refused change waiting for a decision (propose_blocked_change).</param>
+public sealed record NotificationRow(long Id, string What, string? From, ProtonNamed? Project, int Count, string When, bool Read, long? BlockedChangeId = null);
 
 /// <summary>The user's own notifications, newest first: what happened, who did it, and on which project.</summary>
 public sealed class GetMyNotificationsTool(INotificationService notifications, IClock clock) : ProtonTool<NotificationsInput>
@@ -125,7 +127,8 @@ public sealed class GetMyNotificationsTool(INotificationService notifications, I
                 n.Project is { } p ? new ProtonNamed(p.Id, p.Title) : null,
                 n.Count,
                 clock.Local(n.CreatedAt),
-                n.ReadAt is not null))
+                n.ReadAt is not null,
+                n.Kind is NotificationKinds.ChangeBlocked or NotificationKinds.LogDepartmentBlocked && n.SubjectType == "blocked_change" ? n.SubjectId : null))
             .ToList();
         var refs = page.Items.Where(n => n.Project is not null)
             .Select(n => new ProtonRef(ProtonRefType.Project, n.Project!.Id, n.Project.Title, n.Project.Domain))

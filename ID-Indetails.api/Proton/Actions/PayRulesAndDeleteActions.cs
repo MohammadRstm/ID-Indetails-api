@@ -166,7 +166,8 @@ public sealed class ProposeScheduleTool(IEmployeeService employees, IScheduleSer
     }
 }
 
-public sealed record HourExcuseArgs(long UserId, AddHourExcuseRequest Request);
+/// <param name="RemoveId">Set to remove that excuse instead of adding one; <paramref name="Request"/> is then empty.</param>
+public sealed record HourExcuseArgs(long UserId, AddHourExcuseRequest? Request, long? RemoveId = null);
 
 public sealed record HourExcuseInput : ProtonActionInput
 {
@@ -181,19 +182,24 @@ public sealed record HourExcuseInput : ProtonActionInput
 
     [Description("Days of that month excused, each worth the day's required hours.")]
     public IReadOnlyList<DateOnly>? Days { get; init; }
+
+    [Description("Instead of adding an excuse, remove this one (from list_hour_excuses, in the same month). Leave minutes and days out.")]
+    public long? RemoveExcuseId { get; init; }
 }
 
 /// <summary>
 /// Excuses some of someone's required hours in a month (sick days, an errand), through POST
-/// /api/employees/{id}/hour-excuses once confirmed. The card says what is excused, never what it is worth.
+/// /api/employees/{id}/hour-excuses once confirmed, or takes an excuse back off (DELETE /api/hour-excuses/{id}, the
+/// person's name typed). The card says what is excused, never what it is worth.
 /// </summary>
-public sealed class ProposeHourExcuseTool(IEmployeeService employees, IHourExcuseService excuses) : ProtonActionTool<HourExcuseInput, HourExcuseArgs>
+public sealed class ProposeHourExcuseTool(IEmployeeService employees, IHourExcuseService excuses, ISalaryService salaries)
+    : ProtonActionTool<HourExcuseInput, HourExcuseArgs>
 {
     public override string Name => "propose_hour_excuse";
 
     public override string Description =>
-        "Propose excusing some of someone's required hours in a month: a number of minutes, or whole days. Nothing " +
-        "changes until the user confirms the card.";
+        "Propose excusing some of someone's required hours in a month: a number of minutes, or whole days; or removing an " +
+        "excuse already recorded (list_hour_excuses has the ids). Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -202,6 +208,11 @@ public sealed class ProposeHourExcuseTool(IEmployeeService employees, IHourExcus
     protected override async Task<(HourExcuseArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
         HourExcuseInput input, ProtonToolContext context, CancellationToken cancellationToken)
     {
+        if (input.RemoveExcuseId is { } removeId)
+        {
+            return await ProposeRemoveAsync(input, removeId, cancellationToken);
+        }
+
         if (input.Minutes is null == input.Days is not { Count: > 0 })
         {
             throw new ProtonToolInputException("Give minutes or days, one of the two.");
@@ -221,11 +232,47 @@ public sealed class ProposeHourExcuseTool(IEmployeeService employees, IHourExcus
             AccessText.Ref(person));
     }
 
-    protected override object RequestOf(HourExcuseArgs args) => args.Request;
+    /// <summary>Takes an excuse back off. It pays on the month's hours, so the person's name is typed.</summary>
+    private async Task<(HourExcuseArgs, ProtonPreview, ProtonRef?)> ProposeRemoveAsync(HourExcuseInput input, long excuseId, CancellationToken cancellationToken)
+    {
+        if (input.Minutes is not null || input.Days is { Count: > 0 })
+        {
+            throw new ProtonToolInputException("Either add an excuse (minutes or days) or remove one (remove_excuse_id), not both.");
+        }
+
+        var person = await employees.GetAsync(input.UserId, cancellationToken);
+        var excuse = (await ExcusesOfAsync(person.Id, input.Month, cancellationToken)).FirstOrDefault(e => e.Id == excuseId)
+            ?? throw new NotFoundException("Excuse not found.");
+        var name = AccessText.Name(person);
+        var what = excuse.Kind switch
+        {
+            ExcuseKind.Minutes => WorkText.Hours(excuse.Minutes ?? 0),
+            ExcuseKind.Days => string.Join(", ", excuse.Days.Select(d => ProjectText.Date(d))),
+            _ => "the whole month",
+        };
+        return (new HourExcuseArgs(person.Id, null, excuse.Id),
+            new ProtonPreview($"Take an excuse off {name}'s hours",
+                [new ProtonChange("Month", null, excuse.Month.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)), new ProtonChange("Excused", what, "removed")],
+                "Those hours count as required again that month.",
+                Confirm: ProtonConfirm.Typed, Phrase: name),
+            AccessText.Ref(person));
+    }
+
+    /// <summary>The month's excuses, as the salary detail lists them (which needs the permission to view salaries).</summary>
+    private async Task<IReadOnlyList<DTO.Response.Payroll.HourExcuseResponse>> ExcusesOfAsync(long userId, string month, CancellationToken cancellationToken)
+        => (await salaries.GetAsync(userId, new SalaryMonthQuery { Month = month.Trim() }, cancellationToken)).Excuses;
+
+    protected override object? RequestOf(HourExcuseArgs args) => args.Request;
 
     protected override async Task<ProtonActionDone> ExecuteAsync(HourExcuseArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        var excuse = await excuses.AddAsync(args.UserId, args.Request, cancellationToken);
+        if (args.RemoveId is { } removeId)
+        {
+            await excuses.DeleteAsync(removeId, cancellationToken);
+            return new ProtonActionDone("Took the excuse off.", "hour_excuse", removeId, []);
+        }
+
+        var excuse = await excuses.AddAsync(args.UserId, args.Request!, cancellationToken);
         return new ProtonActionDone("Excused the hours.", "hour_excuse", excuse.Id, []);
     }
 }

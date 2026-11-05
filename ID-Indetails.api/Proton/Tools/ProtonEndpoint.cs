@@ -30,16 +30,19 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
         "Company.GetSettings", "DomainSettings.Get",
         // the person's own saved card order for a dashboard
         "BoardLayouts.Get",
+        // the person's own phones and push settings: their service reads only the caller's
+        "Devices.List", "NotificationSettings.Get",
         // the discussion with a client decides who takes part in it, from the project, never from a permission
         "ProjectPortalDiscussion.Messages",
     };
 
     /// <summary>
-    /// Write endpoints with no permission of their own: changing the signed-in person's own name and phone, sending a
-    /// message (which their service limits to the chats the sender may write in), marking their own chats and
-    /// notifications read, their own dashboard card order, a bug report, and writing in, editing, deleting from or
-    /// reading the discussion with a project's client, which its service limits to the staff taking part in it.
-    /// proton:use is their policy here.
+    /// Write endpoints with no permission of their own: changing the signed-in person's own name, phone, photo and
+    /// Proton switch, their own phones and push settings (their service touches only the caller's), sending a message
+    /// (which their service limits to the chats the sender may write in), marking their own chats and notifications
+    /// read, their own dashboard card order, a bug report, and writing in, editing, deleting from or reading the
+    /// discussion with a project's client, which its service limits to the staff taking part in it. proton:use is
+    /// their policy here.
     /// </summary>
     public static readonly IReadOnlySet<string> RuleBasedWrites = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -50,6 +53,7 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
         "ProjectPortalDiscussion.Send", "ProjectPortalDiscussion.Comment", "ProjectPortalDiscussion.EditMessage",
         "ProjectPortalDiscussion.EditComment", "ProjectPortalDiscussion.DeleteMessage", "ProjectPortalDiscussion.DeleteComment",
         "ProjectPortalDiscussion.Read",
+        "Profile.RemovePhoto", "Profile.SetProtonSuggestions", "Devices.Delete", "NotificationSettings.Save",
     };
 
     /// <summary>A write endpoint from <see cref="RuleBasedWrites"/>: its service decides who it may reach.</summary>
