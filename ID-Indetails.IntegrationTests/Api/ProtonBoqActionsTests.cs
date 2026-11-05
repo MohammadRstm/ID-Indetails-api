@@ -316,6 +316,46 @@ public class ProtonBoqActionsTests(ProtonAllActionsApiFactory api) : IClassFixtu
     }
 
     [Fact]
+    public async Task A_permit_line_is_charged_with_no_supervision_or_TVA_on_the_cards()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var site = await NewSiteAsync(superAdmin);
+        var client = await Boqs.CreateAsync(superAdmin.AccessToken, site.Id);
+        await Boqs.SaveAsync(superAdmin.AccessToken, client.Id, [Line("Works as agreed", 1, 1000m, unit: "lot")]);
+
+        // a permit added on the card: the work stays, the permits are apart, and the client pays them as they are
+        var (edit, _) = await ProposeAsync(superAdmin, "propose_edit_boq",
+            new { boq_id = client.Id, add_lines = new[] { new { description = "Building permit", quantity = 1m, rate = 200m, permit = true } } },
+            "Add the building permit at 200");
+        var card = edit.PendingAction!;
+        card.Preview.Changes.Single(c => c.Label == "New line").After.ShouldStartWith("Permit: Building permit");
+        card.Preview.Changes.Single(c => c.Label == "Work total").ShouldSatisfyAllConditions(c => c.Before.ShouldBe("USD 1,000"), c => c.After.ShouldBe("USD 1,000"));
+        card.Preview.Changes.Single(c => c.Label == "Permits (no supervision or TVA)").After.ShouldBe("USD 200");
+        // 1,000 of work with 10% supervision and 11% TVA, and 200 of permits with neither
+        card.Preview.Changes.Single(c => c.Label.StartsWith("Client pays")).After.ShouldBe("USD 1,410");
+        (card.Preview.Confirm, card.Preview.Phrase).ShouldBe((ProtonConfirm.Typed, "1200"));
+        await ConfirmAsync(superAdmin, edit, "1200");
+        var saved = await GetBoqAsync(superAdmin, client.Id);
+        (saved.TotalUsd, saved.PermitsUsd).ShouldBe((1000m, 200m));
+        saved.Lines.Last().Nature.ShouldBe(BoqLineNature.Permit);
+
+        // agreeing sets the work price and the permits; supervision and TVA stay on the work
+        var (agree, _) = await ProposeAsync(superAdmin, "propose_boq_agreement", new { boq_id = client.Id, step = "agree" });
+        agree.PendingAction!.Preview.Changes.Select(c => (c.Label, c.After)).ShouldBe(
+        [
+            ("BOQ", "Agreed"),
+            ("Work price", "USD 1,000"),
+            ("Permits (no supervision or TVA)", "USD 200"),
+            ("Supervision (10%)", "USD 100"),
+            ("TVA (11%, on the work only)", "USD 110"),
+            ("The client pays", "USD 1,410"),
+        ]);
+        await ConfirmAsync(superAdmin, agree, "1200");
+        var money = (await ProjectAsync(superAdmin, site.Id)).Money!;
+        (money.ProjectFee, money.PermitsUsd).ShouldBe((1000m, 200m));
+    }
+
+    [Fact]
     public async Task A_withdrawal_that_would_take_the_profit_to_zero_is_refused_at_Confirm_and_kept_for_forcing()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

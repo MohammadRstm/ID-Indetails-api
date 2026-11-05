@@ -32,7 +32,8 @@ change, and only their Confirm button carries it out. You can propose:
 - money, when it is switched on: draft invoices and changing them, issuing, voiding or discarding one, noting it was
   delivered; recording, applying or voiding a payment (a site's initial payment, under an account label); project
   expenses; a site's expenses (in USD or LBP, under an account label) and labour weeks; a site's BOQs and their VOs
-  (making, editing, agreeing or withdrawing one, emailing one to the client), its supervision rate and TVA;
+  (making, editing, agreeing or withdrawing one, emailing one to the client; a line is work or a permit, and a
+  permit carries no supervision and no TVA), its supervision rate and TVA;
   a Design client project's customer payment (corrections only) and its variation orders (making, applying or
   cancelling one, emailing one to the client); billing settings (never bank details); exchange rates; the company's
   recurring expenses;

@@ -374,7 +374,9 @@ public sealed class ProposeEditBoqTool(IProjectService projects, IBoqService boq
         changes.AddRange(BoqText.TotalRows(boq, totals));
         if (boq.SupervisionRate is { } supervision && boq.TvaRate is { } tva && boq.Kind != BoqKind.Internal)
         {
-            changes.Add(new ProtonChange("Client pays (supervision and TVA on the work, permits as they are)",
+            changes.Add(new ProtonChange(boq.PermitsUsd != 0 || totals.Permits != 0
+                    ? "Client pays (supervision and TVA on the work, permits as they are)"
+                    : "Client pays (supervision and TVA included)",
                 BoqText.Usd(ExecutionPricing.PriceOf(boq.TotalUsd, boq.PermitsUsd, supervision, tva).Gross),
                 BoqText.Usd(ExecutionPricing.PriceOf(total, totals.Permits, supervision, tva).Gross)));
         }
@@ -679,7 +681,7 @@ internal sealed record BoqPricing(
             rows.Add(new ProtonChange("Permits (no supervision or TVA)", BoqText.Usd(price.Current.PermitsUsd), BoqText.Usd(permits)));
         }
 
-        rows.Add(new ProtonChange($"Supervision ({BoqText.Percent(price.Current.SupervisionRate)}, on the work only)", BoqText.Usd(price.Current.SupervisionUsd), BoqText.Usd(after.Supervision)));
+        rows.Add(new ProtonChange($"Supervision ({BoqText.Percent(price.Current.SupervisionRate)})", BoqText.Usd(price.Current.SupervisionUsd), BoqText.Usd(after.Supervision)));
         rows.Add(new ProtonChange($"TVA ({BoqText.Percent(price.Current.TvaRate)}, on the work only)", BoqText.Usd(price.Current.TvaUsd), BoqText.Usd(after.Tva)));
         rows.Add(new ProtonChange("The client pays", BoqText.Usd(price.Current.ClientTotalUsd), BoqText.Usd(after.Gross)));
         return rows;

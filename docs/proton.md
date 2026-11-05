@@ -780,7 +780,7 @@ Core, and each family is off until switched on in `Proton:Actions`. A card that 
 | `propose_department_shares` | Money | `PUT …/departments/shares` | percentages the user typed, adding up to 100; the project's name typed |
 | `propose_design_vo` | Money | `POST /api/projects/{id}/design-vos`, `…/confirm`, `…/cancel` | lines the user typed (work taken out too), split by shares or by departments, pending unless the user said to apply it; the project's name typed. A VO the profit floor refuses stays pending and is kept as a blocked change |
 | `propose_send_design_vo`, `propose_send_boq` | Money, ExternalSend | `…/design-vos/{id}/email`, `/api/boqs/{id}/email` | only sends |
-| `propose_boq`, `propose_edit_boq`, `propose_boq_agreement` | Money | a site's BOQs and VOs: made, copied, duplicated, deleted, edited, agreed, withdrawn, delivered | amounts typed; agreeing sets the site's work price |
+| `propose_boq`, `propose_edit_boq`, `propose_boq_agreement` | Money | a site's BOQs and VOs: made, copied, duplicated, deleted, edited, agreed, withdrawn, delivered | amounts typed; a line is work or a permit, and the cards show the two apart, with supervision and TVA on the work only; agreeing sets the site's work price and its permits |
 | `propose_site_pricing`, `propose_project_billing` | Money | a site's supervision rate and TVA; a Design project's client, or internal | |
 | `propose_blocked_change` | Money | `POST /api/blocked-changes/{id}/force`, `/dismiss` | forcing types the project's name; hours waiting for their logger's department are only dropped (adding the department lets them through). Its id is on the notification (`get_my_notifications`) |
 | `propose_proton_top_up` | Money | Proton's monthly budget top-up | the amount typed |
