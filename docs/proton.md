@@ -606,7 +606,7 @@ fingerprint column on `proton_usage`, which needs its own approval.
 | `propose_set_requirement_done` | low | `POST …/requirements/{id}/done` (`/undone`) | |
 | `propose_change_project_status` | medium | `POST /api/projects/{id}/hold` (`/resume`) | hold and resume only: completing, archiving and reopening lock or unlock revenue |
 | `propose_update_project` | medium | `PUT /api/projects/{id}` | title, description, location, target date, owner; refused if the project changed since |
-| `propose_create_project` | medium | `POST /api/projects` | a Design project, client or internal, or an Execution site for an Execution client with its staff (checked by `SiteTeamRules.CheckStaff`); no money fields, so no revenue, rates or crew defaults |
+| `propose_create_project` | medium | `POST /api/projects` | a Design project, client or internal, or an Execution site for an Execution client with its staff if they are known (checked by `SiteTeamRules.CheckStaff`; none is fine, they can come later); no money fields, so no revenue, rates or crew defaults |
 | `propose_create_client` | low | `POST /api/clients` | the contacts the user gave; a shared name is a warning on the card, another client's contact is refused; opens the new client |
 | `propose_update_client` | low | `PUT /api/clients/{id}` | details, plus contacts added or removed (the rest kept); refused if the client changed since |
 | `propose_set_client_archived` | low | `POST /api/clients/{id}/archive` (`/restore`) | |

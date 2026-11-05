@@ -33,7 +33,7 @@ public sealed class UpdateProjectStaffRequestValidator : AbstractValidator<Updat
 {
     public UpdateProjectStaffRequestValidator()
     {
-        RuleFor(x => x.StaffIds).NotNull().Must(ids => ids.Count is >= 1 and <= 50)
-            .WithMessage("Choose between 1 and 50 staff members to oversee the site.");
+        RuleFor(x => x.StaffIds).NotNull().Must(ids => ids.Count <= 50)
+            .WithMessage("Choose at most 50 staff members to oversee the site.");
     }
 }
