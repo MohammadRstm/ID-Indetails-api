@@ -104,12 +104,13 @@ public sealed class ProjectsController(
 
     /// <summary>
     /// Finalises the project: revenue is locked and open requirements are ticked. <c>{ keepPaidAhead: true }</c> first
-    /// raises a client project's price to what the client paid beyond it. The body is optional.
+    /// raises a client project's price to what the client paid beyond it; <c>{ settleOwed: "excused" }</c> or
+    /// <c>"written_off"</c> lowers it to what they paid, so they owe nothing more. The body is optional.
     /// </summary>
     [HttpPost("{projectId:long}/complete")]
     [HasPermission(PermissionCodes.ProjectChangeStatus)]
     public Task<ProjectResponse> Complete(long projectId, [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CompleteProjectRequest? request, CancellationToken cancellationToken)
-        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Complete, cancellationToken, request?.KeepPaidAhead ?? false);
+        => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Complete, cancellationToken, request?.KeepPaidAhead ?? false, request?.SettleOwed);
 
     /// <summary>Finalises the project too, unless it was already completed.</summary>
     [HttpPost("{projectId:long}/archive")]

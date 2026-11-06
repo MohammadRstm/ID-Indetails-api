@@ -40,6 +40,11 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
             t.HasCheckConstraint("ck_projects_project_fee_non_negative", "`project_fee` IS NULL OR `project_fee` >= 0");
             t.HasCheckConstraint("ck_projects_permits_price_non_negative", "`permits_price` IS NULL OR `permits_price` >= 0");
+            t.HasCheckConstraint("ck_projects_settled_owed_as", SnakeCaseEnum.CheckSql<OwedSettlement>("settled_owed_as"));
+            // what was settled and how go together, and something was owed
+            t.HasCheckConstraint(
+                "ck_projects_settled_owed",
+                "(`settled_owed_usd` IS NULL AND `settled_owed_as` IS NULL) OR (`settled_owed_usd` > 0 AND `settled_owed_as` IS NOT NULL)");
         });
 
         builder.HasKey(x => x.Id);

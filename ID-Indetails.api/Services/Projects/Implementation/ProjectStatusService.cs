@@ -1,4 +1,5 @@
 using ID_Indetails.api.Authorization;
+using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Boqs;
 using ID_Indetails.api.Business.Projects;
@@ -38,7 +39,8 @@ public sealed class ProjectStatusService(
         long projectId,
         ProjectStatusRules.Action action,
         CancellationToken cancellationToken = default,
-        bool keepPaidAhead = false)
+        bool keepPaidAhead = false,
+        OwedSettlement? settleOwed = null)
     {
         var actor = await permissions.GetAccessAsync(currentUser.Id, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -60,9 +62,15 @@ public sealed class ProjectStatusService(
         project.UpdatedAt = now;
         activity.Add(Event(project, transition.EventKind, actor.UserId, null));
 
-        if (transition.Finalises && keepPaidAhead && action == ProjectStatusRules.Action.Complete && project.BillingType == BillingType.Client)
+        var completes = transition.Finalises && action == ProjectStatusRules.Action.Complete;
+        if (completes && keepPaidAhead && project.BillingType == BillingType.Client)
         {
             await KeepPaidAheadAsync(project, actor.UserId, cancellationToken);
+        }
+
+        if (completes && settleOwed is { } settlement)
+        {
+            await SettleOwedAsync(project, actor, settlement, cancellationToken);
         }
 
         if (transition.Finalises)
@@ -94,8 +102,7 @@ public sealed class ProjectStatusService(
     }
 
     /// <summary>
-    /// What a client paid beyond the price becomes part of it, so the project closes on what it really earned: a site
-    /// gets a closing VO, a Design project a higher payment, each written to the payment history like any price change.
+    /// What a client paid beyond the price becomes part of it, so the project closes on what it really earned.
     /// </summary>
     private async Task KeepPaidAheadAsync(Project project, long actorId, CancellationToken cancellationToken)
     {
@@ -105,10 +112,54 @@ public sealed class ProjectStatusService(
             return;
         }
 
+        await PriceAtReceivedAsync(project, money, actorId, BoqRules.ClosingTitle, BoqRules.ClosingReason, cancellationToken);
+    }
+
+    /// <summary>
+    /// What the client still owes, all of it, excused (a discount agreed with them) or written off (revenue lost): the
+    /// price drops to what was received, so they owe nothing more, and the project keeps what was settled and how. Only for
+    /// whoever changes the project's money.
+    /// </summary>
+    private async Task SettleOwedAsync(Project project, UserAccess actor, OwedSettlement settlement, CancellationToken cancellationToken)
+    {
+        var moneyWriter = project.DomainCode == DomainCodes.Execution ? PermissionCodes.ProjectPricingManage : PermissionCodes.FinancialWrite;
+        if (!actor.Has(moneyWriter))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Only whoever changes this project's money can excuse or write off what its client owes.");
+        }
+
+        var money = await finance.GetAsync(project, cancellationToken);
+        var owed = project.BillingType == BillingType.Client ? money.RevenueWithTva - money.Received : 0m;
+        if (owed <= 0)
+        {
+            throw new BusinessRuleException(ErrorCodes.NothingOwed, "The client owes nothing on this project.");
+        }
+
+        var (title, reason, kind) = settlement == OwedSettlement.Excused
+            ? (BoqRules.ExcusedTitle, BoqRules.ExcusedReason, ActivityEventKinds.OwedExcused)
+            : (BoqRules.WrittenOffTitle, BoqRules.WrittenOffReason, ActivityEventKinds.OwedWrittenOff);
+        await PriceAtReceivedAsync(project, money, actor.UserId, title, reason, cancellationToken);
+        project.SettledOwedUsd = owed;
+        project.SettledOwedAs = settlement;
+        activity.Add(Event(project, kind, actor.UserId, owed));
+    }
+
+    /// <summary>
+    /// The price set to what the client paid, TVA included: a site gets a closing VO, a Design project a new payment,
+    /// each written to the payment history like any price change.
+    /// </summary>
+    private async Task PriceAtReceivedAsync(Project project, ProjectFinancials money, long actorId, string title, string reason, CancellationToken cancellationToken)
+    {
         if (project.DomainCode == DomainCodes.Execution)
         {
             var work = ExecutionPricing.WorkFor(money.Received, project.PermitsPrice ?? 0, project.SupervisionRate ?? 0, project.TvaRate);
-            await boqs.AddClosingPriceAsync(project, work, actorId, cancellationToken);
+            if (work < 0)
+            {
+                throw new BusinessRuleException(
+                    ErrorCodes.OwedBeyondWork, "The client paid less than the permits alone, so no work price makes what they paid the price.");
+            }
+
+            await boqs.AddClosingPriceAsync(project, work, title, reason, actorId, cancellationToken);
             return;
         }
 
@@ -120,7 +171,7 @@ public sealed class ProjectStatusService(
             PreviousAmount = project.Revenue,
             TvaRate = project.TvaRate,
             PreviousTvaRate = project.TvaRate,
-            Description = BoqRules.ClosingReason,
+            Description = reason,
             ChangedAt = now,
             ChangedById = actorId,
         });

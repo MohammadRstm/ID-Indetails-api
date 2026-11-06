@@ -97,6 +97,15 @@ public sealed record ProjectMoneyResponse
 
     /// <summary>Execution: what the pocket money paid to the project. Raises its profit.</summary>
     public decimal? FromPocket { get; init; }
+
+    /// <summary>
+    /// What the client still owed when the project was completed, TVA included, and was excused or written off: the price
+    /// was lowered to what was received then. Null when nothing was settled so.
+    /// </summary>
+    public decimal? SettledOwedUsd { get; init; }
+
+    /// <summary>How <see cref="SettledOwedUsd"/> was settled.</summary>
+    public OwedSettlement? SettledOwedAs { get; init; }
 }
 
 /// <summary>

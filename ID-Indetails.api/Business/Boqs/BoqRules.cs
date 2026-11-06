@@ -68,6 +68,16 @@ public static class BoqRules
 
     public const string ClosingReason = "Kept when the project was completed: the client paid more than the agreed price.";
 
+    /// <summary>The VO, or the Design payment change, that lowers the price to what was received when what was owed is excused.</summary>
+    public const string ExcusedTitle = "Excused at completion";
+
+    public const string ExcusedReason = "Excused when the project was completed: the client no longer owes what was left to pay.";
+
+    /// <summary>The same, when what was owed is written off as lost.</summary>
+    public const string WrittenOffTitle = "Unpaid, written off at completion";
+
+    public const string WrittenOffReason = "Written off when the project was completed: the client never paid what was left, and that revenue is lost.";
+
     public static string DefaultTitle(BoqKind kind) => kind switch
     {
         BoqKind.Client => "Client BOQ",

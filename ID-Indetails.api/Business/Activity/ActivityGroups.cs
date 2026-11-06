@@ -24,6 +24,8 @@ public static class ActivityGroups
         [ActivityEventKinds.MaterialMarkupSet] = ActivityGroup.Money,
         [ActivityEventKinds.SupervisionRateSet] = ActivityGroup.Money,
         [ActivityEventKinds.ProjectFinalized] = ActivityGroup.Money,
+        [ActivityEventKinds.OwedExcused] = ActivityGroup.Money,
+        [ActivityEventKinds.OwedWrittenOff] = ActivityGroup.Money,
         [ActivityEventKinds.MaterialAdded] = ActivityGroup.Money,
         [ActivityEventKinds.MaterialUpdated] = ActivityGroup.Money,
         [ActivityEventKinds.MaterialRemoved] = ActivityGroup.Money,

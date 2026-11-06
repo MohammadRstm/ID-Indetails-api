@@ -345,13 +345,13 @@ public sealed class BoqService(
         return await DocumentAsync(boq, cancellationToken);
     }
 
-    public async Task AddClosingPriceAsync(Project project, decimal work, long actorId, CancellationToken cancellationToken = default)
+    public async Task AddClosingPriceAsync(Project project, decimal work, string title, string reason, long actorId, CancellationToken cancellationToken = default)
     {
         var agreed = await boqs.AgreedAsync(project.Id, cancellationToken);
         var kind = agreed.ClientAgreed ? BoqKind.Vo : BoqKind.Client;
-        var raise = work - (project.ProjectFee ?? 0);
-        var boq = NewBoq(project, kind, BoqRules.ClosingTitle, kind == BoqKind.Vo ? BoqRules.ClosingReason : null, actorId);
-        boq.Lines.Add(new BoqLine { Position = 1, Description = BoqRules.ClosingTitle, Quantity = 1, WasteRate = 0, Unit = "L.S", Rate = raise });
+        var change = work - (project.ProjectFee ?? 0);
+        var boq = NewBoq(project, kind, title, kind == BoqKind.Vo ? reason : null, actorId);
+        boq.Lines.Add(new BoqLine { Position = 1, Description = title, Quantity = 1, WasteRate = 0, Unit = "L.S", Rate = change });
         await FinishAsync(boq, project, actorId, cancellationToken);
 
         var now = clock.UtcNow;

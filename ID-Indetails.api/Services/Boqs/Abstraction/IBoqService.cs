@@ -50,8 +50,11 @@ public interface IBoqService
     Task<BoqDocument> GetDocumentForSendingAsync(long boqId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Completing a site whose client paid beyond its price: an agreed VO (a client BOQ when none was agreed) that raises
-    /// the work price to <paramref name="work"/>. Runs inside the caller's transaction, on the project it has locked.
+    /// Completing a site whose client paid beyond its price, or still owed what was excused or written off: an agreed VO
+    /// (a client BOQ when none was agreed) that sets the work price to <paramref name="work"/>, raising or lowering it. Runs
+    /// inside the caller's transaction, on the project it has locked.
     /// </summary>
-    Task AddClosingPriceAsync(Project project, decimal work, long actorId, CancellationToken cancellationToken = default);
+    /// <param name="title">The VO's title and its one line's description.</param>
+    /// <param name="reason">Why, on a VO.</param>
+    Task AddClosingPriceAsync(Project project, decimal work, string title, string reason, long actorId, CancellationToken cancellationToken = default);
 }
