@@ -127,6 +127,11 @@ public sealed record UnconvertedCostResponse(CostSource Source, string Currency,
 
 public sealed record ProjectProjectionResponse(decimal Cost, decimal Profit, decimal? Margin);
 
+/// <summary>What deleting a project would remove, or why it can't be deleted.</summary>
+/// <param name="Blockers">Why it can't be deleted, one line each; empty when it can.</param>
+/// <param name="Removes">What goes with it, in words ("3 site expenses"): only what it holds any of.</param>
+public sealed record ProjectDeletionResponse(bool CanDelete, IReadOnlyList<string> Blockers, IReadOnlyList<string> Removes);
+
 /// <summary>The project's cash position in USD, kept apart from revenue and profit.</summary>
 /// <param name="Invoiced">Issued, live invoices.</param>
 /// <param name="Outstanding">Left to pay on those invoices.</param>

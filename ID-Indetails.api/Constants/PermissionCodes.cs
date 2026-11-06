@@ -11,6 +11,7 @@ public static class PermissionCodes
     public const string ProjectCreate = "project:create";
     public const string ProjectEdit = "project:edit";
     public const string ProjectChangeStatus = "project:change_status";
+    public const string ProjectDelete = "project:delete";
     public const string ProjectPricingManage = "project:pricing_manage";
     public const string BoqCreate = "boq:create";
     public const string RequirementView = "requirement:view";

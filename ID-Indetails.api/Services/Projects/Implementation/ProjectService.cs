@@ -157,7 +157,8 @@ public sealed class ProjectService(
             pageSize,
             query.OwnerId,
             period is { } open ? new OpenPeriod(clock.CompanyDayStartUtc(open.From), open.To) : null,
-            query.Sort);
+            query.Sort,
+            ExcludeArchived: query.ExcludeArchived);
 
     public async Task<ProjectResponse> GetAsync(long projectId, CancellationToken cancellationToken = default)
     {

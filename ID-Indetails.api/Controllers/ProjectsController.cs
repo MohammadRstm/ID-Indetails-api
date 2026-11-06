@@ -20,6 +20,7 @@ namespace ID_Indetails.api.Controllers;
 public sealed class ProjectsController(
     IProjectService projectService,
     IProjectStatusService statusService,
+    IProjectDeletionService deletion,
     IDocumentService documents) : ControllerBase
 {
     [HttpGet]
@@ -111,6 +112,24 @@ public sealed class ProjectsController(
     [HasPermission(PermissionCodes.ProjectChangeStatus)]
     public Task<ProjectResponse> Complete(long projectId, [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] CompleteProjectRequest? request, CancellationToken cancellationToken)
         => statusService.ChangeAsync(projectId, ProjectStatusRules.Action.Complete, cancellationToken, request?.KeepPaidAhead ?? false, request?.SettleOwed);
+
+    /// <summary>What deleting an archived project made by mistake would remove, or why it can't be deleted.</summary>
+    [HttpGet("{projectId:long}/deletion")]
+    [HasPermission(PermissionCodes.ProjectDelete)]
+    public Task<ProjectDeletionResponse> Deletion(long projectId, CancellationToken cancellationToken)
+        => deletion.PreviewAsync(projectId, cancellationToken);
+
+    /// <summary>
+    /// Deletes an archived project made by mistake, with everything on it: the body names it exactly, as typed. A project
+    /// that was invoiced, paid, moved pocket money or supervision, or had hours logged is 422 project_not_deletable.
+    /// </summary>
+    [HttpDelete("{projectId:long}")]
+    [HasPermission(PermissionCodes.ProjectDelete)]
+    public async Task<IActionResult> Delete(long projectId, DeleteProjectRequest request, CancellationToken cancellationToken)
+    {
+        await deletion.DeleteAsync(projectId, request.Title, cancellationToken);
+        return NoContent();
+    }
 
     /// <summary>Finalises the project too, unless it was already completed.</summary>
     [HttpPost("{projectId:long}/archive")]

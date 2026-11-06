@@ -26,6 +26,9 @@ public sealed record ProjectListQuery
     /// <summary>1 to 4; needs <see cref="Year"/>.</summary>
     public int? Quarter { get; init; }
 
+    /// <summary>Leaves archived projects out when no <see cref="Status"/> is asked for: the list's "All".</summary>
+    public bool ExcludeArchived { get; init; }
+
     public ProjectSort Sort { get; init; } = ProjectSort.Start;
 
     public int Page { get; init; } = 1;
@@ -89,6 +92,12 @@ public sealed record CreateProjectRequest
     /// file". Left out, the project has none and works as before departments; the app asks for them on client work.
     /// </summary>
     public IReadOnlyList<long>? DepartmentIds { get; init; }
+}
+
+/// <summary>Deleting a project made by mistake: its name, typed to confirm it.</summary>
+public sealed record DeleteProjectRequest
+{
+    public string? Title { get; init; }
 }
 
 /// <summary>Completing a project.</summary>

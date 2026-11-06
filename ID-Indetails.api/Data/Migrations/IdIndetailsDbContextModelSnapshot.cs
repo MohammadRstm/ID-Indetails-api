@@ -2514,6 +2514,11 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "project:delete",
+                            Description = "Delete an archived project made by mistake, with everything on it"
+                        },
+                        new
+                        {
                             Code = "project:pricing_manage",
                             Description = "Set the project fee, default material markup and material client prices",
                             DomainCode = "execution"
@@ -5539,6 +5544,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "super_admin",
                             PermissionCode = "project:change_status"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
+                            PermissionCode = "project:delete"
                         },
                         new
                         {

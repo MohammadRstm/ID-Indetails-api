@@ -66,6 +66,12 @@ public static class ActivityEventKinds
     public const string ProjectResumed = "project_resumed";
     public const string ProjectCompleted = "project_completed";
     public const string ProjectArchived = "project_archived";
+
+    /// <summary>
+    /// A project made by mistake was deleted with everything on it; the one trace it leaves. <c>project_id</c> is null,
+    /// <c>subject_id</c> the deleted project's id, and the payload its <c>title</c> and what it held (<c>removed</c>).
+    /// </summary>
+    public const string ProjectDeleted = "project_deleted";
     public const string ProjectReopened = "project_reopened";
 
     /// <summary>Revenue locked; <c>amount</c> is the revenue frozen at that moment.</summary>

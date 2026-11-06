@@ -61,6 +61,7 @@ public static class ActivityGroups
         [ActivityEventKinds.ProjectResumed] = ActivityGroup.Projects,
         [ActivityEventKinds.ProjectCompleted] = ActivityGroup.Projects,
         [ActivityEventKinds.ProjectArchived] = ActivityGroup.Projects,
+        [ActivityEventKinds.ProjectDeleted] = ActivityGroup.Projects,
         [ActivityEventKinds.ProjectReopened] = ActivityGroup.Projects,
         [ActivityEventKinds.ProgressSet] = ActivityGroup.Projects,
         [ActivityEventKinds.RequirementAdded] = ActivityGroup.Projects,
