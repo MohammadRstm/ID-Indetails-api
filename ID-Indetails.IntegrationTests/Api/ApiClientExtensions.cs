@@ -38,6 +38,12 @@ public static class ApiClientExtensions
         return client.SendAsync(Authorize(request, accessToken, null));
     }
 
+    public static Task<HttpResponseMessage> DeleteJsonAsync(this HttpClient client, string url, object body, string accessToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Delete, url) { Content = JsonContent.Create(body, options: Json) };
+        return client.SendAsync(Authorize(request, accessToken, null));
+    }
+
     public static Task<HttpResponseMessage> DeleteAsync(this HttpClient client, string url, string accessToken, string? refreshCookie = null)
         => client.SendAsync(Authorize(new HttpRequestMessage(HttpMethod.Delete, url), accessToken, refreshCookie));
 

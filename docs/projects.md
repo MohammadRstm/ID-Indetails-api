@@ -23,7 +23,7 @@ Employees hold `project:view`, so they see every project of their domain in any 
 
 ## The project list
 
-- **Filters:** `search` (every word in the title or the description), `status`, `clientId`, `billingType`, `domain`, `ownerId`, and `year` with an optional `quarter` (1–4). A project was **open during** a period when it started by the period's end and wasn't completed before its start (as in the prototype); a period that hasn't started yet matches nothing. A quarter needs a year (`400`).
+- **Filters:** `search` (every word in the title or the description), `status`, `clientId`, `billingType`, `domain`, `ownerId`, and `year` with an optional `quarter` (1–4). `excludeArchived=true` leaves archived projects out when no `status` is asked for: the app's "All", where archived projects show only once Archived is chosen. A project was **open during** a period when it started by the period's end and wasn't completed before its start (as in the prototype); a period that hasn't started yet matches nothing. A quarter needs a year (`400`).
 - **Sort** (`sort`): `start` (newest start first, the default), `activity` (most recent work first; a project without work counts from when it was added), `hours` (most logged time first), `progress` (furthest along first), `name` (A to Z) or `client` (A to Z, projects without a client last). Money isn't sortable here (decision M7).
 - **`work`** (Design rows, `work_entry:view_all` only; left out otherwise): all-time minutes, the activity level and minutes of the last 14 days (busy from 45 h a week, steady from 15 h, quiet with any work), minutes of the last 8 weeks ending with this one (the company's week start), when the latest work started, the 4 people who logged the most time and how many logged any. Loaded for the whole page at once, not per row.
 
@@ -156,6 +156,27 @@ Anything else is `422 invalid_status_change`, and asking for the current status 
 - **Finalising** happens when a project is completed, or archived without being completed first. Revenue is locked (`revenue_locked_at`, `finalized_at`, `completed_at`), the Execution agreed amount is frozen into `projects.revenue`, and every open requirement is ticked as done with `auto_done` set.
 - **Reopening** clears those dates, returns Execution revenue to being calculated live, and reopens exactly the `auto_done` requirements.
 - Archiving a completed project keeps its finalisation. Resuming from hold changes nothing else.
+
+## Deleting a project
+
+Only a project made by mistake (a flake) is ever deleted, with everything on it. Old real projects are never deleted: they stay archived, and their records are small. If space ever runs short, the files are what take it (photos, attachments, backups), and clearing an old project's files would be its own action, never this one.
+
+| Endpoint | Permission | What it does |
+|---|---|---|
+| `GET /api/projects/{id}/deletion` | `project:delete` | `{ canDelete, blockers, removes }`: why it can't be deleted, one line each, or what goes with it, in words ("3 site expenses") |
+| `DELETE /api/projects/{id}` | `project:delete` | `{ title }`, its name typed exactly (spaces around it aside), else `400 validation_failed`. `204` once deleted |
+
+- `project:delete` is the super admins' by default, and can be given to anyone.
+- **Only an archived project**, and only one that never held anything real. Each of these keeps it archived for good (`422 project_not_deletable`, saying which):
+  - issued invoices, voided ones included, since their numbers must stay;
+  - payments received;
+  - pocket money moves;
+  - supervision taken;
+  - hours logged. Hours in a closed month never change, so they keep it for good; this month's are moved to the right project first, after reopening it.
+- **What goes with it:** its requirements, meetings, staff, departments and shares, BOQs and VOs (with their lines and deliveries), Design VOs, price changes, project and site expenses, weeks of labour, site logs, draft invoices, voided payments, removed supervision withdrawals and deleted hours entries, waiting price changes and pocket money requests, its notifications and its activity, and its client portal (items, files, messages, comments, uploads, invitations and the clients' access to it). The portal's stored files are deleted from the content store once the transaction commits; the weekly check removes any left behind.
+- **What stays:** the client and the people. A website page that showed it stays, no longer linked to it. A chat message that shared one of its deleted hours entries keeps its text.
+- **The one trace it leaves:** a `project_deleted` event with no `project_id`, the deleted project's id as `subject_id`, and its `title` and what it held (`removed`) in the payload.
+- It can't be undone, except from a backup.
 
 ## Requirements
 

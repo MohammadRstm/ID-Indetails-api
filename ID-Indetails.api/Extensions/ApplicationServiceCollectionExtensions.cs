@@ -219,6 +219,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IHourExcuseRepository, HourExcuseRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<IProjectDeletionRepository, ProjectDeletionRepository>();
         services.AddScoped<IRequirementRepository, RequirementRepository>();
         services.AddScoped<IExpenseRepository, ExpenseRepository>();
         services.AddScoped<IBillingSettingsRepository, BillingSettingsRepository>();
@@ -315,6 +316,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IProjectAutoArchive, ProjectAutoArchive>();
         services.AddScoped<IProjectProgress, ProjectProgress>();
         services.AddScoped<IProjectStatusService, ProjectStatusService>();
+        services.AddScoped<IProjectDeletionService, ProjectDeletionService>();
         services.AddScoped<IRequirementService, RequirementService>();
         services.AddScoped<IExpenseService, ExpenseService>();
         services.AddScoped<IBillingSettingsService, BillingSettingsService>();

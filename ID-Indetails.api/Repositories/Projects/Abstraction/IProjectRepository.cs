@@ -19,7 +19,8 @@ public sealed record ProjectSearch(
     long? OwnerId = null,
     OpenPeriod? OpenDuring = null,
     ProjectSort Sort = ProjectSort.Start,
-    bool CountTotal = true);
+    bool CountTotal = true,
+    bool ExcludeArchived = false);
 
 public sealed record SiteRecorder(long ProjectId, long UserId, string Name, DateTime LastAt);
 

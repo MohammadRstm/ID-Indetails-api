@@ -187,6 +187,9 @@ public static class ErrorCodes
     /// <summary>422. An internal draft is never sent, agreed or withdrawn.</summary>
     public const string BoqInternal = "boq_internal";
 
+    /// <summary>422. A project that isn't archived, or that holds money that moved or hours logged, can't be deleted.</summary>
+    public const string ProjectNotDeletable = "project_not_deletable";
+
     /// <summary>422. Excusing or writing off what a client owes, on a project whose client owes nothing.</summary>
     public const string NothingOwed = "nothing_owed";
 

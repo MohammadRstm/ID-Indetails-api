@@ -24,6 +24,7 @@ public static class PermissionCatalog
         new(P.ProjectCreate, "Create projects"),
         new(P.ProjectEdit, "Edit project details, owner, client and revenue"),
         new(P.ProjectChangeStatus, "Put projects on hold, complete, reopen or archive them"),
+        new(P.ProjectDelete, "Delete an archived project made by mistake, with everything on it"),
         new(P.ProjectPricingManage, "Set the project fee, default material markup and material client prices", DomainCodes.Execution, Sensitivity: Money),
         new(P.BoqCreate, "Write internal draft BOQs of a site", DomainCodes.Execution, Sensitivity: Money),
         new(P.RequirementView, "View project requirements"),
@@ -114,7 +115,7 @@ public static class PermissionCatalog
     [
         P.FinancialView, P.FinancialWrite, P.InvoiceCreate, P.InvoiceSend, P.InvoiceVoid, P.PaymentRecord, P.PaymentVoid,
         P.BillingSettingsManage, P.ExpenseManage, P.ProjectPricingManage, P.BoqCreate,
-        P.EmployeeInvite, P.EmployeePayManage, P.MessageAnnounce,
+        P.EmployeeInvite, P.EmployeePayManage, P.MessageAnnounce, P.ProjectDelete,
     ];
 
     /// <summary>

@@ -17,6 +17,7 @@ public static class PermissionExplanations
         [PermissionCodes.ProjectCreate] = "Start new projects in the business, for a client or internal.",
         [PermissionCodes.ProjectEdit] = "Change a project's name, description, dates, owner, client and the amount the client pays.",
         [PermissionCodes.ProjectChangeStatus] = "Put a project on hold, resume it, mark it completed, reopen it or archive it.",
+        [PermissionCodes.ProjectDelete] = "Delete an archived project that was made by mistake, with everything on it. A project that was invoiced, paid or had hours logged can't be deleted.",
         [PermissionCodes.ProjectPricingManage] = "On sites: write, send, agree and withdraw the client BOQs and variation orders that set the work price, see every internal draft BOQ, and set the supervision and TVA rates.",
 
         // Requirements and meetings

@@ -53,6 +53,10 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
         {
             query = query.Where(p => p.Status == status);
         }
+        else if (search.ExcludeArchived)
+        {
+            query = query.Where(p => p.Status != ProjectStatus.Archived);
+        }
 
         if (search.ClientId is { } clientId)
         {

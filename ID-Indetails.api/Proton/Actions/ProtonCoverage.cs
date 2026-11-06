@@ -180,6 +180,7 @@ public static class ProtonCoverage
         Action("BoardLayouts.Save", "propose_arrange_board"),
         // a person's own board layout: a preference, not a record
         Action("BoardLayouts.Delete", "propose_arrange_board"),
+        Open("Projects.Delete", "it can't be undone and needs the project's name typed in the app: Proton opens the project"),
         Open("Files.Upload", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
 
         // Project expenses (Design) and an Execution site's costs
