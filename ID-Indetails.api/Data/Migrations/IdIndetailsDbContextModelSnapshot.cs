@@ -2701,7 +2701,7 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             Code = "employee:manage",
-                            Description = "Edit employee profiles, teams and status"
+                            Description = "Edit employee profiles, departments and status"
                         },
                         new
                         {
@@ -2736,7 +2736,7 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             Code = "team:manage",
-                            Description = "Create, rename and delete teams"
+                            Description = "Create, rename and delete departments"
                         },
                         new
                         {
@@ -4187,6 +4187,16 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("datetime(3)")
                         .HasColumnName("revenue_locked_at");
 
+                    b.Property<string>("SettledOwedAs")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("settled_owed_as");
+
+                    b.Property<decimal?>("SettledOwedUsd")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("settled_owed_usd");
+
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date")
                         .HasColumnName("start_date");
@@ -4261,6 +4271,10 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_projects_project_fee_non_negative", "`project_fee` IS NULL OR `project_fee` >= 0");
 
                             t.HasCheckConstraint("ck_projects_revenue_non_negative", "`revenue` >= 0");
+
+                            t.HasCheckConstraint("ck_projects_settled_owed", "(`settled_owed_usd` IS NULL AND `settled_owed_as` IS NULL) OR (`settled_owed_usd` > 0 AND `settled_owed_as` IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_projects_settled_owed_as", "`settled_owed_as` IN ('excused', 'written_off')");
 
                             t.HasCheckConstraint("ck_projects_status", "`status` IN ('active', 'hold', 'completed', 'archived')");
 

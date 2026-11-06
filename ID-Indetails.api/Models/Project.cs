@@ -53,6 +53,15 @@ public class Project
 
     public DateTime? FinalizedAt { get; set; }
 
+    /// <summary>
+    /// What the client still owed (TVA included) when the project was completed and the person completing it excused it
+    /// or wrote it off, all of it: the price was lowered to what was received then. Null when nothing was settled so.
+    /// </summary>
+    public decimal? SettledOwedUsd { get; set; }
+
+    /// <summary>How <see cref="SettledOwedUsd"/> was settled; set with it.</summary>
+    public OwedSettlement? SettledOwedAs { get; set; }
+
     /// <summary>Execution only (required there, null for Design): the work price. 0 until a price is agreed.</summary>
     public decimal? ProjectFee { get; set; }
 

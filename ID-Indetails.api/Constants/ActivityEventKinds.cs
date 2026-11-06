@@ -71,6 +71,12 @@ public static class ActivityEventKinds
     /// <summary>Revenue locked; <c>amount</c> is the revenue frozen at that moment.</summary>
     public const string ProjectFinalized = "project_finalized";
 
+    /// <summary>What the client still owed was excused as the project was completed; <c>amount</c> is all of it, TVA included.</summary>
+    public const string OwedExcused = "owed_excused";
+
+    /// <summary>What the client still owed was written off as lost as the project was completed; <c>amount</c> as above.</summary>
+    public const string OwedWrittenOff = "owed_written_off";
+
     /// <summary><c>amount</c> and <c>prev_amount</c> hold the new and previous progress percentage.</summary>
     public const string ProgressSet = "progress_set";
 

@@ -305,6 +305,101 @@ public class ProjectStatusTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Completing_a_site_whose_client_still_owes_can_excuse_it_so_the_price_drops_to_what_was_received()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        // 1,000 of work: 100 supervision, 110 TVA, 1,210 for the client; the client paid 605
+        var site = await SiteAsync(token, 1_000m);
+        await PayAsync(site.Id, 605m, token);
+
+        var completed = await CompleteWithAsync(site.Id, new { settleOwed = "excused" }, token);
+
+        // 500 of work + 50 supervision + 55 TVA = 605: nothing more is owed
+        completed.Money!.ShouldSatisfyAllConditions(
+            m => m.IsLocked.ShouldBeTrue(),
+            m => m.ProjectFee.ShouldBe(500m),
+            m => m.Revenue.ShouldBe(550m),
+            m => m.RevenueWithTva.ShouldBe(605m),
+            m => m.Billing.Owed.ShouldBe(0m),
+            m => m.SettledOwedUsd.ShouldBe(605m),
+            m => m.SettledOwedAs.ShouldBe(OwedSettlement.Excused));
+        (await _steps.ScalarAsync<decimal>("SELECT revenue FROM projects WHERE id = @p", ("@p", site.Id))).ShouldBe(550m);
+
+        // a VO beside the agreed BOQ lowers the price, as any VO can
+        var vo = (await BoqsAsync(site.Id, token)).Vos.ShouldHaveSingleItem();
+        vo.ShouldSatisfyAllConditions(
+            b => b.Status.ShouldBe(BoqStatus.Agreed),
+            b => b.Title.ShouldBe("Excused at completion"),
+            b => b.Reason.ShouldBe("Excused when the project was completed: the client no longer owes what was left to pay."),
+            b => b.TotalUsd.ShouldBe(-500m));
+        var history = await (await Client.GetAsync($"/api/projects/{site.Id}/payment-changes", token)).ReadAsync<List<ProjectPaymentChangeResponse>>();
+        history[0].ShouldSatisfyAllConditions(h => h.Amount.ShouldBe(500m), h => h.PreviousAmount.ShouldBe(1_000m), h => h.Description.ShouldBe(vo.Number));
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'owed_excused' AND amount = 605", ("@p", site.Id))).ShouldBe(1);
+
+        // reopened, it keeps the lower price, and what was settled
+        var reopened = await ChangeAsync(site.Id, "reopen", token);
+        reopened.Money!.ShouldSatisfyAllConditions(m => m.RevenueWithTva.ShouldBe(605m), m => m.SettledOwedAs.ShouldBe(OwedSettlement.Excused));
+    }
+
+    [Fact]
+    public async Task Completing_a_design_project_whose_client_still_owes_can_write_it_off_as_lost()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var client = await Projects.CreateClientAsync(token, DomainCodes.Design);
+        // 1,000 at 11% TVA: the client owes 1,110 and paid 555
+        var project = await (await Client.PostJsonAsync("/api/projects",
+            new { title = "Villa interiors", domainCode = DomainCodes.Design, clientId = client.Id, revenue = 1_000m }, token)).ReadAsync<ProjectResponse>();
+        await PayAsync(project.Id, 555m, token);
+
+        var completed = await CompleteWithAsync(project.Id, new { settleOwed = "written_off" }, token);
+
+        // 500 net + 11% TVA = 555
+        completed.Money!.ShouldSatisfyAllConditions(
+            m => m.Revenue.ShouldBe(500m),
+            m => m.RevenueWithTva.ShouldBe(555m),
+            m => m.Billing.Owed.ShouldBe(0m),
+            m => m.SettledOwedUsd.ShouldBe(555m),
+            m => m.SettledOwedAs.ShouldBe(OwedSettlement.WrittenOff));
+        var history = await (await Client.GetAsync($"/api/projects/{project.Id}/payment-changes", token)).ReadAsync<List<ProjectPaymentChangeResponse>>();
+        history[0].ShouldSatisfyAllConditions(
+            h => h.Amount.ShouldBe(500m),
+            h => h.PreviousAmount.ShouldBe(1_000m),
+            h => h.Description.ShouldBe("Written off when the project was completed: the client never paid what was left, and that revenue is lost."));
+        (await _steps.ScalarAsync<int>(
+            "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'owed_written_off' AND amount = 555", ("@p", project.Id))).ShouldBe(1);
+        (await _steps.ScalarAsync<string>("SELECT settled_owed_as FROM projects WHERE id = @p", ("@p", project.Id))).ShouldBe("written_off");
+    }
+
+    [Fact]
+    public async Task What_a_client_owes_is_settled_only_by_whoever_changes_the_money_and_only_when_something_is_owed()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        // a site's admin may complete it, but not change its price
+        var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var owing = await SiteAsync(token, 1_000m);
+        await PayAsync(owing.Id, 605m, token);
+        await (await Client.PostJsonAsync($"/api/projects/{owing.Id}/complete", new { settleOwed = "excused" }, siteAdmin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        (await _steps.ScalarAsync<string>("SELECT status FROM projects WHERE id = @p", ("@p", owing.Id))).ShouldBe("active");
+
+        // without the choice it completes as before, and what is owed stays owed
+        var left = await (await Client.PostEmptyAsync($"/api/projects/{owing.Id}/complete", siteAdmin.AccessToken)).ReadAsync<ProjectResponse>();
+        left.Status.ShouldBe(ProjectStatus.Completed);
+        var seen = await (await Client.GetAsync($"/api/projects/{owing.Id}", token)).ReadAsync<ProjectResponse>();
+        seen.Money!.ShouldSatisfyAllConditions(m => m.Billing.Owed.ShouldBe(605m), m => m.SettledOwedUsd.ShouldBeNull(), m => m.SettledOwedAs.ShouldBeNull());
+
+        // nothing to settle when the client paid in full
+        var paid = await SiteAsync(token, 1_000m);
+        await PayAsync(paid.Id, 1_210m, token);
+        await (await Client.PostJsonAsync($"/api/projects/{paid.Id}/complete", new { settleOwed = "written_off" }, token))
+            .ShouldFailWithAsync(422, ErrorCodes.NothingOwed);
+    }
+
+    [Fact]
     public async Task Only_status_managers_of_the_domain_change_status()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

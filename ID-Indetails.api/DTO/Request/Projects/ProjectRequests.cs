@@ -96,6 +96,13 @@ public sealed record CompleteProjectRequest
 {
     /// <summary>Whether what a client paid beyond the price becomes part of it before the project closes.</summary>
     public bool KeepPaidAhead { get; init; }
+
+    /// <summary>
+    /// What becomes of what the client still owes, all of it: <c>excused</c> (a discount agreed with them) or
+    /// <c>written_off</c> (revenue lost). Either lowers the price to what was received. Left out, it stays owed. Only for
+    /// whoever changes the project's money: <c>financial:write</c> on Design, <c>project:pricing_manage</c> on a site.
+    /// </summary>
+    public OwedSettlement? SettleOwed { get; init; }
 }
 
 /// <summary>Replaces the project's details and owner.</summary>

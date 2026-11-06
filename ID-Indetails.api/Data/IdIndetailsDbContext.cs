@@ -208,6 +208,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<ProjectDepartmentChangeKind>(configurationBuilder);
         StoreAsSnakeCase<DesignVoStatus>(configurationBuilder);
         StoreAsSnakeCase<DesignVoSplit>(configurationBuilder);
+        StoreAsSnakeCase<OwedSettlement>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

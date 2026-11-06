@@ -696,6 +696,8 @@ public sealed class ProjectService(
             CashProfit = money.CashProfit,
             ToPocket = p.DomainCode == DomainCodes.Execution ? money.ToPocket : null,
             FromPocket = p.DomainCode == DomainCodes.Execution ? money.FromPocket : null,
+            SettledOwedUsd = p.SettledOwedUsd,
+            SettledOwedAs = p.SettledOwedAs,
         };
     }
 

@@ -187,6 +187,12 @@ public static class ErrorCodes
     /// <summary>422. An internal draft is never sent, agreed or withdrawn.</summary>
     public const string BoqInternal = "boq_internal";
 
+    /// <summary>422. Excusing or writing off what a client owes, on a project whose client owes nothing.</summary>
+    public const string NothingOwed = "nothing_owed";
+
+    /// <summary>422. A site's client paid less than its permits alone, so no work price makes what they paid the price.</summary>
+    public const string OwedBeyondWork = "owed_beyond_work";
+
     /// <summary>422. Only a variation order can have a negative rate.</summary>
     public const string BoqNegativeRate = "boq_negative_rate";
 
