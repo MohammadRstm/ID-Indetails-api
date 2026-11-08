@@ -700,7 +700,7 @@ and confirmed strongly: a second step at least, and a typed phrase the server st
 | `propose_end_sessions` | Access | `POST /api/employees/{id}/sessions/end` (`/restore`) | two steps; never one's own |
 | `propose_delete_team` | Deletes | `DELETE /api/teams/{id}` | the department's name typed; an empty department only (one whose chat has messages is refused by the app) |
 | `propose_company_settings` | CompanyRules | `PUT /api/company/settings` | two steps; the company's name typed for a new week start or default currency. The card says how many people it affects |
-| `propose_domain_settings` | CompanyRules | `PUT /api/domain-settings/{domain}` | two steps; the domain's name typed to hold or release logging. The card says how many people it affects |
+| `propose_domain_settings` | CompanyRules | `PUT /api/domain-settings/{domain}` | two steps; the domain's name typed to let projects on hold take work (`holdLogging` on) or to stop it. The card says how many people it affects |
 | `propose_send_message` | Messaging | `POST /api/messages/direct/{id}`, `/teams/{id}` | see below |
 | `propose_comment_work_entry` with `send_to_group` | Core, held to Messaging | `POST /api/work-entries/{id}/comments` | the team's name typed; needs Messaging switched on and a typed question |
 

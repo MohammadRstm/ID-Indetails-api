@@ -114,7 +114,7 @@ public class ProtonStrongActionsTests(ProtonStrongApiFactory api) : IClassFixtur
     }
 
     [Fact]
-    public async Task Settings_cards_say_who_they_reach_and_holding_logging_needs_the_domain_typed()
+    public async Task Settings_cards_say_who_they_reach_and_logging_on_held_projects_needs_the_domain_typed()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (hold, _) = await ProposeAsync(superAdmin, "propose_domain_settings", new { domain = "design", hold_logging = true });
@@ -122,10 +122,13 @@ public class ProtonStrongActionsTests(ProtonStrongApiFactory api) : IClassFixtur
         card.Preview.Reach!.ShouldStartWith("Affects ");
         card.Preview.Reach.ShouldEndWith("in Design.");
         card.Preview.Phrase.ShouldBe("Design");
+        // on, the setting lets projects on hold take work (WorkEntryRules.AcceptsWork): the card must not say the opposite
+        card.Preview.Note.ShouldBe("People can log work on Design projects that are on hold.");
         await ConfirmAsync(superAdmin, hold, "design");
         (await GetAsync<DomainSettingsResponse>(superAdmin, "/api/domain-settings/design")).HoldLogging.ShouldBeTrue();
 
         var (release, _) = await ProposeAsync(superAdmin, "propose_domain_settings", new { domain = "design", hold_logging = false });
+        release.PendingAction!.Preview.Note.ShouldBe("Design projects on hold stop taking work until they are resumed.");
         await ConfirmAsync(superAdmin, release, "Design");
 
         var (website, _) = await ProposeAsync(superAdmin, "propose_company_settings", new { website = "indetails.example" });

@@ -141,7 +141,7 @@ public sealed record DomainSettingsInput : ProtonActionInput
 
     public bool? WeeklySummary { get; init; }
 
-    [Description("Stops everyone in the domain from logging work while on.")]
+    [Description("While on, work can still be logged on projects that are on hold; while off, a project on hold takes no work. Only Design logs work.")]
     public bool? HoldLogging { get; init; }
 
     public bool? AutoArchive { get; init; }
@@ -149,7 +149,8 @@ public sealed record DomainSettingsInput : ProtonActionInput
 
 /// <summary>
 /// Changes a domain's work-logging rules and notifications, through PUT /api/domain-settings/{domain} once confirmed. The
-/// card says how many people it affects; holding or releasing logging needs the domain's name typed to confirm.
+/// card says how many people it affects; letting projects on hold take work, or stopping it, needs the domain's name
+/// typed to confirm.
 /// </summary>
 public sealed class ProposeDomainSettingsTool(IDomainSettingsService settings, IEmployeeService employees)
     : ProtonActionTool<DomainSettingsInput, DomainSettingsArgs>
@@ -158,7 +159,8 @@ public sealed class ProposeDomainSettingsTool(IDomainSettingsService settings, I
 
     public override string Description =>
         "Propose changing a domain's work-logging rules (edit window, overlaps, future entries, descriptions, the timer, " +
-        "holding all logging) or its notifications (use get_domain_settings first). Nothing changes until the user confirms the card.";
+        "whether projects on hold still take work) or its notifications (use get_domain_settings first). Nothing changes until " +
+        "the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -197,7 +199,7 @@ public sealed class ProposeDomainSettingsTool(IDomainSettingsService settings, I
         SettingsText.Compare(changes, "Project notifications", SettingsText.OnOff(before.NotifyProject), SettingsText.OnOff(after.NotifyProject));
         SettingsText.Compare(changes, "Idle notifications", SettingsText.OnOff(before.NotifyIdle), SettingsText.OnOff(after.NotifyIdle));
         SettingsText.Compare(changes, "Weekly summary", SettingsText.OnOff(before.WeeklySummary), SettingsText.OnOff(after.WeeklySummary));
-        SettingsText.Compare(changes, "Logging on hold", SettingsText.OnOff(before.HoldLogging), SettingsText.OnOff(after.HoldLogging));
+        SettingsText.Compare(changes, "Logging on projects on hold", SettingsText.OnOff(before.HoldLogging), SettingsText.OnOff(after.HoldLogging));
         SettingsText.Compare(changes, "Auto-archive", SettingsText.OnOff(before.AutoArchive), SettingsText.OnOff(after.AutoArchive));
         if (changes.Count == 0)
         {
@@ -208,7 +210,11 @@ public sealed class ProposeDomainSettingsTool(IDomainSettingsService settings, I
         var holds = after.HoldLogging != before.HoldLogging;
         return (new DomainSettingsArgs(domain, after, before),
             new ProtonPreview($"Change the {area} settings", changes,
-                holds && after.HoldLogging ? $"Nobody in {area} can log work until logging is released." : null,
+                holds
+                    ? after.HoldLogging
+                        ? $"People can log work on {area} projects that are on hold."
+                        : $"{area} projects on hold stop taking work until they are resumed."
+                    : null,
                 Confirm: holds ? ProtonConfirm.Typed : ProtonConfirm.TwoStep,
                 Phrase: holds ? area : null,
                 Area: domain,
