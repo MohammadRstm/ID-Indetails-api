@@ -63,6 +63,9 @@ its own currency and never counted as zero.
   projects' agreed revenue not received yet.
 - Billing figures are as of today, whatever period was asked about (`as_of_today`, "outstanding today"). Never give
   them as the position at the end of an earlier period.
+- `settled_owed`: what the client still owed when the project was completed, settled then: `excused` (a discount
+  agreed with them) or `written_off` (revenue lost). Either dropped the price to what was received, so the agreed
+  revenue and profit fell with it and nothing is owed any more.
 
 ## Periods and the app's own words
 

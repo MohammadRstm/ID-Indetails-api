@@ -693,7 +693,7 @@ and confirmed strongly: a second step at least, and a typed phrase the server st
 
 | Tool | Family | Stands in for | Confirm |
 |---|---|---|---|
-| `propose_project_lifecycle` | Lifecycle | `POST /api/projects/{id}/complete`, `/archive`, `/reopen` | the project's name typed; the card says the revenue locks (or unlocks) and how many open requirements get ticked |
+| `propose_project_lifecycle` | Lifecycle | `POST /api/projects/{id}/complete`, `/archive`, `/reopen` | the project's name typed; the card says the revenue locks (or unlocks), how many open requirements get ticked, and, for whoever sees the money, what the client still owes or paid ahead. Completing can also excuse or write off what is owed (`settleOwed`) or keep an overpayment (`keepPaidAhead`), only when the user asks: that changes the price, so it is held to the Money family (switched on, a typed question, `financial:write` on Design or `project:pricing_manage` on a site), the user types the amount, and a balance that moved since the card is refused (`422 proton_action_stale`). `get_project_financials` then gives `settled_owed` and how |
 | `propose_update_employee` | Access | `PUT /api/employees/{id}` | two steps; name, phone, position and department only (role and business are `propose_employee_access`; never sign-in email or pay). A Design employee keeps a department |
 | `propose_deactivate_employee` | Access | `POST /api/employees/{id}/deactivate` | the person's name typed; never oneself |
 | `propose_reactivate_employee` | Access | `POST /api/employees/{id}/reactivate` | two steps; when they left earlier this month the tool asks Proton to ask the user whether the time away is paid, and the card shows the answer. Someone who never signed up shows as invited again |

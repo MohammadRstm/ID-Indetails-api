@@ -83,6 +83,29 @@ public class ProtonStrongActionsTests(ProtonStrongApiFactory api) : IClassFixtur
     }
 
     [Fact]
+    public async Task Settling_what_a_client_owes_on_completion_waits_for_the_Money_family()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var client = await new ProjectTestSteps(_steps).CreateClientAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var created = await Client.PostJsonAsync("/api/projects", new
+        {
+            title = "Villa " + Guid.NewGuid().ToString("N")[..8],
+            domainCode = DomainCodes.Design,
+            clientId = client.Id,
+            revenue = 1_000m,
+            tvaRate = 0.11m,
+            departmentIds = new[] { await _steps.DesignDepartmentAsync() },
+        }, superAdmin.AccessToken);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        var project = await created.ReadAsync<ProjectResponse>();
+
+        // Lifecycle is on here, Money isn't: a settlement changes the price, so it is the Money family's
+        var (reply, result) = await ProposeAsync(superAdmin, "propose_project_lifecycle", new { project_id = project.Id, change = "complete", settle_owed = "excused" });
+        reply.PendingAction.ShouldBeNull();
+        result["message"]!.GetValue<string>().ShouldContain("isn't switched on for Proton yet");
+    }
+
+    [Fact]
     public async Task Someone_is_deactivated_with_their_name_typed_then_reactivated_and_signed_out_on_request()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
