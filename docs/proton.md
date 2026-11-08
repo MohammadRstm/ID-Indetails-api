@@ -85,7 +85,7 @@ POST /api/proton/messages
 |---|---|---|
 | `find` | project, client and employee lists | name → ids; drops filler words, tries single words if the phrase matches nothing |
 | `list_projects` | `GET /api/projects` | filters, sorting, `overdue_only` |
-| `get_project_departments` | `GET /api/projects/{id}/departments` (+ `/history` with `financial:view`) | Design client projects: each department's share, budget, cost, minutes, what is left and its people; money only with `financial:view`, no rates |
+| `get_project_departments` | `GET /api/projects/{id}/departments` (+ `/history` with `financial:view`) | Design client projects: each department's share, budget, cost, minutes, what is left and its people with their minutes (never a person's cost, which with their minutes is their hourly cost); money only with `financial:view` |
 | `list_design_vos` | `GET /api/projects/{id}/design-vos` (+ `/outside-scope`) | Design only, `financial:view`: the price, each VO's lines, status, split and department amounts, the hours outside the agreed scope, and the department ids for a split |
 | `get_permissions`, `list_hour_excuses` | `GET /api/users/{id}/permissions`, the month's salary detail | someone's permissions with what their role gives; the excuses in someone's month with their ids, never what they are worth |
 | `list_my_devices`, `get_my_notification_settings` | `GET /api/me/devices`, `/api/me/notification-settings` | the user's own phones and push settings |
