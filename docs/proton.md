@@ -57,11 +57,11 @@ POST /api/proton/messages
   - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
-  237 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
-  - a built action (168), or one planned (13): each planned entry already has the tier and family it will be confirmed
+  249 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
+  - a built action (168), or one planned (14): each planned entry already has the tier and family it will be confirmed
     with. The planned ones are an Execution site's staff and daily logs, the pocket money, supervision taken, emailing,
     planning and scheduling invoices, and a payment's account label, waiting for the Execution changes to settle;
-  - a place opened for the user (17): what takes a password or a sign-in address (typed on its own form, never in a
+  - a place opened for the user (23): time off (see below), what takes a password or a sign-in address (typed on its own form, never in a
     chat), someone's pay (pay amounts never reach Proton), and uploads, which need a file from the person's device;
   - elsewhere (31): what isn't the signed-in person's to do: signing in, someone else's invitation, the client's side of
     the portal, the phone app's own device, a website visitor's message, the development file store;
@@ -694,7 +694,7 @@ and confirmed strongly: a second step at least, and a typed phrase the server st
 | Tool | Family | Stands in for | Confirm |
 |---|---|---|---|
 | `propose_project_lifecycle` | Lifecycle | `POST /api/projects/{id}/complete`, `/archive`, `/reopen` | the project's name typed; the card says the revenue locks (or unlocks) and how many open requirements get ticked |
-| `propose_update_employee` | Access | `PUT /api/employees/{id}` | two steps; name, phone, position and department only (role and business are `propose_employee_access`; never sign-in email or pay). A Design employee keeps a department |
+| `propose_update_employee` | Access | `PUT /api/employees/{id}` | two steps; name, phone, position and department only (role and business are `propose_employee_access`; never sign-in email or pay). A Design employee or admin keeps a department |
 | `propose_deactivate_employee` | Access | `POST /api/employees/{id}/deactivate` | the person's name typed; never oneself |
 | `propose_reactivate_employee` | Access | `POST /api/employees/{id}/reactivate` | two steps; when they left earlier this month the tool asks Proton to ask the user whether the time away is paid, and the card shows the answer. Someone who never signed up shows as invited again |
 | `propose_end_sessions` | Access | `POST /api/employees/{id}/sessions/end` (`/restore`) | two steps; never one's own |
@@ -767,7 +767,7 @@ Core, and each family is off until switched on in `Proton:Actions`. A card that 
 
 | Tool | Family | Stands in for | Notes |
 |---|---|---|---|
-| `propose_employee_access` | Access | `PUT /api/employees/{id}/role`, `/domain`, `DELETE …/photo` | the person's name typed; never oneself, never pay. A Design employee needs a department: a move into Design asks for one, and a role change that would leave a Design employee without one is refused |
+| `propose_employee_access` | Access | `PUT /api/employees/{id}/role`, `/domain`, `DELETE …/photo` | the person's name typed; never oneself, never pay. Design employees and admins each need a department: a move into Design asks for one, and a role change that would leave one without it is refused (the app's role change takes a `teamId`; Proton does not, so it points to the person's profile) |
 | `propose_permissions` | Access | `PUT /api/users/{id}/permissions` | grant, revoke or reset up to 20 codes with the user's reason; the name typed |
 | `propose_invitation` | Access, ExternalSend | `POST /api/invitations`, `…/{id}/resend` | employees only (an admin's invitation carries a salary); a Design employee with a department; the address typed |
 | `propose_portal_invitation`, `propose_portal_end_access` | Access (the invitation is ExternalSend) | the client portal's invitations and access | a client's contact invited, re-sent or taken off |
@@ -791,6 +791,8 @@ Core, and each family is off until switched on in `Proton:Actions`. A card that 
 
 Navigation for them: `open_record` opens a Design client project's `payments` and `vos` tabs for those who see its
 money, and `open_surface project_departments` opens its departments window while the project is open.
+
+**Time off is not covered yet** (9 Nov 2026, [time-off.md](time-off.md)). Its five write endpoints (`MeTimeOff.Ask`, `MeTimeOff.Withdraw`, `TimeOff.Approve`, `TimeOff.Decline`, `TimeOff.Reject`) are `Open` entries in `ProtonCoverage`: Proton sends the person to the Time off page, and there is no read tool for it. It is already held to the rule that blocks hours on a day off or during time off, because logging goes through `WorkEntryService`; the refusal reads as any other refused save.
 
 ## The blob (client, Stage 5 Phase 2)
 

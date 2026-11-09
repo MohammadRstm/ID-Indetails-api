@@ -16,6 +16,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | Company: settings, working time, schedules, overhead, salaries, hours ledger, excuses, overview, project pay | [company.md](company.md) | #11, #13, #15, #23 |
 | Design work: entries, comments, meetings, settings, reports, activity, timeline, overtime, closed months, dashboards | [design.md](design.md) | #14, #22, #24 |
 | Self-service: hours, overtime, schedule, requirements, board layouts (employees don't see their pay) | [me.md](me.md) | #17, #22, #23, #24 |
+| Time off: requests, approval with or without pay, the hour block, alerts, pay | [time-off.md](time-off.md) | `MR-Time-Off` |
 | Notifications, scheduled checks, money insights, auto-archive | [notifications.md](notifications.md) | #19, #22 |
 | Messaging, live updates, online status and last seen | [messaging.md](messaging.md) | #20 |
 | Search | [search.md](search.md) | #22 |
