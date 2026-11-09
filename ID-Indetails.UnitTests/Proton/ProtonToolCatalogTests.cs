@@ -142,7 +142,8 @@ public class ProtonToolCatalogTests
         string[] excluded =
         [
             "HourlyRate", "OvertimeRate", "LabourCost", "LabourByPerson", "CostPerHour", "AdminSalaries",
-            "UnconvertedAdminSalaries", "NetProfit", "CurrentPay", "Pay", "PayHistory", "Salary", "BankAccount",
+            "UnconvertedAdminSalaries", "FixedSalaries", "UnconvertedFixedSalaries", "PaidLeave", "UnconvertedPaidLeave",
+            "NetProfit", "CurrentPay", "Pay", "PayHistory", "Salary", "BankAccount",
             "BankName", "Iban", "Swift", "PasswordHash", "Token", "ApiKey",
         ];
         // A site crew's daily pay is a site cost, already shown to anyone who sees the project (decision 13).

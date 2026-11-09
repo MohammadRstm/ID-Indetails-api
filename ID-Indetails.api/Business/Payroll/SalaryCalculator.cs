@@ -277,9 +277,33 @@ public static class SalaryCalculator
         return ledger.Short + breaks;
     }
 
+    /// <summary>
+    /// What a monthly salary pays for paid leave (excused time off that is paid): the paid excused minutes, and the full
+    /// paid day of each paid day off, at the month's hourly rate, as unpaid ones are deducted; a whole month off with pay
+    /// is the month's base pay. Nothing is logged for it, so no project carries it: it is a company cost. Hourly pay is
+    /// paid for hours worked only, and a fixed salary is a company cost whole, so neither has any.
+    /// </summary>
+    public static decimal PaidLeavePay(Input input, Result pay)
+    {
+        if (input.FixedSalary || pay.Terms.Basis != PayBasis.Monthly)
+        {
+            return 0;
+        }
+
+        return input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth && e.IsPaid)
+            ? pay.BasePay
+            : Round(ExcusedMinutes(input, input.Month.AddMonths(1), paid: true) / 60m * pay.HourlyRate);
+    }
+
     /// <summary>Unpaid excused minutes, and the full paid day of each unpaid day off within the month.</summary>
-    private static int UnpaidMinutes(Input input, DateOnly next)
-        => input.Excuses.Where(e => !e.IsPaid && e.Kind != ExcuseKind.WholeMonth).Sum(e =>
+    private static int UnpaidMinutes(Input input, DateOnly next) => ExcusedMinutes(input, next, paid: false);
+
+    /// <summary>
+    /// The excused minutes that are paid (or unpaid), and the full paid day of each such day off within the month while
+    /// employed. A whole month is left to the caller.
+    /// </summary>
+    private static int ExcusedMinutes(Input input, DateOnly next, bool paid)
+        => input.Excuses.Where(e => e.IsPaid == paid && e.Kind != ExcuseKind.WholeMonth).Sum(e =>
             (e.Minutes ?? 0)
             + e.Days.Where(d => d >= input.Month && d < next && d >= input.JoinedOn && !(d > input.LeftOn) && !Employment.InGap(input.Gaps, d))
                 .Sum(d => input.Calendar.HoursOn(d)?.Span ?? 0));

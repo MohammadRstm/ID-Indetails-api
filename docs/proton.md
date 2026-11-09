@@ -117,7 +117,7 @@ POST /api/proton/messages
 | `get_finance_projects` | `GET /api/finance/{domain}/projects` | ranked by agreed revenue, cost, profit against it, margin or hours (all time); unknown margins rank last both ways |
 | `get_money_attention` | `GET /api/finance/{domain}/attention` | |
 | `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | by the period issued or received; paid in USD, balance in the invoice's currency; up to 100 matching rows as a dataset for `add_up` |
-| `get_company_overview` | `GET /api/company/overview` | received, project cost and cash profit (the overview's gross profit), overhead by calendar days; without admin salaries and net profit |
+| `get_company_overview` | `GET /api/company/overview` | received, project cost and cash profit (the overview's gross profit), overhead by calendar days; without the fixed salaries, paid leave and net profit |
 | `list_overhead` | `GET /api/company/overhead` + `/groups` | the company's recurring expenses still running (or every one, `include_ended`), with their category, this month's amount and amount changes, and the categories: the ids `propose_overhead` and the `company_expense` form need |
 | `present_data` | — (open to whoever may list projects) | shows a dataset a tool returned as a chart, a table or headline figures; reads nothing |
 | `add_up` | — (open to whoever may list projects) | totals a number column of a dataset a tool returned, optionally where a text column has a value; refuses a dataset holding only part of its rows, percentages and compared headline figures; reads nothing |

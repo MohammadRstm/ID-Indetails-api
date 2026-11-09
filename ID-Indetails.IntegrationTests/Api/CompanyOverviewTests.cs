@@ -83,7 +83,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         design.ProjectsWithActivity.ShouldBe(1);
         design.Loggers.ShouldBe(1);
         june.Domains.Single(d => d.Domain == DomainCodes.Execution).Revenue.ShouldBe(0m);
-        june.NetProfit.ShouldBe(3930m - june.Overhead - june.AdminSalaries);
+        june.NetProfit.ShouldBe(3930m - june.Overhead - june.FixedSalaries - june.PaidLeave);
         design.UnconvertedCosts.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "EUR", 50m)]);
         design.Invoiced.ShouldBe(0m);
         design.UnconvertedInvoices.ShouldBe([new UnconvertedInvoicesResponse("EUR", 3000m, 1)]);
@@ -129,18 +129,21 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // all of March 2026, then its first 16 of 31 days
         var march = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-03-01&to=2026-03-31", superAdmin.AccessToken));
-        march.AdminSalaries.ShouldBe(3100m);
-        march.UnconvertedAdminSalaries.ShouldBeEmpty();
+        march.FixedSalaries.ShouldBe(3100m);
+        march.UnconvertedFixedSalaries.ShouldBeEmpty();
         march.NetProfit.ShouldBe(march.GrossProfit - march.Overhead - 3100m);
+        // the phone app still reads them under their old name
+        march.AdminSalaries.ShouldBe(march.FixedSalaries);
+        march.UnconvertedAdminSalaries.ShouldBeEmpty();
         var half = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2026-03-01&to=2026-03-16", superAdmin.AccessToken));
-        half.AdminSalaries.ShouldBe(1600m);
+        half.FixedSalaries.ShouldBe(1600m);
 
         // the monthly chart takes them off a whole month at a time, after overhead
         var year = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2026", superAdmin.AccessToken));
         var marchMonth = year.Single(m => m.Month == new DateOnly(2026, 3, 1));
-        marchMonth.AdminSalaries.ShouldBe(3100m);
+        marchMonth.FixedSalaries.ShouldBe(3100m);
         marchMonth.NetProfit.ShouldBe(marchMonth.ProfitAfterOverhead - 3100m);
-        year.Single(m => m.Month == new DateOnly(2026, 1, 1)).AdminSalaries.ShouldBe(3100m);
+        year.Single(m => m.Month == new DateOnly(2026, 1, 1)).FixedSalaries.ShouldBe(3100m);
 
         // no project carries it: the businesses' costs don't move
         march.Domains.ShouldAllBe(d => d.Cost == 0m);
@@ -216,9 +219,59 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         // This month to date: its elapsed share of 3,000 (at least 1 day's worth) is charged.
         overview.Overhead.ShouldBeGreaterThan(0m);
         overview.Overhead.ShouldBeLessThanOrEqualTo(3000m);
-        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead - overview.AdminSalaries);
+        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead - overview.FixedSalaries - overview.PaidLeave);
 
         var months = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?months=1", superAdmin.AccessToken));
         months.ShouldHaveSingleItem().Overhead.ShouldBeGreaterThanOrEqualTo(3000m);
+    }
+
+    [Fact]
+    public async Task Site_staff_salaries_are_fixed_salaries_and_paid_leave_comes_off_the_company_too()
+    {
+        // April 2025 has 22 working days of 8 paid hours, so 1,760 a month is 10 an hour. Both people left at the end of
+        // 2025, so the other tests' 2026 months keep only their own people.
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, siteStaff) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        foreach (var (person, amount) in new[] { (siteStaff, 1500m), (designer, 1760m) })
+        {
+            await _steps.SetJoinedOnAsync(person.User.Id, "2025-01-01");
+            (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
+                new { basis = "monthly", amount, currency = "USD", effectiveFrom = "2025-01-01" }, superAdmin.AccessToken))
+                .IsSuccessStatusCode.ShouldBeTrue();
+        }
+
+        // two paid hours and a paid day off (Tuesday 15 April, 8 paid hours) are paid leave: 100; the unpaid hour is
+        // deducted from the designer's pay instead
+        object[] excuses =
+        [
+            new { month = "2025-04", kind = "minutes", minutes = 120, isPaid = true },
+            new { month = "2025-04", kind = "days", days = new[] { "2025-04-15" }, isPaid = true },
+            new { month = "2025-04", kind = "minutes", minutes = 60, isPaid = false },
+        ];
+        foreach (var excuse in excuses)
+        {
+            var added = await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/hour-excuses", excuse, superAdmin.AccessToken);
+            added.IsSuccessStatusCode.ShouldBeTrue(await added.Content.ReadAsStringAsync());
+        }
+
+        await _steps.SetLeftAtAsync(siteStaff.User.Id, "2025-12-31 15:00:00");
+        await _steps.SetLeftAtAsync(designer.User.Id, "2025-12-31 15:00:00");
+
+        // the site staff log no hours, so their whole salary is a fixed salary; the designer's hours are project cost,
+        // and only their paid leave comes off the company
+        var april = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2025-04-01&to=2025-04-30", superAdmin.AccessToken));
+        april.FixedSalaries.ShouldBe(1500m);
+        april.PaidLeave.ShouldBe(100m);
+        april.UnconvertedPaidLeave.ShouldBeEmpty();
+        april.AdminSalaries.ShouldBe(1500m);
+        april.NetProfit.ShouldBe(april.GrossProfit - april.Overhead - 1500m - 100m);
+        april.Domains.ShouldAllBe(d => d.Cost == 0m);
+
+        var year = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2025", superAdmin.AccessToken));
+        var aprilMonth = year.Single(m => m.Month == new DateOnly(2025, 4, 1));
+        (aprilMonth.FixedSalaries, aprilMonth.PaidLeave).ShouldBe((1500m, 100m));
+        aprilMonth.NetProfit.ShouldBe(aprilMonth.ProfitAfterOverhead - 1600m);
+        year.Single(m => m.Month == new DateOnly(2025, 3, 1)).PaidLeave.ShouldBe(0m);
     }
 }

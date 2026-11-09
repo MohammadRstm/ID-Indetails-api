@@ -208,4 +208,33 @@ public class PayrollTests
         pay.Total.ShouldBe(1760m);
         SalaryCalculator.Calculate(input with { FixedSalary = false })!.OvertimePay.ShouldBeGreaterThan(0m);
     }
+
+    [Fact]
+    public void Paid_leave_is_what_a_salary_pays_for_paid_time_off_as_unpaid_time_off_is_deducted()
+    {
+        // 2 paid hours and a paid day off (Tuesday 16 June, 8 paid hours) at 10 an hour; the unpaid hour is deducted instead
+        SalaryCalculator.Excuse[] excuses =
+        [
+            new(ExcuseKind.Minutes, 120, [], true),
+            new(ExcuseKind.Days, null, [new DateOnly(2026, 6, 16)], true),
+            new(ExcuseKind.Minutes, 60, [], false),
+        ];
+        var input = new SalaryCalculator.Input(June, July10, new(2026, 1, 1), true, [Monthly], Calendar(), [], excuses);
+
+        SalaryCalculator.PaidLeavePay(input, SalaryCalculator.Calculate(input)!).ShouldBe(100m);
+    }
+
+    [Fact]
+    public void A_whole_month_off_with_pay_is_its_base_pay_and_hourly_pay_or_a_fixed_salary_has_no_paid_leave()
+    {
+        SalaryCalculator.Input With(SalaryCalculator.PayTerms terms, bool fixedSalary, SalaryCalculator.Excuse excuse)
+            => new(June, July10, new(2026, 1, 1), !fixedSalary, [terms], Calendar(), [], [excuse], FixedSalary: fixedSalary);
+        decimal PaidLeave(SalaryCalculator.Input input) => SalaryCalculator.PaidLeavePay(input, SalaryCalculator.Calculate(input)!);
+        var twoHours = new SalaryCalculator.Excuse(ExcuseKind.Minutes, 120, [], true);
+
+        PaidLeave(With(Monthly, false, new SalaryCalculator.Excuse(ExcuseKind.WholeMonth, null, [], true))).ShouldBe(1760m);
+        // hourly pay is for hours worked only; a fixed salary is a company cost whole, its time off included
+        PaidLeave(With(Hourly, false, twoHours)).ShouldBe(0m);
+        PaidLeave(With(Monthly, true, twoHours)).ShouldBe(0m);
+    }
 }
