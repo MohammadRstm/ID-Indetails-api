@@ -188,7 +188,7 @@ public class TimeOffTests(ApiFactory api) : IClassFixture<ApiFactory>
         rejected.IsPaid.ShouldBe(false);
         (await OfKindAsync(employee, NotificationKinds.TimeOffRejected)).ShouldHaveSingleItem();
         (await OfKindAsync(colleague, NotificationKinds.TimeOffBack)).ShouldContain(n => n.SubjectId == employee.User.Id);
-        (await OfKindAsync(employee, NotificationKinds.TimeOffBack)).ShouldBeEmpty();
+        (await OfKindAsync(employee, NotificationKinds.TimeOffBack)).ShouldNotContain(n => n.SubjectId == employee.User.Id);
 
         // the days before today were taken, today is a work day again
         var away = await OkAsync<List<AwayResponse>>(Client.GetAsync($"/api/time-off/away?from={Today.AddDays(-3):yyyy-MM-dd}&to={Today:yyyy-MM-dd}", colleague.AccessToken));
@@ -217,7 +217,7 @@ public class TimeOffTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await OfKindAsync(employee, NotificationKinds.TimeOffExpired)).ShouldHaveSingleItem();
         (await OfKindAsync(colleague, NotificationKinds.TimeOffStarts)).Count(n => n.SubjectId == employee.User.Id).ShouldBe(1);
         (await OfKindAsync(superAdmin, NotificationKinds.TimeOffStarts)).Count(n => n.SubjectId == employee.User.Id).ShouldBe(1);
-        (await OfKindAsync(employee, NotificationKinds.TimeOffStarts)).ShouldBeEmpty();
+        (await OfKindAsync(employee, NotificationKinds.TimeOffStarts)).ShouldNotContain(n => n.SubjectId == employee.User.Id);
         await (await Client.PostJsonAsync($"/api/time-off/{undecided.Id}/approve", new { isPaid = true }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.TimeOffDecided);
     }
@@ -241,6 +241,7 @@ public class TimeOffTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Leaving_cancels_pending_requests_and_ends_approved_time_off()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, otherSuperAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null);
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var approved = await AskAsync(employee, daysAhead: 5);
         await ApproveAsync(superAdmin, approved.Id);
@@ -250,7 +251,8 @@ public class TimeOffTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         (await _steps.ScalarAsync<string>("SELECT status FROM time_off_requests WHERE id = @id", ("@id", approved.Id))).ShouldBe("ended");
         (await _steps.ScalarAsync<string>("SELECT status FROM time_off_requests WHERE id = @id", ("@id", pending.Id))).ShouldBe("cancelled");
-        (await OfKindAsync(superAdmin, NotificationKinds.TimeOffEnded)).ShouldContain(n => n.SubjectId == employee.User.Id);
+        // whoever made the change knows; the other super admins are told
+        (await OfKindAsync(otherSuperAdmin, NotificationKinds.TimeOffEnded)).ShouldContain(n => n.SubjectId == employee.User.Id);
     }
 
     [Fact]
