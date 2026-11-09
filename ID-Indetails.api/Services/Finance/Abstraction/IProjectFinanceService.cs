@@ -99,8 +99,17 @@ public sealed record ProjectCostHistory(
 public sealed record BreakCost(long UserId, long ProjectId, ProjectFinance.CostItem Cost);
 
 /// <summary>Someone's hours and their cost in a month, in the department they were logged in (null: none), in USD.</summary>
+/// <param name="Cost">What converted, at the rate of each day.</param>
 /// <param name="HourlyRate">Their hourly cost that month in USD; null when they have no pay or it has no exchange rate.</param>
-public sealed record DepartmentLabour(long? TeamId, long UserId, DateOnly Month, int Minutes, decimal Cost, decimal? HourlyRate);
+/// <param name="Unconverted">Labour with no exchange rate on its day, in its own currency: never counted as 0 in <paramref name="Cost"/>.</param>
+public sealed record DepartmentLabour(
+    long? TeamId,
+    long UserId,
+    DateOnly Month,
+    int Minutes,
+    decimal Cost,
+    decimal? HourlyRate,
+    IReadOnlyList<ProjectFinance.UnconvertedCost> Unconverted);
 
 public sealed record PaidOvertime(int Minutes, decimal Multiplier)
 {

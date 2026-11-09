@@ -1,6 +1,7 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using Shouldly;
 
@@ -154,6 +155,46 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
         await _steps.ExecuteAsync("UPDATE users SET team_id = @t WHERE id = @u", ("@t", architecture), ("@u", engineer.User.Id));
         await (await Client.DeleteAsync($"/api/teams/{structure.Id}", superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.TeamOnProjects);
+    }
+
+    [Fact]
+    public async Task Labour_with_no_exchange_rate_on_its_day_is_listed_in_its_currency_never_counted_as_0()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var architecture = await _steps.DesignDepartmentAsync();
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        // 14,320,000 LBP a month is 89,500 LBP an hour in February 2026 (160 paid hours)
+        (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+            new { basis = "monthly", amount = 14_320_000m, currency = "LBP", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var project = await ProjectAsync(superAdmin, [architecture]);
+
+        // 3 hours in Architecture on Tuesday 10 February 2026 (09:00-12:00 in Beirut) and the paid hour of break: 4 hours,
+        // 358,000 LBP, on a day with no LBP rate yet
+        await _steps.ExecuteAsync(
+            "INSERT INTO work_entries (user_id, project_id, team_id, description, started_at, ended_at, created_at) " +
+            "VALUES (@u, @p, @t, 'Drawings', '2026-02-10 07:00:00', '2026-02-10 10:00:00', UTC_TIMESTAMP(3))",
+            ("@u", designer.User.Id), ("@p", project.Id), ("@t", architecture));
+
+        var money = (await DepartmentsAsync(superAdmin, project.Id)).Departments.Single(d => d.Id == architecture).Money!;
+        money.Minutes.ShouldBe(180);
+        money.Unconverted.ShouldBe([new CurrencyAmountResponse("LBP", 358_000m)]);
+        money.Cost.ShouldBe(0m);
+        money.Left.ShouldBe(money.Budget);
+        var person = money.People.ShouldHaveSingleItem();
+        person.Cost.ShouldBe(0m);
+        person.Months.ShouldHaveSingleItem().HourlyRate.ShouldBeNull();
+
+        // with a rate in force that day it is converted, 1 USD an hour, and no longer listed
+        (await Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_500m, effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var converted = (await DepartmentsAsync(superAdmin, project.Id)).Departments.Single(d => d.Id == architecture).Money!;
+        converted.Unconverted.ShouldBeEmpty();
+        converted.Cost.ShouldBe(4m);
+        converted.Left.ShouldBe(converted.Budget - 4m);
+        var month = converted.People.ShouldHaveSingleItem().Months.ShouldHaveSingleItem();
+        month.HourlyRate.ShouldBe(1m);
+        month.Cost.ShouldBe(4m);
     }
 
     [Fact]

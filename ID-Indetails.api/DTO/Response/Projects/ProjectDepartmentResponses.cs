@@ -1,4 +1,5 @@
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Projects;
@@ -45,6 +46,9 @@ public sealed record DepartmentMoneyResponse
     public decimal Left { get; init; }
 
     public int Minutes { get; init; }
+
+    /// <summary>Labour logged in it with no exchange rate on its day, per currency: left out of the cost and what is left, never counted as 0.</summary>
+    public required IReadOnlyList<CurrencyAmountResponse> Unconverted { get; init; }
 
     /// <summary>Who logged hours in it, most cost first.</summary>
     public required IReadOnlyList<DepartmentPersonResponse> People { get; init; }
