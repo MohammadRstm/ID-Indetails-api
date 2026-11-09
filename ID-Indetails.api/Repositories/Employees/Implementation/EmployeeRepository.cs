@@ -26,6 +26,11 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
             query = query.Where(u => u.TeamId == teamId);
         }
 
+        if (search.Id is { } id)
+        {
+            query = query.Where(u => u.Id == id);
+        }
+
         if (search.Role is { } role)
         {
             query = query.Where(u => u.RoleCode == role);

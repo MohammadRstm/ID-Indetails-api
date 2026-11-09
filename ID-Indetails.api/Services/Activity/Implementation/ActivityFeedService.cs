@@ -107,6 +107,12 @@ public sealed class ActivityFeedService(
             hidden.AddRange([ActivityEventKinds.HoursExcused, ActivityEventKinds.HoursExcuseRemoved]);
         }
 
+        // why someone is off, and whether it is paid, are the super admins'
+        if (!actor.Has(PermissionCodes.TimeOffDecide))
+        {
+            hidden.AddRange(ActivityEventKinds.TimeOff);
+        }
+
         if (!actor.Has(PermissionCodes.CompanyView))
         {
             hidden.Add(ActivityEventKinds.ScheduleChanged);

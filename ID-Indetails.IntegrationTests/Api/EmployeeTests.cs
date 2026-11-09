@@ -192,31 +192,39 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_Design_employee_always_belongs_to_a_department()
+    public async Task Design_employees_and_admins_always_belong_to_a_department()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var department = await _steps.DesignDepartmentAsync();
+        var salary = new { basis = "monthly", amount = 2000m, currency = "USD" };
 
         await (await Client.PostJsonAsync("/api/invitations",
                 new { email = AuthTestSteps.NewEmail(), role = RoleCodes.Employee, domainCode = DomainCodes.Design }, superAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.DepartmentRequired);
-        // Execution staff and Design admins don't need one
+        await (await Client.PostJsonAsync("/api/invitations",
+                new { email = AuthTestSteps.NewEmail(), role = RoleCodes.Admin, domainCode = DomainCodes.Design, pay = salary }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.DepartmentRequired);
+        // Execution's people don't need one
         ((int)(await Client.PostJsonAsync("/api/invitations",
                 new { email = AuthTestSteps.NewEmail(), role = RoleCodes.Employee, domainCode = DomainCodes.Execution }, superAdmin.AccessToken)).StatusCode)
             .ShouldBe(201);
+
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-
         var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        await (await Client.PutJsonAsync($"/api/employees/{employee.User.Id}", new { firstName = "Test", lastName = "Member" }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.DepartmentRequired);
+        foreach (var person in new[] { admin, employee })
+        {
+            await (await Client.PutJsonAsync($"/api/employees/{person.User.Id}", new { firstName = "Test", lastName = "Member" }, superAdmin.AccessToken))
+                .ShouldFailWithAsync(400, ErrorCodes.DepartmentRequired);
+        }
 
-        // an admin made an employee needs one first
-        await (await Client.PutJsonAsync($"/api/employees/{admin.User.Id}/role", new { role = RoleCodes.Employee }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.DepartmentRequired);
-        (await Client.PutJsonAsync($"/api/employees/{admin.User.Id}", new { firstName = "Test", lastName = "Admin", teamId = department }, superAdmin.AccessToken))
-            .IsSuccessStatusCode.ShouldBeTrue();
-        (await Client.PutJsonAsync($"/api/employees/{admin.User.Id}/role", new { role = RoleCodes.Employee }, superAdmin.AccessToken))
-            .IsSuccessStatusCode.ShouldBeTrue();
+        // someone joining Design's staff by a role change is given one with it
+        var (_, _, other) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null);
+        var url = $"/api/employees/{other.User.Id}/role";
+        await (await Client.PutJsonAsync(url, new { role = RoleCodes.Admin, domainCode = DomainCodes.Design }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.DepartmentRequired);
+        var made = await OkAsync<EmployeeResponse>(Client.PutJsonAsync(url,
+            new { role = RoleCodes.Admin, domainCode = DomainCodes.Design, teamId = department }, superAdmin.AccessToken));
+        made.Team!.Id.ShouldBe(department);
     }
 
     [Fact]

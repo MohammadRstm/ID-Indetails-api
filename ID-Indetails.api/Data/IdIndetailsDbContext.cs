@@ -104,6 +104,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<UserScheduleDay> UserScheduleDays => Set<UserScheduleDay>();
     public DbSet<HourExcuse> HourExcuses => Set<HourExcuse>();
     public DbSet<HourExcuseDay> HourExcuseDays => Set<HourExcuseDay>();
+    public DbSet<TimeOffRequest> TimeOffRequests => Set<TimeOffRequest>();
 
     // Billing
     public DbSet<Invoice> Invoices => Set<Invoice>();
@@ -209,6 +210,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<DesignVoStatus>(configurationBuilder);
         StoreAsSnakeCase<DesignVoSplit>(configurationBuilder);
         StoreAsSnakeCase<OwedSettlement>(configurationBuilder);
+        StoreAsSnakeCase<TimeOffStatus>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

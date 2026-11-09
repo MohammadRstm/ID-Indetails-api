@@ -208,4 +208,39 @@ public class PayrollTests
         pay.Total.ShouldBe(1760m);
         SalaryCalculator.Calculate(input with { FixedSalary = false })!.OvertimePay.ShouldBeGreaterThan(0m);
     }
+
+    [Fact]
+    public void Paid_time_off_pays_an_hourly_employee_their_normal_day_but_an_excuse_pays_nothing()
+    {
+        // Tuesday 2 and Wednesday 3 June off; Saturday the 6th is no working day, so it adds nothing
+        var off = new SalaryCalculator.Excuse(ExcuseKind.Days, null, [new(2026, 6, 2), new(2026, 6, 3), new(2026, 6, 6)], true, TimeOff: true);
+        var paid = Pay(Hourly, new(2026, 1, 1), [], ledger: false, off);
+        paid.TimeOffDays.ShouldBe(2);
+        paid.TimeOffPay.ShouldBe(320m);
+        paid.BasePay.ShouldBe(320m);
+
+        var unpaid = Pay(Hourly, new(2026, 1, 1), [], ledger: false, off with { IsPaid = false });
+        unpaid.TimeOffDays.ShouldBe(2);
+        unpaid.TimeOffPay.ShouldBe(0m);
+
+        Pay(Hourly, new(2026, 1, 1), [], ledger: false, new SalaryCalculator.Excuse(ExcuseKind.Days, null, [new(2026, 6, 2)], true))
+            .BasePay.ShouldBe(0m);
+    }
+
+    [Fact]
+    public void On_a_salary_paid_time_off_costs_nothing_and_unpaid_time_off_is_deducted_as_full_days()
+    {
+        // joined on Monday the 29th: the 29th and 30th are the month's two working days, both off
+        var off = new SalaryCalculator.Excuse(ExcuseKind.Days, null, [new(2026, 6, 29), new(2026, 6, 30)], true, TimeOff: true);
+        var paid = Pay(Monthly, new(2026, 6, 29), [], excuses: off);
+        paid.Ledger!.Short.ShouldBe(0);
+        paid.Deduction.ShouldBe(0m);
+        paid.TimeOffPay.ShouldBe(0m);
+        paid.BasePay.ShouldBe(160m);
+
+        var unpaid = Pay(Monthly, new(2026, 6, 29), [], excuses: off with { IsPaid = false });
+        unpaid.Ledger!.Short.ShouldBe(0);
+        unpaid.DeductionMinutes.ShouldBe(960);
+        unpaid.BasePay.ShouldBe(0m);
+    }
 }
