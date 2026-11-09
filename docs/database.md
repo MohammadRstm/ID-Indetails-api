@@ -41,7 +41,7 @@ The database is the second line of defence. The API must still filter every quer
 | Design work | `work_entries`, `work_entry_comments` |
 | Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
-| Working time and hours ledger | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days` |
+| Working time, hours ledger and time off | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days`, `time_off_requests` |
 | Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `account_labels`, `company_settings`, `domain_settings` |
 
 ## Execution pricing
@@ -60,6 +60,7 @@ An Execution project has a **work price** (`projects.project_fee`, 0 until a BOQ
 - **The break is paid.** It only reduces the hours required on a day longer than 6 hours, never pay: a 9–5 day requires 7 hours and pays 8. From 1 December 2026 the company week's break is 0, so the whole 8-hour day is required and logged; the rows before keep their 60-minute break.
 - **Personal schedules** (`user_schedules` with their `user_schedule_days`) override the company days and hours for one person from a date onward. A weekday with no row is a day off, and a row with `follows_default` returns the person to the company week.
 - **Excuses** (`hour_excuses`) cover minutes, specific days or a whole month in a person's hours ledger. They are paid unless `is_paid` is false.
+- **Time off** (`time_off_requests`, 9 Nov 2026) holds a Design employee's request for whole days off ([time-off.md](time-off.md)): the first and last day, the reason (500 characters), a `status` (`pending`, `approved`, `declined`, `withdrawn`, `expired`, `cancelled`, `rejected`, `ended`), `is_paid` (null until approved), who decided and when, and, once rejected or cut short, the first day no longer off (`ended_on`) with who and why. Its taken days are not stored: they are worked out from the row and read as day excuses by pay.
 | Activity, messaging, files | `activity_events`, `notifications` (kept a week), `notification_sent_keys` (who was sent each once-only notification), `conversations` (a `dm`, a team's `group`, or the one `announcements` row, which the `Announcements` migration inserts), `messages`, `message_mentions`, `message_attachments`, `conversation_reads`, `files`, `user_board_layouts` |
 | Phone app | `user_devices`, `user_notification_settings`, `user_notification_mutes` |
 
@@ -94,6 +95,8 @@ bytes live in the content store, never in MySQL or on the server's disk. See [cl
 - A BOQ's number is unique; a line is part of its BOQ and goes with it.
 - Working-time policies have valid hours (0–1440, start before end), at least one working day, and a break shorter than the day; one policy per effective date. Personal schedule days are single spans within a day, one change per person per date.
 - An excuse belongs to a month (first day of the month) and carries minutes exactly when it is a "minutes" excuse.
+- A time off request ends on or after its first day. It has `is_paid` exactly when its status is approved, rejected or ended, and `ended_on` exactly when it is rejected or ended (never after its last day). The person and whoever decided or ended it can't be deleted (RESTRICT).
+- A time off request ends on or after its first day. It has `is_paid` exactly when its status is approved, rejected or ended, and `ended_on` exactly when it is rejected or ended (never after its last day). Its person and who decided or ended it can't be deleted (RESTRICT).
 - A project's client belongs to the same domain.
 - A work entry ends after it starts; a meeting ends after it starts.
 - Pay, labour defaults, overhead amounts and exchange rates are dated: one row per effective date.
@@ -190,6 +193,8 @@ The `ProjectDepartments` migration (4 Nov 2026) adds `project_departments` (a De
 The `DepartmentsBase` migration (4 Nov 2026) drops `quotes`, `quote_deliveries` and `quote_sequences` (Design has no quotes any more), deletes the `quote_due` notifications, and seeds the `financial:write` permission, limited to Design and held by super admins: setting a Design project's price, and later its departments' shares and variation orders.
 
 The `WebsiteAnalyticsPermission` migration seeds the `website_analytics:view` permission, limited to the website: super admins and the website's own staff hold it ([website.md](website.md#analytics)) (20 Oct 2026).
+
+The `TimeOff` migration (9 Nov 2026) adds `time_off_requests` ([time-off.md](time-off.md)) with its checks (`ck_time_off_requests_days`, `_status`, `_is_paid`, `_ended_on`), foreign keys (RESTRICT) to the person, whoever decided and whoever ended it, and indexes on `(user_id, status, first_day)` and `(status, first_day)`. It seeds the `time_off:request` permission (limited to Design, held by employees) and the `time_off:decide` permission (held by super admins). `Down` drops the table and deletes both permissions and their role rows. The model now has 102 tables.
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 

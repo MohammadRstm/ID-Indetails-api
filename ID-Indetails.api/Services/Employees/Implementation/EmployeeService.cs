@@ -27,6 +27,7 @@ using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
+using ID_Indetails.api.Services.TimeOff.Abstraction;
 
 namespace ID_Indetails.api.Services.Employees.Implementation;
 
@@ -47,6 +48,7 @@ public sealed class EmployeeService(
     ISessionService sessions,
     IPresence presence,
     IWorkingTimeService workingTime,
+    ITimeOffWatch timeOff,
     IClock clock) : IEmployeeService
 {
     private const string NotFoundMessage = "Employee not found.";
@@ -66,7 +68,8 @@ public sealed class EmployeeService(
                 query.Domain,
                 query.Status,
                 query.Page,
-                query.PageSize),
+                query.PageSize,
+                Id: query.Id),
             cancellationToken);
 
         return new PagedResponse<EmployeeSummaryResponse>(rows.Select(ToSummary).ToList(), query.Page, query.PageSize, total);
@@ -149,6 +152,7 @@ public sealed class EmployeeService(
         await refreshTokens.RevokeAllActiveForUserAsync(user.Id, now, cancellationToken);
         await invitations.RevokePendingForUserAsync(user.Id, now, cancellationToken);
         activity.Add(UserEvent(user, ActivityEventKinds.EmployeeDeactivated, actor.UserId, period is null ? null : new { lastWorkingDay = lastDay }));
+        await timeOff.EndAsync(user, actor.UserId, "They left.", cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -301,10 +305,18 @@ public sealed class EmployeeService(
             user.TeamId = null;
         }
 
-        // a Design employee's hours are counted in their department: they're given one before they become one
-        if (EmployeeRules.NeedsDepartment(user.RoleCode, user.DomainCode) && user.TeamId is null)
+        // Design's employees and admins belong to a department: one given with the change takes the place of theirs
+        if (request.TeamId is { } teamId && user.DomainCode is not null)
         {
-            throw new BusinessRuleException(ErrorCodes.DepartmentRequired, "Give them a department on their profile before making them a Design employee.");
+            await EnsureTeamInDomainAsync(teamId, user.DomainCode, cancellationToken);
+            user.TeamId = teamId;
+        }
+
+        Throw(EmployeeRules.CheckDepartment(user.RoleCode, user.DomainCode, user.TeamId));
+
+        if (IsDesignEmployee(previousRole, previousDomain) && !IsDesignEmployee(user.RoleCode, user.DomainCode))
+        {
+            await timeOff.EndAsync(user, actor.UserId, "They became an admin.", cancellationToken);
         }
 
         // a promotion or demotion may come with a new job title; without one, the old title stays
@@ -350,6 +362,10 @@ public sealed class EmployeeService(
         user.DomainCode = request.DomainCode;
         user.TeamId = request.TeamId;
         user.UpdatedAt = clock.UtcNow;
+        if (IsDesignEmployee(user.RoleCode, previousDomain) && !IsDesignEmployee(user.RoleCode, user.DomainCode))
+        {
+            await timeOff.EndAsync(user, actor.UserId, "They moved out of Design.", cancellationToken);
+        }
 
         // Their personal permission changes were made for the old domain.
         await ClearPermissionOverridesAsync(user.Id, cancellationToken);
@@ -548,6 +564,9 @@ public sealed class EmployeeService(
             CurrentPay = pay is null ? null : ToPay(pay),
         };
     }
+
+    /// <summary>Only Design's employees take time off: someone who stops being one has theirs ended.</summary>
+    private static bool IsDesignEmployee(string role, string? domain) => role == RoleCodes.Employee && domain == DomainCodes.Design;
 
     private async Task EnsureTeamInDomainAsync(long? teamId, string? domainCode, CancellationToken cancellationToken)
     {

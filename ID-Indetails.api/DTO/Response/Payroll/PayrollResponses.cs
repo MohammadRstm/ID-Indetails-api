@@ -209,6 +209,8 @@ public sealed record SalaryProjectResponse(
 /// <param name="DeductionMinutes">Shortfall (with the paid break of each missed day) and unpaid excuses.</param>
 /// <param name="WorkingDays">The month's working days while the person was employed, to choose days to excuse from.</param>
 /// <param name="Projects">Where their hours and overtime went, most time first. Empty for people who don't log hours.</param>
+/// <param name="TimeOff">The month's days of approved time off: read-only here, decided on Company › Time off.</param>
+/// <param name="TimeOffPay">What an hourly employee is paid for their paid time off; part of the base pay. 0 on a salary.</param>
 public sealed record SalaryDetailResponse(
     SalaryRowResponse Salary,
     bool InProgress,
@@ -219,4 +221,27 @@ public sealed record SalaryDetailResponse(
     IReadOnlyList<OvertimeWorkResponse> OvertimeWork,
     IReadOnlyList<HourExcuseResponse> Excuses,
     IReadOnlyList<SalaryDayResponse> WorkingDays,
-    IReadOnlyList<SalaryProjectResponse> Projects);
+    IReadOnlyList<SalaryProjectResponse> Projects,
+    IReadOnlyList<MonthTimeOffResponse> TimeOff,
+    decimal TimeOffPay);
+
+/// <summary>Approved time off in a month: <paramref name="Days"/> are its working days that month.</summary>
+public sealed record MonthTimeOffResponse(long RequestId, DateOnly FirstDay, DateOnly LastDay, bool IsPaid, IReadOnlyList<DateOnly> Days)
+{
+    public static IReadOnlyList<MonthTimeOffResponse> Of(ID_Indetails.api.Services.Payroll.Abstraction.PersonMonth month)
+    {
+        var input = month.Input;
+        var next = input.Month.AddMonths(1);
+        return month.TimeOff
+            .Select(p => new MonthTimeOffResponse(
+                p.Id,
+                p.FirstDay,
+                p.LastTaken,
+                p.IsPaid ?? false,
+                ID_Indetails.api.Business.TimeOff.TimeOffRules.DaysBetween(p.FirstDay < input.Month ? input.Month : p.FirstDay, p.LastTaken < next ? p.LastTaken : next.AddDays(-1))
+                    .Where(d => input.Calendar.HoursOn(d) is not null)
+                    .ToList()))
+            .OrderBy(t => t.FirstDay)
+            .ToList();
+    }
+}

@@ -216,7 +216,12 @@ public static class EmployeeRules
 
     /// <summary>Moving someone to the other business. Only callers who see both businesses can; website staff aren't moved.</summary>
     /// <summary>A Design employee must belong to a department (a team): their logged hours are counted in it.</summary>
-    public static bool NeedsDepartment(string role, string? domain) => role == RoleCodes.Employee && domain == DomainCodes.Design;
+    /// <summary>
+    /// Design's employees and admins each belong to a department: an employee's hours are counted in it, and its admins
+    /// are told when one of its people is off (see <c>Business/TimeOff</c>).
+    /// </summary>
+    public static bool NeedsDepartment(string role, string? domain)
+        => role is RoleCodes.Employee or RoleCodes.Admin && domain == DomainCodes.Design;
 
     /// <summary>The 400 on <c>teamId</c> when someone who needs a department is given none.</summary>
     public static RuleDenial? CheckDepartment(string role, string? domain, long? teamId)

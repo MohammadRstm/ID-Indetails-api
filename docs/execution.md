@@ -108,7 +108,7 @@ Client statements, which listed materials supplied and froze their prices, are g
 
 ## Site staff and daily logs
 
-Site staff are Execution employees. They log no hours (they are paid monthly: an hourly pay is refused with `400 fixed_salary_paid_monthly`), record no site expenses by default (`material:create` is no longer an employee default; admins record them, or someone given the permission), and on the sites they oversee they report ground labour and write daily logs.
+Site staff are Execution employees. They log no hours (they are paid monthly: an hourly pay is refused with `400 fixed_salary_paid_monthly`), so their pay is a fixed salary: a company cost in the company overview, like admins', never a site's ([company.md](company.md)). They record no site expenses by default (`material:create` is no longer an employee default; admins record them, or someone given the permission), and on the sites they oversee they report ground labour and write daily logs.
 
 **Who oversees a site** (`project_staff`):
 - `POST /api/projects` for an Execution site takes optional `staffIds`: each an active Execution employee, each once (`400 staffIds`). A site can be created with none and get its staff when it needs them; until then nobody writes its daily logs. A Design project takes none.

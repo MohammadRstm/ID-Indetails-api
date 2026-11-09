@@ -84,6 +84,10 @@ public static class PermissionCodes
     public const string ScheduleManage = "schedule:manage";
     public const string HoursExcuse = "hours:excuse";
 
+    // Time off: Design employees ask, super admins decide
+    public const string TimeOffRequest = "time_off:request";
+    public const string TimeOffDecide = "time_off:decide";
+
     // Messages: the Announcements chat everyone reads
     public const string MessageAnnounce = "message:announce";
 

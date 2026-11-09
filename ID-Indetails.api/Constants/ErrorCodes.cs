@@ -239,6 +239,46 @@ public static class ErrorCodes
     // Payroll
     public const string SalaryMonthInFuture = "salary_month_in_future";
     public const string ExcuseMonthInFuture = "excuse_month_in_future";
+
+    /// <summary>422. A day of approved time off can't also be excused by hand, nor a month that holds one excused whole.</summary>
+    public const string ExcuseOnTimeOff = "excuse_on_time_off";
+
+    // Time off
+    /// <summary>400. Time off starts tomorrow at the earliest.</summary>
+    public const string TimeOffTooSoon = "time_off_too_soon";
+
+    /// <summary>400. Time off starts at most 6 months ahead.</summary>
+    public const string TimeOffTooFar = "time_off_too_far";
+
+    /// <summary>400. The days asked for hold none of the person's working days.</summary>
+    public const string TimeOffNoWorkingDay = "time_off_no_working_day";
+
+    /// <summary>422. The days overlap the person's own pending or approved time off.</summary>
+    public const string TimeOffOverlaps = "time_off_overlaps";
+
+    /// <summary>422. Some of the days are already excused in the hours ledger.</summary>
+    public const string TimeOffExcused = "time_off_excused";
+
+    /// <summary>422. Someone already decided the request, or the employee withdrew it.</summary>
+    public const string TimeOffDecided = "time_off_decided";
+
+    /// <summary>422. The request's first day came while it was pending.</summary>
+    public const string TimeOffExpired = "time_off_expired";
+
+    /// <summary>422. Only approved time off can be rejected.</summary>
+    public const string TimeOffNotApproved = "time_off_not_approved";
+
+    /// <summary>422. The time off's last day has passed.</summary>
+    public const string TimeOffOver = "time_off_over";
+
+    /// <summary>422. No hours can be dated on a day of time off.</summary>
+    public const string TimeOffDay = "time_off_day";
+
+    /// <summary>422. Someone on time off can't log or change any hours until it's over.</summary>
+    public const string OnTimeOff = "on_time_off";
+
+    /// <summary>422. Someone on time off that day can't be put in a meeting.</summary>
+    public const string MeetingAttendeeOff = "meeting_attendee_off";
     public const string ProjectPayPeriodInFuture = "project_pay_period_in_future";
 
     // Proton

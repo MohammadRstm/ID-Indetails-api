@@ -86,6 +86,22 @@ public static class PushText
                 ? $"Your working schedule changes from {Day(from)}."
                 : "Your working schedule changed."),
 
+            // time off: who and when, never why or whether it is paid
+            NotificationKinds.TimeOffRequested => new("Time off", $"{Named(Text(payload, "name"), Someone)} asks for time off{From(payload)}."),
+            NotificationKinds.TimeOffUndecided => new("Time off", $"{Named(Text(payload, "name"), Someone)}'s time off{From(payload)} is still undecided."),
+            NotificationKinds.TimeOffWithdrawn => new("Time off", $"{Named(Text(payload, "name"), Someone)} took back their request for time off."),
+            NotificationKinds.TimeOffApproved => new("Time off", $"Your time off{From(payload)} was approved."),
+            NotificationKinds.TimeOffDeclined => new("Time off", $"Your request for time off{From(payload)} was declined."),
+            NotificationKinds.TimeOffRejected => new("Time off", "Your time off was taken back from today."),
+            NotificationKinds.TimeOffExpired => new("Time off", $"Your request for time off{From(payload)} expired undecided."),
+            NotificationKinds.TimeOffStarts => new("Off today", Date(payload, "lastDay") is { } until
+                ? $"{Named(Text(payload, "name"), Someone)} is off until {Day(until)}."
+                : $"{Named(Text(payload, "name"), Someone)} is off today."),
+            NotificationKinds.TimeOffBack => new("Back at work", $"{Named(Text(payload, "name"), Someone)} is back at work today."),
+            NotificationKinds.TimeOffEnded => new("Time off", $"{Named(Text(payload, "name"), Someone)}'s time off was cut short."),
+            NotificationKinds.TimeOffOnline => new("On time off, but online", $"{Named(Text(payload, "name"), Someone)} is on time off but is using the app."),
+            NotificationKinds.TimeOffHours => new("On time off, logging hours", $"{Named(Text(payload, "name"), Someone)} is on time off but tried to log hours."),
+
             NotificationKinds.ProjectCreated => new("New project", $"{actor} added {project}."),
             NotificationKinds.ProjectStatusChanged => new("Project update", StatusChange(Text(payload, "change"), project)),
             NotificationKinds.ProjectOwnerSet => new("Project owner", $"You're now the owner of {project}."),
@@ -219,6 +235,8 @@ public static class PushText
     private static string Named(string? value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 
     private static string Day(DateOnly day) => day.ToString("d MMM", CultureInfo.InvariantCulture);
+
+    private static string From(JsonElement? payload) => Date(payload, "firstDay") is { } first ? $" from {Day(first)}" : "";
 
     private static JsonElement? Property(JsonElement? payload, string name)
         => payload is { ValueKind: JsonValueKind.Object } p && p.TryGetProperty(name, out var value) ? value : null;

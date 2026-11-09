@@ -1,11 +1,13 @@
 using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
+using ID_Indetails.api.Business.TimeOff;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Company.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
+using ID_Indetails.api.Repositories.TimeOff.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
@@ -16,6 +18,7 @@ public sealed class PayrollInputs(
     IPayrollRepository payroll,
     IScheduleRepository schedules,
     IWorkingTimeService workingTime,
+    ITimeOffRepository timeOff,
     IClock clock) : IPayrollInputs
 {
     /// <summary>The hours ledger applies to Design employees only: whether it applies to them today.</summary>
@@ -73,6 +76,8 @@ public sealed class PayrollInputs(
         var roles = await RoleHistoriesAsync(ids, cancellationToken);
 
         var excuses = (await payroll.ExcusesAsync(ids, months.Distinct().ToList(), cancellationToken)).ToLookup(x => (x.UserId, x.MonthStart));
+        var timeOffs = (await timeOff.GrantedAsync(ids, months.Min(), months.Max().AddMonths(1).AddDays(-1), cancellationToken))
+            .ToLookup(x => x.UserId, x => x.Period);
 
         // A day either side covers the time-zone offset; entries are then kept by their company date.
         var work = (await payroll.WorkAsync(
@@ -93,6 +98,7 @@ public sealed class PayrollInputs(
             foreach (var month in months)
             {
                 var monthExcuses = excuses[(person.Id, month)].ToList();
+                var monthTimeOff = timeOffs[person.Id].Where(p => p.Takes(month, month.AddMonths(1).AddDays(-1))).ToList();
                 var fixedSalary = roles[person.Id].FixedSalaryMonth(month);
                 result.Add(new PersonMonth(person, new SalaryCalculator.Input(
                     month,
@@ -104,11 +110,14 @@ public sealed class PayrollInputs(
                     work[(person.Id, month)]
                         .Select(e => new Overtime.Work(e.Id, DateOnly.FromDateTime(e.Local), (int)e.Local.TimeOfDay.TotalMinutes, e.Minutes))
                         .ToList(),
-                    monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
+                    monthExcuses.Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid))
+                        .Concat(TimeOffRules.ExcusesIn(month, monthTimeOff))
+                        .ToList(),
                     employment.LeftOn,
                     employment.Gaps,
                     fixedSalary),
-                    monthExcuses));
+                    monthExcuses,
+                    monthTimeOff));
             }
         }
 

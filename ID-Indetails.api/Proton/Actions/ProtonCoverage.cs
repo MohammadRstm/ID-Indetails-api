@@ -233,6 +233,13 @@ public static class ProtonCoverage
         Action("Schedules.Set", "propose_schedule", T2, ProtonFamily.PayRules),
         Action("HourExcuses.Add", "propose_hour_excuse", T2, ProtonFamily.PayRules),
         Action("HourExcuses.Delete", "propose_hour_excuse", T2, ProtonFamily.PayRules),
+
+        // Time off: not in Proton yet (the user's decision, 9 Nov 2026); the pages are in the app
+        Open("MeTimeOff.Ask", "time off is asked for on the Time off page; Proton doesn't ask for it yet"),
+        Open("MeTimeOff.Withdraw", "a pending request is taken back on the Time off page; Proton doesn't do it yet"),
+        Open("TimeOff.Approve", "super admins approve time off on Company › Time off; Proton doesn't decide it yet"),
+        Open("TimeOff.Decline", "super admins decline time off on Company › Time off; Proton doesn't decide it yet"),
+        Open("TimeOff.Reject", "super admins take approved time off back on Company › Time off; Proton doesn't do it yet"),
         ReadOnly("MyTime.OvertimePreview", "an employee's own overtime preview"),
 
         // People and access

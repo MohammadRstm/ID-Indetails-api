@@ -92,6 +92,35 @@ public static class NotificationKinds
     /// <summary>Your working schedule changed from a date (subject: you).</summary>
     public const string ScheduleChanged = "schedule_changed";
 
+    // Time off. Its reason and whether it is paid never leave the super admins and the person.
+
+    /// <summary>Someone asked for time off (subject: the request). To every super admin.</summary>
+    public const string TimeOffRequested = "time_off_requested";
+
+    /// <summary>Someone took back their pending request (subject: the request). To every super admin.</summary>
+    public const string TimeOffWithdrawn = "time_off_withdrawn";
+
+    /// <summary>Your time off was approved, with pay or without (subject: the request).</summary>
+    public const string TimeOffApproved = "time_off_approved";
+
+    /// <summary>Your request for time off was declined (subject: the request).</summary>
+    public const string TimeOffDeclined = "time_off_declined";
+
+    /// <summary>Your approved time off was taken back from today (subject: the request).</summary>
+    public const string TimeOffRejected = "time_off_rejected";
+
+    /// <summary>Someone who was off is back at work today: their time off was taken back (subject: them). To their department and the super admins.</summary>
+    public const string TimeOffBack = "time_off_back";
+
+    /// <summary>Someone's time off was cancelled or cut short: they left, moved out of Design or became an admin (subject: them). To every super admin.</summary>
+    public const string TimeOffEnded = "time_off_ended";
+
+    /// <summary>Someone on time off is using the app (subject: them). Once a day, to every super admin.</summary>
+    public const string TimeOffOnline = "time_off_online";
+
+    /// <summary>Someone on time off tried to log or change hours (subject: them). At most once an hour, to every super admin.</summary>
+    public const string TimeOffHours = "time_off_hours";
+
     /// <summary>A client was added (subject: the client). Sent to whoever manages the domain's clients.</summary>
     public const string ClientAdded = "client_added";
 
@@ -157,6 +186,15 @@ public static class NotificationKinds
 
     /// <summary>Who logged less than a working day asked for (digest key <c>hours-missed-list-YYYY-MM-DD</c>). The next morning, to whoever sees everyone's Design work.</summary>
     public const string HoursMissedList = "hours_missed_list";
+
+    /// <summary>Your request for time off expired: nobody decided it before its first day (subject: the request).</summary>
+    public const string TimeOffExpired = "time_off_expired";
+
+    /// <summary>A request for time off starting tomorrow is still undecided (subject: the request). From 09:00 the day before, to every super admin.</summary>
+    public const string TimeOffUndecided = "time_off_undecided";
+
+    /// <summary>Someone is off from today (subject: them). From 00:00 on the first day, to their department and the super admins.</summary>
+    public const string TimeOffStarts = "time_off_starts";
     /// <summary>
     /// An active client project's cost passed 85% of its payment (subject: the project). No longer sent: <see cref="ProfitLow"/>
     /// took its place; kept so the ones sent before still read.
