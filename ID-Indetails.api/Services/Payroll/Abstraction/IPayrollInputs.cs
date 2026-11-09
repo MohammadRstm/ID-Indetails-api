@@ -1,12 +1,14 @@
 using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
+using ID_Indetails.api.Business.TimeOff;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Models;
 
 namespace ID_Indetails.api.Services.Payroll.Abstraction;
 
 /// <summary>One person's month, ready for <see cref="SalaryCalculator"/>, with the excuses it was built from.</summary>
-public sealed record PersonMonth(User User, SalaryCalculator.Input Input, IReadOnlyList<HourExcuse> Excuses);
+/// <param name="TimeOff">Their granted time off that takes a day of the month; its days are also among <see cref="SalaryCalculator.Input.Excuses"/>.</param>
+public sealed record PersonMonth(User User, SalaryCalculator.Input Input, IReadOnlyList<HourExcuse> Excuses, IReadOnlyList<TimeOffRules.Period> TimeOff);
 
 /// <summary>A work entry split as Salaries pays it.</summary>
 /// <param name="MadeUp">Overtime that made up a short month, paid as normal hours.</param>

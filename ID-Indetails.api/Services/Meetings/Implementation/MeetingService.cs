@@ -18,6 +18,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Meetings.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.TimeOff.Abstraction;
 
 namespace ID_Indetails.api.Services.Meetings.Implementation;
 
@@ -25,7 +26,8 @@ namespace ID_Indetails.api.Services.Meetings.Implementation;
 /// Project meetings and general meetings (see <see cref="MeetingRules"/>). Everyone who sees a project sees its
 /// meetings; a general meeting is for its attendees. Meetings the caller can't see are not found. When someone who
 /// doesn't manage meetings sets a project meeting, the people who do (other than them) are notified; a general
-/// meeting's attendees are told when they are invited, when it moves, and when it is cancelled for them.
+/// meeting's attendees are told when they are invited, when it moves, and when it is cancelled for them. Nobody is put
+/// in a meeting, or has one moved onto, a day of their time off; the meetings they were already in stay.
 /// </summary>
 public sealed class MeetingService(
     ICurrentUser currentUser,
@@ -35,6 +37,7 @@ public sealed class MeetingService(
     INotificationSender notifications,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
+    ITimeOffWatch timeOff,
     IClock clock) : IMeetingService
 {
     public async Task<IReadOnlyList<MeetingResponse>> ListAsync(MeetingListQuery query, CancellationToken cancellationToken = default)
@@ -95,6 +98,7 @@ public sealed class MeetingService(
 
         var meeting = new ProjectMeeting { DomainCode = domain, CreatedAt = clock.UtcNow, CreatedById = actor.UserId };
         Apply(meeting, request.StartsAt, request.EndsAt, request.Topic, request.Description);
+        await CheckOffAsync(meeting, attendeeIds, cancellationToken);
         foreach (var userId in attendeeIds)
         {
             meeting.Attendees.Add(new MeetingAttendee { UserId = userId });
@@ -137,6 +141,8 @@ public sealed class MeetingService(
             var after = request.AttendeeIds is { } chosen
                 ? (await AttendeesAsync(actor, meeting.DomainCode, chosen, cancellationToken)).ToHashSet()
                 : before;
+            var moved = (startsAt, endsAt) != (meeting.StartsAt, meeting.EndsAt);
+            await CheckOffAsync(meeting, moved ? after.ToList() : after.Except(before).ToList(), cancellationToken);
             foreach (var gone in meeting.Attendees.Where(a => !after.Contains(a.UserId)).ToList())
             {
                 meeting.Attendees.Remove(gone);
@@ -217,6 +223,10 @@ public sealed class MeetingService(
         Throw(MeetingRules.CheckAttendees(ids, invitable));
         return ids;
     }
+
+    /// <summary>No one goes into a meeting on a day of their time off.</summary>
+    private Task CheckOffAsync(ProjectMeeting meeting, IReadOnlyList<long> attendeeIds, CancellationToken cancellationToken)
+        => timeOff.CheckMeetingAsync(attendeeIds, clock.ToCompanyDate(meeting.StartsAt), clock.ToCompanyDate(meeting.EndsAt.AddMinutes(-1)), cancellationToken);
 
     private static RuleDenial? NoAttendees(SaveMeetingRequest request)
         => request.AttendeeIds is null

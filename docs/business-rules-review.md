@@ -27,7 +27,7 @@ This file records the business decisions taken at the same time, so they're appl
 | 17 | ~~**A manual price equal to the automatic one is stored as automatic** (`client_price` NULL), so it keeps following the markup.~~ *Superseded (Oct 2026): materials became cost-only site expenses; client prices and markups were removed ([execution.md](execution.md#site-expenses)).* | gone |
 | 18 | **No separate delivery date** for now: a site expense is dated by the day it was spent (`spent_on`, which defaults to the day it is recorded), labour by its day. *(Was open question 6.)* | Schema |
 | 19 | **Unpaid excuses** are deducted from salaried pay: unpaid minutes at the hourly rate, an unpaid day off as the full paid day, an unpaid whole month as the whole salary. | Payroll calculation |
-| 20 | **Hourly staff** are paid for what they log; excuses only clear their shortfall and never add pay. | Payroll calculation |
+| 20 | **Hourly staff** are paid for what they log; excuses only clear their shortfall and never add pay. (Paid time off does pay them, from 9 Nov 2026: T5.) | Payroll calculation |
 | 21 | **Admins and super admins are paid a fixed monthly salary** and log no hours (6 Oct 2026): no overtime, no hours ledger; a salary is required when inviting them. Both come off the company's net profit (7 Oct 2026; until then only super admins' did), and any hours they logged cost their projects nothing. Both go by month (23 Oct 2026): a month with any day as an admin or super admin is a fixed salary, and earlier months keep their own role. Until then everything went by the role today, so a promotion wiped the past labour cost of someone's projects and changed their past pay. | Payroll calculation |
 | 22 | **Project pay leaves paid breaks out.** A break isn't worked on any project, so project pay covers logged hours and overtime only, and differs from Salaries for hourly staff by exactly their paid breaks. It needs `salary:view`. | Project pay report |
 | 23 | **Leavers stay in past months** (29 Sep 2026). `users.deactivated_at` records when an account was deactivated (cleared on reactivation; backfilled from the latest `employee_deactivated` event). Salaries (list, detail, CSV, totals), the month-end alert and project pay include everyone active at any point in the month, with the final month pro-rated to the leaving day like a joining month, and the hours ledger ending there. | Schema (`UserDeactivatedAt` migration); payroll calculation |
@@ -149,6 +149,26 @@ Answers to the questions raised after the helper sessions' work was merged.
 | O16 | **An expense's currency changes from a month**: the line ends and a new one takes over, so past months keep theirs. |
 | O17 | **The company's address and website are settings**, for the letterhead. |
 | O18 | **Money stays exact to the cent**: no tolerance for small balances. |
+
+## Decided on 9 Nov 2026 (time off)
+
+The client asked for time off requests. The full rules are in [time-off.md](time-off.md).
+
+| # | Rule |
+|---|---|
+| T1 | **Only Design employees ask for time off** (`time_off:request`); any super admin decides (`time_off:decide`). Admins and super admins can't ask, since they are on a fixed salary and log no hours. |
+| T2 | **A request is whole days, from tomorrow at the earliest and at most 6 months ahead,** with a required reason. It can span months and has no yearly allowance. It can't overlap the person's own pending or approved time off, nor days already excused by hand. Every calendar day counts as "off" (flag, hour block, alerts, meetings); pay and "days taken" count only the person's working days. |
+| T3 | **The first decision wins.** A super admin approves it with pay or without, or declines it. Deciding locks the person, then the request, so two super admins deciding at once run one after the other and the second is told it was already decided. The employee can withdraw only while it is pending. A request still pending on its first day expires and the employee is told; the super admins are reminded the day before. |
+| T4 | **Approved time off can be rejected until its last day.** Days before the rejection day stay time off, paid or unpaid as approved. The rejection day and the days after are normal work days, with the usual hours required (7h logged plus the 1h paid break in November 2026, 8h logged from 1 December 2026, decision 25). |
+| T5 | **Time off pays as day excuses.** A paid day changes nothing on a salary and counts toward the overtime threshold; an unpaid day deducts the full paid day. An hourly employee is paid their normal paid day (the day's span at their rate) for each working day of paid time off, which amends decision 20 (an excuse by hand still pays them nothing). It is a company cost, never charged to a project. |
+| T6 | **No hours while off.** No hours can be dated on a day of time off, and the person can't add, edit, move, delete or restore hours while off (both rules, `422`). Hours logged for them rather than by them (parked hours released when a department is added, blocked changes forced through) go through for days outside the time off, with no alert. |
+| T7 | **The super admins are alerted** (a link to the People page filtered to the person) when someone on time off tries to log hours (at most once an hour) or uses the app (at most once a day). |
+| T8 | **The department and the super admins get a heads-up** on the first day (never the person), and again if it is rejected while under way ("back at work today"). Only super admins and the employee see whether it is paid, the reason and the time-off activity; everyone else sees only that the person is off. |
+| T9 | **No new meeting on a day off.** From approval, nobody can be added to a meeting on the person's days off, or have a meeting they attend moved onto them. Meetings they were already in stay. |
+| T10 | **Excuses and time off don't overlap, both ways.** Time off can't be asked for or approved on an excused day, and the Salaries page can't excuse a day of approved time off, nor a month holding some whole. |
+| T11 | **Leaving, moving out of Design or becoming an admin ends time off.** Pending requests are cancelled; approved time off stops that day, keeping the days already taken; the super admins are told. |
+| T12 | **A Design admin needs a department**, like a Design employee, so a department's admins hear when its people are off. There is no backfill: an admin without one is asked for it on their next edit, and a role change can give one (`teamId`). |
+| T13 | **Proton doesn't cover time off yet.** The write endpoints are listed as opened for the user; hours are still blocked for Proton, since it logs through the same service. |
 
 ## Open questions
 

@@ -194,4 +194,18 @@ public static class ActivityEventKinds
     // Hours ledger (subject: the person; no amounts)
     public const string HoursExcused = "hours_excused";
     public const string HoursExcuseRemoved = "hours_excuse_removed";
+
+    // Time off (subject: the person; the request, its days and whether it is paid in the payload). Only those who decide time off see them.
+    public const string TimeOffRequested = "time_off_requested";
+    public const string TimeOffWithdrawn = "time_off_withdrawn";
+    public const string TimeOffApproved = "time_off_approved";
+    public const string TimeOffDeclined = "time_off_declined";
+    public const string TimeOffExpired = "time_off_expired";
+    public const string TimeOffRejected = "time_off_rejected";
+
+    /// <summary>Cancelled or cut short because the person left, moved out of Design or became an admin.</summary>
+    public const string TimeOffEnded = "time_off_ended";
+
+    public static readonly IReadOnlyList<string> TimeOff =
+        [TimeOffRequested, TimeOffWithdrawn, TimeOffApproved, TimeOffDeclined, TimeOffExpired, TimeOffRejected, TimeOffEnded];
 }

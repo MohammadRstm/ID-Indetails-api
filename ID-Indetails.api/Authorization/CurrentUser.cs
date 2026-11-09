@@ -31,6 +31,9 @@ public interface ICurrentUser
 
     /// <summary>Back to the signed-in person, after <see cref="ActAs"/>.</summary>
     void StopActing() => throw new NotSupportedException();
+
+    /// <summary>Whether <see cref="ActAs"/> is in force: what is done now is done for someone, not by them.</summary>
+    bool IsActing => false;
 }
 
 public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
@@ -57,6 +60,8 @@ public sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
     public void ActAs(long userId, string role, string? domain, string fullName) => actingAs = (userId, role, domain, fullName);
 
     public void StopActing() => actingAs = null;
+
+    public bool IsActing => actingAs is not null;
 
     public Guid? SessionId => Guid.TryParse(Claim(AuthClaimTypes.SessionId), out var id) ? id : null;
 

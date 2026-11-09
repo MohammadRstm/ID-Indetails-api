@@ -77,7 +77,7 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
 | Money: the finance calculator, dashboards, Financials | [finance.md](docs/finance.md) |
 | Invoices and payments | [billing.md](docs/billing.md) |
 | Clients | [clients.md](docs/clients.md) |
-| People, pay, hours | [employees.md](docs/employees.md), [me.md](docs/me.md) |
+| People, pay, hours | [employees.md](docs/employees.md), [me.md](docs/me.md), [time-off.md](docs/time-off.md) |
 | Company settings, working time, overhead, account labels | [company.md](docs/company.md) |
 | Client portal, project files, storage | [client-portal.md](docs/client-portal.md), [content-storage.md](docs/content-storage.md), [files.md](docs/files.md) |
 | Chats, notifications, live updates, search | [messaging.md](docs/messaging.md), [notifications.md](docs/notifications.md), [search.md](docs/search.md) |

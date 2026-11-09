@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Teams;
@@ -65,7 +66,7 @@ public sealed class AuthTestSteps(ApiFactory api)
     {
         var email = NewEmail(role);
         pay ??= role == RoleCodes.Employee ? null : new { basis = "monthly", amount = 2000m, currency = "USD" };
-        long? teamId = role == RoleCodes.Employee && domain == DomainCodes.Design ? await DesignDepartmentAsync() : null;
+        long? teamId = EmployeeRules.NeedsDepartment(role, domain) ? await DesignDepartmentAsync() : null;
         var invite = await Client.PostJsonAsync("/api/invitations", new { email, role, domainCode = domain, pay, teamId }, inviter.AccessToken);
         ((int)invite.StatusCode).ShouldBe(201, await invite.Content.ReadAsStringAsync());
 

@@ -38,7 +38,9 @@ Every change writes an `activity_events` row (`employee_updated`, `employee_deac
 
 ## The people list
 
-`GET /api/employees?search=&teamId=&role=&domain=&status=&page=1&pageSize=25`
+`GET /api/employees?id=&search=&teamId=&role=&domain=&status=&page=1&pageSize=25`
+
+- `id` keeps just that person (still only if the caller may see them). It is where an alert about someone leads, for example the time-off alerts to the People page ([time-off.md](time-off.md)).
 
 - `search` matches first name, last name, email and position; every word must match. Case is ignored.
 - Deactivated people are left out unless `status=deactivated` is asked for. Invited people are included.
@@ -73,6 +75,7 @@ Whoever holds `employee:change_email` (super admins by default) sets someone's n
 
 Employment is kept as dated periods (`employment_periods`): accepting the invitation starts the first one, leaving ends it, and being taken back starts a new one. Pay, the hours ledger and project pay count only the days inside a period (`Business/Payroll/Employment.cs`, `Business/Employees/EmploymentRules.cs`).
 
+- **Time off** ends with the employment: pending requests are cancelled and approved time off stops today, keeping the days already taken ([time-off.md](time-off.md)).
 - **Deactivating** sets the status to `deactivated`, records when (`users.deactivated_at`), and ends the person's period on their **last working day**: today unless given, never in the future (`400 last_working_day_invalid`) or before the period started, and never so far back that a closed month would change (`422 month_closed`; on the 1st, last month is still open). That day is paid. It also revokes every refresh token and any pending invitation link, and drops the cached permissions. The person's access token stops working at once: permission checks find no permissions, and `/auth/me` answers `401`. Their history is kept, and `leftOn` shows the last working day.
 - **Reactivating** clears `deactivated_at` and makes them `active` again if they had signed up, or `invited` if they never did (send them a fresh link with `POST /api/invitations/{id}/resend`). For someone who worked here:
   - back the day after their last working day (or the same day): their period simply goes on;
@@ -85,7 +88,8 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 
 - Between admin and employee the domain stays. To change domain as well, move them separately.
 - Making someone a super admin removes their domain and team.
-- A Design admin made an employee must already have a department (`422 department_required`).
+- Design's employees and admins each need a department. `teamId` (optional) gives them one of the domain they end up in with the change, replacing their current one: it is needed when the new role needs a department and they have none, or when a super admin joins Design. Without one, the change is refused (`400 department_required` on `teamId`); a department of another domain is refused as for any move.
+- A Design employee who becomes an admin or super admin has their time off ended: pending requests are cancelled, approved time off stops today, and the super admins are told ([time-off.md](time-off.md)).
 - A super admin becoming an admin or employee needs `domainCode` (a domain the caller can see).
 - Making or unmaking a super admin needs `employee:invite_super_admin`.
 - `position` optionally gives them a new job title with it (an empty one clears it); without it, the title stays. Pay is changed separately, from a date (see Pay below).
@@ -100,6 +104,7 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 - The team is replaced (it must belong to the new domain, or be empty).
 - Personal permission changes are cleared, because they were made for the old domain.
 - Super admins have no domain and can't be moved.
+- A Design employee moved to Execution has their time off ended, as on a role change ([time-off.md](time-off.md)). Moving a Design admin into Design needs a `teamId` like an employee.
 
 ## Pay
 
@@ -115,7 +120,7 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 ## Teams (departments)
 
 - Each team belongs to one domain, and names are unique within a domain (ignoring case).
-- One department per person. A **Design employee must have one**: their hours are counted in it. Inviting one, editing their profile or moving them into Design without a `teamId` is `400 department_required`. Admins, super admins and Execution staff need none.
+- One department per person. A **Design employee or admin must have one** (since 9 Nov 2026): an employee's hours are counted in it, and its people and admins hear when someone in it is off ([time-off.md](time-off.md)). Inviting one, editing their profile, moving them into Design or changing their role into one without a `teamId` is `400 department_required`. Super admins and Execution staff need none. There is no backfill: a Design admin who has none is asked for one the next time they are edited.
 - The prototype's teams are seeded (`Constants/TeamSeed.cs`):
   - Design: Engineering, Design, Data, Marketing, Operations, Platform.
   - Execution: Site Operations, Procurement, Quantity Surveying, Safety, Project Management.

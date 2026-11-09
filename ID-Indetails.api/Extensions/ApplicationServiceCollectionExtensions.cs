@@ -110,6 +110,10 @@ using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Notifications.Implementation;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Payroll.Implementation;
+using ID_Indetails.api.Services.TimeOff.Abstraction;
+using ID_Indetails.api.Services.TimeOff.Implementation;
+using ID_Indetails.api.Repositories.TimeOff.Abstraction;
+using ID_Indetails.api.Repositories.TimeOff.Implementation;
 using ID_Indetails.api.Services.Permissions.Abstraction;
 using ID_Indetails.api.Services.Permissions.Implementation;
 using ID_Indetails.api.Services.Portal.Abstraction;
@@ -217,6 +221,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ICompanyFinanceRepository, CompanyFinanceRepository>();
         services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IHourExcuseRepository, HourExcuseRepository>();
+        services.AddScoped<ITimeOffRepository, TimeOffRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IProjectDeletionRepository, ProjectDeletionRepository>();
@@ -302,6 +307,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISalaryService, SalaryService>();
         services.AddScoped<IMyTimeService, MyTimeService>();
         services.AddScoped<IHourExcuseService, HourExcuseService>();
+        services.AddScoped<ITimeOffService, TimeOffService>();
+        services.AddScoped<ITimeOffWatch, TimeOffWatch>();
+        services.AddScoped<ITimeOffSchedule, TimeOffSchedule>();
         services.AddScoped<IProjectPayService, ProjectPayService>();
         services.AddScoped<ITeamService, TeamService>();
         services.AddScoped<IMessagingService, MessagingService>();
