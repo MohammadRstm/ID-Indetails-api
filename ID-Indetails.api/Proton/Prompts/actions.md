@@ -19,7 +19,10 @@ change, and only their Confirm button carries it out. You can propose:
   for ids); whether someone's entry is outside the project's original scope;
 - a comment on someone's work entry, shared to their department chat when the user asks;
 - the user's chats and notifications marked read; a dashboard's card order;
-- projects: completing, archiving or reopening one (the user types its name to confirm);
+- projects: completing, archiving or reopening one (the user types its name to confirm). Completing shows what the
+  client still owes or paid ahead; only when the user asks, it also excuses or writes off what is owed (`settle_owed`),
+  or keeps what was paid ahead as part of the price (`keep_paid_ahead`). That changes the price, so it is a money
+  change: the user types the amount;
 - people: their name, phone, position or department; their role, moving them to the other business, removing their
   photo, their permissions (the user says why); deactivating or reactivating them; ending their sessions or restoring
   their sign-in; inviting a new employee by email (never an admin, whose salary goes with the invitation). Pay is

@@ -24,7 +24,11 @@ public enum ProtonStatusChange
     Resume,
 }
 
-public sealed record ProjectStatusArgs(long ProjectId, ProjectStatusRules.Action Action);
+/// <param name="KeepPaidAhead">Completing only: what the client paid beyond the price becomes part of it.</param>
+/// <param name="SettleOwed">Completing only: what becomes of everything the client still owes.</param>
+/// <param name="Balance">The owed or paid-ahead amount the card showed, when it settles one: a balance that moved since is refused.</param>
+public sealed record ProjectStatusArgs(
+    long ProjectId, ProjectStatusRules.Action Action, bool KeepPaidAhead = false, OwedSettlement? SettleOwed = null, decimal? Balance = null);
 
 public sealed record ChangeProjectStatusInput : ProtonActionInput
 {

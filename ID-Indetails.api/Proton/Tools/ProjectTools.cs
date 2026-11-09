@@ -467,6 +467,9 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
 /// <param name="CashProfit">Execution: received less the cost so far, less what was moved to the pocket money, plus what it paid in.</param>
 /// <param name="ToPocket">Execution: moved from the site into the pocket money. Lowers its profit, not what the client owes.</param>
 /// <param name="FromPocket">Execution: paid to the site by the pocket money. Raises its profit.</param>
+/// <param name="SettledOwed">What the client still owed when the project was completed, TVA included, and settled then: the price
+/// dropped to what was received. Empty when nothing was settled.</param>
+/// <param name="SettledOwedAs">excused (a discount agreed with the client) or written_off (revenue lost).</param>
 public sealed record ProjectFinancials(
     long ProjectId,
     string Title,
@@ -490,6 +493,8 @@ public sealed record ProjectFinancials(
     decimal? CashProfit,
     decimal? ToPocket,
     decimal? FromPocket,
+    decimal? SettledOwed,
+    OwedSettlement? SettledOwedAs,
     string Note);
 
 /// <summary>
@@ -505,7 +510,8 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
         "client pays with TVA, its TVA rate, what was received, invoiced, outstanding and overdue (TVA included), cost by " +
         "source (labour, expenses, site expenses, ground labour), profit and margin against the agreed revenue, and " +
         "projection. Execution sites also give their supervision and its rate, the pocket money moved out and paid in, and " +
-        "cash profit (received − cost − moved to the pocket money + paid by it).";
+        "cash profit (received − cost − moved to the pocket money + paid by it). A completed project also says what the " +
+        "client still owed and whether it was excused or written off then.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Get));
 
@@ -519,6 +525,7 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
                 m.SupervisionRate * 100, m.SupervisionUsd, m.PermitsUsd,
                 m.ExpenseTotals, m.Billing, m.Cost, m.Profit, ProtonAnalysis.Pct(m.Margin), m.RecognisedToDate,
                 ProtonProjection.Of(m.Projected), ProtonText.Hours(m.LabourHours), m.CashProfit, m.ToPocket, m.FromPocket,
+                m.SettledOwedUsd, m.SettledOwedAs,
                 "All-time figures in USD. Agreed revenue and profit are net of TVA; billing is as the client is billed, TVA " +
                 "included, and is measured against agreed_with_tva. Agreed profit is against the agreed revenue, whether or not " +
                 "it was paid: billing.received is the cash in. Margin is empty until it means something (project done, 5% " +

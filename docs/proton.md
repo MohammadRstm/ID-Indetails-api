@@ -85,7 +85,7 @@ POST /api/proton/messages
 |---|---|---|
 | `find` | project, client and employee lists | name → ids; drops filler words, tries single words if the phrase matches nothing |
 | `list_projects` | `GET /api/projects` | filters, sorting, `overdue_only` |
-| `get_project_departments` | `GET /api/projects/{id}/departments` (+ `/history` with `financial:view`) | Design client projects: each department's share, budget, cost, minutes, what is left and its people; money only with `financial:view`, no rates |
+| `get_project_departments` | `GET /api/projects/{id}/departments` (+ `/history` with `financial:view`) | Design client projects: each department's share, budget, cost, minutes, what is left and its people with their minutes (never a person's cost, which with their minutes is their hourly cost); money only with `financial:view` |
 | `list_design_vos` | `GET /api/projects/{id}/design-vos` (+ `/outside-scope`) | Design only, `financial:view`: the price, each VO's lines, status, split and department amounts, the hours outside the agreed scope, and the department ids for a split |
 | `get_permissions`, `list_hour_excuses` | `GET /api/users/{id}/permissions`, the month's salary detail | someone's permissions with what their role gives; the excuses in someone's month with their ids, never what they are worth |
 | `list_my_devices`, `get_my_notification_settings` | `GET /api/me/devices`, `/api/me/notification-settings` | the user's own phones and push settings |
@@ -693,14 +693,14 @@ and confirmed strongly: a second step at least, and a typed phrase the server st
 
 | Tool | Family | Stands in for | Confirm |
 |---|---|---|---|
-| `propose_project_lifecycle` | Lifecycle | `POST /api/projects/{id}/complete`, `/archive`, `/reopen` | the project's name typed; the card says the revenue locks (or unlocks) and how many open requirements get ticked |
+| `propose_project_lifecycle` | Lifecycle | `POST /api/projects/{id}/complete`, `/archive`, `/reopen` | the project's name typed; the card says the revenue locks (or unlocks), how many open requirements get ticked, and, for whoever sees the money, what the client still owes or paid ahead. Completing can also excuse or write off what is owed (`settleOwed`) or keep an overpayment (`keepPaidAhead`), only when the user asks: that changes the price, so it is held to the Money family (switched on, a typed question, `financial:write` on Design or `project:pricing_manage` on a site), the user types the amount, and a balance that moved since the card is refused (`422 proton_action_stale`). `get_project_financials` then gives `settled_owed` and how |
 | `propose_update_employee` | Access | `PUT /api/employees/{id}` | two steps; name, phone, position and department only (role and business are `propose_employee_access`; never sign-in email or pay). A Design employee or admin keeps a department |
 | `propose_deactivate_employee` | Access | `POST /api/employees/{id}/deactivate` | the person's name typed; never oneself |
 | `propose_reactivate_employee` | Access | `POST /api/employees/{id}/reactivate` | two steps; when they left earlier this month the tool asks Proton to ask the user whether the time away is paid, and the card shows the answer. Someone who never signed up shows as invited again |
 | `propose_end_sessions` | Access | `POST /api/employees/{id}/sessions/end` (`/restore`) | two steps; never one's own |
 | `propose_delete_team` | Deletes | `DELETE /api/teams/{id}` | the department's name typed; an empty department only (one whose chat has messages is refused by the app) |
 | `propose_company_settings` | CompanyRules | `PUT /api/company/settings` | two steps; the company's name typed for a new week start or default currency. The card says how many people it affects |
-| `propose_domain_settings` | CompanyRules | `PUT /api/domain-settings/{domain}` | two steps; the domain's name typed to hold or release logging. The card says how many people it affects |
+| `propose_domain_settings` | CompanyRules | `PUT /api/domain-settings/{domain}` | two steps; the domain's name typed to let projects on hold take work (`holdLogging` on) or to stop it. The card says how many people it affects |
 | `propose_send_message` | Messaging | `POST /api/messages/direct/{id}`, `/teams/{id}` | see below |
 | `propose_comment_work_entry` with `send_to_group` | Core, held to Messaging | `POST /api/work-entries/{id}/comments` | the team's name typed; needs Messaging switched on and a typed question |
 

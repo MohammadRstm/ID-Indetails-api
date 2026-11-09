@@ -4,7 +4,8 @@ using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Proton.Tools;
 
-public sealed record DepartmentPersonRow(string Person, int Minutes, decimal Cost);
+/// <summary>Who logged hours in a department: their minutes only. A person's cost beside their minutes is their hourly cost, which never reaches Proton.</summary>
+public sealed record DepartmentPersonRow(string Person, int Minutes);
 
 /// <param name="SharePercent">Its part of the price. Null without financial:view, like all the money here.</param>
 /// <param name="Left">Budget less cost; below zero when over budget.</param>
@@ -34,8 +35,9 @@ public sealed class GetProjectDepartmentsTool(IProjectDepartmentService departme
 
     public override string Description =>
         "A Design project's departments: which work on it, and, for someone who sees the money, each one's share of the price, " +
-        "budget, cost so far, minutes logged, what is left and who logged hours, plus hours that belong to no budget and the " +
-        "history of the split. Without money access only the department names. Execution sites have no departments.";
+        "budget, cost so far, minutes logged, what is left and who logged how many minutes (never a person's cost), plus " +
+        "hours that belong to no budget and the history of the split. Without money access only the department names. " +
+        "Execution sites have no departments.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectDepartmentsController>(nameof(ProjectDepartmentsController.Get));
 
@@ -62,7 +64,7 @@ public sealed class GetProjectDepartmentsTool(IProjectDepartmentService departme
 
     private static DepartmentRow Row(long id, string name, decimal? share, DepartmentMoneyResponse? money)
         => new(id, name, share is { } s ? s * 100m : null, money?.Budget, money?.Cost, money?.Left, money?.Minutes,
-            money?.People.Select(p => new DepartmentPersonRow(p.Person.Name, p.Minutes, p.Cost)).ToList());
+            money?.People.Select(p => new DepartmentPersonRow(p.Person.Name, p.Minutes)).ToList());
 
     private static string Split(IReadOnlyList<DepartmentShareResponse> split)
         => split.Count == 0 ? "none" : string.Join(", ", split.Select(s => $"{s.Name} {(s.Share * 100m).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%"));

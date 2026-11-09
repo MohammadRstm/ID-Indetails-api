@@ -167,6 +167,30 @@ public class ProtonToolCatalogTests
         properties.Where(p => Regex.IsMatch(p, "Pay(?![a-z])") && !payAllowed.Contains(p)).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A row about one person carries their hours, never money: a person's cost beside their hours is their hourly cost,
+    /// whatever the field is called ("Cost" alone passes the list above).
+    /// </summary>
+    [Fact]
+    public void No_row_about_one_person_carries_money()
+    {
+        string[] namespaces = ["ID_Indetails.api.Proton.Tools", "ID_Indetails.api.Proton.Actions", "ID_Indetails.api.Proton.Ui"];
+        var personRows = typeof(IProtonTool).Assembly.GetTypes()
+            .Where(t => namespaces.Contains(t.Namespace) && !typeof(IProtonTool).IsAssignableFrom(t) && !t.Name.EndsWith("Input")
+                && !t.Name.Contains('<')
+                && (Regex.IsMatch(t.Name, "Person|People|Member|Contributor") || t.GetProperty("Person") is not null))
+            .ToList();
+
+        personRows.Select(t => t.Name).ShouldContain(nameof(DepartmentPersonRow));
+        foreach (var type in personRows)
+        {
+            type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Select(p => p.Name)
+                .Where(name => Regex.IsMatch(name, "Cost|Labour|Rate|Amount|Usd|Revenue|Profit|Budget"))
+                .ShouldBeEmpty(type.Name);
+        }
+    }
+
     private static void Collect(Type type, HashSet<string> properties, HashSet<Type> seen)
     {
         type = Nullable.GetUnderlyingType(type) ?? type;

@@ -83,6 +83,29 @@ public class ProtonStrongActionsTests(ProtonStrongApiFactory api) : IClassFixtur
     }
 
     [Fact]
+    public async Task Settling_what_a_client_owes_on_completion_waits_for_the_Money_family()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var client = await new ProjectTestSteps(_steps).CreateClientAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var created = await Client.PostJsonAsync("/api/projects", new
+        {
+            title = "Villa " + Guid.NewGuid().ToString("N")[..8],
+            domainCode = DomainCodes.Design,
+            clientId = client.Id,
+            revenue = 1_000m,
+            tvaRate = 0.11m,
+            departmentIds = new[] { await _steps.DesignDepartmentAsync() },
+        }, superAdmin.AccessToken);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        var project = await created.ReadAsync<ProjectResponse>();
+
+        // Lifecycle is on here, Money isn't: a settlement changes the price, so it is the Money family's
+        var (reply, result) = await ProposeAsync(superAdmin, "propose_project_lifecycle", new { project_id = project.Id, change = "complete", settle_owed = "excused" });
+        reply.PendingAction.ShouldBeNull();
+        result["message"]!.GetValue<string>().ShouldContain("isn't switched on for Proton yet");
+    }
+
+    [Fact]
     public async Task Someone_is_deactivated_with_their_name_typed_then_reactivated_and_signed_out_on_request()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
@@ -114,7 +137,7 @@ public class ProtonStrongActionsTests(ProtonStrongApiFactory api) : IClassFixtur
     }
 
     [Fact]
-    public async Task Settings_cards_say_who_they_reach_and_holding_logging_needs_the_domain_typed()
+    public async Task Settings_cards_say_who_they_reach_and_logging_on_held_projects_needs_the_domain_typed()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (hold, _) = await ProposeAsync(superAdmin, "propose_domain_settings", new { domain = "design", hold_logging = true });
@@ -122,10 +145,13 @@ public class ProtonStrongActionsTests(ProtonStrongApiFactory api) : IClassFixtur
         card.Preview.Reach!.ShouldStartWith("Affects ");
         card.Preview.Reach.ShouldEndWith("in Design.");
         card.Preview.Phrase.ShouldBe("Design");
+        // on, the setting lets projects on hold take work (WorkEntryRules.AcceptsWork): the card must not say the opposite
+        card.Preview.Note.ShouldBe("People can log work on Design projects that are on hold.");
         await ConfirmAsync(superAdmin, hold, "design");
         (await GetAsync<DomainSettingsResponse>(superAdmin, "/api/domain-settings/design")).HoldLogging.ShouldBeTrue();
 
         var (release, _) = await ProposeAsync(superAdmin, "propose_domain_settings", new { domain = "design", hold_logging = false });
+        release.PendingAction!.Preview.Note.ShouldBe("Design projects on hold stop taking work until they are resumed.");
         await ConfirmAsync(superAdmin, release, "Design");
 
         var (website, _) = await ProposeAsync(superAdmin, "propose_company_settings", new { website = "indetails.example" });
