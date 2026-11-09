@@ -105,12 +105,12 @@ public sealed class ProposeEmployeeAccessTool(
                 PeopleText.Refuse(PayRules.CheckRoleChange(
                     decision.Role, (await payRecords.GetPayInForceAsync(person.Id, context.Today, cancellationToken))?.Basis));
 
-                // a Design employee's hours are counted in their department, and a new business clears it
+                // Design's employees and admins each belong to a department, and a new business clears it
                 if (EmployeeRules.NeedsDepartment(decision.Role, decision.Domain) && (decision.Domain != person.Domain || person.Team is null))
                 {
                     throw new ProtonToolInputException(decision.Domain != person.Domain
-                        ? $"{name} would join Design as an employee with no department, and a Design employee needs one. Make them a Design admin first, give them a department (propose_update_employee), then make them an employee."
-                        : $"{name} has no department, and a Design employee needs one. Give them a department first (propose_update_employee), then change the role.");
+                        ? $"{name} would join Design with no department, and Design's employees and admins each need one. Change their role in the app (open their profile): the department is picked there with it."
+                        : $"{name} has no department, and Design's employees and admins each need one. Give them a department first (propose_update_employee), then change the role.");
                 }
 
                 var position = input.Position is null ? person.Position : AccessText.Clean(input.Position);
@@ -160,7 +160,7 @@ public sealed class ProposeEmployeeAccessTool(
 
                 if (EmployeeRules.NeedsDepartment(person.Role, domain) && teamName is null)
                 {
-                    throw new ProtonToolInputException($"A Design employee needs a department: give one of Design's (list_teams) to move {name} into.");
+                    throw new ProtonToolInputException($"Design's employees and admins each need a department: give one of Design's (list_teams) to move {name} into.");
                 }
 
                 var changes = new List<ProtonChange> { new("Business", PeopleText.DomainWords(person.Domain), PeopleText.DomainWords(domain)) };

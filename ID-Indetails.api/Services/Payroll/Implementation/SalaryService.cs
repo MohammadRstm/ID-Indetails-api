@@ -32,7 +32,7 @@ public sealed class SalaryService(
     IPayrollInputs inputs,
     IClock clock) : ISalaryService
 {
-    private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses, SalaryCalculator.Input Input);
+    private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses, SalaryCalculator.Input Input, PersonMonth Month);
 
     public async Task<SalariesResponse> ListAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
     {
@@ -136,7 +136,9 @@ public sealed class SalaryService(
                 .ToList(),
             person.Excuses.Select(HourExcuseService.ToResponse).ToList(),
             workingDays,
-            await ProjectsAsync(userId, month, result, input, cancellationToken));
+            await ProjectsAsync(userId, month, result, input, cancellationToken),
+            MonthTimeOffResponse.Of(person.Month),
+            result.TimeOffPay);
     }
 
     /// <summary>The month's work grouped by project, each entry paid as Project pay pays it.</summary>
@@ -276,7 +278,7 @@ public sealed class SalaryService(
         {
             if (SalaryCalculator.Calculate(personMonth.Input) is { } result)
             {
-                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses, personMonth.Input));
+                computed.Add(new Computed(personMonth.User, result, personMonth.Excuses, personMonth.Input, personMonth));
             }
             else if (LacksPay(personMonth.Input))
             {

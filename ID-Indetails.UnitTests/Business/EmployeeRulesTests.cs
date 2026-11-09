@@ -178,11 +178,14 @@ public class EmployeeRulesTests
         => EmployeeRules.CanSee(CrossDomainAdmin, null).ShouldBeTrue();
 
     [Fact]
-    public void Only_a_Design_employee_needs_a_department()
+    public void Design_employees_and_admins_need_a_department()
     {
         EmployeeRules.CheckDepartment(RoleCodes.Employee, DomainCodes.Design, null)!.Code.ShouldBe(ErrorCodes.DepartmentRequired);
+        EmployeeRules.CheckDepartment(RoleCodes.Admin, DomainCodes.Design, null)!.Code.ShouldBe(ErrorCodes.DepartmentRequired);
         EmployeeRules.CheckDepartment(RoleCodes.Employee, DomainCodes.Design, 4).ShouldBeNull();
+        EmployeeRules.CheckDepartment(RoleCodes.Admin, DomainCodes.Design, 4).ShouldBeNull();
         EmployeeRules.CheckDepartment(RoleCodes.Employee, DomainCodes.Execution, null).ShouldBeNull();
-        EmployeeRules.CheckDepartment(RoleCodes.Admin, DomainCodes.Design, null).ShouldBeNull();
+        EmployeeRules.CheckDepartment(RoleCodes.Admin, DomainCodes.Execution, null).ShouldBeNull();
+        EmployeeRules.CheckDepartment(RoleCodes.SuperAdmin, null, null).ShouldBeNull();
     }
 }

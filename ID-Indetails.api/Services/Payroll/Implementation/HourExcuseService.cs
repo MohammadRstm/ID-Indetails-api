@@ -4,6 +4,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Payroll;
+using ID_Indetails.api.Business.TimeOff;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Payroll;
@@ -18,10 +19,14 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.TimeOff.Abstraction;
 
 namespace ID_Indetails.api.Services.Payroll.Implementation;
 
-/// <summary>Excused hours (see <c>Business/Payroll/ExcuseRules</c>). People outside the caller's domains read as not found.</summary>
+/// <summary>
+/// Excused hours (see <c>Business/Payroll/ExcuseRules</c>). People outside the caller's domains read as not found. A day
+/// of approved time off is never excused too; the person is locked while that is checked, as approving time off does.
+/// </summary>
 public sealed class HourExcuseService(
     ICurrentUser currentUser,
     IPermissionService permissions,
@@ -29,6 +34,7 @@ public sealed class HourExcuseService(
     IHourExcuseRepository excuses,
     IActivityEventRepository activity,
     INotificationSender notifications,
+    ITimeOffWatch timeOff,
     IUnitOfWork unitOfWork,
     IClock clock) : IHourExcuseService
 {
@@ -62,6 +68,9 @@ public sealed class HourExcuseService(
         };
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        await users.GetByIdForUpdateAsync(user.Id, cancellationToken);
+        var off = (await timeOff.GrantedAsync([user.Id], month, month.AddMonths(1).AddDays(-1), cancellationToken)).Select(x => x.Period).ToList();
+        TimeOffRules.CheckExcuse(request.Kind, days, off).ThrowIfDenied();
         excuses.Add(excuse);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         Record(user.DomainCode, excuse, ActivityEventKinds.HoursExcused, actor.UserId);

@@ -44,6 +44,7 @@ Rules (`Business/Requirements/MyRequirements.cs`):
   - `overtimePaidMinutes`: the rest of the overtime.
   - `shortMinutes` and `missedDays`: what is still missing, and the working days with no work within hours and no excuse.
   - `excuses`: the month's excuses, paid or not, with their notes. Who made them isn't shown.
+  - `timeOff`: the month's days of approved time off, one item per request (`requestId`, `firstDay`, `lastDay` (the last day taken), `isPaid`, `days`: its working days in the month). They count like excused days: the ledger expects no hours on them ([time-off.md](time-off.md)).
 - `status` is `excused` (the whole month), `short` (a closed month still short), `behind` (the month in progress is short so far), `on_track` or `complete` (`Business/Payroll/MyTime.cs`).
 - Someone else's ledger, for their profile, is `GET /api/employees/{id}/hours` (`salary:view`; see [design.md](design.md)).
 
@@ -58,6 +59,19 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - Totals: overtime, how much of it made up missing hours and how much is paid as overtime (both null where the ledger doesn't apply), and the number of entries.
 - `days`: days with overtime, newest first, each with whether it was a day off and every entry: project (with its icon and tint), description, start and end, length, overtime and the part that made up missing hours. No money is shown.
 - Someone else's overtime, for their profile, is `GET /api/employees/{id}/overtime` (`work_entry:view_all`; see [design.md](design.md)).
+
+## My time off
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/me/time-off` | `time_off:request` | The caller's own requests, latest first day first |
+| `POST /api/me/time-off` | `time_off:request` | `{ firstDay, lastDay, reason }`: asks for time off. Returns `201` |
+| `POST /api/me/time-off/{id}/withdraw` | `time_off:request` | Takes back a request that is still pending |
+
+- Design employees only: `time_off:request` is held by employees and never by admins or super admins. Someone else's request reads as `404`.
+- A request starts tomorrow at the earliest and at most 6 months ahead, needs a reason, and can't overlap the caller's own pending or approved time off. The whole rules, the response shape and the errors are in [time-off.md](time-off.md).
+- The caller sees the paid flag, the reason and the decision and rejection notes, but not who decided (`person`, `decidedByName` and `endedByName` are left out).
+- Who is off, for the "Off" flags, is `GET /api/time-off/away`, open to anyone signed in; it never shows the reason or the paid flag.
 
 ## My board layouts
 

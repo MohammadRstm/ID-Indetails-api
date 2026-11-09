@@ -30,7 +30,7 @@ Every notification goes through one sender (`INotificationSender`), which applie
 - only active people who can see the notification's domain;
 - no money in payloads, so a notification can't reveal amounts to someone who later loses `financial:view`. The page it links to checks permissions as usual.
 
-Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged`, `work_digest` and `hours_missed_list` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`).
+Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged`, `work_digest` and `hours_missed_list` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`). The time-off kinds sent to the super admins (`time_off_requested`, `time_off_undecided`, `time_off_withdrawn`, `time_off_ended`, `time_off_online`, `time_off_hours`) need `time_off:decide`. No time-off notification carries the reason, and only `time_off_approved` carries whether it is paid ([time-off.md](time-off.md)).
 
 "Holders of a permission" means the active people who hold it and can see the domain, super admins and people granted it from the other domain included. "The domain's people" means the active admins and employees whose home domain it is; super admins are left out of these broadcasts.
 
@@ -68,6 +68,15 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `permissions_changed` | The person | the person | `granted`, `revoked`, `reset` (permission codes) |
 | `hours_excused` | The person | the excuse | `month`, `kind`, `minutes`, `days`, `isPaid` |
 | `schedule_changed` | The person | the person | `effectiveFrom`, `followsDefault` |
+| `time_off_requested` | Holders of `time_off:decide` (every super admin) | the request | `name`, `firstDay`, `lastDay` (never the reason) |
+| `time_off_withdrawn` | The same, when the employee takes back a pending request | the request | `name`, `firstDay`, `lastDay` |
+| `time_off_approved` | The employee | the request | `firstDay`, `lastDay`, `isPaid` (the only place the paid flag is sent) |
+| `time_off_declined` | The employee | the request | `firstDay`, `lastDay` |
+| `time_off_rejected` | The employee, when approved time off is taken back | the request | `firstDay`, `lastDay`, `endedOn` |
+| `time_off_back` | The person's department (active employees and admins) and every super admin, never the person, when time off already under way is rejected | the person | `name`, `userId` |
+| `time_off_ended` | Holders of `time_off:decide`, when someone leaves, moves out of Design or becomes an admin and had open time off | the person | `name`, `userId`, `why` |
+| `time_off_online` | Holders of `time_off:decide`, when someone on time off uses the app. Once a day per request (`time-off-online-{requestId}-{yyyyMMdd}`) | the person | `name`, `userId`, `lastDay` |
+| `time_off_hours` | Holders of `time_off:decide`, when someone on time off tries to log or change hours. Once an hour per request (`time-off-hours-{requestId}-{yyyyMMddHH}`) | the person | `name`, `userId`, `lastDay` |
 | `client_added` | Holders of `client:manage` in the client's domain | the client | `name`, `organisation` |
 | `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
@@ -95,6 +104,9 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `hours_short` | From the first of a month, when Design employees finished the month before flagged in the hours ledger. Key `hours-short-YYYY-MM` | Holders of `salary:view` | — | `month`, `count`, `people` (the 5 most short: `id`, `name`, `shortMinutes`) |
 | `hours_missed` | The morning after a working day on which a Design employee logged less than the day required (every minute logged that day counts, overtime included). From 09:00 company time it judges yesterday, before that the day before. Days off, excused days (a day or whole-month excuse; a minutes excuse names no day) and days outside their employment never count (`Business/Payroll/MissedHours.cs`). It is only a reminder: the day can still be logged for the rest of the month. Key `hours-missed-{day}` | That employee (Design members holding `work_entry:create`) | — | `day`, `loggedMinutes`, `requiredMinutes` |
 | `hours_missed_list` | With `hours_missed`: one list of everyone it went to that day. Key `hours-missed-list-{day}` | Holders of `work_entry:view_all` in Design (Design admins and super admins); never employees | — | `day`, `count`, `people` (all of them, by name: `id`, `name`, `loggedMinutes`, `requiredMinutes`) |
+| `time_off_expired` | A request still pending when its first day comes, which then becomes `expired`. Key `time-off-expired-{requestId}` | The employee | the request | `firstDay`, `lastDay` |
+| `time_off_undecided` | A request starting tomorrow is still pending, from 09:00 company time the day before. Key `time-off-undecided-{requestId}` | Holders of `time_off:decide` | the request | `name`, `firstDay`, `lastDay` |
+| `time_off_starts` | The first day of approved time off, from the first run that day (00:00 company time on). Not sent once it is rejected or over. Key `time-off-starts-{requestId}` | The person's department (active employees and admins) and every super admin, never the person | the person | `name`, `userId`, `lastDay` (never the reason or the paid flag) |
 | `profit_low` | An active client project held to the profit floor is at 10% of its agreed amount or less. Sent by the change that took it there, or by the hourly check when nobody's change did. Once per project: key `profit-low-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `marginPct` (whole percentage, never an amount) |
 | `profit_at_zero` | The same project is at zero profit or below: a forced change, or a change nobody made. Once per project: key `profit-zero-{projectId}` | Holders of `financial:view` in its domain | the project | `projectTitle`, `marginPct` |
 | `project_cost_high` | No longer sent (`profit_low` replaced it, 29 Oct 2026); the ones sent before still read. Was: a Design client project's cost past 85% of its payment | Holders of `financial:view` in its domain | the project | `projectTitle`, `usedPct` |
@@ -147,7 +159,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
 | `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
-| `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed` |
+| `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed`, and the twelve `time_off_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `rejected`, `expired`, `undecided`, `starts`, `back`, `ended`, `online`, `hours`) |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 
 `log_reminder` has no category, so it can't be muted. Each person chooses their own quiet hours and muted categories ([me.md](me.md#my-notification-settings)); until they do, quiet hours are 22:00 to 07:00 in the company's time zone and nothing is muted. A push during quiet hours is still delivered, without sound, on the `quiet` channel (passive on iOS); nothing waits on the server.

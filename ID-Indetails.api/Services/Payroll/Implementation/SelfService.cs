@@ -47,7 +47,8 @@ internal static class SelfService
             ledger.OvertimePaid,
             ledger.Short,
             ledger.MissedDays,
-            personMonth.Excuses.Select(Excuse).ToList());
+            personMonth.Excuses.Select(Excuse).ToList(),
+            MonthTimeOffResponse.Of(personMonth));
     }
 
     /// <summary>An excuse as the caller sees it: who made it isn't shown.</summary>

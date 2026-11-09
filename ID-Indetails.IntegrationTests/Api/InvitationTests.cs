@@ -21,6 +21,7 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
             email,
             role = "admin",
             domainCode = "design",
+            teamId = await _steps.DesignDepartmentAsync(),
             position = "Design Director",
             pay = new { basis = "monthly", amount = 3000, currency = "usd" },
         }, superAdmin.AccessToken);

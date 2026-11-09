@@ -87,6 +87,8 @@ public static class PermissionExplanations
         [PermissionCodes.WorkingTimeManage] = "Set the company's working week, daily break and overtime rate.",
         [PermissionCodes.ScheduleManage] = "Set people's personal work schedules, when they differ from the company's working week.",
         [PermissionCodes.HoursExcuse] = "Excuse hours or days off in people's hours balance, so they don't count as missing.",
+        [PermissionCodes.TimeOffRequest] = "Ask for whole days off ahead of time, and take the request back while it waits for a decision.",
+        [PermissionCodes.TimeOffDecide] = "Approve time off with pay or without, decline it, and take approved time off back until its last day. You're told when someone on time off logs hours or uses the app.",
 
         // Messages
         [PermissionCodes.MessageAnnounce] = "Write in Announcements, the chat every active member of staff reads and is told about on their phone. Everyone else only reads it.",

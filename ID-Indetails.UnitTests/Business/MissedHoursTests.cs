@@ -57,6 +57,12 @@ public class MissedHoursTests
     }
 
     [Fact]
+    public void A_day_of_time_off_is_never_missed_paid_or_not()
+    {
+        Check(Tuesday, 0, null, new SalaryCalculator.Excuse(ExcuseKind.Days, null, [Tuesday], false, TimeOff: true)).ShouldBeNull();
+    }
+
+    [Fact]
     public void Days_outside_their_employment_are_never_missed()
     {
         Check(Tuesday, 0, new Employment([new Employment.Period(Tuesday.AddDays(1), null)])).ShouldBeNull();

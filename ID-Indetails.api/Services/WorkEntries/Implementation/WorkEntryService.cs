@@ -22,6 +22,7 @@ using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
+using ID_Indetails.api.Services.TimeOff.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
 namespace ID_Indetails.api.Services.WorkEntries.Implementation;
@@ -29,7 +30,8 @@ namespace ID_Indetails.api.Services.WorkEntries.Implementation;
 /// <summary>
 /// People log only their own work, and only on Design projects (see <see cref="WorkEntryRules"/>).
 /// Someone else's entry reads as not found. Each change locks the person's user row, so overlap
-/// checks of two simultaneous changes run one after the other. Work in a closed month never changes.
+/// checks of two simultaneous changes run one after the other. Work in a closed month never changes, no hours land on a
+/// day of time off, and someone on time off changes none (<see cref="ITimeOffWatch.CheckHoursAsync"/>).
 /// </summary>
 public sealed class WorkEntryService(
     ICurrentUser currentUser,
@@ -45,11 +47,13 @@ public sealed class WorkEntryService(
     IUnitOfWork unitOfWork,
     IOvertimeService overtime,
     IProfitFloor floor,
+    ITimeOffWatch timeOff,
     IClock clock) : IWorkEntryService
 {
     public async Task<WorkEntryResponse> CreateAsync(SaveWorkEntryRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
+        await timeOff.CheckHoursAsync(actor.UserId, DaysOf(request), cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
@@ -92,6 +96,7 @@ public sealed class WorkEntryService(
     public async Task<WorkEntryResponse> UpdateAsync(long id, SaveWorkEntryRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
+        await timeOff.CheckHoursAsync(actor.UserId, DaysOf(request), cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
@@ -171,6 +176,7 @@ public sealed class WorkEntryService(
     public async Task DeleteAsync(long id, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
+        await timeOff.CheckHoursAsync(actor.UserId, [], cancellationToken);
         var settings = await domainSettings.CurrentAsync(DomainCodes.Design, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
@@ -192,6 +198,7 @@ public sealed class WorkEntryService(
         await entries.LockPersonAsync(actor.UserId, cancellationToken);
 
         var entry = Own(actor, await entries.GetDeletedForUpdateAsync(id, cancellationToken));
+        await timeOff.CheckHoursAsync(actor.UserId, DaysOf(entry.StartedAt, entry.EndedAt), cancellationToken);
         Throw(WorkEntryRules.CheckOpenMonth(WorkEntryMapper.OpenFromUtc(clock), entry.StartedAt));
         Throw(WorkEntryRules.CheckChangeable(entry.CreatedAt, clock.UtcNow, settings.EditWindow, entry.Project.Status, settings.HoldLogging));
         await CheckOverlapAsync(actor.UserId, [SpanOf(entry)], settings, cancellationToken);
@@ -252,6 +259,17 @@ public sealed class WorkEntryService(
     }
 
     /// <summary>Other people's entries read as not found, whatever the caller may view.</summary>
+    /// <summary>The company days an entry's new times and its moves land on.</summary>
+    private List<DateOnly> DaysOf(SaveWorkEntryRequest request)
+        => [.. DaysOf(request.StartedAt, request.EndedAt), .. request.Moves.SelectMany(m => DaysOf(m.StartedAt, m.EndedAt))];
+
+    private List<DateOnly> DaysOf(DateTime startedAt, DateTime endedAt)
+    {
+        var first = clock.ToCompanyDate(WorkEntryRules.AsUtc(startedAt));
+        var last = clock.ToCompanyDate(WorkEntryRules.AsUtc(endedAt).AddMinutes(-1));
+        return last > first ? [first, last] : [first];
+    }
+
     private static WorkEntry Own(UserAccess actor, WorkEntry? entry)
         => entry is not null && entry.UserId == actor.UserId ? entry : throw new NotFoundException("Work entry not found.");
 

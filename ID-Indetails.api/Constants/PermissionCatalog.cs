@@ -85,6 +85,8 @@ public static class PermissionCatalog
         new(P.WorkingTimeManage, "Set the company working week, break and overtime multiplier", Sensitivity: Pay),
         new(P.ScheduleManage, "Set personal work schedules", Sensitivity: Pay),
         new(P.HoursExcuse, "Excuse hours and days off in the hours ledger", Sensitivity: Pay),
+        new(P.TimeOffRequest, "Ask for time off", DomainCodes.Design),
+        new(P.TimeOffDecide, "Approve time off, with pay or without, decline it, or take approved time off back", Sensitivity: Pay),
 
         new(P.MessageAnnounce, "Write in Announcements, the chat everyone reads"),
 
@@ -101,7 +103,7 @@ public static class PermissionCatalog
     private static readonly string[] CompanyOnly =
     [
         P.CompanyView, P.OverheadManage, P.SalaryView, P.CompanySettingsManage,
-        P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse,
+        P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse, P.TimeOffDecide,
         P.EmployeeInviteSuperAdmin, P.PermissionManage, P.ExchangeRateManage,
         P.OverheadCategoryManage, P.SessionManage, P.EmployeeChangeEmail,
         P.ProtonBudgetManage,
@@ -124,8 +126,11 @@ public static class PermissionCatalog
     /// </summary>
     private static readonly string[] ClientPublishing = [P.ClientPortalManage];
 
-    /// <summary>Logging one's own hours: employees only. Admins and super admins are paid a fixed salary and log no hours.</summary>
-    public static readonly IReadOnlyList<string> OwnWork = [P.WorkEntryCreate, P.WorkEntryViewOwn];
+    /// <summary>
+    /// Logging one's own hours, and asking for time off from them: employees only. Admins and super admins are paid a
+    /// fixed salary and log no hours.
+    /// </summary>
+    public static readonly IReadOnlyList<string> OwnWork = [P.WorkEntryCreate, P.WorkEntryViewOwn, P.TimeOffRequest];
 
     private static readonly string[] EmployeeGrants =
     [
@@ -135,6 +140,7 @@ public static class PermissionCatalog
         P.MeetingCreate,
         P.WorkEntryCreate,
         P.WorkEntryViewOwn,
+        P.TimeOffRequest,
         P.LabourReportCreate,
         P.SiteLogCreate,
         P.ProtonUse,
