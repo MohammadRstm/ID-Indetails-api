@@ -194,4 +194,17 @@ public class OvertimeThresholdTests
         PayRules.SuggestedOvertimeRate(PayBasis.Monthly, 1840m).ShouldBe(10m);
         PayRules.SuggestedOvertimeRate(PayBasis.Hourly, 20m, 200).ShouldBe(20m);
     }
+
+    [Fact]
+    public void The_premium_is_the_overtime_paid_past_the_threshold_beyond_the_hourly_rate_projects_carry_it_at()
+    {
+        var calendar = CalendarOf();
+
+        // 10 hours past the threshold are paid at 10 × 1.5: 150. Projects carry them at the hourly rate (1,840 ÷ 184
+        // paid hours in December, 10): 100. The other 50 reach no project.
+        SalaryCalculator.OvertimePremium(Pay(calendar, [.. FullDays(calendar), DayOff(6, 10)])).ShouldBe(50m);
+        // under the threshold no overtime is paid; hourly pay puts its overtime on projects itself
+        SalaryCalculator.OvertimePremium(Pay(calendar, [.. FullDays(calendar, skip: 3), DayOff(6, 10)])).ShouldBe(0m);
+        SalaryCalculator.OvertimePremium(Pay(calendar, [.. FullDays(calendar), DayOff(6, 10)], Hourly)).ShouldBe(0m);
+    }
 }

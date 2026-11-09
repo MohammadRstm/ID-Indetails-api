@@ -302,9 +302,48 @@ public static class SalaryCalculator
         return ledger.Short + breaks;
     }
 
+    /// <summary>
+    /// What a month paid for paid leave. Nothing is logged for it, so no project carries it: it is a company cost.
+    /// A salary: the paid excused minutes and the full paid day of each paid day off (paid time off included), at the
+    /// month's hourly rate, as unpaid ones are deducted; a whole month off with pay is the month's base pay. Hourly pay:
+    /// its paid time off (<see cref="Result.TimeOffPay"/>); paid excuses pay it nothing. A fixed salary is a company cost
+    /// whole, so it has none.
+    /// </summary>
+    public static decimal PaidLeavePay(Input input, Result pay)
+    {
+        if (input.FixedSalary)
+        {
+            return 0;
+        }
+
+        if (pay.Terms.Basis != PayBasis.Monthly)
+        {
+            return pay.TimeOffPay;
+        }
+
+        return input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth && e.IsPaid)
+            ? pay.BasePay
+            : Round(ExcusedMinutes(input, input.Month.AddMonths(1), paid: true) / 60m * pay.HourlyRate);
+    }
+
+    /// <summary>
+    /// What a salary paid for overtime past its threshold beyond the hourly rate. Projects price every logged hour of a
+    /// month with a threshold at the hourly rate (<c>EntrySplit.NoPremium</c>), while the overtime past it is paid at the
+    /// overtime rate × the multiplier: the rest reaches no project, so it is a company cost. None where no threshold
+    /// applies: hourly pay puts its overtime on projects, and a fixed salary has none.
+    /// </summary>
+    public static decimal OvertimePremium(Result pay)
+        => pay.ThresholdMinutes is null ? 0 : Round(pay.OvertimePay - pay.OvertimePaidMinutes / 60m * pay.HourlyRate);
+
     /// <summary>Unpaid excused minutes, and the full paid day of each unpaid day off within the month.</summary>
-    private static int UnpaidMinutes(Input input, DateOnly next)
-        => input.Excuses.Where(e => !e.IsPaid && e.Kind != ExcuseKind.WholeMonth).Sum(e =>
+    private static int UnpaidMinutes(Input input, DateOnly next) => ExcusedMinutes(input, next, paid: false);
+
+    /// <summary>
+    /// The excused minutes that are paid (or unpaid), and the full paid day of each such day off within the month while
+    /// employed. A whole month is left to the caller.
+    /// </summary>
+    private static int ExcusedMinutes(Input input, DateOnly next, bool paid)
+        => input.Excuses.Where(e => e.IsPaid == paid && e.Kind != ExcuseKind.WholeMonth).Sum(e =>
             (e.Minutes ?? 0)
             + e.Days.Where(d => d >= input.Month && d < next && d >= input.JoinedOn && !(d > input.LeftOn) && !Employment.InGap(input.Gaps, d))
                 .Sum(d => input.Calendar.HoursOn(d)?.Span ?? 0));

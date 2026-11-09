@@ -25,9 +25,10 @@ namespace ID_Indetails.api.Services.Company.Implementation;
 
 /// <summary>
 /// Company totals from the shared finance calculator: revenue is the money received, on the day it arrived; costs
-/// count on their day; overhead is charged by calendar days and converted at the rate of its month. Admins' and super
-/// admins' salaries are company costs like overhead: they log no hours, so no project carries their pay. Every figure
-/// needs company:view, checked here as well as on the endpoint.
+/// count on their day; overhead is charged by calendar days and converted at the rate of its month. Fixed salaries (the
+/// pay of everyone who logs no hours: admins, super admins and Execution's site staff), Design salaries' paid leave and
+/// the overtime premium past a salary's threshold are company costs like overhead: no project carries them. Every figure needs company:view, checked here as well as on
+/// the endpoint.
 /// </summary>
 public sealed class CompanyOverviewService(
     ICompanyFinanceRepository company,
@@ -46,6 +47,41 @@ public sealed class CompanyOverviewService(
         IReadOnlyList<Project> Projects,
         IReadOnlyDictionary<long, ProjectCostHistory> History,
         ExchangeRateTable Rates);
+
+    /// <summary>One salary cost the company carries as a whole, added up by month in USD, with what had no rate for its month.</summary>
+    private sealed class SalaryLine
+    {
+        private readonly Dictionary<DateOnly, decimal> _usd = [];
+        private readonly Dictionary<string, decimal> _unconverted = [];
+
+        public decimal Total => PeriodMoney.Round(_usd.Values.Sum());
+
+        public decimal In(DateOnly month) => PeriodMoney.Round(_usd.GetValueOrDefault(month));
+
+        public IReadOnlyList<CurrencyTotalResponse> Unconverted
+            => _unconverted.Select(u => new CurrencyTotalResponse(u.Key, PeriodMoney.Round(u.Value))).ToList();
+
+        /// <summary>Converted at the rate on the first of <paramref name="month"/>; listed apart when there is none.</summary>
+        public void Add(decimal amount, string currency, DateOnly month, ExchangeRateTable rates)
+        {
+            if (amount == 0)
+            {
+                return;
+            }
+
+            if (rates.ToUsd(amount, currency, month) is { } converted)
+            {
+                _usd[month] = _usd.GetValueOrDefault(month) + converted;
+            }
+            else
+            {
+                _unconverted[currency] = _unconverted.GetValueOrDefault(currency) + amount;
+            }
+        }
+    }
+
+    /// <summary>The salary costs no project carries.</summary>
+    private sealed record SalaryCosts(SalaryLine Fixed, SalaryLine PaidLeave, SalaryLine OvertimePremium);
 
     private static readonly DateOnly EarliestDay = new(2000, 1, 1);
 
@@ -111,8 +147,8 @@ public sealed class CompanyOverviewService(
         }).ToList();
 
         var (overhead, unconverted) = await OverheadAsync(shares.Select(s => (s.Month, s.Calendar)), data.Rates, cancellationToken);
-        var (salariesByMonth, unconvertedSalaries) = await FixedSalariesAsync(shares, data.Rates, cancellationToken);
-        var salaries = PeriodMoney.Round(salariesByMonth.Values.Sum());
+        var salaryCosts = await SalaryCostsAsync(shares, data.Rates, cancellationToken);
+        var (salaries, paidLeave, premium) = (salaryCosts.Fixed.Total, salaryCosts.PaidLeave.Total, salaryCosts.OvertimePremium.Total);
         var gross = domains.Sum(d => d.Profit);
 
         return new CompanyOverviewResponse(
@@ -125,8 +161,14 @@ public sealed class CompanyOverviewService(
             overhead,
             unconverted,
             salaries,
-            unconvertedSalaries,
-            gross - overhead - salaries,
+            salaryCosts.Fixed.Unconverted,
+            paidLeave,
+            salaryCosts.PaidLeave.Unconverted,
+            premium,
+            salaryCosts.OvertimePremium.Unconverted,
+            salaries,
+            salaryCosts.Fixed.Unconverted,
+            gross - overhead - salaries - paidLeave - premium,
             domains.Sum(d => d.Invoiced),
             domains.Sum(d => d.Collected),
             domains.Sum(d => d.Outstanding),
@@ -172,7 +214,7 @@ public sealed class CompanyOverviewService(
         var received = (await company.PaymentsAsync(cancellationToken)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();
 
         var costs = data.History.Values.SelectMany(h => h.Costs).ToList();
-        var (salaries, _) = await FixedSalariesAsync(keys.Select(m => new Recognition.MonthShare(m, 1m)).ToList(), data.Rates, cancellationToken);
+        var salaryCosts = await SalaryCostsAsync(keys.Select(m => new Recognition.MonthShare(m, 1m)).ToList(), data.Rates, cancellationToken);
 
         var lines = await overheads.ListAsync(cancellationToken);
         var result = new List<CompanyMonthResponse>();
@@ -186,11 +228,11 @@ public sealed class CompanyOverviewService(
             var ground = PeriodMoney.Round(cost.GroundLabour);
             var monthRevenue = PeriodMoney.Received(received, month, month.AddMonths(1).AddDays(-1));
             var before = monthRevenue - labour - expenses - materials - ground;
-            var adminSalaries = PeriodMoney.Round(salaries.GetValueOrDefault(month));
+            var (fixedSalaries, paidLeave, premium) = (salaryCosts.Fixed.In(month), salaryCosts.PaidLeave.In(month), salaryCosts.OvertimePremium.In(month));
 
             result.Add(new CompanyMonthResponse(
-                month, monthRevenue, labour, expenses, materials, ground, overhead, adminSalaries,
-                before, before - overhead, before - overhead - adminSalaries));
+                month, monthRevenue, labour, expenses, materials, ground, overhead, fixedSalaries, paidLeave, premium,
+                before, before - overhead, before - overhead - fixedSalaries - paidLeave - premium));
         }
 
         return result;
@@ -246,42 +288,53 @@ public sealed class CompanyOverviewService(
     }
 
     /// <summary>
-    /// The admins' and super admins' pay in each month they were paid a fixed salary (any month they held that role on a
-    /// day: they log no hours, so no project carries it), as Salaries works it out, times the share of the month's
-    /// calendar days the period covers (like overhead), converted at the rate on the first of the month.
+    /// The salaries no project carries, as Salaries works them out, times the share of the month's calendar days the
+    /// period covers (like overhead), converted at the rate on the first of the month:
+    /// <list type="bullet">
+    /// <item>fixed salaries: the whole pay of each month someone was paid without logging hours (<see cref="PaidAsFixed"/>);</item>
+    /// <item>paid leave: what a Design salary paid for its paid excused time off (<see cref="SalaryCalculator.PaidLeavePay"/>).
+    /// Its logged hours are already project cost;</item>
+    /// <item>the overtime premium: what a Design salary paid for overtime past its threshold beyond the hourly rate its
+    /// projects carry it at (<see cref="SalaryCalculator.OvertimePremium"/>).</item>
+    /// </list>
     /// </summary>
-    private async Task<(IReadOnlyDictionary<DateOnly, decimal> Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted)> FixedSalariesAsync(
+    private async Task<SalaryCosts> SalaryCostsAsync(
         IReadOnlyList<Recognition.MonthShare> shares,
         ExchangeRateTable rates,
         CancellationToken cancellationToken)
     {
         var months = shares.Select(s => s.Month).ToList();
         var people = await payroll.PeopleAsync(DomainCodes.All, includeSuperAdmins: true, domain: null, search: null, months.Min(), cancellationToken);
-        var roles = await payrollInputs.RoleHistoriesAsync(people.Select(p => p.Id).ToList(), cancellationToken);
-        var salaried = people.Where(p => roles[p.Id].HadFixedSalary(months.Min(), months.Max().AddMonths(1).AddDays(-1))).ToList();
-        var usd = new Dictionary<DateOnly, decimal>();
-        var unconverted = new Dictionary<string, decimal>();
+        var costs = new SalaryCosts(new SalaryLine(), new SalaryLine(), new SalaryLine());
 
-        foreach (var month in (await payrollInputs.ForAsync(salaried, months, cancellationToken)).Where(m => m.Input.FixedSalary))
+        foreach (var month in await payrollInputs.ForAsync(people, months, cancellationToken))
         {
             if (SalaryCalculator.Calculate(month.Input) is not { } pay)
             {
                 continue;
             }
 
-            var amount = pay.Total * shares.Single(s => s.Month == month.Input.Month).Calendar;
-            if (rates.ToUsd(amount, pay.Terms.Currency, month.Input.Month) is { } converted)
+            var (key, currency) = (month.Input.Month, pay.Terms.Currency);
+            var share = shares.Single(s => s.Month == key).Calendar;
+            if (PaidAsFixed(month))
             {
-                usd[month.Input.Month] = usd.GetValueOrDefault(month.Input.Month) + converted;
+                costs.Fixed.Add(pay.Total * share, currency, key, rates);
+                continue;
             }
-            else
-            {
-                unconverted[pay.Terms.Currency] = unconverted.GetValueOrDefault(pay.Terms.Currency) + amount;
-            }
+
+            costs.PaidLeave.Add(SalaryCalculator.PaidLeavePay(month.Input, pay) * share, currency, key, rates);
+            costs.OvertimePremium.Add(SalaryCalculator.OvertimePremium(pay) * share, currency, key, rates);
         }
 
-        return (usd, unconverted.Select(u => new CurrencyTotalResponse(u.Key, PeriodMoney.Round(u.Value))).ToList());
+        return costs;
     }
+
+    /// <summary>
+    /// Whether a month's pay is a fixed salary, a company cost whole: an admin's or super admin's (any month they held
+    /// that role on a day), or an employee's outside Design, who logs no hours (Execution's site staff). A Design
+    /// employee's logged hours are project cost instead.
+    /// </summary>
+    private static bool PaidAsFixed(PersonMonth month) => month.Input.FixedSalary || month.User.DomainCode != DomainCodes.Design;
 
     private static IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices(IEnumerable<IssuedInvoiceRow> invoices)
         => invoices

@@ -210,6 +210,40 @@ public class PayrollTests
     }
 
     [Fact]
+    public void Paid_leave_is_what_a_salary_pays_for_paid_time_off_as_unpaid_time_off_is_deducted()
+    {
+        // 2 paid hours and a paid day off (Tuesday 16 June, 8 paid hours) at 10 an hour; the unpaid hour is deducted instead
+        SalaryCalculator.Excuse[] excuses =
+        [
+            new(ExcuseKind.Minutes, 120, [], true),
+            new(ExcuseKind.Days, null, [new DateOnly(2026, 6, 16)], true),
+            new(ExcuseKind.Minutes, 60, [], false),
+        ];
+        var input = new SalaryCalculator.Input(June, July10, new(2026, 1, 1), true, [Monthly], Calendar(), [], excuses);
+
+        SalaryCalculator.PaidLeavePay(input, SalaryCalculator.Calculate(input)!).ShouldBe(100m);
+    }
+
+    [Fact]
+    public void Paid_leave_is_a_whole_month_s_base_pay_and_paid_time_off_on_any_pay_but_never_on_a_fixed_salary()
+    {
+        SalaryCalculator.Input With(SalaryCalculator.PayTerms terms, bool fixedSalary, SalaryCalculator.Excuse excuse)
+            => new(June, July10, new(2026, 1, 1), !fixedSalary, [terms], Calendar(), [], [excuse], FixedSalary: fixedSalary);
+        decimal PaidLeave(SalaryCalculator.Input input) => SalaryCalculator.PaidLeavePay(input, SalaryCalculator.Calculate(input)!);
+        var twoHours = new SalaryCalculator.Excuse(ExcuseKind.Minutes, 120, [], true);
+        // Tuesday 2 June, 8 paid hours: 80 on the salary (10 an hour), 160 on hourly pay (20 an hour)
+        var dayOff = new SalaryCalculator.Excuse(ExcuseKind.Days, null, [new(2026, 6, 2)], true, TimeOff: true);
+
+        PaidLeave(With(Monthly, false, new SalaryCalculator.Excuse(ExcuseKind.WholeMonth, null, [], true))).ShouldBe(1760m);
+        PaidLeave(With(Monthly, false, dayOff)).ShouldBe(80m);
+        PaidLeave(With(Hourly, false, dayOff)).ShouldBe(160m);
+        // an excuse pays hourly staff nothing; a fixed salary is a company cost whole, its time off included
+        PaidLeave(With(Hourly, false, twoHours)).ShouldBe(0m);
+        PaidLeave(With(Monthly, true, twoHours)).ShouldBe(0m);
+        PaidLeave(With(Monthly, true, dayOff)).ShouldBe(0m);
+    }
+
+    [Fact]
     public void Paid_time_off_pays_an_hourly_employee_their_normal_day_but_an_excuse_pays_nothing()
     {
         // Tuesday 2 and Wednesday 3 June off; Saturday the 6th is no working day, so it adds nothing
