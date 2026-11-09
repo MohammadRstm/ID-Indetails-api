@@ -121,7 +121,7 @@ public sealed class DomainFinanceService(
                 var period = PeriodMoney.Of(received, costs, month, end);
                 var cost = PeriodCost(period.Cost);
                 return new FinanceMonthResponse(
-                    month, period.Received, ExpectedRevenue.In(agreed, month, end), cost.Labour, cost.Expenses, cost.SiteExpenses, cost.GroundLabour,
+                    month, period.Received, ExpectedRevenue.In(agreed, month, end), cost.Labour, cost.Expenses, cost.Materials, cost.GroundLabour,
                     cost.Total, period.Profit, UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
             })
             .ToList();
