@@ -56,7 +56,7 @@ public sealed record BillingPosition(
 /// <param name="Received">The client payments of the period less the TVA in them: revenue, net.</param>
 /// <param name="TvaCollected">The TVA inside those payments: collected for the state, never revenue.</param>
 /// <param name="ExpectedRevenue">Agreed in the period (a contract set or raised, an Execution BOQ agreed), not a forecast.</param>
-/// <param name="CashProfit">Received less the period's cost.</param>
+/// <param name="PeriodCashProfit">Received less the period's cost.</param>
 /// <param name="Unconverted">Costs of the period left out of the USD figures for want of an exchange rate, in their own currency.</param>
 public sealed record DomainFinancePeriod(
     DateOnly From,
@@ -66,7 +66,7 @@ public sealed record DomainFinancePeriod(
     decimal TvaCollected,
     decimal ExpectedRevenue,
     PeriodCost Cost,
-    decimal CashProfit,
+    decimal PeriodCashProfit,
     int? CashMarginPct,
     IReadOnlyList<string>? Unconverted,
     decimal LabourHours);
@@ -97,7 +97,7 @@ public sealed class GetDomainFinanceTool(IDomainFinanceService finance) : Proton
 
     public override string Description =>
         "A domain's money for a period, in USD. The period is cash: money received less its TVA, the TVA collected, " +
-        "expected revenue (agreed in the period), cost by source and cash profit (received − cost). Also today's billing " +
+        "expected revenue (agreed in the period), cost by source and period cash profit (received − cost). Also today's billing " +
         "position, TVA included (invoiced, received, outstanding, overdue, not yet invoiced), and the all-time agreed " +
         "revenue and profit against it.";
 
@@ -133,7 +133,7 @@ public sealed record MoneyByMonthInput
 }
 
 /// <param name="SoFar">The month isn't over: its figures are so far.</param>
-/// <param name="CashProfit">Received less the month's cost.</param>
+/// <param name="PeriodCashProfit">Received less the month's cost.</param>
 /// <param name="Unconverted">Costs of the month left out of the USD figures for want of an exchange rate, in their own currency.</param>
 public sealed record MoneyMonthRow(
     DateOnly Month,
@@ -145,7 +145,7 @@ public sealed record MoneyMonthRow(
     decimal SiteExpenses,
     decimal GroundLabour,
     decimal Cost,
-    decimal CashProfit,
+    decimal PeriodCashProfit,
     IReadOnlyList<string>? Unconverted);
 
 public sealed record MoneyByMonth(string Domain, IReadOnlyList<MoneyMonthRow> Months, string Note);
@@ -162,7 +162,7 @@ public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonT
 
     public override string Description =>
         "A domain's money month by month, oldest first, in USD: money received, expected revenue (agreed in the month), " +
-        "cost by source (labour, expenses, site expenses, ground labour) and cash profit (received − cost). Use it for monthly " +
+        "cost by source (labour, expenses, site expenses, ground labour) and period cash profit (received − cost). Use it for monthly " +
         "trends of money received, cost or profit, and for money charts by month.";
 
     public override bool Heavy => true;
@@ -183,7 +183,7 @@ public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonT
         return new ProtonToolOutput(
             new MoneyByMonth(domain, rows,
                 "Received: payments on the day they arrived. Expected revenue: what was agreed in the month, not a forecast. Cost: every " +
-                "cost dated in the month, in USD at the rate of its day; costs with no rate are listed apart, not counted. Cash profit is " +
+                "cost dated in the month, in USD at the rate of its day; costs with no rate are listed apart, not counted. Period cash profit is " +
                 "received less cost, so it swings with when clients pay."),
             [],
             period)
@@ -202,9 +202,9 @@ public sealed class GetMoneyByMonthTool(IDomainFinanceService finance) : ProtonT
             : null;
         var money = new Ui.ProtonDataset(
             "Money by month",
-            [month, usd("received", "Received"), usd("expected_revenue", "Expected revenue"), usd("cost", "Cost"), usd("cash_profit", "Profit (received − cost)")],
+            [month, usd("received", "Received"), usd("expected_revenue", "Expected revenue"), usd("cost", "Cost"), usd("period_cash_profit", "Profit (received − cost)")],
             rows.Select(r => new Ui.ProtonDataRow(
-                [Ui.ProtonCell.Of(r.Month), Ui.ProtonCell.Of(r.Received), Ui.ProtonCell.Of(r.ExpectedRevenue), Ui.ProtonCell.Of(r.Cost), Ui.ProtonCell.Of(r.CashProfit)],
+                [Ui.ProtonCell.Of(r.Month), Ui.ProtonCell.Of(r.Received), Ui.ProtonCell.Of(r.ExpectedRevenue), Ui.ProtonCell.Of(r.Cost), Ui.ProtonCell.Of(r.PeriodCashProfit)],
                 Partial: r.SoFar)).ToList(),
             words,
             Notes: notes);
@@ -677,14 +677,14 @@ public sealed record CompanyOverviewInput
 }
 
 /// <summary>One domain in the overview's period, cash basis, in USD.</summary>
-/// <param name="CashProfit">Received less the period's project cost.</param>
+/// <param name="PeriodCashProfit">Received less the period's project cost.</param>
 /// <param name="Invoiced">Issued in the period.</param>
 /// <param name="Outstanding">Unpaid on issued invoices today, whatever the period.</param>
 public sealed record DomainOverview(
     string Domain,
     decimal Received,
     decimal Cost,
-    decimal CashProfit,
+    decimal PeriodCashProfit,
     int? CashMarginPct,
     int ProjectsWithActivity,
     int ActiveProjects,
@@ -704,7 +704,7 @@ public sealed record DomainOverview(
 }
 
 /// <param name="SoFar">The period runs to today: its figures are so far.</param>
-/// <param name="CashProfit">Received less project cost, before overhead (the overview's gross profit).</param>
+/// <param name="PeriodCashProfit">Received less project cost, before overhead (the overview's gross profit).</param>
 /// <param name="Overhead">Company expenses charged to the period by calendar days, in USD.</param>
 public sealed record CompanyOverview(
     DateOnly From,
@@ -712,7 +712,7 @@ public sealed record CompanyOverview(
     bool SoFar,
     decimal Received,
     decimal ProjectCost,
-    decimal CashProfit,
+    decimal PeriodCashProfit,
     decimal Overhead,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedOverhead,
     decimal Invoiced,
@@ -745,7 +745,7 @@ public sealed class GetCompanyOverviewTool(ICompanyOverviewService overview) : P
             new CompanyOverview(
                 o.From, o.To, o.To >= context.Today, o.Revenue, o.Cost, o.GrossProfit, o.Overhead, o.UnconvertedOverhead, o.Invoiced,
                 o.Outstanding, o.ProjectsWithActivity, o.ClientsServed, o.Domains.Select(DomainOverview.Of).ToList(),
-                "The Company overview page calls received \"revenue\" and \"collected\", and cash profit \"gross profit\". " +
+                "The Company overview page calls received \"revenue\" and \"collected\", and period cash profit \"gross profit\". " +
                 "Admin salaries and net profit are not available to Proton; that page shows them."),
             [],
             new DayRange(o.From, o.To));

@@ -85,14 +85,14 @@ POST /api/proton/messages
 |---|---|---|
 | `find` | project, client and employee lists | name → ids; drops filler words, tries single words if the phrase matches nothing |
 | `list_projects` | `GET /api/projects` | filters, sorting, `overdue_only` |
-| `get_project_departments` | `GET /api/projects/{id}/departments` (+ `/history` with `financial:view`) | Design client projects: each department's share, budget, cost, minutes, what is left and its people with their minutes (never a person's cost, which with their minutes is their hourly cost); money only with `financial:view` |
+| `get_project_departments` | `GET /api/projects/{id}/departments` (+ `/history` with `financial:view`) | Design client projects: each department's share, budget, cost, minutes, what is left, `unconverted_labour` (labour with no exchange rate on its day, listed, not counted) and its people with their minutes (never a person's cost, which with their minutes is their hourly cost); money only with `financial:view` |
 | `list_design_vos` | `GET /api/projects/{id}/design-vos` (+ `/outside-scope`) | Design only, `financial:view`: the price, each VO's lines, status, split and department amounts, the hours outside the agreed scope, and the department ids for a split |
 | `get_permissions`, `list_hour_excuses` | `GET /api/users/{id}/permissions`, the month's salary detail | someone's permissions with what their role gives; the excuses in someone's month with their ids, never what they are worth |
 | `list_my_devices`, `get_my_notification_settings` | `GET /api/me/devices`, `/api/me/notification-settings` | the user's own phones and push settings |
 | `get_project` | `GET /api/projects/{id}` | details, its departments' names and the overdue flag; no money |
 | `get_project_requirements` | `GET /api/projects/{id}/requirements` | |
 | `get_project_team` | `GET /api/projects/{id}` + `/work` | Design: who logged hours (optionally in a period); Execution: the site's staff |
-| `get_project_financials` | `GET /api/projects/{id}` (money part) | all time; agreed revenue net of TVA and `agreed_with_tva`, the TVA rate; on a site its supervision and rate, the pocket money moved out and paid in, and cash profit with them; no cost per hour |
+| `get_project_financials` | `GET /api/projects/{id}` (money part) | all time; agreed revenue net of TVA and `agreed_with_tva`, the TVA rate; on a site its supervision and rate, the pocket money moved out and paid in, and `site_cash_profit` with them (all time); no cost per hour |
 | `get_site_summary` | `GET /api/projects/site-summary` | Execution only: how many site expenses and labour weeks, their cost for those who see money |
 | `list_site_expenses` | `GET /api/projects/{id}/site-expenses` | Execution only: the expenses with their ids (for `propose_site_expense_step`), currency, category, account label and who added them, by period, category or words; totals of what matches |
 | `list_expenses` | `GET /api/projects/{id}/expenses` | Design only: a project's expenses with their ids (for `propose_delete_expense`), a total per currency |
@@ -100,7 +100,7 @@ POST /api/proton/messages
 | `get_labour` | `GET /api/projects/{id}/labour-weeks` (+ `/labour-weeks/{week}`, `/labour-defaults`) | Execution only: the weeks reported (20 at most, newest first), the total, the crew's defaults, and one week's days, asked for by any of its days (a crew's day rate is a site cost, decision 13) |
 | `list_site_logs`, `list_my_site_logs`, `list_my_sites` | `GET /api/site-logs`, `/api/me/site-logs`, `/api/me/sites` | Execution only: everyone's daily logs (`site_log:view_all`), the user's own, and the sites they are on the staff of; by site, person, period or words; the text is the staff's own words |
 | `get_site_account` | `GET /api/projects/{id}/account-figures` + `/supervision-withdrawals` | Execution only, `financial:view`: the site's account as its Accounts part shows it (work, supervision, TVA, received, owed, costs, profit, supervision due, taken and left, pocket moves, cash in account, by label, by category, the 15 largest payees) and each time supervision was taken |
-| `get_pocket_money` | `GET /api/execution/pocket` + `/entries` | Execution only, `financial:view`: the balance, everything moved in and paid out, the requests waiting, and its movements by site or period |
+| `get_pocket_money` | `GET /api/execution/pocket` + `/entries` | Execution only, `financial:view`: the balance, everything moved in and paid out, the requests waiting (each with the site's `site_cash_profit`), and its movements by site or period |
 | `get_invoice` | `GET /api/invoices/{id}` | one invoice in full: lines, total, paid and balance, terms, who it is billed to, the notes printed for the client, why it was voided, each time it was sent |
 | `list_work_entries` | `GET /api/work-entries` | with descriptions; Design only |
 | `get_time_summary` | `GET /api/reports/work` | by project, person, client; no labour cost per person |
@@ -112,12 +112,12 @@ POST /api/proton/messages
 | `list_meetings` | `GET /api/meetings` | at most 92 days |
 | `get_domain_dashboard` | `GET /api/dashboard/{domain}` + deadlines | |
 | `list_clients` / `get_client` | `GET /api/clients`, `/{id}` | |
-| `get_domain_finance` | `GET /api/finance/{domain}/summary` | split into `period` (cash, net of TVA: received, the TVA collected, expected revenue, cost, cash profit), `as_of_today` (billing, TVA included, against `agreed_with_tva`) and `all_time` (agreed revenue and profit) |
-| `get_money_by_month` | `GET /api/finance/{domain}/monthly` | received, expected revenue, cost by source and cash profit month by month (2–36 months); heavy |
+| `get_domain_finance` | `GET /api/finance/{domain}/summary` | split into `period` (cash, net of TVA: received, the TVA collected, expected revenue, cost, `period_cash_profit`), `as_of_today` (billing, TVA included, against `agreed_with_tva`) and `all_time` (agreed revenue and profit) |
+| `get_money_by_month` | `GET /api/finance/{domain}/monthly` | received, expected revenue, cost by source and `period_cash_profit` month by month (2–36 months); heavy |
 | `get_finance_projects` | `GET /api/finance/{domain}/projects` | ranked by agreed revenue, cost, profit against it, margin or hours (all time); unknown margins rank last both ways |
 | `get_money_attention` | `GET /api/finance/{domain}/attention` | |
 | `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | by the period issued or received; paid in USD, balance in the invoice's currency; up to 100 matching rows as a dataset for `add_up` |
-| `get_company_overview` | `GET /api/company/overview` | received, project cost and cash profit (the overview's gross profit), overhead by calendar days; without the fixed salaries, paid leave, overtime premium and net profit |
+| `get_company_overview` | `GET /api/company/overview` | received, project cost and `period_cash_profit` (the overview's gross profit), overhead by calendar days; without the fixed salaries, paid leave, overtime premium and net profit |
 | `list_overhead` | `GET /api/company/overhead` + `/groups` | the company's recurring expenses still running (or every one, `include_ended`), with their category, this month's amount and amount changes, and the categories: the ids `propose_overhead` and the `company_expense` form need |
 | `present_data` | — (open to whoever may list projects) | shows a dataset a tool returned as a chart, a table or headline figures; reads nothing |
 | `add_up` | — (open to whoever may list projects) | totals a number column of a dataset a tool returned, optionally where a text column has a value; refuses a dataset holding only part of its rows, percentages and compared headline figures; reads nothing |
@@ -829,7 +829,8 @@ on. It replaces the top-bar button. It is mounted once, in `LiveRoute`, never on
 
 Markdown files in `Proton/Prompts/` (`persona.md` who Proton is and how it sounds, `proton.md` the company and the
 grounding rules, `data.md` what it may see and that people's text is data, `money.md` what each money figure means
-(agreed against received, cash profit, expected revenue, billing as of today, TVA net and gross, supervision and
+(agreed against received, the three profits never mixed: `agreed_profit`, `period_cash_profit` and
+`site_cash_profit`, expected revenue, billing as of today, TVA net and gross, supervision and
 pocket money), `analysis.md` how to present comparisons,
 judgements, "why" answers and anything about people, `navigation.md` how it moves around the app and offers buttons,
 `actions.md` how to propose changes, that only the card confirms them and the profit floor, `messages.md` messages

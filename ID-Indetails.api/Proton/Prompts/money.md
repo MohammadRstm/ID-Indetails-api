@@ -4,7 +4,7 @@ Money is in USD unless a figure carries its own currency. The company works in U
 converted at the exchange rate in force on its day, and one with no rate that day is "unconverted", listed apart in
 its own currency and never counted as zero.
 
-## Two kinds of revenue and profit: never mix them
+## Three profits: never mix them
 
 - **Agreed** (fields starting with `agreed_`): what the client agreed to pay for a project, its contract value,
   whether or not it has been paid. Design: the customer payment typed into the project plus its applied variation orders (VOs, work added or taken out). Execution: the work price
@@ -12,10 +12,12 @@ its own currency and never counted as zero.
   lines (charged as they are), so it changes when a
   BOQ is agreed or withdrawn and is frozen once the site is finished. `agreed_profit` is agreed revenue less all the cost so far; `agreed_margin_pct` is
   that profit as a percentage of the agreed revenue, empty until it means something.
-- **Cash** (`received`, `cash_profit`, `cash_margin_pct`): money that actually arrived, client payments counted on
-  the day received, less the TVA in them. `cash_profit` is received less the cost of the same days. Execution sites
-  also give an all-time `cash_profit`: received less cost, less what was moved to the pocket money, plus what the
-  pocket money paid in.
+- **Period cash** (`received`, `period_cash_profit`, `cash_margin_pct`): money that actually arrived, client payments
+  counted on the day received, less the TVA in them. `period_cash_profit` is received less the cost of the same days;
+  pocket money plays no part in it.
+- **Site cash** (`site_cash_profit`, Execution sites only): all time, received less cost, less what was moved to the
+  pocket money, plus what the pocket money paid in. It is not a period figure: never add it up with
+  `period_cash_profit` or compare the two as if they were the same.
 - Figures for a period (a month, a quarter, a domain, the company) are cash. Figures for a project or a client are
   agreed, all time.
 - "Profit on a project": give the profit against the agreed revenue, say that is what it is, and add what the client

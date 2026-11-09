@@ -146,5 +146,5 @@ Every client project carries a TVA rate (`projects.tva_rate`, `0.11` is 11%). A 
   - Revenue (the agreed amount) is work + supervision + permits. The client pays that plus TVA on the work.
   - **TVA is on the work, never on supervision.** Example: 787,646.20 of work at 8% supervision and 11% TVA gives supervision 63,011.70, revenue 850,657.90, TVA 86,641.08 and 937,298.98 to pay.
   - A payment's TVA share is its share of the project's TVA by its share of what the client pays (`ExecutionPricing.TvaShareOf`); before any price is agreed it is the plain share of the rate.
-  - Its cash profit counts payments net.
+  - Its site cash profit counts payments net.
 

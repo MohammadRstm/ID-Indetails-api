@@ -62,7 +62,7 @@ public sealed record ReviewHours(ProtonFigure Hours, ProtonFigure Entries, Proto
 public sealed record ReviewRequirements(int Total, int Done, int Open, int Overdue, DateOnly? NextDeadline);
 
 /// <summary>The project's money: the period's cash, and all time against its agreed revenue.</summary>
-/// <param name="CashProfit">The period's received less its cost.</param>
+/// <param name="PeriodCashProfit">The period's received less its cost.</param>
 /// <param name="AllTimeAgreedRevenue">The contract value, not cash.</param>
 /// <param name="AllTimeAgreedProfit">Agreed revenue less the cost so far.</param>
 /// <param name="AllTimeCostOfAgreedPct">All-time cost as a whole percentage of the agreed revenue, while there is one.</param>
@@ -71,7 +71,7 @@ public sealed record ReviewRequirements(int Total, int Done, int Open, int Overd
 public sealed record ReviewMoney(
     ProtonFigure Received,
     ProtonFigure Cost,
-    ProtonFigure CashProfit,
+    ProtonFigure PeriodCashProfit,
     bool CostNotable,
     decimal AllTimeAgreedRevenue,
     decimal AllTimeCost,
@@ -110,7 +110,7 @@ public sealed class ReviewProjectTool(ProtonAnalysisService analysis, IProjectSe
     public override string Description =>
         "One project's state and trend in one call: status, progress, target date and overdue, days since work was last " +
         "logged, hours this period against the previous one with who contributed, requirements, money (this period's " +
-        "cash: received, cost, cash profit; and all time against the agreed revenue), and the attention signals that " +
+        "cash: received, cost, period cash profit; and all time against the agreed revenue), and the attention signals that " +
         "fire for it. Parts the user may not see are listed in basis.omitted.";
 
     public override bool Heavy => true;
@@ -278,11 +278,11 @@ public sealed record WorkBlock(ProtonFigure Hours, ProtonFigure Entries, ProtonF
 public sealed record RequirementsBlock(int DueSoon, int Overdue);
 
 /// <summary>A domain's money in the period, cash basis.</summary>
-/// <param name="CashProfit">Received less cost.</param>
+/// <param name="PeriodCashProfit">Received less cost.</param>
 /// <param name="Unconverted">Costs of the period left out of the USD figures for want of an exchange rate, in their own currency.</param>
 /// <param name="PreviousUnconverted">The same, in the period compared with.</param>
 public sealed record MoneyBlock(
-    ProtonFigure Received, ProtonFigure Cost, ProtonFigure CashProfit, int? CashMarginPct, bool CostNotable,
+    ProtonFigure Received, ProtonFigure Cost, ProtonFigure PeriodCashProfit, int? CashMarginPct, bool CostNotable,
     IReadOnlyList<string>? Unconverted, IReadOnlyList<string>? PreviousUnconverted);
 
 /// <summary>A domain's part of the summary: each block only when the user may see it (see basis.omitted).</summary>
@@ -317,7 +317,7 @@ public sealed class GetCompanySummaryTool(
     public override string Description =>
         "A summary of the company for a period (this week by default) against the previous one: per domain the user " +
         "sees, projects (active, on hold, started, completed, overdue, target soon, idle), Design hours with the busiest " +
-        "projects, requirements due and overdue, money received, cost and cash profit (received − cost); the company " +
+        "projects, requirements due and overdue, money received, cost and period cash profit (received − cost); the company " +
         "overhead charged to the period (by calendar days, as the Company overview charges it); and the top attention " +
         "items. Blocks the user may not see are left out and named in basis.omitted.";
 
