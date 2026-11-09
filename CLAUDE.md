@@ -126,9 +126,17 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     fixed whatever the joining date. The premium is a company cost, never put on projects. Hourly pay is unchanged.
     Employees see their overtime minutes as before; only Salaries shows what is paid ([company.md](docs/company.md),
     "The overtime threshold").
-  - Admins and super admins are on a fixed salary and never log hours. Super admins' salaries are a company cost.
+  - Fixed salaries: admins, super admins and Execution site staff are on a pure monthly salary and never log hours.
+    Their pay is a company cost: the company overview takes it off the net profit, never a project.
+  - Paid leave on Design (a salary's paid excuses and paid time off, an hourly employee's paid time off) is a company
+    cost too, its own line in the company overview.
+  - Project profit is agreed revenue - project costs; overhead counts only at company level.
 - **Privacy:** employees never see their colleagues' hours or pay.
 - **Site staff:** an Execution site needs no staff to be created; staff are put on it when it needs them, and can all be taken off again. Each one is an active Execution employee. Staff write daily logs, which they can edit until midnight. Execution employees are paid monthly only.
+- **Project type and area** (decided 9 November 2026, not built yet): projects get two optional fields, a type (villa,
+  apartment, commercial, interior, ...) and an area in m², set on the project form and editable any time. Financial
+  Intelligence compares a project with past ones of the same type and size, and falls back to domain, price band and
+  duration while they are empty.
 
 ### Changes that always come together
 
