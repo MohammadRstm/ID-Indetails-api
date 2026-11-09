@@ -25,6 +25,12 @@ public static class NotificationAccess
         [NotificationKinds.ChangeBlocked] = PermissionCodes.FinancialView,
         [NotificationKinds.ProfitLow] = PermissionCodes.FinancialView,
         [NotificationKinds.ProfitAtZero] = PermissionCodes.FinancialView,
+        [NotificationKinds.TimeOffRequested] = PermissionCodes.TimeOffDecide,
+        [NotificationKinds.TimeOffUndecided] = PermissionCodes.TimeOffDecide,
+        [NotificationKinds.TimeOffWithdrawn] = PermissionCodes.TimeOffDecide,
+        [NotificationKinds.TimeOffEnded] = PermissionCodes.TimeOffDecide,
+        [NotificationKinds.TimeOffOnline] = PermissionCodes.TimeOffDecide,
+        [NotificationKinds.TimeOffHours] = PermissionCodes.TimeOffDecide,
     };
 
     /// <summary>The kinds <paramref name="reader"/> may no longer read.</summary>

@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.Projects;
+using ID_Indetails.api.Business.TimeOff;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
@@ -16,6 +17,7 @@ using ID_Indetails.api.Repositories.Notifications.Abstraction;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Repositories.Requirements.Abstraction;
+using ID_Indetails.api.Repositories.TimeOff.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
@@ -27,6 +29,7 @@ using ID_Indetails.api.Services.Push.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.Reports.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
+using ID_Indetails.api.Services.TimeOff.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
 
 namespace ID_Indetails.api.Services.Notifications.Implementation;
@@ -50,6 +53,7 @@ namespace ID_Indetails.api.Services.Notifications.Implementation;
 /// <item>Draft invoices: once per draft still unissued 3 days after it was created, to whoever sees the domain's money.</item>
 /// <item>Auto-archive: see <see cref="IProjectAutoArchive"/>.</item>
 /// <item>Log-your-hours and labour-week reminders, pushes only: see <see cref="IPushReminders"/>.</item>
+/// <item>Time off: see <see cref="ITimeOffSchedule"/>.</item>
 /// </list>
 /// </summary>
 public sealed class ScheduledNotifications(
@@ -69,6 +73,8 @@ public sealed class ScheduledNotifications(
     IPushReminders reminders,
     IPayrollRepository payroll,
     IPayrollInputs payrollInputs,
+    ITimeOffRepository timeOff,
+    ITimeOffSchedule timeOffSchedule,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IPushQueue pushes,
@@ -97,6 +103,7 @@ public sealed class ScheduledNotifications(
             ScheduledCheck.LogReminders => reminders.LogHoursAsync(cancellationToken),
             ScheduledCheck.LabourWeekReminders => reminders.LabourWeeksAsync(cancellationToken),
             ScheduledCheck.MissedHours => MissedHoursAsync(cancellationToken),
+            ScheduledCheck.TimeOff => timeOffSchedule.RunAsync(cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(check)),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -278,6 +285,7 @@ public sealed class ScheduledNotifications(
 
         var calendars = await payrollInputs.CalendarsAsync(people, cancellationToken);
         var excuses = (await payroll.ExcusesAsync(people, [WorkStats.MonthStartOf(day)], cancellationToken)).ToLookup(x => x.UserId);
+        var off = (await timeOff.GrantedAsync(people, day, day, cancellationToken)).ToLookup(x => x.UserId, x => x.Period);
         var logged = (await entries.RowsAsync(
                 new WorkEntrySearch(From: clock.CompanyDayStartUtc(day), To: clock.CompanyDayStartUtc(day.AddDays(1))),
                 cancellationToken))
@@ -289,7 +297,9 @@ public sealed class ScheduledNotifications(
                 day,
                 calendars[user.Id],
                 payrollInputs.EmploymentOf(user),
-                excuses[user.Id].Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid)).ToList(),
+                excuses[user.Id].Select(x => new SalaryCalculator.Excuse(x.Kind, x.Minutes, x.Days.Select(d => d.Day).ToList(), x.IsPaid))
+                    .Concat(TimeOffRules.ExcusesIn(WorkStats.MonthStartOf(day), off[user.Id]))
+                    .ToList(),
                 logged.GetValueOrDefault(user.Id))))
             .Where(m => m.Short is not null)
             .Select(m => new { m.User.Id, Name = PersonName.Of(m.User.FirstName, m.User.LastName, m.User.Email), m.Short!.LoggedMinutes, m.Short.RequiredMinutes })

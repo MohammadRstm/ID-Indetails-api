@@ -85,7 +85,7 @@ public sealed class ProposeUpdateEmployeeTool(IEmployeeService employees, ITeamS
         };
         if (after.TeamId is null && EmployeeRules.NeedsDepartment(person.Role, person.Domain))
         {
-            throw new ProtonToolInputException($"{AccessText.Name(person)} is a Design employee and needs a department: pick another one instead.");
+            throw new ProtonToolInputException($"{AccessText.Name(person)} is in Design's staff and needs a department: pick another one instead.");
         }
 
         var changes = new List<ProtonChange>();

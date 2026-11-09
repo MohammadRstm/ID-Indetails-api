@@ -8,6 +8,9 @@ public sealed record EmployeeListQuery
     /// <summary>Matches first name, last name, email and position; every word must match.</summary>
     public string? Search { get; init; }
 
+    /// <summary>Just this person: where an alert about them leads.</summary>
+    public long? Id { get; init; }
+
     public long? TeamId { get; init; }
 
     /// <summary>super_admin, admin or employee.</summary>
@@ -50,6 +53,12 @@ public sealed record ChangeRoleRequest
 
     /// <summary>Their position (job title) in the new role; null leaves it as it is, an empty one clears it.</summary>
     public string? Position { get; init; }
+
+    /// <summary>
+    /// A department of the domain they end up in: needed when the new role needs one (a Design employee or admin) and
+    /// they have none, or are joining a new domain. Null keeps their department, or leaves them without one.
+    /// </summary>
+    public long? TeamId { get; init; }
 }
 
 public sealed record MoveEmployeeRequest

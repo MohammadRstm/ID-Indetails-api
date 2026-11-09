@@ -2800,6 +2800,17 @@ namespace ID_Indetails.api.Data.Migrations
                         },
                         new
                         {
+                            Code = "time_off:request",
+                            Description = "Ask for time off",
+                            DomainCode = "design"
+                        },
+                        new
+                        {
+                            Code = "time_off:decide",
+                            Description = "Approve time off, with pay or without, decline it, or take approved time off back"
+                        },
+                        new
+                        {
                             Code = "message:announce",
                             Description = "Write in Announcements, the chat everyone reads"
                         },
@@ -5808,6 +5819,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "time_off:decide"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "message:announce"
                         },
                         new
@@ -6024,6 +6040,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             RoleCode = "employee",
                             PermissionCode = "work_entry:view_own"
+                        },
+                        new
+                        {
+                            RoleCode = "employee",
+                            PermissionCode = "time_off:request"
                         },
                         new
                         {
@@ -6362,6 +6383,107 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasDatabaseName("ix_teams_domain_code_name");
 
                     b.ToTable("teams", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.TimeOffRequest", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("decided_at");
+
+                    b.Property<long?>("DecidedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("decided_by_id");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("decision_note");
+
+                    b.Property<string>("EndNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("end_note");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("ended_at");
+
+                    b.Property<long?>("EndedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ended_by_id");
+
+                    b.Property<DateOnly?>("EndedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("ended_on");
+
+                    b.Property<DateOnly>("FirstDay")
+                        .HasColumnType("date")
+                        .HasColumnName("first_day");
+
+                    b.Property<bool?>("IsPaid")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_paid");
+
+                    b.Property<DateOnly>("LastDay")
+                        .HasColumnType("date")
+                        .HasColumnName("last_day");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("requested_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_time_off_requests");
+
+                    b.HasIndex("DecidedById")
+                        .HasDatabaseName("ix_time_off_requests_decided_by_id");
+
+                    b.HasIndex("EndedById")
+                        .HasDatabaseName("ix_time_off_requests_ended_by_id");
+
+                    b.HasIndex("Status", "FirstDay")
+                        .HasDatabaseName("ix_time_off_requests_status_first_day");
+
+                    b.HasIndex("UserId", "Status", "FirstDay")
+                        .HasDatabaseName("ix_time_off_requests_user_id_status_first_day");
+
+                    b.ToTable("time_off_requests", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_time_off_requests_days", "`last_day` >= `first_day`");
+
+                            t.HasCheckConstraint("ck_time_off_requests_ended_on", "(`status` IN ('rejected', 'ended')) = (`ended_on` IS NOT NULL) AND (`ended_on` IS NULL OR `ended_on` <= `last_day`)");
+
+                            t.HasCheckConstraint("ck_time_off_requests_is_paid", "(`status` IN ('approved', 'rejected', 'ended')) = (`is_paid` IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_time_off_requests_status", "`status` IN ('pending', 'approved', 'declined', 'withdrawn', 'expired', 'cancelled', 'rejected', 'ended')");
+                        });
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.User", b =>
@@ -9074,6 +9196,30 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_teams_domains_domain_code");
 
                     b.Navigation("Domain");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.TimeOffRequest", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_time_off_requests_users_decided_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("EndedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_time_off_requests_users_ended_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_time_off_requests_users_user_id");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.User", b =>

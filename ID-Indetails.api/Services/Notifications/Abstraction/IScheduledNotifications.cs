@@ -15,6 +15,7 @@ public enum ScheduledCheck
     LogReminders,
     LabourWeekReminders,
     MissedHours,
+    TimeOff,
 }
 
 /// <summary>

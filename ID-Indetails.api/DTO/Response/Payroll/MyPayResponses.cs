@@ -13,6 +13,7 @@ namespace ID_Indetails.api.DTO.Response.Payroll;
 /// <param name="OvertimePaidMinutes">Overtime left after that, paid as overtime.</param>
 /// <param name="MissedDays">Working days with no work within hours and no excuse.</param>
 /// <param name="Excuses">The month's excuses, with their notes.</param>
+/// <param name="TimeOff">The month's days of approved time off, which count like excused days.</param>
 public sealed record MyLedgerMonthResponse(
     DateOnly Month,
     bool InProgress,
@@ -26,7 +27,8 @@ public sealed record MyLedgerMonthResponse(
     int OvertimePaidMinutes,
     int ShortMinutes,
     IReadOnlyList<DateOnly> MissedDays,
-    IReadOnlyList<MyExcuseResponse> Excuses);
+    IReadOnlyList<MyExcuseResponse> Excuses,
+    IReadOnlyList<MonthTimeOffResponse> TimeOff);
 
 /// <param name="Applies">The hours ledger applies to Design employees only; for anyone else there are no months.</param>
 /// <param name="TotalMonths">Months from the one the person joined to this one (or the one they left).</param>
