@@ -1,4 +1,5 @@
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Employees;
@@ -113,6 +114,93 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
 
         await (await Client.GetAsync("/api/company/overview", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+    }
+
+    /// <summary>
+    /// Money in both domains: half an hour from <paramref name="workUtc"/> (09:00 in Beirut on a weekday) by someone paid
+    /// 10.01 an hour, which with the paid hour of break is 15.015 of labour, a fraction of a cent; a Design expense and
+    /// payment; a site expense and payment.
+    /// </summary>
+    private async Task MoneyInBothDomainsAsync(
+        AuthResponse superAdmin, DateTime workUtc, string spentOn, string receivedOn, decimal designReceived, decimal siteReceived)
+    {
+        var token = superAdmin.AccessToken;
+        var projects = new ProjectTestSteps(_steps);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+            new { basis = "hourly", amount = 10.01m, currency = "USD", effectiveFrom = "2025-01-01" }, token))
+            .IsSuccessStatusCode.ShouldBeTrue();
+
+        var project = await projects.CreateProjectAsync(token, DomainCodes.Design, revenue: 10_000m);
+        await ExecuteAsync(
+            "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
+            "VALUES (@u, @p, 'Drawings', @start, @end, UTC_TIMESTAMP(3))",
+            ("@u", designer.User.Id), ("@p", project.Id), ("@start", workUtc), ("@end", workUtc.AddMinutes(30)));
+        await OkAsync<ExpenseResponse>(Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+            new { label = "Print run", amount = 40m, currency = "USD", spentOn }, token));
+        await OkAsync<object>(Client.PostJsonAsync($"/api/projects/{project.Id}/payments",
+            new { amount = designReceived, currency = "USD", receivedOn }, token));
+
+        var site = await projects.CreateProjectAsync(token, DomainCodes.Execution);
+        await OkAsync<object>(Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
+            new { items = new[] { new { name = "Cement", amount = 250m, spentOn } } }, token));
+        await OkAsync<object>(Client.PostJsonAsync($"/api/projects/{site.Id}/payments",
+            new { amount = siteReceived, currency = "USD", receivedOn }, token));
+    }
+
+    [Fact]
+    public async Task Each_domain_s_money_is_what_its_Financials_give_for_the_same_period()
+    {
+        // August and September 2025, when no other test here has project money
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var projects = new ProjectTestSteps(_steps);
+        await MoneyInBothDomainsAsync(superAdmin, new DateTime(2025, 8, 12, 6, 0, 0), "2025-08-14", "2025-09-03", 500m, 600m);
+
+        // and a Design invoice of 3,000, 1,000 of it paid, so something is outstanding
+        var project = await projects.CreateProjectAsync(token, DomainCodes.Design, revenue: 10_000m);
+        await projects.SetUpBillingAsync(token, DomainCodes.Design);
+        var draft = await OkAsync<InvoiceResponse>(Client.PostJsonAsync($"/api/projects/{project.Id}/invoices",
+            new { lines = new[] { new { description = "Stage 1", amount = 3000m } } }, token));
+        (await Client.PostJsonAsync($"/api/invoices/{draft.Id}/issue", new { issuedOn = "2025-08-18" }, token))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        await OkAsync<object>(Client.PostJsonAsync($"/api/projects/{project.Id}/payments",
+            new { amount = 1000m, currency = "USD", receivedOn = "2025-08-25", invoiceId = draft.Id }, token));
+
+        const string period = "from=2025-08-01&to=2025-09-30";
+        var overview = await OkAsync<CompanyOverviewResponse>(Client.GetAsync($"/api/company/overview?{period}", token));
+        var profits = 0m;
+        foreach (var domain in DomainCodes.Businesses)
+        {
+            var summary = await OkAsync<FinanceSummaryResponse>(Client.GetAsync($"/api/finance/{domain}/summary?{period}", token));
+            summary.Revenue.ShouldBeGreaterThan(0m);
+            var figures = overview.Domains.Single(d => d.Domain == domain);
+            figures.Revenue.ShouldBe(summary.Revenue);
+            figures.Cost.ShouldBe(summary.Cost.Total);
+            figures.Profit.ShouldBe(summary.Profit);
+            figures.Margin.ShouldBe(summary.Margin);
+            figures.Outstanding.ShouldBe(summary.Billing.Outstanding);
+            profits += summary.Profit;
+        }
+
+        overview.GrossProfit.ShouldBe(profits);
+    }
+
+    [Fact]
+    public async Task A_month_s_profit_before_overhead_is_the_overview_s_gross_profit_for_that_month()
+    {
+        // October 2025, when no other test here has project money. The month adds up each domain's period profit, as the
+        // overview does, so the two agree to the cent.
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await MoneyInBothDomainsAsync(superAdmin, new DateTime(2025, 10, 14, 6, 0, 0), "2025-10-15", "2025-10-20", 2500m, 700m);
+
+        var october = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2025-10-01&to=2025-10-31", superAdmin.AccessToken));
+        var year = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2025", superAdmin.AccessToken));
+        var month = year.Single(m => m.Month == new DateOnly(2025, 10, 1));
+
+        october.Revenue.ShouldBeGreaterThan(0m);
+        month.Revenue.ShouldBe(october.Revenue);
+        month.ProfitBeforeOverhead.ShouldBe(october.GrossProfit);
     }
 
     [Fact]

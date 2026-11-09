@@ -51,5 +51,4 @@ These are known and harmless at today's size. Revisit them as the data grows.
 - **Unconverted money still missing in two places:**
   - the company monthly view drops unconverted overhead and costs;
   - the money follow-ups miss overdue invoices that have no exchange rate.
-- **Rounding in the company monthly view:** it rounds the parts before subtracting them; the domain charts subtract the rounded total.
 - **Viewing a super admin:** `/employees/{id}/work-summary` shows a super admin to anyone, but `/employees/{id}/overtime` only to callers who see every domain.

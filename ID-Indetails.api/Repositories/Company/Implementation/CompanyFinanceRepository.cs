@@ -20,24 +20,4 @@ public sealed class CompanyFinanceRepository(IdIndetailsDbContext db) : ICompany
 
     public async Task<IReadOnlyDictionary<string, int>> ClientsAsync(CancellationToken cancellationToken = default)
         => await db.Clients.GroupBy(c => c.DomainCode).ToDictionaryAsync(g => g.Key, g => g.Count(), cancellationToken);
-
-    public async Task<IReadOnlyList<IssuedInvoiceRow>> IssuedInvoicesAsync(CancellationToken cancellationToken = default)
-        => await db.Invoices
-            .AsNoTracking()
-            .Where(i => i.IssuedAt != null && i.VoidedAt == null)
-            .Select(i => new IssuedInvoiceRow(
-                i.Project.DomainCode,
-                i.IssuedAt!.Value,
-                i.Total,
-                i.Currency,
-                db.Payments.Where(p => p.InvoiceId == i.Id && p.VoidedAt == null).Sum(p => (decimal?)p.AmountUsd) ?? 0))
-            .ToListAsync(cancellationToken);
-
-    public async Task<IReadOnlyList<ReceivedPaymentRow>> PaymentsAsync(CancellationToken cancellationToken = default)
-        => await db.Payments
-            .AsNoTracking()
-            .Where(p => p.VoidedAt == null)
-            // revenue: what payments bring in, TVA left out
-            .Select(p => new ReceivedPaymentRow(p.Project.DomainCode, p.ReceivedOn, p.AmountUsd - p.TvaUsd))
-            .ToListAsync(cancellationToken);
 }

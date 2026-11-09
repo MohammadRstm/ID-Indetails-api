@@ -8,7 +8,7 @@ namespace ID_Indetails.api.Business.Finance;
 /// <item>Revenue: the money received in the period, each payment counted on the day it arrived.</item>
 /// <item>Cost: every cost dated inside the period, by source. Costs with no exchange rate on their day are listed
 /// apart, in their own currency (<see cref="Unconverted"/>).</item>
-/// <item>Margin: profit ÷ revenue while there is revenue.</item>
+/// <item>Margin: profit ÷ revenue while there is revenue (<see cref="ProjectFinance.MarginOf"/>).</item>
 /// </list>
 /// </summary>
 public static class PeriodMoney
@@ -41,8 +41,20 @@ public static class PeriodMoney
             .ThenBy(u => u.Currency)
             .ToList();
 
-    public static decimal? Margin(decimal profit, decimal revenue)
-        => revenue > 0 ? Math.Round(profit / revenue, 4, MidpointRounding.AwayFromZero) : null;
+    /// <summary>
+    /// A period's received, cost, period cash profit and margin. The profit is received less the cost total rounded once,
+    /// never less parts rounded one by one, so every view of the same days gives the same cent. No pocket money: that is
+    /// a site's all-time cash profit, not a period's.
+    /// </summary>
+    public sealed record Figures(decimal Received, CostTotals Cost, decimal Profit, decimal? Margin);
+
+    public static Figures Of(IEnumerable<(DateOnly Day, decimal Usd)> payments, IEnumerable<Recognition.DatedCost> costs, DateOnly from, DateOnly to)
+    {
+        var received = Received(payments, from, to);
+        var cost = Costs(costs, from, to);
+        var profit = received - Round(cost.Total);
+        return new Figures(received, cost, profit, ProjectFinance.MarginOf(profit, received));
+    }
 
     public static decimal Round(decimal amount) => Math.Round(amount, 2, MidpointRounding.AwayFromZero);
 }

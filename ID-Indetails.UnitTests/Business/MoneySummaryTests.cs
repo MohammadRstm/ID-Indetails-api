@@ -32,8 +32,27 @@ public class MoneySummaryTests
         costs.ShouldBe(new PeriodMoney.CostTotals(70m, 0m, 30m, 0m));
         costs.Total.ShouldBe(100m);
 
-        PeriodMoney.Margin(25m, 100m).ShouldBe(0.25m);
-        PeriodMoney.Margin(-5m, 0m).ShouldBeNull();
+        ProjectFinance.MarginOf(25m, 100m).ShouldBe(0.25m);
+        ProjectFinance.MarginOf(-5m, 0m).ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_period_s_profit_takes_off_its_cost_total_rounded_once_not_its_rounded_parts()
+    {
+        // 10.005 of labour and of expenses: 10.01 each when rounded alone, but 20.01 together
+        var figures = PeriodMoney.Of(
+            [(new DateOnly(2026, 8, 3), 100m)],
+            [
+                new Recognition.DatedCost(CostSource.Labour, new(2026, 8, 4), 10.005m),
+                new Recognition.DatedCost(CostSource.Expenses, new(2026, 8, 5), 10.005m),
+            ],
+            new DateOnly(2026, 8, 1),
+            new DateOnly(2026, 8, 31));
+
+        figures.Received.ShouldBe(100m);
+        figures.Profit.ShouldBe(79.99m);
+        figures.Margin.ShouldBe(0.7999m);
+        PeriodMoney.Of([], [], new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31)).Margin.ShouldBeNull();
     }
 
     [Fact]

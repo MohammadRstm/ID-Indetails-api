@@ -288,7 +288,8 @@ public static class ProjectFinance
             hours > 0 ? Round(cost / hours) : 0);
     }
 
-    private static decimal? MarginOf(decimal profit, decimal revenue)
+    /// <summary>The one margin rule, for projects and periods alike: profit ÷ revenue to 4 decimal places, while there is revenue.</summary>
+    public static decimal? MarginOf(decimal profit, decimal revenue)
         => revenue > 0 ? Math.Round(profit / revenue, 4, MidpointRounding.AwayFromZero) : null;
 
     private static DateOnly WeekOf(DateOnly day, DayOfWeek weekStart) => day.AddDays(-(((int)day.DayOfWeek - (int)weekStart + 7) % 7));
