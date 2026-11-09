@@ -26,8 +26,8 @@ namespace ID_Indetails.api.Services.Company.Implementation;
 /// <summary>
 /// Company totals from the shared finance calculator: revenue is the money received, on the day it arrived; costs
 /// count on their day; overhead is charged by calendar days and converted at the rate of its month. Fixed salaries (the
-/// pay of everyone who logs no hours: admins, super admins and Execution's site staff) and Design salaries' paid leave
-/// are company costs like overhead: no project carries them. Every figure needs company:view, checked here as well as on
+/// pay of everyone who logs no hours: admins, super admins and Execution's site staff), Design salaries' paid leave and
+/// the overtime premium past a salary's threshold are company costs like overhead: no project carries them. Every figure needs company:view, checked here as well as on
 /// the endpoint.
 /// </summary>
 public sealed class CompanyOverviewService(
@@ -48,12 +48,40 @@ public sealed class CompanyOverviewService(
         IReadOnlyDictionary<long, ProjectCostHistory> History,
         ExchangeRateTable Rates);
 
-    /// <summary>Salaries the company carries as a whole, by month in USD, with what had no exchange rate for its month.</summary>
-    private sealed record SalaryCosts(
-        IReadOnlyDictionary<DateOnly, decimal> Fixed,
-        IReadOnlyList<CurrencyTotalResponse> UnconvertedFixed,
-        IReadOnlyDictionary<DateOnly, decimal> PaidLeave,
-        IReadOnlyList<CurrencyTotalResponse> UnconvertedPaidLeave);
+    /// <summary>One salary cost the company carries as a whole, added up by month in USD, with what had no rate for its month.</summary>
+    private sealed class SalaryLine
+    {
+        private readonly Dictionary<DateOnly, decimal> _usd = [];
+        private readonly Dictionary<string, decimal> _unconverted = [];
+
+        public decimal Total => PeriodMoney.Round(_usd.Values.Sum());
+
+        public decimal In(DateOnly month) => PeriodMoney.Round(_usd.GetValueOrDefault(month));
+
+        public IReadOnlyList<CurrencyTotalResponse> Unconverted
+            => _unconverted.Select(u => new CurrencyTotalResponse(u.Key, PeriodMoney.Round(u.Value))).ToList();
+
+        /// <summary>Converted at the rate on the first of <paramref name="month"/>; listed apart when there is none.</summary>
+        public void Add(decimal amount, string currency, DateOnly month, ExchangeRateTable rates)
+        {
+            if (amount == 0)
+            {
+                return;
+            }
+
+            if (rates.ToUsd(amount, currency, month) is { } converted)
+            {
+                _usd[month] = _usd.GetValueOrDefault(month) + converted;
+            }
+            else
+            {
+                _unconverted[currency] = _unconverted.GetValueOrDefault(currency) + amount;
+            }
+        }
+    }
+
+    /// <summary>The salary costs no project carries.</summary>
+    private sealed record SalaryCosts(SalaryLine Fixed, SalaryLine PaidLeave, SalaryLine OvertimePremium);
 
     private static readonly DateOnly EarliestDay = new(2000, 1, 1);
 
@@ -120,8 +148,7 @@ public sealed class CompanyOverviewService(
 
         var (overhead, unconverted) = await OverheadAsync(shares.Select(s => (s.Month, s.Calendar)), data.Rates, cancellationToken);
         var salaryCosts = await SalaryCostsAsync(shares, data.Rates, cancellationToken);
-        var salaries = PeriodMoney.Round(salaryCosts.Fixed.Values.Sum());
-        var paidLeave = PeriodMoney.Round(salaryCosts.PaidLeave.Values.Sum());
+        var (salaries, paidLeave, premium) = (salaryCosts.Fixed.Total, salaryCosts.PaidLeave.Total, salaryCosts.OvertimePremium.Total);
         var gross = domains.Sum(d => d.Profit);
 
         return new CompanyOverviewResponse(
@@ -134,12 +161,14 @@ public sealed class CompanyOverviewService(
             overhead,
             unconverted,
             salaries,
-            salaryCosts.UnconvertedFixed,
+            salaryCosts.Fixed.Unconverted,
             paidLeave,
-            salaryCosts.UnconvertedPaidLeave,
+            salaryCosts.PaidLeave.Unconverted,
+            premium,
+            salaryCosts.OvertimePremium.Unconverted,
             salaries,
-            salaryCosts.UnconvertedFixed,
-            gross - overhead - salaries - paidLeave,
+            salaryCosts.Fixed.Unconverted,
+            gross - overhead - salaries - paidLeave - premium,
             domains.Sum(d => d.Invoiced),
             domains.Sum(d => d.Collected),
             domains.Sum(d => d.Outstanding),
@@ -199,12 +228,11 @@ public sealed class CompanyOverviewService(
             var ground = PeriodMoney.Round(cost.GroundLabour);
             var monthRevenue = PeriodMoney.Received(received, month, month.AddMonths(1).AddDays(-1));
             var before = monthRevenue - labour - expenses - materials - ground;
-            var fixedSalaries = PeriodMoney.Round(salaryCosts.Fixed.GetValueOrDefault(month));
-            var paidLeave = PeriodMoney.Round(salaryCosts.PaidLeave.GetValueOrDefault(month));
+            var (fixedSalaries, paidLeave, premium) = (salaryCosts.Fixed.In(month), salaryCosts.PaidLeave.In(month), salaryCosts.OvertimePremium.In(month));
 
             result.Add(new CompanyMonthResponse(
-                month, monthRevenue, labour, expenses, materials, ground, overhead, fixedSalaries, paidLeave,
-                before, before - overhead, before - overhead - fixedSalaries - paidLeave));
+                month, monthRevenue, labour, expenses, materials, ground, overhead, fixedSalaries, paidLeave, premium,
+                before, before - overhead, before - overhead - fixedSalaries - paidLeave - premium));
         }
 
         return result;
@@ -265,7 +293,9 @@ public sealed class CompanyOverviewService(
     /// <list type="bullet">
     /// <item>fixed salaries: the whole pay of each month someone was paid without logging hours (<see cref="PaidAsFixed"/>);</item>
     /// <item>paid leave: what a Design salary paid for its paid excused time off (<see cref="SalaryCalculator.PaidLeavePay"/>).
-    /// Its logged hours are already project cost.</item>
+    /// Its logged hours are already project cost;</item>
+    /// <item>the overtime premium: what a Design salary paid for overtime past its threshold beyond the hourly rate its
+    /// projects carry it at (<see cref="SalaryCalculator.OvertimePremium"/>).</item>
     /// </list>
     /// </summary>
     private async Task<SalaryCosts> SalaryCostsAsync(
@@ -275,8 +305,7 @@ public sealed class CompanyOverviewService(
     {
         var months = shares.Select(s => s.Month).ToList();
         var people = await payroll.PeopleAsync(DomainCodes.All, includeSuperAdmins: true, domain: null, search: null, months.Min(), cancellationToken);
-        var (fixedUsd, fixedUnconverted) = (new Dictionary<DateOnly, decimal>(), new Dictionary<string, decimal>());
-        var (leaveUsd, leaveUnconverted) = (new Dictionary<DateOnly, decimal>(), new Dictionary<string, decimal>());
+        var costs = new SalaryCosts(new SalaryLine(), new SalaryLine(), new SalaryLine());
 
         foreach (var month in await payrollInputs.ForAsync(people, months, cancellationToken))
         {
@@ -285,26 +314,19 @@ public sealed class CompanyOverviewService(
                 continue;
             }
 
-            var paidAsFixed = PaidAsFixed(month);
-            var amount = (paidAsFixed ? pay.Total : SalaryCalculator.PaidLeavePay(month.Input, pay))
-                * shares.Single(s => s.Month == month.Input.Month).Calendar;
-            if (amount == 0)
+            var (key, currency) = (month.Input.Month, pay.Terms.Currency);
+            var share = shares.Single(s => s.Month == key).Calendar;
+            if (PaidAsFixed(month))
             {
+                costs.Fixed.Add(pay.Total * share, currency, key, rates);
                 continue;
             }
 
-            var (usd, unconverted) = paidAsFixed ? (fixedUsd, fixedUnconverted) : (leaveUsd, leaveUnconverted);
-            if (rates.ToUsd(amount, pay.Terms.Currency, month.Input.Month) is { } converted)
-            {
-                usd[month.Input.Month] = usd.GetValueOrDefault(month.Input.Month) + converted;
-            }
-            else
-            {
-                unconverted[pay.Terms.Currency] = unconverted.GetValueOrDefault(pay.Terms.Currency) + amount;
-            }
+            costs.PaidLeave.Add(SalaryCalculator.PaidLeavePay(month.Input, pay) * share, currency, key, rates);
+            costs.OvertimePremium.Add(SalaryCalculator.OvertimePremium(pay) * share, currency, key, rates);
         }
 
-        return new SalaryCosts(fixedUsd, Totals(fixedUnconverted), leaveUsd, Totals(leaveUnconverted));
+        return costs;
     }
 
     /// <summary>
@@ -313,9 +335,6 @@ public sealed class CompanyOverviewService(
     /// employee's logged hours are project cost instead.
     /// </summary>
     private static bool PaidAsFixed(PersonMonth month) => month.Input.FixedSalary || month.User.DomainCode != DomainCodes.Design;
-
-    private static IReadOnlyList<CurrencyTotalResponse> Totals(Dictionary<string, decimal> byCurrency)
-        => byCurrency.Select(u => new CurrencyTotalResponse(u.Key, PeriodMoney.Round(u.Value))).ToList();
 
     private static IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices(IEnumerable<IssuedInvoiceRow> invoices)
         => invoices

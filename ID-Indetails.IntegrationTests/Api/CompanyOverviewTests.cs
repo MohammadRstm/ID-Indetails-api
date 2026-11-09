@@ -83,7 +83,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         design.ProjectsWithActivity.ShouldBe(1);
         design.Loggers.ShouldBe(1);
         june.Domains.Single(d => d.Domain == DomainCodes.Execution).Revenue.ShouldBe(0m);
-        june.NetProfit.ShouldBe(3930m - june.Overhead - june.FixedSalaries - june.PaidLeave);
+        june.NetProfit.ShouldBe(3930m - june.Overhead - june.FixedSalaries - june.PaidLeave - june.OvertimePremium);
         design.UnconvertedCosts.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "EUR", 50m)]);
         design.Invoiced.ShouldBe(0m);
         design.UnconvertedInvoices.ShouldBe([new UnconvertedInvoicesResponse("EUR", 3000m, 1)]);
@@ -219,7 +219,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         // This month to date: its elapsed share of 3,000 (at least 1 day's worth) is charged.
         overview.Overhead.ShouldBeGreaterThan(0m);
         overview.Overhead.ShouldBeLessThanOrEqualTo(3000m);
-        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead - overview.FixedSalaries - overview.PaidLeave);
+        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead - overview.FixedSalaries - overview.PaidLeave - overview.OvertimePremium);
 
         var months = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?months=1", superAdmin.AccessToken));
         months.ShouldHaveSingleItem().Overhead.ShouldBeGreaterThanOrEqualTo(3000m);
@@ -273,5 +273,44 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         (aprilMonth.FixedSalaries, aprilMonth.PaidLeave).ShouldBe((1500m, 100m));
         aprilMonth.NetProfit.ShouldBe(aprilMonth.ProfitAfterOverhead - 1600m);
         year.Single(m => m.Month == new DateOnly(2025, 3, 1)).PaidLeave.ShouldBe(0m);
+    }
+
+    [Fact]
+    public async Task The_overtime_premium_past_a_salary_s_threshold_comes_off_the_company_too()
+    {
+        // From November 2026 a salary's overtime is paid only past 184 counted hours. November 2026 has 21 working days
+        // of 8 paid hours (7 logged, with the paid break): 1,680 a month is 10 an hour. Overtime is set at 15 an hour (the
+        // seeded working time's multiplier is 1).
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await _steps.SetJoinedOnAsync(designer.User.Id, "2026-01-01");
+        (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+            new { basis = "monthly", amount = 1680m, currency = "USD", overtimeRate = 15m, effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
+
+        // 7 hours on every working day (147, no overtime) and 5 on eight weekend days (40, all overtime): 187 counted, 3
+        // past the threshold. Salaries pays them at 15 an hour (45) and the project carries them at 10 (30): the other 15
+        // is the premium.
+        const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
+            "VALUES (@u, @p, 'Drawings', @start, @end, UTC_TIMESTAMP(3))";
+        var weekendDays = 0;
+        for (var day = new DateOnly(2026, 11, 1); day.Month == 11; day = day.AddDays(1))
+        {
+            var weekend = day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+            if (weekend && ++weekendDays > 8)
+            {
+                continue;
+            }
+
+            var start = day.ToDateTime(new TimeOnly(7, 0)); // 09:00 in Beirut
+            await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", project.Id), ("@start", start), ("@end", start.AddHours(weekend ? 5 : 7)));
+        }
+
+        var year = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2026", superAdmin.AccessToken));
+        var november = year.Single(m => m.Month == new DateOnly(2026, 11, 1));
+        november.OvertimePremium.ShouldBe(15m);
+        november.NetProfit.ShouldBe(november.ProfitAfterOverhead - november.FixedSalaries - november.PaidLeave - 15m);
+        year.Single(m => m.Month == new DateOnly(2026, 10, 1)).OvertimePremium.ShouldBe(0m);
     }
 }

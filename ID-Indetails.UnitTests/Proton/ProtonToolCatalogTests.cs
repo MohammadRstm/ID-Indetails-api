@@ -143,6 +143,7 @@ public class ProtonToolCatalogTests
         [
             "HourlyRate", "OvertimeRate", "LabourCost", "LabourByPerson", "CostPerHour", "AdminSalaries",
             "UnconvertedAdminSalaries", "FixedSalaries", "UnconvertedFixedSalaries", "PaidLeave", "UnconvertedPaidLeave",
+            "OvertimePremium", "UnconvertedOvertimePremium",
             "NetProfit", "CurrentPay", "Pay", "PayHistory", "Salary", "BankAccount",
             "BankName", "Iban", "Swift", "PasswordHash", "Token", "ApiKey",
         ];

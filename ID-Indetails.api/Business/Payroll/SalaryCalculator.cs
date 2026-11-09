@@ -295,6 +295,15 @@ public static class SalaryCalculator
             : Round(ExcusedMinutes(input, input.Month.AddMonths(1), paid: true) / 60m * pay.HourlyRate);
     }
 
+    /// <summary>
+    /// What a salary paid for overtime past its threshold beyond the hourly rate. Projects price every logged hour of a
+    /// month with a threshold at the hourly rate (<c>EntrySplit.NoPremium</c>), while the overtime past it is paid at the
+    /// overtime rate × the multiplier: the rest reaches no project, so it is a company cost. None where no threshold
+    /// applies: hourly pay puts its overtime on projects, and a fixed salary has none.
+    /// </summary>
+    public static decimal OvertimePremium(Result pay)
+        => pay.ThresholdMinutes is null ? 0 : Round(pay.OvertimePay - pay.OvertimePaidMinutes / 60m * pay.HourlyRate);
+
     /// <summary>Unpaid excused minutes, and the full paid day of each unpaid day off within the month.</summary>
     private static int UnpaidMinutes(Input input, DateOnly next) => ExcusedMinutes(input, next, paid: false);
 

@@ -42,9 +42,12 @@ public sealed record DomainOverviewResponse(
 /// <param name="PaidLeave">What Design salaries paid for paid leave (paid excused time off) in the period, in USD: nothing is
 /// logged for it, so no project carries it.</param>
 /// <param name="UnconvertedPaidLeave">Paid leave in a currency with no rate for its month, left out of <see cref="PaidLeave"/>.</param>
+/// <param name="OvertimePremium">What Design salaries paid in the period for overtime past their monthly threshold beyond the
+/// hourly rate, in USD: projects carry every logged hour at the hourly rate, so the rest reaches no project.</param>
+/// <param name="UnconvertedOvertimePremium">The premium in a currency with no rate for its month, left out of <see cref="OvertimePremium"/>.</param>
 /// <param name="AdminSalaries">The phone app's name for <see cref="FixedSalaries"/>, the same figure, until it moves.</param>
 /// <param name="UnconvertedAdminSalaries">The phone app's name for <see cref="UnconvertedFixedSalaries"/>, until it moves.</param>
-/// <param name="NetProfit">Both domains' profit less company overhead, the fixed salaries and paid leave.</param>
+/// <param name="NetProfit">Both domains' profit less company overhead, the fixed salaries, paid leave and the overtime premium.</param>
 /// <param name="UnconvertedInvoices">Both domains' invoices with no exchange rate on their issue day.</param>
 public sealed record CompanyOverviewResponse(
     DateOnly From,
@@ -59,6 +62,8 @@ public sealed record CompanyOverviewResponse(
     IReadOnlyList<CurrencyTotalResponse> UnconvertedFixedSalaries,
     decimal PaidLeave,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedPaidLeave,
+    decimal OvertimePremium,
+    IReadOnlyList<CurrencyTotalResponse> UnconvertedOvertimePremium,
     decimal AdminSalaries,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedAdminSalaries,
     decimal NetProfit,
@@ -77,9 +82,10 @@ public sealed record PeriodOverheadResponse(DateOnly From, DateOnly To, decimal 
 /// <summary>One month for both domains together, in USD.</summary>
 /// <param name="FixedSalaries">The month's fixed salaries (admins, super admins and site staff), a company cost like overhead.</param>
 /// <param name="PaidLeave">What Design salaries paid for paid leave in the month, a company cost too.</param>
+/// <param name="OvertimePremium">What Design salaries paid for overtime past the month's threshold beyond the hourly rate.</param>
 /// <param name="ProfitBeforeOverhead">Revenue − project costs.</param>
 /// <param name="ProfitAfterOverhead">After company overhead only.</param>
-/// <param name="NetProfit">After company overhead, the fixed salaries and paid leave, as the overview's net profit.</param>
+/// <param name="NetProfit">After company overhead, the fixed salaries, paid leave and the overtime premium, as the overview's net profit.</param>
 public sealed record CompanyMonthResponse(
     DateOnly Month,
     decimal Revenue,
@@ -90,6 +96,7 @@ public sealed record CompanyMonthResponse(
     decimal Overhead,
     decimal FixedSalaries,
     decimal PaidLeave,
+    decimal OvertimePremium,
     decimal ProfitBeforeOverhead,
     decimal ProfitAfterOverhead,
     decimal NetProfit);
