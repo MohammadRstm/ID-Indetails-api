@@ -18,12 +18,34 @@ Billing is a cash ledger kept apart from a project's profitability: invoices and
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/exchange-rates?currency=` | `financial:view` | Every dated rate, newest first per currency |
+| `GET /api/exchange-rates?currency=` | `financial:view` | Every dated rate, newest first per currency. `automatic` is true on a rate the daily feed added (below) |
 | `POST /api/exchange-rates` | `exchange_rate:manage` (super admins) | `{ currency, ratePerUsd, effectiveFrom }` adds a dated rate |
 
-A rate says how many units of a currency one US dollar buys, from its effective date. The rate in force on a day is the latest one effective on or before it. Rates are company-wide, so only super admins set them.
+A rate says how many units of a currency one US dollar buys, from its effective date. The rate in force on a day is the latest one effective on or before it. Rates are company-wide, so only super admins set them, besides the daily feed.
 
 Rates are append-only, like pay history (`Business/Billing/ExchangeRateRules.cs`): a new rate applies from today or earlier (`400 rate_date_in_future`) and after the currency's latest rate (`422 rate_not_after_latest`). Payments already recorded keep the rate they were recorded with. Adding one writes `exchange_rate_set` with no domain and the rate in the `amount` column.
+
+An expense in another currency than USD, a Design project expense or a site expense, is refused without a rate in force on its day (`422 exchange_rate_missing`, `ExchangeRateRules.CheckConvertible`): money leaves out what it can't convert, so the cost would never reach profit or the profit floor. With the daily feed, that only happens for days before a currency's first rate.
+
+### The daily feed
+
+`Jobs/ExchangeRateFeedJob` adds today's rate of each currency in `ExchangeRateFeed:Currencies` (LBP) by itself (`Services/Billing/Implementation/ExchangeRateFeedService.cs`), so costs keep converting at a current rate.
+
+- **When:** it checks when the API starts and then every `IntervalMinutes` (60), from `FromHour` (6:00 company time). The source is called only when a currency has no rate from today. Once a day's call has answered, it isn't made again that day. A call that fails is logged and tried again on the next check.
+- **The source:** ExchangeRate-API's open endpoint, `https://open.er-api.com/v6/latest/USD`: no key, updated once a day. Its terms require attribution ("Rates By Exchange Rate API", linking to https://www.exchangerate-api.com) on the pages showing the rates, which the client's exchange-rate settings carry.
+- **Still append-only:** the feed's rate applies from today, under the same rules as a super admin's. A currency that already has a rate from today (a super admin's, or the feed's) keeps it, and a different rate for today can't be added afterwards (`422 rate_not_after_latest`). Since no rate applies from a future day either, a correction is entered tomorrow and applies from then.
+- **The guard** (owner decision, 10 Nov 2026, `ExchangeRateRules.IsFeedRateUsable`): a rate that isn't above 0, or is more than `MaxChange` (10%) away from the last rate, isn't added. The last rate stays in force, the server logs a warning, and the feed tries again the next day. A real jump that big is entered by a super admin. A currency's first rate is always taken.
+- **Nobody added it:** the rate has no creator (`created_by_id` null), and its `exchange_rate_set` event has no actor, with `automatic: true` and the `source` in its payload. That event is what marks it `automatic`: a rate inserted any other way has none, so it isn't.
+
+| Setting (`ExchangeRateFeed`) | Default | |
+|---|---|---|
+| `Enabled` | `true` | `false` in `appsettings.Development.json`, so a local API doesn't write rates into the dev database unless it is switched on. The integration tests switch it off |
+| `Url` | `https://open.er-api.com/v6/latest/USD` | a JSON document of rates per USD |
+| `Source` | `ExchangeRate-API` | named in the event of each rate it adds |
+| `Currencies` | `LBP` | at least one |
+| `FromHour` | 6 | the company hour from which it runs each day, once the source has published that day's rates |
+| `MaxChange` | 0.10 | the guard: 0.10 is 10% (0.01 to 1) |
+| `IntervalMinutes`, `TimeoutSeconds` | 60, 20 | how often it checks; how long a call may take |
 
 ## Invoices
 

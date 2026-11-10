@@ -23,6 +23,8 @@ Website visitor ──HTTPS :443──▶ caddy ──▶ website: the website's
 | `migrations` | `ghcr.io/mohammadrstm/id-indetails-migrations` | The EF Core migrations of that API version as one executable. The deploy runs it before starting the new API. |
 | `db` | `mysql:8.4` | The database, on the `db_data` volume, reachable only from the API and the migrations. It keeps 768 MB of data in memory (`--innodb-buffer-pool-size`, the default is 128 MB), about 1 GB in all beside the API's 2 GB. |
 
+The API adds each day's LBP exchange rate from `https://open.er-api.com` by itself, so it needs outbound HTTPS there. The feed runs with its defaults and has no line in the server's `.env` ([billing.md](billing.md#the-daily-feed)).
+
 ### The public website
 
 - **Its own domain:** `WEBSITE_DOMAIN` in the server's `.env` is the bare domain. Its DNS, and `www.`'s, point at this server like the app's; Caddy gets both certificates once they resolve.

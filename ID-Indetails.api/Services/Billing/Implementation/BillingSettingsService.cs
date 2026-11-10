@@ -122,15 +122,19 @@ public sealed class BillingSettingsService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return new ExchangeRateResponse(rate.Id, rate.Currency, rate.RatePerUsd, rate.EffectiveFrom, rate.CreatedAt);
+        return new ExchangeRateResponse(rate.Id, rate.Currency, rate.RatePerUsd, rate.EffectiveFrom, rate.CreatedAt, Automatic: false);
     }
 
     public async Task<IReadOnlyList<ExchangeRateResponse>> ListExchangeRatesAsync(
         ExchangeRateListQuery query,
         CancellationToken cancellationToken = default)
-        => (await exchangeRates.ListAsync(query.Currency?.ToUpperInvariant(), cancellationToken))
-            .Select(r => new ExchangeRateResponse(r.Id, r.Currency, r.RatePerUsd, r.EffectiveFrom, r.CreatedAt))
+    {
+        var rates = await exchangeRates.ListAsync(query.Currency?.ToUpperInvariant(), cancellationToken);
+        var fromFeed = await exchangeRates.AddedByFeedAsync(rates.Select(r => r.Id).ToList(), cancellationToken);
+        return rates
+            .Select(r => new ExchangeRateResponse(r.Id, r.Currency, r.RatePerUsd, r.EffectiveFrom, r.CreatedAt, fromFeed.Contains(r.Id)))
             .ToList();
+    }
 
     /// <summary>The caller's id, once the domain is known to be one they can see.</summary>
     private async Task<long> EnsureVisibleAsync(string domainCode, CancellationToken cancellationToken)

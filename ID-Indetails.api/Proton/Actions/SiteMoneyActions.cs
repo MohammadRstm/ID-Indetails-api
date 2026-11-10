@@ -48,7 +48,8 @@ public sealed record AddExpenseInput : ProtonActionInput
 /// Records a Design project expense, through POST /api/projects/{id}/expenses once confirmed. The user types the amount. An
 /// Execution site keeps its costs as site expenses instead.
 /// </summary>
-public sealed class ProposeAddExpenseTool(IProjectService projects, IExpenseService expenses) : ProtonActionTool<AddExpenseInput, ExpenseArgs>
+public sealed class ProposeAddExpenseTool(IProjectService projects, IExpenseService expenses, IBillingSettingsService billing)
+    : ProtonActionTool<AddExpenseInput, ExpenseArgs>
 {
     public override string Name => "propose_add_expense";
 
@@ -79,6 +80,7 @@ public sealed class ProposeAddExpenseTool(IProjectService projects, IExpenseServ
         };
         // the same amount spent the same day: often the same expense asked for twice; not refused, but said
         var day = request.SpentOn ?? context.Today;
+        await SiteExpenseText.CheckRateAsync(billing, request.Currency, [day], cancellationToken);
         var same = (await expenses.ListAsync(project.Id, cancellationToken)).Items
             .Count(e => e.Amount == request.Amount && e.Currency == request.Currency && e.SpentOn == day);
         var careful = same == 0 ? "" : $"Careful: {same} expense(s) of {MoneyText.Amount(request.Amount, request.Currency)} that day are already recorded. Confirm only if this is another one. ";

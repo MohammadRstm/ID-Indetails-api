@@ -10,7 +10,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | Permissions: role defaults, personal grants and revokes, delegation, domain separation | [authorization.md](authorization.md) | #6 |
 | People, teams, pay records, employment periods (leaving and coming back) | [employees.md](employees.md) | #7, #23 |
 | Clients, projects, requirements, expenses, status changes, project lists with filters, sorts and work | [clients.md](clients.md), [projects.md](projects.md) | #8, #16, #22 |
-| Invoices, payments (filed under account labels), deliveries, billing settings, exchange rates | [billing.md](billing.md) | #8, #9, #21 |
+| Invoices, payments (filed under account labels), deliveries, billing settings, exchange rates and their daily feed | [billing.md](billing.md) | #8, #9, #21, `MR-Design-Expense-Rate` |
 | Project cost, profit and margin; domain money summaries, list money, client rollups, money follow-ups | [finance.md](finance.md) | #10, #18, #21, #22 |
 | Execution: BOQs and variation orders, site expenses (cost-only; the old materials paths stay as a temporary alias for the phone), ground labour, site money, supervision taken and a site's account figures | [execution.md](execution.md) | #5, #12 |
 | Company: settings, working time, schedules, overhead, salaries, hours ledger, excuses, overview, project pay | [company.md](company.md) | #11, #13, #15, #23 |

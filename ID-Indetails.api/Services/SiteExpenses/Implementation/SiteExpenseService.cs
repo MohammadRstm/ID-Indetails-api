@@ -387,7 +387,7 @@ public sealed class SiteExpenseService(
         }
 
         var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
-        Throw(SiteExpenseRules.CheckConvertible(expenses.Select(e => (e.Currency, e.SpentOn)), rates));
+        Throw(ExchangeRateRules.CheckConvertible(expenses.Select(e => (e.Currency, e.SpentOn)), rates));
     }
 
     /// <summary>Worked out here rather than read from the generated column, which is only filled in after a save.</summary>
