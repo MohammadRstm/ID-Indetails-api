@@ -2,8 +2,8 @@
 
 **Status:** approved by the owner on 9 November 2026: the decisions in [§3](#3-decisions-that-shape-the-plan), the
 schema changes in [§6](#6-phase-2-data-foundations) and phase 5, and the delivery order in [§10](#10-delivery-order-prs).
-Only phase 2h is built (PRs #195 / client #199). Each migration still shows its tables and risks in its own PR
-(CLAUDE.md rule 9).
+Built so far: phase 2h (PRs #195 / client #199) and 1a-1 to 1a-4 and 1a-6 (#198 / client #201). Each migration still
+shows its tables and risks in its own PR (CLAUDE.md rule 9).
 
 **Built on** [proton-financial-intelligence-discovery.md](proton-financial-intelligence-discovery.md) (PR #194). File
 references point to that report's sections ("D§9" = discovery report, section 9) or to code paths under
@@ -79,7 +79,7 @@ what each one blocks.
 | Q3 | Design salaried people's paid, unlogged time | **Decided (9 Nov), built in the same PRs:** paid leave comes off the company's net profit as its own line in the overview | done |
 | Q4 | Admins' project time and the threshold overtime premium | **Decided (9 Nov), built in the same PRs:** admin time stays at 0 on projects (it's a fixed salary). The overtime past a salary's threshold that Salaries pays above the hourly rate comes off the company's net profit as its own "overtime premium" line | done |
 | Q5 | Internal projects | **Decided (9 Nov):** cost centres only. Their costs count in company and domain totals; they stay out of margin rankings, risk-of-loss signals and comparisons | phase 1 rankings |
-| Q6 | Currencies for forecasts; LBP Design expenses with no rate; where rates come from | **Decided (9 Nov):** money not yet spent or received is forecast at **today's rate**, and the answer names it. A Design expense in LBP with no rate for its day is **refused**, as site expenses are (`exchange_rate_missing`). A **public rate feed adds the day's USD/LBP rate automatically** each morning unless a super admin entered one that day (outside Proton: the implementation session builds it) | phase 1a, phase 3 |
+| Q6 | Currencies for forecasts; LBP Design expenses with no rate; where rates come from | **Decided (9 Nov):** money not yet spent or received is forecast at **today's rate**, and the answer names it. A Design expense in LBP with no rate for its day is **refused**, as site expenses are (`exchange_rate_missing`). A **public rate feed adds the day's USD/LBP rate automatically** each morning unless a super admin entered one that day (10% guard, 10 Nov; outside Proton: the implementation session builds it) | phase 1a, phase 3 |
 | Q7 | How progress is measured | **Decided (9 Nov):** Design: **hours logged ÷ planned hours** per department, where planned hours exist; requirements otherwise. Execution: **value executed ÷ agreed BOQ value**, from executed quantities per BOQ line that site staff record (new data, later phase) | phase 2b, 2c, phase 3 |
 | Q8 | Budgets: who sets and approves them | **Decided (9 Nov):** a **cost budget per project**, per department on Design and per category on Execution, set by whoever holds `financial:write` (Design) or `project:pricing_manage` (Execution). A revision needs a reason and is kept | phase 2a, phase 3 variance |
 | Q9 | Committed costs | **Decided (9 Nov):** record **commitments** (supplier, amount, currency, expected date, status: open, received, cancelled) on Execution sites first. Open ones count in the forecast cost and the cash-flow | phase 2d, phase 4 |
@@ -147,9 +147,9 @@ Each item ships with regression tests that pin today's numbers before the change
 | Project summary and profitability | `GET /api/finance/insights/projects/{id}` | `get_project_financial_summary` | margin bridge: base price, VOs, settlements, cost by source, labour share by department | `get_project_financials`, `CostHistoryAsync`, `ProfitFloorRules.StandingOf`, departments | READY |
 | Project risks | `GET /api/finance/insights/{domain}/risks` | `detect_project_financial_risks` | profit-floor standing, cost growth against progress, department over budget, pending blocked changes, unconverted costs, short runway, settlement at or below zero (Q10); ranked with `ProtonSignals` | `get_attention` sources | PARTIAL (no forecasts yet) |
 | Expense trends and anomalies | `GET /api/finance/insights/{domain}/expenses` | `analyze_expense_trends` | category baselines and the Q16 thresholds; same amount twice; unit-cost jumps per item name (normalised: trimmed, case-folded) | site and Design expenses, `ProtonTrends.Baseline` | PARTIAL (three category schemes, free-text items) |
-| Labour cost (Design) | `GET /api/finance/insights/design/labour` | `analyze_labor_costs` | totals and series by project, department, month; outside-scope share; **no person money** | `LabourPricer`, `LabourByDepartmentAsync` | PARTIAL until PRs #195 / client #199 merge |
+| Labour cost (Design) | `GET /api/finance/insights/design/labour` | `analyze_labor_costs` | totals and series by project, department, month; outside-scope share; **no person money** | `LabourPricer`, `LabourByDepartmentAsync` | READY once built (Q2–Q4 are in, PRs #195 / client #199) |
 | Utilization (Design, hours only) | `GET /api/reports/utilization` | `analyze_employee_utilization` | logged against expected hours, overtime, excused, project mix | `HoursLedger`, `WorkInsightsService` | PARTIAL (no non-project time) |
-| Company performance | existing `get_company_overview`, `compare_money`, `get_money_by_month`, plus a trend block | — | — | after 1a-1 | PARTIAL until PRs #195 / client #199 merge |
+| Company performance | existing `get_company_overview`, `compare_money`, `get_money_by_month`, plus a trend block | — | — | after 1a-1 | READY once built (Q2–Q4 are in, PRs #195 / client #199) |
 | Scenario on one project | `GET /api/finance/insights/projects/{id}/scenario?...` | `simulate_project_financial_scenario` | levers from Q18 fed to `ExecutionPricing.PriceOf`, `ProjectFinance.Summarise`, `Tva`, `ProfitFloorRules`; before and after | pure rules only | READY for the levers listed |
 
 ### 1c. Proton wiring for phase 1
@@ -263,8 +263,8 @@ Tool: `forecast_cash_flow`. It returns no payroll line and states that it leaves
 
 | # | Branch | Contents | Needs |
 |---|---|---|---|
-| 1 | `MR-Finance-Consolidate` | 1a-1 to 1a-4, 1a-6, with regression tests | — |
-| 2 | `MR-Design-Expense-Rate` | 1a-5, and the daily USD/LBP rate feed | Q6 |
+| 1 | done: `MR-Finance-Consolidate` (#198 / client #201, merged) | 1a-1 to 1a-4, 1a-6, with regression tests | — |
+| 2 | `MR-Design-Expense-Rate` (this PR) | 1a-5, and the daily USD/LBP rate feed | Q6 |
 | 3 | `MR-Insights-Project` | summary, profitability bridge, simulator; client tab; Proton tools | Q1, Q5, Q18 |
 | 4 | `MR-Insights-Risks-Expenses` | risks v1, expense trends and anomalies | Q10, Q16 |
 | 5 | `MR-Insights-Labour` | labour cost and utilization | Q12 |
