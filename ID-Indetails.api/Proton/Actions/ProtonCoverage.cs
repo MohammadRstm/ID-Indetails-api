@@ -143,6 +143,7 @@ public static class ProtonCoverage
         Action("AccountLabels.Archive", "propose_account_label", T2, ProtonFamily.CompanyRules),
         Action("AccountLabels.Restore", "propose_account_label", T2, ProtonFamily.CompanyRules),
         Action("AccountLabels.Order", "propose_account_label", T2, ProtonFamily.CompanyRules),
+        Action("AccountLabels.Delete", "propose_account_label", T2, ProtonFamily.CompanyRules),
         Action("Boqs.Create", "propose_boq", T2, ProtonFamily.Money),
         Action("Boqs.Save", "propose_edit_boq", T2, ProtonFamily.Money),
         Action("Boqs.CopyLines", "propose_boq", T2, ProtonFamily.Money),

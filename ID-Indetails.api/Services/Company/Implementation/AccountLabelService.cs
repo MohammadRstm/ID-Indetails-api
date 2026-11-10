@@ -32,7 +32,7 @@ public sealed class AccountLabelService(
             (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.CompanySettingsManage);
         }
 
-        return (await labels.ListAsync(includeArchived, cancellationToken)).Select(ToResponse).ToList();
+        return await DescribeAsync(await labels.ListAsync(includeArchived, cancellationToken), cancellationToken);
     }
 
     public async Task<AccountLabelResponse> AddAsync(AccountLabelRequest request, CancellationToken cancellationToken = default)
@@ -51,7 +51,7 @@ public sealed class AccountLabelService(
 
         activity.Add(Event(label, "added"));
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return ToResponse(label);
+        return ToResponse(label, inUse: false);
     }
 
     public async Task<AccountLabelResponse> RenameAsync(long id, AccountLabelRequest request, CancellationToken cancellationToken = default)
@@ -63,7 +63,7 @@ public sealed class AccountLabelService(
         label.Name = name;
         activity.Add(Event(label, "renamed"));
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return ToResponse(label);
+        return ToResponse(label, await labels.InUseAsync(label.Id, cancellationToken));
     }
 
     public async Task<AccountLabelResponse> ArchiveAsync(long id, CancellationToken cancellationToken = default)
@@ -76,7 +76,7 @@ public sealed class AccountLabelService(
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        return ToResponse(label);
+        return ToResponse(label, await labels.InUseAsync(label.Id, cancellationToken));
     }
 
     public async Task<AccountLabelResponse> RestoreAsync(long id, CancellationToken cancellationToken = default)
@@ -90,7 +90,18 @@ public sealed class AccountLabelService(
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        return ToResponse(label);
+        return ToResponse(label, await labels.InUseAsync(label.Id, cancellationToken));
+    }
+
+    public async Task DeleteAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var label = await FindAsync(id, cancellationToken);
+        AccountLabelRules.CheckDeletable(await labels.InUseAsync(id, cancellationToken)).ThrowIfDenied();
+
+        // the event keeps the name: the label itself is gone
+        activity.Add(Event(label, "deleted"));
+        labels.Remove(label);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<AccountLabelResponse>> OrderAsync(AccountLabelOrderRequest request, CancellationToken cancellationToken = default)
@@ -114,7 +125,7 @@ public sealed class AccountLabelService(
             Payload = JsonSerializer.Serialize(new { change = "reordered" }),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return (await labels.ListAsync(true, cancellationToken)).Select(ToResponse).ToList();
+        return await DescribeAsync(await labels.ListAsync(true, cancellationToken), cancellationToken);
     }
 
     private async Task<AccountLabel> FindAsync(long id, CancellationToken cancellationToken)
@@ -138,6 +149,12 @@ public sealed class AccountLabelService(
         Payload = JsonSerializer.Serialize(new { change, name = label.Name }),
     };
 
-    private static AccountLabelResponse ToResponse(AccountLabel label)
-        => new(label.Id, label.Name, label.Position, label.ArchivedAt is not null);
+    private async Task<IReadOnlyList<AccountLabelResponse>> DescribeAsync(IReadOnlyList<AccountLabel> list, CancellationToken cancellationToken)
+    {
+        var used = await labels.UsedIdsAsync(cancellationToken);
+        return list.Select(l => ToResponse(l, used.Contains(l.Id))).ToList();
+    }
+
+    private static AccountLabelResponse ToResponse(AccountLabel label, bool inUse)
+        => new(label.Id, label.Name, label.Position, label.ArchivedAt is not null, inUse);
 }

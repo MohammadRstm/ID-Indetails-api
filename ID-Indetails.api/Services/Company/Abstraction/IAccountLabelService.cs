@@ -17,6 +17,9 @@ public interface IAccountLabelService
     /// <summary>Puts an archived label back, last in the list.</summary>
     Task<AccountLabelResponse> RestoreAsync(long id, CancellationToken cancellationToken = default);
 
+    /// <summary>Removes a label nothing is filed under (<c>422 account_label_in_use</c> otherwise).</summary>
+    Task DeleteAsync(long id, CancellationToken cancellationToken = default);
+
     /// <summary>Saves the order of the labels that can be picked; returns every label, archived ones included.</summary>
     Task<IReadOnlyList<AccountLabelResponse>> OrderAsync(AccountLabelOrderRequest request, CancellationToken cancellationToken = default);
 }

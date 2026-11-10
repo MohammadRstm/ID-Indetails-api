@@ -42,6 +42,15 @@ public sealed class AccountLabelsController(IAccountLabelService labels) : Contr
     public Task<AccountLabelResponse> Restore(long id, CancellationToken cancellationToken)
         => labels.RestoreAsync(id, cancellationToken);
 
+    /// <summary>Deletes a label nothing is filed under; one that payments or expenses carry is archived instead (<c>422 account_label_in_use</c>).</summary>
+    [HttpDelete("{id:long}")]
+    [HasPermission(PermissionCodes.CompanySettingsManage)]
+    public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
+    {
+        await labels.DeleteAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>The new order of the labels that can be picked: every one, once (<c>422 account_label_order_stale</c> otherwise).</summary>
     [HttpPut("order")]
     [HasPermission(PermissionCodes.CompanySettingsManage)]

@@ -184,6 +184,27 @@ public class ProtonPeopleActionsTests(ProtonAllActionsApiFactory api) : IClassFi
         var (againCard, again) = await ProposeAsync(superAdmin, "propose_account_label", new { step = "restore", name = renamed });
         againCard.PendingAction.ShouldBeNull();
         again["message"]!.GetValue<string>().ShouldContain("isn't archived");
+
+        // nothing is filed under it, so it can be deleted, with its name typed
+        var (delete, _) = await ProposeAsync(superAdmin, "propose_account_label", new { step = "delete", name = renamed });
+        delete.PendingAction!.Preview.Phrase.ShouldBe(renamed);
+        await ConfirmTypedAsync(superAdmin, delete);
+        (await OkAsync<List<AccountLabelResponse>>(Client.GetAsync("/api/account-labels?includeArchived=true", superAdmin.AccessToken)))
+            .ShouldNotContain(l => l.Id == label.Id);
+    }
+
+    [Fact]
+    public async Task A_label_payments_are_filed_under_is_not_deleted_by_proton()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var name = "Label " + Guid.NewGuid().ToString("N")[..8];
+        var label = await OkAsync<AccountLabelResponse>(Client.PostJsonAsync("/api/account-labels", new { name }, superAdmin.AccessToken));
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        await OkAsync<JsonNode>(Client.PostJsonAsync($"/api/projects/{site.Id}/payments", new { amount = 50m, currency = "USD", accountLabelId = label.Id }, superAdmin.AccessToken));
+
+        var (card, result) = await ProposeAsync(superAdmin, "propose_account_label", new { step = "delete", name });
+        card.PendingAction.ShouldBeNull();
+        result["message"]!.GetValue<string>().ShouldContain("archive it instead");
     }
 
     [Fact]

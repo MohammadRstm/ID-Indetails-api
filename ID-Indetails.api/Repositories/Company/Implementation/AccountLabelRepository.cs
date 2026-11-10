@@ -20,5 +20,18 @@ public sealed class AccountLabelRepository(IdIndetailsDbContext db) : IAccountLa
     public Task<bool> NameTakenAsync(string name, long? exceptId, CancellationToken cancellationToken = default)
         => db.AccountLabels.AnyAsync(l => l.Name.ToLower() == name.ToLower() && l.Id != exceptId, cancellationToken);
 
+    public async Task<IReadOnlySet<long>> UsedIdsAsync(CancellationToken cancellationToken = default)
+    {
+        var payments = await db.Payments.Where(p => p.AccountLabelId != null).Select(p => p.AccountLabelId!.Value).Distinct().ToListAsync(cancellationToken);
+        var expenses = await db.SiteExpenses.Where(e => e.AccountLabelId != null).Select(e => e.AccountLabelId!.Value).Distinct().ToListAsync(cancellationToken);
+        return payments.Concat(expenses).ToHashSet();
+    }
+
+    public async Task<bool> InUseAsync(long id, CancellationToken cancellationToken = default)
+        => await db.Payments.AnyAsync(p => p.AccountLabelId == id, cancellationToken)
+            || await db.SiteExpenses.AnyAsync(e => e.AccountLabelId == id, cancellationToken);
+
     public void Add(AccountLabel label) => db.AccountLabels.Add(label);
+
+    public void Remove(AccountLabel label) => db.AccountLabels.Remove(label);
 }

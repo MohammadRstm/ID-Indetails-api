@@ -115,8 +115,38 @@ public class AccountLabelTests(ApiFactory api) : IClassFixture<ApiFactory>
             await (await Client.PostEmptyAsync($"/api/account-labels/{label.Id}/archive", token)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.PostEmptyAsync($"/api/account-labels/{label.Id}/restore", token)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.PutJsonAsync("/api/account-labels/order", new { ids = new[] { label.Id } }, token)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+            await (await Client.DeleteAsync($"/api/account-labels/{label.Id}", token)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
             await (await Client.GetAsync("/api/account-labels?includeArchived=true", token)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         }
+    }
+
+    [Fact]
+    public async Task A_label_nothing_is_filed_under_is_deleted_and_one_in_use_is_only_archived()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var unused = await AddAsync(superAdmin.AccessToken, NewName());
+        var used = await AddAsync(superAdmin.AccessToken, NewName());
+        unused.InUse.ShouldBeFalse();
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var payment = await Client.PostJsonAsync($"/api/projects/{site.Id}/payments", new { amount = 300m, currency = "USD", accountLabelId = used.Id }, superAdmin.AccessToken);
+        ((int)payment.StatusCode).ShouldBe(201, await payment.Content.ReadAsStringAsync());
+
+        // the list says which labels something is filed under, archived or not
+        var labels = await ListAsync(superAdmin.AccessToken, includeArchived: true);
+        labels.Single(l => l.Id == unused.Id).InUse.ShouldBeFalse();
+        labels.Single(l => l.Id == used.Id).InUse.ShouldBeTrue();
+
+        (await Client.DeleteAsync($"/api/account-labels/{unused.Id}", superAdmin.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+        (await ListAsync(superAdmin.AccessToken, includeArchived: true)).ShouldNotContain(l => l.Id == unused.Id);
+        await (await Client.DeleteAsync($"/api/account-labels/{unused.Id}", superAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        // its name is free again
+        (await AddAsync(superAdmin.AccessToken, unused.Name)).Name.ShouldBe(unused.Name);
+
+        // a payment carries the other one, archived or not: it stays, and can only be archived
+        await (await Client.DeleteAsync($"/api/account-labels/{used.Id}", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.AccountLabelInUse);
+        await OkAsync<AccountLabelResponse>(Client.PostEmptyAsync($"/api/account-labels/{used.Id}/archive", superAdmin.AccessToken));
+        await (await Client.DeleteAsync($"/api/account-labels/{used.Id}", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.AccountLabelInUse);
+        (await ListAsync(superAdmin.AccessToken, includeArchived: true)).ShouldContain(l => l.Id == used.Id && l.Archived && l.InUse);
     }
 
     [Fact]
