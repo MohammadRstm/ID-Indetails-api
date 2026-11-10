@@ -21,6 +21,7 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Boqs.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 
 namespace ID_Indetails.api.Services.Boqs.Implementation;
@@ -32,6 +33,7 @@ public sealed class BoqService(
     IBoqRepository boqs,
     IProfitFloor floor,
     IActivityEventRepository activity,
+    INotificationSender notifications,
     IUnitOfWork unitOfWork,
     IClock clock) : IBoqService
 {
@@ -41,21 +43,21 @@ public sealed class BoqService(
     public async Task<BoqListResponse> ListAsync(long projectId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        var caller = CallerOf(actor);
-        if (!caller.CanDraft && !caller.CanSeeMoney && !caller.CanManagePricing)
-        {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "BOQs need the permission to write drafts, see money or manage pricing.");
-        }
-
         var project = await projects.GetAsync(projectId, cancellationToken);
-        if (project is null || !actor.CanSee(project.DomainCode))
+        if (project is null || !Reaches(actor, project))
         {
             throw new NotFoundException(ProjectNotFound);
         }
 
+        var caller = CallerOf(actor, project.OwnerId);
+        if (!caller.CanDraft && !caller.CanSeeMoney && !caller.CanManagePricing && !caller.IsSiteOwner)
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "BOQs need the permission to write drafts, see money or manage pricing.");
+        }
+
         Throw(BoqRules.CheckSite(project.DomainCode, project.BillingType));
         var rows = await boqs.ListAsync(projectId, cancellationToken);
-        var readable = rows.Where(r => BoqRules.CanRead(r.Boq.Kind, r.Boq.AuthorId, caller)).ToList();
+        var readable = rows.Where(r => BoqRules.CanRead(r.Boq.Kind, r.Boq.AuthorId, r.Boq.SubmittedAt is not null, caller)).ToList();
         var names = await boqs.NamesAsync(UserIds(readable.Select(r => r.Boq)), cancellationToken);
         List<BoqSummaryResponse> Of(BoqKind kind) => readable.Where(r => r.Boq.Kind == kind).Select(r => Summary(r.Boq, r.LineCount, names)).ToList();
 
@@ -79,10 +81,9 @@ public sealed class BoqService(
     public async Task<BoqDetailResponse> CreateAsync(long projectId, CreateBoqRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        var caller = CallerOf(actor);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await LockedSiteAsync(actor, projectId, cancellationToken);
-        RequireCreate(request.Kind, caller);
+        RequireCreate(request.Kind, CallerOf(actor, project.OwnerId));
         Throw(BoqRules.CheckCanCreate(request.Kind, (await boqs.AgreedAsync(project.Id, cancellationToken)).ClientAgreed));
 
         var source = request.FromBoqId is { } fromId ? await SourceAsync(actor, project.Id, fromId, cancellationToken) : null;
@@ -104,8 +105,8 @@ public sealed class BoqService(
         var actor = await ActorAsync(cancellationToken);
         var peek = await ReadableAsync(actor, boqId, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
-        await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
-        var boq = await LockedBoqAsync(actor, boqId, cancellationToken);
+        var site = await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
+        var boq = await LockedBoqAsync(actor, boqId, site, cancellationToken);
         Throw(BoqRules.CheckEditable(boq.Status));
         if (request.UpdatedAt is { } loaded && !BoqRules.SameSave(boq.UpdatedAt, loaded))
         {
@@ -152,6 +153,8 @@ public sealed class BoqService(
         boq.AdjustmentValue = request.AdjustmentValue;
         Recompute(boq);
         boq.UpdatedAt = clock.UtcNow;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await TellAuthorOfEditAsync(boq, site, actor, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -164,7 +167,7 @@ public sealed class BoqService(
         var peek = await ReadableAsync(actor, boqId, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
-        var boq = await LockedBoqAsync(actor, boqId, cancellationToken);
+        var boq = await LockedBoqAsync(actor, boqId, project, cancellationToken);
         Throw(BoqRules.CheckEditable(boq.Status));
 
         var source = await SourceAsync(actor, project.Id, request.FromBoqId, cancellationToken);
@@ -182,6 +185,8 @@ public sealed class BoqService(
         Throw(BoqRules.CheckContent(boq.Kind, boq.Reason, boq.AdjustmentType, boq.AdjustmentValue, LinesOf(boq)));
         Recompute(boq);
         boq.UpdatedAt = clock.UtcNow;
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await TellAuthorOfEditAsync(boq, project, actor, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -191,11 +196,10 @@ public sealed class BoqService(
     public async Task<BoqDetailResponse> DuplicateAsync(long boqId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        var caller = CallerOf(actor);
         var source = await ReadableAsync(actor, boqId, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await LockedSiteAsync(actor, source.ProjectId, cancellationToken);
-        RequireCreate(source.Kind, caller);
+        RequireCreate(source.Kind, CallerOf(actor, project.OwnerId));
         Throw(BoqRules.CheckCanCreate(source.Kind, (await boqs.AgreedAsync(project.Id, cancellationToken)).ClientAgreed));
 
         var boq = NewBoq(project, source.Kind, BoqRules.CopyTitle(source.Title), source.Reason, actor.UserId);
@@ -216,8 +220,16 @@ public sealed class BoqService(
         var actor = await ActorAsync(cancellationToken);
         var peek = await ReadableAsync(actor, boqId, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
-        await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
-        var boq = await LockedBoqAsync(actor, boqId, cancellationToken);
+        var site = await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
+        var boq = await boqs.GetForUpdateAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound);
+        EnsureReadable(boq, actor, site.OwnerId);
+        if (!BoqRules.CanDelete(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, site.OwnerId)))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, boq.Kind == BoqKind.Internal
+                ? "Only its author deletes an internal draft, and only after withdrawing it from the site."
+                : "Deleting client BOQs and variation orders needs the permission to manage pricing.");
+        }
+
         Throw(BoqRules.CheckEditable(boq.Status));
 
         // soft-deleted: a draft that was sent keeps its deliveries on record
@@ -232,7 +244,7 @@ public sealed class BoqService(
         var peek = await ReadableAsync(actor, boqId, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
-        var boq = await LockedBoqAsync(actor, boqId, cancellationToken);
+        var boq = await LockedBoqAsync(actor, boqId, project, cancellationToken);
 
         var agreed = await boqs.AgreedAsync(project.Id, cancellationToken);
         Throw(BoqRules.CheckAgreeable(boq.Kind, boq.Status, boq.Lines.Count, agreed.ClientAgreed));
@@ -269,7 +281,7 @@ public sealed class BoqService(
         var peek = await ReadableAsync(actor, boqId, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
-        var boq = await LockedBoqAsync(actor, boqId, cancellationToken);
+        var boq = await LockedBoqAsync(actor, boqId, project, cancellationToken);
 
         var agreed = await boqs.AgreedAsync(project.Id, cancellationToken);
         Throw(BoqRules.CheckWithdrawable(boq.Kind, boq.Status, agreed.VoTotals.Count));
@@ -306,7 +318,7 @@ public sealed class BoqService(
         var peek = await ReadableAsync(actor, boqId, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
-        var boq = await LockedBoqAsync(actor, boqId, cancellationToken);
+        var boq = await LockedBoqAsync(actor, boqId, project, cancellationToken);
         Throw(BoqRules.CheckSendable(boq.Kind, boq.Lines.Count));
 
         boqs.AddDelivery(new BoqDelivery
@@ -327,6 +339,70 @@ public sealed class BoqService(
         return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<BoqSiteResponse>> SitesAsync(CancellationToken cancellationToken = default)
+    {
+        (await ActorAsync(cancellationToken)).Require(PermissionCodes.BoqCreate);
+        return (await boqs.AuthorSitesAsync(cancellationToken)).Select(p => new BoqSiteResponse(p.Id, p.Title, p.Location, p.Status)).ToList();
+    }
+
+    public async Task<BoqSiteResponse> SiteAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        (await ActorAsync(cancellationToken)).Require(PermissionCodes.BoqCreate);
+        var project = await projects.GetAsync(projectId, cancellationToken);
+        return project is not null && BoqRules.IsAuthorSite(project.DomainCode, project.BillingType, project.Status)
+            ? new BoqSiteResponse(project.Id, project.Title, project.Location, project.Status)
+            : throw new NotFoundException(ProjectNotFound);
+    }
+
+    public async Task<BoqDetailResponse> SubmitAsync(long boqId, CancellationToken cancellationToken = default)
+    {
+        var (actor, site, boq) = await AuthorsDraftAsync(boqId, cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        Throw(BoqRules.CheckSubmittable(boq.Kind, boq.SubmittedAt is not null, boq.Lines.Count));
+
+        boq.SubmittedAt = clock.UtcNow;
+        boq.SubmittedLines = JsonSerializer.Serialize(SubmittedLinesOf(boq));
+        activity.Add(BoqEvent(boq, site, ActivityEventKinds.BoqSubmitted, actor.UserId, new { title = boq.Title, lines = boq.Lines.Count }));
+        // the site's pricing managers and owner: whoever works from submitted drafts
+        var recipients = (await notifications.HoldersAsync(DomainCodes.Execution, PermissionCodes.ProjectPricingManage, cancellationToken)).Append(site.OwnerId);
+        await notifications.SendAsync(
+            new NotificationDraft(NotificationKinds.BoqSubmitted, actor.UserId, DomainCodes.Execution, site.Id, "boq", boq.Id,
+                new { authorName = currentUser.FullName, title = boq.Title }),
+            recipients,
+            cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
+    }
+
+    public async Task<BoqDetailResponse> WithdrawSubmissionAsync(long boqId, CancellationToken cancellationToken = default)
+    {
+        var (actor, site, boq) = await AuthorsDraftAsync(boqId, cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        Throw(BoqRules.CheckSubmitted(boq.Kind, boq.SubmittedAt is not null));
+
+        boq.SubmittedAt = null;
+        boq.SubmittedLines = null;
+        activity.Add(BoqEvent(boq, site, ActivityEventKinds.BoqSubmissionWithdrawn, actor.UserId, new { title = boq.Title }));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
+    }
+
+    public async Task<BoqDetailResponse> KeepAsync(long boqId, CancellationToken cancellationToken = default)
+    {
+        var (actor, site, boq) = await AuthorsDraftAsync(boqId, cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        Throw(BoqRules.CheckSubmitted(boq.Kind, boq.SubmittedAt is not null));
+
+        // the edited lines become what later edits are compared against
+        boq.SubmittedLines = JsonSerializer.Serialize(SubmittedLinesOf(boq));
+        activity.Add(BoqEvent(boq, site, ActivityEventKinds.BoqChangesKept, actor.UserId, new { title = boq.Title }));
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(await boqs.GetAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound), actor, cancellationToken);
+    }
+
     public async Task<BoqDocument> GetDocumentAsync(long boqId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
@@ -339,7 +415,7 @@ public sealed class BoqService(
     {
         var actor = await ActorAsync(cancellationToken);
         var boq = await ReadableAsync(actor, boqId, cancellationToken);
-        RequireWrite(boq, actor);
+        RequireWrite(boq, actor, boq.Project.OwnerId);
         Throw(SiteRules.CheckOpen(boq.Project.DomainCode, boq.Project.Status, boq.Project.RevenueLockedAt is not null));
         Throw(BoqRules.CheckSendable(boq.Kind, boq.Lines.Count));
         return await DocumentAsync(boq, cancellationToken);
@@ -366,8 +442,14 @@ public sealed class BoqService(
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
 
-    private static BoqRules.Caller CallerOf(UserAccess actor)
-        => new(actor.UserId, actor.Has(PermissionCodes.BoqCreate), actor.Has(PermissionCodes.FinancialView), actor.Has(PermissionCodes.ProjectPricingManage));
+    private static BoqRules.Caller CallerOf(UserAccess actor, long siteOwnerId)
+        => new(actor.UserId, actor.Has(PermissionCodes.BoqCreate), actor.Has(PermissionCodes.FinancialView), actor.Has(PermissionCodes.ProjectPricingManage),
+            siteOwnerId == actor.UserId);
+
+    /// <summary>The caller sees the site's domain, or writes BOQs and it is an active Execution client site.</summary>
+    private static bool Reaches(UserAccess actor, Project project)
+        => actor.CanSee(project.DomainCode)
+            || (actor.Has(PermissionCodes.BoqCreate) && BoqRules.IsAuthorSite(project.DomainCode, project.BillingType, project.Status));
 
     /// <summary>
     /// The project locked for the rest of the transaction, so agreeing, saving and numbering one project's BOQs wait for
@@ -376,7 +458,7 @@ public sealed class BoqService(
     private async Task<Project> LockedSiteAsync(UserAccess actor, long projectId, CancellationToken cancellationToken)
     {
         var project = await projects.GetForUpdateAsync(projectId, cancellationToken);
-        if (project is null || !actor.CanSee(project.DomainCode))
+        if (project is null || !Reaches(actor, project))
         {
             throw new NotFoundException(ProjectNotFound);
         }
@@ -390,27 +472,27 @@ public sealed class BoqService(
     private async Task<Boq> ReadableAsync(UserAccess actor, long boqId, CancellationToken cancellationToken)
     {
         var boq = await boqs.GetAsync(boqId, cancellationToken);
-        if (boq is null || !actor.CanSee(boq.Project.DomainCode))
+        if (boq is null || !Reaches(actor, boq.Project))
         {
             throw new NotFoundException(BoqNotFound);
         }
 
-        EnsureReadable(boq, actor);
+        EnsureReadable(boq, actor, boq.Project.OwnerId);
         return boq;
     }
 
     /// <summary>The BOQ tracked, after the project is locked, for a change the caller may make.</summary>
-    private async Task<Boq> LockedBoqAsync(UserAccess actor, long boqId, CancellationToken cancellationToken)
+    private async Task<Boq> LockedBoqAsync(UserAccess actor, long boqId, Project site, CancellationToken cancellationToken)
     {
         var boq = await boqs.GetForUpdateAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound);
-        RequireWrite(boq, actor);
+        RequireWrite(boq, actor, site.OwnerId);
         return boq;
     }
 
     /// <summary>Another author's internal draft doesn't exist for the caller; a client BOQ they may not read is forbidden.</summary>
-    private static void EnsureReadable(Boq boq, UserAccess actor)
+    private static void EnsureReadable(Boq boq, UserAccess actor, long siteOwnerId)
     {
-        if (BoqRules.CanRead(boq.Kind, boq.AuthorId, CallerOf(actor)))
+        if (BoqRules.CanRead(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, siteOwnerId)))
         {
             return;
         }
@@ -420,12 +502,14 @@ public sealed class BoqService(
             : new ForbiddenException(ErrorCodes.Forbidden, "Client BOQs and variation orders need the permission to see money or manage pricing.");
     }
 
-    private static void RequireWrite(Boq boq, UserAccess actor)
+    private static void RequireWrite(Boq boq, UserAccess actor, long siteOwnerId)
     {
-        EnsureReadable(boq, actor);
-        if (!BoqRules.CanWrite(boq.Kind, boq.AuthorId, CallerOf(actor)))
+        EnsureReadable(boq, actor, siteOwnerId);
+        if (!BoqRules.CanWrite(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, siteOwnerId)))
         {
-            throw new ForbiddenException(ErrorCodes.Forbidden, "Changing client BOQs and variation orders needs the permission to manage pricing.");
+            throw new ForbiddenException(ErrorCodes.Forbidden, boq.Kind == BoqKind.Internal
+                ? "A submitted draft is changed by the site's pricing managers and owner: withdraw it to change it yourself."
+                : "Changing client BOQs and variation orders needs the permission to manage pricing.");
         }
     }
 
@@ -597,9 +681,59 @@ public sealed class BoqService(
 
     private async Task<BoqDetailResponse> DescribeAsync(Boq boq, UserAccess actor, CancellationToken cancellationToken)
     {
-        var caller = CallerOf(actor);
+        var caller = CallerOf(actor, boq.Project.OwnerId);
         return Detail(boq, await boqs.NamesAsync(UserIds([boq]), cancellationToken), caller.CanSeeMoney || caller.CanManagePricing);
     }
+
+    /// <summary>
+    /// The caller's own internal draft, tracked, with its site locked: submitting, withdrawing and keeping are its author's
+    /// alone. Someone else's draft doesn't exist for them.
+    /// </summary>
+    private async Task<(UserAccess Actor, Project Site, Boq Boq)> AuthorsDraftAsync(long boqId, CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var peek = await ReadableAsync(actor, boqId, cancellationToken);
+        if (peek.Kind != BoqKind.Internal || peek.AuthorId != actor.UserId)
+        {
+            throw new NotFoundException(BoqNotFound);
+        }
+
+        var site = await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
+        return (actor, site, await boqs.GetForUpdateAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound));
+    }
+
+    /// <summary>
+    /// Someone else changed a submitted draft: its author hears, once per draft until they open it, with a link to see what
+    /// changed. Company-level, so an author who doesn't see Execution still gets it.
+    /// </summary>
+    private async Task TellAuthorOfEditAsync(Boq boq, Project site, UserAccess actor, CancellationToken cancellationToken)
+    {
+        if (boq.Kind != BoqKind.Internal || boq.SubmittedAt is null || boq.AuthorId == actor.UserId)
+        {
+            return;
+        }
+
+        await notifications.SendDigestAsync(
+            new NotificationDraft(NotificationKinds.BoqDraftEdited, actor.UserId, null, null, "boq", boq.Id,
+                new { editorName = currentUser.FullName, title = boq.Title, projectId = site.Id, projectTitle = site.Title }),
+            $"boq-edited:{boq.Id}",
+            [boq.AuthorId],
+            restartOnceRead: true,
+            cancellationToken);
+    }
+
+    /// <summary>The lines as the rules compare them.</summary>
+    private static List<BoqRules.SubmittedLine> SubmittedLinesOf(Boq boq)
+        => boq.Lines.OrderBy(l => l.Position)
+            .Select(l => new BoqRules.SubmittedLine(l.Id, l.Nature, l.Code, l.Description, l.Quantity, l.WasteRate, l.Unit, l.Rate))
+            .ToList();
+
+    private static IReadOnlyList<BoqRules.LineChange>? ChangesOf(Boq boq)
+        => boq.SubmittedAt is null
+            ? null
+            : BoqRules.Changes(
+                boq.SubmittedLines is { } json ? JsonSerializer.Deserialize<List<BoqRules.SubmittedLine>>(json) : null,
+                SubmittedLinesOf(boq));
 
     /// <summary>A client BOQ or VO's PDF: only for callers who read those, so with every figure.</summary>
     private async Task<BoqDocument> DocumentAsync(Boq boq, CancellationToken cancellationToken)
@@ -650,7 +784,9 @@ public sealed class BoqService(
         boq.AgreedAt,
         PersonOf(boq.AgreedById, names),
         LastDeliveryOf(boq),
-        boq.PermitsUsd);
+        boq.PermitsUsd,
+        boq.SubmittedAt,
+        ChangesOf(boq) is { Count: > 0 });
 
     private static BoqDetailResponse Detail(Boq boq, IReadOnlyDictionary<long, string> names, bool seesPrice)
     {
@@ -695,7 +831,10 @@ public sealed class BoqService(
             seesPrice ? price.Gross : null,
             boq.PermitsUsd,
             boq.Deliveries.OrderByDescending(d => d.SentAt).ThenByDescending(d => d.Id)
-                .Select(d => new BoqDeliveryResponse(d.Id, d.Channel, d.Recipient, d.Note, d.TotalUsd, d.SentAt, PersonOf(d.SentById, names))).ToList());
+                .Select(d => new BoqDeliveryResponse(d.Id, d.Channel, d.Recipient, d.Note, d.TotalUsd, d.SentAt, PersonOf(d.SentById, names))).ToList(),
+            boq.SubmittedAt,
+            ChangesOf(boq)?.Select(c => new BoqLineChangeResponse(c.Kind, c.LineId, c.Description,
+                c.Fields.Select(f => new BoqFieldChangeResponse(f.Field, f.Before, f.After)).ToList())).ToList());
     }
 
     private static void Throw(RuleDenial? denial)

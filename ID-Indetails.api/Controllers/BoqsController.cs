@@ -19,9 +19,12 @@ namespace ID_Indetails.api.Controllers;
 [Route("api")]
 public sealed class BoqsController(IBoqService boqs, IDocumentService documents) : ControllerBase
 {
-    /// <summary>The project's BOQs: the caller's internal drafts, the client BOQs and VOs, and the price the agreed ones make.</summary>
+    /// <summary>
+    /// The project's BOQs: the caller's own internal drafts and the submitted ones they may see, the client BOQs and VOs,
+    /// and the price the agreed ones make. The site's owner reaches it for its submitted drafts (the service decides).
+    /// </summary>
     [HttpGet("projects/{projectId:long}/boqs")]
-    [HasAnyPermission(PermissionCodes.BoqCreate, PermissionCodes.FinancialView, PermissionCodes.ProjectPricingManage)]
+    [HasAnyPermission(PermissionCodes.BoqCreate, PermissionCodes.FinancialView, PermissionCodes.ProjectPricingManage, PermissionCodes.ProjectView)]
     public Task<BoqListResponse> List(long projectId, CancellationToken cancellationToken)
         => boqs.ListAsync(projectId, cancellationToken);
 
@@ -32,13 +35,13 @@ public sealed class BoqsController(IBoqService boqs, IDocumentService documents)
         => StatusCode(StatusCodes.Status201Created, await boqs.CreateAsync(projectId, request, cancellationToken));
 
     [HttpGet("boqs/{boqId:long}")]
-    [HasAnyPermission(PermissionCodes.BoqCreate, PermissionCodes.FinancialView, PermissionCodes.ProjectPricingManage)]
+    [HasAnyPermission(PermissionCodes.BoqCreate, PermissionCodes.FinancialView, PermissionCodes.ProjectPricingManage, PermissionCodes.ProjectView)]
     public Task<BoqDetailResponse> Get(long boqId, CancellationToken cancellationToken)
         => boqs.GetAsync(boqId, cancellationToken);
 
     /// <summary>Saves the whole document. Drafts stay editable after being sent; an agreed BOQ is locked.</summary>
     [HttpPut("boqs/{boqId:long}")]
-    [HasAnyPermission(PermissionCodes.BoqCreate, PermissionCodes.ProjectPricingManage)]
+    [HasAnyPermission(PermissionCodes.BoqCreate, PermissionCodes.ProjectPricingManage, PermissionCodes.ProjectView)]
     public Task<BoqDetailResponse> Save(long boqId, SaveBoqRequest request, CancellationToken cancellationToken)
         => boqs.SaveAsync(boqId, request, cancellationToken);
 
@@ -53,6 +56,21 @@ public sealed class BoqsController(IBoqService boqs, IDocumentService documents)
     [HasAnyPermission(PermissionCodes.BoqCreate, PermissionCodes.ProjectPricingManage)]
     public async Task<ActionResult<BoqDetailResponse>> Duplicate(long boqId, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await boqs.DuplicateAsync(boqId, cancellationToken));
+
+    /// <summary>The author submits their internal draft to the site's pricing managers and owner.</summary>
+    [HttpPost("boqs/{boqId:long}/submit")]
+    [HasPermission(PermissionCodes.BoqCreate)]
+    public Task<BoqDetailResponse> Submit(long boqId, CancellationToken cancellationToken) => boqs.SubmitAsync(boqId, cancellationToken);
+
+    /// <summary>The author takes their draft back from the site, private again.</summary>
+    [HttpPost("boqs/{boqId:long}/withdraw-submission")]
+    [HasPermission(PermissionCodes.BoqCreate)]
+    public Task<BoqDetailResponse> WithdrawSubmission(long boqId, CancellationToken cancellationToken) => boqs.WithdrawSubmissionAsync(boqId, cancellationToken);
+
+    /// <summary>The author keeps what others changed in their submitted draft.</summary>
+    [HttpPost("boqs/{boqId:long}/keep")]
+    [HasPermission(PermissionCodes.BoqCreate)]
+    public Task<BoqDetailResponse> Keep(long boqId, CancellationToken cancellationToken) => boqs.KeepAsync(boqId, cancellationToken);
 
     /// <summary>Drafts only.</summary>
     [HttpDelete("boqs/{boqId:long}")]

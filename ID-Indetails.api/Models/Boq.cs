@@ -52,6 +52,18 @@ public class Boq
 
     public DateTime? DeletedAt { get; set; }
 
+    /// <summary>
+    /// An internal draft its author submitted to the site: then its site's pricing managers and owner see and edit it, and
+    /// its author only reads it. Null while it is private to its author, and on every other kind.
+    /// </summary>
+    public DateTime? SubmittedAt { get; set; }
+
+    /// <summary>
+    /// The lines as submitted, or as last kept by the author, as JSON (<c>BoqRules.SubmittedLine</c>): what others' edits
+    /// are compared against. Null when no copy was kept (drafts submitted before copies were kept).
+    /// </summary>
+    public string? SubmittedLines { get; set; }
+
     public Project Project { get; set; } = null!;
 
     public ICollection<BoqLine> Lines { get; set; } = new List<BoqLine>();

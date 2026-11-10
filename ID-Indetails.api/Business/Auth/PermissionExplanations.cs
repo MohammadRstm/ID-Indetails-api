@@ -41,7 +41,7 @@ public static class PermissionExplanations
         [PermissionCodes.LabourReportManage] = "Edit anyone's labour reports and change the labour defaults.",
         [PermissionCodes.SiteLogCreate] = "Write the daily logs of the sites you oversee: what arrived, what was missing, what held the work up.",
         [PermissionCodes.SiteLogViewAll] = "Read every site's daily logs, by person, site and day.",
-        [PermissionCodes.BoqCreate] = "Write your own internal draft BOQs of a site: private working papers the client BOQ is built from. Nobody else sees them except whoever manages pricing, and they are never sent to the client.",
+        [PermissionCodes.BoqCreate] = "Write your own internal draft BOQs for Execution's active client sites, from either business, on the BOQs page. A draft is yours alone until you submit it; then the site's pricing managers and owner see and edit it, and you're told when they change it. It is never sent to the client.",
 
         // Clients
         [PermissionCodes.ClientView] = "See the business's clients and their contact details.",

@@ -159,6 +159,11 @@ public static class ActivityEventKinds
     // number in the payload). Internal drafts are private working papers and raise none.
     public const string BoqCreated = "boq_created";
 
+    /// <summary>An internal draft's author submitted it to the site, took it back, or kept what others changed in it.</summary>
+    public const string BoqSubmitted = "boq_submitted";
+    public const string BoqSubmissionWithdrawn = "boq_submission_withdrawn";
+    public const string BoqChangesKept = "boq_changes_kept";
+
     /// <summary>The channel in the payload.</summary>
     public const string BoqSent = "boq_sent";
 

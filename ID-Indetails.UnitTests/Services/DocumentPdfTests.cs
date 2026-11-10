@@ -112,7 +112,7 @@ public class DocumentPdfTests
             9, kind, kind == BoqKind.Vo ? "VO-2026-002" : "BQ-2026-001", "Villa Mounir", new PersonRefResponse(1, "Nadia Khoury"), status, total, items.Count,
             kind == BoqKind.Vo ? "The client added a guest house" : null, new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 9, 2, 0, 0, 0, DateTimeKind.Utc),
             null, null, null, 4, adjustment, value, items, subtotal, total - subtotal, 0.10m, total * 0.10m, 0.11m, total * 0.11m, total * 1.21m + permitsUsd,
-            permitsUsd, []);
+            permitsUsd, [], null, null);
 
         return new BoqDocument(boq, "Site 12", "Beit Mery", "Haddad Holdings");
     }
