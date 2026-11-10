@@ -1,7 +1,9 @@
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Expenses;
+using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Expenses;
 using ID_Indetails.api.DTO.Response.Expenses;
@@ -11,6 +13,7 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Expenses.Abstraction;
+using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
@@ -25,6 +28,7 @@ public sealed class ExpenseService(
     IPermissionService permissions,
     IProjectRepository projects,
     IExpenseRepository expenses,
+    IProjectFinanceRepository financeSources,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IProfitFloor floor,
@@ -67,6 +71,7 @@ public sealed class ExpenseService(
             CreatedAt = clock.UtcNow,
             CreatedById = actor.UserId,
         };
+        await CheckConvertibleAsync(expense, cancellationToken);
         expenses.Add(expense);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -90,6 +95,21 @@ public sealed class ExpenseService(
         activity.Add(ExpenseEvent(project, expense, ActivityEventKinds.ExpenseRemoved, actor.UserId));
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>An expense in another currency needs a rate in force on its day, as a site expense does (exchange_rate_missing).</summary>
+    private async Task CheckConvertibleAsync(ProjectExpense expense, CancellationToken cancellationToken)
+    {
+        if (expense.Currency == PaymentRules.BaseCurrency)
+        {
+            return;
+        }
+
+        var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
+        if (ExchangeRateRules.CheckConvertible([(expense.Currency, expense.SpentOn)], rates) is { } denial)
+        {
+            throw denial.ToException();
+        }
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)

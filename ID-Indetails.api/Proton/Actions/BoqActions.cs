@@ -731,7 +731,7 @@ internal static class BoqText
 
     public static void RequireWrite(BoqDetailResponse boq, UserAccess access)
     {
-        if (!BoqRules.CanWrite(boq.Kind, boq.Author.Id, CallerOf(access)))
+        if (!BoqRules.CanWrite(boq.Kind, boq.Author.Id, boq.SubmittedAt is not null, CallerOf(access)))
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Changing client BOQs and variation orders needs the permission to manage pricing.");
         }

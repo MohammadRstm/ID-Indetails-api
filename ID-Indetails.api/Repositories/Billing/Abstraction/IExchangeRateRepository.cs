@@ -12,5 +12,8 @@ public interface IExchangeRateRepository
 
     Task<DateOnly?> GetLatestDateAsync(string currency, CancellationToken cancellationToken = default);
 
+    /// <summary>Which of these rates the daily feed added: their <c>exchange_rate_set</c> event has no actor.</summary>
+    Task<IReadOnlySet<long>> AddedByFeedAsync(IReadOnlyCollection<long> rateIds, CancellationToken cancellationToken = default);
+
     void Add(ExchangeRate rate);
 }

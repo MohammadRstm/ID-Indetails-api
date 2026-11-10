@@ -8,6 +8,8 @@ namespace ID_Indetails.api.DTO.Response.Boqs;
 /// <param name="Reason">A variation order's reason; null on any other kind.</param>
 /// <param name="AgreedBy">Null until agreed.</param>
 /// <param name="PermitsUsd">Its permit lines' total, charged with no supervision or TVA; the permits it adds once agreed.</param>
+/// <param name="SubmittedAt">When its author submitted an internal draft to the site; null while it is private, and on every other kind.</param>
+/// <param name="Changed">A submitted draft someone other than its author changed since it was submitted or last kept.</param>
 public sealed record BoqSummaryResponse(
     long Id,
     BoqKind Kind,
@@ -23,7 +25,12 @@ public sealed record BoqSummaryResponse(
     DateTime? AgreedAt,
     PersonRefResponse? AgreedBy,
     BoqLastDeliveryResponse? LastDelivery,
-    decimal PermitsUsd);
+    decimal PermitsUsd,
+    DateTime? SubmittedAt,
+    bool Changed);
+
+/// <summary>A site a BOQ author writes drafts for: just its name and where it is, and whether it still takes changes.</summary>
+public sealed record BoqSiteResponse(long Id, string Title, string? Location, ProjectStatus Status);
 
 public sealed record BoqLastDeliveryResponse(DeliveryChannel Channel, DateTime SentAt);
 
@@ -34,6 +41,8 @@ public sealed record BoqLastDeliveryResponse(DeliveryChannel Channel, DateTime S
 /// <param name="SupervisionRate">With the supervision, TVA and client total: only for callers who see money or manage the
 /// pricing. An internal draft's author may see neither, and the project's rates are pricing.</param>
 /// <param name="ClientTotalUsd">The work, its supervision and TVA, and the permits.</param>
+/// <param name="SubmittedAt">When its author submitted an internal draft; null while it is private.</param>
+/// <param name="Changes">A submitted draft's changes since it was submitted or last kept, line by line; null when it isn't submitted or no copy was kept.</param>
 public sealed record BoqDetailResponse(
     long Id,
     BoqKind Kind,
@@ -61,7 +70,17 @@ public sealed record BoqDetailResponse(
     decimal? TvaUsd,
     decimal? ClientTotalUsd,
     decimal PermitsUsd,
-    IReadOnlyList<BoqDeliveryResponse> Deliveries);
+    IReadOnlyList<BoqDeliveryResponse> Deliveries,
+    DateTime? SubmittedAt,
+    IReadOnlyList<BoqLineChangeResponse>? Changes);
+
+/// <param name="Kind">added, removed or changed.</param>
+/// <param name="LineId">The line it is now; null for a removed line.</param>
+/// <param name="Fields">For a changed line: each field that changed, before and after, as typed.</param>
+public sealed record BoqLineChangeResponse(string Kind, long? LineId, string Description, IReadOnlyList<BoqFieldChangeResponse> Fields);
+
+/// <param name="Field">code, description, quantity, wasteRate, unit, rate or nature.</param>
+public sealed record BoqFieldChangeResponse(string Field, string? Before, string? After);
 
 /// <param name="Quantity">The exact quantity, before waste. Internal: the client's PDF shows the final quantity.</param>
 /// <param name="WasteRate">A fraction. Internal.</param>

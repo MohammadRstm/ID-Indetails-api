@@ -13,6 +13,9 @@ public sealed record AgreedBoqs(bool ClientAgreed, decimal ClientTotal, IReadOnl
 
 public interface IBoqRepository
 {
+    /// <summary>Execution's active client sites, by title. Not tracked.</summary>
+    Task<IReadOnlyList<Project>> AuthorSitesAsync(CancellationToken cancellationToken = default);
+
     /// <summary>The project's live BOQs, newest first, not tracked, with their deliveries.</summary>
     Task<IReadOnlyList<BoqListRow>> ListAsync(long projectId, CancellationToken cancellationToken = default);
 

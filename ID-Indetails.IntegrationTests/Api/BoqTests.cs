@@ -95,6 +95,11 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
             d => d.TvaUsd.ShouldBeNull(),
             d => d.ClientTotalUsd.ShouldBeNull());
         (await Boqs.GetAsync(author.AccessToken, draft.Id)).ClientTotalUsd.ShouldBeNull();
+
+        // private until its author submits it: not even whoever manages pricing sees it
+        (await ListAsync(pricing, site.Id)).Internal.ShouldBeEmpty();
+        await (await Client.GetAsync($"/api/boqs/{draft.Id}", pricing.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        (await OkAsync<BoqDetailResponse>(Client.PostEmptyAsync($"/api/boqs/{draft.Id}/submit", author.AccessToken))).SubmittedAt.ShouldNotBeNull();
         (await Boqs.GetAsync(pricing.AccessToken, draft.Id)).ClientTotalUsd.ShouldNotBeNull();
 
         (await ListAsync(author, site.Id)).Internal.Select(b => b.Id).ShouldBe([draft.Id]);
@@ -116,20 +121,22 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync($"/api/projects/{site.Id}/boqs", new { kind = "internal", fromBoqId = draft.Id }, otherDrafter.AccessToken))
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
-        // whoever manages pricing reads, copies from and edits any of them; it stays its author's
+        // submitted, whoever manages pricing reads, copies from and edits it; it stays its author's
         (await Boqs.GetAsync(pricing.AccessToken, draft.Id)).Lines.ShouldHaveSingleItem().Description.ShouldBe("Excavation");
         var edited = await Boqs.SaveAsync(pricing.AccessToken, draft.Id, [Line("Excavation", 120, 8)], "Corrected");
         edited.ShouldSatisfyAllConditions(d => d.Title.ShouldBe("Corrected"), d => d.Author.Id.ShouldBe(author.User.Id), d => d.TotalUsd.ShouldBe(960m));
 
-        // a private working paper: no events, no notifications, never sent, agreed or withdrawn
-        (await CountAsync("SELECT COUNT(*) FROM activity_events WHERE subject_type = 'boq' AND subject_id = @id", ("@id", draft.Id))).ShouldBe(0);
+        // a working paper: only its submission is recorded; never sent, agreed or withdrawn
+        (await CountAsync("SELECT COUNT(*) FROM activity_events WHERE subject_type = 'boq' AND subject_id = @id AND kind <> 'boq_submitted'", ("@id", draft.Id))).ShouldBe(0);
         await (await Client.PostEmptyAsync($"/api/boqs/{draft.Id}/agree", pricing.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.BoqInternal);
         await (await Client.PostJsonAsync($"/api/boqs/{draft.Id}/withdraw-agreement", new { reason = "No" }, pricing.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.BoqInternal);
         await (await Client.PostJsonAsync($"/api/boqs/{draft.Id}/deliveries", new { channel = "download" }, pricing.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.BoqInternal);
         await (await Client.PostJsonAsync($"/api/boqs/{draft.Id}/email", new { to = "client@test.local" }, pricing.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.BoqInternal);
         await (await Client.GetAsync($"/api/boqs/{draft.Id}/pdf", pricing.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.BoqInternal);
 
-        // the author deletes their own; it is gone for everyone
+        // the author deletes their own once it is theirs alone again; it is gone for everyone
+        await (await Client.DeleteAsync($"/api/boqs/{draft.Id}", author.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await OkAsync<BoqDetailResponse>(Client.PostEmptyAsync($"/api/boqs/{draft.Id}/withdraw-submission", author.AccessToken));
         ((int)(await Client.DeleteAsync($"/api/boqs/{draft.Id}", author.AccessToken)).StatusCode).ShouldBe(204);
         await (await Client.GetAsync($"/api/boqs/{draft.Id}", superAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
         (await ListAsync(superAdmin, site.Id)).Internal.ShouldBeEmpty();
@@ -195,7 +202,9 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // someone writing drafts can't make a client BOQ even by copying: the pricing manager can write them all
         (await Boqs.CreateAsync(pricing.AccessToken, site.Id, "client", fromBoqId: client.Id)).Lines.ShouldHaveSingleItem();
-        (await Boqs.CreateAsync(superAdmin.AccessToken, site.Id, "client", fromBoqId: own.Id)).Lines.ShouldBeEmpty();
+        // someone's private draft isn't there to start from, even for a super admin
+        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/boqs", new { kind = "client", fromBoqId = own.Id }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
         // the domain is invisible to another one: its money admin finds neither the project nor its BOQs
         await (await Client.GetAsync($"/api/projects/{site.Id}/boqs", designMoney.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
@@ -843,6 +852,7 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
         // a client BOQ starts from an internal draft, and the drafter's own copy is theirs
         var draft = await Boqs.CreateAsync(drafter.AccessToken, site.Id, "internal");
         await Boqs.SaveAsync(drafter.AccessToken, draft.Id, [Line("Excavation", 100, 8m)], "Estimate");
+        await OkAsync<BoqDetailResponse>(Client.PostEmptyAsync($"/api/boqs/{draft.Id}/submit", drafter.AccessToken));
         var fromDraft = await Boqs.CreateAsync(superAdmin.AccessToken, site.Id, "client", fromBoqId: draft.Id);
         (fromDraft.Lines.Single().Description, fromDraft.TotalUsd, fromDraft.Author.Id).ShouldBe(("Excavation", 800m, superAdmin.User.Id));
         var draftCopy = await OkAsync<BoqDetailResponse>(Client.PostEmptyAsync($"/api/boqs/{draft.Id}/duplicate", drafter.AccessToken));

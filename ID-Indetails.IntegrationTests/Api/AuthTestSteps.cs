@@ -98,8 +98,10 @@ public sealed class AuthTestSteps(ApiFactory api)
     public async Task<(string Email, string Password, AuthResponse Auth)> MoneyAdminAsync(AuthResponse superAdmin, string domain)
     {
         var admin = await InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, domain);
+        // writing BOQ drafts belongs to no domain, but it is Execution's work: a Design money admin isn't given it
         var codes = PermissionCatalog.Definitions
             .Where(d => MoneyPermissions.Contains(d.Code) && (d.DomainCode is null || d.DomainCode == domain))
+            .Where(d => d.Code != PermissionCodes.BoqCreate || domain == DomainCodes.Execution)
             .Select(d => d.Code);
         var granted = await Client.PutJsonAsync($"/api/users/{admin.Auth.User.Id}/permissions",
             new { changes = codes.Select(code => new { code, action = "grant", reason = "Handles the money" }) }, superAdmin.AccessToken);

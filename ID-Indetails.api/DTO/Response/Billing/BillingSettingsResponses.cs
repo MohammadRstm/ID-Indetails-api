@@ -17,4 +17,5 @@ public sealed record BillingSettingsResponse(
     DateTime? UpdatedAt);
 
 /// <summary>How many units of <see cref="Currency"/> one US dollar buys, from <see cref="EffectiveFrom"/>.</summary>
-public sealed record ExchangeRateResponse(long Id, string Currency, decimal RatePerUsd, DateOnly EffectiveFrom, DateTime CreatedAt);
+/// <param name="Automatic">Added by the daily feed (ExchangeRate-API), not by a person.</param>
+public sealed record ExchangeRateResponse(long Id, string Currency, decimal RatePerUsd, DateOnly EffectiveFrom, DateTime CreatedAt, bool Automatic);

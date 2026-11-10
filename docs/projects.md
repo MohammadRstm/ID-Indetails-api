@@ -207,6 +207,7 @@ These are **Design** projects' expenses. An Execution site records its costs as 
 
 - Only while the project is open and its revenue isn't locked (`422 project_closed`). Expenses can't be edited: remove and add again.
 - `amount` is more than zero with at most 2 decimals. `currency` is USD or LBP. `spentOn` defaults to today.
+- An expense in LBP needs an exchange rate in force on its `spentOn` (`422 exchange_rate_missing`), as a site expense does: without one the project's money couldn't convert it, so it would never reach cost, profit or the profit floor ([billing.md](billing.md#exchange-rates)). Expenses recorded before this rule with no rate stay listed as unconverted.
 - `category` is one of `assets`, `services`, `contractor`, `software`, `travel`, `hardware` or `other` (the default).
 - **Totals are per currency** and are never converted or added across currencies. The project's `money.expenseTotals` shows the same totals.
 - Events: `expense_added` and `expense_removed`, with the amount in the `amount` column and the label, category and currency in the payload.

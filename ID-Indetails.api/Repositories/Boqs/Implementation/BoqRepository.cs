@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
@@ -27,6 +28,13 @@ public sealed class BoqRepository(IdIndetailsDbContext db) : IBoqRepository
 
         return boqs.Select(b => new BoqListRow(b, counts.GetValueOrDefault(b.Id))).ToList();
     }
+
+    public async Task<IReadOnlyList<Project>> AuthorSitesAsync(CancellationToken cancellationToken = default)
+        => await db.Projects
+            .AsNoTracking()
+            .Where(p => p.DomainCode == DomainCodes.Execution && p.BillingType == BillingType.Client && p.Status == ProjectStatus.Active)
+            .OrderBy(p => p.Title)
+            .ToListAsync(cancellationToken);
 
     public Task<Boq?> GetAsync(long id, CancellationToken cancellationToken = default)
         => db.Boqs

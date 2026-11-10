@@ -177,6 +177,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddOptions<NotificationSchedulerOptions>().BindConfiguration(NotificationSchedulerOptions.SectionName)
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        services.AddOptions<ExchangeRateFeedOptions>().BindConfiguration(ExchangeRateFeedOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         services.AddOptions<PushOptions>().BindConfiguration(PushOptions.SectionName)
             .ValidateDataAnnotations()
             .Validate(
@@ -330,6 +333,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IRequirementService, RequirementService>();
         services.AddScoped<IExpenseService, ExpenseService>();
         services.AddScoped<IBillingSettingsService, BillingSettingsService>();
+        services.AddHttpClient<IExchangeRateFeed, OpenExchangeRateFeed>((provider, client) =>
+            client.Timeout = TimeSpan.FromSeconds(provider.GetRequiredService<IOptions<ExchangeRateFeedOptions>>().Value.TimeoutSeconds));
+        services.AddScoped<IExchangeRateFeedService, ExchangeRateFeedService>();
+        services.AddHostedService<ExchangeRateFeedJob>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInvoiceScheduleService, InvoiceScheduleService>();
         services.AddScoped<IInvoiceReminderService, InvoiceReminderService>();

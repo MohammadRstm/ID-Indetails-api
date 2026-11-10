@@ -189,6 +189,15 @@ public static class ErrorCodes
     /// <summary>422. An internal draft is never sent, agreed or withdrawn.</summary>
     public const string BoqInternal = "boq_internal";
 
+    /// <summary>422. Only an internal draft is submitted to its site.</summary>
+    public const string BoqNotInternal = "boq_not_internal";
+
+    /// <summary>422. The internal draft is already submitted.</summary>
+    public const string BoqAlreadySubmitted = "boq_already_submitted";
+
+    /// <summary>422. The internal draft isn't submitted, so there is nothing to withdraw or keep.</summary>
+    public const string BoqNotSubmitted = "boq_not_submitted";
+
     /// <summary>422. A project that isn't archived, or that holds money that moved or hours logged, can't be deleted.</summary>
     public const string ProjectNotDeletable = "project_not_deletable";
 
