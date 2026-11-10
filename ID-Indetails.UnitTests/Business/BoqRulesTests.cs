@@ -274,24 +274,84 @@ public class BoqRulesTests
     }
 
     [Fact]
-    public void An_author_reads_and_writes_their_own_internal_draft_and_pricing_managers_every_one()
+    public void A_private_draft_is_its_authors_alone_and_a_submitted_one_is_the_pricing_managers_and_site_owners()
     {
         const long author = 5;
         var drafter = Caller(id: author, draft: true);
         var otherDrafter = Caller(id: 6, draft: true);
         var pricing = Caller(id: 7, pricing: true);
         var viewer = Caller(id: 8, money: true);
+        var owner = new BoqRules.Caller(9, false, false, false, IsSiteOwner: true);
         var lostPermission = Caller(id: author);
 
-        BoqRules.CanRead(BoqKind.Internal, author, drafter).ShouldBeTrue();
-        BoqRules.CanWrite(BoqKind.Internal, author, drafter).ShouldBeTrue();
-        BoqRules.CanRead(BoqKind.Internal, author, otherDrafter).ShouldBeFalse();
-        BoqRules.CanWrite(BoqKind.Internal, author, otherDrafter).ShouldBeFalse();
-        BoqRules.CanRead(BoqKind.Internal, author, pricing).ShouldBeTrue();
-        BoqRules.CanWrite(BoqKind.Internal, author, pricing).ShouldBeTrue();
-        BoqRules.CanRead(BoqKind.Internal, author, viewer).ShouldBeFalse();
+        // private: the author's alone
+        BoqRules.CanRead(BoqKind.Internal, author, false, drafter).ShouldBeTrue();
+        BoqRules.CanWrite(BoqKind.Internal, author, false, drafter).ShouldBeTrue();
+        BoqRules.CanDelete(BoqKind.Internal, author, false, drafter).ShouldBeTrue();
+        foreach (var other in new[] { otherDrafter, pricing, viewer, owner })
+        {
+            BoqRules.CanRead(BoqKind.Internal, author, false, other).ShouldBeFalse();
+            BoqRules.CanWrite(BoqKind.Internal, author, false, other).ShouldBeFalse();
+        }
+
+        // submitted: the pricing managers and the site owner read and write it; its author only reads it
+        BoqRules.CanRead(BoqKind.Internal, author, true, drafter).ShouldBeTrue();
+        BoqRules.CanWrite(BoqKind.Internal, author, true, drafter).ShouldBeFalse();
+        BoqRules.CanDelete(BoqKind.Internal, author, true, drafter).ShouldBeFalse();
+        foreach (var editor in new[] { pricing, owner })
+        {
+            BoqRules.CanRead(BoqKind.Internal, author, true, editor).ShouldBeTrue();
+            BoqRules.CanWrite(BoqKind.Internal, author, true, editor).ShouldBeTrue();
+            BoqRules.CanDelete(BoqKind.Internal, author, true, editor).ShouldBeFalse();
+        }
+
+        BoqRules.CanRead(BoqKind.Internal, author, true, otherDrafter).ShouldBeFalse();
+        BoqRules.CanRead(BoqKind.Internal, author, true, viewer).ShouldBeFalse();
         // an author without the permission any more reads nothing of it
-        BoqRules.CanRead(BoqKind.Internal, author, lostPermission).ShouldBeFalse();
+        BoqRules.CanRead(BoqKind.Internal, author, false, lostPermission).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Authors_reach_only_Executions_active_client_sites()
+    {
+        BoqRules.IsAuthorSite(DomainCodes.Execution, BillingType.Client, ProjectStatus.Active).ShouldBeTrue();
+        BoqRules.IsAuthorSite(DomainCodes.Execution, BillingType.Client, ProjectStatus.Hold).ShouldBeFalse();
+        BoqRules.IsAuthorSite(DomainCodes.Execution, BillingType.Internal, ProjectStatus.Active).ShouldBeFalse();
+        BoqRules.IsAuthorSite(DomainCodes.Design, BillingType.Client, ProjectStatus.Active).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Only_a_private_internal_draft_with_lines_is_submitted_and_only_a_submitted_one_withdrawn_or_kept()
+    {
+        BoqRules.CheckSubmittable(BoqKind.Internal, false, 3).ShouldBeNull();
+        BoqRules.CheckSubmittable(BoqKind.Internal, true, 3)!.Code.ShouldBe(ErrorCodes.BoqAlreadySubmitted);
+        BoqRules.CheckSubmittable(BoqKind.Internal, false, 0)!.Code.ShouldBe(ErrorCodes.BoqEmpty);
+        BoqRules.CheckSubmittable(BoqKind.Client, false, 3)!.Code.ShouldBe(ErrorCodes.BoqNotInternal);
+        BoqRules.CheckSubmitted(BoqKind.Internal, true).ShouldBeNull();
+        BoqRules.CheckSubmitted(BoqKind.Internal, false)!.Code.ShouldBe(ErrorCodes.BoqNotSubmitted);
+    }
+
+    [Fact]
+    public void Changes_since_submitting_are_lines_added_removed_or_changed_field_by_field()
+    {
+        BoqRules.SubmittedLine Line(long id, string desc, decimal qty, decimal rate, decimal waste = 0)
+            => new(id, BoqLineNature.Work, "1." + id, desc, qty, waste, "m3", rate);
+        IReadOnlyList<BoqRules.SubmittedLine> submitted = [Line(1, "Concrete", 100, 76), Line(2, "Steel", 9000, 0.69m), Line(3, "Formwork", 300, 16)];
+        IReadOnlyList<BoqRules.SubmittedLine> now = [Line(1, "Concrete", 100, 80), Line(3, "Formwork", 300, 16), Line(4, "Waterproof", 400, 8)];
+
+        var changes = BoqRules.Changes(submitted, now)!;
+        changes.Count.ShouldBe(3);
+        var concrete = changes.Single(c => c.Kind == "changed");
+        concrete.LineId.ShouldBe(1);
+        concrete.Fields.ShouldHaveSingleItem().ShouldBe(new BoqRules.FieldChange("rate", "76", "80"));
+        changes.Single(c => c.Kind == "added").LineId.ShouldBe(4);
+        var removed = changes.Single(c => c.Kind == "removed");
+        removed.LineId.ShouldBeNull();
+        removed.Description.ShouldBe("Steel");
+
+        BoqRules.Changes(now, now)!.ShouldBeEmpty();
+        // no copy kept: nothing to compare against
+        BoqRules.Changes(null, now).ShouldBeNull();
     }
 
     [Fact]
@@ -299,12 +359,12 @@ public class BoqRulesTests
     {
         foreach (var kind in new[] { BoqKind.Client, BoqKind.Vo })
         {
-            BoqRules.CanRead(kind, 1, Caller(money: true)).ShouldBeTrue();
-            BoqRules.CanRead(kind, 1, Caller(pricing: true)).ShouldBeTrue();
-            BoqRules.CanRead(kind, 1, Caller(draft: true)).ShouldBeFalse();
-            BoqRules.CanWrite(kind, 1, Caller(money: true)).ShouldBeFalse();
-            BoqRules.CanWrite(kind, 1, Caller(draft: true, money: true)).ShouldBeFalse();
-            BoqRules.CanWrite(kind, 1, Caller(pricing: true)).ShouldBeTrue();
+            BoqRules.CanRead(kind, 1, false, Caller(money: true)).ShouldBeTrue();
+            BoqRules.CanRead(kind, 1, false, Caller(pricing: true)).ShouldBeTrue();
+            BoqRules.CanRead(kind, 1, false, Caller(draft: true)).ShouldBeFalse();
+            BoqRules.CanWrite(kind, 1, false, Caller(money: true)).ShouldBeFalse();
+            BoqRules.CanWrite(kind, 1, false, Caller(draft: true, money: true)).ShouldBeFalse();
+            BoqRules.CanWrite(kind, 1, false, Caller(pricing: true)).ShouldBeTrue();
             BoqRules.CanCreate(kind, Caller(draft: true, money: true)).ShouldBeFalse();
             BoqRules.CanCreate(kind, Caller(pricing: true)).ShouldBeTrue();
         }

@@ -43,7 +43,18 @@ public static class BoqRules
     /// <param name="CanDraft"><c>boq:create</c>: writes internal drafts.</param>
     /// <param name="CanSeeMoney"><c>financial:view</c>: reads client BOQs and VOs.</param>
     /// <param name="CanManagePricing"><c>project:pricing_manage</c>: writes client BOQs and VOs, and reads every internal draft.</param>
-    public sealed record Caller(long UserId, bool CanDraft, bool CanSeeMoney, bool CanManagePricing);
+    /// <param name="IsSiteOwner">The owner of the site the BOQ belongs to: they see and edit its submitted drafts.</param>
+    public sealed record Caller(long UserId, bool CanDraft, bool CanSeeMoney, bool CanManagePricing, bool IsSiteOwner = false);
+
+    /// <summary>A line as an internal draft was submitted, or last kept by its author.</summary>
+    public sealed record SubmittedLine(long Id, BoqLineNature Nature, string? Code, string Description, decimal Quantity, decimal WasteRate, string? Unit, decimal Rate);
+
+    /// <summary>What changed in one line since its draft was submitted: a value before and after, as typed.</summary>
+    public sealed record FieldChange(string Field, string? Before, string? After);
+
+    /// <param name="Kind">added, removed or changed.</param>
+    /// <param name="LineId">Null for a removed line, which no longer exists.</param>
+    public sealed record LineChange(string Kind, long? LineId, string Description, IReadOnlyList<FieldChange> Fields);
 
     /// <param name="Quantity">The exact quantity, before waste.</param>
     /// <param name="WasteRate">A fraction: 0.05 adds 5%.</param>
@@ -113,15 +124,99 @@ public static class BoqRules
     /// </summary>
     public static decimal WorkPrice(decimal agreedClientTotal, IEnumerable<decimal> agreedVoTotals) => agreedClientTotal + agreedVoTotals.Sum();
 
-    public static bool CanRead(BoqKind kind, long authorId, Caller caller)
+    /// <summary>
+    /// An internal draft is its author's alone until they submit it; submitted, the site's pricing managers and owner see
+    /// it too. Client BOQs and VOs are for whoever sees money or manages pricing.
+    /// </summary>
+    public static bool CanRead(BoqKind kind, long authorId, bool submitted, Caller caller)
         => kind == BoqKind.Internal
-            ? caller.CanManagePricing || (caller.CanDraft && authorId == caller.UserId)
+            ? (caller.CanDraft && authorId == caller.UserId) || (submitted && (caller.CanManagePricing || caller.IsSiteOwner))
             : caller.CanSeeMoney || caller.CanManagePricing;
 
-    public static bool CanWrite(BoqKind kind, long authorId, Caller caller)
+    /// <summary>A private draft is changed by its author; a submitted one by the site's pricing managers and owner, while its author only reads it.</summary>
+    public static bool CanWrite(BoqKind kind, long authorId, bool submitted, Caller caller)
         => kind == BoqKind.Internal
-            ? caller.CanManagePricing || (caller.CanDraft && authorId == caller.UserId)
+            ? submitted ? caller.CanManagePricing || caller.IsSiteOwner : caller.CanDraft && authorId == caller.UserId
             : caller.CanManagePricing;
+
+    /// <summary>Only its author deletes an internal draft, and only while it is private.</summary>
+    public static bool CanDelete(BoqKind kind, long authorId, bool submitted, Caller caller)
+        => kind == BoqKind.Internal ? !submitted && caller.CanDraft && authorId == caller.UserId : caller.CanManagePricing;
+
+    /// <summary>
+    /// The sites a BOQ author reaches without seeing Execution: its active client sites. They see nothing there but their
+    /// own drafts.
+    /// </summary>
+    public static bool IsAuthorSite(string domain, BillingType billingType, ProjectStatus status)
+        => domain == DomainCodes.Execution && billingType == BillingType.Client && status == ProjectStatus.Active;
+
+    public static RuleDenial? CheckSubmittable(BoqKind kind, bool submitted, int lineCount)
+    {
+        if (kind != BoqKind.Internal)
+        {
+            return RuleDenial.BusinessRule(ErrorCodes.BoqNotInternal, "Only an internal draft is submitted to its site.");
+        }
+
+        if (submitted)
+        {
+            return RuleDenial.BusinessRule(ErrorCodes.BoqAlreadySubmitted, "This draft is already submitted.");
+        }
+
+        return lineCount == 0 ? RuleDenial.BusinessRule(ErrorCodes.BoqEmpty, "Add at least one line before submitting it.") : null;
+    }
+
+    public static RuleDenial? CheckSubmitted(BoqKind kind, bool submitted)
+        => kind == BoqKind.Internal && submitted ? null : RuleDenial.BusinessRule(ErrorCodes.BoqNotSubmitted, "This draft isn't submitted.");
+
+    /// <summary>
+    /// What others changed in a submitted draft since it was submitted (or last kept): lines matched by id, added, removed,
+    /// or changed field by field. Empty when nothing changed; null when no copy was kept to compare against.
+    /// </summary>
+    public static IReadOnlyList<LineChange>? Changes(IReadOnlyList<SubmittedLine>? submitted, IReadOnlyList<SubmittedLine> current)
+    {
+        if (submitted is null)
+        {
+            return null;
+        }
+
+        var before = submitted.ToDictionary(l => l.Id);
+        var changes = new List<LineChange>();
+        foreach (var now in current)
+        {
+            if (!before.TryGetValue(now.Id, out var was))
+            {
+                changes.Add(new LineChange("added", now.Id, now.Description, []));
+                continue;
+            }
+
+            var fields = new List<FieldChange>();
+            void Compare(string field, string? a, string? b)
+            {
+                if (a != b)
+                {
+                    fields.Add(new FieldChange(field, a, b));
+                }
+            }
+
+            Compare("code", was.Code, now.Code);
+            Compare("description", was.Description, now.Description);
+            Compare("quantity", Text(was.Quantity), Text(now.Quantity));
+            Compare("wasteRate", Text(was.WasteRate), Text(now.WasteRate));
+            Compare("unit", was.Unit, now.Unit);
+            Compare("rate", Text(was.Rate), Text(now.Rate));
+            Compare("nature", was.Nature.ToString(), now.Nature.ToString());
+            if (fields.Count > 0)
+            {
+                changes.Add(new LineChange("changed", now.Id, now.Description, fields));
+            }
+        }
+
+        var still = current.Select(l => l.Id).ToHashSet();
+        changes.AddRange(submitted.Where(l => !still.Contains(l.Id)).Select(l => new LineChange("removed", null, l.Description, [])));
+        return changes;
+    }
+
+    private static string Text(decimal value) => value.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool CanCreate(BoqKind kind, Caller caller) => kind == BoqKind.Internal ? caller.CanDraft : caller.CanManagePricing;
 

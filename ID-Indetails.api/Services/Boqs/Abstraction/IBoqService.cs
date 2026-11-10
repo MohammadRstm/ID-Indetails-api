@@ -41,6 +41,21 @@ public interface IBoqService
     Task<BoqDetailResponse> RecordDeliveryAsync(long boqId, RecordBoqDeliveryRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>A client BOQ or VO for its PDF. An internal draft has none (<c>boq_internal</c>).</summary>
+    /// <summary>Execution's active client sites, for a BOQ author in either business: name and location only.</summary>
+    Task<IReadOnlyList<BoqSiteResponse>> SitesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>One of those sites; any other reads as not found.</summary>
+    Task<BoqSiteResponse> SiteAsync(long projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>The author submits their internal draft to the site: its pricing managers and owner then see and edit it.</summary>
+    Task<BoqDetailResponse> SubmitAsync(long boqId, CancellationToken cancellationToken = default);
+
+    /// <summary>The author takes their draft back from the site, private again, to change it.</summary>
+    Task<BoqDetailResponse> WithdrawSubmissionAsync(long boqId, CancellationToken cancellationToken = default);
+
+    /// <summary>The author keeps what others changed in their submitted draft: later changes are compared against it.</summary>
+    Task<BoqDetailResponse> KeepAsync(long boqId, CancellationToken cancellationToken = default);
+
     Task<BoqDocument> GetDocumentAsync(long boqId, CancellationToken cancellationToken = default);
 
     /// <summary>

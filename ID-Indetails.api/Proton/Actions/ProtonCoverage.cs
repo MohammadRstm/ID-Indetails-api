@@ -180,6 +180,10 @@ public static class ProtonCoverage
         Action("BoardLayouts.Save", "propose_arrange_board"),
         // a person's own board layout: a preference, not a record
         Action("BoardLayouts.Delete", "propose_arrange_board"),
+        // BOQ drafts: submitting, withdrawing and keeping are the author's, on the BOQs page
+        Open("Boqs.Submit", "submitting a BOQ draft is its author's, on the BOQs page; Proton doesn't do it yet"),
+        Open("Boqs.WithdrawSubmission", "withdrawing a submitted BOQ draft is its author's, on the BOQs page; Proton doesn't do it yet"),
+        Open("Boqs.Keep", "keeping others' changes to a BOQ draft is its author's, on the BOQs page; Proton doesn't do it yet"),
         Open("Projects.Delete", "it can't be undone and needs the project's name typed in the app: Proton opens the project"),
         Open("Files.Upload", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
 

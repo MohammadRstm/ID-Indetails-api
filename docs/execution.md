@@ -68,7 +68,7 @@ Rules (`Business/Labour/LabourRules.cs`):
 
 A site's price is built line by line in bills of quantities (BOQs), not typed in. There are three kinds (`kind`):
 
-- **`internal`**: an admin's private working draft. Never numbered, sent or agreed, and it raises no events or notifications.
+- **`internal`**: a working draft written by an engineer or admin who holds `boq:create`, in either business. Never numbered, sent or agreed. It is private to its author until they submit it to the site (see [Internal drafts](#internal-drafts-private-and-submitted)).
 - **`client`**: the BOQ the client is sent, as a PDF, as often as needed. It stays a draft until a super admin agrees it. One per project can be agreed (`422 boq_already_agreed`); the other client drafts stay drafts.
 - **`vo`**: a variation order, a later change of price. It needs the client BOQ agreed first (`422 boq_not_agreed_yet`, even for a VO made before a withdrawal) and has a required `reason`. It is the only kind that can lower the price: negative rates, or a lower total.
 
@@ -76,13 +76,18 @@ BOQs exist only on Execution client projects. A project the caller can't see rea
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `GET /api/projects/{id}/boqs` | `boq:create`, `financial:view` or `project:pricing_manage` | `{ internal, client, vos, price }`, newest first. `internal` holds the caller's own drafts (all of them for `project:pricing_manage`). `client`, `vos` and `price` are empty / `null` without `financial:view` or `project:pricing_manage` |
+| `GET /api/projects/{id}/boqs` | `boq:create`, `financial:view`, `project:pricing_manage` or `project:view` (the site's owner; the service decides) | `{ internal, client, vos, price }`, newest first. `internal` holds the caller's own drafts and the submitted drafts they may read (see below). Each summary has `submittedAt` and `changed`. `client`, `vos` and `price` are empty / `null` without `financial:view` or `project:pricing_manage` |
 | `POST /api/projects/{id}/boqs` | `boq:create` (internal) or `project:pricing_manage` (client, vo) | `{ kind, title?, reason?, fromBoqId? }`. `fromBoqId` starts it with all the lines of a BOQ the caller can read on the same project. Numbers a client BOQ or VO. `201`, the BOQ |
-| `GET /api/boqs/{boqId}` | as the list | The BOQ with its lines, totals and deliveries |
-| `PUT /api/boqs/{boqId}` | the author of an internal draft, or `project:pricing_manage` | Saves the whole document: `{ title, reason?, adjustmentType, adjustmentValue?, lines: [{ id?, code?, description, quantity, wasteRate, unit?, rate }], updatedAt? }`. Lines are replaced in the order given; a line with an `id` keeps it, one left out is removed. `updatedAt` is the BOQ's as the editor loaded it (the web editor always sends it): if someone saved since, it is `409 boq_changed` and nothing is saved, so an older copy can't undo their changes |
+| `GET /api/boqs/{boqId}` | as the list | The BOQ with its lines, totals and deliveries, and for an internal draft `submittedAt` and `changes` |
+| `PUT /api/boqs/{boqId}` | `boq:create`, `project:pricing_manage` or `project:view` (the site's owner); the service decides who may write which BOQ | Saves the whole document: `{ title, reason?, adjustmentType, adjustmentValue?, lines: [{ id?, code?, description, quantity, wasteRate, unit?, rate }], updatedAt? }`. Lines are replaced in the order given; a line with an `id` keeps it, one left out is removed. `updatedAt` is the BOQ's as the editor loaded it (the web editor always sends it): if someone saved since, it is `409 boq_changed` and nothing is saved, so an older copy can't undo their changes |
 | `POST /api/boqs/{boqId}/copy-lines` | as the save | `{ fromBoqId, lineIds? }` appends lines (all, or the ones named, in the source's order) of another BOQ of the project |
 | `POST /api/boqs/{boqId}/duplicate` | `boq:create` (internal) or `project:pricing_manage` | A new draft of the same kind with the title plus " (copy)", the reason, the adjustment and the lines, and a new number. `201` |
-| `DELETE /api/boqs/{boqId}` | as the save | Drafts only (`204`). Soft delete: what was sent stays on record |
+| `DELETE /api/boqs/{boqId}` | as the save | Drafts only (`204`). Soft delete: what was sent stays on record. An internal draft is deleted only by its author, while it is private |
+| `POST /api/boqs/{boqId}/submit` | `boq:create` (its author) | No body. Submits the author's private internal draft to the site. Returns the BOQ |
+| `POST /api/boqs/{boqId}/withdraw-submission` | `boq:create` (its author) | No body. Takes a submitted draft back, private again. Returns the BOQ |
+| `POST /api/boqs/{boqId}/keep` | `boq:create` (its author) | No body. Accepts what others changed in a submitted draft. Returns the BOQ |
+| `GET /api/boq-sites` | `boq:create` | The sites an author writes for: Execution's active client sites, by title, as `{ id, title, location, status }` |
+| `GET /api/boq-sites/{id}` | `boq:create` | One of those sites. Any other project reads as `404` |
 | `POST /api/boqs/{boqId}/agree` | `project:pricing_manage` | No body. Locks the BOQ and sets the work price |
 | `POST /api/boqs/{boqId}/withdraw-agreement` | `project:pricing_manage` | `{ reason }`. Returns it to draft and takes it out of the work price |
 | `GET /api/boqs/{boqId}/pdf` | `financial:view` or `project:pricing_manage` | A client BOQ or VO as a PDF (`bq-2026-001.pdf`, `vo-2026-001.pdf`). Downloading records nothing |
@@ -95,14 +100,48 @@ Rules (`Business/Boqs/BoqRules.cs`, pure; the totals are recomputed from the lin
 - **Work and permits.** `subtotalUsd` is the work lines' totals and `permitsUsd` the permit lines'. Permits are charged as they are: never adjusted, and **no supervision and no TVA on them**. Their real cost goes in the site's expenses like any other.
 - **Adjustment** of the work: `none`, `percent` (the value is a fraction from -0.99 to 1, e.g. -0.05) or `total` (the value is the new work total, not negative except on a VO). `adjustmentUsd` = subtotal × percent, or value − subtotal; `totalUsd` = subtotal + adjustment.
 - **Supervision, TVA and the client's total** are shown with each BOQ at the project's rates as they are now: `supervisionUsd` = total × supervision rate, `tvaUsd` = total × TVA rate (never on supervision or permits), `clientTotalUsd` = total + supervision + TVA + permits.
-- **Rights.** Internal drafts: written by whoever holds `boq:create`; its author reads and edits their own, and holders of `project:pricing_manage` read, copy from and edit or delete any of them. Another author's draft is `404` to everyone else. Client BOQs and VOs: every write (create, save, copy lines into, duplicate, delete, email, record a delivery, agree, withdraw) needs `project:pricing_manage`; reading them, the price summary and the PDF needs `financial:view` or `project:pricing_manage` (`403` otherwise). Both permissions are super-admin defaults; a super admin can grant `boq:create` to an admin person by person.
+- **Rights.** Internal drafts follow the next section. Client BOQs and VOs: every write (create, save, copy lines into, duplicate, delete, email, record a delivery, agree, withdraw) needs `project:pricing_manage`; reading them, the price summary and the PDF needs `financial:view` or `project:pricing_manage` (`403` otherwise). Both permissions are super-admin defaults; a super admin can grant `boq:create` to an admin or an employee, in either business, person by person.
 - **Numbers** are `BQ-YYYY-NNN` (client) and `VO-YYYY-NNN`, one sequence per prefix and year, taken from `boq_sequences` under a row lock so a number is never handed out twice. Internal drafts have none. A duplicate takes the next number.
 - **Agreed BOQs are locked** (`422 boq_locked`: no save, copy into, delete, or a second agree). Drafts stay editable after being sent; each delivery keeps the BOQ's total when it was sent.
 - **Sending** (email or a recorded delivery) works on drafts and agreed BOQs, never on an internal draft (`422 boq_internal`) or an empty one (`422 boq_empty`). Agreeing an empty BOQ is `422 boq_empty` too.
 - **The work price and the permits.** Agreeing or withdrawing recomputes `projects.project_fee` = the agreed client BOQ's total + the agreed VOs' totals, and `projects.permits_price` = their permits likewise (0 when nothing is agreed). It is the only way the price changes. It writes a payment-history row (the work price and the permits, new and previous) whose reason is the BOQ's number when agreeing, or the reason given when withdrawing, and a `project_fee_set` event when the work price moved and a `permits_set` event when the permits did (new and previous amount). Withdrawing the client BOQ while VOs are agreed on it is `422 boq_has_agreed_vos`; withdrawing a BOQ that is not agreed is `422 boq_not_agreed`. Agreeing or withdrawing a VO that would take the work price or the permits below nothing is refused (`422 boq_price_below_zero`). A site priced before BOQs existed keeps its typed-in work price (and the price summary shows it) until its first client BOQ is agreed, which replaces it. An internal draft's detail leaves out the site's rates and the client figures (`supervisionRate`, `supervisionUsd`, `tvaRate`, `tvaUsd`, `clientTotalUsd` are `null`) for a caller without `financial:view` or `project:pricing_manage`, and a withdrawal's reason is left out of the activity feed for whoever doesn't see money.
 - **The profit floor** holds agreeing and withdrawing like any other change: a recompute that leaves the profit at zero or below is refused with `422 profit_floor` and a `blockedChangeId`, and the change is kept (kinds `boq_agree` and `boq_withdraw`) for someone who sees the money to force through or dismiss (see [finance.md](finance.md)). Only a lower price is held to it: a rise always passes, the first agreement included (the floor is off until a price is agreed), and withdrawing the whole price always needs forcing.
 - **The PDF** shows the company header, the client and project, the number, date and title (a VO also its reason), then each work line's code, description, final quantity, unit, rate and total, the permit lines under their own **Permits** heading, and the subtotal, adjustment (when there is one), total, supervision (x%), TVA (y%), the permits (when there are any) and total to pay. With permits, the subtotal and total read "Work subtotal" and "Work total". It never shows the exact quantity or the waste. A draft is stamped DRAFT. See [documents.md](documents.md).
-- Events (client BOQs and VOs only; the number and kind in the payload, the total in the `amount` column): `boq_created`, `boq_sent` (and the channel), `boq_agreed`, `boq_agreement_withdrawn` (and the reason). There are no notifications for BOQs: the client portal does not show them yet, so they reach the client as a PDF. Proton has no BOQ actions: every BOQ write endpoint is a `Never` entry in `ProtonCoverage`.
+- Events (client BOQs and VOs; the number and kind in the payload, the total in the `amount` column): `boq_created`, `boq_sent` (and the channel), `boq_agreed`, `boq_agreement_withdrawn` (and the reason). An internal draft raises events only when it is submitted, withdrawn or kept (below). The only BOQ notifications are the two for internal drafts (`boq_submitted`, `boq_draft_edited`, below): the client portal does not show BOQs, so they reach the client as a PDF. Submitting, withdrawing and keeping a draft are `Open` entries in `ProtonCoverage`: Proton sends the person to the BOQs page and does not do them.
+
+### Internal drafts: private and submitted
+
+`boq:create` is a permission for both businesses, granted person by person (super admins hold it; nobody else by default). Holding it does not open Execution: `Constants/PermissionCatalog.cs` no longer limits it to a domain.
+
+**Reaching a site.** A holder who does not see Execution reaches only Execution's active client sites (`BoqRules.IsAuthorSite`), and on them only the BOQs the rules below let them read. `GET /api/boq-sites` and `/api/boq-sites/{id}` list those sites with just a name, a location and a status. On such a site the BOQ endpoints accept the holder, and the service filters what they read. The site's owner reaches the list, get and save through the `project:view` attribute, and the service decides what they may do (`BoqRules.Caller.IsSiteOwner`). A caller who holds none of `boq:create`, `financial:view` and `project:pricing_manage` and is not the owner gets `403`.
+
+**Who does what with an internal draft.**
+
+| | Private (`submittedAt` is null) | Submitted |
+|---|---|---|
+| Read | its author | its author, holders of `project:pricing_manage`, the site's owner |
+| Write | its author | holders of `project:pricing_manage`, the site's owner; its author only reads (`403`) |
+| Delete | its author | nobody: the author withdraws it first |
+
+A draft the caller may not read is `404`, so another person's private draft does not exist for them, and neither does a submitted one for an admin who is neither a pricing manager nor the owner.
+
+**Submit, withdraw, keep.** These are the author's alone (a draft that is not theirs is `404`), on an internal draft, and need the project open.
+
+- `submit` sets `submitted_at` and stores a copy of the lines as `submitted_lines`. It needs an internal draft (`422 boq_not_internal`) that is private (`422 boq_already_submitted`) and has at least one line (`422 boq_empty`).
+- `withdraw-submission` clears both columns, so the draft is private again and the author can change it. A draft that is not submitted is `422 boq_not_submitted`.
+- `keep` replaces the stored copy with the current lines, accepting the changes. A draft that is not submitted is `422 boq_not_submitted`.
+
+**Changes.** While a draft is submitted, `BoqRules.Changes` compares its lines with the stored copy, matching lines by id. A summary has `changed` (true when something differs) and the detail has `changes`, a list of `{ kind, lineId, description, fields }`:
+
+- `added`: a line that was not in the copy;
+- `removed`: a line that was; `lineId` is null and the description is the old one;
+- `changed`: a line with a different `code`, `description`, `quantity`, `wasteRate`, `unit`, `rate` or `nature`; `fields` lists each as `{ field, before, after }`, as typed.
+
+`changes` is `null` when the draft is private or no copy was kept (a draft submitted by the migration), and empty when nothing differs.
+
+**Notifications and events.** Submitting sends `boq_submitted` to Execution's pricing managers and the site's owner. A save of a submitted draft by someone other than its author sends the author `boq_draft_edited`: company-level, so an author who does not see Execution still gets it, and one rolling notification per draft (digest `boq-edited:{id}`). Both are in [notifications.md](notifications.md). Submitting, withdrawing and keeping record the activity events `boq_submitted`, `boq_submission_withdrawn` and `boq_changes_kept` (the title in the payload, and the number of lines when submitting), in the Billing group.
+
+**Migration.** `BoqAuthors` (10 Nov 2026) adds `submitted_at` and `submitted_lines`, makes `boq:create` a company permission (`domain_code` NULL), and counts every existing internal draft as submitted (`submitted_at = created_at`, no copy, so nothing shows as changed). See [database.md](database.md).
 
 Client statements, which listed materials supplied and froze their prices, are gone: nothing is in production, so their tables went with no data migration. A site expense is a plain cost.
 

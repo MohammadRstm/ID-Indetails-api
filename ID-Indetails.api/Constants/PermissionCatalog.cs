@@ -26,7 +26,7 @@ public static class PermissionCatalog
         new(P.ProjectChangeStatus, "Put projects on hold, complete, reopen or archive them"),
         new(P.ProjectDelete, "Delete an archived project made by mistake, with everything on it"),
         new(P.ProjectPricingManage, "Set the project fee, default material markup and material client prices", DomainCodes.Execution, Sensitivity: Money),
-        new(P.BoqCreate, "Write internal draft BOQs of a site", DomainCodes.Execution, Sensitivity: Money),
+        new(P.BoqCreate, "Write internal draft BOQs for Execution's active sites and submit them, from either business", Sensitivity: Money),
         new(P.RequirementView, "View project requirements"),
         new(P.RequirementManage, "Add, edit, assign, tick and remove requirements"),
         new(P.RequirementCompleteOwn, "Tick requirements assigned to you, and untick the ones you ticked"),
