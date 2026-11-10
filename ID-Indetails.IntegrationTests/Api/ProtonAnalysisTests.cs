@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Company;
+using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Proton;
 using ID_Indetails.api.DTO.Response.Reports;
@@ -419,10 +420,14 @@ public class ProtonAnalysisTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         api.Anthropic.Reset();
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        // no LBP rate reaches back to 2001, so this expense stays in LBP, outside every USD figure
-        (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
-                new { label = "Permit stamps", amount = 4_500_000m, currency = "LBP", spentOn = "2001-01-15" }, superAdmin.AccessToken))
-            .IsSuccessStatusCode.ShouldBeTrue();
+        // no LBP rate reaches back to 2001, so this expense stays in LBP, outside every USD figure. The API refuses such an
+        // expense now (exchange_rate_missing), but ones recorded before the rule remain, so it is recorded in USD and
+        // switched to LBP in the database.
+        var recorded = await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+            new { label = "Permit stamps", amount = 1m, currency = "USD", spentOn = "2001-01-15" }, superAdmin.AccessToken);
+        recorded.IsSuccessStatusCode.ShouldBeTrue(await recorded.Content.ReadAsStringAsync());
+        await _steps.ExecuteAsync("UPDATE project_expenses SET currency = 'LBP', amount = 4500000 WHERE id = @id",
+            ("@id", (await recorded.ReadAsync<ExpenseResponse>()).Id));
         api.Anthropic.Reply(
             FakeAnthropic.ToolUse("review_project", new { project_id = project.Id }),
             FakeAnthropic.Text("Some of its cost couldn't be converted."));
