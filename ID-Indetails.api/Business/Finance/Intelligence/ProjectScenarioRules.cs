@@ -63,9 +63,10 @@ public static class ProjectScenarioRules
     {
         var before = FiguresOf(facts, facts.Revenue, Gross(facts, facts.Work, facts.Revenue, facts.SupervisionRate, facts.TvaRate), facts.Work, facts.Cost);
         var unsettled = Apply(facts, levers with { Settle = false }, out _);
-        var after = levers.Settle ? Apply(facts, levers, out var impossible) : unsettled;
+        var impossible = false;
+        var after = levers.Settle ? Apply(facts, levers, out impossible) : unsettled;
         var refused = before.Standing is not null && unsettled.Profit <= 0 && unsettled.Profit < before.Profit;
-        return new Outcome(before, after, refused, levers.Settle && impossible);
+        return new Outcome(before, after, refused, impossible);
     }
 
     private static Figures Apply(Facts facts, Levers levers, out bool settlementImpossible)
