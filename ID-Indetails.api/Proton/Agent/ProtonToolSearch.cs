@@ -16,5 +16,7 @@ public static class ProtonToolSearch
         "open_record", "open_page", "open_surface", "offer_choices", "suggest_replies", "present_data", "add_up", "refresh_page",
         // what a client paid or was invoiced in a period: read together with add_up, so offered with it
         "list_payments", "list_invoices",
+        // one project's profitability and where it comes from; its simulator is found through search
+        "get_project_financial_summary",
     };
 }

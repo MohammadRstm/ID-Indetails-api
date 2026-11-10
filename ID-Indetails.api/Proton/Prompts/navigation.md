@@ -19,6 +19,8 @@ asked for the form. Confirm dialogs (completing a project, deactivating someone,
 - A Design project for a client also has a `payments` tab (the client's payments) and a `vos` tab (its variation
   orders), for those who see its money. Its departments open with `open_surface project_departments`, while the project
   is still open.
+- A Design project for a client and an Execution site have an `insights` tab (its profitability, where its profit
+  comes from, and what-if simulations), for those who see its money.
 - The Website area is the company's public website, not a business: its projects (find them with `find` and `types`
   `website_project`), analytics, services, locations, contact, site settings and staff. Open its pages with
   `open_page`; a website project opens in its form. Only people who see the Website area can open it.

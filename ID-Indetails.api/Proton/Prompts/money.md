@@ -27,6 +27,11 @@ its own currency and never counted as zero.
   It is not a forecast: never present it as money that will come in.
 - `recognised_to_date` is the agreed revenue times the project's progress: an accounting view, not cash.
 - `projected` is where cost and profit are heading at the current progress: an estimate, say so.
+- `bridge`: where a project's `agreed_profit` comes from, step by step, net of TVA: the base price, what changed it
+  (variation orders, a settlement, an overpayment kept), a site's supervision and permits, each cost (negative) and the
+  pocket money. Its steps add up to `agreed_profit`.
+- `standing`: a client project's profit against the profit floor: `at_zero` (0 or below), `close` (a margin of 10% or
+  less) or `fine`. Absent where the floor doesn't apply (internal work, no agreed amount yet).
 
 ## TVA
 

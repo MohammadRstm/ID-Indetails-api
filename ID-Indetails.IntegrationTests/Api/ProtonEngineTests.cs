@@ -103,6 +103,9 @@ public class ProtonEngineTests(ProtonEngineApiFactory api) : IClassFixture<Proto
         Deferred("list_payments").ShouldBeFalse();
         Deferred("get_finance_projects").ShouldBeTrue();
         Deferred("propose_add_requirement").ShouldBeTrue();
+        // a project's profitability is sent up front; what a change would do to it is found through search
+        Deferred("get_project_financial_summary").ShouldBeFalse();
+        Deferred("simulate_project_financial_scenario").ShouldBeTrue();
         // the same list on every call, so it stays in the cached prefix
         api.Anthropic.Requests[1]["tools"]!.ToJsonString().ShouldBe(tools.ToJsonString());
     }

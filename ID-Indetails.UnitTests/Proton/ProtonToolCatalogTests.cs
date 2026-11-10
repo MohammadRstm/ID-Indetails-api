@@ -191,6 +191,46 @@ public class ProtonToolCatalogTests
         }
     }
 
+    /// <summary>
+    /// Financial Intelligence carries money, so it names no one: nothing its tools return, Design's departments included,
+    /// puts a person beside a figure (the plan's principle 4). A new insight output joins the roots here.
+    /// </summary>
+    [Fact]
+    public void The_financial_intelligence_outputs_name_no_person()
+    {
+        var properties = new HashSet<string>();
+        var types = new HashSet<Type>();
+        foreach (var root in new[] { typeof(ProjectFinancialSummary), typeof(ProjectScenario) })
+        {
+            Collect(root, properties, types);
+        }
+
+        types.ShouldContain(typeof(InsightDepartmentRow));
+        types.ShouldContain(typeof(BridgeRow));
+        foreach (var type in types)
+        {
+            type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Select(p => p.Name)
+                .Where(name => Regex.IsMatch(name, "Person|People|Member|Contributor|Employee|User|Staff|Owner|Who|By$"))
+                .ShouldBeEmpty(type.Name);
+        }
+    }
+
+    /// <summary>Both read one project's money: financial:view from the endpoint, not heavy, and only the summary sent up front.</summary>
+    [Fact]
+    public void The_financial_intelligence_tools_mirror_financial_view_and_only_the_summary_is_core()
+    {
+        var financialView = AuthorizationPolicies.PermissionPrefix + PermissionCodes.FinancialView;
+        var summary = Tools.Single(t => t.Name == "get_project_financial_summary");
+        var scenario = Tools.Single(t => t.Name == "simulate_project_financial_scenario");
+
+        summary.Endpoint.Policies.ShouldBe([financialView]);
+        scenario.Endpoint.Policies.ShouldBe([financialView]);
+        ProtonToolSearch.Core.ShouldContain(summary.Name);
+        ProtonToolSearch.Core.ShouldNotContain(scenario.Name);
+        scenario.InputSchema["required"]!.AsArray().Select(r => r!.ToString()).ShouldBe(["project_id"]);
+    }
+
     private static void Collect(Type type, HashSet<string> properties, HashSet<Type> seen)
     {
         type = Nullable.GetUnderlyingType(type) ?? type;
