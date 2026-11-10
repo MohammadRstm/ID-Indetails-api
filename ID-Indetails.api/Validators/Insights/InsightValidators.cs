@@ -29,3 +29,14 @@ public sealed class ProjectScenarioQueryValidator : AbstractValidator<ProjectSce
         RuleFor(x => x.DelayWeeks).InclusiveBetween(1, MaxDelayWeeks).When(x => x.DelayWeeks is not null);
     }
 }
+
+public sealed class ExpenseTrendsQueryValidator : AbstractValidator<ExpenseTrendsQuery>
+{
+    public const int DefaultMonths = 12;
+    public const int MaxMonths = 24;
+
+    public ExpenseTrendsQueryValidator()
+    {
+        RuleFor(x => x.Months).InclusiveBetween(1, MaxMonths).When(x => x.Months is not null);
+    }
+}

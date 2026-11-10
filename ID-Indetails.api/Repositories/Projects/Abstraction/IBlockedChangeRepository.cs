@@ -25,5 +25,8 @@ public interface IBlockedChangeRepository
     /// <summary>A project's changes of <paramref name="kind"/> still pending, oldest first.</summary>
     Task<IReadOnlyList<BlockedChange>> PendingAsync(long projectId, BlockedChangeKind kind, CancellationToken cancellationToken = default);
 
+    /// <summary>These projects' changes still pending, of every kind, oldest first.</summary>
+    Task<IReadOnlyList<BlockedChange>> PendingAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+
     void Add(BlockedChange change);
 }
