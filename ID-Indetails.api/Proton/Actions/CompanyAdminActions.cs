@@ -326,7 +326,7 @@ public sealed class ProposeAccountLabelTool(IAccountLabelService labels) : Proto
                 }
 
                 return (new AccountLabelArgs(input.Step, label.Id, before, null, null),
-                    new ProtonPreview($"Delete the account label {label.Name}", [new ProtonChange("Account label", label.Name, null)],
+                    new ProtonPreview($"Delete the account label {label.Name}", [new ProtonChange("Account label", label.Name, "Deleted")],
                         "Nothing is filed under it. It is removed for good; a label with the same name can be added again later.",
                         Confirm: ProtonConfirm.Typed, Phrase: label.Name, Area: "company", Irreversible: true),
                     null);

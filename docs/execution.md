@@ -177,6 +177,7 @@ sum of the rows. A `contribution` is positive and a `payout` is negative. Sites 
   - Only by hand, for an Execution client site.
   - Never so much that the site's profit reaches zero (`422 pocket_would_empty_site`).
   - The site is locked while its profit is checked.
+  - **Round-off:** a site's profit reads cleanly in whole thousands, so what is over the last one can follow it into the pocket (`PocketRules.RoundOff`: $243,459 gives $459, $4,900 gives $900; nothing when it is already round or under a thousand). When a move leaves the profit off a whole thousand, whoever sees Execution's money (the mover too) gets one rolling suggestion per site (`pocket_round_off`, key `pocket-round-off:{siteId}`, no amount in it). It opens the site's "Move to pocket money" form with the round-off filled in, worked out from the profit at that moment. Proton proposes the same move (`propose_pocket_contribution` with `round_off`).
 - **Out:**
   - A site asks for money (`POST .../requests`); the system will also raise requests when a site gets close to zero.
   - A change that takes a site to 10% of its agreed amount or less raises a request by itself, with no requester and the note "Close to zero profit", unless one is pending already (see [projects.md](projects.md), "Profit floor").

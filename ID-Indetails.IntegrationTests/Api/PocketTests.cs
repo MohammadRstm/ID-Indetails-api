@@ -76,6 +76,37 @@ public class PocketTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_move_that_leaves_the_profit_off_a_whole_thousand_suggests_moving_the_rest()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, money) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 5_459m);
+        Task<long> SuggestionsAsync(AuthResponse to) => _steps.ScalarAsync<long>(
+            "SELECT COUNT(*) FROM notifications WHERE kind = 'pocket_round_off' AND project_id = @id AND recipient_id = @to AND read_at IS NULL",
+            ("@id", site.Id), ("@to", to.User.Id));
+
+        // 5,459 - 1,000 leaves 4,459: whoever sees Execution's money is told 459 can follow, the mover too
+        await OkAsync<PocketResponse>(ContributeAsync(site.Id, 1_000m, money));
+        (await SuggestionsAsync(money)).ShouldBe(1);
+        (await SuggestionsAsync(superAdmin)).ShouldBe(1);
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE kind = 'pocket_round_off' AND project_id = @id AND payload IS NOT NULL",
+            ("@id", site.Id))).ShouldBe(0);
+
+        // moving the 459 leaves a round 4,000: no new suggestion
+        await OkAsync<PocketResponse>(ContributeAsync(site.Id, 459m, money));
+        (await MoneyAsync(site.Id, money)).Profit.ShouldBe(4_000m);
+        (await SuggestionsAsync(money)).ShouldBe(1);
+        (await _steps.ScalarAsync<long>("SELECT COALESCE(MAX(`count`), 0) FROM notifications WHERE kind = 'pocket_round_off' AND project_id = @id",
+            ("@id", site.Id))).ShouldBe(1);
+
+        // a site under a whole thousand has nothing to round off
+        var small = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        await OkAsync<PocketResponse>(ContributeAsync(small.Id, 150m, money));
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM notifications WHERE kind = 'pocket_round_off' AND project_id = @id",
+            ("@id", small.Id))).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task A_site_asks_for_money_the_system_suggests_how_much_and_a_super_admin_approves_their_own_amount_once()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

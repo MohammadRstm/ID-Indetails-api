@@ -22,6 +22,7 @@ public static class NotificationAccess
         [NotificationKinds.InvoiceDraftWaiting] = PermissionCodes.FinancialView,
         [NotificationKinds.PaymentRecorded] = PermissionCodes.FinancialView,
         [NotificationKinds.PocketRequested] = PermissionCodes.FinancialView,
+        [NotificationKinds.PocketRoundOff] = PermissionCodes.FinancialView,
         [NotificationKinds.ChangeBlocked] = PermissionCodes.FinancialView,
         [NotificationKinds.ProfitLow] = PermissionCodes.FinancialView,
         [NotificationKinds.ProfitAtZero] = PermissionCodes.FinancialView,

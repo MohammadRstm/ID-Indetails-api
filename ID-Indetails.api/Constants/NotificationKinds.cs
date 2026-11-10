@@ -145,6 +145,9 @@ public static class NotificationKinds
     /// <summary>An Execution site asks the pocket money for money: for whoever sees Execution's money to approve or deny.</summary>
     public const string PocketRequested = "pocket_requested";
 
+    /// <summary>A move into the pocket money left a site's profit off a whole thousand: the rest can follow it.</summary>
+    public const string PocketRoundOff = "pocket_round_off";
+
 
     /// <summary>
     /// A change was refused because it would take a client project's profit to zero or below (subject: the blocked

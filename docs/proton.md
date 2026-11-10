@@ -57,9 +57,9 @@ POST /api/proton/messages
   - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
-  249 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
-  - a built action (168), or one planned (14): each planned entry already has the tier and family it will be confirmed
-    with. The planned ones are an Execution site's staff and daily logs, the pocket money, supervision taken, emailing,
+  250 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
+  - a built action (170), or one planned (13): each planned entry already has the tier and family it will be confirmed
+    with. The planned ones are an Execution site's staff and daily logs, asking for and deciding pocket money, supervision taken, emailing,
     planning and scheduling invoices, and a payment's account label, waiting for the Execution changes to settle;
   - a place opened for the user (23): time off (see below), what takes a password or a sign-in address (typed on its own form, never in a
     chat), someone's pay (pay amounts never reach Proton), and uploads, which need a file from the person's device;
@@ -731,6 +731,7 @@ an invoice's whole balance uses `full_balance`, so the server sets the amount.
 | `propose_submit_labour_week`, `propose_labour_defaults` | labour weeks and defaults | a week: its total (a crew's day rate is a site cost, decision 13); it sends the week's version, so a week changed since is refused (`409 labour_week_changed`) |
 | `propose_billing_settings` | `PUT /api/billing-settings/{domain}` | — ; prefix, terms and footer only. Bank details and overdue reminders (which email clients on their own) are never part of a proposal: they are taken from the database when the change is made |
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate; irreversible. A backdated rate changes past costs, overhead and invoices (they convert at the rate of their day when read), and the card says so; payments keep their own rate |
+| `propose_pocket_contribution` | `POST /api/execution/pocket/contributions` (an Execution client site) | the amount, typed on the card. `amount` is one the user gave; `round_off` works it out instead: what is over the site's last whole thousand of profit, so it is left round ($4,900 moves $900). Never all of the profit; a card made before the profit changed is refused (`proton_action_stale`) |
 | `propose_project_money` | `PUT /api/projects/{id}/payment` (a Design client project's customer payment), with why it changes (`reason`, asked for when not given) | the new amount. It corrects mistakes: work added or taken out is a VO (`propose_design_vo`). An Execution site's price is its agreed BOQ; its supervision and TVA are `propose_site_pricing` |
 | `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
 | `propose_delete` | requirement, meeting, client and project file deletes | the project's or client's name, or a general meeting's topic; a client with projects is archived instead |

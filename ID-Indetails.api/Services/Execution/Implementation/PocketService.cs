@@ -87,11 +87,32 @@ public sealed class PocketService(
                 CreatedAt = clock.UtcNow,
                 CreatedById = actor.UserId,
             });
+            await SuggestRoundOffAsync(site, money.Summary.Profit - request.Amount, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
 
         return await GetAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// When a move leaves the site's profit off a whole thousand, whoever sees Execution's money (the mover too: it comes
+    /// from the system) finds a suggestion in their notifications to move the rest, which opens the form with that amount.
+    /// One rolling suggestion per site; the payload never holds the amount, the form works it out from the profit then.
+    /// </summary>
+    private async Task SuggestRoundOffAsync(Project site, decimal profitLeft, CancellationToken cancellationToken)
+    {
+        if (PocketRules.RoundOff(profitLeft) == 0)
+        {
+            return;
+        }
+
+        await notifications.SendDigestAsync(
+            new NotificationDraft(NotificationKinds.PocketRoundOff, null, DomainCodes.Execution, site.Id, "project", site.Id, null),
+            $"pocket-round-off:{site.Id}",
+            await notifications.HoldersAsync(DomainCodes.Execution, PermissionCodes.FinancialView, cancellationToken),
+            restartOnceRead: true,
+            cancellationToken);
     }
 
     public async Task<PocketRequestResponse> RequestAsync(CreatePocketRequestRequest request, CancellationToken cancellationToken = default)
