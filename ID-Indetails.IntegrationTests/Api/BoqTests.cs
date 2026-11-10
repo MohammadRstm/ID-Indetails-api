@@ -202,7 +202,9 @@ public class BoqTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // someone writing drafts can't make a client BOQ even by copying: the pricing manager can write them all
         (await Boqs.CreateAsync(pricing.AccessToken, site.Id, "client", fromBoqId: client.Id)).Lines.ShouldHaveSingleItem();
-        (await Boqs.CreateAsync(superAdmin.AccessToken, site.Id, "client", fromBoqId: own.Id)).Lines.ShouldBeEmpty();
+        // someone's private draft isn't there to start from, even for a super admin
+        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/boqs", new { kind = "client", fromBoqId = own.Id }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
 
         // the domain is invisible to another one: its money admin finds neither the project nor its BOQs
         await (await Client.GetAsync($"/api/projects/{site.Id}/boqs", designMoney.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);

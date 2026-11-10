@@ -49,7 +49,7 @@ public sealed class BoqService(
             throw new NotFoundException(ProjectNotFound);
         }
 
-        var caller = CallerOf(actor, project.OwnerId);
+        var caller = CallerOf(actor, project);
         if (!caller.CanDraft && !caller.CanSeeMoney && !caller.CanManagePricing && !caller.IsSiteOwner)
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, "BOQs need the permission to write drafts, see money or manage pricing.");
@@ -83,7 +83,7 @@ public sealed class BoqService(
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await LockedSiteAsync(actor, projectId, cancellationToken);
-        RequireCreate(request.Kind, CallerOf(actor, project.OwnerId));
+        RequireCreate(request.Kind, CallerOf(actor, project));
         Throw(BoqRules.CheckCanCreate(request.Kind, (await boqs.AgreedAsync(project.Id, cancellationToken)).ClientAgreed));
 
         var source = request.FromBoqId is { } fromId ? await SourceAsync(actor, project.Id, fromId, cancellationToken) : null;
@@ -199,7 +199,7 @@ public sealed class BoqService(
         var source = await ReadableAsync(actor, boqId, cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await LockedSiteAsync(actor, source.ProjectId, cancellationToken);
-        RequireCreate(source.Kind, CallerOf(actor, project.OwnerId));
+        RequireCreate(source.Kind, CallerOf(actor, project));
         Throw(BoqRules.CheckCanCreate(source.Kind, (await boqs.AgreedAsync(project.Id, cancellationToken)).ClientAgreed));
 
         var boq = NewBoq(project, source.Kind, BoqRules.CopyTitle(source.Title), source.Reason, actor.UserId);
@@ -222,8 +222,8 @@ public sealed class BoqService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var site = await LockedSiteAsync(actor, peek.ProjectId, cancellationToken);
         var boq = await boqs.GetForUpdateAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound);
-        EnsureReadable(boq, actor, site.OwnerId);
-        if (!BoqRules.CanDelete(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, site.OwnerId)))
+        EnsureReadable(boq, actor, site);
+        if (!BoqRules.CanDelete(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, site)))
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, boq.Kind == BoqKind.Internal
                 ? "Only its author deletes an internal draft, and only after withdrawing it from the site."
@@ -415,7 +415,7 @@ public sealed class BoqService(
     {
         var actor = await ActorAsync(cancellationToken);
         var boq = await ReadableAsync(actor, boqId, cancellationToken);
-        RequireWrite(boq, actor, boq.Project.OwnerId);
+        RequireWrite(boq, actor, boq.Project);
         Throw(SiteRules.CheckOpen(boq.Project.DomainCode, boq.Project.Status, boq.Project.RevenueLockedAt is not null));
         Throw(BoqRules.CheckSendable(boq.Kind, boq.Lines.Count));
         return await DocumentAsync(boq, cancellationToken);
@@ -442,9 +442,16 @@ public sealed class BoqService(
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
 
-    private static BoqRules.Caller CallerOf(UserAccess actor, long siteOwnerId)
-        => new(actor.UserId, actor.Has(PermissionCodes.BoqCreate), actor.Has(PermissionCodes.FinancialView), actor.Has(PermissionCodes.ProjectPricingManage),
-            siteOwnerId == actor.UserId);
+    /// <summary>
+    /// What the caller may do on this site. Someone who reaches it only as a BOQ author (they don't see its domain) is an
+    /// author there and nothing more, whatever money or pricing they hold elsewhere.
+    /// </summary>
+    private static BoqRules.Caller CallerOf(UserAccess actor, Project site)
+    {
+        var sees = actor.CanSee(site.DomainCode);
+        return new(actor.UserId, actor.Has(PermissionCodes.BoqCreate), sees && actor.Has(PermissionCodes.FinancialView),
+            sees && actor.Has(PermissionCodes.ProjectPricingManage), sees && site.OwnerId == actor.UserId);
+    }
 
     /// <summary>The caller sees the site's domain, or writes BOQs and it is an active Execution client site.</summary>
     private static bool Reaches(UserAccess actor, Project project)
@@ -477,7 +484,7 @@ public sealed class BoqService(
             throw new NotFoundException(BoqNotFound);
         }
 
-        EnsureReadable(boq, actor, boq.Project.OwnerId);
+        EnsureReadable(boq, actor, boq.Project);
         return boq;
     }
 
@@ -485,27 +492,27 @@ public sealed class BoqService(
     private async Task<Boq> LockedBoqAsync(UserAccess actor, long boqId, Project site, CancellationToken cancellationToken)
     {
         var boq = await boqs.GetForUpdateAsync(boqId, cancellationToken) ?? throw new NotFoundException(BoqNotFound);
-        RequireWrite(boq, actor, site.OwnerId);
+        RequireWrite(boq, actor, site);
         return boq;
     }
 
     /// <summary>Another author's internal draft doesn't exist for the caller; a client BOQ they may not read is forbidden.</summary>
-    private static void EnsureReadable(Boq boq, UserAccess actor, long siteOwnerId)
+    private static void EnsureReadable(Boq boq, UserAccess actor, Project site)
     {
-        if (BoqRules.CanRead(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, siteOwnerId)))
+        if (BoqRules.CanRead(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, site)))
         {
             return;
         }
 
-        throw boq.Kind == BoqKind.Internal
+        throw boq.Kind == BoqKind.Internal || !actor.CanSee(site.DomainCode)
             ? new NotFoundException(BoqNotFound)
             : new ForbiddenException(ErrorCodes.Forbidden, "Client BOQs and variation orders need the permission to see money or manage pricing.");
     }
 
-    private static void RequireWrite(Boq boq, UserAccess actor, long siteOwnerId)
+    private static void RequireWrite(Boq boq, UserAccess actor, Project site)
     {
-        EnsureReadable(boq, actor, siteOwnerId);
-        if (!BoqRules.CanWrite(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, siteOwnerId)))
+        EnsureReadable(boq, actor, site);
+        if (!BoqRules.CanWrite(boq.Kind, boq.AuthorId, boq.SubmittedAt is not null, CallerOf(actor, site)))
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, boq.Kind == BoqKind.Internal
                 ? "A submitted draft is changed by the site's pricing managers and owner: withdraw it to change it yourself."
@@ -681,7 +688,7 @@ public sealed class BoqService(
 
     private async Task<BoqDetailResponse> DescribeAsync(Boq boq, UserAccess actor, CancellationToken cancellationToken)
     {
-        var caller = CallerOf(actor, boq.Project.OwnerId);
+        var caller = CallerOf(actor, boq.Project);
         return Detail(boq, await boqs.NamesAsync(UserIds([boq]), cancellationToken), caller.CanSeeMoney || caller.CanManagePricing);
     }
 

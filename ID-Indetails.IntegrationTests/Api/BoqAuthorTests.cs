@@ -146,6 +146,22 @@ public class BoqAuthorTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task An_author_who_handles_Designs_money_still_sees_only_their_own_drafts_on_a_site()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (email, password, money) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
+        await GrantAsync(superAdmin, money.User.Id, PermissionCodes.BoqCreate);
+        var author = await (await Client.PostJsonAsync("/api/auth/login", new { email, password })).ShouldSignInAsync();
+        var site = await NewSiteAsync(superAdmin);
+        var client = await Boqs.CreateAsync(superAdmin.AccessToken, site.Id);
+
+        var list = await ListAsync(author, site.Id);
+        list.Client.ShouldBeEmpty();
+        list.Price.ShouldBeNull();
+        await (await Client.GetAsync($"/api/boqs/{client.Id}", author.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    [Fact]
     public async Task The_sites_owner_sees_and_edits_only_its_submitted_drafts()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
