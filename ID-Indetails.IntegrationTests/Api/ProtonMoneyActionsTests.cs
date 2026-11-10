@@ -367,6 +367,37 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         again.PendingAction!.Preview.Note!.ShouldContain("Careful: 1 expense(s) of USD 40 that day are already recorded");
     }
 
+    /// <summary>
+    /// A Design expense in another currency than USD counts only with an exchange rate in force on its day, as a site
+    /// expense does: said before the card is made, rather than refused (exchange_rate_missing) once the user confirms it.
+    /// </summary>
+    [Fact]
+    public async Task An_lbp_expense_needs_a_rate_on_its_day_before_any_card()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+
+        // no LBP rate reaches back to 2001
+        var (refused, noRate) = await ProposeAsync(superAdmin, "propose_add_expense",
+            new { project_id = project.Id, label = "Permit stamps", amount = 900_000m, currency = "LBP", spent_on = "2001-01-02" }, "Add the permit stamps, 900000 LBP");
+        refused.PendingAction.ShouldBeNull();
+        var message = noRate["message"]!.GetValue<string>();
+        message.ShouldContain("There is no LBP exchange rate in force on 2 Jan 2001");
+        message.ShouldContain("propose_exchange_rate");
+        (await GetAsync<ExpenseListResponse>(superAdmin, $"/api/projects/{project.Id}/expenses")).Items.ShouldBeEmpty();
+
+        // the same day in USD needs no rate
+        var (usd, _) = await ProposeAsync(superAdmin, "propose_add_expense",
+            new { project_id = project.Id, label = "Permit stamps", amount = 900m, spent_on = "2001-01-02" }, "Add the permit stamps, 900");
+        usd.PendingAction.ShouldNotBeNull();
+
+        // with a rate in force today (added here, unless another test here already has one), today's LBP expense gets its card
+        await Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_500m }, superAdmin.AccessToken);
+        var (card, _) = await ProposeAsync(superAdmin, "propose_add_expense",
+            new { project_id = project.Id, label = "Permit stamps", amount = 900_000m, currency = "LBP" }, "Add the permit stamps, 900000 LBP");
+        card.PendingAction.ShouldNotBeNull().Preview.Changes.Single(c => c.Label == "Amount").After.ShouldBe("LBP 900,000");
+    }
+
     [Fact]
     public async Task A_revenue_card_is_refused_if_the_revenue_changed_since_and_an_execution_site_is_not_priced_by_proton()
     {

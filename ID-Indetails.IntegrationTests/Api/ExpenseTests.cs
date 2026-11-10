@@ -13,6 +13,13 @@ public class ExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
     private HttpClient Client => _steps.Client;
     private ProjectTestSteps Projects => new(_steps);
 
+    /// <summary>
+    /// 89,500 LBP to the dollar from 1 January 2026, the class's only LBP rate. Rates are company-wide and added in date
+    /// order: whichever test asks second is refused, which is fine.
+    /// </summary>
+    private Task LbpRateAsync(string token)
+        => Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_500m, effectiveFrom = "2026-01-01" }, token);
+
     [Fact]
     public async Task A_value_that_cannot_be_read_is_named_in_words_never_in_the_readers_own()
     {
@@ -61,6 +68,8 @@ public class ExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
         var licence = await created.ReadAsync<ExpenseResponse>();
         licence.Currency.ShouldBe("USD");
 
+        // an LBP expense needs a rate in force on its day, today here
+        await LbpRateAsync(superAdmin.AccessToken);
         await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses", new { label = "Taxi", amount = 900_000m, currency = "LBP" }, admin.AccessToken);
         var printing = await (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
             new { label = "Printing", amount = 30m, currency = "USD" }, admin.AccessToken)).ReadAsync<ExpenseResponse>();
@@ -80,6 +89,47 @@ public class ExpenseTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(404, ErrorCodes.NotFound);
         (await _steps.ScalarAsync<int>(
             "SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND subject_type = 'expense'", ("@p", project.Id))).ShouldBe(4);
+    }
+
+    /// <summary>
+    /// An expense in another currency counts only with an exchange rate in force on its day, as a site expense does: without
+    /// one the project's money would leave it out, so it is refused instead. The class's LBP rate starts on 1 January 2026,
+    /// so 31 December 2025 never has one, whichever test added the rate.
+    /// </summary>
+    [Fact]
+    public async Task An_expense_in_another_currency_needs_a_rate_in_force_on_its_day()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var url = $"/api/projects/{project.Id}/expenses";
+
+        var refused = await (await Client.PostJsonAsync(url,
+                new { label = "Permit stamps", amount = 4_475_000m, currency = "LBP", spentOn = "2025-12-31" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ExchangeRateMissing);
+        refused.Message.ShouldContain("There is no LBP exchange rate in force on 2025-12-31");
+        (await (await Client.GetAsync(url, superAdmin.AccessToken)).ReadAsync<ExpenseListResponse>()).Items.ShouldBeEmpty();
+        (await _steps.ScalarAsync<int>("SELECT COUNT(*) FROM activity_events WHERE project_id = @p AND kind = 'expense_added'", ("@p", project.Id)))
+            .ShouldBe(0);
+
+        // the same day in USD needs no rate
+        var courier = await Client.PostJsonAsync(url, new { label = "Courier", amount = 50m, currency = "USD", spentOn = "2025-12-31" }, superAdmin.AccessToken);
+        ((int)courier.StatusCode).ShouldBe(201, await courier.Content.ReadAsStringAsync());
+
+        // from the rate's first day the LBP expense is recorded and converted (4,475,000 at 89,500 is 50); the day before
+        // still has no rate
+        await LbpRateAsync(superAdmin.AccessToken);
+        var recorded = await Client.PostJsonAsync(url,
+            new { label = "Permit stamps", amount = 4_475_000m, currency = "LBP", spentOn = "2026-01-01" }, superAdmin.AccessToken);
+        ((int)recorded.StatusCode).ShouldBe(201, await recorded.Content.ReadAsStringAsync());
+        await (await Client.PostJsonAsync(url,
+                new { label = "Permit stamps", amount = 4_475_000m, currency = "LBP", spentOn = "2025-12-31" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ExchangeRateMissing);
+
+        var list = await (await Client.GetAsync(url, superAdmin.AccessToken)).ReadAsync<ExpenseListResponse>();
+        list.Items.Select(e => (e.Label, e.Currency, e.SpentOn))
+            .ShouldBe([("Permit stamps", "LBP", new DateOnly(2026, 1, 1)), ("Courier", "USD", new DateOnly(2025, 12, 31))], ignoreOrder: true);
+        (await (await Client.GetAsync($"/api/projects/{project.Id}", superAdmin.AccessToken)).ReadAsync<ProjectResponse>()).Money!.Cost.Expenses
+            .ShouldBe(100m);
     }
 
     [Fact]

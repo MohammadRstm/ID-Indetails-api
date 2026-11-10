@@ -198,8 +198,10 @@ This file is how every new session learns the project, so keep it true:
 - **The phone's materials routes:** the phone app still records site expenses at `/api/projects/{id}/materials`, which
   the same controller serves alongside `/site-expenses` until the phone moves. Permissions keep their `material:*` codes,
   and stored activity, notification and blocked-change kinds keep their `material_*` names.
-- **LBP site expenses** need an exchange rate in force on their day (`exchange_rate_missing`), so no cost slips past
-  profit and the profit floor.
+- **LBP expenses**, on a site or a Design project, need an exchange rate in force on their day (`exchange_rate_missing`),
+  so no cost slips past profit and the profit floor. A daily feed (`ExchangeRateFeedJob`, ExchangeRate-API) adds today's
+  LBP rate each morning unless the currency already has one from today, and skips a rate more than 10% from the last.
+  Rates stay append-only, so a correction applies from tomorrow.
 
 ---
 

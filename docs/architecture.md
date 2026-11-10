@@ -39,7 +39,7 @@ Request → Middleware → Controller → FluentValidation → Service → Busin
 | `Exceptions/` | Typed exceptions that centralized handling turns into the uniform error contract. The folder is plural on purpose: a folder named `Exception` creates a namespace that hides `System.Exception` (CS0118). |
 | `Authorization/Handlers/`, `Authorization/Requirements/` | Policy requirements and handlers for permission and domain checks. See [authorization.md](authorization.md). |
 | `Extensions/` | `IServiceCollection` and `WebApplication` extension methods, so `Program.cs` stays short. |
-| `HealthChecks/`, `RateLimiting/`, `Jobs/` | Health endpoints, rate-limit policies and background jobs (scheduled notifications, the push sender and its receipts, file and device cleanup). |
+| `HealthChecks/`, `RateLimiting/`, `Jobs/` | Health endpoints, rate-limit policies and background jobs (scheduled notifications, the push sender and its receipts, file and device cleanup, the daily exchange rate feed). |
 
 ## Conventions
 

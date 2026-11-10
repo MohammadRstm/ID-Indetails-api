@@ -136,7 +136,8 @@ public sealed class ProposeExchangeRateTool(IBillingSettingsService settings) : 
     public override string Description =>
         "Propose a new dated exchange rate for a currency against the US dollar. Costs, overhead and invoices in that " +
         "currency from that day convert at it, so a backdated rate changes past figures; payments keep their own rate. " +
-        "It can't be edited or deleted afterwards. The user confirms by typing the rate.";
+        "It can't be edited or deleted afterwards. A public feed adds today's LBP rate automatically each morning, so " +
+        "once a currency has a rate from today a different one can only apply from tomorrow. The user confirms by typing the rate.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -157,7 +158,7 @@ public sealed class ProposeExchangeRateTool(IBillingSettingsService settings) : 
         return (new ExchangeRateArgs(request),
             new ProtonPreview($"Set the {currency} rate",
                 [
-                    new ProtonChange("1 USD", latest is null ? null : $"{MoneyText.Amount(latest.RatePerUsd, currency)} (from {ProjectText.Date(latest.EffectiveFrom)})",
+                    new ProtonChange("1 USD", latest is null ? null : $"{MoneyText.Amount(latest.RatePerUsd, currency)} (from {ProjectText.Date(latest.EffectiveFrom)}{(latest.Automatic ? ", added by the daily feed" : "")})",
                         MoneyText.Amount(request.RatePerUsd, currency)),
                     new ProtonChange("From", null, ProjectText.Date(from)),
                 ],

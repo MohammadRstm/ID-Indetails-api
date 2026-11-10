@@ -4,6 +4,7 @@ using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Clients;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Dashboard;
+using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Finance;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
@@ -48,13 +49,17 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // Tuesday 10 February 2026 (Beirut is UTC+2): an hour on the project (09:00-10:00) and an hour on internal work
         // (11:00-12:00), 10 each, and the paid hour of break shared between them, 5 each. Then an LBP expense converted
-        // at today's rate (10), and one dated before any LBP rate.
+        // at today's rate (10), and one dated before any LBP rate. The API refuses that one now (exchange_rate_missing), but
+        // expenses recorded before the rule can be like it, so it is recorded in USD and switched to LBP in the database.
         await Work.InsertAsync(designer.User.Id, project.Id, "2026-02-10 07:00:00", "2026-02-10 08:00:00");
         await Work.InsertAsync(designer.User.Id, internalWork.Id, "2026-02-10 09:00:00", "2026-02-10 10:00:00");
         (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses", new { label = "Taxi", amount = 895_000m, currency = "LBP" }, admin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
-            new { label = "Old print run", amount = 1_790_000m, currency = "LBP", spentOn = "2025-12-15" }, admin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        var recorded = await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+            new { label = "Old print run", amount = 1m, currency = "USD", spentOn = "2025-12-15" }, admin.AccessToken);
+        recorded.IsSuccessStatusCode.ShouldBeTrue(await recorded.Content.ReadAsStringAsync());
+        var oldPrintRun = await recorded.ReadAsync<ExpenseResponse>();
+        await _steps.ExecuteAsync("UPDATE project_expenses SET currency = 'LBP', amount = 1790000 WHERE id = @id", ("@id", oldPrintRun.Id));
 
         // Invoiced 3,000 two months ago (45-day terms, so overdue), 1,000 paid against it and 500 on account.
         var draft = await (await Client.PostJsonAsync($"/api/projects/{project.Id}/invoices",
