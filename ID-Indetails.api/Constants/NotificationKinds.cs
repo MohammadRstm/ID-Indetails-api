@@ -89,6 +89,15 @@ public static class NotificationKinds
     /// <summary>Hours were excused for you in the hours ledger (subject: the excuse).</summary>
     public const string HoursExcused = "hours_excused";
 
+    /// <summary>An author submitted an internal BOQ draft to a site (subject: the BOQ). To its pricing managers and owner.</summary>
+    public const string BoqSubmitted = "boq_submitted";
+
+    /// <summary>
+    /// Someone changed your submitted BOQ draft (subject: the BOQ; digest key <c>boq-edited:{id}</c>). Company-level, so an
+    /// author who doesn't see Execution gets it; the payload names the site.
+    /// </summary>
+    public const string BoqDraftEdited = "boq_draft_edited";
+
     /// <summary>Your working schedule changed from a date (subject: you).</summary>
     public const string ScheduleChanged = "schedule_changed";
 

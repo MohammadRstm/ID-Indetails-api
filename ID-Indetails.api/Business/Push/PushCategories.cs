@@ -46,6 +46,8 @@ public static class PushCategories
         [NotificationKinds.MeetingCancelled] = NotificationCategory.Meetings,
 
         [NotificationKinds.MaterialsAdded] = NotificationCategory.Sites,
+        [NotificationKinds.BoqSubmitted] = NotificationCategory.Sites,
+        [NotificationKinds.BoqDraftEdited] = NotificationCategory.Sites,
         [NotificationKinds.LabourWeekSubmitted] = NotificationCategory.Sites,
         [PushKinds.LabourWeekReminder] = NotificationCategory.Sites,
 

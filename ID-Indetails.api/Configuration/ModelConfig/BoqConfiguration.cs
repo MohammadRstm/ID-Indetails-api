@@ -19,6 +19,9 @@ public class BoqConfiguration : IEntityTypeConfiguration<Boq>
             // an internal draft has no number and is never agreed; a reason is a VO's
             t.HasCheckConstraint("ck_boqs_number_by_kind", "(`kind` = 'internal') = (`number` IS NULL)");
             t.HasCheckConstraint("ck_boqs_internal_is_draft", "`kind` <> 'internal' OR `status` = 'draft'");
+            // only an internal draft is submitted, and only a submitted one keeps a copy of its lines
+            t.HasCheckConstraint("ck_boqs_submitted_internal", "`submitted_at` IS NULL OR `kind` = 'internal'");
+            t.HasCheckConstraint("ck_boqs_submitted_lines", "`submitted_lines` IS NULL OR `submitted_at` IS NOT NULL");
             t.HasCheckConstraint("ck_boqs_reason_only_vo", "`reason` IS NULL OR `kind` = 'vo'");
             t.HasCheckConstraint("ck_boqs_agreed", "(`status` = 'agreed') = (`agreed_at` IS NOT NULL)");
             t.HasCheckConstraint("ck_boqs_adjustment_value", "(`adjustment_type` = 'none') = (`adjustment_value` IS NULL)");
@@ -29,6 +32,7 @@ public class BoqConfiguration : IEntityTypeConfiguration<Boq>
         });
 
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.SubmittedLines).HasColumnType("mediumtext");
 
         builder.HasIndex(x => x.Number).IsUnique();
         builder.HasIndex(x => new { x.ProjectId, x.Kind, x.Status });

@@ -31,9 +31,9 @@ public class PushTextTests
         """).RootElement;
 
     [Fact]
-    public void There_are_65_notification_kinds_and_each_has_its_own_text()
+    public void There_are_67_notification_kinds_and_each_has_its_own_text()
     {
-        AllKinds.Count.ShouldBe(65);
+        AllKinds.Count.ShouldBe(67);
         foreach (var kind in AllKinds)
         {
             var text = PushText.ForNotification(kind, "Rana Haddad", "Villa Haddad", Revealing, 2);

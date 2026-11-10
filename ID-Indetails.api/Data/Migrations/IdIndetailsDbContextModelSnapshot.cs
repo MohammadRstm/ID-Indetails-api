@@ -408,6 +408,16 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(20)")
                         .HasColumnName("status");
 
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("submitted_at");
+
+                    b.Property<string>("SubmittedLines")
+                        .HasMaxLength(255)
+                        .HasColumnType("mediumtext")
+                        .HasColumnName("submitted_lines");
+
                     b.Property<decimal>("SubtotalUsd")
                         .HasPrecision(14, 2)
                         .HasColumnType("decimal(14,2)")
@@ -466,6 +476,10 @@ namespace ID_Indetails.api.Data.Migrations
                             t.HasCheckConstraint("ck_boqs_reason_only_vo", "`reason` IS NULL OR `kind` = 'vo'");
 
                             t.HasCheckConstraint("ck_boqs_status", "`status` IN ('draft', 'agreed')");
+
+                            t.HasCheckConstraint("ck_boqs_submitted_internal", "`submitted_at` IS NULL OR `kind` = 'internal'");
+
+                            t.HasCheckConstraint("ck_boqs_submitted_lines", "`submitted_lines` IS NULL OR `submitted_at` IS NOT NULL");
                         });
                 });
 
@@ -2526,8 +2540,7 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             Code = "boq:create",
-                            Description = "Write internal draft BOQs of a site",
-                            DomainCode = "execution"
+                            Description = "Write internal draft BOQs for Execution's active sites and submit them, from either business"
                         },
                         new
                         {

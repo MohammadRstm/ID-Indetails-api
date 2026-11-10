@@ -87,6 +87,10 @@ public static class PushText
                 ? $"Your working schedule changes from {Day(from)}."
                 : "Your working schedule changed."),
 
+            // BOQ drafts: who and which, never the amounts
+            NotificationKinds.BoqSubmitted => new("BOQ submitted", $"{Named(Text(payload, "authorName"), actor)} submitted {Named(Text(payload, "title"), "a BOQ draft")} on {project}."),
+            NotificationKinds.BoqDraftEdited => new("BOQ draft changed", $"{Named(Text(payload, "editorName"), actor)} changed your BOQ draft {Named(Text(payload, "title"), "")} on {Named(Text(payload, "projectTitle"), AProject)}."),
+
             // time off: who and when, never why or whether it is paid
             NotificationKinds.TimeOffRequested => new("Time off", $"{Named(Text(payload, "name"), Someone)} asks for time off{From(payload)}."),
             NotificationKinds.TimeOffUndecided => new("Time off", $"{Named(Text(payload, "name"), Someone)}'s time off{From(payload)} is still undecided."),

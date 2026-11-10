@@ -88,6 +88,8 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `portal_mention` | Staff mentioned in a client portal message or comment, once each (`portal_mention:m{id}` / `c{id}`) | `message` or `comment` (subject id: the item, for comments) | `projectTitle`, `authorName`, `itemTitle` |
 | `project_file_comment` | The file's uploader and everyone who commented on it before, never the author, when someone comments on a project file. Rolling per file (`file_comments:{itemId}`, counting again from 1 once read). Push: Messages, "File comment" | the item | `projectTitle`, `fileTitle`, `authorName` (never the text) |
 | `project_closed` | Holders of `financial:view`, when a client project with revenue is finalised (completed, or archived without being completed). Each finalisation sends it: a project reopened and completed again reports its new margin | the project | `projectTitle`, `marginPct` (the final margin as a percentage, one decimal; never an amount) |
+| `boq_submitted` | Holders of `project:pricing_manage` in Execution, and the site's owner, when an author submits an internal BOQ draft ([execution.md](execution.md#internal-drafts-private-and-submitted)) | the BOQ | `authorName`, `title` (never an amount) |
+| `boq_draft_edited` | The draft's author, when someone else saves their submitted draft. Company-level, so an author who does not see Execution gets it. Rolling per draft (`boq-edited:{id}`), shown as new again after it was read | the BOQ | `editorName`, `title`, `projectId`, `projectTitle` |
 
 ## Scheduled notifications
 
@@ -158,7 +160,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `requirements` | `requirement_assigned`, `requirements_added`, `requirement_done`, `requirement_due_soon`, `requirement_overdue` |
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
-| `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder` |
+| `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder`, `boq_submitted`, `boq_draft_edited` |
 | `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `pocket_round_off`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed`, and the twelve `time_off_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `rejected`, `expired`, `undecided`, `starts`, `back`, `ended`, `online`, `hours`) |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
