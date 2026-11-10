@@ -108,7 +108,10 @@ public class BillingSettingsTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var added = await Client.PostJsonAsync("/api/exchange-rates", new { currency = "lbp", ratePerUsd = 89_700m, effectiveFrom = "2026-07-01" }, superAdmin.AccessToken);
         ((int)added.StatusCode).ShouldBe(201, await added.Content.ReadAsStringAsync());
-        (await added.ReadAsync<ExchangeRateResponse>()).Currency.ShouldBe("LBP");
+        var rate = await added.ReadAsync<ExchangeRateResponse>();
+        rate.Currency.ShouldBe("LBP");
+        // added by a person, not by the daily feed
+        rate.Automatic.ShouldBeFalse();
 
         await (await Client.PostJsonAsync("/api/exchange-rates", new { currency = "LBP", ratePerUsd = 89_000m, effectiveFrom = "2026-07-01" }, superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.RateNotAfterLatest);

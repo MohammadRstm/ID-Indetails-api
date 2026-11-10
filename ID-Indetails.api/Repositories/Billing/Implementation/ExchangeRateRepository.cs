@@ -1,3 +1,4 @@
+using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Billing.Abstraction;
@@ -26,6 +27,17 @@ public sealed class ExchangeRateRepository(IdIndetailsDbContext db) : IExchangeR
         => db.ExchangeRates
             .Where(r => r.Currency == currency)
             .MaxAsync(r => (DateOnly?)r.EffectiveFrom, cancellationToken);
+
+    public async Task<IReadOnlySet<long>> AddedByFeedAsync(IReadOnlyCollection<long> rateIds, CancellationToken cancellationToken = default)
+        => rateIds.Count == 0
+            ? new HashSet<long>()
+            : (await db.ActivityEvents
+                .AsNoTracking()
+                .Where(e => e.Kind == ActivityEventKinds.ExchangeRateSet && e.SubjectType == "exchange_rate" && e.ActorId == null
+                    && e.SubjectId != null && rateIds.Contains(e.SubjectId.Value))
+                .Select(e => e.SubjectId!.Value)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
 
     public void Add(ExchangeRate rate) => db.ExchangeRates.Add(rate);
 }

@@ -89,6 +89,10 @@ The live connections pass their access token in the query string; the log writes
 
 Development logs are plain text. Elsewhere they are JSON lines (see [deployment.md](deployment.md#logs-and-status)).
 
+## Exchange rate feed
+
+The daily exchange rate feed is off in development (`ExchangeRateFeed:Enabled` is false in `appsettings.Development.json`), so a local API doesn't write rates into your `id_indetails` database. Turn it on with `ExchangeRateFeed__Enabled=true`. See [billing.md](billing.md#the-daily-feed).
+
 ## Tests
 
 ```bash
