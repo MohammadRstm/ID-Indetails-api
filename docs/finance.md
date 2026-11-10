@@ -116,12 +116,12 @@ Judgements and simulations on one project, kept apart from the Financials page's
   - The steps always add up to `agreedProfit`.
   - A step of 0 is left out, except `base_price` on client work. Internal work has only its costs and pocket money.
 - **Departments** (`departments[]`, Design only; `null` on a site): from the departments service without its people, so no figure here sits beside a person. Each row has:
-  - `id`, `name` and `sharePercent` (its part of the price, as a percentage);
+  - `id`, `name` and `share` (its part of the price, a fraction like the departments endpoint's: 0.25 is 25%);
   - `budget`, `cost`, `left` (below 0 when it is over its budget) and `minutes`;
-  - `labourSharePercent`: its cost ÷ the project's labour cost, to 1 decimal; `null` while there is no labour cost;
+  - `labourShare`: its cost ÷ the project's labour cost, a fraction to 4 decimals; `null` while there is no labour cost;
   - `unconverted[]`: labour logged in it with no exchange rate on its day, per currency, left out of `cost` and `left`.
 
-  Hours of people in no department, or in one no longer on the project, are a last row named "Other hours", with no `id` and no `sharePercent`.
+  Hours of people in no department, or in one no longer on the project, are a last row named "Other hours", with no `id` and no `share`.
 - **`basis`:** `method` (the profit formula above), `assumptions` (the margin rule, and the projection as a straight line when there is one) and `leftOut`: costs with no exchange rate on their day (amount, currency and source), hours of people with no pay record, and for internal work that it has no revenue, margin or floor.
 
 ### Scenarios

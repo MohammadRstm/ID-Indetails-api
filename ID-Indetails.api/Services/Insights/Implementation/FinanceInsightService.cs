@@ -196,9 +196,9 @@ public sealed class FinanceInsightService(
 
     private static IReadOnlyList<DepartmentInsightResponse> DepartmentsOf(ProjectDepartmentsResponse response, decimal labour)
     {
-        decimal? ShareOfLabour(decimal cost) => labour > 0 ? Math.Round(cost / labour * 100, 1, MidpointRounding.AwayFromZero) : null;
+        decimal? ShareOfLabour(decimal cost) => labour > 0 ? Math.Round(cost / labour, 4, MidpointRounding.AwayFromZero) : null;
         DepartmentInsightResponse Row(long? id, string name, decimal? share, DepartmentMoneyResponse money) => new(
-            id, name, share is { } s ? s * 100 : null, money.Budget, money.Cost, money.Left, money.Minutes, ShareOfLabour(money.Cost), money.Unconverted);
+            id, name, share, money.Budget, money.Cost, money.Left, money.Minutes, ShareOfLabour(money.Cost), money.Unconverted);
 
         var rows = response.Departments
             .Where(d => d.Money is not null)

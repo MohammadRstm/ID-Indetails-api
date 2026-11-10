@@ -129,7 +129,7 @@ public sealed class GetProjectFinancialSummaryTool(IFinanceInsightService insigh
             site ? p.SiteCashProfit : null, site ? p.ToPocket : null, site ? p.FromPocket : null,
             p.Bridge.Select(s => new BridgeRow(s.Kind, s.Amount)).ToList(),
             p.Departments?.Select(d => new InsightDepartmentRow(
-                d.Id, d.Name, d.SharePercent, d.Budget, d.Cost, d.Left, d.Minutes, d.LabourSharePercent,
+                d.Id, d.Name, d.Share * 100, d.Budget, d.Cost, d.Left, d.Minutes, d.LabourShare * 100,
                 d.Unconverted.Count > 0 ? d.Unconverted : null)).ToList(),
             "All time, in USD. Agreed revenue, cost, agreed_profit and the bridge are net of TVA; agreed_with_tva, received " +
             "and owed include it. The bridge's steps add up to agreed_profit. Departments carry no people: never work out " +

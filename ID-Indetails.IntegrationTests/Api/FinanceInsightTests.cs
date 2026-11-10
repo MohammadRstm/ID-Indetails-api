@@ -177,20 +177,20 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         var row = insight.Departments.ShouldNotBeNull().ShouldHaveSingleItem();
         row.ShouldSatisfyAllConditions(
             r => r.Id.ShouldBe(architecture),
-            r => r.SharePercent.ShouldBe(100m),
+            r => r.Share.ShouldBe(1m),
             r => r.Budget.ShouldBe(12_000m),
             r => r.Budget.ShouldBe(architectureMoney.Budget),
             r => r.Cost.ShouldBe(40m),
             r => r.Cost.ShouldBe(architectureMoney.Cost),
             r => r.Left.ShouldBe(11_960m),
             r => r.Minutes.ShouldBe(180),
-            r => r.LabourSharePercent.ShouldBe(100m),
+            r => r.LabourShare.ShouldBe(1m),
             r => r.Unconverted.ShouldBeEmpty());
 
         // never a person: no people, no one's hours, rate or name
         using var json = JsonDocument.Parse(body);
         json.RootElement.GetProperty("departments")[0].EnumerateObject().Select(p => p.Name).ShouldBe(
-            ["id", "name", "sharePercent", "budget", "cost", "left", "minutes", "labourSharePercent", "unconverted"], ignoreOrder: true);
+            ["id", "name", "share", "budget", "cost", "left", "minutes", "labourShare", "unconverted"], ignoreOrder: true);
         body.ShouldNotContain("\"people\"");
         body.ShouldNotContain("\"person\"");
         body.ShouldNotContain("hourlyRate");

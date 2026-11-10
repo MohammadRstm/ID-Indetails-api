@@ -12,17 +12,17 @@ public sealed record BridgeStepResponse(BridgeStepKind Kind, decimal Amount);
 
 /// <summary>A Design department's part of the project and the labour logged in it. Never a person's cost.</summary>
 /// <param name="Id">Null for the hours of people in no department, or in one no longer on the project.</param>
-/// <param name="SharePercent">Its part of the price; null for the other hours.</param>
-/// <param name="LabourSharePercent">Its share of the project's labour cost, while there is any.</param>
+/// <param name="Share">Its part of the price, a fraction (0.25 is 25%); null for the other hours.</param>
+/// <param name="LabourShare">Its share of the project's labour cost, a fraction, while there is any.</param>
 public sealed record DepartmentInsightResponse(
     long? Id,
     string Name,
-    decimal? SharePercent,
+    decimal? Share,
     decimal Budget,
     decimal Cost,
     decimal Left,
     int Minutes,
-    decimal? LabourSharePercent,
+    decimal? LabourShare,
     IReadOnlyList<CurrencyAmountResponse> Unconverted);
 
 /// <summary>
