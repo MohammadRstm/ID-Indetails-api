@@ -60,6 +60,7 @@ public static class PushCategories
         [NotificationKinds.InvoiceDraftWaiting] = NotificationCategory.Money,
         [NotificationKinds.PaymentRecorded] = NotificationCategory.Money,
         [NotificationKinds.PocketRequested] = NotificationCategory.Money,
+        [NotificationKinds.PocketRoundOff] = NotificationCategory.Money,
         [NotificationKinds.ChangeBlocked] = NotificationCategory.Money,
         [NotificationKinds.ProfitLow] = NotificationCategory.Money,
         [NotificationKinds.ProfitAtZero] = NotificationCategory.Money,

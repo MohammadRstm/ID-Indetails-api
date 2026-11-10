@@ -4190,6 +4190,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("permits_price");
 
+                    b.Property<long?>("PhotoFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("photo_file_id");
+
                     b.Property<byte>("ProgressPct")
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("progress_pct");
@@ -4276,6 +4280,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("OwnerId")
                         .HasDatabaseName("ix_projects_owner_id");
+
+                    b.HasIndex("PhotoFileId")
+                        .HasDatabaseName("ix_projects_photo_file_id");
 
                     b.HasIndex("ClientId", "DomainCode")
                         .HasDatabaseName("ix_projects_client_id_domain_code");
@@ -8768,6 +8775,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_projects_users_owner_id");
+
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("PhotoFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_projects_files_photo_file_id");
 
                     b.HasOne("ID_Indetails.api.Models.Client", "Client")
                         .WithMany("Projects")

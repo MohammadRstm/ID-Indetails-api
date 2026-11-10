@@ -17,6 +17,21 @@ public class PocketRulesTests
     }
 
     [Fact]
+    public void The_round_off_is_what_is_over_the_profits_last_whole_thousand()
+    {
+        PocketRules.RoundOff(243_459m).ShouldBe(459m);
+        PocketRules.RoundOff(4_900m).ShouldBe(900m);
+        PocketRules.RoundOff(1_000.50m).ShouldBe(0.50m);
+        // already round, or under a thousand (moving it all would leave nothing): nothing to round off
+        PocketRules.RoundOff(243_000m).ShouldBe(0m);
+        PocketRules.RoundOff(900m).ShouldBe(0m);
+        PocketRules.RoundOff(0m).ShouldBe(0m);
+        PocketRules.RoundOff(-1_250m).ShouldBe(0m);
+        // what it leaves can always be moved: it stays above zero
+        PocketRules.CheckContribution(PocketRules.RoundOff(1_999m), profit: 1_999m).ShouldBeNull();
+    }
+
+    [Fact]
     public void A_contribution_leaves_the_site_above_zero()
     {
         PocketRules.CheckContribution(399.99m, profit: 400).ShouldBeNull();

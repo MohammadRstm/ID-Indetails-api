@@ -31,9 +31,9 @@ public class PushTextTests
         """).RootElement;
 
     [Fact]
-    public void There_are_66_notification_kinds_and_each_has_its_own_text()
+    public void There_are_67_notification_kinds_and_each_has_its_own_text()
     {
-        AllKinds.Count.ShouldBe(66);
+        AllKinds.Count.ShouldBe(67);
         foreach (var kind in AllKinds)
         {
             var text = PushText.ForNotification(kind, "Rana Haddad", "Villa Haddad", Revealing, 2);
@@ -64,9 +64,10 @@ public class PushTextTests
     {
         string Body(string kind) => PushText.ForNotification(kind, "Rana", "Villa Haddad", Revealing, 1).Body;
 
-        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(17);
+        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(18);
         Body(NotificationKinds.PaymentRecorded).ShouldBe("Payment recorded. Open ID InDetails to see it.");
         Body(NotificationKinds.PocketRequested).ShouldBe("A site asks for pocket money. Open ID InDetails to decide.");
+        Body(NotificationKinds.PocketRoundOff).ShouldBe("A site's profit can be rounded off into the pocket money. Open ID InDetails to see it.");
         Body(NotificationKinds.ChangeBlocked).ShouldBe("A change was stopped to keep a project above zero profit. Open ID InDetails to decide.");
         Body(NotificationKinds.ProfitLow).ShouldBe("A project is close to zero profit.");
         Body(NotificationKinds.ProfitAtZero).ShouldBe("A project is at zero profit or below.");

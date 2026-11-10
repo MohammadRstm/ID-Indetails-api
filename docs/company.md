@@ -25,10 +25,11 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `POST /api/company/overhead/{id}/amounts` | `overhead:manage` | A new monthly amount from a month |
 | `POST /api/company/overhead/{id}/currency` | `overhead:manage` | `{ currency, amount, fromMonth }`: charges it in another currency from a month (this month when empty). Returns the line charged from then |
 | `POST /api/company/overhead/{id}/cancel`, `/resume` | `overhead:manage` | Stops it after this month, or undoes that |
-| `GET /api/account-labels?includeArchived=` | Signed in (`company_settings:manage` for `includeArchived=true`) | The account labels, first to last: `[{ id, name, position, archived }]` |
+| `GET /api/account-labels?includeArchived=` | Signed in (`company_settings:manage` for `includeArchived=true`) | The account labels, first to last: `[{ id, name, position, archived, inUse }]`. `inUse`: payments or site expenses are filed under it |
 | `POST /api/account-labels` | `company_settings:manage` | `{ name }`: a new label, last in the list |
 | `PUT /api/account-labels/{id}` | `company_settings:manage` | `{ name }`: renames it |
 | `POST /api/account-labels/{id}/archive`, `/restore` | `company_settings:manage` | Stops it being picked, or brings it back last. Repeating either changes nothing |
+| `DELETE /api/account-labels/{id}` | `company_settings:manage` | Removes a label nothing is filed under (`204`); one that payments or site expenses carry is `422 account_label_in_use` and can only be archived |
 | `PUT /api/account-labels/order` | `company_settings:manage` | `{ ids }`: the new order of the labels that can be picked, every one once (`422 account_label_order_stale` otherwise); answers every label, archived ones included |
 | `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
 | `GET /api/company/overview/monthly?months=13` or `?year=2026` | `company:view` | Revenue, costs, overhead, fixed salaries (`fixedSalaries`), paid leave (`paidLeave`) and the overtime premium (`overtimePremium`) per month: the profit before company expenses, after overhead, and the net profit after all of them, as the overview's (whole months; the last 1–36 months, or a year's months from January, up to this month in the current year; a future year, or one before 2000, is `400`) |
@@ -51,7 +52,8 @@ Settings, working time, personal schedules and company overhead. These belong to
 One company-wide list of labels (`account_labels`: Concrete, Finishing and Permits are seeded) that payments and expenses are filed under. Super admins edit it in Settings; everyone signed in can read it. `Business/Company/AccountLabelRules.cs`:
 
 - A name is trimmed, required and at most 40 characters. Names are unique whatever their case, archived labels included (`409 account_label_taken`).
-- Archiving stops a label being picked but never removes it: what already carries it keeps it. Restoring puts it last. Nothing is deleted.
+- Archiving stops a label being picked but never removes it: what already carries it keeps it. Restoring puts it last.
+- Only a label nothing is filed under (no payment, no site expense) can be deleted. One in use can only be archived, so no payment or expense ever loses its label; the database refuses it too (the foreign keys restrict). A deleted label's name is free again.
 - Every change is an `account_label_changed` event (company level, `change` and `name` in the payload), so only `company:view` sees it in the feed.
 
 ## Working time

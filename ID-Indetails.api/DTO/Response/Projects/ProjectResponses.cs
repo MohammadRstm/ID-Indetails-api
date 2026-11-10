@@ -182,6 +182,9 @@ public sealed record ProjectSummaryResponse
 
     public string? Tint { get; init; }
 
+    /// <summary>The project's own photo, read through <c>GET /api/files/{id}</c>; shown instead of the icon tile when set.</summary>
+    public long? PhotoFileId { get; init; }
+
     public ProjectStatus Status { get; init; }
 
     public BillingType BillingType { get; init; }
@@ -246,6 +249,9 @@ public sealed record ProjectResponse
     public string? Icon { get; init; }
 
     public string? Tint { get; init; }
+
+    /// <summary>The project's own photo, read through <c>GET /api/files/{id}</c>; shown instead of the icon tile when set.</summary>
+    public long? PhotoFileId { get; init; }
 
     public ProjectStatus Status { get; init; }
 

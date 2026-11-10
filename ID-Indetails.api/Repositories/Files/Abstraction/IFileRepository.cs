@@ -7,9 +7,10 @@ public sealed record FileView(long Id, string Name, string MimeType, long SizeBy
 
 /// <summary>Everything a file is attached to, which decides who may download it.</summary>
 /// <param name="IsWebsite">A picture or the favicon of the company's public website.</param>
-public sealed record FileUses(bool IsPhoto, bool IsLogo, IReadOnlyList<long> ConversationIds, IReadOnlyList<long> EntryIds, bool IsWebsite)
+/// <param name="ProjectDomains">The domains of the projects whose photo it is.</param>
+public sealed record FileUses(bool IsPhoto, bool IsLogo, IReadOnlyList<long> ConversationIds, IReadOnlyList<long> EntryIds, bool IsWebsite, IReadOnlyList<string> ProjectDomains)
 {
-    public bool IsUsed => IsPhoto || IsLogo || IsWebsite || ConversationIds.Count > 0 || EntryIds.Count > 0;
+    public bool IsUsed => IsPhoto || IsLogo || IsWebsite || ConversationIds.Count > 0 || EntryIds.Count > 0 || ProjectDomains.Count > 0;
 }
 
 public interface IFileRepository

@@ -23,6 +23,12 @@ public static class AccountLabelRules
                 ? RuleDenial.BusinessRule(ErrorCodes.AccountLabelArchived, "This account label is archived: pick another one.")
                 : null;
 
+    /// <summary>Only a label nothing is filed under can be deleted: one that payments or expenses carry is archived instead.</summary>
+    public static RuleDenial? CheckDeletable(bool inUse)
+        => inUse
+            ? RuleDenial.BusinessRule(ErrorCodes.AccountLabelInUse, "Payments or expenses are filed under this label, so it can't be deleted. Archive it instead.")
+            : null;
+
     /// <summary>A new label goes last.</summary>
     public static int NextPosition(IEnumerable<int> existing) => existing.DefaultIfEmpty(0).Max() + 1;
 

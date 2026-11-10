@@ -20,6 +20,15 @@ public static class PocketRules
     public static decimal Suggest(decimal agreed, decimal profit)
         => Math.Max(0, Math.Round(TargetMargin * agreed - profit, 2, MidpointRounding.AwayFromZero));
 
+    /// <summary>A site's profit reads cleanly in whole thousands: what is over the last one can go to the pocket money.</summary>
+    public const decimal RoundTo = 1000m;
+
+    /// <summary>
+    /// What is over the site's last whole thousand of profit, so moving it leaves a round number: $243,459 gives $459,
+    /// $4,900 gives $900. Nothing when the profit is already round, or under a thousand (moving it would leave nothing).
+    /// </summary>
+    public static decimal RoundOff(decimal profit) => profit < RoundTo ? 0 : profit % RoundTo;
+
     /// <summary>Only an Execution client site moves money with the pocket.</summary>
     public static RuleDenial? CheckSite(string domain, BillingType billingType)
         => domain == DomainCodes.Execution && billingType == BillingType.Client

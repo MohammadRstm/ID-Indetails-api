@@ -8,6 +8,16 @@ namespace ID_Indetails.UnitTests.Business;
 public class AccountLabelRulesTests
 {
     [Fact]
+    public void Only_a_label_nothing_is_filed_under_can_be_deleted()
+    {
+        AccountLabelRules.CheckDeletable(inUse: false).ShouldBeNull();
+
+        var used = AccountLabelRules.CheckDeletable(inUse: true)!;
+        used.Code.ShouldBe(ErrorCodes.AccountLabelInUse);
+        used.Kind.ShouldBe(DenialKind.BusinessRule);
+    }
+
+    [Fact]
     public void A_new_label_goes_last()
     {
         AccountLabelRules.NextPosition([]).ShouldBe(1);

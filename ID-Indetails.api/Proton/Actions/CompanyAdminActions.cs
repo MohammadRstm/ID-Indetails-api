@@ -210,6 +210,7 @@ public enum ProtonLabelStep
     Archive,
     Restore,
     Order,
+    Delete,
 }
 
 /// <param name="Before">The labels as proposed (<see cref="CompanyAdminText.Signature"/>): if any changed since, the change is refused.</param>
@@ -217,10 +218,10 @@ public sealed record AccountLabelArgs(ProtonLabelStep Step, long? Id, string Bef
 
 public sealed record AccountLabelInput : ProtonActionInput
 {
-    [Description("create, rename, archive (it can no longer be picked; what carries it keeps it), restore, or order (the pick list).")]
+    [Description("create, rename, archive (it can no longer be picked; what carries it keeps it), restore, order (the pick list), or delete (only a label nothing is filed under).")]
     public required ProtonLabelStep Step { get; init; }
 
-    [Description("create: the new label's name. rename, archive, restore: the existing label, by name.")]
+    [Description("create: the new label's name. rename, archive, restore, delete: the existing label, by name.")]
     public string? Name { get; init; }
 
     [Description("rename: the new name.")]
@@ -232,8 +233,8 @@ public sealed record AccountLabelInput : ProtonActionInput
 
 /// <summary>
 /// The company's account labels (what payments and expenses are filed under), through the account-label endpoints once
-/// confirmed. Labels are found by name. Renaming and archiving need the label's name typed; adding, restoring and
-/// ordering need the second step.
+/// confirmed. Labels are found by name. Renaming, archiving and deleting need the label's name typed; adding, restoring
+/// and ordering need the second step.
 /// </summary>
 public sealed class ProposeAccountLabelTool(IAccountLabelService labels) : ProtonActionTool<AccountLabelInput, AccountLabelArgs>
 {
@@ -241,12 +242,13 @@ public sealed class ProposeAccountLabelTool(IAccountLabelService labels) : Proto
 
     public override string Description =>
         "Propose a change to the company's account labels (what payments and site expenses are filed under): add one, " +
-        "rename it, archive it (it can no longer be picked; what already carries it keeps it), restore it, or reorder the " +
-        "pick list. Labels are named, not numbered. Renaming and archiving are confirmed by typing the label's name.";
+        "rename it, archive it (it can no longer be picked; what already carries it keeps it), restore it, reorder the " +
+        "pick list, or delete one nothing is filed under (a label in use is archived instead). Labels are named, not numbered. " +
+        "Renaming, archiving and deleting are confirmed by typing the label's name.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
-    // add, rename, archive, restore and order share one policy
+    // add, rename, archive, restore, order and delete share one policy
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.OfWrite<AccountLabelsController>(nameof(AccountLabelsController.Create));
 
     protected override async Task<(AccountLabelArgs, ProtonPreview, ProtonRef?)> ProposeAsync(
@@ -317,6 +319,17 @@ public sealed class ProposeAccountLabelTool(IAccountLabelService labels) : Proto
                         "It can no longer be picked for new payments and expenses; what already carries it keeps it. It can be restored.",
                         Confirm: ProtonConfirm.Typed, Phrase: label.Name, Area: "company"),
                     null);
+            case ProtonLabelStep.Delete:
+                if (label.InUse)
+                {
+                    throw new ProtonToolInputException($"Payments or expenses are filed under {label.Name}, so it can't be deleted: archive it instead.");
+                }
+
+                return (new AccountLabelArgs(input.Step, label.Id, before, null, null),
+                    new ProtonPreview($"Delete the account label {label.Name}", [new ProtonChange("Account label", label.Name, "Deleted")],
+                        "Nothing is filed under it. It is removed for good; a label with the same name can be added again later.",
+                        Confirm: ProtonConfirm.Typed, Phrase: label.Name, Area: "company", Irreversible: true),
+                    null);
             default:
                 if (!label.Archived)
                 {
@@ -353,6 +366,9 @@ public sealed class ProposeAccountLabelTool(IAccountLabelService labels) : Proto
             case ProtonLabelStep.Restore:
                 var restored = await labels.RestoreAsync(args.Id!.Value, cancellationToken);
                 return new ProtonActionDone($"Restored the account label {restored.Name}.", "account_label", restored.Id, []);
+            case ProtonLabelStep.Delete:
+                await labels.DeleteAsync(args.Id!.Value, cancellationToken);
+                return new ProtonActionDone("Deleted the account label.", "account_label", args.Id.Value, []);
             default:
                 await labels.OrderAsync(args.Order!, cancellationToken);
                 return new ProtonActionDone("Reordered the account labels.", "account_label", 0, []);

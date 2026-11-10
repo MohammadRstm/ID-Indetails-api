@@ -239,6 +239,9 @@ public static class ErrorCodes
     /// <summary>422. An archived account label can't be newly picked.</summary>
     public const string AccountLabelArchived = "account_label_archived";
 
+    /// <summary>422. Payments or expenses are filed under this account label, so it can only be archived.</summary>
+    public const string AccountLabelInUse = "account_label_in_use";
+
     /// <summary>400. Supervision can't be recorded as taken on a day that hasn't come.</summary>
     public const string TakenDateInFuture = "taken_date_in_future";
 

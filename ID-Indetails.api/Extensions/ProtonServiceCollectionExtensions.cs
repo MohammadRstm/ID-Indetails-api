@@ -227,6 +227,7 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, ProposeBillingSettingsTool>();
         services.AddScoped<IProtonTool, ProposeExchangeRateTool>();
         services.AddScoped<IProtonTool, ProposeProjectMoneyTool>();
+        services.AddScoped<IProtonTool, ProposePocketContributionTool>();
         services.AddScoped<IProtonTool, ProposeBoqTool>();
         services.AddScoped<IProtonTool, ProposeEditBoqTool>();
         services.AddScoped<IProtonTool, ProposeBoqAgreementTool>();

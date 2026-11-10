@@ -428,6 +428,44 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
     }
 
     [Fact]
+    public async Task Proton_moves_a_sites_round_off_or_a_typed_amount_into_the_pocket_money()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var projects = new ProjectTestSteps(_steps);
+        var site = await projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, projectFee: 4_900m);
+        async Task<decimal> ProfitAsync() => (await GetAsync<ProjectResponse>(superAdmin, $"/api/projects/{site.Id}")).Money!.Profit;
+
+        // the round-off is worked out from the profit, and still typed on the card
+        var (round, _) = await ProposeAsync(superAdmin, "propose_pocket_contribution", new { project_id = site.Id, round_off = true }, "Round off the site's profit into the pocket");
+        round.PendingAction!.Preview.Phrase.ShouldBe("900");
+        round.PendingAction.Preview.Changes.Single(c => c.Label == "Site profit").After.ShouldBe(MoneyText.Amount(4_000m, "USD"));
+        await ConfirmAsync(superAdmin, round, "900");
+        (await ProfitAsync()).ShouldBe(4_000m);
+
+        // already round: nothing to propose
+        var (_, nothing) = await ProposeAsync(superAdmin, "propose_pocket_contribution", new { project_id = site.Id, round_off = true }, "Round it off again");
+        nothing["message"]!.GetValue<string>().ShouldContain("already a round");
+
+        // an amount must be the user's own, and never all of the profit
+        var (_, untyped) = await ProposeAsync(superAdmin, "propose_pocket_contribution", new { project_id = site.Id, amount = 250m }, "Move some of it to the pocket");
+        untyped["message"]!.GetValue<string>().ShouldContain("didn't give 250");
+        var (_, all) = await ProposeAsync(superAdmin, "propose_pocket_contribution", new { project_id = site.Id, amount = 4_000m }, "Move 4000 to the pocket");
+        all["message"]!.GetValue<string>().ShouldContain("stays above zero");
+
+        // a card made before the profit changed is refused, not applied to the new profit
+        var (typed, _) = await ProposeAsync(superAdmin, "propose_pocket_contribution", new { project_id = site.Id, amount = 250m }, "Move 250 to the pocket");
+        (await Client.PostJsonAsync("/api/execution/pocket/contributions", new { projectId = site.Id, amount = 100m }, superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await (await Client.PostJsonAsync($"/api/proton/actions/{typed.PendingAction!.Id}/confirm", new { typed.ConversationId, typed = "250" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ProtonActionStale);
+        (await ProfitAsync()).ShouldBe(3_900m);
+
+        // a Design project has no pocket money
+        var design = await projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var (_, refused) = await ProposeAsync(superAdmin, "propose_pocket_contribution", new { project_id = design.Id, round_off = true }, "Round off its profit");
+        refused["message"]!.GetValue<string>().ShouldContain("Execution client site");
+    }
+
+    [Fact]
     public async Task A_site_records_expenses_and_labour_as_costs_and_proton_has_no_tool_for_what_the_client_is_charged()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
