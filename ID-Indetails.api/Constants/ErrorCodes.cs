@@ -89,6 +89,8 @@ public static class ErrorCodes
     public const string ProjectLocked = "project_locked";
     public const string ProjectHasBilling = "project_has_billing";
     public const string NotForThisDomain = "not_for_this_domain";
+    /// <summary>A simulated change that doesn't apply to this project, such as a price change on internal work.</summary>
+    public const string ScenarioNotApplicable = "scenario_not_applicable";
     public const string StatusUnchanged = "status_unchanged";
     public const string InvalidStatusChange = "invalid_status_change";
 

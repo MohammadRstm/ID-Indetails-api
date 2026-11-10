@@ -94,6 +94,7 @@ A Design client project's price changes with **variation orders** (VOs): lines b
 - A project with any invoice or payment can't move to another client or become internal (`422 project_has_billing`), because invoices and payments keep the client they were made for.
 - `money.billing` is the project's cash position in USD, kept apart from revenue: `invoiced`, `outstanding`, `received`, `onAccount`, `notYetInvoiced` (revenue − invoiced − on account), `leftToInvoice` (revenue − invoiced), `owed`, `paidAhead`, `issuedCount`, `paymentCount`, `overdue`, `overdueCount`, `oldestOverdueDays`, `drafts` and `unconvertedInvoices[]` (invoices with no rate on their issue day, or drafts with none today, left out of the USD figures). It comes from the same billing rule and batch load as the lists and the Financials page (`Business/Billing/ProjectBilling.cs`; see [billing.md](billing.md) and [finance.md](finance.md)).
 - Cost, profit, margin and the projections come from the shared finance calculator (below).
+- Where a project's profit comes from (the bridge), its standing against the profit floor, Design's department labour and what-if scenarios are `GET /api/finance/insights/projects/{id}` and `…/scenario` (`financial:view`; see [finance.md](finance.md#financial-intelligence)).
 
 ## Cost, profit and margin
 
