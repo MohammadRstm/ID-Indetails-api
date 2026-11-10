@@ -18,21 +18,23 @@ using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
-using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.MoneySummaries.Abstraction;
+using ID_Indetails.api.Services.MoneySummaries.Implementation;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 
 namespace ID_Indetails.api.Services.Company.Implementation;
 
 /// <summary>
-/// Company totals from the shared finance calculator: revenue is the money received, on the day it arrived; costs
-/// count on their day; overhead is charged by calendar days and converted at the rate of its month. Fixed salaries (the
-/// pay of everyone who logs no hours: admins, super admins and Execution's site staff), Design salaries' paid leave and
-/// the overtime premium past a salary's threshold are company costs like overhead: no project carries them. Every figure needs company:view, checked here as well as on
-/// the endpoint.
+/// Company totals from the shared finance calculator: each domain's period figures are its Financials' own
+/// (<see cref="PeriodMoney.Of"/> over the same <see cref="MoneyRollup"/>), and its billing is <see cref="ProjectBilling"/>'s.
+/// Revenue is the money received, on the day it arrived; costs count on their day; overhead is charged by calendar days
+/// and converted at the rate of its month. Fixed salaries (the pay of everyone who logs no hours: admins, super admins
+/// and Execution's site staff), Design paid leave and the overtime premium past a salary's threshold are company costs
+/// like overhead: no project carries them. Every figure needs company:view, checked here as well as on the endpoint.
 /// </summary>
 public sealed class CompanyOverviewService(
     ICompanyFinanceRepository company,
-    IProjectFinanceService finance,
+    IMoneyRollupService rollups,
     IProjectFinanceRepository financeSources,
     IOverheadRepository overheads,
     IPayrollRepository payroll,
@@ -43,10 +45,24 @@ public sealed class CompanyOverviewService(
 {
     public const int MinYear = 2000;
 
-    private sealed record Data(
-        IReadOnlyList<Project> Projects,
-        IReadOnlyDictionary<long, ProjectCostHistory> History,
-        ExchangeRateTable Rates);
+    /// <summary>Every project and its money, loaded once.</summary>
+    private sealed record Data(IReadOnlyList<Project> Projects, MoneyRollup Rollup)
+    {
+        public ExchangeRateTable Rates => Rollup.Rates;
+
+        public IReadOnlyList<Project> Of(string domain) => Projects.Where(p => p.DomainCode == domain).ToList();
+
+        /// <summary>These projects' period figures, as their domain's Financials work them out.</summary>
+        public PeriodMoney.Figures Period(IReadOnlyCollection<Project> projects, DateOnly from, DateOnly to)
+        {
+            var ids = projects.Select(p => p.Id).ToHashSet();
+            return PeriodMoney.Of(
+                Rollup.Payments.Where(p => ids.Contains(p.ProjectId)).Select(p => (p.ReceivedOn, p.NetUsd)),
+                projects.SelectMany(p => Rollup.Costs(p.Id)),
+                from,
+                to);
+        }
+    }
 
     /// <summary>One salary cost the company carries as a whole, added up by month in USD, with what had no rate for its month.</summary>
     private sealed class SalaryLine
@@ -101,35 +117,26 @@ public sealed class CompanyOverviewService(
         var data = await LoadAsync(cancellationToken);
         var employees = await company.EmployeesAsync(cancellationToken);
         var clients = await company.ClientsAsync(cancellationToken);
-        var invoices = await company.IssuedInvoicesAsync(cancellationToken);
-        var payments = await company.PaymentsAsync(cancellationToken);
+        var rollup = data.Rollup;
 
         var domains = DomainCodes.Businesses.Select(domain =>
         {
-            var projects = data.Projects.Where(p => p.DomainCode == domain).ToList();
-            var history = projects.Select(p => (Project: p, History: data.History[p.Id])).ToList();
-
-            // revenue is the money received, counted on the day it arrived: live as payments are recorded
-            var revenue = PeriodMoney.Received(payments.Where(p => p.Domain == domain).Select(p => (p.ReceivedOn, p.AmountUsd)), start, end);
-            var cost = PeriodMoney.Round(PeriodMoney.Costs(history.SelectMany(h => h.History.Costs), start, end).Total);
-            var active = history
-                .Where(h => h.History.Costs.Any(c => InPeriod(c.Day)) || h.History.Work.Any(w => InPeriod(w.Day)))
-                .Select(h => h.Project)
+            var projects = data.Of(domain);
+            var ids = projects.Select(p => p.Id).ToHashSet();
+            var period = data.Period(projects, start, end);
+            var active = projects
+                .Where(p => rollup.Costs(p.Id).Any(c => InPeriod(c.Day)) || rollup.Work(p.Id).Any(w => InPeriod(w.Day)))
                 .ToList();
-            var work = history.SelectMany(h => h.History.Work).ToList();
-            // An invoice is converted at the rate of its issue day; one with no rate there is listed, not counted as 0.
-            var domainInvoices = invoices
-                .Where(i => i.Domain == domain)
-                .Select(i => (Invoice: i, Usd: data.Rates.ToUsd(i.Total, i.Currency, clock.ToCompanyDate(i.IssuedAt))))
-                .ToList();
-            var converted = domainInvoices.Where(x => x.Usd is not null).ToList();
+            var work = projects.SelectMany(p => rollup.Work(p.Id)).ToList();
+            // invoices in USD at the rate of their issue day; one with no rate there is listed, not counted as 0
+            var issued = rollup.Invoices.Where(i => ids.Contains(i.ProjectId) && i.IsIssued && !i.IsVoided).ToList();
 
             return new DomainOverviewResponse(
                 domain,
-                revenue,
-                cost,
-                revenue - cost,
-                PeriodMoney.Margin(revenue - cost, revenue),
+                period.Received,
+                PeriodMoney.Round(period.Cost.Total),
+                period.Profit,
+                period.Margin,
                 active.Count,
                 projects.Count(p => p.Status == ProjectStatus.Active),
                 employees.GetValueOrDefault(domain),
@@ -137,13 +144,14 @@ public sealed class CompanyOverviewService(
                 work.Count > 0,
                 active.Where(p => p.ClientId is not null).Select(p => p.ClientId).Distinct().Count(),
                 clients.GetValueOrDefault(domain),
-                PeriodMoney.Round(converted.Where(x => InPeriod(clock.ToCompanyDate(x.Invoice.IssuedAt))).Sum(x => x.Usd!.Value)),
-                PeriodMoney.Round(payments.Where(p => p.Domain == domain && InPeriod(p.ReceivedOn)).Sum(p => p.AmountUsd)),
-                PeriodMoney.Round(converted.Sum(x => InvoiceRules.Balance(x.Usd!.Value, x.Invoice.PaidUsd))),
-                PeriodMoney.Unconverted(history.SelectMany(h => h.History.Unconverted), start, end)
+                PeriodMoney.Round(issued.Where(i => InPeriod(clock.ToCompanyDate(rollup.InvoiceRow(i.Id).IssuedAt!.Value))).Sum(i => i.Total)),
+                // collected: the period's payments net of TVA, as received
+                period.Received,
+                PeriodMoney.Round(rollup.Billing(projects).Outstanding),
+                PeriodMoney.Unconverted(projects.SelectMany(p => rollup.Unconverted(p.Id)), start, end)
                     .Select(u => new UnconvertedCostResponse(u.Source, u.Currency, u.Amount))
                     .ToList(),
-                UnconvertedInvoices(domainInvoices.Where(x => x.Usd is null).Select(x => x.Invoice)));
+                rollup.UnconvertedInvoices(projects, issuedOnly: true));
         }).ToList();
 
         var (overhead, unconverted) = await OverheadAsync(shares.Select(s => (s.Month, s.Calendar)), data.Rates, cancellationToken);
@@ -174,7 +182,7 @@ public sealed class CompanyOverviewService(
             domains.Sum(d => d.Outstanding),
             domains.Sum(d => d.ProjectsWithActivity),
             domains.Sum(d => d.ClientsServed),
-            UnconvertedInvoices(invoices.Where(i => data.Rates.ToUsd(i.Total, i.Currency, clock.ToCompanyDate(i.IssuedAt)) is null)));
+            rollup.UnconvertedInvoices(issuedOnly: true));
     }
 
     public async Task<PeriodOverheadResponse> OverheadAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
@@ -210,10 +218,7 @@ public sealed class CompanyOverviewService(
     {
         (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.CompanyView);
         var data = await LoadAsync(cancellationToken);
-
-        var received = (await company.PaymentsAsync(cancellationToken)).Select(p => (p.ReceivedOn, p.AmountUsd)).ToList();
-
-        var costs = data.History.Values.SelectMany(h => h.Costs).ToList();
+        var businesses = DomainCodes.Businesses.Select(data.Of).ToList();
         var salaryCosts = await SalaryCostsAsync(keys.Select(m => new Recognition.MonthShare(m, 1m)).ToList(), data.Rates, cancellationToken);
 
         var lines = await overheads.ListAsync(cancellationToken);
@@ -221,18 +226,15 @@ public sealed class CompanyOverviewService(
         foreach (var month in keys)
         {
             var (overhead, _) = OverheadOf(lines, [(month, 1m)], data.Rates);
-            var cost = PeriodMoney.Costs(costs, month, month.AddMonths(1).AddDays(-1));
-            var labour = PeriodMoney.Round(cost.Labour);
-            var expenses = PeriodMoney.Round(cost.Expenses);
-            var materials = PeriodMoney.Round(cost.SiteExpenses);
-            var ground = PeriodMoney.Round(cost.GroundLabour);
-            var monthRevenue = PeriodMoney.Received(received, month, month.AddMonths(1).AddDays(-1));
-            var before = monthRevenue - labour - expenses - materials - ground;
+            // each domain as its Financials chart gives it, so a month adds up to the overview's gross profit to the cent
+            var periods = businesses.Select(projects => data.Period(projects, month, month.AddMonths(1).AddDays(-1))).ToList();
+            decimal Cost(Func<PeriodMoney.CostTotals, decimal> source) => PeriodMoney.Round(periods.Sum(p => source(p.Cost)));
+            var before = periods.Sum(p => p.Profit);
             var (fixedSalaries, paidLeave, premium) = (salaryCosts.Fixed.In(month), salaryCosts.PaidLeave.In(month), salaryCosts.OvertimePremium.In(month));
 
             result.Add(new CompanyMonthResponse(
-                month, monthRevenue, labour, expenses, materials, ground, overhead, fixedSalaries, paidLeave, premium,
-                before, before - overhead, before - overhead - fixedSalaries - paidLeave - premium));
+                month, periods.Sum(p => p.Received), Cost(c => c.Labour), Cost(c => c.Expenses), Cost(c => c.SiteExpenses), Cost(c => c.GroundLabour),
+                overhead, fixedSalaries, paidLeave, premium, before, before - overhead, before - overhead - fixedSalaries - paidLeave - premium));
         }
 
         return result;
@@ -241,10 +243,7 @@ public sealed class CompanyOverviewService(
     private async Task<Data> LoadAsync(CancellationToken cancellationToken)
     {
         var projects = await company.ProjectsAsync(cancellationToken);
-        return new Data(
-            projects,
-            await finance.CostHistoryAsync(projects, cancellationToken),
-            new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken)));
+        return new Data(projects, await rollups.LoadAsync(projects, cancellationToken));
     }
 
     /// <summary>Overhead of each month times its share, converted at the rate on the first of the month.</summary>
@@ -335,10 +334,4 @@ public sealed class CompanyOverviewService(
     /// employee's logged hours are project cost instead.
     /// </summary>
     private static bool PaidAsFixed(PersonMonth month) => month.Input.FixedSalary || month.User.DomainCode != DomainCodes.Design;
-
-    private static IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices(IEnumerable<IssuedInvoiceRow> invoices)
-        => invoices
-            .GroupBy(i => i.Currency.ToUpperInvariant())
-            .Select(g => new UnconvertedInvoicesResponse(g.Key, g.Sum(i => i.Total), g.Count()))
-            .ToList();
 }

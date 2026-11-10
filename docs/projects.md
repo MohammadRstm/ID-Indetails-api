@@ -43,7 +43,7 @@ A Design project is worked on by one or more departments (teams; the app calls t
 
 | Endpoint | Permission | What it does |
 |---|---|---|
-| `GET /api/projects/{id}/departments` | `project:view` | The departments. With `financial:view`, each one's `share` and `money`: `budget` (the price before TVA × its share), `cost` and `minutes` of the hours logged in it, `left` (below zero when it is over its budget), and each person's hours and cost month by month with that month's hourly rate. `other` holds hours of people in no department, or in one no longer on the project. |
+| `GET /api/projects/{id}/departments` | `project:view` | The departments. With `financial:view`, each one's `share` and `money`: `budget` (the price before TVA × its share), `cost` and `minutes` of the hours logged in it, `left` (below zero when it is over its budget), `unconverted` (labour logged in it with no exchange rate on its day, per currency: left out of `cost` and `left`, never counted as 0), and each person's hours and cost month by month with that month's hourly rate. `other` holds hours of people in no department, or in one no longer on the project. |
 | `GET /api/projects/{id}/departments/history` | `financial:view` | Every change of the split, newest first: `kind` (`created`, `departments`, `shares`), the departments and shares `before` and `after` (named as they were then), the reason, who and when |
 | `PUT /api/projects/{id}/departments` | `project:edit` | `{ departmentIds }`: the departments. Any change puts the shares back to equal; hours waiting for an added department go through (below). A department with hours logged on the project stays (`422 department_has_hours`). |
 | `PUT /api/projects/{id}/departments/shares` | `financial:write` | `{ shares: [{ departmentId, share }], reason? }`: a share for each department, adding up to 100% (`400`); the reason is optional, kept in the history when given |
@@ -104,10 +104,10 @@ Every project money figure comes from one place: `Business/Finance/ProjectFinanc
   - **Expenses and site expenses:** converted to USD at the company exchange rate in force on their day (`spentOn`, the day the money was spent). An amount with no rate that day is left out and listed in `cost.unconverted`, in its own currency (`source` is `expenses` or `site_expense`).
   - **Ground labour:** workers × daily pay, in USD.
 - **Profit** = revenue − cost. Internal projects have no revenue.
-- **Margin** = profit ÷ revenue, only once it means something: the project is completed or archived, at least 5% along, or has at least 10 hours logged. Otherwise `null`.
+- **Margin** = profit ÷ revenue, to 4 decimal places (`ProjectFinance.MarginOf`, the same rule as a period's margin), only once it means something: the project is completed or archived, at least 5% along, or has at least 10 hours logged. Otherwise `null`.
 - **Projected** cost, profit and margin = cost ÷ progress, for open client projects at least 5% along.
 - **Recognised to date** = revenue × progress, or all of it once completed or archived.
-- **Execution:** `cashProfit` = received net of TVA − cost − moved to the pocket money + paid by it.
+- **Execution:** `cashProfit` (the site cash profit) = received net of TVA − cost − moved to the pocket money + paid by it, all time. It is not a period's profit, which leaves pocket money out ([finance.md](finance.md#rules)); Proton calls it `site_cash_profit`.
 - **Cash by week** (`ProjectFinance.CashByWeek`): payments received and cost added up week by week, Monday to Sunday. Execution sites show it on `GET /api/projects/{id}/site-money/timeline` (see [execution.md](execution.md)).
 
 ## Profit floor

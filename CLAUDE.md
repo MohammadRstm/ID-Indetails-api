@@ -107,7 +107,10 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     VOs); nobody types it in. Its revenue is work + supervision (work × rate, 10% by default), and TVA (11% by default on
     every client project) is on the work only, never on supervision. Completing the site freezes that amount. Site
     expenses are costs only: no client price, no markup.
-  - Execution cash profit = received − cost − money moved to the pocket + money paid by it. Pocket money moves profit, never what the client owes.
+  - Execution site cash profit (all time; Proton's `site_cash_profit`) = received − cost − money moved to the pocket +
+    money paid by it. Pocket money moves profit, never what the client owes. A period's profit (Financials, the company
+    overview; Proton's `period_cash_profit`) is received − the cost of the same days, without pocket money. Proton never
+    mixes either with `agreed_profit`.
   - TVA sits on the net: revenue, profit and margin exclude it. Billing (invoices, BOQs, what the client owes or paid)
     is gross, and the client never sees TVA as its own line ([billing.md](docs/billing.md), "TVA").
   - **Profit floor:** a client project with an agreed amount can't have its profit lowered to zero or below. The change

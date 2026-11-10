@@ -141,14 +141,14 @@ Each log is `{ id, project: { id, title }, person: { id, name }, body, createdAt
 
 ## Site money
 
-A site's money (received, cost by source, cash profit, expected profit as `profit`, owed or paid ahead) is on `GET /api/projects/{id}` for callers with `financial:view`, from the shared finance calculator. Over time:
+A site's money (received, cost by source, site cash profit as `cashProfit`, expected profit as `profit`, owed or paid ahead) is on `GET /api/projects/{id}` for callers with `financial:view`, from the shared finance calculator. Over time:
 
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/projects/{id}/site-money/timeline` | `financial:view` | Cash week by week, and when profit would reach zero |
 
 - **Weeks** run Monday to Sunday, from the project's first week to the current one (or the one it was finalised in). Each has what was received, spent and paid in ground labour up to its end, the profit so far (received − spent), and what that week added in payments and ground labour. They come from the finance calculator (`ProjectFinance.CashByWeek`): costs on their day at that day's rate, payments by the day received.
-- **Projection** (`LabourRules.ProjectZero`): at today's labour defaults (workers × daily pay a working day), how many working days (Monday to Saturday, from tomorrow) until cash profit reaches zero, and until expected profit would, once the client has paid everything agreed. `state` is `done` for a finalised site, `losing` when cash profit is already below zero, `no_defaults` without a crew and day rate, otherwise `ok`. It assumes the crew, their pay and the money received stay as they are, and no new materials.
+- **Projection** (`LabourRules.ProjectZero`): at today's labour defaults (workers × daily pay a working day), how many working days (Monday to Saturday, from tomorrow) until site cash profit reaches zero, and until expected profit would, once the client has paid everything agreed. `state` is `done` for a finalised site, `losing` when site cash profit is already below zero, `no_defaults` without a crew and day rate, otherwise `ok`. It assumes the crew, their pay and the money received stay as they are, and no new materials.
 
 ## Pocket money
 
@@ -172,7 +172,7 @@ sum of the rows. A `contribution` is positive and a `payout` is negative. Sites 
   a site's **profit**, never what the client owes:
   - a contribution lowers it and a payout raises it;
   - both show on the project as `money.toPocket` and `money.fromPocket`, and in its [account figures](#account-figures);
-  - both count in its cash profit (received − cost − to the pocket + from it) and in its weekly cash on the day they moved.
+  - both count in its site cash profit (received − cost − to the pocket + from it, all time) and in its weekly cash on the day they moved, never in a period's profit on Financials or the company overview.
 - **In:**
   - Only by hand, for an Execution client site.
   - Never so much that the site's profit reaches zero (`422 pocket_would_empty_site`).

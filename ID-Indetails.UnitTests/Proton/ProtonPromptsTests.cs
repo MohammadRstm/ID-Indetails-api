@@ -25,13 +25,15 @@ public class ProtonPromptsTests
         chat.ShouldContain("You are Proton, the AI assistant inside ID InDetails");
     }
 
-    /// <summary>Revenue and profit mean two things in the app: the prompt says which field is which, in the tools' own names.</summary>
+    /// <summary>Profit means three things in the app: the prompt says which field is which, in the tools' own names.</summary>
     [Fact]
     public void The_chat_prompt_says_what_each_money_figure_means()
     {
         ProtonPrompts.Chat.ShouldContain("# Money: what each figure means");
         ProtonPrompts.Chat.ShouldContain("`agreed_profit`");
-        ProtonPrompts.Chat.ShouldContain("`cash_profit`");
+        ProtonPrompts.Chat.ShouldContain("`period_cash_profit`");
+        ProtonPrompts.Chat.ShouldContain("`site_cash_profit`");
+        ProtonPrompts.Chat.ShouldNotContain("`cash_profit`");
         ProtonPrompts.Chat.ShouldContain("It is not a forecast");
         ProtonPrompts.Chat.ShouldContain("Billing figures are as of today");
     }

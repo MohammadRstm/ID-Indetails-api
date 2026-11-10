@@ -20,9 +20,13 @@ public sealed class MoneyRollup(
     IReadOnlyDictionary<long, InvoiceMoneyRow> invoiceRows,
     IReadOnlyList<InvoiceMoneyRow> unconvertedInvoices,
     IReadOnlyList<ProjectBilling.Payment> payments,
-    DateOnly today)
+    DateOnly today,
+    ExchangeRateTable rates)
 {
     public DateOnly Today { get; } = today;
+
+    /// <summary>The exchange rates the money was converted with.</summary>
+    public ExchangeRateTable Rates { get; } = rates;
 
     public IReadOnlyList<ProjectBilling.Invoice> Invoices { get; } = invoices;
 
@@ -52,12 +56,15 @@ public sealed class MoneyRollup(
             Today);
     }
 
-    /// <summary>Live invoices of these projects (all of them when not given) that have no exchange rate on their day.</summary>
-    public IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices(IEnumerable<Project>? projects = null)
+    /// <summary>
+    /// Live invoices of these projects (all of them when not given) that have no exchange rate on their day; drafts
+    /// left out when <paramref name="issuedOnly"/>.
+    /// </summary>
+    public IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices(IEnumerable<Project>? projects = null, bool issuedOnly = false)
     {
         var ids = projects?.Select(p => p.Id).ToHashSet();
         return unconvertedInvoices
-            .Where(r => !r.IsVoided && (ids is null || ids.Contains(r.ProjectId)))
+            .Where(r => !r.IsVoided && (!issuedOnly || r.IssuedAt is not null) && (ids is null || ids.Contains(r.ProjectId)))
             .GroupBy(r => r.Currency.ToUpperInvariant())
             .Select(g => new UnconvertedInvoicesResponse(g.Key, g.Sum(r => r.Total), g.Count()))
             .ToList();

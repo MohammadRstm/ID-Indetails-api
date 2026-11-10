@@ -73,22 +73,19 @@ public sealed class DomainFinanceService(
         var (from, to) = period;
 
         // revenue is the money received: it moves as soon as a payment is recorded, whatever the project's progress
-        var received = ReceivedOn(projects, rollup);
-        var revenue = PeriodMoney.Received(received, from, to);
-        var cost = PeriodMoney.Costs(projects.SelectMany(p => rollup.Costs(p.Id)), from, to);
+        var figures = PeriodMoney.Of(ReceivedOn(projects, rollup), projects.SelectMany(p => rollup.Costs(p.Id)), from, to);
         var clientWork = projects.Where(p => p.BillingType == BillingType.Client).Select(p => rollup.Money(p.Id).Summary).ToList();
-        var profit = revenue - PeriodMoney.Round(cost.Total);
         var labourMinutes = projects.SelectMany(p => rollup.Work(p.Id)).Where(w => w.Day >= from && w.Day <= to).Sum(w => w.Minutes);
 
         return new FinanceSummaryResponse(
             domain,
             from,
             to,
-            revenue,
+            figures.Received,
             ExpectedRevenue.In(agreed, from, to),
-            PeriodCost(cost),
-            profit,
-            PeriodMoney.Margin(profit, revenue),
+            PeriodCost(figures.Cost),
+            figures.Profit,
+            figures.Margin,
             UnconvertedOf(PeriodMoney.Unconverted(projects.SelectMany(p => rollup.Unconverted(p.Id)), from, to)),
             projects.Sum(p => rollup.Money(p.Id).UnpricedLabourMinutes),
             clientWork.Count,
@@ -121,11 +118,11 @@ public sealed class DomainFinanceService(
             .Select(month =>
             {
                 var end = month.AddMonths(1).AddDays(-1);
-                var revenue = PeriodMoney.Received(received, month, end);
-                var cost = PeriodMoney.Costs(costs, month, end);
+                var period = PeriodMoney.Of(received, costs, month, end);
+                var cost = PeriodCost(period.Cost);
                 return new FinanceMonthResponse(
-                    month, revenue, ExpectedRevenue.In(agreed, month, end), Rounded(cost.Labour), Rounded(cost.Expenses), Rounded(cost.SiteExpenses), Rounded(cost.GroundLabour),
-                    Rounded(cost.Total), revenue - Rounded(cost.Total), UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
+                    month, period.Received, ExpectedRevenue.In(agreed, month, end), cost.Labour, cost.Expenses, cost.Materials, cost.GroundLabour,
+                    cost.Total, period.Profit, UnconvertedOf(PeriodMoney.Unconverted(unconverted, month, end)));
             })
             .ToList();
     }
@@ -411,10 +408,9 @@ public sealed class DomainFinanceService(
         // the same figures as SummaryAsync, per project: payments on the day they arrived, costs dated in the period
         FinanceProjectPeriodMoneyResponse MoneyOf(Project project, DateOnly from, DateOnly to)
         {
-            var received = PeriodMoney.Received(payments[project.Id].Select(p => (p.ReceivedOn, p.NetUsd)), from, to);
-            var cost = PeriodMoney.Costs(rollup.Costs(project.Id), from, to);
+            var period = PeriodMoney.Of(payments[project.Id].Select(p => (p.ReceivedOn, p.NetUsd)), rollup.Costs(project.Id), from, to);
             return new FinanceProjectPeriodMoneyResponse(
-                from, to, received, PeriodCost(cost), received - Rounded(cost.Total), PeriodMoney.Unconverted(rollup.Unconverted(project.Id), from, to).Count > 0);
+                from, to, period.Received, PeriodCost(period.Cost), period.Profit, PeriodMoney.Unconverted(rollup.Unconverted(project.Id), from, to).Count > 0);
         }
 
         var received = ReceivedOn(projects, rollup);
@@ -425,11 +421,9 @@ public sealed class DomainFinanceService(
             ranges
                 .Select(r =>
                 {
-                    var revenue = PeriodMoney.Received(received, r.From, r.To);
-                    var cost = PeriodMoney.Costs(costs, r.From, r.To);
-                    var profit = revenue - Rounded(cost.Total);
+                    var period = PeriodMoney.Of(received, costs, r.From, r.To);
                     return new FinanceDomainPeriodResponse(
-                        r.From, r.To, revenue, ExpectedRevenue.In(agreed, r.From, r.To), PeriodCost(cost), profit, PeriodMoney.Margin(profit, revenue),
+                        r.From, r.To, period.Received, ExpectedRevenue.In(agreed, r.From, r.To), PeriodCost(period.Cost), period.Profit, period.Margin,
                         UnconvertedOf(PeriodMoney.Unconverted(unconverted, r.From, r.To)));
                 })
                 .ToList(),

@@ -464,7 +464,7 @@ public sealed class GetProjectTeamTool(IProjectService projects, IWorkInsightsSe
 /// <param name="Permits">Execution: the agreed permits, part of the agreed revenue, with no supervision or TVA on them.</param>
 /// <param name="Expenses">Project expenses, one total per currency, as recorded (not converted).</param>
 /// <param name="AgreedProfit">Agreed revenue less the cost so far.</param>
-/// <param name="CashProfit">Execution: received less the cost so far, less what was moved to the pocket money, plus what it paid in.</param>
+/// <param name="SiteCashProfit">Execution: received less the cost so far, less what was moved to the pocket money, plus what it paid in.</param>
 /// <param name="ToPocket">Execution: moved from the site into the pocket money. Lowers its profit, not what the client owes.</param>
 /// <param name="FromPocket">Execution: paid to the site by the pocket money. Raises its profit.</param>
 /// <param name="SettledOwed">What the client still owed when the project was completed, TVA included, and settled then: the price
@@ -490,7 +490,7 @@ public sealed record ProjectFinancials(
     decimal RecognisedToDate,
     ProtonProjection? Projected,
     decimal LabourHours,
-    decimal? CashProfit,
+    decimal? SiteCashProfit,
     decimal? ToPocket,
     decimal? FromPocket,
     decimal? SettledOwed,
@@ -510,7 +510,7 @@ public sealed class GetProjectFinancialsTool(IProjectService projects) : ProtonT
         "client pays with TVA, its TVA rate, what was received, invoiced, outstanding and overdue (TVA included), cost by " +
         "source (labour, expenses, site expenses, ground labour), profit and margin against the agreed revenue, and " +
         "projection. Execution sites also give their supervision and its rate, the pocket money moved out and paid in, and " +
-        "cash profit (received − cost − moved to the pocket money + paid by it). A completed project also says what the " +
+        "site cash profit (received − cost − moved to the pocket money + paid by it, all time). A completed project also says what the " +
         "client still owed and whether it was excused or written off then.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.Get));

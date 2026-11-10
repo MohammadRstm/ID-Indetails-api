@@ -66,19 +66,18 @@ public sealed class ProjectFinanceService(
     {
         var loaded = await LoadAsync([project], cancellationToken);
         var entries = loaded.Entries[project.Id].ToList();
-        decimal Usd(IEnumerable<Cost> items) => items.Sum(i => loaded.Rates.ToUsd(i.Amount, i.Currency, i.Day) ?? 0);
 
         var costs = entries.Select(e =>
         {
             var day = clock.ToCompanyDate(e.StartedAt);
             var (items, _) = ProjectFinance.PriceLabour([PaidOvertime.Of(e.UserId, day, e.Minutes, loaded.Overtime.GetValueOrDefault(e.Id))], loaded.PayRates);
-            return (e.TeamId, e.UserId, Day: day, e.Minutes, Cost: Usd(items));
+            return (e.TeamId, e.UserId, Day: day, e.Minutes, Items: items);
         }).ToList();
 
         // a paid break counts in the department that day's hours were logged in
         var teamOn = costs.GroupBy(c => (c.UserId, c.Day)).ToDictionary(g => g.Key, g => g.First().TeamId);
         costs.AddRange(loaded.Breaks[project.Id].Select(b =>
-            (teamOn.GetValueOrDefault((b.UserId, b.Cost.Day)), b.UserId, b.Cost.Day, Minutes: 0, Cost: Usd([b.Cost]))));
+            (teamOn.GetValueOrDefault((b.UserId, b.Cost.Day)), b.UserId, b.Cost.Day, Minutes: 0, Items: (IReadOnlyList<Cost>)[b.Cost])));
 
         var rates = loaded.PayRates.GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => g.OrderBy(r => r.EffectiveFrom).ToList());
         decimal? RateIn(long userId, DateOnly day)
@@ -88,8 +87,21 @@ public sealed class ProjectFinanceService(
 
         return costs
             .GroupBy(c => (c.TeamId, c.UserId, Month: new DateOnly(c.Day.Year, c.Day.Month, 1)))
-            .Select(g => new DepartmentLabour(g.Key.TeamId, g.Key.UserId, g.Key.Month, g.Sum(c => c.Minutes), g.Sum(c => c.Cost),
-                RateIn(g.Key.UserId, g.Min(c => c.Day))))
+            .Select(g =>
+            {
+                var items = g.SelectMany(c => c.Items).Select(i => (Item: i, Usd: loaded.Rates.ToUsd(i.Amount, i.Currency, i.Day))).ToList();
+                return new DepartmentLabour(
+                    g.Key.TeamId,
+                    g.Key.UserId,
+                    g.Key.Month,
+                    g.Sum(c => c.Minutes),
+                    items.Sum(i => i.Usd ?? 0),
+                    RateIn(g.Key.UserId, g.Min(c => c.Day)),
+                    items.Where(i => i.Usd is null)
+                        .GroupBy(i => i.Item.Currency.ToUpperInvariant())
+                        .Select(u => new ProjectFinance.UnconvertedCost(CostSource.Labour, u.Key, u.Sum(i => i.Item.Amount)))
+                        .ToList());
+            })
             .ToList();
     }
 

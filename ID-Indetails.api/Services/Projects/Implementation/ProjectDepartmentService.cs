@@ -8,6 +8,7 @@ using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Projects;
+using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
@@ -274,7 +275,16 @@ public sealed class ProjectDepartmentService(
             .ThenBy(p => p.Person.Name)
             .ToList();
         var cost = people.Sum(p => p.Cost);
-        return new DepartmentMoneyResponse { Budget = budget, Cost = cost, Left = budget - cost, Minutes = people.Sum(p => p.Minutes), People = people };
+        var unconverted = labour
+            .SelectMany(l => l.Unconverted)
+            .GroupBy(u => u.Currency)
+            .Select(g => new CurrencyAmountResponse(g.Key, Math.Round(g.Sum(u => u.Amount), 2)))
+            .OrderBy(u => u.Currency)
+            .ToList();
+        return new DepartmentMoneyResponse
+        {
+            Budget = budget, Cost = cost, Left = budget - cost, Minutes = people.Sum(p => p.Minutes), Unconverted = unconverted, People = people,
+        };
     }
 
     /// <summary>The split as it is kept in the history: each department with its name then.</summary>

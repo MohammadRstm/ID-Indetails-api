@@ -364,8 +364,8 @@ public sealed record CompareMoneyInput
 }
 
 /// <param name="ExpectedRevenue">Agreed in the period (a contract set or changed, an Execution BOQ agreed or withdrawn), not a forecast.</param>
-/// <param name="CashProfit">Received less cost.</param>
-/// <param name="CashMarginPct">Cash profit as a whole percentage of what was received, while anything was.</param>
+/// <param name="PeriodCashProfit">Received less cost.</param>
+/// <param name="CashMarginPct">Period cash profit as a whole percentage of what was received, while anything was.</param>
 /// <param name="ProjectsWithMoney">Projects with money received or costs in either period; <paramref name="Projects"/> holds the first ones.</param>
 /// <param name="Unconverted">Costs left out of the USD figures for want of an exchange rate, this period.</param>
 /// <param name="PreviousUnconverted">The same, in the period compared with: a change can come from what each left out.</param>
@@ -373,7 +373,7 @@ public sealed record MoneyComparison(
     ProtonFigure Received,
     ProtonFigure ExpectedRevenue,
     ProtonFigure Cost,
-    ProtonFigure CashProfit,
+    ProtonFigure PeriodCashProfit,
     int? CashMarginPct,
     int? PreviousCashMarginPct,
     bool CostNotable,
@@ -386,7 +386,7 @@ public sealed record MoneyComparison(
     IReadOnlyList<string>? PreviousUnconverted);
 
 public sealed record MoneyProjectRow(
-    long ProjectId, string Title, ProjectStatus Status, ProtonFigure Received, ProtonFigure Cost, ProtonFigure CashProfit, bool CostNotable, bool HasUnconverted);
+    long ProjectId, string Title, ProjectStatus Status, ProtonFigure Received, ProtonFigure Cost, ProtonFigure PeriodCashProfit, bool CostNotable, bool HasUnconverted);
 
 /// <summary>
 /// A domain's money in two periods, from the Financials summary's own calculation (GET /api/finance/{domain}/summary):
@@ -400,7 +400,7 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
 
     public override string Description =>
         "A domain's money in a period compared with another (the previous one by default): money received, expected " +
-        "revenue (agreed in the period), cost (by source: labour, expenses, site expenses, ground labour), cash profit " +
+        "revenue (agreed in the period), cost (by source: labour, expenses, site expenses, ground labour), period cash profit " +
         "(received − cost) and its margin, and per project with the biggest cost increases. All in USD, already " +
         "calculated. Use it for trends in money received and cost, and for which measurable costs made a change.";
 
@@ -447,7 +447,7 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
             IOrderedEnumerable<MoneyProjectRow> sorted = (input.Sort ?? MoneySort.Cost) switch
             {
                 MoneySort.Received => rows.OrderByDescending(r => r.Received.Current),
-                MoneySort.Profit => rows.OrderByDescending(r => r.CashProfit.Current),
+                MoneySort.Profit => rows.OrderByDescending(r => r.PeriodCashProfit.Current),
                 MoneySort.CostChange => rows.OrderByDescending(r => Math.Abs(r.Cost.Diff ?? 0)),
                 _ => rows.OrderByDescending(r => r.Cost.Current),
             };
@@ -494,7 +494,7 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
                 [
                     ProtonSignals.NotableMoneyRule(t),
                     "received: payments on the day they arrived; cost: every cost dated in the period, in USD at the rate of its day; " +
-                    "cash profit: received − cost",
+                    "period cash profit: received − cost",
                 ],
                 comparison.Unconverted.Count > 0 || comparison.PreviousUnconverted is not null ? [ProtonAnalysis.UnconvertedLeftOut] : []),
             Datasets = Datasets(pair, money, bySource, ranked, domain),
@@ -521,7 +521,7 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
         var totals = ProtonDatasets.Compared(
             "Money compared",
             pair,
-            [usd("received", "Received"), usd("expected_revenue", "Expected revenue"), usd("cost", "Cost"), usd("cash_profit", "Profit (received − cost)"),
+            [usd("received", "Received"), usd("expected_revenue", "Expected revenue"), usd("cost", "Cost"), usd("period_cash_profit", "Profit (received − cost)"),
                 ProtonDatasets.Figure("margin", "Margin", ProtonUnit.Percent)],
             Figures(now),
             before is null ? null : Figures(before),
@@ -529,10 +529,10 @@ public sealed class CompareMoneyTool(ProtonAnalysisService analysis) : ProtonToo
         var sources = bySource is null ? null : ProtonAnalysis.Groups("Cost by source", "source", "Source", pair, bySource, ProtonUnit.Usd, "Cost", _ => null, unconverted);
         var perProject = projects is null ? null : new ProtonDataset(
             "Money by project",
-            [ProtonDatasets.Label("project", "Project"), usd("received", "Received"), usd("cost", "Cost"), usd("cash_profit", "Profit (received − cost)")],
+            [ProtonDatasets.Label("project", "Project"), usd("received", "Received"), usd("cost", "Cost"), usd("period_cash_profit", "Profit (received − cost)")],
             projects.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
                 new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, domain),
-                ProtonCell.Of(p.Title), ProtonCell.Of(p.Received.Current), ProtonCell.Of(p.Cost.Current), ProtonCell.Of(p.CashProfit.Current))).ToList(),
+                ProtonCell.Of(p.Title), ProtonCell.Of(p.Received.Current), ProtonCell.Of(p.Cost.Current), ProtonCell.Of(p.PeriodCashProfit.Current))).ToList(),
             ProtonDatasets.Period(pair.Current),
             projects.Count,
             Notes: projects.Any(p => p.HasUnconverted) ? ["Some projects have costs in another currency with no exchange rate on their day: they're left out."] : null);

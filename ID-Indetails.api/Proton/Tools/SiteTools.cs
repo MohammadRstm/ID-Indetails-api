@@ -427,10 +427,10 @@ public sealed record PocketInput
 }
 
 /// <param name="SuggestedNow">What brings the site back to a 10% margin today.</param>
-/// <param name="CashProfit">The site's cash profit today, pocket money counted.</param>
+/// <param name="SiteCashProfit">The site's cash profit today, all time, pocket money counted.</param>
 /// <param name="RequestedBy">Empty when the system raised it.</param>
 public sealed record PocketRequestRow(
-    long Id, ProtonNamed Site, decimal SuggestedAmount, decimal? SuggestedNow, decimal? CashProfit, string? Note, DateTime RequestedAt, string? RequestedBy);
+    long Id, ProtonNamed Site, decimal SuggestedAmount, decimal? SuggestedNow, decimal? SiteCashProfit, string? Note, DateTime RequestedAt, string? RequestedBy);
 
 /// <param name="Amount">From the pocket's side: positive in (a contribution from a site), negative out (a payout to one).</param>
 public sealed record PocketEntryRow(PocketEntryKind Kind, decimal Amount, ProtonNamed Site, string? Note, DateTime At, string By);
@@ -446,7 +446,7 @@ public sealed class GetPocketMoneyTool(IPocketService pocket) : ProtonTool<Pocke
 
     public override string Description =>
         "Execution's pocket money: what it holds, everything moved in and paid out, the sites' requests waiting for a " +
-        "decision (with the amount suggested and the site's cash profit), and its movements newest first, by site or period.";
+        "decision (with the amount suggested and the site cash profit), and its movements newest first, by site or period.";
 
     public override string? OnlyInDomain => DomainCodes.Execution;
 
