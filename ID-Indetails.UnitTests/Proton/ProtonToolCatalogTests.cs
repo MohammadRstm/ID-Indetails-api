@@ -113,7 +113,9 @@ public class ProtonToolCatalogTests
         Tools.Where(t => t.Heavy).Select(t => t.Name)
             .ShouldBe(["compare_money", "get_money_by_month", "review_project", "get_company_summary", "get_attention",
                 // a file, a discussion or the website's visitors: each can be large, or asks Google
-                "read_project_file", "read_discussion", "get_website_analytics"], ignoreOrder: true);
+                "read_project_file", "read_discussion", "get_website_analytics",
+                // Financial Intelligence across a domain: every project's money, or every expense
+                "detect_project_financial_risks", "analyze_expense_trends"], ignoreOrder: true);
     }
 
     [Fact]
@@ -200,20 +202,52 @@ public class ProtonToolCatalogTests
     {
         var properties = new HashSet<string>();
         var types = new HashSet<Type>();
-        foreach (var root in new[] { typeof(ProjectFinancialSummary), typeof(ProjectScenario) })
+        foreach (var root in new[] { typeof(ProjectFinancialSummary), typeof(ProjectScenario), typeof(ProjectRiskRegister), typeof(ExpenseTrends) })
         {
             Collect(root, properties, types);
         }
 
         types.ShouldContain(typeof(InsightDepartmentRow));
         types.ShouldContain(typeof(BridgeRow));
+        types.ShouldContain(typeof(InsightRiskProject));
+        types.ShouldContain(typeof(InsightRisk));
+        types.ShouldContain(typeof(ExpenseMonth));
+        types.ShouldContain(typeof(ExpenseAnomaly));
         foreach (var type in types)
         {
             type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Select(p => p.Name)
-                .Where(name => Regex.IsMatch(name, "Person|People|Member|Contributor|Employee|User|Staff|Owner|Who|By$"))
+                // an expense names no supplier and no one who added it
+                .Where(name => Regex.IsMatch(name, "Person|People|Member|Contributor|Employee|User|Staff|Owner|Who|By$|Supplier|Vendor|Added"))
                 .ShouldBeEmpty(type.Name);
         }
+    }
+
+    /// <summary>
+    /// A domain's risks and spending read every project's money: financial:view from their endpoints, heavy, found
+    /// through tool search, and the business is optional (a user who sees one has it chosen for them).
+    /// </summary>
+    [Fact]
+    public void The_domain_insight_tools_mirror_their_endpoints_and_are_deferred_and_heavy()
+    {
+        var financialView = AuthorizationPolicies.PermissionPrefix + PermissionCodes.FinancialView;
+        var risks = Tools.Single(t => t.Name == "detect_project_financial_risks");
+        var expenses = Tools.Single(t => t.Name == "analyze_expense_trends");
+
+        risks.Endpoint.Name.ShouldBe($"FinanceInsights.{nameof(FinanceInsightsController.Risks)}");
+        expenses.Endpoint.Name.ShouldBe($"FinanceInsights.{nameof(FinanceInsightsController.Expenses)}");
+        foreach (var tool in new[] { risks, expenses })
+        {
+            tool.Endpoint.Policies.ShouldBe([financialView], tool.Name);
+            tool.Endpoint.Writes.ShouldBeFalse(tool.Name);
+            tool.Heavy.ShouldBeTrue(tool.Name);
+            tool.OnlyInDomain.ShouldBeNull(tool.Name);
+            ProtonToolSearch.Core.ShouldNotContain(tool.Name);
+            (tool.InputSchema["required"]?.AsArray().Count ?? 0).ShouldBe(0, tool.Name);
+        }
+
+        risks.InputSchema["properties"]!.AsObject().Select(p => p.Key).ShouldBe(["domain", "limit"], ignoreOrder: true);
+        expenses.InputSchema["properties"]!.AsObject().Select(p => p.Key).ShouldBe(["domain", "months"], ignoreOrder: true);
     }
 
     /// <summary>Both read one project's money: financial:view from the endpoint, not heavy, and only the summary sent up front.</summary>

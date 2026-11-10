@@ -188,6 +188,10 @@ public enum ProtonProjectPart
     Staff,
 }
 
+/// <summary>
+/// The Financials page's tabs: a domain's overview, projects, clients, billing and costs, and its insights (its
+/// Financial Intelligence). The whole page is for whoever sees the domain's money (financial:view), the insights tab too.
+/// </summary>
 public enum ProtonFinancialsTab
 {
     Overview,
@@ -195,6 +199,8 @@ public enum ProtonFinancialsTab
     Clients,
     Billing,
     Costs,
+    /// <summary>The domain's Financial Intelligence: its projects' financial risks and its spending's trends and anomalies.</summary>
+    Insights,
 }
 
 /// <summary>

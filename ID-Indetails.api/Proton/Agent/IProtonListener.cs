@@ -34,6 +34,8 @@ public static class ProtonStatus
         ["get_money_by_month"] = "Reading the money month by month…",
         ["get_project_financial_summary"] = "Working out where the profit comes from…",
         ["simulate_project_financial_scenario"] = "Simulating the change…",
+        ["detect_project_financial_risks"] = "Checking the projects for financial risks…",
+        ["analyze_expense_trends"] = "Going through the spending month by month…",
         ["open_record"] = "Opening it…",
         ["open_page"] = "Opening it…",
         ["offer_choices"] = "Lining up the options…",
