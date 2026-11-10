@@ -152,6 +152,12 @@ public sealed class FileService(
     /// <summary>Whether a file that isn't a shared picture is attached where the caller may read it.</summary>
     private async Task<bool> CanReadAsync(UserAccess me, FileUses uses, CancellationToken cancellationToken)
     {
+        // a project's photo is seen by whoever sees its business, as the project is
+        if (uses.ProjectDomains.Any(me.CanSee))
+        {
+            return true;
+        }
+
         if (uses.EntryIds.Count > 0
             && (await entries.ViewsByIdAsync(uses.EntryIds, cancellationToken)).Any(e => WorkEntryQueryService.CanRead(me, e)))
         {

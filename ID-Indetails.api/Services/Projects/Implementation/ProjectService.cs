@@ -12,6 +12,7 @@ using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Expenses;
@@ -35,6 +36,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Billing.Abstraction;
 using ID_Indetails.api.Services.Portal.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.MoneySummaries.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Implementation;
@@ -62,6 +64,7 @@ public sealed class ProjectService(
     ILabourRepository labour,
     IUnitOfWork unitOfWork,
     IProfitFloor floor,
+    IFileClaims fileClaims,
     IClock clock) : IProjectService
 {
     private const string NotFoundMessage = "Project not found.";
@@ -538,6 +541,30 @@ public sealed class ProjectService(
         return await DescribeAsync(actor, project.Id, cancellationToken);
     }
 
+    /// <summary>The project's own photo, from the caller's upload. The one it replaces is attached to nothing any more, so the cleanup deletes it.</summary>
+    public Task<ProjectResponse> SetPhotoAsync(long projectId, AttachFileRequest request, CancellationToken cancellationToken = default)
+        => ChangePhotoAsync(projectId, request.FileId, cancellationToken);
+
+    public Task<ProjectResponse> RemovePhotoAsync(long projectId, CancellationToken cancellationToken = default)
+        => ChangePhotoAsync(projectId, null, cancellationToken);
+
+    private async Task<ProjectResponse> ChangePhotoAsync(long projectId, long? fileId, CancellationToken cancellationToken)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        var project = await VisibleProjectForUpdateAsync(actor, projectId, cancellationToken);
+        if (project.PhotoFileId != fileId)
+        {
+            project.PhotoFileId = fileId is { } id ? (await fileClaims.ClaimAsync(id, FileKind.Image, cancellationToken)).Id : null;
+            project.UpdatedAt = clock.UtcNow;
+            activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectUpdated, actor.UserId, new { change = fileId is null ? "photo_removed" : "photo" }));
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(actor, project.Id, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<ProjectPaymentChangeResponse>> PaymentChangesAsync(long projectId, CancellationToken cancellationToken = default)
     {
         var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.FinancialView);
@@ -622,6 +649,7 @@ public sealed class ProjectService(
             Location = p.Location,
             Icon = p.Icon,
             Tint = p.Tint,
+            PhotoFileId = p.PhotoFileId,
             Status = p.Status,
             BillingType = p.BillingType,
             Client = ClientOf(p),
@@ -794,6 +822,7 @@ public sealed class ProjectService(
         Location = p.Location,
         Icon = p.Icon,
         Tint = p.Tint,
+        PhotoFileId = p.PhotoFileId,
         Status = p.Status,
         BillingType = p.BillingType,
         Client = ClientOf(p),

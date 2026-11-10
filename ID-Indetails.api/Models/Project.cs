@@ -24,6 +24,9 @@ public class Project
 
     public string? Tint { get; set; }
 
+    /// <summary>The project's own photo, shown instead of its icon tile. Replaced or removed, the old one is cleaned up.</summary>
+    public long? PhotoFileId { get; set; }
+
     public ProjectStatus Status { get; set; } = ProjectStatus.Active;
 
     public BillingType BillingType { get; set; } = BillingType.Client;

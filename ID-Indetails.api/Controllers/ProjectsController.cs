@@ -1,6 +1,7 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Finance;
@@ -80,6 +81,17 @@ public sealed class ProjectsController(
     [HasPermission(PermissionCodes.ProjectEdit)]
     public Task<ProjectResponse> UpdateStaff(long projectId, UpdateProjectStaffRequest request, CancellationToken cancellationToken)
         => projectService.UpdateStaffAsync(projectId, request, cancellationToken);
+
+    /// <summary>The project's own photo, shown instead of its icon tile, from the caller's upload.</summary>
+    [HttpPut("{projectId:long}/photo")]
+    [HasPermission(PermissionCodes.ProjectEdit)]
+    public Task<ProjectResponse> SetPhoto(long projectId, AttachFileRequest request, CancellationToken cancellationToken)
+        => projectService.SetPhotoAsync(projectId, request, cancellationToken);
+
+    [HttpDelete("{projectId:long}/photo")]
+    [HasPermission(PermissionCodes.ProjectEdit)]
+    public Task<ProjectResponse> RemovePhoto(long projectId, CancellationToken cancellationToken)
+        => projectService.RemovePhotoAsync(projectId, cancellationToken);
 
     /// <summary>Every change of the project's agreed payment, newest first, with why it changed.</summary>
     [HttpGet("{projectId:long}/payment-changes")]

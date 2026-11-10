@@ -55,6 +55,10 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(x => x.Location).HasMaxLength(200);
         builder.Property(x => x.Icon).HasMaxLength(40);
         builder.Property(x => x.Tint).HasMaxLength(9);
+        builder.HasOne<StoredFile>()
+            .WithMany()
+            .HasForeignKey(x => x.PhotoFileId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.RevenueCurrency).IsCurrencyCode();
         builder.Property(x => x.TvaRate).HasPrecision(5, 4).HasDefaultValue(0m);
         builder.Property(x => x.SupervisionRate).HasPrecision(5, 4);

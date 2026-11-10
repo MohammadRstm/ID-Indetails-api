@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Request.Files;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Finance;
@@ -27,6 +28,12 @@ public interface IProjectService
 
     /// <summary>Execution only: who oversees the site, all of them (at least one active Execution employee).</summary>
     Task<ProjectResponse> UpdateStaffAsync(long projectId, UpdateProjectStaffRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>The project's own photo, shown instead of its icon tile, from the caller's upload (an image).</summary>
+    Task<ProjectResponse> SetPhotoAsync(long projectId, AttachFileRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Back to the icon tile.</summary>
+    Task<ProjectResponse> RemovePhotoAsync(long projectId, CancellationToken cancellationToken = default);
 
     /// <summary>The project's payment changes, newest first; needs financial:view.</summary>
     Task<IReadOnlyList<ProjectPaymentChangeResponse>> PaymentChangesAsync(long projectId, CancellationToken cancellationToken = default);
