@@ -62,4 +62,16 @@ public class MessagingRulesTests
         MessagingRules.CheckMentions([Analyst.Id], members)!.Field.ShouldBe("mentionIds");
         MessagingRules.CheckMentions([Engineer.Id], null)!.Field.ShouldBe("mentionIds");
     }
+
+    [Fact]
+    public void A_message_carries_at_most_one_voice_note()
+    {
+        MessagingRules.CheckVoiceNotes([]).ShouldBeNull();
+        MessagingRules.CheckVoiceNotes(["audio/webm"]).ShouldBeNull();
+        MessagingRules.CheckVoiceNotes(["audio/webm", "image/png", "video/mp4"]).ShouldBeNull();
+
+        var denial = MessagingRules.CheckVoiceNotes(["audio/webm", "audio/ogg"])!;
+        denial.Code.ShouldBe(ErrorCodes.TooManyVoiceNotes);
+        denial.Message.ShouldBe("A message can carry one voice note.");
+    }
 }

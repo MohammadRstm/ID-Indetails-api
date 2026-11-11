@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ID_Indetails.api.Business.Auth;
+using ID_Indetails.api.Business.Files;
 using ID_Indetails.api.Business.Notifications;
 using ID_Indetails.api.Business.Push;
 using ID_Indetails.api.Constants;
@@ -162,12 +163,12 @@ public sealed class PushDelivery(
                 if (m.Announcement)
                 {
                     return new(
-                        PushText.ForAnnouncement(message.Sender.Name, message.Body, message.Attachments.Count > 0),
+                        PushText.ForAnnouncement(message.Sender.Name, message.Body, message.Attachments.Count > 0, IsVoiceOnly(message)),
                         new PushData(m.RecipientId, PushKinds.Message, null, PushTarget.Announcements));
                 }
 
                 return new(
-                    PushText.ForMessage(message.Sender.Name, teamName, message.Body, message.Kind, message.Attachments.Count > 0, m.Mentioned),
+                    PushText.ForMessage(message.Sender.Name, teamName, message.Body, message.Kind, message.Attachments.Count > 0, m.Mentioned, IsVoiceOnly(message)),
                     new PushData(m.RecipientId, PushKinds.Message, null, PushTarget.Chat(m.TeamId, message.Sender.Id)));
 
             case ReminderPushJob r:
@@ -178,6 +179,9 @@ public sealed class PushDelivery(
                 return null;
         }
     }
+
+    private static bool IsVoiceOnly(MessageView message)
+        => message.Attachments is [{ } only] && FileRules.KindOf(only.MimeType) == FileKind.Audio;
 
     /// <summary>Unread notifications, counted as the bell counts them, plus unread messages.</summary>
     private async Task<int> BadgeAsync(UserAccess access, CancellationToken cancellationToken)
