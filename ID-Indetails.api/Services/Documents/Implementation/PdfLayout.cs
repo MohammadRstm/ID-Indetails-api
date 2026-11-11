@@ -55,7 +55,13 @@ public static class PdfLayout
         var section = document.AddSection();
         section.PageSetup = document.DefaultPageSetup.Clone();
         section.PageSetup.PageFormat = PageFormat.A4;
-        section.PageSetup.Orientation = landscape ? Orientation.Landscape : Orientation.Portrait;
+        section.PageSetup.Orientation = Orientation.Portrait;
+        if (landscape)
+        {
+            // A4 on its side, given as its size: MigraDoc's Landscape orientation came out as an upright page
+            section.PageSetup.PageWidth = Unit.FromCentimeter(29.7);
+            section.PageSetup.PageHeight = Unit.FromCentimeter(21);
+        }
         section.PageSetup.TopMargin = Unit.FromCentimeter(1.8);
         section.PageSetup.BottomMargin = Unit.FromCentimeter(2);
         section.PageSetup.LeftMargin = Unit.FromCentimeter(1.8);
