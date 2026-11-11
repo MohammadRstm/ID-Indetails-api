@@ -1,3 +1,4 @@
+using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Finance;
 using ID_Indetails.api.Business.Payroll;
