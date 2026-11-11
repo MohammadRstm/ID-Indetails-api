@@ -59,6 +59,31 @@ public class ProtonPromptsTests
         ProtonPrompts.Chat.ShouldContain("- `standing`:");
     }
 
+    /// <summary>
+    /// A business's risks and spending: each judgement with the rule that fired, nothing at risk or unusual without one,
+    /// a projection as an estimate, internal projects never listed, and what was left out said.
+    /// </summary>
+    [Fact]
+    public void The_chat_prompt_says_how_to_present_a_businesss_risks_and_spending()
+    {
+        ProtonPrompts.Chat.ShouldContain("# A business's financial risks and its spending");
+        ProtonPrompts.Chat.ShouldContain("`detect_project_financial_risks`");
+        ProtonPrompts.Chat.ShouldContain("`analyze_expense_trends`");
+        ProtonPrompts.Chat.ShouldContain("Say the rule each risk names");
+        ProtonPrompts.Chat.ShouldContain("Never call a project at risk, losing money or in trouble without a fired rule");
+        ProtonPrompts.Chat.ShouldContain("A projection is an estimate");
+        ProtonPrompts.Chat.ShouldContain("Internal projects are never listed");
+        ProtonPrompts.Chat.ShouldContain("Spending is unusual only when a rule fired");
+        ProtonPrompts.Chat.ShouldContain("`unconverted`");
+        ProtonPrompts.Chat.ShouldContain("too short a history");
+        // "unusual" now has two sources, and the analysis rules say so
+        ProtonPrompts.Chat.ShouldContain("or a spending anomaly `analyze_expense_trends` lists");
+        // the terms, defined with the other money figures
+        ProtonPrompts.Chat.ShouldContain("- Risk register:");
+        ProtonPrompts.Chat.ShouldContain("- `baseline`:");
+        ProtonPrompts.Chat.ShouldContain("- Runway:");
+    }
+
     /// <summary>Charts and tables come from present_data, built from the data; never drawn in text or invented.</summary>
     [Fact]
     public void The_chat_prompt_shows_figures_only_through_present_data()

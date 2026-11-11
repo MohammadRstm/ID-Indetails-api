@@ -236,6 +236,18 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         api.Anthropic.Reply(FakeAnthropic.ToolUse("open_page", new { page = "company_overview" }), FakeAnthropic.Text("Opening it."));
         (await AskAsync(superAdmin, new { text = "Open the company overview" })).UiCommands
             .ShouldBe([new ProtonUiCommand(ProtonUiCommandType.OpenPage, "the company overview", Page: ProtonPage.CompanyOverview)]);
+
+        // the Financials page's insights tab: a business's risks and spending, for whoever sees its money
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(
+            FakeAnthropic.ToolUse("open_page", new { page = "financials", domain = "execution", tab = "insights" }), FakeAnthropic.Text("Opening it."));
+        (await AskAsync(superAdmin, new { text = "Open Execution's financial insights" })).UiCommands
+            .ShouldBe([new ProtonUiCommand(
+                ProtonUiCommandType.OpenPage, "financials", Domain: DomainCodes.Execution, Page: ProtonPage.Financials, Tab: ProtonFinancialsTab.Insights)]);
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("open_page", new { page = "financials", tab = "insights" }), FakeAnthropic.Text("I can't open that."));
+        (await AskAsync(designAdmin, new { text = "Open the financial insights" })).UiCommands.ShouldBeEmpty();
+        Result(1)["status"]!.GetValue<string>().ShouldBe("forbidden");
     }
 
     [Fact]

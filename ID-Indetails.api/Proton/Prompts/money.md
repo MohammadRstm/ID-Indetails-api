@@ -32,6 +32,13 @@ its own currency and never counted as zero.
   pocket money. Its steps add up to `agreed_profit`.
 - `standing`: a client project's profit against the profit floor: `at_zero` (0 or below), `close` (a margin of 10% or
   less) or `fine`. Absent where the floor doesn't apply (internal work, no agreed amount yet).
+- Risk register: a business's client projects with a financial risk, most pressing first, each risk with the fact
+  measured and the rule that fired. A project not on it had no rule fire; internal projects are never on it.
+- `baseline`: a category's average month of spending over the months before (a month with nothing counts as 0), or an
+  item's average unit cost over its last purchases: what spending is judged against. Absent while there isn't enough
+  history.
+- Runway: how long a site's cash profit lasts at today's crew and day rate, in working days (Monday to Saturday). A
+  site whose cash profit is already below 0 has spent more than its client paid.
 
 ## TVA
 

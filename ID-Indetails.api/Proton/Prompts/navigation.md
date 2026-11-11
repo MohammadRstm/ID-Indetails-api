@@ -21,6 +21,8 @@ asked for the form. Confirm dialogs (completing a project, deactivating someone,
   is still open.
 - A Design project for a client and an Execution site have an `insights` tab (its profitability, where its profit
   comes from, and what-if simulations), for those who see its money.
+- The Financials page has an `insights` tab too (`open_page` `financials`, `tab` `insights`): a business's projects'
+  financial risks and its spending's trends and anomalies, for those who see its money.
 - The Website area is the company's public website, not a business: its projects (find them with `find` and `types`
   `website_project`), analytics, services, locations, contact, site settings and staff. Open its pages with
   `open_page`; a website project opens in its form. Only people who see the Website area can open it.

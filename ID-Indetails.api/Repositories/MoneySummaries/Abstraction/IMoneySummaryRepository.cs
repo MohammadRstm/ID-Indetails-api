@@ -30,6 +30,20 @@ public sealed record RunningProjectRow(long Id, string Title, DateOnly StartDate
 
 public sealed record ExpenseDetailRow(long Id, long ProjectId, string Label, string Category, string Currency, decimal Amount, DateOnly SpentOn);
 
+/// <summary>A site expense with its item: <paramref name="Quantity"/> and <paramref name="UnitCost"/> when it was entered as a quantity × a unit cost.</summary>
+/// <param name="Total">Its cost in its own currency, whichever way it was entered.</param>
+public sealed record SiteExpenseDetailRow(
+    long Id,
+    long ProjectId,
+    string Name,
+    SiteExpenseCategory Category,
+    decimal? Quantity,
+    string? Unit,
+    decimal? UnitCost,
+    decimal Total,
+    string Currency,
+    DateOnly SpentOn);
+
 /// <summary>What the money summaries read besides the shared finance calculator. One query each, whatever the number of projects.</summary>
 public interface IMoneySummaryRepository
 {
@@ -62,6 +76,13 @@ public interface IMoneySummaryRepository
 
     /// <summary>Live expenses of these projects spent between the two days, both inclusive.</summary>
     Task<IReadOnlyList<ExpenseDetailRow>> ExpensesAsync(
+        IReadOnlyCollection<long> projectIds,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Live site expenses of these projects spent between the two days, both inclusive, with their items.</summary>
+    Task<IReadOnlyList<SiteExpenseDetailRow>> SiteExpensesAsync(
         IReadOnlyCollection<long> projectIds,
         DateOnly from,
         DateOnly to,

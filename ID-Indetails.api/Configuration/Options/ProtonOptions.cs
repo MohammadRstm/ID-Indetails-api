@@ -285,8 +285,9 @@ public sealed class ProtonActionOptions
 }
 
 /// <summary>
-/// When a measured change may be called notable or unusual (docs/proton.md, "Analysis"). Without one of these rules
-/// firing, Proton reports the change and makes no judgement about its size.
+/// When a measured change may be called notable or unusual (docs/proton.md, "Analysis"), and the owner's thresholds for
+/// Financial Intelligence's risks and expense anomalies (docs/finance.md, "Financial Intelligence"). Without one of
+/// these rules firing, nothing is called notable, unusual or at risk.
 /// </summary>
 public sealed class ProtonInsightOptions
 {
@@ -310,6 +311,39 @@ public sealed class ProtonInsightOptions
 
     [Range(1, 365)]
     public int TargetSoonDays { get; init; } = 14;
+
+    /// <summary>A site's money is short when the site money timeline sees it run out within this many working days.</summary>
+    [Range(1, 312)]
+    public int RunwayWorkingDays { get; init; } = 24;
+
+    /// <summary>How many months back the risks list settlements on finished projects (Q10).</summary>
+    [Range(1, 120)]
+    public int SettlementMonths { get; init; } = 12;
+
+    /// <summary>The months before a category's month that its average is taken over (Q16).</summary>
+    [Range(2, 24)]
+    public int ExpenseBaselineMonths { get; init; } = 6;
+
+    /// <summary>A category's month is unusual at this many times its average, when it also reaches <see cref="ExpenseHighUsd"/> (Q16).</summary>
+    [Range(1, 100)]
+    public decimal ExpenseHighRatio { get; init; } = 1.5m;
+
+    [Range(0, 10_000_000)]
+    public decimal ExpenseHighUsd { get; init; } = 1_000m;
+
+    /// <summary>An item's unit cost is unusual this many percent above the average of its last <see cref="UnitCostPurchases"/> purchases (Q16).</summary>
+    [Range(1, 1_000)]
+    public int UnitCostJumpPct { get; init; } = 25;
+
+    [Range(1, 20)]
+    public int UnitCostPurchases { get; init; } = 3;
+
+    /// <summary>
+    /// Two expenses on one project with the same item, amount and currency, this many days apart or less, may be one typed
+    /// twice; 0 is the same day.
+    /// </summary>
+    [Range(0, 31)]
+    public int DuplicateDays { get; init; } = 0;
 }
 
 /// <summary>

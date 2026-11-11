@@ -352,6 +352,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IMoneyRollupService, MoneyRollupService>();
         services.AddScoped<IFinanceInsightService, FinanceInsightService>();
+        services.AddScoped<IDomainInsightService, DomainInsightService>();
         services.AddScoped<IDomainFinanceService, DomainFinanceService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IActivityFeedService, ActivityFeedService>();

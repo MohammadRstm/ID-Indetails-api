@@ -85,4 +85,15 @@ public sealed class MoneySummaryRepository(IdIndetailsDbContext db) : IMoneySumm
             .Where(x => projectIds.Contains(x.ProjectId) && x.DeletedAt == null && x.SpentOn >= from && x.SpentOn <= to)
             .Select(x => new ExpenseDetailRow(x.Id, x.ProjectId, x.Label, x.Category, x.Currency, x.Amount, x.SpentOn))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<SiteExpenseDetailRow>> SiteExpensesAsync(
+        IReadOnlyCollection<long> projectIds,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken = default)
+        => await db.SiteExpenses
+            .AsNoTracking()
+            .Where(x => projectIds.Contains(x.ProjectId) && x.DeletedAt == null && x.SpentOn >= from && x.SpentOn <= to)
+            .Select(x => new SiteExpenseDetailRow(x.Id, x.ProjectId, x.Name, x.Category, x.Quantity, x.Unit, x.UnitCost, x.Total, x.Currency, x.SpentOn))
+            .ToListAsync(cancellationToken);
 }

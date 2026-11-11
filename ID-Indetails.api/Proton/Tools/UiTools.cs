@@ -179,7 +179,7 @@ public sealed record OpenPageInput
     [Description("projects page only: show this client's projects (id from find).")]
     public long? ClientId { get; init; }
 
-    [Description("financials page only.")]
+    [Description("financials page only. insights is the business's Financial Intelligence: its projects' financial risks and its spending's trends and anomalies.")]
     public ProtonFinancialsTab? Tab { get; init; }
 }
 
@@ -238,6 +238,9 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
 
     private static ProtonEndpoint WebsiteRead => ProtonEndpoint.Of<WebsiteController>(nameof(WebsiteController.Projects));
 
+    /// <summary>The Financials page's insights tab reads the domain's Financial Intelligence (financial:view, as the page).</summary>
+    private static readonly ProtonEndpoint FinancialsInsights = ProtonEndpoint.Of<FinanceInsightsController>(nameof(FinanceInsightsController.Risks));
+
     /// <summary>The person's own pages: only employees have them (an admin's profile is the company area's).</summary>
     private static readonly IReadOnlySet<ProtonPage> EmployeePages = new HashSet<ProtonPage>
     {
@@ -262,7 +265,8 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
 
     public override string Description =>
         "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people (Design), financials " +
-        "(optionally a tab), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
+        "(optionally a tab: overview, projects, clients, billing, costs, or insights, its projects' financial risks and its " +
+        "spending's trends and anomalies), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
         "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
         "start page; in Execution the pocket money and everyone's daily logs (site_logs); for employees their own my_work (Design), " +
         "daily_log and my_sites (Execution site staff) and my_profile (they don't see their pay); in the Website area (the company's public " +
@@ -277,6 +281,11 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
         if (endpoint is not null)
         {
             await context.RequireAsync(endpoint);
+        }
+
+        if (input.Page == ProtonPage.Financials && input.Tab == ProtonFinancialsTab.Insights)
+        {
+            await context.RequireAsync(FinancialsInsights);
         }
 
         if (WebsiteArea.Contains(input.Page) && !context.Access.VisibleDomains.Contains(DomainCodes.Website))

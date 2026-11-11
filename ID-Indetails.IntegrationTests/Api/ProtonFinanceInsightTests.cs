@@ -158,4 +158,150 @@ public class ProtonFinanceInsightTests(ProtonApiFactory api) : IClassFixture<Pro
         nothing["status"]!.GetValue<string>().ShouldBe("invalid");
         nothing["message"]!.GetValue<string>().ShouldContain("at least one change");
     }
+
+    /// <summary>A listed project's risks, found by its id: other tests' projects share the database.</summary>
+    private static JsonArray? RisksOf(JsonNode data, long projectId)
+        => data["projects"]!.AsArray().SingleOrDefault(p => p!["project_id"]!.GetValue<long>() == projectId)?["risks"]!.AsArray();
+
+    [Fact]
+    public async Task A_super_admin_reads_a_domains_risk_register_each_risk_with_its_fact_and_rule_and_no_internal_project()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+
+        // agreed at 1,000 USD with 950 of expenses: a margin of 5%, close to the floor
+        var thin = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 1000m);
+        await OkAsync(Client.PostJsonAsync($"/api/projects/{thin.Id}/expenses",
+            new { label = "Facade study", amount = 950m, currency = "USD", category = "other", spentOn = Today }, superAdmin.AccessToken));
+        // an expense that would take the profit to zero is refused and kept as a change waiting to be forced or dismissed
+        var held = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 1000m);
+        await (await Client.PostJsonAsync($"/api/projects/{held.Id}/expenses",
+            new { label = "Model shop", amount = 1000m, currency = "USD", category = "other", spentOn = Today }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.ProfitFloor);
+        // internal work is a cost centre: never a risk of loss, whatever it costs
+        var created = await Client.PostJsonAsync("/api/projects",
+            new { title = "Studio tooling " + Guid.NewGuid().ToString("N")[..6], domainCode = DomainCodes.Design, billingType = "internal" }, superAdmin.AccessToken);
+        var studio = await created.ReadAsync<ProjectResponse>();
+        await OkAsync(Client.PostJsonAsync($"/api/projects/{studio.Id}/expenses",
+            new { label = "Plotter", amount = 500m, currency = "USD", category = "hardware", spentOn = Today }, superAdmin.AccessToken));
+
+        var (design, reply) = await CallAsync(superAdmin, "detect_project_financial_risks", new { domain = "design", limit = 20 });
+        var data = design["data"]!;
+        data["domain"]!.GetValue<string>().ShouldBe(DomainCodes.Design);
+        data["checked"]!.GetValue<int>().ShouldBeGreaterThanOrEqualTo(2);
+        var close = RisksOf(data, thin.Id).ShouldNotBeNull().ShouldHaveSingleItem()!;
+        (close["kind"]!.GetValue<string>(), close["amount"]!.GetValue<decimal>()).ShouldBe(("profit_close", 50m));
+        close["fact"]!.GetValue<string>().ShouldContain("50 USD on 1,000 USD agreed");
+        close["rule"]!.GetValue<string>().ShouldContain("a margin of 10% or less, against the profit floor");
+        var waiting = RisksOf(data, held.Id).ShouldNotBeNull().ShouldHaveSingleItem()!;
+        waiting["kind"]!.GetValue<string>().ShouldBe("blocked_change");
+        waiting["amount"].ShouldBeNull();
+        RisksOf(data, studio.Id).ShouldBeNull();
+        var counts = data["counts"]!.AsArray().ToDictionary(c => c!["kind"]!.GetValue<string>(), c => c!["projects"]!.GetValue<int>());
+        counts["profit_close"].ShouldBeGreaterThanOrEqualTo(1);
+        counts["blocked_change"].ShouldBeGreaterThanOrEqualTo(1);
+
+        // the basis says how it was checked and what was left out; the register is a table, never a chart of mixed amounts
+        design["basis"]!["rules"]!.ToJsonString().ShouldContain("a margin of 10% or less");
+        design["basis"]!["omitted"]!.ToJsonString().ShouldContain("Internal projects");
+        var datasets = design["datasets"]!.AsArray();
+        datasets.ShouldContain(d => d!["title"]!.GetValue<string>() == "Design: risk register" && d["forms"]!.ToJsonString() == "[\"table\"]");
+        datasets.ShouldContain(d => d!["title"]!.GetValue<string>() == "Design: projects by kind of risk");
+        reply.Sources.ShouldHaveSingleItem().Label.ShouldBe("Design's financial risks");
+
+        // a site that has spent more than its client paid: its cash profit is below zero
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        await OkAsync(Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
+            new { items = new[] { new { name = "Scaffolding", amount = 100m, spentOn = Today } } }, superAdmin.AccessToken));
+        var onSite = (await CallAsync(superAdmin, "detect_project_financial_risks", new { domain = "execution", limit = 20 })).Result["data"]!;
+        var runway = RisksOf(onSite, site.Id).ShouldNotBeNull()[0]!;
+        (runway["kind"]!.GetValue<string>(), runway["amount"]!.GetValue<decimal>()).ShouldBe(("short_runway", -100m));
+        runway["fact"]!.GetValue<string>().ShouldContain("spent more than the client paid");
+        runway["rule"]!.GetValue<string>().ShouldContain("already below 0");
+    }
+
+    [Fact]
+    public async Task A_super_admin_reads_a_domains_spending_by_month_and_what_the_rules_call_unusual_with_no_person_in_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var tag = Guid.NewGuid().ToString("N")[..8];
+
+        // Design: the same licence entered twice on one project on the same day
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var licence = $"Licence {tag}";
+        for (var i = 0; i < 2; i++)
+        {
+            await OkAsync(Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+                new { label = licence, amount = 100m, currency = "USD", category = "software", spentOn = Today }, superAdmin.AccessToken));
+        }
+
+        var (design, reply) = await CallAsync(superAdmin, "analyze_expense_trends", new { domain = "design" });
+        var data = design["data"]!;
+        var months = data["months"]!.AsArray();
+        months.Count.ShouldBe(12);
+        var thisMonth = months[months.Count - 1]!;
+        thisMonth["so_far"]!.GetValue<bool>().ShouldBeTrue();
+        thisMonth["categories"]!.AsArray().Single(c => c!["category"]!.GetValue<string>() == "software")!["usd"]!.GetValue<decimal>()
+            .ShouldBeGreaterThanOrEqualTo(200m);
+        var twice = data["anomalies"]!.AsArray().Single(a => a!["item"]?.GetValue<string>() == licence)!;
+        (twice["kind"]!.GetValue<string>(), twice["project_id"]!.GetValue<long>(), twice["usd"]!.GetValue<decimal>()).ShouldBe(("same_amount_twice", project.Id, 100m));
+        twice["expense_ids"]!.AsArray().Count.ShouldBe(2);
+        twice["fact"]!.GetValue<string>().ShouldContain($"2 expenses of 100 USD for \"{licence}\"");
+        twice["rule"]!.GetValue<string>().ShouldContain("maybe one typed twice");
+        design["basis"]!["partial"]!.GetValue<bool>().ShouldBeTrue();
+        design["basis"]!["rules"]!.ToJsonString().ShouldContain("Design expenses have no unit cost");
+        var datasets = design["datasets"]!.AsArray();
+        datasets.ShouldContain(d => d!["title"]!.GetValue<string>() == "Design: spending by category, by month" && d["forms"]!.ToJsonString().Contains("line"));
+        datasets.ShouldContain(d => d!["title"]!.GetValue<string>() == "Design: spending the rules call unusual" && d["forms"]!.ToJsonString().Contains("table"));
+        reply.Sources.ShouldHaveSingleItem().Label.ShouldBe("Design's spending by category");
+
+        // fewer months on request; more than 24 is refused by the endpoint's own validator
+        (await CallAsync(superAdmin, "analyze_expense_trends", new { domain = "design", months = 3 })).Result["data"]!["months"]!.AsArray().Count.ShouldBe(3);
+        var (tooMany, _) = await CallAsync(superAdmin, "analyze_expense_trends", new { domain = "design", months = 30 });
+        tooMany["status"]!.GetValue<string>().ShouldBe("invalid");
+        tooMany["message"]!.GetValue<string>().ShouldContain("24");
+
+        // a site's cement bought at 5 USD a bag three times, then at 8: a jump in its unit cost; the supplier is never shown
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution);
+        var cement = $"Cement {tag}";
+        const string supplier = "Georges Haddad";
+        foreach (var (quantity, unitCost) in new[] { (10m, 5m), (11m, 5m), (12m, 5m), (10m, 8m) })
+        {
+            await OkAsync(Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses",
+                new { items = new[] { new { name = cement, quantity, unit = "bag", unitCost, supplier, spentOn = Today } } }, superAdmin.AccessToken));
+        }
+
+        var (execution, _) = await CallAsync(superAdmin, "analyze_expense_trends", new { domain = "execution", months = 1 });
+        var jump = execution["data"]!["anomalies"]!.AsArray().Single(a => a!["item"]?.GetValue<string>() == cement)!;
+        (jump["kind"]!.GetValue<string>(), jump["project_id"]!.GetValue<long>(), jump["usd"]!.GetValue<decimal>(), jump["baseline"]!.GetValue<decimal>(),
+                jump["pct_above"]!.GetValue<int>())
+            .ShouldBe(("unit_cost_jump", site.Id, 80m, 5m, 60));
+        jump["category"]!.GetValue<string>().ShouldBe("materials");
+        jump["rule"]!.GetValue<string>().ShouldContain("25% or more above the average of its last 3 purchases");
+        execution.ToJsonString().ShouldNotContain(supplier);
+    }
+
+    [Fact]
+    public async Task Without_financial_view_a_domains_risks_and_spending_are_refused_and_another_domain_reads_as_not_found()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+
+        // an admin has no financial:view: the endpoints' policy keeps both tools from them, offered or asked for
+        var plain = await DesignAdminAsync(superAdmin);
+        (await CallAsync(plain, "detect_project_financial_risks", new { domain = "design" })).Result["status"]!.GetValue<string>().ShouldBe("forbidden");
+        api.Anthropic.ToolsOffered(0).ShouldNotContain("detect_project_financial_risks");
+        api.Anthropic.ToolsOffered(0).ShouldNotContain("analyze_expense_trends");
+        (await CallAsync(plain, "analyze_expense_trends", new { domain = "design" })).Result["status"]!.GetValue<string>().ShouldBe("forbidden");
+
+        // with financial:view, a Design admin's only business is chosen for them, and Execution reads as not found
+        var viewer = await DesignAdminAsync(superAdmin, PermissionCodes.FinancialView);
+        (await CallAsync(viewer, "detect_project_financial_risks", new { })).Result["data"]!["domain"]!.GetValue<string>().ShouldBe(DomainCodes.Design);
+        (await CallAsync(viewer, "analyze_expense_trends", new { })).Result["data"]!["domain"]!.GetValue<string>().ShouldBe(DomainCodes.Design);
+        (await CallAsync(viewer, "detect_project_financial_risks", new { domain = "execution" })).Result["status"]!.GetValue<string>().ShouldBe("not_found");
+        (await CallAsync(viewer, "analyze_expense_trends", new { domain = "execution" })).Result["status"]!.GetValue<string>().ShouldBe("not_found");
+
+        // someone who sees both businesses is asked which one, never given one silently
+        var (which, _) = await CallAsync(superAdmin, "detect_project_financial_risks", new { });
+        which["status"]!.GetValue<string>().ShouldBe("invalid");
+        which["message"]!.GetValue<string>().ShouldContain("design or execution");
+    }
 }

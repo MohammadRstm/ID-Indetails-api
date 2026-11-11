@@ -34,7 +34,7 @@ behind any judgement, and what was left out (`omitted`).
 
 - Call a change "notable", "significant", "a big jump" or similar only when the result marks it (`notable`,
   `hours_notable`, `cost_notable`, or a signal), and say which rule: the rule is in `basis.rules`.
-- Call something "unusual" only for an `hours_unusual` signal.
+- Call something "unusual" only for an `hours_unusual` signal or a spending anomaly `analyze_expense_trends` lists.
 - Otherwise just state the change ("up 12%") without judging its size.
 
 ## "Why" questions

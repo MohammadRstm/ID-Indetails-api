@@ -96,4 +96,18 @@ public class InsightValidatorTests
         }).ShouldBeTrue();
         Valid(new ProjectScenarioQuery { SettleOwed = OwedSettlement.Excused, TvaRate = 0.05m, DelayWeeks = 2 }).ShouldBeTrue();
     }
+
+    [Fact]
+    public void Expense_trends_cover_1_to_24_months_and_12_when_left_out()
+    {
+        var validator = new ExpenseTrendsQueryValidator();
+
+        validator.Validate(new ExpenseTrendsQuery()).IsValid.ShouldBeTrue();
+        ExpenseTrendsQueryValidator.DefaultMonths.ShouldBe(12);
+        validator.Validate(new ExpenseTrendsQuery { Months = 1 }).IsValid.ShouldBeTrue();
+        validator.Validate(new ExpenseTrendsQuery { Months = 24 }).IsValid.ShouldBeTrue();
+
+        validator.Validate(new ExpenseTrendsQuery { Months = 0 }).Errors.Select(e => e.PropertyName).ShouldBe(["Months"]);
+        validator.Validate(new ExpenseTrendsQuery { Months = 25 }).Errors.Select(e => e.PropertyName).ShouldBe(["Months"]);
+    }
 }

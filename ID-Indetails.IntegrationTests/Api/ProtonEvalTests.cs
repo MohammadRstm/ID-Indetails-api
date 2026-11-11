@@ -265,6 +265,11 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         new("where the profit comes from", ["Where does Villa Mounir's profit come from?"], ["get_project_financial_summary"], MustMention: ["5,000", "5000"]),
         new("what if a VO", ["What would Villa Mounir's profit be with a 1,000 USD variation order?"], ["simulate_project_financial_scenario"],
             MustMention: ["saved", "simulat", "nothing"]),
+        // a business's risks and spending: no Design project has a rule fire here, so none is called at risk; spending by category in USD
+        new("which projects are at risk", ["Which Design projects are at financial risk?"], ["detect_project_financial_risks"],
+            MustMention: ["none", "no design project", "no project", "checked", "no rule"]),
+        new("spending by category", ["How has Design's spending gone by category over the last 6 months?"], ["analyze_expense_trends"],
+            MustMention: ["1,500", "1500"]),
         new("revenue in a period", ["How much revenue did Design bring in over the last 30 days?"],
             ["get_domain_finance", "compare_money", "get_money_by_month", "get_company_overview"], MustMention: ["received", "came in", "paid"]),
         new("expected isn't a forecast", ["How much revenue should Design expect next month?"], [],
@@ -325,7 +330,7 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         problems.AddRange(Ungrounded(answer, lastRequest, eval.Questions).Select(n => $"number not in any tool result: {n}"));
         var lower = answer.ToLowerInvariant();
         if (SizeWords.FirstOrDefault(w => Regex.IsMatch(lower, $@"\b{w}\b") && !Regex.IsMatch(lower, $@"\bnot (a |an )?{w}\b")) is { } size
-            && !Regex.IsMatch(lastRequest, @"notable\\?""\s*:\s*true|hours_unusual|hours_change|cost_change"))
+            && !Regex.IsMatch(lastRequest, @"notable\\?""\s*:\s*true|hours_unusual|hours_change|cost_change|category_high|unit_cost_jump|same_amount_twice"))
         {
             problems.Add($"says \"{size}\" without a rule that fired");
         }

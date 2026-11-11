@@ -1,8 +1,10 @@
 using System.Text.Json;
 using ID_Indetails.api.Business.Boqs;
+using ID_Indetails.api.Business.Finance.Intelligence;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Boqs;
+using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Insights;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
@@ -12,8 +14,9 @@ using static ID_Indetails.IntegrationTests.Api.BoqTestSteps;
 namespace ID_Indetails.IntegrationTests.Api;
 
 /// <summary>
-/// Financial Intelligence on one project: its profitability, where its profit comes from, and simulated changes. Every
-/// test follows its own projects, since the classes share one database.
+/// Financial Intelligence on one project: its profitability, where its profit comes from, and simulated changes; and
+/// across a domain: its projects' risks and its spending. Every test follows its own projects, since the classes share
+/// one database.
 /// </summary>
 public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
 {
@@ -26,11 +29,37 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
 
     private static string ScenarioUrl(long projectId, string query) => $"/api/finance/insights/projects/{projectId}/scenario?{query}";
 
+    private static string RisksUrl(string domain) => $"/api/finance/insights/{domain}/risks";
+
+    private static string ExpensesUrl(string domain, string? query = null)
+        => $"/api/finance/insights/{domain}/expenses" + (query is null ? "" : $"?{query}");
+
+    private static DateOnly CompanyToday()
+        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Asia/Beirut"));
+
     private async Task<T> OkAsync<T>(string url, AuthResponse who)
     {
         var response = await Client.GetAsync(url, who.AccessToken);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<T>();
+    }
+
+    /// <summary>A 200's body read both ways: as the response, and as the JSON it was sent as.</summary>
+    private async Task<(T Response, JsonElement Json)> OkJsonAsync<T>(string url, AuthResponse who)
+    {
+        var response = await Client.GetAsync(url, who.AccessToken);
+        var body = await response.Content.ReadAsStringAsync();
+        ((int)response.StatusCode).ShouldBe(200, body);
+        using var json = JsonDocument.Parse(body);
+        return (JsonSerializer.Deserialize<T>(body, ApiClientExtensions.Json)!, json.RootElement.Clone());
+    }
+
+    private async Task<ExpenseResponse> ExpenseAsync(long projectId, string label, decimal amount, DateOnly spentOn, string token)
+    {
+        var response = await Client.PostJsonAsync($"/api/projects/{projectId}/expenses",
+            new { label, amount, currency = "USD", spentOn = spentOn.ToString("yyyy-MM-dd") }, token);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        return await response.ReadAsync<ExpenseResponse>();
     }
 
     private async Task<ProjectMoneyResponse> MoneyAsync(AuthResponse who, long projectId)
@@ -382,5 +411,127 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         // no change at all is a validation error
         await (await Client.GetAsync($"/api/finance/insights/projects/{design.Id}/scenario", token))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
+    public async Task A_domains_risks_and_spending_need_financial_view_and_a_business_domain_the_caller_sees()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, plainAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designMoneyAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
+
+        foreach (var domain in new[] { DomainCodes.Design, DomainCodes.Execution })
+        {
+            (await OkAsync<ProjectRisksResponse>(RisksUrl(domain), superAdmin)).Domain.ShouldBe(domain);
+            (await OkAsync<ExpenseTrendsResponse>(ExpensesUrl(domain), superAdmin)).Domain.ShouldBe(domain);
+        }
+
+        (await OkAsync<ProjectRisksResponse>(RisksUrl(DomainCodes.Design), designMoneyAdmin)).Domain.ShouldBe(DomainCodes.Design);
+        (await OkAsync<ExpenseTrendsResponse>(ExpensesUrl(DomainCodes.Design), designMoneyAdmin)).Domain.ShouldBe(DomainCodes.Design);
+
+        // without financial:view: the policy refuses
+        await (await Client.GetAsync(RisksUrl(DomainCodes.Design), plainAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.GetAsync(ExpensesUrl(DomainCodes.Design), plainAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        // the website is a service with no projects' money, and a domain that doesn't exist isn't found either
+        foreach (var domain in new[] { DomainCodes.Website, "nowhere" })
+        {
+            await (await Client.GetAsync(RisksUrl(domain), superAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+            await (await Client.GetAsync(ExpensesUrl(domain), superAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        }
+
+        // the other business domain reads as not found to an admin of one
+        await (await Client.GetAsync(RisksUrl(DomainCodes.Execution), designMoneyAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.GetAsync(ExpensesUrl(DomainCodes.Execution), designMoneyAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task A_design_client_project_whose_cost_passed_its_agreed_amount_is_at_zero_and_internal_work_is_never_a_risk()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+
+        // 1,000 agreed, untaxed; a 1,500 expense the floor kept aside, then forced through: a profit of -500
+        var project = await Projects.CreateProjectAsync(token, DomainCodes.Design, revenue: 1_000m);
+        var refused = await (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+            new { label = "Structural survey", amount = 1_500m, currency = "USD" }, token)).ShouldFailWithAsync(422, ErrorCodes.ProfitFloor);
+        var forced = await Client.PostEmptyAsync($"/api/blocked-changes/{refused.BlockedChangeId.ShouldNotBeNull()}/force", token);
+        forced.IsSuccessStatusCode.ShouldBeTrue(await forced.Content.ReadAsStringAsync());
+
+        // internal work with a cost and no price: a cost centre
+        var created = await Client.PostJsonAsync("/api/projects",
+            new { title = "Studio tooling " + Guid.NewGuid().ToString("N")[..8], billingType = "internal", domainCode = DomainCodes.Design }, token);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        var internalWork = await created.ReadAsync<ProjectResponse>();
+        await ExpenseAsync(internalWork.Id, "Plotter", 300m, CompanyToday(), token);
+
+        var (risks, json) = await OkJsonAsync<ProjectRisksResponse>(RisksUrl(DomainCodes.Design), superAdmin);
+
+        risks.Domain.ShouldBe(DomainCodes.Design);
+        var mine = risks.Projects.Where(p => p.ProjectId == project.Id).ShouldHaveSingleItem();
+        mine.ShouldSatisfyAllConditions(
+            p => p.Title.ShouldBe(project.Title),
+            p => p.Status.ShouldBe(ProjectStatus.Active));
+        // the most pressing first
+        mine.Risks[0].ShouldSatisfyAllConditions(
+            r => r.Kind.ShouldBe(ProjectRiskKind.ProfitAtZero),
+            r => r.Amount.ShouldBe(-500m),
+            r => r.Fact.ShouldBe("An agreed profit of -500 USD on 1,000 USD agreed."),
+            r => r.Rule.ShouldBe(ProjectRiskRules.ProfitAtZeroRule));
+        risks.Counts.ShouldContain(c => c.Kind == ProjectRiskKind.ProfitAtZero);
+        risks.Projects.ShouldNotContain(p => p.ProjectId == internalWork.Id);
+
+        // kinds in snake_case, names in camelCase
+        json.EnumerateObject().Select(p => p.Name).ShouldBe(["domain", "today", "checked", "projects", "counts", "basis"], ignoreOrder: true);
+        var group = json.GetProperty("projects").EnumerateArray().Single(p => p.GetProperty("projectId").GetInt64() == project.Id);
+        group.EnumerateObject().Select(p => p.Name).ShouldBe(["projectId", "title", "status", "risks"], ignoreOrder: true);
+        group.GetProperty("status").GetString().ShouldBe("active");
+        var atZero = group.GetProperty("risks")[0];
+        atZero.EnumerateObject().Select(p => p.Name).ShouldBe(["kind", "amount", "fact", "rule"], ignoreOrder: true);
+        atZero.GetProperty("kind").GetString().ShouldBe("profit_at_zero");
+    }
+
+    [Fact]
+    public async Task The_same_expense_twice_on_one_day_is_unusual_and_the_months_end_with_this_one()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var project = await Projects.CreateProjectAsync(token, DomainCodes.Design, revenue: 5_000m);
+        var today = CompanyToday();
+        var thisMonth = new DateOnly(today.Year, today.Month, 1);
+        var label = "Plotter paper " + Guid.NewGuid().ToString("N")[..6];
+        var first = await ExpenseAsync(project.Id, label, 120m, today, token);
+        var second = await ExpenseAsync(project.Id, label, 120m, today, token);
+
+        var (trends, json) = await OkJsonAsync<ExpenseTrendsResponse>(ExpensesUrl(DomainCodes.Design), superAdmin);
+
+        var twice = trends.Anomalies.Where(a => a.ProjectId == project.Id).ShouldHaveSingleItem();
+        twice.ShouldSatisfyAllConditions(
+            a => a.Kind.ShouldBe(ExpenseAnomalyKind.SameAmountTwice),
+            a => a.On.ShouldBe(today),
+            a => a.ProjectTitle.ShouldBe(project.Title),
+            a => a.Item.ShouldBe(label),
+            a => a.Category.ShouldBe("other"),
+            a => a.Usd.ShouldBe(120m),
+            a => a.ExpenseIds.ShouldBe([first.Id, second.Id], ignoreOrder: true));
+
+        // 12 months when not asked, oldest first, ending with this one; every category in every month
+        trends.Months.Select(m => m.Month).ShouldBe(Enumerable.Range(0, 12).Select(i => thisMonth.AddMonths(i - 11)));
+        trends.Categories.ShouldContain("other");
+        trends.Months.ShouldAllBe(m => m.Categories.Select(c => c.Category).SequenceEqual(trends.Categories));
+
+        // kinds in snake_case, names in camelCase
+        json.EnumerateObject().Select(p => p.Name).ShouldBe(["domain", "categories", "months", "anomalies", "unconverted", "basis"], ignoreOrder: true);
+        var anomaly = json.GetProperty("anomalies").EnumerateArray()
+            .Single(a => a.TryGetProperty("projectId", out var id) && id.ValueKind == JsonValueKind.Number && id.GetInt64() == project.Id);
+        anomaly.GetProperty("kind").GetString().ShouldBe("same_amount_twice");
+        anomaly.GetProperty("expenseIds").EnumerateArray().Select(e => e.GetInt64()).ShouldBe([first.Id, second.Id], ignoreOrder: true);
+        json.GetProperty("months")[11].GetProperty("month").GetString().ShouldBe(thisMonth.ToString("yyyy-MM-dd"));
+
+        // fewer months on asking; 1 to 24
+        (await OkAsync<ExpenseTrendsResponse>(ExpensesUrl(DomainCodes.Design, "months=3"), superAdmin)).Months.Select(m => m.Month)
+            .ShouldBe([thisMonth.AddMonths(-2), thisMonth.AddMonths(-1), thisMonth]);
+        await (await Client.GetAsync(ExpensesUrl(DomainCodes.Design, "months=25"), token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.GetAsync(ExpensesUrl(DomainCodes.Design, "months=0"), token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 }

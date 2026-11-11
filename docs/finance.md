@@ -22,6 +22,8 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 | `GET /api/finance/{domain}/attention` | `financial:view` | The dashboard's money follow-ups, 6 at most |
 | `GET /api/finance/insights/projects/{id}` | `financial:view` | One project's profitability, all time, with where its profit comes from (see [Financial Intelligence](#financial-intelligence)) |
 | `GET /api/finance/insights/projects/{id}/scenario?…` | `financial:view` | One project's figures today and with simulated changes; nothing is saved (see [Scenarios](#scenarios)) |
+| `GET /api/finance/insights/{domain}/risks` | `financial:view` | The domain's client projects with a financial risk, most pressing first, each with the rule that fired (see [A domain's project risks](#a-domains-project-risks)) |
+| `GET /api/finance/insights/{domain}/expenses?months=12` | `financial:view` | The domain's spending by category, month by month, and what the owner's rules call unusual in it (see [A domain's spending trends](#a-domains-spending-trends)) |
 | `GET /api/dashboard/{domain}` | `report:view` | The dashboard's cards without money or hours: active projects, clients, projects by status, longest running |
 | `GET /api/dashboard/{domain}/deadlines` | `report:view` | Upcoming deadlines: open requirements due in the next 14 days, overdue ones included |
 | `GET /api/projects` | `project:view` | Each row has `money` for callers with `financial:view` |
@@ -71,17 +73,21 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ## Financial Intelligence
 
-Judgements and simulations on one project, kept apart from the Financials page's established figures (`Controllers/FinanceInsightsController.cs`, `Services/Insights`). Their rules live in `Business/Finance/Intelligence` (`ProjectBridgeRules`, `ProjectScenarioRules`): pure, with no EF and no HTTP. They build only on the shared calculator (`IProjectFinanceService`, `ProjectFinance`) and on the pricing rules the real changes use (`ExecutionPricing`, `Tva`, `ProfitFloorRules`). There is no second formula ([proton-financial-intelligence-plan.md](proton-financial-intelligence-plan.md), principle 1). Nothing is cached and nothing is saved.
+Judgements and simulations on one project or a whole domain, kept apart from the Financials page's established figures (`Controllers/FinanceInsightsController.cs`, `Services/Insights`: `FinanceInsightService` for a project, `DomainInsightService` for a domain). Their rules live in `Business/Finance/Intelligence` (`ProjectBridgeRules`, `ProjectScenarioRules`, `ProjectRiskRules`, `ExpenseTrendRules`): pure, with no EF and no HTTP. They build only on the shared calculator (`IProjectFinanceService`, `ProjectFinance`) and on the rules the real changes and pages use (`ExecutionPricing`, `Tva`, `ProfitFloorRules`, the site money timeline's `LabourRules.ProjectZero`). There is no second formula ([proton-financial-intelligence-plan.md](proton-financial-intelligence-plan.md), principle 1). Nothing is cached and nothing is saved.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
 | `GET /api/finance/insights/projects/{id}` | `financial:view` | One project's profitability, all time: agreed revenue, cost by source, agreed profit, where it comes from (the bridge), its standing against the profit floor, its cash, and Design's departments |
 | `GET /api/finance/insights/projects/{id}/scenario?voAmount=&extraCost=&extraCostSource=&supervisionRate=&tvaRate=&settleOwed=&delayWeeks=` | `financial:view` | The project's figures today and with the changes asked for. Nothing is saved |
+| `GET /api/finance/insights/{domain}/risks` | `financial:view` | The domain's client projects with a financial risk, most pressing first, each risk with the rule that fired |
+| `GET /api/finance/insights/{domain}/expenses?months=12` | `financial:view` | The domain's spending by category, month by month in USD, and what the owner's rules call unusual in it |
 
-- Without `financial:view` both answer `403`; the service checks it again.
+- Without `financial:view` every one answers `403`; the services check it again.
 - A project in a domain the caller can't see answers `404`, like one that doesn't exist.
-- Both domains, client work and internal work.
+- `{domain}` is `design` or `execution`. Any other value, or a domain the caller can't see, answers `404`.
+- A project's endpoints cover both domains, client work and internal work. The risks cover client work only. Spending covers internal work too.
 - Amounts are USD, net of TVA unless said otherwise.
+- A judgement ("at risk", "unusual") is made only when one of the rules below fired. The thresholds are the owner's, in configuration (see [Thresholds](#thresholds)), and every rule's wording in a response carries the values in force.
 
 ### A project's profitability
 
@@ -150,3 +156,127 @@ Judgements and simulations on one project, kept apart from the Financials page's
 - `422 not_for_this_domain`: `supervisionRate` on Design, or a cost source of the other domain.
 - `422 nothing_owed`: `settleOwed` when the client owes nothing.
 - `422 owed_beyond_work`: `settleOwed` on a site whose client paid less than its permits alone.
+
+### A domain's project risks
+
+`GET /api/finance/insights/{domain}/risks` lists the domain's client projects with a financial risk, the most pressing first. Each risk says what was measured and names the rule that fired (`ProjectRiskRules`). Figures come from the shared calculator: USD net of TVA, all time.
+
+**Which projects are checked:**
+
+- every active or on-hold client project of the domain;
+- every completed or archived client project settled in the last 12 months (`SettlementMonths`), for the settlement risk only;
+- never an internal project: internal projects are cost centres, never a risk of loss (owner decision Q5).
+
+"With an agreed amount" below means the profit floor applies: Design's payment, or a site's work price, is above 0.
+
+| `kind` | Fires when | `amount` |
+|---|---|---|
+| `profit_at_zero` | A running project with an agreed amount has an agreed profit of 0 or below (standing `at_zero`) | the agreed profit |
+| `short_runway` | A running site's cash profit is already below 0, or, on an active site, the site money timeline's projection sees it run out within 24 working days (`RunwayWorkingDays`) at today's crew and day rate (owner decision, 10 Nov) | the site's cash profit |
+| `projected_loss` | A running project with an agreed amount, not already at zero: the cost so far ÷ progress (requirements done) puts the profit at completion at 0 or below. A straight-line estimate, made only from 5% along | the projected profit |
+| `profit_close` | A running project with an agreed amount has a margin of 10% or less (standing `close`) | the agreed profit |
+| `blocked_change` | A change the profit floor refused on a running project is still waiting to be forced or dismissed. Hours kept because their logger's department isn't on the project (`work_entry_department`, [projects.md](projects.md#departments)) aren't a money risk and don't count | none |
+| `department_over_budget` | A running Design project with an agreed amount has a department whose labour cost is past its budget (its share of the price, plus its variation orders). One risk per department | how far over |
+| `unconverted_costs` | A running project has costs with no exchange rate on their day, left out of its cost and profit | none |
+| `settlement_at_zero` | A project finished in the last 12 months (`SettlementMonths`) with what the client owed excused or written off, ending at an agreed profit of 0 or below (Q10). A settlement isn't held to the profit floor, so this is where it shows | the profit the settlement took (positive): its `settlement` step in the project's bridge |
+
+- **A running project** is active or on hold.
+- **Short runway:**
+  - the projection is the site money timeline's, worked out as `SiteMoneyService` does (`LabourRules.ProjectZero`);
+  - it counts working days (Monday to Saturday) from tomorrow, until the cash profit is spent at today's crew size × day rate;
+  - the cash profit is received net of TVA − cost − moved to the pocket + paid by it (`siteCashProfit`);
+  - a cash profit already below 0 is the risk before any countdown;
+  - a site with no crew size or day rate has no countdown;
+  - an on-hold site has no crew at work, so it gets no countdown: it shows only once its cash profit is below 0.
+- **Ranking:** the order of the table is the ranking.
+  - A project's risks come in that order. Within one kind, the bigger comes first: the bigger loss, projected loss, overspend or profit taken; the lower margin; the oldest waiting change; the most unconverted amounts.
+  - Short runway puts the cash profit furthest below 0 first, then the fewest working days left.
+  - Projects are ranked by their most pressing risk, then its size, then id.
+
+**The response:**
+
+- `domain`, and `today`: the company day it was checked on.
+- `checked`: how many projects were checked.
+- `projects[]`, ranked, each with `projectId`, `title`, `status` and `risks[]`. Each risk has `kind`, `amount` (USD to the cent, or `null`), `fact` (what was measured, in words) and `rule` (the rule that fired, in words, with its threshold).
+- `counts[]`: for each kind that fired, how many projects have it (`kind`, `projects`), in the ranking's order.
+- `basis`:
+  - `method`;
+  - `assumptions`: the projection is a straight line; on Execution, how a site's runway is counted; on Design, what a department's budget is;
+  - `leftOut`: internal projects, and how many running projects have no agreed amount yet, so have no standing, projection or department budget to check.
+
+### A domain's spending trends
+
+`GET /api/finance/insights/{domain}/expenses?months=12` shows the domain's spending by category, month by month, in USD at the rate of each expense's day. It also lists what the owner's rules call unusual in it (Q16, `ExpenseTrendRules`).
+
+- `months`: how many months, ending with this one: 1 to 24, 12 when left out. This month runs to today.
+- **What is counted:**
+  - Design: project expenses, by their category (assets, services, contractor, software, travel, hardware, other, then any older category the list no longer has).
+  - Execution: site expenses, by theirs (materials, contractor, equipment, fees, other), dated by the day they were spent.
+  - Labour and ground labour aren't spending here.
+- **Every project of the domain, internal ones included:** their costs count in the domain's totals (Q5).
+- **Everything up to today is read,** so the months before the window count for an average and for an item's earlier purchases.
+- **An expense with no exchange rate on its day** is in no USD figure. The window's are listed in `unconverted[]`, per currency.
+
+| `kind` | Fires when | Fields |
+|---|---|---|
+| `category_high` | A category's month is at least 1.5× (`ExpenseHighRatio`) its average over the 6 months before (`ExpenseBaselineMonths`), and the month's total reaches 1,000 USD (`ExpenseHighUsd`) | `on`: the month's first day. `usd`: the month's total. `baseline`: the average. `pct`: how far above it. No project and no expenses: it covers the whole domain |
+| `unit_cost_jump` | Execution only. An item is bought at a unit cost at least 25% (`UnitCostJumpPct`) above the average of its last 3 purchases (`UnitCostPurchases`) | `on`: the expense's day. `usd`: its cost. `baseline`: the average unit cost, in USD to 4 decimals. `pct`. `expenseIds`: the one expense |
+| `same_amount_twice` | Expenses on one project have the same item, amount and currency on the same day (`DuplicateDays` 0; owner decision, 10 Nov): maybe one typed twice | `on`: the last one's day. `usd`: one of them's cost. `expenseIds`: all of them |
+
+- **A category's month (owner's reading, 10 Nov):**
+  - the month's total must reach 1,000 USD, not the rise;
+  - a month with nothing counts as 0 in the 6-month average;
+  - a month has no average (`baseline` is `null`) until the domain has 6 months of spending history before it, or when those 6 months were all empty. No category is called unusual in such a month.
+- **Unit cost:**
+  - only site expenses entered as a quantity × a unit cost have one: the expense's cost in USD ÷ its quantity, so cents don't round it away;
+  - an item's purchases are matched by name and unit, across every site of the domain, in USD at each day's rate;
+  - the item's last 3 purchases are the 3 before it, by day; an item's first 3 purchases have nothing to compare with;
+  - Design expenses have no unit cost, so on Design only categories and repeated entries are checked.
+- **Same amount twice:**
+  - the item (on Design, the expense's label) is matched by its text trimmed, with single spaces, in lower case (`SiteExpenseRules.GroupKey`);
+  - the amount and currency are compared as typed, so expenses with no exchange rate can still be one typed twice;
+  - it is listed when the last of them falls in the window;
+  - with `DuplicateDays` above 0, expenses that many days apart or less are grouped, each with the one before it.
+
+**The response:**
+
+- `domain`, and `categories[]`: every category of the domain's scheme, in its order.
+- `months[]`, oldest first, ending with this month. Each has:
+  - `month`: its first day;
+  - `total` in USD;
+  - `categories[]`, every category in the order of `categories`, each with `category`, `usd` and `baseline` (its 6-month average, or `null` as above).
+- `anomalies[]`, newest first, then in the table's order, then the bigger first. Each has:
+  - `kind`, `on` and `category`;
+  - `projectId` and `projectTitle` (`null` for a category's month);
+  - `item`, `usd` (`null` with no exchange rate), `baseline` and `pct` (a whole percentage);
+  - `expenseIds[]` (empty for a category's month);
+  - `fact` and `rule`, in words.
+- `unconverted[]`: `currency` and `amount`, the window's spending with no exchange rate on its day.
+- `basis`:
+  - `method`;
+  - `assumptions`: each rule with the thresholds in force, and that this month runs to today;
+  - `leftOut`: the unconverted spending, and months without 6 months of history before them.
+
+**Errors:** `400 validation_failed` when `months` is outside 1 to 24.
+
+### Left out of the domain endpoints
+
+- **Internal projects are left out of the risks** (cost centres, Q5). Their expenses are in the spending, as their costs count in the domain's totals.
+- **Amounts with no exchange rate** are in no USD figure: the risks name them as `unconverted_costs`, and the spending lists them in `unconverted[]`.
+- **Months without 6 months of history** have no baseline, so no category is called unusual in them.
+- **Unit costs** exist only on Execution, on site expenses entered as a quantity × a unit cost.
+
+### Thresholds
+
+The owner's thresholds live in configuration, in the `Proton:Insights` section (`ProtonInsightOptions`), with Proton's own rules for notable and unusual changes ([proton.md](proton.md)). The owner set them on 9 Nov (Q10, Q16) and on 10 Nov (the runway and repeated entries, and how Q16 reads).
+
+| Key | Default | Range | Used by |
+|---|---|---|---|
+| `RunwayWorkingDays` | 24 | 1 to 312 | `short_runway`: a site's money runs out within this many working days |
+| `SettlementMonths` | 12 | 1 to 120 | `settlement_at_zero`: how far back finished projects' settlements are listed |
+| `ExpenseBaselineMonths` | 6 | 2 to 24 | `category_high`: the months before a category's month its average is taken over |
+| `ExpenseHighRatio` | 1.5 | 1 to 100 | `category_high`: the month at this many times its average, or more |
+| `ExpenseHighUsd` | 1,000 | 0 to 10,000,000 | `category_high`: the month's total at least this many USD |
+| `UnitCostJumpPct` | 25 | 1 to 1,000 | `unit_cost_jump`: this many percent above the average, or more |
+| `UnitCostPurchases` | 3 | 1 to 20 | `unit_cost_jump`: how many earlier purchases the average is taken over |
+| `DuplicateDays` | 0 | 0 to 31 | `same_amount_twice`: this many days apart or less; 0 is the same day |

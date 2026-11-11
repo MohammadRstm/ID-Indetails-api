@@ -26,3 +26,10 @@ public sealed record ProjectScenarioQuery
     /// <summary>Finishing this many weeks later at the project's weekly cost of its last four full weeks.</summary>
     public int? DelayWeeks { get; init; }
 }
+
+/// <summary>Which months of a domain's spending to show.</summary>
+public sealed record ExpenseTrendsQuery
+{
+    /// <summary>How many months, ending with this one: 1 to 24, 12 when left out.</summary>
+    public int? Months { get; init; }
+}
