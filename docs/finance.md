@@ -24,6 +24,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 | `GET /api/finance/insights/projects/{id}/scenario?…` | `financial:view` | One project's figures today and with simulated changes; nothing is saved (see [Scenarios](#scenarios)) |
 | `GET /api/finance/insights/{domain}/risks` | `financial:view` | The domain's client projects with a financial risk, most pressing first, each with the rule that fired (see [A domain's project risks](#a-domains-project-risks)) |
 | `GET /api/finance/insights/{domain}/expenses?months=12` | `financial:view` | The domain's spending by category, month by month, and what the owner's rules call unusual in it (see [A domain's spending trends](#a-domains-spending-trends)) |
+| `GET /api/finance/insights/{domain}/labour?months=12` | `financial:view` | Design's labour cost and hours by month, project and department, with the part logged outside the agreed scope; never a person (see [Design labour](#design-labour)) |
 | `GET /api/dashboard/{domain}` | `report:view` | The dashboard's cards without money or hours: active projects, clients, projects by status, longest running |
 | `GET /api/dashboard/{domain}/deadlines` | `report:view` | Upcoming deadlines: open requirements due in the next 14 days, overdue ones included |
 | `GET /api/projects` | `project:view` | Each row has `money` for callers with `financial:view` |
@@ -73,7 +74,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ## Financial Intelligence
 
-Judgements and simulations on one project or a whole domain, kept apart from the Financials page's established figures (`Controllers/FinanceInsightsController.cs`, `Services/Insights`: `FinanceInsightService` for a project, `DomainInsightService` for a domain). Their rules live in `Business/Finance/Intelligence` (`ProjectBridgeRules`, `ProjectScenarioRules`, `ProjectRiskRules`, `ExpenseTrendRules`): pure, with no EF and no HTTP. They build only on the shared calculator (`IProjectFinanceService`, `ProjectFinance`) and on the rules the real changes and pages use (`ExecutionPricing`, `Tva`, `ProfitFloorRules`, the site money timeline's `LabourRules.ProjectZero`). There is no second formula ([proton-financial-intelligence-plan.md](proton-financial-intelligence-plan.md), principle 1). Nothing is cached and nothing is saved.
+Judgements and simulations on one project or a whole domain, kept apart from the Financials page's established figures (`Controllers/FinanceInsightsController.cs`, `Services/Insights`: `FinanceInsightService` for a project, `DomainInsightService` for a domain). Their rules live in `Business/Finance/Intelligence` (`ProjectBridgeRules`, `ProjectScenarioRules`, `ProjectRiskRules`, `ExpenseTrendRules`, `LabourInsightRules`): pure, with no EF and no HTTP. They build only on the shared calculator (`IProjectFinanceService`, `ProjectFinance`) and on the rules the real changes and pages use (`ExecutionPricing`, `Tva`, `ProfitFloorRules`, the site money timeline's `LabourRules.ProjectZero`). There is no second formula ([proton-financial-intelligence-plan.md](proton-financial-intelligence-plan.md), principle 1). Nothing is cached and nothing is saved.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
@@ -81,11 +82,12 @@ Judgements and simulations on one project or a whole domain, kept apart from the
 | `GET /api/finance/insights/projects/{id}/scenario?voAmount=&extraCost=&extraCostSource=&supervisionRate=&tvaRate=&settleOwed=&delayWeeks=` | `financial:view` | The project's figures today and with the changes asked for. Nothing is saved |
 | `GET /api/finance/insights/{domain}/risks` | `financial:view` | The domain's client projects with a financial risk, most pressing first, each risk with the rule that fired |
 | `GET /api/finance/insights/{domain}/expenses?months=12` | `financial:view` | The domain's spending by category, month by month in USD, and what the owner's rules call unusual in it |
+| `GET /api/finance/insights/{domain}/labour?months=12` | `financial:view` | Design's labour cost and hours by month, project and department, with the part logged outside the agreed scope. Never a person |
 
 - Without `financial:view` every one answers `403`; the services check it again.
 - A project in a domain the caller can't see answers `404`, like one that doesn't exist.
 - `{domain}` is `design` or `execution`. Any other value, or a domain the caller can't see, answers `404`.
-- A project's endpoints cover both domains, client work and internal work. The risks cover client work only. Spending covers internal work too.
+- A project's endpoints cover both domains, client work and internal work. The risks cover client work only. Spending and labour cover internal work too.
 - Amounts are USD, net of TVA unless said otherwise.
 - A judgement ("at risk", "unusual") is made only when one of the rules below fired. The thresholds are the owner's, in configuration (see [Thresholds](#thresholds)), and every rule's wording in a response carries the values in force.
 
@@ -259,10 +261,50 @@ Judgements and simulations on one project or a whole domain, kept apart from the
 
 **Errors:** `400 validation_failed` when `months` is outside 1 to 24.
 
+### Design labour
+
+`GET /api/finance/insights/design/labour?months=12` shows where Design's labour money goes: month by month, by project and by department, with the part logged outside the agreed scope (`LabourInsightRules`). It is the shared calculator's labour, as a project's own `money` prices it ([projects.md](projects.md), "Cost, profit and margin"), loaded for every project of the domain in one batch (`IProjectFinanceService.DepartmentLabourAsync`: one query per source, whatever the number of projects).
+
+- **Who:** `financial:view`, like every Financial Intelligence endpoint (`403` without it).
+- **Design only.** Only Design logs hours. `execution` answers `422 not_for_this_domain`: a site's labour is its ground labour, in its spending and its account. Any other value, or a domain the caller can't see, answers `404`.
+- **`months`:** how many months, ending with this one: 1 to 24, 12 when left out. This month runs to today.
+- **Never a person.** The calculator's rows are per person; they are added up by month, project and department before anything leaves the API, so no figure in the response is one person's. Who earns what stays on Salaries (`salary:view`) and a person's profile (`financial:view`).
+- **Every project of the domain, internal ones included:** their labour counts in the domain's totals (Q5).
+
+**How each figure is worked out:**
+
+- **`cost`**: hours × each person's hourly cost in force on the day worked, with overtime as Salaries pays it and every paid break, in USD at the rate of each day. Exactly the project cost's labour: hours and breaks in a month someone was an admin or super admin cost nothing, and from November 2026 a salary's hours carry no overtime premium.
+- **`minutes`**: the hours logged. Paid breaks add cost, never minutes.
+- **`outsideScopeMinutes`** and **`outsideScopeCost`**: the hours ticked as outside the agreed scope ([design.md](design.md), "Outside the original scope") and the cost of their worked time. Paid breaks stay with the day: they are never outside the scope, even on a day logged wholly outside it.
+- **`outsideScopeShare`**: outside-scope cost ÷ cost, a fraction to 4 decimals (0.12 is 12%); `null` with no cost.
+- **`labourShare`** (a project's or a department's): its cost ÷ the window's labour cost, a fraction to 4 decimals; `null` with no cost.
+- **A department** is the one the hours were logged in (`work_entries.team_id`), as on a project's departments ([projects.md](projects.md#departments)). A paid break counts in the department that day's hours were logged in.
+- Amounts are rounded to the cent after adding up; minutes are whole.
+
+**What is left out:**
+
+- **Fixed salaries** (admins, super admins, site staff), **paid leave** and the **overtime premium** of salaries paid past the month's threshold: company costs, never a project's ([company.md](company.md)). The company overview has them.
+- **Labour with no exchange rate on its day:** in no cost, listed in `unconverted[]` per currency, and named in `basis.leftOut`.
+- **Hours of people with no pay record** count in `minutes` with no cost.
+
+**The response:**
+
+- `domain`: `design`.
+- `total`: the window's `cost`, `minutes`, `outsideScopeCost`, `outsideScopeMinutes` and `outsideScopeShare`.
+- `months[]`: every month of the window, oldest first, empty ones included, ending with this one. Each has `month` (its first day) and `totals`, shaped like `total`.
+- `projects[]`: projects with labour in the window (minutes or cost), the costliest first, then the most minutes. Each has `projectId`, `title`, `billingType` (`client` or `internal`), `totals` and `labourShare`.
+- `departments[]`: the same by department, each with `teamId`, `name`, `totals` and `labourShare`. Hours logged in no department are a row with no `teamId`, named "No department"; a department since deleted is named "A former department". Never its people.
+- `unconverted[]`: `currency` and `amount`, the window's labour with no exchange rate on its day.
+- `basis`: `method` (the calculator's pricing, added up by month, project and department, never by person; internal projects included), `assumptions` (a department is the one the hours were logged in; outside-scope cost is the worked time; this month runs to today) and `leftOut` (the company costs above, and the unconverted labour).
+
+**Errors:** `400 validation_failed` when `months` is outside 1 to 24; `422 not_for_this_domain` for `execution`.
+
 ### Left out of the domain endpoints
 
-- **Internal projects are left out of the risks** (cost centres, Q5). Their expenses are in the spending, as their costs count in the domain's totals.
-- **Amounts with no exchange rate** are in no USD figure: the risks name them as `unconverted_costs`, and the spending lists them in `unconverted[]`.
+- **Internal projects are left out of the risks** (cost centres, Q5). Their expenses are in the spending, and their labour in the labour, as their costs count in the domain's totals.
+- **Amounts with no exchange rate** are in no USD figure: the risks name them as `unconverted_costs`, and the spending and the labour list them in `unconverted[]`.
+- **Company costs** (overhead, fixed salaries, paid leave, the overtime premium) are in no domain endpoint: they are the company overview's.
+- **One person's labour cost** is never returned by the domain endpoints.
 - **Months without 6 months of history** have no baseline, so no category is called unusual in them.
 - **Unit costs** exist only on Execution, on site expenses entered as a quantity × a unit cost.
 

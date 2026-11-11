@@ -189,18 +189,21 @@ public enum ProtonProjectPart
 }
 
 /// <summary>
-/// The Financials page's tabs: a domain's overview, projects, clients, billing and costs, and its insights (its
-/// Financial Intelligence). The whole page is for whoever sees the domain's money (financial:view), the insights tab too.
+/// The tabs of a page open_page can open on. The Financials page's: a domain's overview, projects, clients, billing and
+/// costs, and its insights (its Financial Intelligence), all for whoever sees the domain's money (financial:view). The
+/// Design Reports page's: utilization, each Design employee's hours against their expected hours (report:view).
 /// </summary>
-public enum ProtonFinancialsTab
+public enum ProtonPageTab
 {
     Overview,
     Projects,
     Clients,
     Billing,
     Costs,
-    /// <summary>The domain's Financial Intelligence: its projects' financial risks and its spending's trends and anomalies.</summary>
+    /// <summary>Financials: the domain's Financial Intelligence: its projects' financial risks, its spending's trends and anomalies, and Design's labour cost.</summary>
     Insights,
+    /// <summary>Design Reports: each Design employee's logged against expected hours in a month, hours only.</summary>
+    Utilization,
 }
 
 /// <summary>
@@ -210,6 +213,7 @@ public enum ProtonFinancialsTab
 /// <param name="Label">What is being opened, in words, from the record's own name ("Villa Mounir").</param>
 /// <param name="Domain">The business the record or page belongs to; null for company pages and company-wide people.</param>
 /// <param name="ClientId">Projects page only: show that client's projects.</param>
+/// <param name="Tab">Financials: overview to insights; Design Reports: utilization. No other page has one.</param>
 /// <param name="Surface">For open_surface: what to open; <paramref name="Id"/> is the record it is for, when it needs one.</param>
 /// <param name="Sounds">For set_preference: message sounds on or off.</param>
 /// <param name="Part">With the files or portal tab: which part of it.</param>
@@ -222,7 +226,7 @@ public sealed record ProtonUiCommand(
     ProtonProjectSection? Section = null,
     ProtonPage? Page = null,
     long? ClientId = null,
-    ProtonFinancialsTab? Tab = null,
+    ProtonPageTab? Tab = null,
     ProtonSurface? Surface = null,
     ProtonSettingsSection? SettingsSection = null,
     ProtonCompanyTab? CompanyTab = null,

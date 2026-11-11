@@ -34,6 +34,22 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
     private static string ExpensesUrl(string domain, string? query = null)
         => $"/api/finance/insights/{domain}/expenses" + (query is null ? "" : $"?{query}");
 
+    private static string LabourUrl(string domain, string? query = null)
+        => $"/api/finance/insights/{domain}/labour" + (query is null ? "" : $"?{query}");
+
+    /// <summary>Every property name anywhere in a JSON value, nested objects and arrays included.</summary>
+    private static IEnumerable<string> PropertyNames(JsonElement element)
+        => element.ValueKind switch
+        {
+            JsonValueKind.Object => element.EnumerateObject().SelectMany(p => PropertyNames(p.Value).Prepend(p.Name)),
+            JsonValueKind.Array => element.EnumerateArray().SelectMany(PropertyNames),
+            _ => [],
+        };
+
+    /// <summary>The first Tuesday of a month, a working day, so its hours fall in working hours.</summary>
+    private static DateOnly FirstTuesday(DateOnly month)
+        => Enumerable.Range(0, 7).Select(month.AddDays).First(d => d.DayOfWeek == DayOfWeek.Tuesday);
+
     private static DateOnly CompanyToday()
         => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Asia/Beirut"));
 
@@ -533,5 +549,132 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldBe([thisMonth.AddMonths(-2), thisMonth.AddMonths(-1), thisMonth]);
         await (await Client.GetAsync(ExpensesUrl(DomainCodes.Design, "months=25"), token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         await (await Client.GetAsync(ExpensesUrl(DomainCodes.Design, "months=0"), token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
+    public async Task Design_labour_needs_financial_view_and_is_refused_for_execution_and_unknown_to_other_domains()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, plainAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designMoneyAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
+        var (_, _, executionMoneyAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
+
+        (await OkAsync<LabourInsightResponse>(LabourUrl(DomainCodes.Design), superAdmin)).Domain.ShouldBe(DomainCodes.Design);
+        (await OkAsync<LabourInsightResponse>(LabourUrl(DomainCodes.Design), designMoneyAdmin)).Domain.ShouldBe(DomainCodes.Design);
+
+        // without financial:view: the policy refuses
+        await (await Client.GetAsync(LabourUrl(DomainCodes.Design), plainAdmin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        // Execution logs no hours: its labour is ground labour, in its spending
+        await (await Client.GetAsync(LabourUrl(DomainCodes.Execution), superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
+        await (await Client.GetAsync(LabourUrl(DomainCodes.Execution), executionMoneyAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.NotForThisDomain);
+
+        // the website and a domain that doesn't exist aren't found, nor the business domain an admin doesn't see
+        foreach (var domain in new[] { DomainCodes.Website, "nowhere" })
+        {
+            await (await Client.GetAsync(LabourUrl(domain), superAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        }
+
+        await (await Client.GetAsync(LabourUrl(DomainCodes.Design), executionMoneyAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        await (await Client.GetAsync(LabourUrl(DomainCodes.Execution), designMoneyAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task Design_labour_shows_a_projects_hours_and_its_outside_scope_part_over_12_months_without_anyone_in_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var architecture = await _steps.DesignDepartmentAsync();
+        var today = CompanyToday();
+        var thisMonth = new DateOnly(today.Year, today.Month, 1);
+        var lastMonth = thisMonth.AddMonths(-1);
+        var (designerEmail, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+                new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = lastMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        var client = await Projects.CreateClientAsync(token, DomainCodes.Design);
+        var created = await Client.PostJsonAsync("/api/projects", new
+        {
+            title = "Villa " + Guid.NewGuid().ToString("N")[..8],
+            domainCode = DomainCodes.Design,
+            clientId = client.Id,
+            revenue = 10_000m,
+            tvaRate = 0m,
+            departmentIds = new[] { architecture },
+        }, token);
+        ((int)created.StatusCode).ShouldBe(201, await created.Content.ReadAsStringAsync());
+        var project = await created.ReadAsync<ProjectResponse>();
+
+        // on last month's first Tuesday, in the morning in Beirut: 2 hours within the scope, then 30 minutes outside it
+        var day = FirstTuesday(lastMonth).ToString("yyyy-MM-dd");
+        const string insert =
+            "INSERT INTO work_entries (user_id, project_id, team_id, description, started_at, ended_at, outside_scope, created_at) " +
+            "VALUES (@u, @p, @t, @d, @s, @e, @o, UTC_TIMESTAMP(3))";
+        await _steps.ExecuteAsync(insert, ("@u", designer.User.Id), ("@p", project.Id), ("@t", architecture), ("@d", "Drawings"),
+            ("@s", $"{day} 07:00:00"), ("@e", $"{day} 09:00:00"), ("@o", false));
+        await _steps.ExecuteAsync(insert, ("@u", designer.User.Id), ("@p", project.Id), ("@t", architecture), ("@d", "A guest house the client added"),
+            ("@s", $"{day} 09:00:00"), ("@e", $"{day} 09:30:00"), ("@o", true));
+
+        var (labour, json) = await OkJsonAsync<LabourInsightResponse>(LabourUrl(DomainCodes.Design), superAdmin);
+
+        // 12 months when not asked, oldest first, ending with this one
+        labour.Domain.ShouldBe(DomainCodes.Design);
+        labour.Months.Select(m => m.Month).ShouldBe(Enumerable.Range(0, 12).Select(i => thisMonth.AddMonths(i - 11)));
+        json.GetProperty("months")[11].GetProperty("month").GetString().ShouldBe(thisMonth.ToString("yyyy-MM-dd"));
+
+        var mine = labour.Projects.Where(p => p.ProjectId == project.Id).ShouldHaveSingleItem();
+        mine.ShouldSatisfyAllConditions(
+            p => p.Title.ShouldBe(project.Title),
+            p => p.BillingType.ShouldBe(BillingType.Client),
+            p => p.Totals.Minutes.ShouldBe(150),
+            p => p.Totals.OutsideScopeMinutes.ShouldBe(30),
+            p => p.Totals.Cost.ShouldBeGreaterThan(0m),
+            // the worked half hour, never the day's paid break
+            p => p.Totals.OutsideScopeCost.ShouldBeGreaterThan(0m),
+            p => p.Totals.OutsideScopeCost.ShouldBeLessThan(p.Totals.Cost),
+            p => p.Totals.OutsideScopeShare.ShouldNotBeNull(),
+            p => p.LabourShare.ShouldNotBeNull());
+
+        // the same labour as the project's money and its department's, all time (all of it is in the window)
+        var money = await MoneyAsync(superAdmin, project.Id);
+        mine.Totals.Cost.ShouldBe(money.Cost.Labour);
+        var department = (await OkAsync<ProjectDepartmentsResponse>($"/api/projects/{project.Id}/departments", superAdmin))
+            .Departments.Single(d => d.Id == architecture).Money!;
+        department.Minutes.ShouldBe(150);
+        department.Cost.ShouldBe(mine.Totals.Cost);
+
+        // being outside the scope changes nothing on the department: the same minutes, cost and what is left with it in the scope
+        await _steps.ExecuteAsync("UPDATE work_entries SET outside_scope = 0 WHERE project_id = @p", ("@p", project.Id));
+        var withinScope = (await OkAsync<ProjectDepartmentsResponse>($"/api/projects/{project.Id}/departments", superAdmin))
+            .Departments.Single(d => d.Id == architecture).Money!;
+        withinScope.Minutes.ShouldBe(department.Minutes);
+        withinScope.Cost.ShouldBe(department.Cost);
+        withinScope.Left.ShouldBe(department.Left);
+
+        // last month holds the hours, and the department they were logged in has them
+        labour.Months[10].Totals.Minutes.ShouldBeGreaterThanOrEqualTo(150);
+        labour.Months[10].Totals.OutsideScopeMinutes.ShouldBeGreaterThanOrEqualTo(30);
+        labour.Departments.ShouldContain(d => d.TeamId == architecture && d.Totals.Minutes >= 150);
+
+        // never a person: no one's id, name, email or rate anywhere
+        PropertyNames(json).ShouldNotContain(n =>
+            n.Contains("user", StringComparison.OrdinalIgnoreCase) ||
+            n.Contains("person", StringComparison.OrdinalIgnoreCase) ||
+            n.Contains("people", StringComparison.OrdinalIgnoreCase) ||
+            n.Contains("employee", StringComparison.OrdinalIgnoreCase) ||
+            n.Contains("email", StringComparison.OrdinalIgnoreCase) ||
+            n.Contains("firstName", StringComparison.OrdinalIgnoreCase) ||
+            n.Contains("lastName", StringComparison.OrdinalIgnoreCase) ||
+            n.Contains("rate", StringComparison.OrdinalIgnoreCase));
+        var body = json.GetRawText();
+        body.ShouldNotContain(designerEmail, Case.Insensitive);
+        body.ShouldNotContain("Test employee", Case.Insensitive);
+
+        // fewer months on asking; 1 to 24
+        (await OkAsync<LabourInsightResponse>(LabourUrl(DomainCodes.Design, "months=3"), superAdmin)).Months.Select(m => m.Month)
+            .ShouldBe([thisMonth.AddMonths(-2), lastMonth, thisMonth]);
+        await (await Client.GetAsync(LabourUrl(DomainCodes.Design, "months=25"), token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.GetAsync(LabourUrl(DomainCodes.Design, "months=0"), token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
     }
 }

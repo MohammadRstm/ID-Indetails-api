@@ -19,6 +19,7 @@ using ID_Indetails.api.Repositories.Finance.Abstraction;
 using ID_Indetails.api.Repositories.Labour.Abstraction;
 using ID_Indetails.api.Repositories.MoneySummaries.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
+using ID_Indetails.api.Repositories.Teams.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
@@ -46,10 +47,71 @@ public sealed class DomainInsightService(
     IProjectDepartmentService departments,
     ILabourRepository labour,
     IFinanceInsightService projectInsights,
+    ITeamRepository teams,
     IClock clock,
     IOptions<ProtonOptions> options) : IDomainInsightService
 {
     private ProtonInsightOptions Settings => options.Value.Insights;
+
+    public async Task<LabourInsightResponse> LabourAsync(string domain, LabourInsightQuery query, CancellationToken cancellationToken = default)
+    {
+        await CheckDomainAsync(domain, cancellationToken);
+        if (domain != DomainCodes.Design)
+        {
+            throw new BusinessRuleException(ErrorCodes.NotForThisDomain,
+                "Only Design logs hours; an Execution site's labour is its ground labour, in its spending.");
+        }
+
+        var current = Recognition.MonthOf(clock.CompanyToday);
+        var count = query.Months ?? ExpenseTrendsQueryValidator.DefaultMonths;
+        var window = Enumerable.Range(0, count).Select(i => current.AddMonths(i - count + 1)).ToList();
+
+        // every project, internal ones too: their labour counts in the domain's totals (Q5)
+        var projects = await summaries.DomainProjectsAsync(domain, cancellationToken);
+        var labour = await finance.DepartmentLabourAsync(projects, cancellationToken);
+        var result = LabourInsightRules.Of(
+            labour.SelectMany(p => p.Value.Select(r => new LabourInsightRules.Row(
+                p.Key, r.TeamId, r.Month, r.Minutes, r.Cost, r.OutsideScopeMinutes, r.OutsideScopeCost, r.Unconverted))),
+            window);
+
+        var byId = projects.ToDictionary(p => p.Id);
+        var teamNames = (await teams.ListAsync([DomainCodes.Design], cancellationToken)).ToDictionary(t => t.Team.Id, t => t.Team.Name);
+        static LabourTotalsResponse TotalsOf(LabourInsightRules.Totals t)
+            => new(t.Cost, t.Minutes, t.OutsideScopeCost, t.OutsideScopeMinutes, t.OutsideScopeShare);
+
+        var leftOut = new List<string>
+        {
+            "Fixed salaries (admins and super admins), paid leave and a salary's overtime premium past its threshold: company costs, never a project's.",
+        };
+        if (result.Unconverted.Count > 0)
+        {
+            leftOut.Add("Labour with no exchange rate on its day, in no cost: " +
+                string.Join(", ", result.Unconverted.Select(u => $"{u.Amount.ToString("#,0.##", CultureInfo.InvariantCulture)} {u.Currency}")) + ".");
+        }
+
+        return new LabourInsightResponse(
+            domain,
+            TotalsOf(result.Total),
+            result.Months.Select(m => new LabourMonthResponse(m.Start, TotalsOf(m.Totals))).ToList(),
+            result.Projects.Select(p => new LabourProjectResponse(
+                p.Id!.Value, byId[p.Id.Value].Title, byId[p.Id.Value].BillingType, TotalsOf(p.Totals), p.LabourShare)).ToList(),
+            result.Departments.Select(d => new LabourDepartmentResponse(
+                d.Id,
+                d.Id is { } id ? teamNames.GetValueOrDefault(id, "A former department") : "No department",
+                TotalsOf(d.Totals),
+                d.LabourShare)).ToList(),
+            result.Unconverted.Select(u => new CurrencyAmountResponse(u.Currency, u.Amount)).ToList(),
+            new InsightBasisResponse(
+                "Design labour as the shared calculator prices a project's labour: hours at each person's hourly cost in force that " +
+                "day, the overtime Salaries pays at the overtime rate (from November 2026 a salary's premium is the company's, not the project's), and paid breaks, in USD at the rate of each day; added up by " +
+                "month, project and department, never by person. Internal projects included, as their labour counts in the domain's totals.",
+                [
+                    "A department is the one the hours were logged in.",
+                    "Outside-scope cost is the worked time logged as outside the agreed scope; paid breaks stay with the day.",
+                    "This month runs to today.",
+                ],
+                leftOut));
+    }
 
     public async Task<ProjectRisksResponse> RisksAsync(string domain, CancellationToken cancellationToken = default)
     {

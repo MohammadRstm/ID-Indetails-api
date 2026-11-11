@@ -84,6 +84,28 @@ public class ProtonPromptsTests
         ProtonPrompts.Chat.ShouldContain("- Runway:");
     }
 
+    /// <summary>
+    /// Design's labour is never a person's, not even a department of one, and its outside-scope share is quoted as given;
+    /// utilization is hours only, never a judgement of a person and never linked to pay.
+    /// </summary>
+    [Fact]
+    public void The_chat_prompt_says_how_to_present_labour_cost_and_utilization()
+    {
+        ProtonPrompts.Chat.ShouldContain("# Design's labour cost");
+        ProtonPrompts.Chat.ShouldContain("`analyze_labor_costs`");
+        ProtonPrompts.Chat.ShouldContain("Labour is never per person");
+        ProtonPrompts.Chat.ShouldContain("a department's labour is still never a person's pay");
+        ProtonPrompts.Chat.ShouldContain("`outside_scope_pct`");
+        ProtonPrompts.Chat.ShouldContain("# Utilization");
+        ProtonPrompts.Chat.ShouldContain("`analyze_employee_utilization`");
+        ProtonPrompts.Chat.ShouldContain("Utilization is logged ÷ (expected − excused)");
+        ProtonPrompts.Chat.ShouldContain("A utilization figure is recorded time, not a judgement of a person");
+        ProtonPrompts.Chat.ShouldContain("Never link utilization to pay");
+        // the terms, defined with the other money figures
+        ProtonPrompts.Chat.ShouldContain("- Outside scope:");
+        ProtonPrompts.Chat.ShouldContain("- Utilization:");
+    }
+
     /// <summary>Charts and tables come from present_data, built from the data; never drawn in text or invented.</summary>
     [Fact]
     public void The_chat_prompt_shows_figures_only_through_present_data()

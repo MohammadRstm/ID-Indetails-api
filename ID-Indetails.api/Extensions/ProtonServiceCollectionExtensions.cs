@@ -89,6 +89,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetDomainSettingsTool>();
         services.AddScoped<IProtonTool, GetTimeSummaryTool>();
         services.AddScoped<IProtonTool, GetWorkOverviewTool>();
+        // each Design employee's logged against expected hours in a month: hours only, never pay
+        services.AddScoped<IProtonTool, AnalyzeEmployeeUtilizationTool>();
         services.AddScoped<IProtonTool, GetPersonTool>();
         services.AddScoped<IProtonTool, GetPersonWorkTool>();
         services.AddScoped<IProtonTool, ListPeopleActivityTool>();
@@ -129,11 +131,12 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, GetAttentionTool>();
 
         // Financial Intelligence: one project's profitability and its simulations, from the insights service (nothing saved),
-        // and a domain's project risks and spending trends, from the domain insights service.
+        // and a domain's project risks and spending trends, and Design's labour (never a person's), from the domain insights service.
         services.AddScoped<IProtonTool, GetProjectFinancialSummaryTool>();
         services.AddScoped<IProtonTool, SimulateProjectFinancialScenarioTool>();
         services.AddScoped<IProtonTool, DetectProjectFinancialRisksTool>();
         services.AddScoped<IProtonTool, AnalyzeExpenseTrendsTool>();
+        services.AddScoped<IProtonTool, AnalyzeLaborCostsTool>();
 
         // The user's own chats and notifications, read as them through their services (no message bodies).
         services.AddScoped<IProtonTool, FindRecipientTool>();
