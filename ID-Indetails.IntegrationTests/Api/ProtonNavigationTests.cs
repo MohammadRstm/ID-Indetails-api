@@ -243,10 +243,37 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
             FakeAnthropic.ToolUse("open_page", new { page = "financials", domain = "execution", tab = "insights" }), FakeAnthropic.Text("Opening it."));
         (await AskAsync(superAdmin, new { text = "Open Execution's financial insights" })).UiCommands
             .ShouldBe([new ProtonUiCommand(
-                ProtonUiCommandType.OpenPage, "financials", Domain: DomainCodes.Execution, Page: ProtonPage.Financials, Tab: ProtonFinancialsTab.Insights)]);
+                ProtonUiCommandType.OpenPage, "financials", Domain: DomainCodes.Execution, Page: ProtonPage.Financials, Tab: ProtonPageTab.Insights)]);
         api.Anthropic.Reset();
         api.Anthropic.Reply(FakeAnthropic.ToolUse("open_page", new { page = "financials", tab = "insights" }), FakeAnthropic.Text("I can't open that."));
         (await AskAsync(designAdmin, new { text = "Open the financial insights" })).UiCommands.ShouldBeEmpty();
+        Result(1)["status"]!.GetValue<string>().ShouldBe("forbidden");
+
+        // the Design Reports page's utilization tab: each employee's hours, for whoever reads the reports (admins too)
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("open_page", new { page = "reports", tab = "utilization" }), FakeAnthropic.Text("Opening it."));
+        var response = await PostAsync(designAdmin, new { text = "Open the utilization report" });
+        var sent = await response.Content.ReadAsStringAsync();
+        response.IsSuccessStatusCode.ShouldBeTrue(sent);
+        // the app reads "tab": "utilization", as its route ?tab=utilization
+        sent.ShouldContain("\"tab\":\"utilization\"");
+        var command = JsonNode.Parse(sent)!["uiCommands"]!.AsArray().ShouldHaveSingleItem()!;
+        (command["type"]!.GetValue<string>(), command["page"]!.GetValue<string>(), command["domain"]!.GetValue<string>())
+            .ShouldBe(("open_page", "reports", DomainCodes.Design));
+
+        // a tab another page has is refused
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("open_page", new { page = "financials", tab = "utilization" }), FakeAnthropic.Text("I can't open that."));
+        (await AskAsync(superAdmin, new { text = "Open the financial utilization" })).UiCommands.ShouldBeEmpty();
+        Result(1)["status"]!.GetValue<string>().ShouldBe("invalid");
+
+        // without report:view, neither the page nor its tab opens
+        await (await Client.PutJsonAsync($"/api/users/{designAdmin.User.Id}/permissions",
+            new { changes = new[] { new { code = PermissionCodes.ReportView, action = "revoke", reason = "No reports" } } }, superAdmin.AccessToken))
+            .Content.ReadAsStringAsync();
+        api.Anthropic.Reset();
+        api.Anthropic.Reply(FakeAnthropic.ToolUse("open_page", new { page = "reports", tab = "utilization" }), FakeAnthropic.Text("I can't open that."));
+        (await AskAsync(designAdmin, new { text = "Open the utilization report" })).UiCommands.ShouldBeEmpty();
         Result(1)["status"]!.GetValue<string>().ShouldBe("forbidden");
     }
 

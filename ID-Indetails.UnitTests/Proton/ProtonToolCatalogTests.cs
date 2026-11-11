@@ -114,8 +114,10 @@ public class ProtonToolCatalogTests
             .ShouldBe(["compare_money", "get_money_by_month", "review_project", "get_company_summary", "get_attention",
                 // a file, a discussion or the website's visitors: each can be large, or asks Google
                 "read_project_file", "read_discussion", "get_website_analytics",
-                // Financial Intelligence across a domain: every project's money, or every expense
-                "detect_project_financial_risks", "analyze_expense_trends"], ignoreOrder: true);
+                // Financial Intelligence across a domain: every project's money, every expense, or every hour priced
+                "detect_project_financial_risks", "analyze_expense_trends", "analyze_labor_costs",
+                // every Design employee's hours ledger for a month
+                "analyze_employee_utilization"], ignoreOrder: true);
     }
 
     [Fact]
@@ -184,13 +186,38 @@ public class ProtonToolCatalogTests
             .ToList();
 
         personRows.Select(t => t.Name).ShouldContain(nameof(DepartmentPersonRow));
+        // utilization names each Design employee: their hours only
+        personRows.Select(t => t.Name).ShouldContain(nameof(UtilizationPersonRow));
         foreach (var type in personRows)
         {
             type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Select(p => p.Name)
-                .Where(name => Regex.IsMatch(name, "Cost|Labour|Rate|Amount|Usd|Revenue|Profit|Budget"))
+                .Where(name => Regex.IsMatch(name, Money))
                 .ShouldBeEmpty(type.Name);
         }
+    }
+
+    private const string Money = "Cost|Labour|Rate|Amount|Usd|Revenue|Profit|Budget";
+
+    /// <summary>
+    /// Utilization names people, so nothing in it, down to each person's hours and project mix, carries money or pay
+    /// (the owner's 11 Nov decision: per-person hours for report:view holders, never their cost).
+    /// </summary>
+    [Fact]
+    public void The_utilization_output_carries_hours_and_no_money()
+    {
+        var properties = new HashSet<string>();
+        var types = new HashSet<Type>();
+        Collect(typeof(EmployeeUtilization), properties, types);
+
+        types.ShouldContain(typeof(UtilizationPersonRow));
+        types.ShouldContain(typeof(UtilizationHours));
+        types.ShouldContain(typeof(UtilizationProjectShare));
+        types.ShouldContain(typeof(UtilizationDepartmentRow));
+        properties.ShouldContain(nameof(UtilizationHours.UtilizationPct));
+        // "Utilization" itself must never read as money
+        Regex.IsMatch(nameof(UtilizationHours.UtilizationPct), Money).ShouldBeFalse();
+        properties.Where(name => Regex.IsMatch(name, Money + "|Pay(?![a-z])|Salary|Short|MadeUp|Deduct")).ShouldBeEmpty();
     }
 
     /// <summary>
@@ -202,7 +229,7 @@ public class ProtonToolCatalogTests
     {
         var properties = new HashSet<string>();
         var types = new HashSet<Type>();
-        foreach (var root in new[] { typeof(ProjectFinancialSummary), typeof(ProjectScenario), typeof(ProjectRiskRegister), typeof(ExpenseTrends) })
+        foreach (var root in new[] { typeof(ProjectFinancialSummary), typeof(ProjectScenario), typeof(ProjectRiskRegister), typeof(ExpenseTrends), typeof(LabourInsight) })
         {
             Collect(root, properties, types);
         }
@@ -213,6 +240,10 @@ public class ProtonToolCatalogTests
         types.ShouldContain(typeof(InsightRisk));
         types.ShouldContain(typeof(ExpenseMonth));
         types.ShouldContain(typeof(ExpenseAnomaly));
+        types.ShouldContain(typeof(LabourFigures));
+        types.ShouldContain(typeof(LabourMonthRow));
+        types.ShouldContain(typeof(LabourProjectRow));
+        types.ShouldContain(typeof(LabourDepartmentRow));
         foreach (var type in types)
         {
             type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -248,6 +279,34 @@ public class ProtonToolCatalogTests
 
         risks.InputSchema["properties"]!.AsObject().Select(p => p.Key).ShouldBe(["domain", "limit"], ignoreOrder: true);
         expenses.InputSchema["properties"]!.AsObject().Select(p => p.Key).ShouldBe(["domain", "months"], ignoreOrder: true);
+    }
+
+    /// <summary>
+    /// Design's labour and its employees' utilization: Design only (Execution logs no hours), heavy, found through tool
+    /// search, with nothing required. Labour is money (financial:view); utilization is hours (report:view, admins too).
+    /// </summary>
+    [Fact]
+    public void The_labour_and_utilization_tools_mirror_their_endpoints_and_are_design_only_deferred_and_heavy()
+    {
+        var labour = Tools.Single(t => t.Name == "analyze_labor_costs");
+        var utilization = Tools.Single(t => t.Name == "analyze_employee_utilization");
+
+        labour.Endpoint.Name.ShouldBe($"FinanceInsights.{nameof(FinanceInsightsController.Labour)}");
+        labour.Endpoint.Policies.ShouldBe([AuthorizationPolicies.PermissionPrefix + PermissionCodes.FinancialView]);
+        utilization.Endpoint.Name.ShouldBe($"Reports.{nameof(ReportsController.Utilization)}");
+        utilization.Endpoint.Policies.ShouldBe([AuthorizationPolicies.PermissionPrefix + PermissionCodes.ReportView]);
+        foreach (var tool in new[] { labour, utilization })
+        {
+            tool.Endpoint.Writes.ShouldBeFalse(tool.Name);
+            tool.Heavy.ShouldBeTrue(tool.Name);
+            tool.OnlyInDomain.ShouldBe(DomainCodes.Design, tool.Name);
+            ProtonToolSearch.Core.ShouldNotContain(tool.Name);
+            (tool.InputSchema["required"]?.AsArray().Count ?? 0).ShouldBe(0, tool.Name);
+        }
+
+        // Design is the only business with labour: there is no business to choose
+        labour.InputSchema["properties"]!.AsObject().Select(p => p.Key).ShouldBe(["months"]);
+        utilization.InputSchema["properties"]!.AsObject().Select(p => p.Key).ShouldBe(["month"]);
     }
 
     /// <summary>Both read one project's money: financial:view from the endpoint, not heavy, and only the summary sent up front.</summary>

@@ -179,8 +179,8 @@ public sealed record OpenPageInput
     [Description("projects page only: show this client's projects (id from find).")]
     public long? ClientId { get; init; }
 
-    [Description("financials page only. insights is the business's Financial Intelligence: its projects' financial risks and its spending's trends and anomalies.")]
-    public ProtonFinancialsTab? Tab { get; init; }
+    [Description("financials: overview, projects, clients, billing, costs or insights (the business's Financial Intelligence: its projects' financial risks, its spending's trends and anomalies, and in Design its labour cost). reports: utilization (each Design employee's logged against expected hours). No other page has a tab.")]
+    public ProtonPageTab? Tab { get; init; }
 }
 
 /// <summary>Opens one of a fixed set of pages, if the user may open it: each page needs what its own endpoint needs.</summary>
@@ -241,6 +241,17 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
     /// <summary>The Financials page's insights tab reads the domain's Financial Intelligence (financial:view, as the page).</summary>
     private static readonly ProtonEndpoint FinancialsInsights = ProtonEndpoint.Of<FinanceInsightsController>(nameof(FinanceInsightsController.Risks));
 
+    /// <summary>The Design Reports page's utilization tab reads each Design employee's hours (report:view).</summary>
+    private static readonly ProtonEndpoint ReportsUtilization = ProtonEndpoint.Of<ReportsController>(nameof(ReportsController.Utilization));
+
+    /// <summary>The tabs each page has: only Financials and Design Reports have any.</summary>
+    private static readonly IReadOnlyDictionary<ProtonPage, IReadOnlySet<ProtonPageTab>> Tabs = new Dictionary<ProtonPage, IReadOnlySet<ProtonPageTab>>
+    {
+        [ProtonPage.Financials] = new HashSet<ProtonPageTab>
+            { ProtonPageTab.Overview, ProtonPageTab.Projects, ProtonPageTab.Clients, ProtonPageTab.Billing, ProtonPageTab.Costs, ProtonPageTab.Insights },
+        [ProtonPage.Reports] = new HashSet<ProtonPageTab> { ProtonPageTab.Utilization },
+    };
+
     /// <summary>The person's own pages: only employees have them (an admin's profile is the company area's).</summary>
     private static readonly IReadOnlySet<ProtonPage> EmployeePages = new HashSet<ProtonPage>
     {
@@ -265,8 +276,9 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
 
     public override string Description =>
         "Open a page of the app for the user: dashboard, projects (optionally one client's), clients, people (Design), financials " +
-        "(optionally a tab: overview, projects, clients, billing, costs, or insights, its projects' financial risks and its " +
-        "spending's trends and anomalies), meetings, activity, reports, settings, notifications, messages, help, and in the company area " +
+        "(optionally a tab: overview, projects, clients, billing, costs, or insights, its projects' financial risks, its " +
+        "spending's trends and anomalies and Design's labour cost), meetings, activity, reports (optionally its utilization " +
+        "tab: each Design employee's logged against expected hours), settings, notifications, messages, help, and in the company area " +
         "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
         "start page; in Execution the pocket money and everyone's daily logs (site_logs); for employees their own my_work (Design), " +
         "daily_log and my_sites (Execution site staff) and my_profile (they don't see their pay); in the Website area (the company's public " +
@@ -283,9 +295,18 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
             await context.RequireAsync(endpoint);
         }
 
-        if (input.Page == ProtonPage.Financials && input.Tab == ProtonFinancialsTab.Insights)
+        // a tab only on a page that has it; another page's tab is left out, as before
+        var tab = input.Tab is { } asked && Tabs.TryGetValue(input.Page, out var tabs)
+            ? (tabs.Contains(asked) ? asked : throw new ProtonToolInputException($"{label} has no {asked.ToString().ToLowerInvariant()} tab."))
+            : (ProtonPageTab?)null;
+        if (input.Page == ProtonPage.Financials && tab == ProtonPageTab.Insights)
         {
             await context.RequireAsync(FinancialsInsights);
+        }
+
+        if (input.Page == ProtonPage.Reports && tab == ProtonPageTab.Utilization)
+        {
+            await context.RequireAsync(ReportsUtilization);
         }
 
         if (WebsiteArea.Contains(input.Page) && !context.Access.VisibleDomains.Contains(DomainCodes.Website))
@@ -326,7 +347,7 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
 
         var command = new ProtonUiCommand(
             ProtonUiCommandType.OpenPage, label, Domain: domain, Page: input.Page, ClientId: client?.Id,
-            Tab: input.Page == ProtonPage.Financials ? input.Tab : null);
+            Tab: tab);
         return new ProtonToolOutput(
             new UiOutcome(label, "The app opens it when your answer is shown. Say what you opened in a few words."),
             client is null ? [] : [client]) { UiCommand = command };
