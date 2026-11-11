@@ -13,4 +13,7 @@ public interface IDomainInsightService
     Task<ProjectRisksResponse> RisksAsync(string domain, CancellationToken cancellationToken = default);
 
     Task<ExpenseTrendsResponse> ExpensesAsync(string domain, ExpenseTrendsQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>Design labour by month, project and department, never a person; Execution's labour is ground labour, so it is refused.</summary>
+    Task<LabourInsightResponse> LabourAsync(string domain, LabourInsightQuery query, CancellationToken cancellationToken = default);
 }

@@ -34,7 +34,8 @@ public interface IProjectFinanceRepository
 }
 
 /// <param name="TeamId">The logger's department when the hours were logged.</param>
-public sealed record WorkEntryRow(long Id, long ProjectId, long UserId, DateTime StartedAt, int Minutes, long? TeamId = null);
+/// <param name="OutsideScope">Work the client asked for beyond what was agreed.</param>
+public sealed record WorkEntryRow(long Id, long ProjectId, long UserId, DateTime StartedAt, int Minutes, long? TeamId = null, bool OutsideScope = false);
 
 public sealed record ExpenseRow(long ProjectId, string Currency, decimal Amount, DateOnly SpentOn);
 

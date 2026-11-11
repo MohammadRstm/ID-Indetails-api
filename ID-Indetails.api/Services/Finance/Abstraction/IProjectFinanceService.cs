@@ -54,6 +54,14 @@ public interface IProjectFinanceService
     /// </summary>
     Task<IReadOnlyList<DepartmentLabour>> LabourByDepartmentAsync(Project project, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The same for many projects, by project id, with one query per source whatever the number of projects. Its rows
+    /// are per person: aggregate them before anything leaves the API, never show a person beside their cost.
+    /// </summary>
+    Task<IReadOnlyDictionary<long, IReadOnlyList<DepartmentLabour>>> DepartmentLabourAsync(
+        IReadOnlyCollection<Project> projects,
+        CancellationToken cancellationToken = default);
+
     /// <summary>The project's cash position week by week, from its first week to the week of <paramref name="to"/>.</summary>
     Task<IReadOnlyList<ProjectFinance.CashWeek>> CashByWeekAsync(
         Project project,
@@ -102,6 +110,8 @@ public sealed record BreakCost(long UserId, long ProjectId, ProjectFinance.CostI
 /// <param name="Cost">What converted, at the rate of each day.</param>
 /// <param name="HourlyRate">Their hourly cost that month in USD; null when they have no pay or it has no exchange rate.</param>
 /// <param name="Unconverted">Labour with no exchange rate on its day, in its own currency: never counted as 0 in <paramref name="Cost"/>.</param>
+/// <param name="OutsideScopeMinutes">The part of <paramref name="Minutes"/> logged as outside the agreed scope.</param>
+/// <param name="OutsideScopeCost">That part's cost (its worked time; paid breaks stay with the day, in <paramref name="Cost"/> only).</param>
 public sealed record DepartmentLabour(
     long? TeamId,
     long UserId,
@@ -109,7 +119,9 @@ public sealed record DepartmentLabour(
     int Minutes,
     decimal Cost,
     decimal? HourlyRate,
-    IReadOnlyList<ProjectFinance.UnconvertedCost> Unconverted);
+    IReadOnlyList<ProjectFinance.UnconvertedCost> Unconverted,
+    int OutsideScopeMinutes = 0,
+    decimal OutsideScopeCost = 0);
 
 public sealed record PaidOvertime(int Minutes, decimal Multiplier)
 {

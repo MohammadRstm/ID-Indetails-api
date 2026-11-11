@@ -27,6 +27,11 @@ public sealed class FinanceInsightsController(IFinanceInsightService insights, I
     public Task<ExpenseTrendsResponse> Expenses(string domain, [FromQuery] ExpenseTrendsQuery query, CancellationToken cancellationToken)
         => domains.ExpensesAsync(domain, query, cancellationToken);
 
+    /// <summary>Design labour by month, project and department, with the part logged outside the scope; never a person.</summary>
+    [HttpGet("{domain}/labour")]
+    public Task<LabourInsightResponse> Labour(string domain, [FromQuery] LabourInsightQuery query, CancellationToken cancellationToken)
+        => domains.LabourAsync(domain, query, cancellationToken);
+
     /// <summary>One project's profitability, all time: agreed revenue, cost by source, profit, where it comes from and its standing.</summary>
     [HttpGet("projects/{id:long}")]
     public Task<ProjectInsightResponse> Project(long id, CancellationToken cancellationToken)

@@ -63,21 +63,36 @@ public sealed class ProjectFinanceService(
     }
 
     public async Task<IReadOnlyList<DepartmentLabour>> LabourByDepartmentAsync(Project project, CancellationToken cancellationToken = default)
+        => DepartmentLabourOf(project.Id, await LoadAsync([project], cancellationToken));
+
+    public async Task<IReadOnlyDictionary<long, IReadOnlyList<DepartmentLabour>>> DepartmentLabourAsync(
+        IReadOnlyCollection<Project> projects,
+        CancellationToken cancellationToken = default)
     {
-        var loaded = await LoadAsync([project], cancellationToken);
-        var entries = loaded.Entries[project.Id].ToList();
+        if (projects.Count == 0)
+        {
+            return new Dictionary<long, IReadOnlyList<DepartmentLabour>>();
+        }
+
+        var loaded = await LoadAsync(projects, cancellationToken);
+        return projects.ToDictionary(p => p.Id, p => DepartmentLabourOf(p.Id, loaded));
+    }
+
+    private IReadOnlyList<DepartmentLabour> DepartmentLabourOf(long projectId, Loaded loaded)
+    {
+        var entries = loaded.Entries[projectId].ToList();
 
         var costs = entries.Select(e =>
         {
             var day = clock.ToCompanyDate(e.StartedAt);
             var (items, _) = ProjectFinance.PriceLabour([PaidOvertime.Of(e.UserId, day, e.Minutes, loaded.Overtime.GetValueOrDefault(e.Id))], loaded.PayRates);
-            return (e.TeamId, e.UserId, Day: day, e.Minutes, Items: items);
+            return (e.TeamId, e.UserId, Day: day, e.Minutes, Items: items, e.OutsideScope);
         }).ToList();
 
-        // a paid break counts in the department that day's hours were logged in
+        // a paid break counts in the department that day's hours were logged in, and never as outside the scope
         var teamOn = costs.GroupBy(c => (c.UserId, c.Day)).ToDictionary(g => g.Key, g => g.First().TeamId);
-        costs.AddRange(loaded.Breaks[project.Id].Select(b =>
-            (teamOn.GetValueOrDefault((b.UserId, b.Cost.Day)), b.UserId, b.Cost.Day, Minutes: 0, Items: (IReadOnlyList<Cost>)[b.Cost])));
+        costs.AddRange(loaded.Breaks[projectId].Select(b =>
+            (teamOn.GetValueOrDefault((b.UserId, b.Cost.Day)), b.UserId, b.Cost.Day, Minutes: 0, Items: (IReadOnlyList<Cost>)[b.Cost], OutsideScope: false)));
 
         var rates = loaded.PayRates.GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => g.OrderBy(r => r.EffectiveFrom).ToList());
         decimal? RateIn(long userId, DateOnly day)
@@ -90,6 +105,7 @@ public sealed class ProjectFinanceService(
             .Select(g =>
             {
                 var items = g.SelectMany(c => c.Items).Select(i => (Item: i, Usd: loaded.Rates.ToUsd(i.Amount, i.Currency, i.Day))).ToList();
+                var outside = g.Where(c => c.OutsideScope).ToList();
                 return new DepartmentLabour(
                     g.Key.TeamId,
                     g.Key.UserId,
@@ -100,7 +116,9 @@ public sealed class ProjectFinanceService(
                     items.Where(i => i.Usd is null)
                         .GroupBy(i => i.Item.Currency.ToUpperInvariant())
                         .Select(u => new ProjectFinance.UnconvertedCost(CostSource.Labour, u.Key, u.Sum(i => i.Item.Amount)))
-                        .ToList());
+                        .ToList(),
+                    outside.Sum(c => c.Minutes),
+                    outside.SelectMany(c => c.Items).Sum(i => loaded.Rates.ToUsd(i.Amount, i.Currency, i.Day) ?? 0));
             })
             .ToList();
     }
