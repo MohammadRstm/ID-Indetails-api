@@ -121,6 +121,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<OverheadItem> OverheadItems => Set<OverheadItem>();
     public DbSet<OverheadAmount> OverheadAmounts => Set<OverheadAmount>();
+    public DbSet<OneOffExpense> OneOffExpenses => Set<OneOffExpense>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
     public DbSet<DomainSettings> DomainSettings => Set<DomainSettings>();
 
