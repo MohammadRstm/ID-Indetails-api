@@ -198,6 +198,8 @@ The `TimeOff` migration (9 Nov 2026) adds `time_off_requests` ([time-off.md](tim
 
 The `BoqAuthors` migration (10 Nov 2026) adds `boqs.submitted_at` (datetime(3), null) and `boqs.submitted_lines` (mediumtext, null) with the checks `ck_boqs_submitted_internal` and `ck_boqs_submitted_lines`, and makes `boq:create` a company permission (`permissions.domain_code` NULL, with the new description). Data change: every existing internal draft gets `submitted_at = created_at` and no copy of its lines, so it counts as submitted and nothing disappears for those who managed pricing. `Down` drops the checks and columns and sets the permission back to Execution.
 
+The `SiteLogVoiceNotes` migration (11 Nov 2026) adds `site_logs.voice_file_id` (bigint, null) with `ix_site_logs_voice_file_id` and the foreign key `fk_site_logs_files_voice_file_id` to `files` (RESTRICT), the way `work_entries.attachment_file_id` points to its file: a daily log's voice note ([execution.md](execution.md#site-staff-and-daily-logs)). Existing logs keep NULL, and `body` stays NOT NULL (empty for a voice-only log). No data change; `Down` drops the foreign key, the index and the column.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Who connects
