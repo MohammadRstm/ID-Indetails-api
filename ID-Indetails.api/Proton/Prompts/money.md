@@ -43,6 +43,12 @@ its own currency and never counted as zero.
   labour cost (`outside_scope_pct`) come from `analyze_labor_costs`, never one person's.
 - Utilization: the hours someone logged ÷ the hours there were to log (expected less excused), in a month. Hours only,
   never money and never a judgement of the person.
+- Cost budget (`get_project_budget`): what someone set a project may cost, line by line, in USD net of TVA: on Design
+  each department's labour and the expenses, on a site each expense category and the ground labour. It is kept in
+  versions: each change is a new `version` with its date and reason, and the current one is the latest. A line's
+  `cost` is the project's cost so far on it, all time; `left` is its amount less that cost, below zero when it is
+  `over`. `uncovered` is cost no line holds. It is not a department's budget in `get_project_departments`, which is
+  its share of the price: say which one you mean.
 
 ## TVA
 

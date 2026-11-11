@@ -197,16 +197,16 @@ public sealed class FinanceInsightService(
     private static IReadOnlyList<DepartmentInsightResponse> DepartmentsOf(ProjectDepartmentsResponse response, decimal labour)
     {
         decimal? ShareOfLabour(decimal cost) => labour > 0 ? Math.Round(cost / labour, 4, MidpointRounding.AwayFromZero) : null;
-        DepartmentInsightResponse Row(long? id, string name, decimal? share, DepartmentMoneyResponse money) => new(
-            id, name, share, money.Budget, money.Cost, money.Left, money.Minutes, ShareOfLabour(money.Cost), money.Unconverted);
+        DepartmentInsightResponse Row(long? id, string name, decimal? share, DepartmentMoneyResponse money, int? plannedMinutes, decimal? progress) => new(
+            id, name, share, money.Budget, money.Cost, money.Left, money.Minutes, ShareOfLabour(money.Cost), money.Unconverted, plannedMinutes, progress);
 
         var rows = response.Departments
             .Where(d => d.Money is not null)
-            .Select(d => Row(d.Id, d.Name, d.Share, d.Money!))
+            .Select(d => Row(d.Id, d.Name, d.Share, d.Money!, d.PlannedMinutes, d.Progress))
             .ToList();
         if (response.Other is { } other)
         {
-            rows.Add(Row(null, "Other hours", null, other));
+            rows.Add(Row(null, "Other hours", null, other, null, null));
         }
 
         return rows;

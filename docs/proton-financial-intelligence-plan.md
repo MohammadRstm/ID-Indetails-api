@@ -270,7 +270,7 @@ Tool: `forecast_cash_flow`. It returns no payroll line and states that it leaves
 | 4 | done: `MR-Insights-Risks-Expenses` (#203 / client #208, merged) | risks v1, expense trends and anomalies | Q10, Q16 |
 | 5 | this PR: `MR-Insights-Labour` | labour cost and utilization | Q12 |
 | 6 | done: `MR-Company-Salary-Costs` (#195 / client #199, merged) | 2h | — |
-| 7 | `MR-Budgets` → `MR-Planned-Hours` → `MR-Boq-Progress` | 2a, 2b, 2c, stacked migrations, entry screens | Q7, Q8, schema approval |
+| 7 | in progress: `MR-Budgets` (2a), `MR-Planned-Hours` (2b); then `MR-Boq-Progress` | 2a, 2b, 2c, stacked migrations, entry screens | Q7, Q8, schema approval |
 | 8 | `MR-Insights-Forecast` | phase 3 | 7 |
 | 9 | `MR-Commitments`, `MR-Money-Snapshots`, `MR-Project-Attributes`, `MR-Finance-History` | 2d, 2f, 2e, 2g | Q9, Q11, Q15, schema approval |
 | 10 | `MR-Insights-Cash-Flow` | phase 4 | 9, Q14, Q17 |

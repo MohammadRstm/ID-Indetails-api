@@ -84,4 +84,24 @@ public sealed class ProjectDepartmentRepository(IdIndetailsDbContext db) : IProj
     public void Remove(ProjectDepartment department) => db.ProjectDepartments.Remove(department);
 
     public void AddChange(ProjectDepartmentChange change) => db.ProjectDepartmentChanges.Add(change);
+
+    public async Task<IReadOnlyDictionary<(long ProjectId, long TeamId), int>> PlannedMinutesAsync(
+        IReadOnlyCollection<long> projectIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = projectIds.ToList();
+        var plans = await db.ProjectDepartmentPlans
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.ProjectId))
+            .Select(p => new { p.ProjectId, p.TeamId, p.PlannedMinutes })
+            .ToListAsync(cancellationToken);
+        return plans.ToDictionary(p => (p.ProjectId, p.TeamId), p => p.PlannedMinutes);
+    }
+
+    public async Task<IReadOnlyList<ProjectDepartmentPlan>> PlansForUpdateAsync(long projectId, CancellationToken cancellationToken = default)
+        => await db.ProjectDepartmentPlans.Where(p => p.ProjectId == projectId).ToListAsync(cancellationToken);
+
+    public void AddPlan(ProjectDepartmentPlan plan) => db.ProjectDepartmentPlans.Add(plan);
+
+    public void RemovePlan(ProjectDepartmentPlan plan) => db.ProjectDepartmentPlans.Remove(plan);
 }

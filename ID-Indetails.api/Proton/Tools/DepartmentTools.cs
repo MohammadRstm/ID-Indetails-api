@@ -10,7 +10,10 @@ public sealed record DepartmentPersonRow(string Person, int Minutes);
 
 /// <param name="SharePercent">Its part of the price. Null without financial:view, like all the money here.</param>
 /// <param name="Left">Budget less cost; below zero when over budget.</param>
+/// <param name="MinutesLogged">Null for someone who sees neither the money nor everyone's hours.</param>
 /// <param name="UnconvertedLabour">Labour with no exchange rate on its day, per currency: not in the cost or what is left.</param>
+/// <param name="PlannedMinutes">The hours planned for it, in minutes; null while it has none.</param>
+/// <param name="ProgressPct">Minutes logged as a whole percentage of the planned ones (above 100 once past the plan); null without a plan or without the logged minutes.</param>
 public sealed record DepartmentRow(
     long Id,
     string Name,
@@ -20,7 +23,9 @@ public sealed record DepartmentRow(
     decimal? Left,
     int? MinutesLogged,
     IReadOnlyList<CurrencyAmountResponse>? UnconvertedLabour,
-    IReadOnlyList<DepartmentPersonRow>? People);
+    IReadOnlyList<DepartmentPersonRow>? People,
+    int? PlannedMinutes,
+    int? ProgressPct);
 
 public sealed record DepartmentChangeRow(
     DateTime At, string ChangedBy, string Kind, string Before, string After, string? Reason);
@@ -47,7 +52,9 @@ public sealed class GetProjectDepartmentsTool(IProjectDepartmentService departme
         "A Design project's departments: which work on it, and, for someone who sees the money, each one's share of the price, " +
         "budget, cost so far, minutes logged, what is left, labour with no exchange rate (listed, not counted) and who logged " +
         "how many minutes (never a person's cost), plus " +
-        "hours that belong to no budget and the history of the split. Without money access only the department names. " +
+        "hours that belong to no budget and the history of the split. Each department's planned hours (planned_minutes) for " +
+        "anyone who sees the departments; its minutes logged and progress by hours (logged as a percentage of planned, past " +
+        "100 once over the plan) also for someone who sees everyone's hours. Without money access no share, budget or cost. " +
         "Execution sites have no departments.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectDepartmentsController>(nameof(ProjectDepartmentsController.Get));
@@ -71,11 +78,13 @@ public sealed class GetProjectDepartmentsTool(IProjectDepartmentService departme
         return new ProtonToolOutput(card, []);
     }
 
-    private static DepartmentRow Row(ProjectDepartmentResponse d) => Row(d.Id, d.Name, d.Share, d.Money);
+    private static DepartmentRow Row(ProjectDepartmentResponse d)
+        => Row(d.Id, d.Name, d.Share, d.Money, d.LoggedMinutes, d.PlannedMinutes, d.Progress);
 
-    private static DepartmentRow Row(long id, string name, decimal? share, DepartmentMoneyResponse? money)
-        => new(id, name, share is { } s ? s * 100m : null, money?.Budget, money?.Cost, money?.Left, money?.Minutes, money?.Unconverted,
-            money?.People.Select(p => new DepartmentPersonRow(p.Person.Name, p.Minutes)).ToList());
+    private static DepartmentRow Row(long id, string name, decimal? share, DepartmentMoneyResponse? money,
+        int? loggedMinutes = null, int? plannedMinutes = null, decimal? progress = null)
+        => new(id, name, share is { } s ? s * 100m : null, money?.Budget, money?.Cost, money?.Left, money?.Minutes ?? loggedMinutes, money?.Unconverted,
+            money?.People.Select(p => new DepartmentPersonRow(p.Person.Name, p.Minutes)).ToList(), plannedMinutes, ProtonAnalysis.Pct(progress));
 
     private static string Split(IReadOnlyList<DepartmentShareResponse> split)
         => split.Count == 0 ? "none" : string.Join(", ", split.Select(s => $"{s.Name} {(s.Share * 100m).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%"));

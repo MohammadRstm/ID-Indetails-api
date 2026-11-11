@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_102_tables_with_snake_case_names()
+    public void Model_has_all_105_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(102);
+        tables.Count.ShouldBe(105);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -43,6 +43,10 @@ public class DatabaseModelTests
             "meeting_attendees",
             // a Design variation order's lines and departments' parts are part of it
             "design_vo_lines", "design_vo_allocations",
+            // a project's cost budget versions go with the project (an archived one made by mistake), and a version's lines with it
+            "project_budgets", "project_budget_lines",
+            // a department's planned hours go with the project in the same way
+            "project_department_plans",
         };
 
         var cascading = Model.GetEntityTypes()
@@ -117,6 +121,9 @@ public class DatabaseModelTests
         CheckNames<ProjectFileComment>().ShouldContain("ck_project_file_comments_fixed");
         CheckNames<PortalComment>().ShouldContain("ck_portal_comments_body_unless_deleted");
         CheckNames<PortalMessage>().ShouldContain("ck_portal_messages_body_unless_deleted");
+        CheckNames<ProjectBudgetLine>().ShouldContain("ck_project_budget_lines_one_key");
+        CheckNames<ProjectBudgetLine>().ShouldContain("ck_project_budget_lines_amount_non_negative");
+        CheckNames<ProjectDepartmentPlan>().ShouldContain("ck_project_department_plans_planned_minutes_positive");
     }
 
     [Fact]
