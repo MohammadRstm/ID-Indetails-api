@@ -470,10 +470,10 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         var firstKey = await _steps.ScalarAsync<string>("SELECT storage_key FROM files WHERE id = @id", ("@id", first.Id));
         var logged = await Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "", voiceFileId = first.Id }, rami.AccessToken);
         var log = await logged.ReadAsync<SiteLogResponse>();
-        foreach (var file in new[] { first, second, neverUsed })
-        {
-            await _steps.ExecuteAsync("UPDATE files SET created_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY) WHERE id = @id", ("@id", file.Id));
-        }
+        // a day and more old; the second recording is aged only once it is on the log, or the first clean-up would take it
+        Task AgeAsync(long id) => _steps.ExecuteAsync("UPDATE files SET created_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY) WHERE id = @id", ("@id", id));
+        await AgeAsync(first.Id);
+        await AgeAsync(neverUsed.Id);
 
         async Task CleanUpAsync()
         {
@@ -502,6 +502,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // replaced: the old one is attached to nothing now, so it goes; the new one stays
         (await Client.PutJsonAsync($"/api/site-logs/{log.Id}", new { body = "", voiceFileId = second.Id }, rami.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await AgeAsync(second.Id);
         await CleanUpAsync();
         await AssertPlayableAsync(first.Id, false);
         File.Exists(Path.Combine(api.FilesRoot, firstKey)).ShouldBeFalse();
