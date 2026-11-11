@@ -111,6 +111,13 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         (await OpenAsync(designAdmin, project.Id, "vos")).Opened.ShouldBeNull();
         (await OpenAsync(superAdmin, site.Id, "payments")).Opened.ShouldBeNull();
 
+        // a Design client project's and a site's Financial Intelligence, for whoever reads it (financial:view)
+        (await OpenAsync(superAdmin, project.Id, "insights")).Opened.ShouldBe(ProtonProjectSection.Insights);
+        (await OpenAsync(superAdmin, site.Id, "insights")).Opened.ShouldBe(ProtonProjectSection.Insights);
+        var insights = await OpenAsync(designAdmin, project.Id, "insights");
+        insights.Opened.ShouldBeNull();
+        insights.Note.ShouldContain("opens on its first tab");
+
         // its departments window, on a Design project only
         api.Anthropic.Reset();
         api.Anthropic.Reply(FakeAnthropic.ToolUse("open_surface", new { surface = "project_departments", id = project.Id }), FakeAnthropic.Text("Opening it."));
@@ -124,6 +131,7 @@ public class ProtonNavigationTests(ProtonApiFactory api) : IClassFixture<ProtonA
         var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
         (await OpenAsync(siteAdmin, site.Id, "financials")).Opened.ShouldBe(ProtonProjectSection.Financials);
         (await OpenAsync(superAdmin, site.Id, "overview")).Opened.ShouldBeNull();
+        (await OpenAsync(siteAdmin, site.Id, "insights")).Opened.ShouldBeNull();
     }
 
     [Fact]

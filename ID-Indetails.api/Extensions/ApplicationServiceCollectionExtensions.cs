@@ -96,6 +96,8 @@ using ID_Indetails.api.Services.Geocoding.Abstraction;
 using ID_Indetails.api.Services.Geocoding.Implementation;
 using ID_Indetails.api.Services.GoogleAnalytics.Abstraction;
 using ID_Indetails.api.Services.GoogleAnalytics.Implementation;
+using ID_Indetails.api.Services.Insights.Abstraction;
+using ID_Indetails.api.Services.Insights.Implementation;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Invitations.Implementation;
 using ID_Indetails.api.Services.Labour.Abstraction;
@@ -349,6 +351,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMeetingService, MeetingService>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IMoneyRollupService, MoneyRollupService>();
+        services.AddScoped<IFinanceInsightService, FinanceInsightService>();
         services.AddScoped<IDomainFinanceService, DomainFinanceService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<IActivityFeedService, ActivityFeedService>();

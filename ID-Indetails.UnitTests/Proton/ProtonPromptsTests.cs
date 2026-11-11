@@ -38,6 +38,27 @@ public class ProtonPromptsTests
         ProtonPrompts.Chat.ShouldContain("Billing figures are as of today");
     }
 
+    /// <summary>
+    /// A project's profitability: the bridge in order, a judgement only with its rule, what was left out, never one
+    /// person's pay, and a simulation that is no forecast and saves nothing.
+    /// </summary>
+    [Fact]
+    public void The_chat_prompt_says_how_to_present_a_projects_profitability_and_a_simulation()
+    {
+        ProtonPrompts.Chat.ShouldContain("# A project's profitability and what-if simulations");
+        ProtonPrompts.Chat.ShouldContain("`get_project_financial_summary`");
+        ProtonPrompts.Chat.ShouldContain("`simulate_project_financial_scenario`");
+        ProtonPrompts.Chat.ShouldContain("from the base price to `agreed_profit`");
+        ProtonPrompts.Chat.ShouldContain("A judgement needs its rule");
+        ProtonPrompts.Chat.ShouldContain("`basis.omitted`");
+        ProtonPrompts.Chat.ShouldContain("one person's pay");
+        ProtonPrompts.Chat.ShouldContain("not a forecast or a promise");
+        ProtonPrompts.Chat.ShouldContain("nothing was");
+        // the terms, defined with the other money figures
+        ProtonPrompts.Chat.ShouldContain("- `bridge`:");
+        ProtonPrompts.Chat.ShouldContain("- `standing`:");
+    }
+
     /// <summary>Charts and tables come from present_data, built from the data; never drawn in text or invented.</summary>
     [Fact]
     public void The_chat_prompt_shows_figures_only_through_present_data()

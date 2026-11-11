@@ -56,6 +56,7 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
     private static readonly ProtonEndpoint Timeline = ProtonEndpoint.Of<WorkInsightsController>(nameof(WorkInsightsController.Timeline));
     private static readonly ProtonEndpoint ProjectWork = ProtonEndpoint.Of<WorkInsightsController>(nameof(WorkInsightsController.ProjectWork));
     private static readonly ProtonEndpoint Meetings = ProtonEndpoint.Of<MeetingsController>(nameof(MeetingsController.List));
+    private static readonly ProtonEndpoint Insights = ProtonEndpoint.Of<FinanceInsightsController>(nameof(FinanceInsightsController.Project));
 
     public override string Name => "open_record";
 
@@ -64,7 +65,8 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
         "its requirements\"). Use the id from find. Projects can open on a tab: requirements, meetings or financials (on " +
         "a Design project its money; on an Execution site everything about the site, its expenses, labour, BOQs, payments, " +
         "supervision and staff, for whoever sees the site), on a Design client project payments (the client's payments) " +
-        "and vos (its variation orders) for those who see its money, and on Design projects analytics (charts of its work), contributors (who worked on it and how much), " +
+        "and vos (its variation orders) for those who see its money, insights (its profitability, where its profit comes from " +
+        "and what-if simulations) on a Design client project or a site for those who see its money, and on Design projects analytics (charts of its work), contributors (who worked on it and how much), " +
         "timeline (its history as a calendar), files (the project's files, optionally one section) or portal (what its " +
         "client sees in the client portal, who of them has access, and the discussion with them). Opening needs no other " +
         "lookup; only read data too if the user also asked a question about it.";
@@ -118,6 +120,9 @@ public sealed class OpenRecordTool(ProtonRecords records, ProtonPortalTab portal
             // a Design client project's client payments and variation orders, for those who see its money
             ProtonProjectSection.Payments or ProtonProjectSection.Vos => design && access.Has(PermissionCodes.FinancialView)
                 && (await projects.GetAsync(project.Id, cancellationToken)).BillingType == BillingType.Client,
+            // a Design client project's or a site's Financial Intelligence, for those who may read it
+            ProtonProjectSection.Insights => await context.CanCallAsync(Insights)
+                && (!design || (await projects.GetAsync(project.Id, cancellationToken)).BillingType == BillingType.Client),
             // a Design project's overview is the person's own work: those who see money or everyone's work have their own tabs
             ProtonProjectSection.Overview => design && (access.Has(PermissionCodes.WorkEntryViewOwn)
                 || (!access.Has(PermissionCodes.FinancialView) && !access.Has(PermissionCodes.WorkEntryViewAll))),

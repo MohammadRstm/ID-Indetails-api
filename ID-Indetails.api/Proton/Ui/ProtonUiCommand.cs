@@ -143,7 +143,8 @@ public enum ProtonTheme
 /// <summary>
 /// A project page's tabs, in the page's order. Design projects: financials (money), overview (the person's own work),
 /// analytics and contributors (everyone's work), timeline (the history calendar), files (the project's files) and
-/// portal (what its client sees, and the discussion with them); every project has requirements and meetings. The page
+/// portal (what its client sees, and the discussion with them); a Design client project or a site also has insights
+/// (its Financial Intelligence) for whoever sees its money; every project has requirements and meetings. The page
 /// opens on the first one the person may open.
 /// </summary>
 public enum ProtonProjectSection
@@ -153,6 +154,8 @@ public enum ProtonProjectSection
     Payments,
     /// <summary>A Design client project's variation orders.</summary>
     Vos,
+    /// <summary>A Design client project's or a site's Financial Intelligence: its profitability, the bridge and simulations.</summary>
+    Insights,
     Overview,
     Analytics,
     Contributors,

@@ -259,7 +259,12 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         new("table in Arabic", ["اعرض ساعات العمل لكل شخص في آخر 14 يومًا في جدول"], ["get_time_summary", "compare_work"], Forms: [ProtonPresentForm.Table], Matches: @"\p{IsArabic}"),
         new("admin table", ["List the active Design projects as a table."], ["list_projects"], NoMoney: true, Forms: [ProtonPresentForm.Table]),
         // money meanings: agreed against received, a period's cash, today's billing, totals by the server, what isn't there
-        new("profit on a project", ["What's the profit on Villa Mounir?"], ["get_project_financials", "review_project", "get_finance_projects"], MustMention: ["agreed"]),
+        new("profit on a project", ["What's the profit on Villa Mounir?"],
+            ["get_project_financials", "get_project_financial_summary", "review_project", "get_finance_projects"], MustMention: ["agreed"]),
+        // a project's profitability: the bridge from its price to its profit, and a change simulated without saving it
+        new("where the profit comes from", ["Where does Villa Mounir's profit come from?"], ["get_project_financial_summary"], MustMention: ["5,000", "5000"]),
+        new("what if a VO", ["What would Villa Mounir's profit be with a 1,000 USD variation order?"], ["simulate_project_financial_scenario"],
+            MustMention: ["saved", "simulat", "nothing"]),
         new("revenue in a period", ["How much revenue did Design bring in over the last 30 days?"],
             ["get_domain_finance", "compare_money", "get_money_by_month", "get_company_overview"], MustMention: ["received", "came in", "paid"]),
         new("expected isn't a forecast", ["How much revenue should Design expect next month?"], [],

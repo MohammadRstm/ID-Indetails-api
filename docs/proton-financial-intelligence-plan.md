@@ -2,8 +2,8 @@
 
 **Status:** approved by the owner on 9 November 2026: the decisions in [§3](#3-decisions-that-shape-the-plan), the
 schema changes in [§6](#6-phase-2-data-foundations) and phase 5, and the delivery order in [§10](#10-delivery-order-prs).
-Built so far: phase 2h (PRs #195 / client #199) and 1a-1 to 1a-4 and 1a-6 (#198 / client #201). Each migration still
-shows its tables and risks in its own PR (CLAUDE.md rule 9).
+Built so far: phase 2h (PRs #195 / client #199), 1a-1 to 1a-4 and 1a-6 (#198 / client #201), and 1a-5 with the daily
+USD/LBP rate feed (#199 / client #204). Each migration still shows its tables and risks in its own PR (CLAUDE.md rule 9).
 
 **Built on** [proton-financial-intelligence-discovery.md](proton-financial-intelligence-discovery.md) (PR #194). File
 references point to that report's sections ("D§9" = discovery report, section 9) or to code paths under
@@ -144,13 +144,13 @@ Each item ships with regression tests that pin today's numbers before the change
 
 | Capability | Endpoint | Proton tool | Rules (new, pure) | Reuses | Status after phase 1 |
 |---|---|---|---|---|---|
-| Project summary and profitability | `GET /api/finance/insights/projects/{id}` | `get_project_financial_summary` | margin bridge: base price, VOs, settlements, cost by source, labour share by department | `get_project_financials`, `CostHistoryAsync`, `ProfitFloorRules.StandingOf`, departments | READY |
+| Project summary and profitability (PR 3) | `GET /api/finance/insights/projects/{id}` | `get_project_financial_summary` | margin bridge: base price, VOs, settlements, cost by source, labour share by department | `get_project_financials`, `CostHistoryAsync`, `ProfitFloorRules.StandingOf`, departments | READY |
 | Project risks | `GET /api/finance/insights/{domain}/risks` | `detect_project_financial_risks` | profit-floor standing, cost growth against progress, department over budget, pending blocked changes, unconverted costs, short runway, settlement at or below zero (Q10); ranked with `ProtonSignals` | `get_attention` sources | PARTIAL (no forecasts yet) |
 | Expense trends and anomalies | `GET /api/finance/insights/{domain}/expenses` | `analyze_expense_trends` | category baselines and the Q16 thresholds; same amount twice; unit-cost jumps per item name (normalised: trimmed, case-folded) | site and Design expenses, `ProtonTrends.Baseline` | PARTIAL (three category schemes, free-text items) |
 | Labour cost (Design) | `GET /api/finance/insights/design/labour` | `analyze_labor_costs` | totals and series by project, department, month; outside-scope share; **no person money** | `LabourPricer`, `LabourByDepartmentAsync` | READY once built (Q2–Q4 are in, PRs #195 / client #199) |
 | Utilization (Design, hours only) | `GET /api/reports/utilization` | `analyze_employee_utilization` | logged against expected hours, overtime, excused, project mix | `HoursLedger`, `WorkInsightsService` | PARTIAL (no non-project time) |
 | Company performance | existing `get_company_overview`, `compare_money`, `get_money_by_month`, plus a trend block | — | — | after 1a-1 | READY once built (Q2–Q4 are in, PRs #195 / client #199) |
-| Scenario on one project | `GET /api/finance/insights/projects/{id}/scenario?...` | `simulate_project_financial_scenario` | levers from Q18 fed to `ExecutionPricing.PriceOf`, `ProjectFinance.Summarise`, `Tva`, `ProfitFloorRules`; before and after | pure rules only | READY for the levers listed |
+| Scenario on one project (PR 3) | `GET /api/finance/insights/projects/{id}/scenario?...` | `simulate_project_financial_scenario` | levers from Q18 fed to `ExecutionPricing.PriceOf`, `ProjectFinance.Summarise`, `Tva`, `ProfitFloorRules`; before and after | pure rules only | READY for the levers listed |
 
 ### 1c. Proton wiring for phase 1
 
@@ -264,8 +264,8 @@ Tool: `forecast_cash_flow`. It returns no payroll line and states that it leaves
 | # | Branch | Contents | Needs |
 |---|---|---|---|
 | 1 | done: `MR-Finance-Consolidate` (#198 / client #201, merged) | 1a-1 to 1a-4, 1a-6, with regression tests | — |
-| 2 | `MR-Design-Expense-Rate` (this PR) | 1a-5, and the daily USD/LBP rate feed | Q6 |
-| 3 | `MR-Insights-Project` | summary, profitability bridge, simulator; client tab; Proton tools | Q1, Q5, Q18 |
+| 2 | done: `MR-Design-Expense-Rate` (#199 / client #204, merged) | 1a-5, and the daily USD/LBP rate feed | Q6 |
+| 3 | this PR: `MR-Insights-Project` | summary, profitability bridge, simulator; client tab; Proton tools | Q1, Q5, Q18 |
 | 4 | `MR-Insights-Risks-Expenses` | risks v1, expense trends and anomalies | Q10, Q16 |
 | 5 | `MR-Insights-Labour` | labour cost and utilization | Q12 |
 | 6 | done: `MR-Company-Salary-Costs` (#195 / client #199, merged) | 2h | — |

@@ -11,7 +11,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | People, teams, pay records, employment periods (leaving and coming back) | [employees.md](employees.md) | #7, #23 |
 | Clients, projects, requirements, expenses, status changes, project lists with filters, sorts and work | [clients.md](clients.md), [projects.md](projects.md) | #8, #16, #22 |
 | Invoices, payments (filed under account labels), deliveries, billing settings, exchange rates and their daily feed | [billing.md](billing.md) | #8, #9, #21, `MR-Design-Expense-Rate` |
-| Project cost, profit and margin; domain money summaries, list money, client rollups, money follow-ups | [finance.md](finance.md) | #10, #18, #21, #22 |
+| Project cost, profit and margin; domain money summaries, list money, client rollups, money follow-ups; Financial Intelligence: a project's profitability, its bridge and scenarios (`/api/finance/insights/projects/{id}`, with Proton's `get_project_financial_summary` and `simulate_project_financial_scenario`) | [finance.md](finance.md#financial-intelligence), [proton.md](proton.md) | #10, #18, #21, #22, `MR-Insights-Project` |
 | Execution: BOQs and variation orders, site expenses (cost-only; the old materials paths stay as a temporary alias for the phone), ground labour, site money, supervision taken and a site's account figures | [execution.md](execution.md) | #5, #12 |
 | Company: settings, working time, schedules, overhead, salaries, hours ledger, excuses, overview, project pay | [company.md](company.md) | #11, #13, #15, #23 |
 | Design work: entries, comments, meetings, settings, reports, activity, timeline, overtime, closed months, dashboards | [design.md](design.md) | #14, #22, #24 |

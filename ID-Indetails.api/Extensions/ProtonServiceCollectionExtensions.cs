@@ -128,6 +128,10 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, SummarizeChangesTool>();
         services.AddScoped<IProtonTool, GetAttentionTool>();
 
+        // Financial Intelligence: one project's profitability and its simulations, from the insights service (nothing saved).
+        services.AddScoped<IProtonTool, GetProjectFinancialSummaryTool>();
+        services.AddScoped<IProtonTool, SimulateProjectFinancialScenarioTool>();
+
         // The user's own chats and notifications, read as them through their services (no message bodies).
         services.AddScoped<IProtonTool, FindRecipientTool>();
         services.AddScoped<IProtonTool, GetMyInboxTool>();
