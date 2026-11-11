@@ -6312,6 +6312,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
 
+                    b.Property<long?>("VoiceFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("voice_file_id");
+
                     b.HasKey("Id")
                         .HasName("pk_site_logs");
 
@@ -6320,6 +6324,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("UserId", "CreatedAt")
                         .HasDatabaseName("ix_site_logs_user_id_created_at");
+
+                    b.HasIndex("VoiceFileId")
+                        .HasDatabaseName("ix_site_logs_voice_file_id");
 
                     b.ToTable("site_logs", (string)null);
                 });
@@ -9263,6 +9270,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_site_logs_users_user_id");
+
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("VoiceFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_site_logs_files_voice_file_id");
 
                     b.Navigation("Project");
 
