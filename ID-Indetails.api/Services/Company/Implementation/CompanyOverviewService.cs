@@ -155,9 +155,11 @@ public sealed class CompanyOverviewService(
         }).ToList();
 
         var (overhead, unconverted) = await OverheadAsync(shares.Select(s => (s.Month, s.Calendar)), data.Rates, cancellationToken);
+        var (oneOffs, unconvertedOneOffs) = await OneOffsAsync(start, end, data.Rates, cancellationToken);
         var salaryCosts = await SalaryCostsAsync(shares, data.Rates, cancellationToken);
         var (salaries, paidLeave, premium) = (salaryCosts.Fixed.Total, salaryCosts.PaidLeave.Total, salaryCosts.OvertimePremium.Total);
         var gross = domains.Sum(d => d.Profit);
+        var expenses = overhead + oneOffs + salaries + paidLeave + premium;
 
         return new CompanyOverviewResponse(
             start,
@@ -168,6 +170,8 @@ public sealed class CompanyOverviewService(
             gross,
             overhead,
             unconverted,
+            oneOffs,
+            unconvertedOneOffs,
             salaries,
             salaryCosts.Fixed.Unconverted,
             paidLeave,
@@ -176,7 +180,8 @@ public sealed class CompanyOverviewService(
             salaryCosts.OvertimePremium.Unconverted,
             salaries,
             salaryCosts.Fixed.Unconverted,
-            gross - overhead - salaries - paidLeave - premium,
+            expenses,
+            gross - expenses,
             domains.Sum(d => d.Invoiced),
             domains.Sum(d => d.Collected),
             domains.Sum(d => d.Outstanding),
@@ -192,7 +197,8 @@ public sealed class CompanyOverviewService(
         var start = from > end ? end : from;
         var rates = new ExchangeRateTable(await financeSources.ExchangeRatesAsync(cancellationToken));
         var (usd, unconverted) = await OverheadAsync(Recognition.Months(start, end).Select(s => (s.Month, s.Calendar)), rates, cancellationToken);
-        return new PeriodOverheadResponse(start, end, usd, unconverted);
+        var (oneOffs, unconvertedOneOffs) = await OneOffsAsync(start, end, rates, cancellationToken);
+        return new PeriodOverheadResponse(start, end, usd, unconverted, oneOffs, unconvertedOneOffs);
     }
 
     public Task<IReadOnlyList<CompanyMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default)
@@ -222,10 +228,12 @@ public sealed class CompanyOverviewService(
         var salaryCosts = await SalaryCostsAsync(keys.Select(m => new Recognition.MonthShare(m, 1m)).ToList(), data.Rates, cancellationToken);
 
         var lines = await overheads.ListAsync(cancellationToken);
+        var oneOffExpenses = await overheads.OneOffsAsync(keys.Min(), keys.Max().AddMonths(1).AddDays(-1), cancellationToken);
         var result = new List<CompanyMonthResponse>();
         foreach (var month in keys)
         {
             var (overhead, _) = OverheadOf(lines, [(month, 1m)], data.Rates);
+            var (oneOffs, _) = OneOffsOf(oneOffExpenses.Where(e => Recognition.MonthOf(e.SpentOn) == month), data.Rates);
             // each domain as its Financials chart gives it, so a month adds up to the overview's gross profit to the cent
             var periods = businesses.Select(projects => data.Period(projects, month, month.AddMonths(1).AddDays(-1))).ToList();
             decimal Cost(Func<PeriodMoney.CostTotals, decimal> source) => PeriodMoney.Round(periods.Sum(p => source(p.Cost)));
@@ -234,7 +242,8 @@ public sealed class CompanyOverviewService(
 
             result.Add(new CompanyMonthResponse(
                 month, periods.Sum(p => p.Received), Cost(c => c.Labour), Cost(c => c.Expenses), Cost(c => c.SiteExpenses), Cost(c => c.GroundLabour),
-                overhead, fixedSalaries, paidLeave, premium, before, before - overhead, before - overhead - fixedSalaries - paidLeave - premium));
+                overhead, oneOffs, fixedSalaries, paidLeave, premium, before, before - overhead - oneOffs,
+                before - overhead - oneOffs - fixedSalaries - paidLeave - premium));
         }
 
         return result;
@@ -252,6 +261,34 @@ public sealed class CompanyOverviewService(
         ExchangeRateTable rates,
         CancellationToken cancellationToken)
         => OverheadOf(await overheads.ListAsync(cancellationToken), months, rates);
+
+    private async Task<(decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted)> OneOffsAsync(
+        DateOnly from,
+        DateOnly to,
+        ExchangeRateTable rates,
+        CancellationToken cancellationToken)
+        => OneOffsOf(await overheads.OneOffsAsync(from, to, cancellationToken), rates);
+
+    /// <summary>One-off expenses in full on their day, each converted at the rate of that day; one with no rate is listed apart.</summary>
+    private static (decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted) OneOffsOf(IEnumerable<OneOffExpense> expenses, ExchangeRateTable rates)
+    {
+        var usd = 0m;
+        var unconverted = new Dictionary<string, decimal>();
+
+        foreach (var expense in expenses)
+        {
+            if (rates.ToUsd(expense.Amount, expense.Currency, expense.SpentOn) is { } converted)
+            {
+                usd += converted;
+            }
+            else
+            {
+                unconverted[expense.Currency] = unconverted.GetValueOrDefault(expense.Currency) + expense.Amount;
+            }
+        }
+
+        return (PeriodMoney.Round(usd), unconverted.OrderBy(u => u.Key).Select(u => new CurrencyTotalResponse(u.Key, u.Value)).ToList());
+    }
 
     private static (decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted) OverheadOf(
         IReadOnlyList<OverheadItem> lines,
