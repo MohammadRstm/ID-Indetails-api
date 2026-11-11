@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Business.Labour;
 using ID_Indetails.api.DTO.Response.Common;
+using ID_Indetails.api.DTO.Response.Files;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Execution;
@@ -100,12 +101,15 @@ public sealed record SiteMoneyTimelineResponse(IReadOnlyList<CashWeekResponse> W
 
 public sealed record SiteLogProjectResponse(long Id, string Title);
 
+/// <param name="Body">Empty when the log is a voice note only.</param>
+/// <param name="VoiceNote">The recording, played through <c>GET /api/files/{id}</c>; null when there is none.</param>
 /// <param name="CanEdit">The caller wrote it, today (company time): a log is only changed on the day it was written.</param>
 public sealed record SiteLogResponse(
     long Id,
     SiteLogProjectResponse Project,
     PersonRefResponse Person,
     string Body,
+    FileResponse? VoiceNote,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     bool CanEdit);

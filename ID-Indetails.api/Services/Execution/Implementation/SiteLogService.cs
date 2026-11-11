@@ -6,6 +6,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Execution;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Execution;
+using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Common.Abstraction;
@@ -14,6 +15,8 @@ using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Execution.Abstraction;
+using ID_Indetails.api.Services.Files.Abstraction;
+using ID_Indetails.api.Services.Files.Implementation;
 
 namespace ID_Indetails.api.Services.Execution.Implementation;
 
@@ -22,6 +25,7 @@ public sealed class SiteLogService(
     IPermissionService permissions,
     IProjectRepository projects,
     ISiteTeamRepository team,
+    IFileClaims fileClaims,
     IUnitOfWork unitOfWork,
     IClock clock) : ISiteLogService
 {
@@ -37,7 +41,14 @@ public sealed class SiteLogService(
         Throw(SiteRules.CheckOpen(project.DomainCode, project.Status, project.RevenueLockedAt is not null));
         Throw(SiteTeamRules.CheckOnTeam(await team.IsOnTeamAsync(projectId, actor.UserId, cancellationToken)));
 
-        var log = new SiteLog { ProjectId = projectId, UserId = actor.UserId, Body = request.Body.Trim(), CreatedAt = clock.UtcNow };
+        var log = new SiteLog
+        {
+            ProjectId = projectId,
+            UserId = actor.UserId,
+            Body = (request.Body ?? string.Empty).Trim(),
+            VoiceFileId = await ClaimVoiceAsync(request.VoiceFileId, cancellationToken),
+            CreatedAt = clock.UtcNow,
+        };
         team.AddLog(log);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await DescribeAsync(actor, log.Id, cancellationToken);
@@ -54,7 +65,13 @@ public sealed class SiteLogService(
         }
 
         Throw(SiteTeamRules.CheckEditable(clock.ToCompanyDate(log.CreatedAt), clock.CompanyToday));
-        log.Body = request.Body.Trim();
+        log.Body = (request.Body ?? string.Empty).Trim();
+        if (request.VoiceFileId != log.VoiceFileId)
+        {
+            // A replaced or removed voice note is attached to nothing now, so the cleanup job deletes it.
+            log.VoiceFileId = await ClaimVoiceAsync(request.VoiceFileId, cancellationToken);
+        }
+
         log.UpdatedAt = clock.UtcNow;
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return await DescribeAsync(actor, log.Id, cancellationToken);
@@ -102,9 +119,14 @@ public sealed class SiteLogService(
         new SiteLogProjectResponse(r.Log.ProjectId, r.ProjectTitle),
         new PersonRefResponse(r.Log.UserId, r.UserName),
         r.Log.Body,
+        r.Voice is { } voice ? FileMapper.ToResponse(voice) : null,
         r.Log.CreatedAt,
         r.Log.UpdatedAt,
         r.Log.UserId == actor.UserId && SiteTeamRules.IsEditable(clock.ToCompanyDate(r.Log.CreatedAt), clock.CompanyToday));
+
+    /// <summary>The writer's own recording, not attached anywhere else (someone else's upload reads as not found).</summary>
+    private async Task<long?> ClaimVoiceAsync(long? fileId, CancellationToken cancellationToken)
+        => fileId is { } id ? (await fileClaims.ClaimAsync(id, FileKind.Audio, cancellationToken)).Id : null;
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)
         => permissions.GetAccessAsync(currentUser.Id, cancellationToken);
