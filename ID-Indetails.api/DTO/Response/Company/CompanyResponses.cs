@@ -98,7 +98,33 @@ public sealed record OverheadResponse(
     IReadOnlyList<OverheadGroupTotalResponse> GroupTotals);
 
 /// <param name="Month">First day of the month.</param>
-public sealed record OverheadMonthResponse(DateOnly Month, IReadOnlyList<CurrencyTotalResponse> Totals);
+/// <param name="Totals">The month's recurring overhead, one total per currency.</param>
+/// <param name="OneOffTotals">The month's one-off expenses, one total per currency.</param>
+public sealed record OverheadMonthResponse(
+    DateOnly Month,
+    IReadOnlyList<CurrencyTotalResponse> Totals,
+    IReadOnlyList<CurrencyTotalResponse> OneOffTotals);
+
+/// <param name="CanEdit">The caller may change or remove it: they hold <c>overhead:manage</c> and its month is still the current one.</param>
+public sealed record OneOffExpenseResponse(
+    long Id,
+    string Name,
+    OverheadGroupSummaryResponse Group,
+    string Currency,
+    decimal Amount,
+    DateOnly SpentOn,
+    DateTime CreatedAt,
+    bool CanEdit);
+
+/// <param name="Month">First day of the month.</param>
+/// <param name="IsOpen">The month is the current company month: its one-offs can still be changed.</param>
+/// <param name="Items">Newest day first.</param>
+/// <param name="Totals">One total per currency, never converted.</param>
+public sealed record OneOffExpenseListResponse(
+    DateOnly Month,
+    bool IsOpen,
+    IReadOnlyList<OneOffExpenseResponse> Items,
+    IReadOnlyList<CurrencyTotalResponse> Totals);
 
 /// <summary>A label payments and expenses are filed under.</summary>
 /// <param name="Archived">It can't be picked any more but stays on what already carries it.</param>
