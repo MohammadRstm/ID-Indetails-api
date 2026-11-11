@@ -1,3 +1,4 @@
+using System.Globalization;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
@@ -10,6 +11,8 @@ using ID_Indetails.api.DTO.Request.WorkEntries;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Request.Boqs;
+using ID_Indetails.api.DTO.Request.Company;
+using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Boqs;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
@@ -24,6 +27,7 @@ using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Expenses.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -44,6 +48,8 @@ public sealed class DocumentService(
     IPaymentService paymentService,
     IClientService clientService,
     ICompanySettingsService companySettings,
+    ISalaryService salaryService,
+    IScheduleService scheduleService,
     IBillingSettingsRepository billingSettings,
     IEmailSender emailSender,
     IClock clock,
@@ -173,6 +179,41 @@ public sealed class DocumentService(
         var kind = query.Kind == ProjectReportKind.Client ? "client-summary" : "report";
         return new PdfFile(ProjectReportPdf.Render(report, await LetterheadAsync(cancellationToken)), $"project-{projectId}-{kind}-{today:yyyy-MM-dd}.pdf");
     }
+
+    public async Task<PdfFile> SalariesPdfAsync(SalaryListQuery query, CancellationToken cancellationToken = default)
+    {
+        // the whole filtered list through the Salaries page's own calculation (it also checks salary:view)
+        var salaries = await salaryService.ListAsync(query with { Page = 1, PageSize = int.MaxValue }, cancellationToken);
+        var domain = string.IsNullOrWhiteSpace(query.Domain) ? string.Empty : "-" + query.Domain;
+        var name = $"salaries-{salaries.Month.ToString("yyyy-MM", CultureInfo.InvariantCulture)}{domain}.pdf";
+        var report = new SalariesReport(salaries, query.Domain, query.Role, query.Search, clock.CompanyToday);
+        return new PdfFile(SalariesPdf.Render(report, await LetterheadAsync(cancellationToken)), name);
+    }
+
+    public async Task<PdfFile> SchedulesPdfAsync(ScheduleListQuery query, CancellationToken cancellationToken = default)
+    {
+        var report = await SchedulesReportAsync(query, cancellationToken);
+        return new PdfFile(SchedulesPdf.Render(report, await LetterheadAsync(cancellationToken)), SchedulesFileName(report, "pdf"));
+    }
+
+    public async Task<CsvFile> SchedulesCsvAsync(ScheduleListQuery query, CancellationToken cancellationToken = default)
+    {
+        var report = await SchedulesReportAsync(query, cancellationToken);
+        return new CsvFile(SchedulesCsv.Write(report), SchedulesFileName(report, "csv"));
+    }
+
+    /// <summary>The list the Schedules page shows, with the company's display settings.</summary>
+    private async Task<SchedulesReport> SchedulesReportAsync(ScheduleListQuery query, CancellationToken cancellationToken)
+    {
+        var access = (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.ScheduleManage);
+        var company = await companySettings.GetAsync(cancellationToken);
+        var both = string.IsNullOrWhiteSpace(query.Domain) && access.VisibleDomains.Count(DomainCodes.IsBusiness) > 1;
+        return new SchedulesReport(
+            await scheduleService.ListAsync(query, cancellationToken), clock.CompanyToday, company.WeekStart, company.Use24HourTime, both, query.Domain, query.Search);
+    }
+
+    private static string SchedulesFileName(SchedulesReport report, string extension)
+        => $"schedules-{report.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}.{extension}";
 
     /// <summary>What was asked for (every section but the log by default), less what this kind and project can't show.</summary>
     private static HashSet<ProjectReportSection> ReportSections(ProjectReportQuery query, ProjectResponse project)
