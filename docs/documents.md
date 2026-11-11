@@ -15,6 +15,7 @@ Invoices, client BOQs and variation orders, project reports, and the salaries an
 | `GET /api/projects/{id}/report?kind=&from=&to=&sections=` | `financial:view` and `work_entry:view_all` | A Design project's report (below) |
 | `GET /api/company/salaries/pdf?month=&domain=&role=&search=` | `salary:view` | A month of salaries as a landscape PDF (`salaries-2026-11.pdf`, `salaries-2026-11-design.pdf` with a business): the same filters and people as the CSV export (10 a minute per user) |
 | `GET /api/company/schedules/pdf?domain=&search=` | `schedule:manage` | Everyone's week as a landscape PDF (`schedules-2026-11-11.pdf`, dated today in company time) (10 a minute per user) |
+| `GET /api/company/schedules/export?domain=&search=` | `schedule:manage` | The same people as CSV, a row each (`schedules-2026-11-11.csv`) (10 a minute per user) |
 
 - **Downloading a PDF records nothing.** To mark an invoice or BOQ as sent by hand, record a `download` or `whatsapp` delivery (`POST …/deliveries`), as before.
 - **Emailing:**
