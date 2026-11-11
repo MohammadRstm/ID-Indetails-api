@@ -30,4 +30,14 @@ public interface IOverheadRepository
     void AddAmount(OverheadAmount amount);
 
     void Remove(OverheadItem item);
+
+    /// <summary>The one-off expenses spent from <paramref name="from"/> to <paramref name="to"/> (both included), newest day first, with their category, not tracked.</summary>
+    Task<IReadOnlyList<OneOffExpense>> OneOffsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default);
+
+    /// <summary>Tracked, with its category.</summary>
+    Task<OneOffExpense?> GetOneOffForUpdateAsync(long id, CancellationToken cancellationToken = default);
+
+    void AddOneOff(OneOffExpense expense);
+
+    void RemoveOneOff(OneOffExpense expense);
 }

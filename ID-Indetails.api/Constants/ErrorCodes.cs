@@ -233,6 +233,12 @@ public static class ErrorCodes
     public const string OverheadGroupExists = "overhead_group_exists";
     public const string OverheadGroupInUse = "overhead_group_in_use";
 
+    /// <summary>400. A one-off expense is dated from the first of this month up to today.</summary>
+    public const string OneOffOutsideThisMonth = "one_off_outside_this_month";
+
+    /// <summary>422. A one-off expense of a closed month can't be changed or removed.</summary>
+    public const string OneOffLocked = "one_off_locked";
+
     /// <summary>409. Another account label already has this name, whatever its case.</summary>
     public const string AccountLabelTaken = "account_label_taken";
 

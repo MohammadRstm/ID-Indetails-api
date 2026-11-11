@@ -500,4 +500,35 @@ public class ProtonMoneyActionsTests(ProtonMoneyApiFactory api) : IClassFixture<
         money.Cost.GroundLabour.ShouldBe(75m);
         money.Revenue.ShouldBe(1000m);
     }
+
+    [Fact]
+    public async Task A_one_off_company_expense_is_added_listed_changed_and_removed_with_propose_overhead()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var group = (await GetAsync<List<OverheadGroupResponse>>(superAdmin, "/api/company/overhead/groups")).First();
+        var name = "Kettle " + Guid.NewGuid().ToString("N")[..5];
+
+        // the amount is typed to confirm, and the day is today unless the user says another
+        var (add, _) = await ProposeAsync(superAdmin, "propose_overhead",
+            new { step = "add_one_off", name, group_id = group.Id, amount = 45m }, "Add a kettle for 45, paid today");
+        add.PendingAction!.Preview.Phrase.ShouldBe("45");
+        await ConfirmAsync(superAdmin, add, "45");
+        var kettle = (await GetAsync<OneOffExpenseListResponse>(superAdmin, "/api/company/overhead/one-offs")).Items.Single(i => i.Name == name);
+        kettle.Amount.ShouldBe(45m);
+
+        // the read tool gives the id the card needs
+        var listed = (await ReadAsync(superAdmin, "list_overhead", new { }))["one_offs"]!;
+        listed["is_open"]!.GetValue<bool>().ShouldBeTrue();
+        listed["items"]!.AsArray().Single(e => e!["name"]!.GetValue<string>() == name)!["id"]!.GetValue<long>().ShouldBe(kettle.Id);
+
+        var (rename, _) = await ProposeAsync(superAdmin, "propose_overhead", new { step = "update_one_off", id = kettle.Id, name = name + " (red)" });
+        await ConfirmAsync(superAdmin, rename);
+        (await GetAsync<OneOffExpenseListResponse>(superAdmin, "/api/company/overhead/one-offs")).Items.ShouldContain(i => i.Id == kettle.Id && i.Name == name + " (red)");
+
+        // removing one types its name
+        var (remove, _) = await ProposeAsync(superAdmin, "propose_overhead", new { step = "remove_one_off", id = kettle.Id });
+        remove.PendingAction!.Preview.Phrase.ShouldBe(name + " (red)");
+        await ConfirmAsync(superAdmin, remove, name + " (red)");
+        (await GetAsync<OneOffExpenseListResponse>(superAdmin, "/api/company/overhead/one-offs")).Items.ShouldNotContain(i => i.Id == kettle.Id);
+    }
 }

@@ -266,16 +266,23 @@ public enum ProtonOverheadStep
     ChangeCurrency,
     Cancel,
     Resume,
+    AddOneOff,
+    UpdateOneOff,
+    RemoveOneOff,
 }
 
-public sealed record OverheadArgs(ProtonOverheadStep Step, long? Id, string? Name, long? GroupId, string? Currency, decimal? Amount, DateOnly? FromMonth);
+public sealed record OverheadArgs(
+    ProtonOverheadStep Step, long? Id, string? Name, long? GroupId, string? Currency, decimal? Amount, DateOnly? FromMonth, DateOnly? SpentOn = null);
 
 public sealed record OverheadInput : ProtonActionInput
 {
-    [Description("add_group, rename_group or remove_group (a category); add a company expense, update its name or category, change_amount or change_currency from a month, cancel it, or resume it.")]
+    [Description(
+        "add_group, rename_group or remove_group (a category); add a company expense, update its name or category, " +
+        "change_amount or change_currency from a month, cancel it, or resume it. add_one_off, update_one_off or " +
+        "remove_one_off: an expense paid once, this month's only (a closed month's can't be changed).")]
     public required ProtonOverheadStep Step { get; init; }
 
-    [Description("The category or expense (from list_overhead); not for add_group or add.")]
+    [Description("The category or expense (from list_overhead; a one-off from its one_offs); not for add_group, add or add_one_off.")]
     public long? Id { get; init; }
 
     public string? Name { get; init; }
@@ -286,24 +293,30 @@ public sealed record OverheadInput : ProtonActionInput
     [Description("USD or LBP.")]
     public string? Currency { get; init; }
 
-    [Description("Per month, as the user gave it.")]
+    [Description("Per month, as the user gave it; for a one-off, the amount paid.")]
     public decimal? Amount { get; init; }
 
     [Description("The first month it applies to (any day in it); this month when not given. Never a past month.")]
     public DateOnly? FromMonth { get; init; }
+
+    [Description("A one-off's day: from the first of this month up to today; today when not given.")]
+    public DateOnly? SpentOn { get; init; }
 }
 
 /// <summary>
-/// The company's recurring expenses and their categories, through the overhead endpoints once confirmed. Anything that
-/// sets or changes an amount needs the amount typed; cancelling needs the expense's name.
+/// The company's recurring expenses, one-off expenses and categories, through the overhead endpoints once confirmed.
+/// Anything that sets or changes an amount needs the amount typed; cancelling needs the expense's name, and so does
+/// removing a one-off.
 /// </summary>
 public sealed class ProposeOverheadTool(IOverheadService overhead) : ProtonActionTool<OverheadInput, OverheadArgs>
 {
     public override string Name => "propose_overhead";
 
     public override string Description =>
-        "Propose a change to the company's recurring expenses (rent, software…): add one, rename or move it, change its " +
-        "monthly amount or currency from a month, cancel or resume it, or manage their categories. Amounts are typed to confirm.";
+        "Propose a change to the company's expenses: a recurring one (rent, software…): add one, rename or move it, change " +
+        "its monthly amount or currency from a month, cancel or resume it; a one-off (a refrigerator, a repair: paid once, " +
+        "dated this month up to today): add, change or remove one of this month; or manage their categories. Amounts are " +
+        "typed to confirm.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
 
@@ -368,6 +381,55 @@ public sealed class ProposeOverheadTool(IOverheadService overhead) : ProtonActio
                         ],
                         Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(amount), Area: "company"), null);
             }
+            case ProtonOverheadStep.AddOneOff:
+            {
+                var newName = name ?? throw new ProtonToolInputException("Give the expense's name.");
+                var amount = input.Amount ?? throw new ProtonToolInputException("Give the amount paid.");
+                var group = (await overhead.GroupsAsync(cancellationToken)).FirstOrDefault(g => g.Id == input.GroupId)
+                    ?? throw new ProtonToolInputException("Give its category, from list_overhead.");
+                var day = input.SpentOn ?? context.Today;
+                return (new OverheadArgs(input.Step, null, newName, group.Id, currency ?? "USD", amount, null, day),
+                    new ProtonPreview($"Add the one-off expense {newName}",
+                        [
+                            new ProtonChange("Expense", null, newName), new ProtonChange("Category", null, group.Name),
+                            new ProtonChange("Amount", null, MoneyText.Amount(amount, currency ?? "USD")),
+                            new ProtonChange("Spent on", null, OverheadText.Day(day)),
+                        ],
+                        Confirm: ProtonConfirm.Typed, Phrase: MoneyText.Phrase(amount), Area: "company"), null);
+            }
+            case ProtonOverheadStep.UpdateOneOff or ProtonOverheadStep.RemoveOneOff:
+            {
+                // only this month's can be changed, so only they need listing
+                var expense = (await overhead.OneOffsAsync(null, cancellationToken)).Items.FirstOrDefault(e => e.Id == input.Id)
+                    ?? throw new NotFoundException("One-off expense not found among this month's.");
+                if (input.Step == ProtonOverheadStep.RemoveOneOff)
+                {
+                    return (new OverheadArgs(input.Step, expense.Id, null, null, null, null, null),
+                        new ProtonPreview($"Remove the one-off expense {expense.Name}",
+                            [new ProtonChange("Expense", MoneyText.Amount(expense.Amount, expense.Currency), "removed")],
+                            Confirm: ProtonConfirm.Typed, Phrase: expense.Name, Irreversible: true, Area: "company"), null);
+                }
+
+                var groupId = input.GroupId ?? expense.Group.Id;
+                var group = (await overhead.GroupsAsync(cancellationToken)).FirstOrDefault(g => g.Id == groupId)
+                    ?? throw new NotFoundException("Category not found.");
+                var (newName, newCurrency, newAmount, day) = (name ?? expense.Name, currency ?? expense.Currency, input.Amount ?? expense.Amount, input.SpentOn ?? expense.SpentOn);
+                var changes = new List<ProtonChange>();
+                SettingsText.Compare(changes, "Name", expense.Name, newName);
+                SettingsText.Compare(changes, "Category", expense.Group.Name, group.Name);
+                SettingsText.Compare(changes, "Amount", MoneyText.Amount(expense.Amount, expense.Currency), MoneyText.Amount(newAmount, newCurrency));
+                SettingsText.Compare(changes, "Spent on", OverheadText.Day(expense.SpentOn),
+                    OverheadText.Day(day));
+                if (changes.Count == 0)
+                {
+                    throw new ProtonToolInputException("Nothing would change: say what should be different.");
+                }
+
+                var moneyChanges = newAmount != expense.Amount || newCurrency != expense.Currency;
+                return (new OverheadArgs(input.Step, expense.Id, newName, group.Id, newCurrency, newAmount, null, day),
+                    new ProtonPreview($"Change the one-off expense {expense.Name}", changes,
+                        Confirm: moneyChanges ? ProtonConfirm.Typed : ProtonConfirm.Standard, Phrase: moneyChanges ? MoneyText.Phrase(newAmount) : null, Area: "company"), null);
+            }
             default:
             {
                 var line = (await overhead.GetAsync(cancellationToken)).Lines.FirstOrDefault(l => l.Id == input.Id)
@@ -431,6 +493,10 @@ public sealed class ProposeOverheadTool(IOverheadService overhead) : ProtonActio
         ProtonOverheadStep.Update => new UpdateOverheadRequest { Name = args.Name!, GroupId = args.GroupId!.Value },
         ProtonOverheadStep.ChangeAmount => new ChangeOverheadAmountRequest { Amount = args.Amount!.Value, FromMonth = args.FromMonth },
         ProtonOverheadStep.ChangeCurrency => new ChangeOverheadCurrencyRequest { Currency = args.Currency!, Amount = args.Amount!.Value, FromMonth = args.FromMonth },
+        ProtonOverheadStep.AddOneOff or ProtonOverheadStep.UpdateOneOff => new SaveOneOffExpenseRequest
+        {
+            Name = args.Name!, GroupId = args.GroupId!.Value, Currency = args.Currency!, Amount = args.Amount!.Value, SpentOn = args.SpentOn!.Value,
+        },
         _ => null,
     };
 
@@ -465,6 +531,15 @@ public sealed class ProposeOverheadTool(IOverheadService overhead) : ProtonActio
             case ProtonOverheadStep.Cancel:
                 await overhead.CancelAsync(args.Id!.Value, cancellationToken);
                 return new ProtonActionDone("Cancelled it.", "overhead", args.Id.Value, []);
+            case ProtonOverheadStep.AddOneOff:
+                var oneOff = await overhead.CreateOneOffAsync((SaveOneOffExpenseRequest)RequestOf(args)!, cancellationToken);
+                return new ProtonActionDone($"Added {oneOff.Name}.", "one_off_expense", oneOff.Id, []);
+            case ProtonOverheadStep.UpdateOneOff:
+                var changed = await overhead.UpdateOneOffAsync(args.Id!.Value, (SaveOneOffExpenseRequest)RequestOf(args)!, cancellationToken);
+                return new ProtonActionDone($"Updated {changed.Name}.", "one_off_expense", changed.Id, []);
+            case ProtonOverheadStep.RemoveOneOff:
+                await overhead.RemoveOneOffAsync(args.Id!.Value, cancellationToken);
+                return new ProtonActionDone("Removed it.", "one_off_expense", args.Id.Value, []);
             default:
                 var resumed = await overhead.ResumeAsync(args.Id!.Value, cancellationToken);
                 return new ProtonActionDone($"Resumed {resumed.Name}.", "overhead", resumed.Id, []);
@@ -480,4 +555,6 @@ internal static class CompanyMoneyText
 internal static class OverheadText
 {
     public static string Month(DateOnly day) => day.ToString("MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+    public static string Day(DateOnly day) => day.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
 }

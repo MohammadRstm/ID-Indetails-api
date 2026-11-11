@@ -307,7 +307,8 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         // This month to date: its elapsed share of 3,000 (at least 1 day's worth) is charged.
         overview.Overhead.ShouldBeGreaterThan(0m);
         overview.Overhead.ShouldBeLessThanOrEqualTo(3000m);
-        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Overhead - overview.FixedSalaries - overview.PaidLeave - overview.OvertimePremium);
+        overview.NetProfit.ShouldBe(overview.GrossProfit - overview.Expenses);
+        overview.Expenses.ShouldBe(overview.Overhead + overview.OneOffExpenses + overview.FixedSalaries + overview.PaidLeave + overview.OvertimePremium);
 
         var months = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?months=1", superAdmin.AccessToken));
         months.ShouldHaveSingleItem().Overhead.ShouldBeGreaterThanOrEqualTo(3000m);
@@ -400,5 +401,43 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         november.OvertimePremium.ShouldBe(15m);
         november.NetProfit.ShouldBe(november.ProfitAfterOverhead - november.FixedSalaries - november.PaidLeave - 15m);
         year.Single(m => m.Month == new DateOnly(2026, 10, 1)).OvertimePremium.ShouldBe(0m);
+    }
+
+    [Fact]
+    public async Task One_off_expenses_count_in_full_on_their_day_at_that_day_s_rate_and_come_off_the_net_profit()
+    {
+        // March 2024, when no other test here has money. Rows are inserted: the API only dates one-offs this month.
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await ExecuteAsync("INSERT INTO exchange_rates (currency, rate_per_usd, effective_from, created_at) VALUES ('LBP', 90000, '2024-03-01', UTC_TIMESTAMP())");
+        await ExecuteAsync("INSERT INTO exchange_rates (currency, rate_per_usd, effective_from, created_at) VALUES ('LBP', 100000, '2024-03-20', UTC_TIMESTAMP())");
+        foreach (var (name, currency, amount, day) in new[]
+        {
+            ("Refrigerator", "USD", 200m, "2024-03-05"),
+            ("Generator part", "LBP", 900_000m, "2024-03-10"), // 10 at 90,000
+            ("Kettle", "LBP", 1_000_000m, "2024-03-25"), // 10 at 100,000
+            ("Euro invoice", "EUR", 70m, "2024-03-12"), // no rate
+        })
+        {
+            await ExecuteAsync(
+                "INSERT INTO one_off_expenses (name, group_id, currency, amount, spent_on, created_at) VALUES (@n, 1, @c, @a, @d, UTC_TIMESTAMP(3))",
+                ("@n", name), ("@c", currency), ("@a", amount), ("@d", DateTime.Parse(day)));
+        }
+
+        var march = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2024-03-01&to=2024-03-31", superAdmin.AccessToken));
+        march.OneOffExpenses.ShouldBe(220m);
+        march.UnconvertedOneOffExpenses.ShouldHaveSingleItem().ShouldBe(new CurrencyTotalResponse("EUR", 70m));
+        march.Expenses.ShouldBe(march.Overhead + march.OneOffExpenses + march.FixedSalaries + march.PaidLeave + march.OvertimePremium);
+        march.NetProfit.ShouldBe(march.GrossProfit - march.Expenses);
+
+        // a period counts only the one-offs spent inside it
+        var later = await OkAsync<CompanyOverviewResponse>(Client.GetAsync("/api/company/overview?from=2024-03-06&to=2024-03-31", superAdmin.AccessToken));
+        later.OneOffExpenses.ShouldBe(20m);
+
+        var year = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?year=2024", superAdmin.AccessToken));
+        var month = year.Single(m => m.Month == new DateOnly(2024, 3, 1));
+        month.OneOffExpenses.ShouldBe(220m);
+        month.ProfitAfterOverhead.ShouldBe(month.ProfitBeforeOverhead - month.Overhead - 220m);
+        month.NetProfit.ShouldBe(month.ProfitAfterOverhead - month.FixedSalaries - month.PaidLeave - month.OvertimePremium);
+        year.Single(m => m.Month == new DateOnly(2024, 2, 1)).OneOffExpenses.ShouldBe(0m);
     }
 }

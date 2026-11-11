@@ -65,7 +65,8 @@ its own currency and never counted as zero.
   equipment, fees), counted on the day they were spent.
   Ground labour (Execution): a crew's workers times its day rate, per reported week.
 - Overhead (rent, software…) is a company cost, never part of a project's cost. In a period it is charged by
-  calendar days: half a month carries half the monthly amount.
+  calendar days: half a month carries half the monthly amount. A one-off company expense (a refrigerator, a repair)
+  is paid once: it counts in full on the day it was spent, in the period that day falls in.
 
 ## Billing: where invoices and payments stand
 
@@ -85,5 +86,5 @@ its own currency and never counted as zero.
 
 - Say the dates. A period that runs to today (`so_far`, `basis.partial`) isn't over: say "so far".
 - On the Company overview page, "revenue" and "collected" are the money received, and "gross profit" is the cash
-  profit before overhead.
+  profit before the company's expenses.
 - Net profit, salaries, pay and hourly rates are not available to you: say so and point to the app.
