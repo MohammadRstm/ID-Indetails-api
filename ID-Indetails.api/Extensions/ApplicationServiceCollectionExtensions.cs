@@ -247,6 +247,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISiteExpenseRepository, SiteExpenseRepository>();
         services.AddScoped<ILabourRepository, LabourRepository>();
         services.AddScoped<IBoqRepository, BoqRepository>();
+        services.AddScoped<IBoqProgressRepository, BoqProgressRepository>();
         services.AddScoped<ISiteRecordsRepository, SiteRecordsRepository>();
         services.AddScoped<ISiteTeamRepository, SiteTeamRepository>();
         services.AddScoped<IPocketRepository, PocketRepository>();
@@ -368,6 +369,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ISiteExpenseService, SiteExpenseService>();
         services.AddScoped<ILabourService, LabourService>();
         services.AddScoped<IBoqService, BoqService>();
+        services.AddScoped<IBoqProgressService, BoqProgressService>();
         services.AddScoped<IDocumentService, DocumentService>();
         services.AddScoped<ISiteRecordsService, SiteRecordsService>();
         services.AddScoped<ISiteLogService, SiteLogService>();

@@ -40,6 +40,11 @@ public sealed record DepartmentInsightResponse(
 /// <param name="SiteCashProfit">A site's all-time received net of TVA − cost − moved to the pocket + paid by it.</param>
 /// <param name="Bridge">From the base price to the agreed profit; the steps add up to it.</param>
 /// <param name="Departments">Design only.</param>
+/// <param name="ExecutedProgress">
+/// An Execution client site's progress by value: the value executed on its agreed BOQ and VO lines ÷ their agreed value, a
+/// fraction to four places (may pass 1). Null on Design, on internal work, and until a line has a recorded quantity. Shown
+/// beside <paramref name="ProgressPct"/>, which the projection still uses.
+/// </param>
 public sealed record ProjectInsightResponse(
     long ProjectId,
     string Title,
@@ -54,6 +59,7 @@ public sealed record ProjectInsightResponse(
     bool MarginKnown,
     ProfitStanding? Standing,
     int ProgressPct,
+    decimal? ExecutedProgress,
     decimal RecognisedToDate,
     ProjectProjectionResponse? Projected,
     decimal Received,

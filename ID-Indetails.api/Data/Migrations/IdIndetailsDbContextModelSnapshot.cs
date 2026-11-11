@@ -613,6 +613,65 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.BoqLineProgress", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BoqLineId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("boq_line_id");
+
+                    b.Property<decimal>("ExecutedQuantity")
+                        .HasPrecision(14, 4)
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("executed_quantity");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("note");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<long>("RecordedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("recorded_by_id");
+
+                    b.Property<DateOnly>("RecordedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("recorded_on");
+
+                    b.HasKey("Id")
+                        .HasName("pk_boq_line_progress");
+
+                    b.HasIndex("RecordedById")
+                        .HasDatabaseName("ix_boq_line_progress_recorded_by_id");
+
+                    b.HasIndex("BoqLineId", "RecordedOn")
+                        .IsUnique()
+                        .HasDatabaseName("ix_boq_line_progress_boq_line_id_recorded_on");
+
+                    b.HasIndex("ProjectId", "RecordedOn")
+                        .HasDatabaseName("ix_boq_line_progress_project_id_recorded_on");
+
+                    b.ToTable("boq_line_progress", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_boq_line_progress_executed_quantity_non_negative", "`executed_quantity` >= 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.BoqSequence", b =>
                 {
                     b.Property<string>("Prefix")
@@ -7899,6 +7958,30 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_boq_lines_boqs_boq_id");
 
                     b.Navigation("Boq");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.BoqLineProgress", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.BoqLine", null)
+                        .WithMany()
+                        .HasForeignKey("BoqLineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_boq_line_progress_boq_lines_boq_line_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_boq_line_progress_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_boq_line_progress_users_recorded_by_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Client", b =>

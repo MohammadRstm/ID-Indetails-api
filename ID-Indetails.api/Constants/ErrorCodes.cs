@@ -213,6 +213,12 @@ public static class ErrorCodes
     /// </summary>
     public const string BudgetLineInvalid = "budget_line_invalid";
 
+    /// <summary>
+    /// 400 (lines[i].boqLineId). A BOQ line that takes no progress: not on an agreed client BOQ or VO of this site, a
+    /// permit, a line that takes work away (a negative rate), or a line of a settlement or closing VO.
+    /// </summary>
+    public const string BoqProgressLineInvalid = "boq_progress_line_invalid";
+
     /// <summary>422. Only a variation order can have a negative rate.</summary>
     public const string BoqNegativeRate = "boq_negative_rate";
 

@@ -37,6 +37,7 @@ public sealed class FinanceInsightService(
     IProjectDepartmentService departments,
     IDesignVoRepository designVos,
     IBoqRepository boqs,
+    IBoqProgressRepository boqProgress,
     IClock clock) : IFinanceInsightService
 {
     /// <summary>The full weeks a delay is priced at.</summary>
@@ -75,6 +76,7 @@ public sealed class FinanceInsightService(
             summary.MarginKnown,
             StandingOf(project, summary.Revenue, summary.Profit),
             project.ProgressPct,
+            await ExecutedProgressAsync(project, cancellationToken),
             summary.RecognisedToDate,
             summary.Projected is { } p ? new ProjectProjectionResponse(p.Cost, p.Profit, p.Margin) : null,
             money.Received,
@@ -192,6 +194,23 @@ public sealed class FinanceInsightService(
             settlement + SupervisionOn(settlement),
             paidAhead + SupervisionOn(paidAhead),
             (money.Supervision ?? 0) - SupervisionOn(settlement) - SupervisionOn(paidAhead));
+    }
+
+    /// <summary>
+    /// An Execution client site's progress by value today (<see cref="BoqProgressRules"/>): null elsewhere, and until a line
+    /// has a recorded quantity. Only shown: the projection keeps using the progress percentage until forecasting uses it.
+    /// </summary>
+    private async Task<decimal?> ExecutedProgressAsync(Project project, CancellationToken cancellationToken)
+    {
+        if (project.DomainCode != DomainCodes.Execution || project.BillingType != BillingType.Client)
+        {
+            return null;
+        }
+
+        var lines = await boqProgress.AgreedLinesAsync(project.Id, cancellationToken);
+        var latest = await boqProgress.LatestAsync(project.Id, clock.CompanyToday, cancellationToken);
+        var sheet = BoqProgressRules.Of(lines.Select(l => l.Line), latest.ToDictionary(p => p.Key, p => p.Value.ExecutedQuantity));
+        return sheet.Recorded ? sheet.Progress : null;
     }
 
     private static IReadOnlyList<DepartmentInsightResponse> DepartmentsOf(ProjectDepartmentsResponse response, decimal labour)

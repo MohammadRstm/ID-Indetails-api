@@ -145,6 +145,67 @@ A draft the caller may not read is `404`, so another person's private draft does
 
 Client statements, which listed materials supplied and froze their prices, are gone: nothing is in production, so their tables went with no data migration. A site expense is a plain cost.
 
+## Progress by value
+
+How far a site is, measured by the work executed on its agreed BOQs (the owner's decision Q7): the value executed ÷ the
+agreed value. Site staff record, per BOQ line, the quantity executed so far; the API works out every value and figure
+(`Business/Boqs/BoqProgressRules.cs`, pure).
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/projects/{id}/boqs/progress?asOf=` | `financial:view`, `project:pricing_manage` or `site_log:view_all`; or `site_log:create` on a site the caller oversees (`403 not_on_site_team`) | The site's progress as it stood on `asOf` (a company day; today when left out) |
+| `PUT /api/projects/{id}/boqs/progress` | `project:pricing_manage`, or `site_log:create` on a site the caller oversees (`403 not_on_site_team`), while it is open (`422 project_locked`) | `{ recordedOn?, lines: [{ boqLineId, executedQuantity, note? }] }`. Returns the progress as of today |
+
+A project the caller can't see reads as `404`; a Design project is `422 not_for_this_domain`, an internal Execution
+project `422 boq_execution_only`.
+
+**Recording.**
+- `recordedOn` is a company day, today when left out, never one still to come (`400 recordedOn`).
+- 1 to 200 lines, each once (`400 lines`). `executedQuantity` is **cumulative**: everything executed on the line up to
+  that day, in its unit, not the day's work alone. It is 0 or more, to four places (`decimal(14,4)`, the line's
+  quantity's precision), and at most **twice the line's quantity**, so an overrun can be recorded but a typo is caught
+  (`400 lines[i].executedQuantity`). It may be lower than an earlier day's, to correct one. `note` is up to 500 characters.
+- Only work lines of the site's **agreed** client BOQ and **agreed** VOs take progress. Anything else is
+  `400 boq_progress_line_invalid` on `lines[i].boqLineId`: a line of a draft or of another site, a permit, a line with a
+  negative rate (it takes work away: nothing on it is executed), and a line of a VO made at completion (excused, written
+  off, or an overpayment kept: they price money, not work).
+- One record per line and day: recording a line again the same day **replaces** it (who and when move to the new
+  record). The same quantity and note again change nothing. Each save that changes something writes one
+  `boq_progress_recorded` activity event (Projects group; subject the project; no amount, since it is quantities; the
+  payload holds `recordedOn` and the number of `lines` changed).
+
+**Reading.** `{ projectId, asOf, lines, agreedValue, valueExecuted, progress, history }`:
+- `lines`: each work line of the agreed client BOQ, then of the agreed VOs in the order they were agreed (settlement
+  VOs and permits left out), as `{ boqLineId, boqId, boqKind, boqNumber, boqTitle, position, code, description, unit,
+  quantity, takesProgress, executedQuantity, executedOn, progress, unitPrice, agreedValue, valueExecuted }`. `quantity`
+  is the line's final quantity (with waste), the one the client is priced on. `executedQuantity` is the latest record on
+  or before `asOf` (`executedOn` its day), null without one. `progress` = executed ÷ quantity, a fraction to four
+  places that may pass 1. `takesProgress` is false on a line with a negative rate.
+- `progress` = `valueExecuted` ÷ `agreedValue`, a fraction to four places, **not capped** (an overrun passes 1); null
+  until a line has a record, and while the agreed value is 0 or less.
+- **The values** are net of TVA, work only (no supervision, no permits). A line's `unitPrice` is its rate with its
+  BOQ's adjustment spread over it (rate × the BOQ's total ÷ its subtotal; the rate itself when the subtotal is 0), so a
+  BOQ fully executed is worth its agreed total. `agreedValue` = quantity × unit price (negative on a line taking work
+  away), `valueExecuted` = executed × unit price (0 without a record), each to cents; the site's figures add them up, so
+  its `agreedValue` is the counted BOQs' work within cents.
+- **Who sees what.** Quantities and progress go to every reader; `unitPrice`, `agreedValue` and `valueExecuted` (per
+  line and for the site) only to `financial:view`, and are `null`, never 0, for anyone else. Progress is shown to them
+  only as a fraction.
+- `history`: the latest 50 records on or before `asOf` of the lines shown, newest day first, as `{ id, boqLineId,
+  recordedOn, executedQuantity, note, recordedBy: { id, name }, recordedAt }`.
+
+**When a BOQ changes.** A withdrawn BOQ's lines stop counting but keep their records, which count again if it is
+agreed again. A line removed from a BOQ (only a draft's lines can be) takes its records with it (`ON DELETE CASCADE`),
+and so does a deleted project.
+
+**Financial Intelligence** shows the same figure as `executedProgress` on `GET /api/finance/insights/projects/{id}`
+(Execution client sites; null elsewhere and until a line has a record), and Proton's `get_project_financial_summary` as
+`executed_progress_pct`. In this PR it is only shown: the projection and `progressPct` keep their meaning, and phase 3
+forecasting ("Execution by value") will use it ([finance.md](finance.md)).
+
+**Proton** reads it with `get_boq_progress` ([proton.md](proton.md)). Recording is `Planned` in `ProtonCoverage`
+(Money, strong, since pricing managers may record too); site staff will record from the phone app.
+
 ## Site staff and daily logs
 
 Site staff are Execution employees. They log no hours (they are paid monthly: an hourly pay is refused with `400 fixed_salary_paid_monthly`), so their pay is a fixed salary: a company cost in the company overview, like admins', never a site's ([company.md](company.md)). They record no site expenses by default (`material:create` is no longer an employee default; admins record them, or someone given the permission), and on the sites they oversee they report ground labour and write daily logs.

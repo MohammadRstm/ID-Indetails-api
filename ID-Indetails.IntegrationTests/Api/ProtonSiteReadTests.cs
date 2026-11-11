@@ -122,4 +122,42 @@ public class ProtonSiteReadTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         read["lines"]!.AsArray().ShouldHaveSingleItem()!["description"]!.GetValue<string>().ShouldBe("Concept design");
         (read["terms_days"]!.GetValue<int>(), read["notes"]!.GetValue<string>()).ShouldBe((15, "Thank you"));
     }
+
+    [Fact]
+    public async Task A_sites_progress_by_value_is_read_with_prices_only_for_whoever_sees_money()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, rami) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [rami.User.Id], projectFee: 0);
+        var boqSteps = new BoqTestSteps(_steps);
+        var boq = await boqSteps.CreateAsync(superAdmin.AccessToken, site.Id);
+        await boqSteps.SaveAsync(superAdmin.AccessToken, boq.Id, [BoqTestSteps.Line("Floor tiling", 100m, 10m, unit: "m2")]);
+        boq = await boqSteps.AgreeAsync(superAdmin.AccessToken, boq.Id);
+
+        // nothing recorded yet: no progress, and the note says not to guess one
+        var empty = (await CallAsync(rami, "get_boq_progress", new { project_id = site.Id }))["data"]!;
+        empty["progress_pct"].ShouldBeNull();
+        empty["note"]!.GetValue<string>().ShouldContain("never guess");
+
+        await OkAsync(Client.PutJsonAsync($"/api/projects/{site.Id}/boqs/progress",
+            new { lines = new[] { new { boqLineId = boq.Lines.Single().Id, executedQuantity = 25m } } }, rami.AccessToken));
+
+        // the site's staff: quantities and progress, no price
+        var staff = (await CallAsync(rami, "get_boq_progress", new { project_id = site.Id }))["data"]!;
+        staff["progress_pct"]!.GetValue<int>().ShouldBe(25);
+        var line = staff["lines"]!.AsArray().ShouldHaveSingleItem()!;
+        (line["executed_quantity"]!.GetValue<decimal>(), line["progress_pct"]!.GetValue<int>()).ShouldBe((25m, 25));
+        line["unit_price_usd"].ShouldBeNull();
+        staff["agreed_value_usd"].ShouldBeNull();
+        // no one is named beside the figures
+        staff.ToJsonString().ShouldNotContain("recorded_by");
+
+        // with financial:view, the values too
+        var money = (await CallAsync(superAdmin, "get_boq_progress", new { project_id = site.Id }))["data"]!;
+        (money["agreed_value_usd"]!.GetValue<decimal>(), money["value_executed_usd"]!.GetValue<decimal>()).ShouldBe((1_000m, 250m));
+
+        // and the financial summary carries the same progress by value
+        var summary = (await CallAsync(superAdmin, "get_project_financial_summary", new { project_id = site.Id }))["data"]!;
+        summary["executed_progress_pct"]!.GetValue<int>().ShouldBe(25);
+    }
 }

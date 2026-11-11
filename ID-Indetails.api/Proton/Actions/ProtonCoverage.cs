@@ -138,6 +138,9 @@ public static class ProtonCoverage
         Action("DesignVos.Email", "propose_send_design_vo", T2, ProtonFamily.Money, externalSend: true),
         Planned("SiteLogs.Create", T1, ProtonFamily.Core),
         Planned("SiteLogs.Update", T1, ProtonFamily.Core),
+        // quantities, not money, but pricing managers may record them too, so it is held to the Money family like their other
+        // writes; site staff will record it from the phone. Until built Proton reads it (get_boq_progress) and opens the BOQs page
+        Planned("BoqProgress.Record", T2, ProtonFamily.Money),
         Action("Pocket.Contribute", "propose_pocket_contribution", T2, ProtonFamily.Money),
         Planned("Pocket.Ask", T2, ProtonFamily.Money),
         Planned("Pocket.Approve", T2, ProtonFamily.Money),

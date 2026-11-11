@@ -103,6 +103,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<BoqLine> BoqLines => Set<BoqLine>();
     public DbSet<BoqDelivery> BoqDeliveries => Set<BoqDelivery>();
     public DbSet<BoqSequence> BoqSequences => Set<BoqSequence>();
+    public DbSet<BoqLineProgress> BoqLineProgress => Set<BoqLineProgress>();
 
     // Working time and the hours ledger
     public DbSet<WorkingTimePolicy> WorkingTimePolicies => Set<WorkingTimePolicy>();

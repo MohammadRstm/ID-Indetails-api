@@ -106,6 +106,7 @@ Judgements and simulations on one project or a whole domain, kept apart from the
   - `margin` = profit ÷ revenue (`ProjectFinance.MarginOf`). It shows only once the project is done, at least 5% along or has 10 hours logged (`marginKnown`); otherwise `null`.
   - `standing` against the profit floor (`ProfitFloorRules.StandingOf`): `fine`, `close` (a margin of 10% or less) or `at_zero` (profit at zero or below). `null` where the floor doesn't apply: internal work, or no agreed amount yet (Design's payment or a site's work price at 0).
   - `progressPct`, `recognisedToDate` (revenue × progress, all of it once done) and `projected` (`cost`, `profit`, `margin`): cost ÷ progress, a straight line, for open client projects at least 5% along; `null` otherwise. The same rules as [projects.md](projects.md), "Cost, profit and margin".
+  - `executedProgress`: an Execution client site's progress by value, the value executed on its agreed BOQ and VO lines ÷ their agreed value, a fraction to four places that may pass 1 ([execution.md](execution.md#progress-by-value)); `null` on Design, on internal work and until a line has a recorded quantity. Only shown for now: the projection still uses `progressPct`, and phase 3 forecasting will use it.
 - **Cash:**
   - `received`: what the client paid, TVA included. `receivedTva` is the TVA in it.
   - `owed`: what the client still owes, TVA included: agreed with TVA − received, never below 0 (0 for internal work).

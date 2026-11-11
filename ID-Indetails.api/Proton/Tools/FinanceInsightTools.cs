@@ -49,6 +49,10 @@ public sealed record InsightDepartmentRow(
 /// <param name="SiteCashProfit">Execution: received net of TVA, less cost, less what was moved to the pocket money, plus what it paid in.</param>
 /// <param name="Bridge">From the base price to the agreed profit, in order; the steps add up to it.</param>
 /// <param name="Departments">Design only.</param>
+/// <param name="ExecutedProgressPct">
+/// An Execution site's progress by value: the value executed on its agreed BOQ lines as a whole percentage of their agreed
+/// value (above 100 past it); empty on Design, on internal work and until site staff record a quantity.
+/// </param>
 public sealed record ProjectFinancialSummary(
     long ProjectId,
     string Title,
@@ -64,6 +68,7 @@ public sealed record ProjectFinancialSummary(
     int? AgreedMarginPct,
     ProfitStanding? Standing,
     int ProgressPct,
+    int? ExecutedProgressPct,
     decimal RecognisedToDate,
     ProtonProjection? Projected,
     decimal Received,
@@ -144,6 +149,8 @@ public sealed class GetProjectFinancialSummaryTool(IFinanceInsightService insigh
     public override string Description =>
         "One project's profitability, all time, in USD: agreed revenue (net of TVA) and with TVA, cost by source, agreed profit " +
         "and margin, its standing against the profit floor (fine, close or at_zero), progress, recognised to date and projection; " +
+        "on a site its progress by value (the value executed on its agreed BOQ lines as a percentage of their agreed value, beside " +
+        "the progress the projection uses); " +
         "what the client paid and still owes (TVA included); on a site its site cash profit and the pocket money moved out and " +
         "paid in; the bridge from the base price to the agreed profit (variation orders, a settlement, supervision, permits, " +
         "each cost, pocket money); and on a Design project each department's share, budget, cost, minutes, share of the " +
@@ -159,7 +166,7 @@ public sealed class GetProjectFinancialSummaryTool(IFinanceInsightService insigh
             p.ProjectId, p.Title, p.Domain, p.Status, p.BillingType,
             p.AgreedRevenue, p.AgreedWithTva, p.TvaRate * 100, site ? p.SupervisionRate * 100 : null,
             p.Cost, p.AgreedProfit, ProtonAnalysis.Pct(p.Margin), p.Standing,
-            p.ProgressPct, p.RecognisedToDate, ProtonProjection.Of(p.Projected),
+            p.ProgressPct, site ? ProtonAnalysis.Pct(p.ExecutedProgress) : null, p.RecognisedToDate, ProtonProjection.Of(p.Projected),
             p.Received, p.ReceivedTva, p.Owed,
             site ? p.SiteCashProfit : null, site ? p.ToPocket : null, site ? p.FromPocket : null,
             p.Bridge.Select(s => new BridgeRow(s.Kind, s.Amount)).ToList(),

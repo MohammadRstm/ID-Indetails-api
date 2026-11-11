@@ -174,6 +174,12 @@ public static class ActivityEventKinds
     public const string BoqSubmissionWithdrawn = "boq_submission_withdrawn";
     public const string BoqChangesKept = "boq_changes_kept";
 
+    /// <summary>
+    /// Executed quantities were recorded on a site's agreed BOQ lines (subject: the project; quantities, not money, so no
+    /// amount: the payload holds <c>recordedOn</c> and the number of <c>lines</c> that changed).
+    /// </summary>
+    public const string BoqProgressRecorded = "boq_progress_recorded";
+
     /// <summary>The channel in the payload.</summary>
     public const string BoqSent = "boq_sent";
 

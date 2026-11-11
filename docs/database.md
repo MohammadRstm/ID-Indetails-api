@@ -39,7 +39,7 @@ The database is the second line of defence. The API must still filter every quer
 | Clients | `clients`, `client_contacts` |
 | Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings` (with general meetings, about no project), `meeting_attendees`, `project_expenses` (Design's), `blocked_changes`, `project_budgets` and `project_budget_lines` (cost budgets, in versions), `project_department_plans` (planned hours per department) |
 | Design work | `work_entries`, `work_entry_comments` |
-| Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
+| Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences`, `boq_line_progress` (executed quantities per BOQ line and day) |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
 | Working time, hours ledger and time off | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days`, `time_off_requests` |
 | Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `account_labels`, `company_settings`, `domain_settings` |
@@ -212,6 +212,17 @@ The `DepartmentPlans` migration (11 Nov 2026) adds the hours planned for each de
   and `users` (RESTRICT), and the check `ck_project_department_plans_planned_minutes_positive` (`planned_minutes > 0`).
   A change updates the row and clearing deletes it; the revision is the `department_plan_set` activity event.
 - No data changes. `Down` drops the table. The model now has 105 tables.
+
+The `BoqLineProgress` migration (11 Nov 2026) adds the executed quantities site staff record on an Execution site's
+agreed BOQ lines ([execution.md](execution.md#progress-by-value)):
+
+- `boq_line_progress` (id, `boq_line_id`, `project_id`, `recorded_on` date, `executed_quantity` decimal(14,4): the
+  cumulative quantity up to that day, `recorded_by_id`, `recorded_at` datetime(3), `note` varchar(500) null), unique on
+  `(boq_line_id, recorded_on)` (a second record the same day replaces the first), indexed on `(project_id, recorded_on)`
+  and `recorded_by_id`, with foreign keys to `boq_lines` (CASCADE: a line removed from a draft takes its records),
+  `projects` (CASCADE, like the cost budget; project deletion also removes them first) and `users` (RESTRICT), and the
+  check `ck_boq_line_progress_executed_quantity_non_negative` (`executed_quantity >= 0`).
+- No data changes. `Down` drops the table. The model now has 106 tables.
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
