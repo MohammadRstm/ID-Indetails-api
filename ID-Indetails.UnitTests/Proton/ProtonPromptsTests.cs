@@ -59,6 +59,27 @@ public class ProtonPromptsTests
         ProtonPrompts.Chat.ShouldContain("- `standing`:");
     }
 
+    /// <summary>A site's progress by value: read with its tool, never guessed while nothing is recorded, never a new projection.</summary>
+    [Fact]
+    public void The_chat_prompt_says_how_to_present_a_sites_progress_by_value()
+    {
+        ProtonPrompts.Chat.ShouldContain("`get_boq_progress`");
+        ProtonPrompts.Chat.ShouldContain("none recorded the site has no progress by value, so say so");
+        ProtonPrompts.Chat.ShouldContain("`executed_progress_pct`");
+        ProtonPrompts.Chat.ShouldContain("never redo the projection with it");
+    }
+
+    /// <summary>A cost budget: over only for a line above its amount, never a department's share of the price, no one named.</summary>
+    [Fact]
+    public void The_chat_prompt_says_how_to_present_a_cost_budget()
+    {
+        ProtonPrompts.Chat.ShouldContain("# Cost budgets");
+        ProtonPrompts.Chat.ShouldContain("`get_project_budget`");
+        ProtonPrompts.Chat.ShouldContain("\"Over budget\" only for a line whose cost so far is above its amount");
+        ProtonPrompts.Chat.ShouldContain("- Cost budget (`get_project_budget`):");
+        ProtonPrompts.Chat.ShouldContain("It is not a department's budget in `get_project_departments`");
+    }
+
     /// <summary>
     /// A business's risks and spending: each judgement with the rule that fired, nothing at risk or unusual without one,
     /// a projection as an estimate, internal projects never listed, and what was left out said.

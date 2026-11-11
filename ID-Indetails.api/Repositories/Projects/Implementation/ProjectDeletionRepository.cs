@@ -33,6 +33,7 @@ public sealed class ProjectDeletionRepository(IdIndetailsDbContext db) : IProjec
 
         await Add(db.ProjectRequirements.Where(r => r.ProjectId == projectId), "requirement");
         await Add(db.Boqs.Where(b => b.ProjectId == projectId && b.DeletedAt == null), "BOQ or VO", "BOQs and VOs");
+        await Add(db.BoqLineProgress.Where(p => p.ProjectId == projectId), "record of BOQ progress", "records of BOQ progress");
         await Add(db.DesignVos.Where(v => v.ProjectId == projectId), "variation order");
         await Add(db.ProjectPaymentChanges.Where(c => c.ProjectId == projectId), "price change");
         await Add(db.ProjectExpenses.Where(e => e.ProjectId == projectId && e.DeletedAt == null), "project expense");
@@ -44,6 +45,7 @@ public sealed class ProjectDeletionRepository(IdIndetailsDbContext db) : IProjec
         await Add(db.Payments.Where(p => p.ProjectId == projectId && p.VoidedAt != null), "voided payment");
         await Add(db.ProjectStaff.Where(s => s.ProjectId == projectId), "person on its site staff", "people on its site staff");
         await Add(db.ProjectDepartments.Where(d => d.ProjectId == projectId), "department share");
+        await Add(db.ProjectBudgets.Where(b => b.ProjectId == projectId), "version of its cost budget", "versions of its cost budget");
         await Add(db.PortalItems.Where(i => i.ProjectId == projectId && i.RemovedAt == null), "client portal item");
         await Add(db.PortalMessages.Where(m => m.ProjectId == projectId && m.DeletedAt == null), "client portal message");
         await Add(db.PortalComments.Where(c => c.ProjectId == projectId && c.DeletedAt == null), "client portal comment");
@@ -99,6 +101,8 @@ public sealed class ProjectDeletionRepository(IdIndetailsDbContext db) : IProjec
 
         // the work and its costs; lines, days, assignees and attendees go with their rows
         await db.DesignVos.Where(v => v.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+        // recorded progress before the BOQs whose lines it is on
+        await db.BoqLineProgress.Where(p => p.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.Boqs.Where(b => b.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.LabourWeeks.Where(w => w.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectLabourDefaults.Where(d => d.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
@@ -108,7 +112,9 @@ public sealed class ProjectDeletionRepository(IdIndetailsDbContext db) : IProjec
         await db.ProjectRequirements.Where(r => r.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectMeetings.Where(m => m.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectDepartmentChanges.Where(c => c.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+        await db.ProjectDepartmentPlans.Where(p => p.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectDepartments.Where(d => d.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+        await db.ProjectBudgets.Where(b => b.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectStaff.Where(s => s.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectPaymentChanges.Where(c => c.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
 

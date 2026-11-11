@@ -395,4 +395,38 @@ public class ProtonFinanceInsightTests(ProtonApiFactory api) : IClassFixture<Pro
         (await CallAsync(siteMoney, "analyze_labor_costs", new { })).Result["status"]!.GetValue<string>().ShouldBe("forbidden");
         api.Anthropic.ToolsOffered(0).ShouldNotContain("analyze_labor_costs");
     }
+
+    [Fact]
+    public async Task A_super_admin_reads_a_projects_cost_budget_and_without_financial_view_it_is_refused()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        await OkAsync(Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
+            new { label = "Printing", amount = 500m, currency = "USD", category = "other", spentOn = Today }, superAdmin.AccessToken));
+
+        // no budget yet: nothing to call over budget
+        var (empty, _) = await CallAsync(superAdmin, "get_project_budget", new { project_id = project.Id });
+        empty["data"]!["current"].ShouldBeNull();
+        empty["data"]!["uncovered"]!.GetValue<decimal>().ShouldBe(500m);
+
+        await OkAsync(Client.PutJsonAsync($"/api/projects/{project.Id}/budget",
+            new { reason = "Agreed scope", lines = new object[] { new { category = "expenses", amount = 2_000m } } }, superAdmin.AccessToken));
+        var (budget, reply) = await CallAsync(superAdmin, "get_project_budget", new { project_id = project.Id });
+        var data = budget["data"]!;
+        data["current"]!["version"]!.GetValue<int>().ShouldBe(1);
+        data["current"]!["total"]!.GetValue<decimal>().ShouldBe(2_000m);
+        var line = data["lines"]!.AsArray().ShouldHaveSingleItem()!;
+        (line["category"]!.GetValue<string>(), line["cost"]!.GetValue<decimal>(), line["left"]!.GetValue<decimal>(), line["over"]!.GetValue<bool>())
+            .ShouldBe(("expenses", 500m, 1_500m, false));
+        data["versions"]!.AsArray().Count.ShouldBe(1);
+        // no one is named beside an amount
+        data.ToJsonString().ShouldNotContain("set_by");
+        budget["basis"]!["rules"]!.ToJsonString().ShouldContain("over budget");
+        reply.Sources.ShouldHaveSingleItem().Label.ShouldBe($"Cost budget of project #{project.Id}");
+
+        // an admin without financial:view isn't offered it, and asking for it is refused
+        var plain = await DesignAdminAsync(superAdmin);
+        (await CallAsync(plain, "get_project_budget", new { project_id = project.Id })).Result["status"]!.GetValue<string>().ShouldBe("forbidden");
+        api.Anthropic.ToolsOffered(0).ShouldNotContain("get_project_budget");
+    }
 }

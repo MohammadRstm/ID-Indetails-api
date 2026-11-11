@@ -183,7 +183,7 @@ Each item ships with regression tests that pin today's numbers before the change
 |---|---|---|---|---|
 | 2a | **Budgets:** `project_budgets` (project, version, effective date, reason, set by), `project_budget_lines` (department on Design, `SiteExpenseCategory` or ground labour on Execution, amount USD) | budget window on the project's financials tab; `PUT …/budget` (new revision each time) | budget variance; budget-based forecasts | Q8 |
 | 2b | **Planned hours** per department on a Design project (`project_department_plans`: department, hours, revision) | the departments window | Design progress by hours; Design forecasting | Q7 |
-| 2c | **Execution progress:** `boq_line_progress` (BOQ line, date, executed quantity, by whom) | a "progress" column in the BOQ editor, or a weekly progress report beside labour weeks | Execution progress by value; Execution forecasting | Q7 |
+| 2c | **Execution progress:** `boq_line_progress` (BOQ line, date, cumulative executed quantity, by whom), **built in `MR-Boq-Progress`**: `PUT`/`GET /api/projects/{id}/boqs/progress` by the site's staff or a pricing manager; progress = value executed ÷ agreed value of the agreed client BOQ and VOs (net of TVA, work only, not capped), shown on Financial Intelligence as `executedProgress` but not yet used by the projection ([execution.md](execution.md#progress-by-value)) | a "progress" column in the BOQ editor, or a weekly progress report beside labour weeks | Execution progress by value; Execution forecasting | Q7 |
 | 2d | **Commitments:** `cost_commitments` (project, supplier, category, amount, currency, expected date, status open, part-paid, closed) linked to site expenses when paid | a commitments list on the site | cost at completion; cash-flow outflows | Q9 |
 | 2e | **Project attributes:** `projects.project_type` and `projects.area_m2`, both optional and editable any time | the project form and its edit window | comparisons with similar projects | Q15 |
 | 2f | **Monthly snapshots:** `project_money_snapshots` (project, month, revenue, cost by source, received, profit, progress), written by a monthly job and on finalising | none (job) | point-in-time comparisons; fast portfolio views | — |
@@ -270,7 +270,7 @@ Tool: `forecast_cash_flow`. It returns no payroll line and states that it leaves
 | 4 | done: `MR-Insights-Risks-Expenses` (#203 / client #208, merged) | risks v1, expense trends and anomalies | Q10, Q16 |
 | 5 | this PR: `MR-Insights-Labour` | labour cost and utilization | Q12 |
 | 6 | done: `MR-Company-Salary-Costs` (#195 / client #199, merged) | 2h | — |
-| 7 | `MR-Budgets` → `MR-Planned-Hours` → `MR-Boq-Progress` | 2a, 2b, 2c, stacked migrations, entry screens | Q7, Q8, schema approval |
+| 7 | `MR-Budgets`, `MR-Planned-Hours`, `MR-Boq-Progress` in review | 2a, 2b, 2c, stacked migrations, entry screens | Q7, Q8, schema approval |
 | 8 | `MR-Insights-Forecast` | phase 3 | 7 |
 | 9 | `MR-Commitments`, `MR-Money-Snapshots`, `MR-Project-Attributes`, `MR-Finance-History` | 2d, 2f, 2e, 2g | Q9, Q11, Q15, schema approval |
 | 10 | `MR-Insights-Cash-Flow` | phase 4 | 9, Q14, Q17 |

@@ -71,6 +71,12 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<ProjectDepartmentChange> ProjectDepartmentChanges => Set<ProjectDepartmentChange>();
 
+    public DbSet<ProjectDepartmentPlan> ProjectDepartmentPlans => Set<ProjectDepartmentPlan>();
+
+    public DbSet<ProjectBudget> ProjectBudgets => Set<ProjectBudget>();
+
+    public DbSet<ProjectBudgetLine> ProjectBudgetLines => Set<ProjectBudgetLine>();
+
     public DbSet<DesignVo> DesignVos => Set<DesignVo>();
 
     public DbSet<DesignVoLine> DesignVoLines => Set<DesignVoLine>();
@@ -97,6 +103,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<BoqLine> BoqLines => Set<BoqLine>();
     public DbSet<BoqDelivery> BoqDeliveries => Set<BoqDelivery>();
     public DbSet<BoqSequence> BoqSequences => Set<BoqSequence>();
+    public DbSet<BoqLineProgress> BoqLineProgress => Set<BoqLineProgress>();
 
     // Working time and the hours ledger
     public DbSet<WorkingTimePolicy> WorkingTimePolicies => Set<WorkingTimePolicy>();

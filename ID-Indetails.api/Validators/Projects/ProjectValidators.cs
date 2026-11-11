@@ -87,6 +87,33 @@ public sealed class SetDepartmentSharesRequestValidator : AbstractValidator<SetD
     }
 }
 
+public sealed class SetDepartmentPlanRequestValidator : AbstractValidator<SetDepartmentPlanRequest>
+{
+    public SetDepartmentPlanRequestValidator()
+    {
+        RuleFor(x => x.Departments)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("Plan the hours of at least one department.")
+            .Must(d => d.Count >= 1).WithMessage("Plan the hours of at least one department.")
+            .Must(d => d.Count <= DepartmentPlanRules.MaxDepartments).WithMessage($"Plan at most {DepartmentPlanRules.MaxDepartments} departments at once.")
+            .Must(d => d.Where(x => x is not null).GroupBy(x => x.TeamId).All(g => g.Count() == 1))
+            .WithMessage("Plan each department once.");
+        RuleForEach(x => x.Departments)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("A department is missing.")
+            .ChildRules(department =>
+            {
+                department.RuleFor(d => d.TeamId).GreaterThan(0).WithMessage("The department is invalid.");
+                // null clears the plan
+                department.RuleFor(d => d.PlannedHours)
+                    .Cascade(CascadeMode.Stop)
+                    .Must(h => h is null || h > 0).WithMessage("The planned hours must be above 0; leave them empty to clear the plan.")
+                    .Must(h => h is null || h <= DepartmentPlanRules.MaxHours).WithMessage("The planned hours can be at most 100,000.")
+                    .Must(h => h is not { } hours || hours == Math.Round(hours, 2)).WithMessage("The planned hours can have at most two decimals.");
+            });
+    }
+}
+
 public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProjectRequest>
 {
     public UpdateProjectRequestValidator()
@@ -158,5 +185,37 @@ public sealed class ProjectReportQueryValidator : AbstractValidator<ProjectRepor
         RuleForEach(x => x.Sections).IsInEnum().WithMessage("Unknown report section.");
         RuleFor(x => x.To).GreaterThanOrEqualTo(x => x.From).When(x => x.From is not null && x.To is not null)
             .WithMessage("The range must end on or after its start.");
+    }
+}
+
+public sealed class SetProjectBudgetRequestValidator : AbstractValidator<SetProjectBudgetRequest>
+{
+    public SetProjectBudgetRequestValidator()
+    {
+        RuleFor(x => x.Reason).ClientText("The reason", BudgetRules.MaxReasonLength, required: true);
+        RuleFor(x => x.EffectiveFrom).ThisCentury("The start");
+        RuleFor(x => x.Lines)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("Budget at least one line.")
+            .Must(l => l.Count >= 1).WithMessage("Budget at least one line.")
+            .Must(l => l.Count <= BudgetRules.MaxLines).WithMessage($"A budget has at most {BudgetRules.MaxLines} lines.")
+            .Must(l => l.Where(x => x is not null).GroupBy(x => (x.TeamId, x.Category)).All(g => g.Count() == 1))
+            .WithMessage("Each department or category is budgeted once.");
+        RuleForEach(x => x.Lines)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("A line is missing.")
+            .ChildRules(line =>
+            {
+                line.RuleFor(l => l.TeamId)
+                    .Must((l, teamId) => (teamId is null) != (l.Category is null))
+                    .WithMessage("A line is a department or a category, not both.");
+                line.RuleFor(l => l.TeamId).GreaterThan(0).When(l => l.TeamId is not null).WithMessage("The department is invalid.");
+                line.RuleFor(l => l.Category)
+                    .Must(c => c is null || BudgetRules.AllCategories.Contains(c))
+                    .WithMessage($"The category must be one of {string.Join(", ", BudgetRules.AllCategories)}.");
+                line.RuleFor(l => l.Amount)
+                    .Amount("The amount")
+                    .Must(a => a <= BudgetRules.MaxAmount).WithMessage("The amount can be at most 100,000,000 USD.");
+            });
     }
 }

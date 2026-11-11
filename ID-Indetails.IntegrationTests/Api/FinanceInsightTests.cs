@@ -230,12 +230,15 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
             r => r.Left.ShouldBe(11_960m),
             r => r.Minutes.ShouldBe(180),
             r => r.LabourShare.ShouldBe(1m),
-            r => r.Unconverted.ShouldBeEmpty());
+            r => r.Unconverted.ShouldBeEmpty(),
+            // no hours planned for it yet, so no progress by hours
+            r => r.PlannedMinutes.ShouldBeNull(),
+            r => r.Progress.ShouldBeNull());
 
         // never a person: no people, no one's hours, rate or name
         using var json = JsonDocument.Parse(body);
         json.RootElement.GetProperty("departments")[0].EnumerateObject().Select(p => p.Name).ShouldBe(
-            ["id", "name", "share", "budget", "cost", "left", "minutes", "labourShare", "unconverted"], ignoreOrder: true);
+            ["id", "name", "share", "budget", "cost", "left", "minutes", "labourShare", "unconverted", "plannedMinutes", "progress"], ignoreOrder: true);
         body.ShouldNotContain("\"people\"");
         body.ShouldNotContain("\"person\"");
         body.ShouldNotContain("hourlyRate");

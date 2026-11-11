@@ -62,6 +62,16 @@ public static class ActivityEventKinds
     public const string MaterialMarkupSet = "material_markup_set";
 
     public const string SupervisionRateSet = "supervision_rate_set";
+
+    /// <summary>A new version of the project's cost budget (subject: the project; its total in the amount, the previous version's in prev_amount, the version in the payload).</summary>
+    public const string BudgetSet = "budget_set";
+
+    /// <summary>
+    /// A Design department's planned hours were set, changed or cleared (subject: the project; hours, not money, so the
+    /// payload holds <c>teamId</c>, <c>department</c>, <c>plannedMinutes</c> and <c>prevPlannedMinutes</c>, null for none).
+    /// </summary>
+    public const string DepartmentPlanSet = "department_plan_set";
+
     public const string ProjectHold = "project_hold";
     public const string ProjectResumed = "project_resumed";
     public const string ProjectCompleted = "project_completed";
@@ -163,6 +173,12 @@ public static class ActivityEventKinds
     public const string BoqSubmitted = "boq_submitted";
     public const string BoqSubmissionWithdrawn = "boq_submission_withdrawn";
     public const string BoqChangesKept = "boq_changes_kept";
+
+    /// <summary>
+    /// Executed quantities were recorded on a site's agreed BOQ lines (subject: the project; quantities, not money, so no
+    /// amount: the payload holds <c>recordedOn</c> and the number of <c>lines</c> that changed).
+    /// </summary>
+    public const string BoqProgressRecorded = "boq_progress_recorded";
 
     /// <summary>The channel in the payload.</summary>
     public const string BoqSent = "boq_sent";

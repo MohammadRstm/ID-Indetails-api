@@ -20,4 +20,10 @@ public interface IProjectDepartmentService
 
     /// <summary>Sets each department's share, adding up to 100%, with why (<c>financial:write</c>).</summary>
     Task<ProjectDepartmentsResponse> SetSharesAsync(long projectId, SetDepartmentSharesRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets or clears the hours planned for some of the project's departments (<c>project:edit</c>), each change recorded in
+    /// the activity log with the value before.
+    /// </summary>
+    Task<ProjectDepartmentsResponse> SetPlanAsync(long projectId, SetDepartmentPlanRequest request, CancellationToken cancellationToken = default);
 }

@@ -41,4 +41,14 @@ public interface IProjectDepartmentRepository
     void Remove(ProjectDepartment department);
 
     void AddChange(ProjectDepartmentChange change);
+
+    /// <summary>The planned minutes of each of the projects' departments that has a plan, by project then department.</summary>
+    Task<IReadOnlyDictionary<(long ProjectId, long TeamId), int>> PlannedMinutesAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
+
+    /// <summary>A project's plans, tracked, to change.</summary>
+    Task<IReadOnlyList<ProjectDepartmentPlan>> PlansForUpdateAsync(long projectId, CancellationToken cancellationToken = default);
+
+    void AddPlan(ProjectDepartmentPlan plan);
+
+    void RemovePlan(ProjectDepartmentPlan plan);
 }

@@ -111,6 +111,8 @@ public static class ProtonServiceCollectionExtensions
         // An Execution site's BOQs, labour, daily logs and account, and the pocket money
         services.AddScoped<IProtonTool, ListBoqsTool>();
         services.AddScoped<IProtonTool, GetBoqTool>();
+        // a site's executed quantities and progress by value; prices only with financial:view
+        services.AddScoped<IProtonTool, GetBoqProgressTool>();
         services.AddScoped<IProtonTool, ListDesignVosTool>();
         services.AddScoped<IProtonTool, GetLabourTool>();
         services.AddScoped<IProtonTool, ListSiteLogsTool>();
@@ -137,6 +139,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, DetectProjectFinancialRisksTool>();
         services.AddScoped<IProtonTool, AnalyzeExpenseTrendsTool>();
         services.AddScoped<IProtonTool, AnalyzeLaborCostsTool>();
+        // a project's cost budget against its cost so far, without who set each version
+        services.AddScoped<IProtonTool, GetProjectBudgetTool>();
 
         // The user's own chats and notifications, read as them through their services (no message bodies).
         services.AddScoped<IProtonTool, FindRecipientTool>();

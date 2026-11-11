@@ -12,6 +12,7 @@ using ID_Indetails.api.DTO.Response.WorkEntries;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
@@ -36,6 +37,7 @@ public sealed class ProjectDepartmentService(
     IUserRepository users,
     IWorkEntryService workEntries,
     INotificationSender notifications,
+    IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : IProjectDepartmentService
 {
@@ -93,6 +95,13 @@ public sealed class ProjectDepartmentService(
             foreach (var department in removed)
             {
                 departments.Remove(department);
+            }
+
+            // a department taken off the project takes its planned hours with it
+            foreach (var plan in (await departments.PlansForUpdateAsync(project.Id, cancellationToken)).Where(p => removed.Any(d => d.TeamId == p.TeamId)))
+            {
+                departments.RemovePlan(plan);
+                RecordPlan(actor, project, plan.TeamId, removed.First(d => d.TeamId == plan.TeamId).Team.Name, null, plan.PlannedMinutes);
             }
 
             var after = current.Except(removed).Select(d => (d, d.Team.Name)).ToList();
@@ -165,6 +174,73 @@ public sealed class ProjectDepartmentService(
         return await DescribeAsync(actor, project, cancellationToken);
     }
 
+    public async Task<ProjectDepartmentsResponse> SetPlanAsync(long projectId, SetDepartmentPlanRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = (await ActorAsync(cancellationToken)).Require(PermissionCodes.ProjectEdit);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        // the project's row is held until the plans are saved, so two changes at once can't both add one department's plan
+        var project = DesignProject(actor, await projects.GetForUpdateAsync(projectId, cancellationToken));
+        var onProject = await departments.ListAsync([project.Id], cancellationToken);
+        DepartmentPlanRules.Check(request.Departments.Select(d => d.TeamId).ToList(), onProject.Select(d => d.TeamId).ToList()).ThrowIfDenied();
+
+        var plans = await departments.PlansForUpdateAsync(project.Id, cancellationToken);
+        var changed = false;
+        foreach (var wanted in request.Departments)
+        {
+            var plan = plans.FirstOrDefault(p => p.TeamId == wanted.TeamId);
+            int? minutes = wanted.PlannedHours is { } hours ? DepartmentPlanRules.MinutesOf(hours) : null;
+            if (plan?.PlannedMinutes == minutes)
+            {
+                continue;
+            }
+
+            RecordPlan(actor, project, wanted.TeamId, onProject.First(d => d.TeamId == wanted.TeamId).Name, minutes, plan?.PlannedMinutes);
+            changed = true;
+            if (minutes is not { } planned)
+            {
+                departments.RemovePlan(plan!);
+            }
+            else if (plan is null)
+            {
+                departments.AddPlan(new ProjectDepartmentPlan
+                {
+                    ProjectId = project.Id, TeamId = wanted.TeamId, PlannedMinutes = planned, SetById = actor.UserId, SetAt = clock.UtcNow,
+                });
+            }
+            else
+            {
+                plan.PlannedMinutes = planned;
+                plan.SetById = actor.UserId;
+                plan.SetAt = clock.UtcNow;
+            }
+        }
+
+        if (changed)
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return await DescribeAsync(actor, project, cancellationToken);
+    }
+
+    /// <summary>
+    /// A department's planned hours were set, changed or cleared: the activity event is the revision, with who, when and
+    /// the value before. Hours, not money, so they go in the payload.
+    /// </summary>
+    private void RecordPlan(UserAccess actor, Project project, long teamId, string name, int? plannedMinutes, int? previous)
+        => activity.Add(new ActivityEvent
+        {
+            DomainCode = project.DomainCode,
+            Kind = ActivityEventKinds.DepartmentPlanSet,
+            OccurredAt = clock.UtcNow,
+            ActorId = actor.UserId,
+            ProjectId = project.Id,
+            SubjectType = "project",
+            SubjectId = project.Id,
+            Payload = JsonSerializer.Serialize(new { teamId, department = name, plannedMinutes, prevPlannedMinutes = previous }),
+        });
+
     /// <summary>
     /// Logs the hours that waited for one of the project's departments now, as the people who logged them, through the
     /// same checks as any log; each person hears whether theirs went through. One that no longer fits (it overlaps
@@ -227,16 +303,32 @@ public sealed class ProjectDepartmentService(
         var rows = await departments.ListAsync([project.Id], cancellationToken);
         var ids = rows.Select(r => r.TeamId).ToList();
         var name = ProjectDepartmentRules.IsFullFile(ids, await departments.AllDesignAsync(cancellationToken)) ? ProjectDepartmentRules.FullFile : null;
+        var plans = await departments.PlannedMinutesAsync([project.Id], cancellationToken);
+
+        // a department's logged hours, and so its progress, are its people's hours: only for whoever sees those or the money
+        var seesHours = actor.Has(PermissionCodes.FinancialView) || actor.Has(PermissionCodes.WorkEntryViewAll);
+        IReadOnlyList<DepartmentLabour> labour = seesHours ? await finance.LabourByDepartmentAsync(project, cancellationToken) : [];
+        ProjectDepartmentResponse WithHours(ProjectDepartmentResponse response)
+        {
+            int? planned = plans.TryGetValue((project.Id, response.Id), out var minutes) ? minutes : null;
+            if (!seesHours)
+            {
+                return response with { PlannedMinutes = planned };
+            }
+
+            var logged = labour.Where(l => l.TeamId == response.Id).Sum(l => l.Minutes);
+            return response with { PlannedMinutes = planned, LoggedMinutes = logged, Progress = DepartmentPlanRules.Progress(logged, planned) };
+        }
+
         if (!actor.Has(PermissionCodes.FinancialView))
         {
             return new ProjectDepartmentsResponse
             {
                 Name = name,
-                Departments = rows.Select(r => new ProjectDepartmentResponse { Id = r.TeamId, Name = r.Name }).ToList(),
+                Departments = rows.Select(r => WithHours(new ProjectDepartmentResponse { Id = r.TeamId, Name = r.Name })).ToList(),
             };
         }
 
-        var labour = await finance.LabourByDepartmentAsync(project, cancellationToken);
         // the price before VOs is split by the shares; each applied VO's amounts go to the departments it gave them to
         var vos = await designVos.AppliedAsync(project.Id, cancellationToken);
         var beforeVos = project.Revenue - vos.Total;
@@ -245,13 +337,13 @@ public sealed class ProjectDepartmentService(
         return new ProjectDepartmentsResponse
         {
             Name = name,
-            Departments = rows.Select(r => new ProjectDepartmentResponse
+            Departments = rows.Select(r => WithHours(new ProjectDepartmentResponse
             {
                 Id = r.TeamId,
                 Name = r.Name,
                 Share = r.Share,
                 Money = Money(labour.Where(l => l.TeamId == r.TeamId), Math.Round(beforeVos * r.Share, 2) + vos.ByDepartment.GetValueOrDefault(r.TeamId), people),
-            }).ToList(),
+            })).ToList(),
             Other = other.Count > 0 ? Money(other, 0, people) : null,
         };
     }
