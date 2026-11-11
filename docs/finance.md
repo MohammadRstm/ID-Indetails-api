@@ -3,7 +3,7 @@
 A domain's money as the dashboards, the Financials page, the projects list and the client pages show it. Every figure comes from the shared finance calculator (`Business/Finance/ProjectFinance.cs`, loaded by `IProjectFinanceService`; see [projects.md](projects.md), "Cost, profit and margin") and from the billing rules (`Business/Billing`, see [billing.md](billing.md)). Nothing here calculates cost, profit or margin a second way.
 
 - **Currency:** every amount is USD at the rate of its day. Anything with no rate that day is listed as unconverted, in its own currency, never dropped silently.
-- **Overhead** is never charged to a domain: it only appears at company level ([company.md](company.md)).
+- **Overhead and one-off company expenses** are never charged to a domain: they only appear at company level ([company.md](company.md)).
 - **Loading:** every endpoint loads its projects in one batch (one query per cost source, plus invoices, payments and exchange rates), never a query per project or client.
 - **One load per page:** the dashboard and the Financials page take their money from `overview`, which loads the domain once for all six parts. The separate endpoints load it each time, so a page asking for several of them loads it several times.
 
@@ -97,7 +97,7 @@ Judgements and simulations on one project or a whole domain, kept apart from the
 - **Agreed money:**
   - `agreedRevenue`: Design's payment with its applied VOs; a site's work + supervision + permits. 0 for internal work. `agreedWithTva` is what the client is agreed to pay, TVA included (0 for internal work).
   - `cost`: the project's cost by source, as its own `money` shows it: `labour`, `expenses`, `siteExpenses`, `groundLabour`, `total`, `unconverted[]` and `unpricedLabourMinutes`.
-  - `agreedProfit` = agreed revenue − cost + pocket money (paid by the pocket − moved to it), all time (owner decision Q1). Overhead, fixed salaries, paid leave and the overtime premium are company costs, never a project's.
+  - `agreedProfit` = agreed revenue − cost + pocket money (paid by the pocket − moved to it), all time (owner decision Q1). Overhead, one-off company expenses, fixed salaries, paid leave and the overtime premium are company costs, never a project's.
   - `margin` = profit ÷ revenue (`ProjectFinance.MarginOf`). It shows only once the project is done, at least 5% along or has 10 hours logged (`marginKnown`); otherwise `null`.
   - `standing` against the profit floor (`ProfitFloorRules.StandingOf`): `fine`, `close` (a margin of 10% or less) or `at_zero` (profit at zero or below). `null` where the floor doesn't apply: internal work, or no agreed amount yet (Design's payment or a site's work price at 0).
   - `progressPct`, `recognisedToDate` (revenue × progress, all of it once done) and `projected` (`cost`, `profit`, `margin`): cost ÷ progress, a straight line, for open client projects at least 5% along; `null` otherwise. The same rules as [projects.md](projects.md), "Cost, profit and margin".
