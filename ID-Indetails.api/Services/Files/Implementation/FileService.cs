@@ -22,7 +22,8 @@ namespace ID_Indetails.api.Services.Files.Implementation;
 /// Photos are stored made small (<see cref="Pictures"/>): upright, at most <see cref="Pictures.MaxEdge"/> px on their
 /// longest side, as WebP. Videos and voice notes are stored as they come, written straight to disk as they arrive.
 /// Who may download a file: whoever uploaded it; any signed-in person for a profile photo or the company logo; the
-/// chat's people for a message attachment; whoever may read the work entry for its attachment. Anyone else gets
+/// chat's people for a message attachment; whoever may read the work entry for its attachment; the writer and the
+/// readers of everyone's logs for a daily log's voice note. Anyone else gets
 /// not found. Uploads attached to nothing within a day are deleted.
 /// </summary>
 public sealed class FileService(
@@ -167,6 +168,12 @@ public sealed class FileService(
 
         if (uses.EntryIds.Count > 0
             && (await entries.ViewsByIdAsync(uses.EntryIds, cancellationToken)).Any(e => WorkEntryQueryService.CanRead(me, e)))
+        {
+            return true;
+        }
+
+        // a log's voice note is played by its writer and by whoever reads everyone's logs on that site's domain
+        if (uses.SiteLogs.Any(l => l.UserId == me.UserId || (me.Has(PermissionCodes.SiteLogViewAll) && me.CanSee(l.DomainCode))))
         {
             return true;
         }

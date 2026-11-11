@@ -5,6 +5,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Employees;
+using ID_Indetails.api.DTO.Response.Execution;
 using ID_Indetails.api.DTO.Response.Files;
 using ID_Indetails.api.DTO.Response.Messaging;
 using ID_Indetails.api.DTO.Response.Website;
@@ -416,6 +417,100 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await logged.ReadAsync<WorkEntryResponse>()).Attachment!.Id.ShouldBe(proof.Id);
         (await Client.GetAsync($"/api/files/{proof.Id}", designAdmin.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
         await (await Client.GetAsync($"/api/files/{proof.Id}", carl.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task A_daily_logs_voice_note_is_played_by_its_writer_and_the_readers_of_every_log_only()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, rami) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, layla) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [rami.User.Id, layla.User.Id]);
+
+        var memo = await UploadVoiceNoteAsync(Client, rami.AccessToken);
+        var logged = await Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "", voiceFileId = memo.Id }, rami.AccessToken);
+        ((int)logged.StatusCode).ShouldBe(201, await logged.Content.ReadAsStringAsync());
+        (await logged.ReadAsync<SiteLogResponse>()).VoiceNote!.Id.ShouldBe(memo.Id);
+
+        // the writer, and whoever reads every log of Execution
+        foreach (var reader in new[] { rami, siteAdmin, superAdmin })
+        {
+            var played = await Client.GetAsync($"/api/files/{memo.Id}", reader.AccessToken);
+            played.StatusCode.ShouldBe(HttpStatusCode.OK);
+            played.Content.Headers.ContentType!.MediaType.ShouldBe("audio/webm");
+            played.Headers.CacheControl!.NoStore.ShouldBeTrue();
+            (await played.Content.ReadAsByteArrayAsync()).ShouldBe(WebmVoice);
+        }
+
+        // a colleague on the same site, Design's admin and a designer: as if it didn't exist
+        foreach (var other in new[] { layla, designAdmin, designer })
+        {
+            await (await Client.GetAsync($"/api/files/{memo.Id}", other.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        }
+
+        // attached once: neither another log nor a chat message can take it
+        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "Again", voiceFileId = memo.Id }, rami.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.FileInUse);
+        await (await Client.PostJsonAsync($"/api/messages/direct/{superAdmin.User.Id}", new { body = "", attachmentIds = new[] { memo.Id } }, rami.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.FileInUse);
+    }
+
+    [Fact]
+    public async Task A_voice_note_on_a_log_is_never_cleaned_up_until_the_log_lets_it_go()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, rami) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [rami.User.Id]);
+        var first = await UploadVoiceNoteAsync(Client, rami.AccessToken);
+        var second = await UploadVoiceNoteAsync(Client, rami.AccessToken);
+        var neverUsed = await UploadVoiceNoteAsync(Client, rami.AccessToken);
+        var firstKey = await _steps.ScalarAsync<string>("SELECT storage_key FROM files WHERE id = @id", ("@id", first.Id));
+        var logged = await Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "", voiceFileId = first.Id }, rami.AccessToken);
+        var log = await logged.ReadAsync<SiteLogResponse>();
+        foreach (var file in new[] { first, second, neverUsed })
+        {
+            await _steps.ExecuteAsync("UPDATE files SET created_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY) WHERE id = @id", ("@id", file.Id));
+        }
+
+        async Task CleanUpAsync()
+        {
+            await using var scope = api.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<IFileService>().DeleteUnusedAsync();
+        }
+
+        async Task AssertPlayableAsync(long id, bool playable)
+        {
+            var response = await Client.GetAsync($"/api/files/{id}", rami.AccessToken);
+            if (playable)
+            {
+                response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            }
+            else
+            {
+                await response.ShouldFailWithAsync(404, ErrorCodes.NotFound);
+            }
+        }
+
+        // a day and more old, but it belongs to a log: kept, while a recording attached to nothing goes
+        await CleanUpAsync();
+        await AssertPlayableAsync(first.Id, true);
+        File.Exists(Path.Combine(api.FilesRoot, firstKey)).ShouldBeTrue();
+        await AssertPlayableAsync(neverUsed.Id, false);
+
+        // replaced: the old one is attached to nothing now, so it goes; the new one stays
+        (await Client.PutJsonAsync($"/api/site-logs/{log.Id}", new { body = "", voiceFileId = second.Id }, rami.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await CleanUpAsync();
+        await AssertPlayableAsync(first.Id, false);
+        File.Exists(Path.Combine(api.FilesRoot, firstKey)).ShouldBeFalse();
+        await AssertPlayableAsync(second.Id, true);
+
+        // removed (the words keep the log valid): it goes too
+        (await Client.PutJsonAsync($"/api/site-logs/{log.Id}", new { body = "Slab poured.", voiceFileId = (long?)null }, rami.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await CleanUpAsync();
+        await AssertPlayableAsync(second.Id, false);
     }
 
     /// <summary>An MP4's opening box: its size, "ftyp" and a known brand.</summary>
