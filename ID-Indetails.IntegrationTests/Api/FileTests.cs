@@ -82,16 +82,23 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         }
     }
 
+    /// <summary>The first bytes of a WebM (EBML header), an Ogg and an M4A: recordings, as far as the API can tell.</summary>
+    public static readonly byte[] WebmVoice = [0x1A, 0x45, 0xDF, 0xA3, .. Enumerable.Range(0, 64).Select(i => (byte)i)];
+
+    public static readonly byte[] OggVoice = [.. Encoding.ASCII.GetBytes("OggS"), .. Enumerable.Range(0, 64).Select(i => (byte)i)];
+
+    public static readonly byte[] M4aVoice = [0x00, 0x00, 0x00, 0x18, .. Encoding.ASCII.GetBytes("ftypM4A "), .. new byte[32]];
+
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
 
-    public static async Task<HttpResponseMessage> UploadAsync(HttpClient client, byte[] bytes, string name, string? accessToken)
+    public static async Task<HttpResponseMessage> UploadAsync(HttpClient client, byte[] bytes, string name, string? accessToken, string route = "/api/files")
     {
         using var form = new MultipartFormDataContent();
         var part = new ByteArrayContent(bytes);
         part.Headers.ContentType = new MediaTypeHeaderValue("image/png");
         form.Add(part, "file", name);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/files") { Content = form };
+        using var request = new HttpRequestMessage(HttpMethod.Post, route) { Content = form };
         if (accessToken is not null)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -103,6 +110,14 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
     public static async Task<FileResponse> UploadPngAsync(HttpClient client, string accessToken, string name = "plan.png")
     {
         var response = await UploadAsync(client, Png, name, accessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        return await response.ReadAsync<FileResponse>();
+    }
+
+    /// <summary>Uploads a voice note (a WebM unless told otherwise) and returns its file.</summary>
+    public static async Task<FileResponse> UploadVoiceNoteAsync(HttpClient client, string accessToken, byte[]? bytes = null, string name = "note.webm")
+    {
+        var response = await UploadAsync(client, bytes ?? WebmVoice, name, accessToken, "/api/files/voice");
         ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<FileResponse>();
     }
@@ -208,6 +223,60 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await UploadAsync(Client, Encoding.ASCII.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"), "logo.png", superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
         await (await UploadAsync(Client, [], "empty.png", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+    }
+
+    [Fact]
+    public async Task A_voice_note_is_stored_as_the_recording_its_bytes_say_it_is()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+
+        // the name and the browser's type are never trusted: a WebM called a PNG is still a WebM recording
+        var webm = await UploadVoiceNoteAsync(Client, superAdmin.AccessToken, name: "../../note.png");
+        webm.Kind.ShouldBe(FileKind.Audio);
+        webm.MimeType.ShouldBe("audio/webm");
+        webm.Name.ShouldBe("note.webm");
+        webm.SizeBytes.ShouldBe(WebmVoice.Length);
+
+        var ogg = await UploadVoiceNoteAsync(Client, superAdmin.AccessToken, OggVoice, "memo.mp3");
+        (ogg.Kind, ogg.MimeType, ogg.Name).ShouldBe((FileKind.Audio, "audio/ogg", "memo.ogg"));
+        var m4a = await UploadVoiceNoteAsync(Client, superAdmin.AccessToken, M4aVoice, "memo.wav");
+        (m4a.Kind, m4a.MimeType, m4a.Name).ShouldBe((FileKind.Audio, "audio/mp4", "memo.m4a"));
+
+        var played = await Client.GetAsync($"/api/files/{webm.Id}", superAdmin.AccessToken);
+        played.StatusCode.ShouldBe(HttpStatusCode.OK);
+        played.Content.Headers.ContentType!.MediaType.ShouldBe("audio/webm");
+        played.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        (await played.Content.ReadAsByteArrayAsync()).ShouldBe(WebmVoice);
+    }
+
+    [Fact]
+    public async Task Only_recordings_are_accepted_as_voice_notes_and_audio_stays_out_of_the_photo_and_video_route()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+
+        foreach (var notARecording in new[] { Png, Heic, Encoding.ASCII.GetBytes("%PDF-1.7 hello world"), Array.Empty<byte>() })
+        {
+            var refused = await UploadAsync(Client, notARecording, "note.webm", superAdmin.AccessToken, "/api/files/voice");
+            await refused.ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+        }
+
+        (await UploadAsync(Client, Png, "note.webm", null, "/api/files/voice")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // POST /api/files has no audio: Ogg is refused and a WebM is still a video there
+        await (await UploadAsync(Client, OggVoice, "note.ogg", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+        var video = await (await UploadAsync(Client, WebmVoice, "clip.webm", superAdmin.AccessToken)).ReadAsync<FileResponse>();
+        (video.Kind, video.MimeType).ShouldBe((FileKind.Video, "video/webm"));
+    }
+
+    [Fact]
+    public async Task A_voice_note_over_10_MB_is_refused()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        byte[] atTheLimit = [.. WebmVoice, .. new byte[10 * 1024 * 1024 - WebmVoice.Length]];
+
+        (await UploadVoiceNoteAsync(Client, superAdmin.AccessToken, atTheLimit)).SizeBytes.ShouldBe(atTheLimit.Length);
+        var tooBig = await UploadAsync(Client, [.. atTheLimit, 0], "long.webm", superAdmin.AccessToken, "/api/files/voice");
+        await tooBig.ShouldFailWithAsync(422, ErrorCodes.FileTooLarge);
     }
 
     [Fact]
