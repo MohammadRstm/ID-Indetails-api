@@ -4320,6 +4320,104 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectBudget", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTime>("SetAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("set_at");
+
+                    b.Property<long>("SetById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("set_by_id");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_budgets");
+
+                    b.HasIndex("SetById")
+                        .HasDatabaseName("ix_project_budgets_set_by_id");
+
+                    b.HasIndex("ProjectId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_project_budgets_project_id_version");
+
+                    b.ToTable("project_budgets", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectBudgetLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("AmountUsd")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount_usd");
+
+                    b.Property<long>("BudgetId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("budget_id");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)")
+                        .HasColumnName("category");
+
+                    b.Property<long?>("TeamId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("team_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_budget_lines");
+
+                    b.HasIndex("TeamId")
+                        .HasDatabaseName("ix_project_budget_lines_team_id");
+
+                    b.HasIndex("BudgetId", "Category")
+                        .IsUnique()
+                        .HasDatabaseName("ix_project_budget_lines_budget_id_category");
+
+                    b.HasIndex("BudgetId", "TeamId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_project_budget_lines_budget_id_team_id");
+
+                    b.ToTable("project_budget_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_budget_lines_amount_non_negative", "`amount_usd` >= 0");
+
+                            t.HasCheckConstraint("ck_project_budget_lines_one_key", "(`team_id` IS NULL) <> (`category` IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartment", b =>
                 {
                     b.Property<long>("ProjectId")
@@ -8796,6 +8894,39 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectBudget", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_budgets_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SetById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_budgets_users_set_by_id");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectBudgetLine", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.ProjectBudget", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("BudgetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_budget_lines_project_budgets_budget_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_project_budget_lines_teams_team_id");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartment", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -9625,6 +9756,11 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Requirements");
 
                     b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectBudget", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectMeeting", b =>

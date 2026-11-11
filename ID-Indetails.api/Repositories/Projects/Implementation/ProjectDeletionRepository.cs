@@ -44,6 +44,7 @@ public sealed class ProjectDeletionRepository(IdIndetailsDbContext db) : IProjec
         await Add(db.Payments.Where(p => p.ProjectId == projectId && p.VoidedAt != null), "voided payment");
         await Add(db.ProjectStaff.Where(s => s.ProjectId == projectId), "person on its site staff", "people on its site staff");
         await Add(db.ProjectDepartments.Where(d => d.ProjectId == projectId), "department share");
+        await Add(db.ProjectBudgets.Where(b => b.ProjectId == projectId), "version of its cost budget", "versions of its cost budget");
         await Add(db.PortalItems.Where(i => i.ProjectId == projectId && i.RemovedAt == null), "client portal item");
         await Add(db.PortalMessages.Where(m => m.ProjectId == projectId && m.DeletedAt == null), "client portal message");
         await Add(db.PortalComments.Where(c => c.ProjectId == projectId && c.DeletedAt == null), "client portal comment");
@@ -109,6 +110,7 @@ public sealed class ProjectDeletionRepository(IdIndetailsDbContext db) : IProjec
         await db.ProjectMeetings.Where(m => m.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectDepartmentChanges.Where(c => c.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectDepartments.Where(d => d.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+        await db.ProjectBudgets.Where(b => b.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectStaff.Where(s => s.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectPaymentChanges.Where(c => c.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
 

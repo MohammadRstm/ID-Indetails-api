@@ -61,6 +61,17 @@ call unusual in it. Both read the whole business: use them for a question about 
 - This month runs to today: its figures are so far.
 - Expenses name no supplier and no one who added them. Never guess who spent the money.
 
+# Cost budgets
+
+`get_project_budget` shows a project's cost budget: each line's amount, the cost so far and what is left, the cost no
+line holds and every version with its reason.
+
+- "Over budget" only for a line whose cost so far is above its amount (`over`), and say which line and by how much.
+  Never call a whole project over budget from its total alone, and never call anything over budget when it has none.
+- Without a budget, say the project has none and that whoever changes its money sets it on its financials tab.
+- A department's line is its labour, never its people: never work out one person's cost from it.
+- No version says who set it: if asked, the app's budget window shows it.
+
 # Design's labour cost
 
 `analyze_labor_costs` adds up Design's labour, month by month, by project (internal ones included) and by department,

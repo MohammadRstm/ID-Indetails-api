@@ -254,6 +254,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IAccountFiguresRepository, AccountFiguresRepository>();
         services.AddScoped<IBlockedChangeRepository, BlockedChangeRepository>();
         services.AddScoped<IProjectDepartmentRepository, ProjectDepartmentRepository>();
+        services.AddScoped<IProjectBudgetRepository, ProjectBudgetRepository>();
         services.AddScoped<IDesignVoRepository, DesignVoRepository>();
         services.AddScoped<IBoardLayoutRepository, BoardLayoutRepository>();
         services.AddScoped<IUserDeviceRepository, UserDeviceRepository>();
@@ -375,6 +376,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IBlockedChangeRecorder, BlockedChangeRecorder>();
         services.AddScoped<IBlockedChangeService, BlockedChangeService>();
         services.AddScoped<IProjectDepartmentService, ProjectDepartmentService>();
+        services.AddScoped<IProjectBudgetService, ProjectBudgetService>();
         services.AddScoped<IDesignVoService, DesignVoService>();
         services.AddScoped<ISiteMoneyService, SiteMoneyService>();
         services.AddScoped<ISupervisionWithdrawalService, SupervisionWithdrawalService>();
