@@ -83,7 +83,10 @@ public class SalaryAndSchedulePdfTests
         using var stream = new MemoryStream(pdf);
         var document = PdfReader.Open(stream, PdfDocumentOpenMode.Import);
         var page = document.Pages[0];
-        return (document.PageCount, page.Width.Point > page.Height.Point, page.Resources.Elements.GetDictionary("/XObject")?.Elements.Count ?? 0);
+        // PDFsharp keeps a landscape page's box upright and turns it a quarter with /Rotate, so read it as it is shown
+        var box = page.MediaBox;
+        var landscape = page.Rotate % 180 == 0 ? box.Width > box.Height : box.Height > box.Width;
+        return (document.PageCount, landscape, page.Resources.Elements.GetDictionary("/XObject")?.Elements.Count ?? 0);
     }
 
     [Theory]
