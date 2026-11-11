@@ -73,12 +73,20 @@ public class ProtonDepartmentActionsTests(ProtonAllActionsApiFactory api) : ICla
         var architecture = await _steps.DesignDepartmentAsync();
         var structure = await NewDepartmentAsync(superAdmin, "Structure");
         var project = await ProjectAsync(superAdmin, [architecture, structure]);
+        (await Client.PutJsonAsync($"/api/projects/{project.Id}/departments/plan",
+                new { departments = new[] { new { teamId = architecture, plannedHours = 10m } } }, superAdmin.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
 
         var (_, withMoney) = await ProposeAsync(superAdmin, "get_project_departments", new { project_id = project.Id });
         var data = withMoney["data"]!;
         var rows = data["departments"]!.AsArray();
         rows.Count.ShouldBe(2);
         rows.ShouldAllBe(r => r!["share_percent"]!.GetValue<decimal>() == 50m && r["budget"]!.GetValue<decimal>() == 5000m && r["left"]!.GetValue<decimal>() == 5000m);
+        // the planned hours, and progress by hours: nothing logged yet of 600 planned minutes
+        var planned = rows.Single(r => r!["id"]!.GetValue<long>() == architecture)!;
+        planned["planned_minutes"]!.GetValue<int>().ShouldBe(600);
+        planned["progress_pct"]!.GetValue<int>().ShouldBe(0);
+        rows.Single(r => r!["id"]!.GetValue<long>() == structure)!["planned_minutes"].ShouldBeNull();
         data["history"]!.AsArray().ShouldHaveSingleItem()!["kind"]!.GetValue<string>().ShouldBe("Created");
 
         // an admin without financial:view sees who works on it and nothing about money or the history
@@ -86,6 +94,7 @@ public class ProtonDepartmentActionsTests(ProtonAllActionsApiFactory api) : ICla
         var plainRows = plain["data"]!["departments"]!.AsArray();
         plainRows.Count.ShouldBe(2);
         plainRows.ShouldAllBe(r => r!["share_percent"] == null && r["budget"] == null && r["people"] == null);
+        plainRows.Single(r => r!["id"]!.GetValue<long>() == architecture)!["planned_minutes"]!.GetValue<int>().ShouldBe(600);
         plain["data"]!["history"].ShouldBeNull();
 
         // the project's own card names its departments

@@ -36,6 +36,35 @@ public class ProjectDepartmentConfiguration : IEntityTypeConfiguration<ProjectDe
     }
 }
 
+public class ProjectDepartmentPlanConfiguration : IEntityTypeConfiguration<ProjectDepartmentPlan>
+{
+    public void Configure(EntityTypeBuilder<ProjectDepartmentPlan> builder)
+    {
+        builder.ToTable("project_department_plans", t =>
+            t.HasCheckConstraint("ck_project_department_plans_planned_minutes_positive", "`planned_minutes` > 0"));
+
+        builder.HasKey(x => x.Id);
+        builder.HasIndex(x => new { x.ProjectId, x.TeamId }).IsUnique();
+
+        // the plans go with their project when an archived one made by mistake is deleted
+        builder.HasOne<Project>()
+            .WithMany()
+            .HasForeignKey(x => x.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // a department's plan is removed with it from the project, so the team is never deleted under one
+        builder.HasOne<Team>()
+            .WithMany()
+            .HasForeignKey(x => x.TeamId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.SetById)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public class ProjectDepartmentChangeConfiguration : IEntityTypeConfiguration<ProjectDepartmentChange>
 {
     public void Configure(EntityTypeBuilder<ProjectDepartmentChange> builder)

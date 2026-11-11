@@ -71,6 +71,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<ProjectDepartmentChange> ProjectDepartmentChanges => Set<ProjectDepartmentChange>();
 
+    public DbSet<ProjectDepartmentPlan> ProjectDepartmentPlans => Set<ProjectDepartmentPlan>();
+
     public DbSet<ProjectBudget> ProjectBudgets => Set<ProjectBudget>();
 
     public DbSet<ProjectBudgetLine> ProjectBudgetLines => Set<ProjectBudgetLine>();

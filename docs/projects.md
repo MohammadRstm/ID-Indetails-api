@@ -43,10 +43,11 @@ A Design project is worked on by one or more departments (teams; the app calls t
 
 | Endpoint | Permission | What it does |
 |---|---|---|
-| `GET /api/projects/{id}/departments` | `project:view` | The departments. With `financial:view`, each one's `share` and `money`: `budget` (the price before TVA × its share), `cost` and `minutes` of the hours logged in it, `left` (below zero when it is over its budget), `unconverted` (labour logged in it with no exchange rate on its day, per currency: left out of `cost` and `left`, never counted as 0), and each person's hours and cost month by month with that month's hourly rate. `other` holds hours of people in no department, or in one no longer on the project. |
+| `GET /api/projects/{id}/departments` | `project:view` | The departments, each with its `plannedMinutes` (null while it has no plan). With `financial:view` or `work_entry:view_all`, also its `loggedMinutes` (the minutes logged in it on the project) and `progress` (below). With `financial:view`, each one's `share` and `money`: `budget` (the price before TVA × its share), `cost` and `minutes` of the hours logged in it, `left` (below zero when it is over its budget), `unconverted` (labour logged in it with no exchange rate on its day, per currency: left out of `cost` and `left`, never counted as 0), and each person's hours and cost month by month with that month's hourly rate. `other` holds hours of people in no department, or in one no longer on the project. |
 | `GET /api/projects/{id}/departments/history` | `financial:view` | Every change of the split, newest first: `kind` (`created`, `departments`, `shares`), the departments and shares `before` and `after` (named as they were then), the reason, who and when |
 | `PUT /api/projects/{id}/departments` | `project:edit` | `{ departmentIds }`: the departments. Any change puts the shares back to equal; hours waiting for an added department go through (below). A department with hours logged on the project stays (`422 department_has_hours`). |
 | `PUT /api/projects/{id}/departments/shares` | `financial:write` | `{ shares: [{ departmentId, share }], reason? }`: a share for each department, adding up to 100% (`400`); the reason is optional, kept in the history when given |
+| `PUT /api/projects/{id}/departments/plan` | `project:edit` | `{ departments: [{ teamId, plannedHours }] }`: the hours planned for some of the departments; the others keep theirs. Returns the departments, as `GET` shows them to the caller (see "Planned hours") |
 
 - Execution sites have no departments (`422 not_for_this_domain`). A finished project's departments and shares are locked with its money (`422 project_locked`).
 - **Each hour stays with its department.** A work entry keeps its logger's department when it was logged (`work_entries.team_id`): their cost counts in that budget even after they move to another department. Moving an entry to another project counts it in the logger's department then. Costs are the project's labour costs as they are (pay, overtime, paid breaks), only grouped. Expenses stay with the project; the project's profit and its floor are unchanged, while a department may go over its budget.
@@ -56,6 +57,33 @@ A Design project is worked on by one or more departments (teams; the app calls t
   - Such hours are never forced (`422 department_still_missing`); whoever sees the money may dismiss them.
   - Someone with no department logs only on projects with none (`422 department_required`). Moving hours to a project without the logger's department is refused (`422 department_not_on_project`).
 - A team that is a department of a project can't be deleted (`422 team_on_projects`): rename it instead.
+
+### Planned hours
+
+How many hours each department is expected to take on a Design project (the owner's decision Q7 in
+[proton-financial-intelligence-plan.md](proton-financial-intelligence-plan.md)): Design's progress by hours.
+
+- **Setting them.** Whoever edits the project's departments (`project:edit`) plans them, one department at a time or
+  several at once: `plannedHours` above 0 and at most 100,000, to two places, kept as whole minutes (`plannedMinutes`);
+  `null` clears a department's plan. 1 to 50 departments per request, each once; each must be one of the project's
+  departments (`400 validation_failed`). Execution sites have none (`422 not_for_this_domain`); another business's
+  project reads as `404`. Planned hours are hours, not money, so they aren't locked when the project's money is.
+- **One plan per department** (`project_department_plans`). A change replaces it; clearing it removes it. Setting the
+  same hours again changes nothing.
+- **The revision is in the activity log.** Each department whose plan was set, changed or cleared writes a
+  `department_plan_set` event (subject: the project) with `teamId`, `department` (its name then), `plannedMinutes` and
+  `prevPlannedMinutes` in the payload (null for none), who and when.
+- **A department taken off the project** takes its plan with it, recorded the same way.
+- **Progress** = the minutes logged in the department on the project ÷ its planned minutes, a fraction to four places
+  (`0.75` is three quarters). It passes 1 once more is logged than planned. A department without a plan has none.
+  The logged minutes are the departments window's own (each hour in the department it was logged in;
+  `Business/Projects/DepartmentPlanRules.cs`).
+- **Who sees what.** `plannedMinutes` is shown to everyone who sees the departments. `loggedMinutes` and `progress` only
+  to callers with `financial:view` or `work_entry:view_all`: a department may be one person, and employees never see
+  their colleagues' hours.
+- Financial Intelligence's project insight (`GET /api/finance/insights/projects/{id}`) gives each department its
+  `plannedMinutes` and `progress` too, and Proton reads them with `get_project_departments` and
+  `get_project_financial_summary` (hours only).
 
 ## Cost budget
 
@@ -204,7 +232,7 @@ Only a project made by mistake (a flake) is ever deleted, with everything on it.
   - pocket money moves;
   - supervision taken;
   - hours logged. Hours in a closed month never change, so they keep it for good; this month's are moved to the right project first, after reopening it.
-- **What goes with it:** its requirements, meetings, staff, departments and shares, BOQs and VOs (with their lines and deliveries), Design VOs, price changes, project and site expenses, weeks of labour, site logs, draft invoices, voided payments, removed supervision withdrawals and deleted hours entries, waiting price changes and pocket money requests, its notifications and its activity, and its client portal (items, files, messages, comments, uploads, invitations and the clients' access to it). The portal's stored files are deleted from the content store once the transaction commits; the weekly check removes any left behind.
+- **What goes with it:** its requirements, meetings, staff, departments and shares (with their planned hours), BOQs and VOs (with their lines and deliveries), Design VOs, price changes, project and site expenses, weeks of labour, site logs, draft invoices, voided payments, removed supervision withdrawals and deleted hours entries, waiting price changes and pocket money requests, its notifications and its activity, and its client portal (items, files, messages, comments, uploads, invitations and the clients' access to it). The portal's stored files are deleted from the content store once the transaction commits; the weekly check removes any left behind.
 - **What stays:** the client and the people. A website page that showed it stays, no longer linked to it. A chat message that shared one of its deleted hours entries keeps its text.
 - **The one trace it leaves:** a `project_deleted` event with no `project_id`, the deleted project's id as `subject_id`, and its `title` and what it held (`removed`) in the payload.
 - It can't be undone, except from a backup.
@@ -248,4 +276,4 @@ These are **Design** projects' expenses. An Execution site records its costs as 
 
 ## Activity
 
-`project_created`, `project_updated`, `project_owner_set`, `project_client_set`, `revenue_set`, `revenue_changed`, `project_fee_set`, `supervision_rate_set`, `project_hold`, `project_resumed`, `project_completed`, `project_archived`, `project_reopened`, `project_finalized` (the frozen revenue in `amount`), `progress_set`. Amounts go in the event's `amount` and `prev_amount` columns, never in the payload. A rate is a fraction (0.125 is 12.5%), so `supervision_rate_set` keeps it in the payload as `rate` and `prevRate`, with no amount; the feed shows that payload only with `financial:view`. `material_markup_set` is no longer written: older rows keep their `markup` and `prevMarkup` payload, with the same rule.
+`project_created`, `project_updated`, `project_owner_set`, `project_client_set`, `revenue_set`, `revenue_changed`, `project_fee_set`, `supervision_rate_set`, `project_hold`, `project_resumed`, `project_completed`, `project_archived`, `project_reopened`, `project_finalized` (the frozen revenue in `amount`), `progress_set`, `department_plan_set` (a department's planned hours, in the payload; see "Planned hours"). Amounts go in the event's `amount` and `prev_amount` columns, never in the payload. A rate is a fraction (0.125 is 12.5%), so `supervision_rate_set` keeps it in the payload as `rate` and `prevRate`, with no amount; the feed shows that payload only with `financial:view`. `material_markup_set` is no longer written: older rows keep their `markup` and `prevMarkup` payload, with the same rule.

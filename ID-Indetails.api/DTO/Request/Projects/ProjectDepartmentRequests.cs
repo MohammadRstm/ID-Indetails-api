@@ -16,3 +16,12 @@ public sealed record SetDepartmentSharesRequest
 
 /// <param name="Share">A fraction, 0.25 is 25%, to four places.</param>
 public sealed record DepartmentShareRequest(long DepartmentId, decimal Share);
+
+/// <summary>The hours planned for some of a Design project's departments; the departments left out keep theirs.</summary>
+public sealed record SetDepartmentPlanRequest
+{
+    public IReadOnlyList<DepartmentPlanRequest> Departments { get; init; } = [];
+}
+
+/// <param name="PlannedHours">Above 0 and at most 100,000, to two places; null clears the department's plan.</param>
+public sealed record DepartmentPlanRequest(long TeamId, decimal? PlannedHours);

@@ -127,6 +127,8 @@ public static class ProtonCoverage
         Open("Projects.RemovePhoto", "the photo is chosen and taken off in the same place on the project's page: it opens it"),
         Action("ProjectDepartments.Set", "propose_project_departments", T1, ProtonFamily.Core),
         Action("ProjectDepartments.SetShares", "propose_department_shares", T2, ProtonFamily.Money),
+        // hours, not money, so standard in Core like the departments themselves; until built Proton opens the departments window
+        Planned("ProjectDepartments.SetPlan", T1, ProtonFamily.Core),
         // a money change, proposed on a card like the others once built; until then Proton opens the budget window
         Planned("ProjectBudgets.Set", T2, ProtonFamily.Money),
         Action("DesignVos.Create", "propose_design_vo", T2, ProtonFamily.Money),

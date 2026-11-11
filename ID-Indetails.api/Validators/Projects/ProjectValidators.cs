@@ -87,6 +87,33 @@ public sealed class SetDepartmentSharesRequestValidator : AbstractValidator<SetD
     }
 }
 
+public sealed class SetDepartmentPlanRequestValidator : AbstractValidator<SetDepartmentPlanRequest>
+{
+    public SetDepartmentPlanRequestValidator()
+    {
+        RuleFor(x => x.Departments)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("Plan the hours of at least one department.")
+            .Must(d => d.Count >= 1).WithMessage("Plan the hours of at least one department.")
+            .Must(d => d.Count <= DepartmentPlanRules.MaxDepartments).WithMessage($"Plan at most {DepartmentPlanRules.MaxDepartments} departments at once.")
+            .Must(d => d.Where(x => x is not null).GroupBy(x => x.TeamId).All(g => g.Count() == 1))
+            .WithMessage("Plan each department once.");
+        RuleForEach(x => x.Departments)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("A department is missing.")
+            .ChildRules(department =>
+            {
+                department.RuleFor(d => d.TeamId).GreaterThan(0).WithMessage("The department is invalid.");
+                // null clears the plan
+                department.RuleFor(d => d.PlannedHours)
+                    .Cascade(CascadeMode.Stop)
+                    .Must(h => h is null || h > 0).WithMessage("The planned hours must be above 0; leave them empty to clear the plan.")
+                    .Must(h => h is null || h <= DepartmentPlanRules.MaxHours).WithMessage("The planned hours can be at most 100,000.")
+                    .Must(h => h is not { } hours || hours == Math.Round(hours, 2)).WithMessage("The planned hours can have at most two decimals.");
+            });
+    }
+}
+
 public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProjectRequest>
 {
     public UpdateProjectRequestValidator()

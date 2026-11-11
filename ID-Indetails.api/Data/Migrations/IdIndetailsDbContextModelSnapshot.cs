@@ -4516,6 +4516,55 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartmentPlan", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("PlannedMinutes")
+                        .HasColumnType("int")
+                        .HasColumnName("planned_minutes");
+
+                    b.Property<long>("ProjectId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime>("SetAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("set_at");
+
+                    b.Property<long>("SetById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("set_by_id");
+
+                    b.Property<long>("TeamId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("team_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_project_department_plans");
+
+                    b.HasIndex("SetById")
+                        .HasDatabaseName("ix_project_department_plans_set_by_id");
+
+                    b.HasIndex("TeamId")
+                        .HasDatabaseName("ix_project_department_plans_team_id");
+
+                    b.HasIndex("ProjectId", "TeamId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_project_department_plans_project_id_team_id");
+
+                    b.ToTable("project_department_plans", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_project_department_plans_planned_minutes_positive", "`planned_minutes` > 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectExpense", b =>
                 {
                     b.Property<long>("Id")
@@ -8971,6 +9020,30 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasConstraintName("fk_project_department_share_changes_projects_project_id");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.ProjectDepartmentPlan", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_department_plans_projects_project_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SetById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_department_plans_users_set_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_project_department_plans_teams_team_id");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.ProjectExpense", b =>
