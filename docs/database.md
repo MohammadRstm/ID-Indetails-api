@@ -37,7 +37,7 @@ The database is the second line of defence. The API must still filter every quer
 |---|---|
 | Identity and access | `domains`, `roles`, `permissions`, `role_permissions`, `user_permission_overrides`, `users`, `teams`, `employment_periods`, `user_pay_history`, `refresh_tokens`, `user_invitations`, `password_reset_tokens` |
 | Clients | `clients`, `client_contacts` |
-| Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings` (with general meetings, about no project), `meeting_attendees`, `project_expenses` (Design's), `blocked_changes` |
+| Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings` (with general meetings, about no project), `meeting_attendees`, `project_expenses` (Design's), `blocked_changes`, `project_budgets` and `project_budget_lines` (cost budgets, in versions) |
 | Design work | `work_entries`, `work_entry_comments` |
 | Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
@@ -197,6 +197,12 @@ The `WebsiteAnalyticsPermission` migration seeds the `website_analytics:view` pe
 The `TimeOff` migration (9 Nov 2026) adds `time_off_requests` ([time-off.md](time-off.md)) with its checks (`ck_time_off_requests_days`, `_status`, `_is_paid`, `_ended_on`), foreign keys (RESTRICT) to the person, whoever decided and whoever ended it, and indexes on `(user_id, status, first_day)` and `(status, first_day)`. It seeds the `time_off:request` permission (limited to Design, held by employees) and the `time_off:decide` permission (held by super admins). `Down` drops the table and deletes both permissions and their role rows. The model now has 102 tables.
 
 The `BoqAuthors` migration (10 Nov 2026) adds `boqs.submitted_at` (datetime(3), null) and `boqs.submitted_lines` (mediumtext, null) with the checks `ck_boqs_submitted_internal` and `ck_boqs_submitted_lines`, and makes `boq:create` a company permission (`permissions.domain_code` NULL, with the new description). Data change: every existing internal draft gets `submitted_at = created_at` and no copy of its lines, so it counts as submitted and nothing disappears for those who managed pricing. `Down` drops the checks and columns and sets the permission back to Execution.
+
+The `ProjectBudgets` migration (11 Nov 2026) adds a project's cost budget, in versions ([projects.md](projects.md#cost-budget)):
+
+- `project_budgets` (id, `project_id`, `version` int, `effective_from` date, `reason` varchar(500), `set_by_id`, `set_at`), unique on `(project_id, version)`, with foreign keys to `projects` (CASCADE: a project deleted by mistake takes its budget with it) and to `users` (RESTRICT).
+- `project_budget_lines` (id, `budget_id`, `team_id` bigint null, `category` varchar(40) null, `amount_usd` decimal(18,2)), unique on `(budget_id, team_id)` and on `(budget_id, category)`, with foreign keys to `project_budgets` (CASCADE) and `teams` (RESTRICT), and the checks `ck_project_budget_lines_amount_non_negative` (`amount_usd >= 0`) and `ck_project_budget_lines_one_key` (exactly one of `team_id` and `category`).
+- No data changes. `Down` drops both tables. The model now has 104 tables.
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 

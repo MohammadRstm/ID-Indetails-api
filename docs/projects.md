@@ -57,6 +57,36 @@ A Design project is worked on by one or more departments (teams; the app calls t
   - Someone with no department logs only on projects with none (`422 department_required`). Moving hours to a project without the logger's department is refused (`422 department_not_on_project`).
 - A team that is a department of a project can't be deleted (`422 team_on_projects`): rename it instead.
 
+## Cost budget
+
+What a project may cost, set by whoever changes its money (the owner's decision Q8 in
+[proton-financial-intelligence-plan.md](proton-financial-intelligence-plan.md)): line by line, in USD net of TVA, kept
+in versions. Internal projects may have one too. The rules are `Business/Projects/BudgetRules.cs`.
+
+| Endpoint | Permission | What it does |
+|---|---|---|
+| `GET /api/projects/{id}/budget` | `financial:view` | `{ projectId, domain, current, lines, uncovered, unconverted, history }`. `current` is the latest version (`version`, `effectiveFrom`, `reason`, `setByName`, `setAt`, `total`), null while there is none. `lines`: one per line of it, departments by name first, then the categories in their order: `teamId` or `category`, `name` (the department's, or the category in words: "Expenses", "Materials", …, "Ground labour"), `amount`, `cost` (the cost so far on it, all time) and `left` (amount − cost, below zero when it is over). `uncovered`: cost so far on things with no line (all of it while there is no budget). `unconverted`: costs with no exchange rate on their day, per currency, in no figure. `history`: every version, the current one included, newest first, each with its total |
+| `PUT /api/projects/{id}/budget` | `financial:write` or `project:pricing_manage` | `{ reason, effectiveFrom?, lines: [{ teamId?, category?, amount }] }`: the next version, returned as the `GET` does. `financial:write` on a Design project and `project:pricing_manage` on a site (`403` otherwise), with `financial:view` to see what it returns |
+
+- **Lines.** Design: a department of the project (`teamId`) or `expenses`. Execution: a site expense category
+  (`materials`, `contractor`, `equipment`, `fees`, `other`) or `ground_labour`; sites have no departments. Each line is
+  a department or a category, never both, and appears once. 1 to 50 lines, each 0 to 100,000,000 USD to the cent
+  (`400`). A department not on the project, a category of the other business or a department on a site is
+  `400 budget_line_invalid` (on `lines[i].teamId` or `lines[i].category`).
+- **Versions.** Each `PUT` adds the next version (1, 2, …) with its reason (required, up to 500 characters); earlier
+  versions are kept as they were, never edited. `effectiveFrom` is the company day it counts from: today when left
+  out, never a day still to come (`400` on `effectiveFrom`). The latest version is the current one.
+- **Cost on a line** comes from the shared calculator, never a second formula: a department's labour as the
+  departments window counts it (each hour in the department it was logged in, paid breaks included), the project's
+  expenses, a site's expenses of the category at each day's rate (as its account figures split them) and its ground
+  labour. Employee labour on a site, hours in no department of the budget and costs of a category with no line are
+  `uncovered`. Lines and `uncovered` add up to the project's cost, give or take the rounding of each to the cent.
+- Each version writes a `budget_set` activity event: its total in the amount, the previous version's in the previous
+  amount, the version number in the payload (money columns only for `financial:view`).
+- A project deleted by mistake takes its budget with it. A team with a line in any version of a budget can't be
+  deleted (`422 team_on_projects`), even once it is off the project: rename it instead.
+- Proton reads it with `get_project_budget` ([proton.md](proton.md)); setting a budget through Proton is planned.
+
 ## Design variation orders
 
 A Design client project's price changes with **variation orders** (VOs): lines before TVA that add work (above zero) or take it out (below). The pencil on the customer payment stays for correcting mistakes only. Each VO is numbered `VO-YYYY-NNN` in a series of Design's own (Execution's BOQ variation orders have theirs).
