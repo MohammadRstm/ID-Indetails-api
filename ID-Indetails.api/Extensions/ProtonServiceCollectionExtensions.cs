@@ -137,6 +137,8 @@ public static class ProtonServiceCollectionExtensions
         services.AddScoped<IProtonTool, DetectProjectFinancialRisksTool>();
         services.AddScoped<IProtonTool, AnalyzeExpenseTrendsTool>();
         services.AddScoped<IProtonTool, AnalyzeLaborCostsTool>();
+        // a project's cost budget against its cost so far, without who set each version
+        services.AddScoped<IProtonTool, GetProjectBudgetTool>();
 
         // The user's own chats and notifications, read as them through their services (no message bodies).
         services.AddScoped<IProtonTool, FindRecipientTool>();

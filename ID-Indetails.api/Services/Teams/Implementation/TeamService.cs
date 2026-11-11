@@ -25,6 +25,7 @@ public sealed class TeamService(
     IPermissionService permissions,
     ITeamRepository teams,
     IProjectDepartmentRepository departments,
+    IProjectBudgetRepository budgets,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
     IClock clock) : ITeamService
@@ -99,6 +100,13 @@ public sealed class TeamService(
         {
             throw new BusinessRuleException(ErrorCodes.TeamOnProjects,
                 $"{team.Name} is a department of {(count == 1 ? "a project" : $"{count} projects")}, so it can't be deleted. Rename it instead.");
+        }
+
+        // a project's cost budget keeps its department lines, even once the department is off the project
+        if (await budgets.HasTeamAsync(team.Id, cancellationToken))
+        {
+            throw new BusinessRuleException(ErrorCodes.TeamOnProjects,
+                $"{team.Name} has a line in a project's cost budget, so it can't be deleted. Rename it instead.");
         }
 
         // Its chat history is kept, and the chat can't outlive the team.

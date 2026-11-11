@@ -71,6 +71,10 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<ProjectDepartmentChange> ProjectDepartmentChanges => Set<ProjectDepartmentChange>();
 
+    public DbSet<ProjectBudget> ProjectBudgets => Set<ProjectBudget>();
+
+    public DbSet<ProjectBudgetLine> ProjectBudgetLines => Set<ProjectBudgetLine>();
+
     public DbSet<DesignVo> DesignVos => Set<DesignVo>();
 
     public DbSet<DesignVoLine> DesignVoLines => Set<DesignVoLine>();

@@ -160,3 +160,35 @@ public sealed class ProjectReportQueryValidator : AbstractValidator<ProjectRepor
             .WithMessage("The range must end on or after its start.");
     }
 }
+
+public sealed class SetProjectBudgetRequestValidator : AbstractValidator<SetProjectBudgetRequest>
+{
+    public SetProjectBudgetRequestValidator()
+    {
+        RuleFor(x => x.Reason).ClientText("The reason", BudgetRules.MaxReasonLength, required: true);
+        RuleFor(x => x.EffectiveFrom).ThisCentury("The start");
+        RuleFor(x => x.Lines)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("Budget at least one line.")
+            .Must(l => l.Count >= 1).WithMessage("Budget at least one line.")
+            .Must(l => l.Count <= BudgetRules.MaxLines).WithMessage($"A budget has at most {BudgetRules.MaxLines} lines.")
+            .Must(l => l.Where(x => x is not null).GroupBy(x => (x.TeamId, x.Category)).All(g => g.Count() == 1))
+            .WithMessage("Each department or category is budgeted once.");
+        RuleForEach(x => x.Lines)
+            .Cascade(CascadeMode.Stop)
+            .NotNull().WithMessage("A line is missing.")
+            .ChildRules(line =>
+            {
+                line.RuleFor(l => l.TeamId)
+                    .Must((l, teamId) => (teamId is null) != (l.Category is null))
+                    .WithMessage("A line is a department or a category, not both.");
+                line.RuleFor(l => l.TeamId).GreaterThan(0).When(l => l.TeamId is not null).WithMessage("The department is invalid.");
+                line.RuleFor(l => l.Category)
+                    .Must(c => c is null || BudgetRules.AllCategories.Contains(c))
+                    .WithMessage($"The category must be one of {string.Join(", ", BudgetRules.AllCategories)}.");
+                line.RuleFor(l => l.Amount)
+                    .Amount("The amount")
+                    .Must(a => a <= BudgetRules.MaxAmount).WithMessage("The amount can be at most 100,000,000 USD.");
+            });
+    }
+}

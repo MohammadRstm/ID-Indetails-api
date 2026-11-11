@@ -229,7 +229,7 @@ public class ProtonToolCatalogTests
     {
         var properties = new HashSet<string>();
         var types = new HashSet<Type>();
-        foreach (var root in new[] { typeof(ProjectFinancialSummary), typeof(ProjectScenario), typeof(ProjectRiskRegister), typeof(ExpenseTrends), typeof(LabourInsight) })
+        foreach (var root in new[] { typeof(ProjectFinancialSummary), typeof(ProjectScenario), typeof(ProjectRiskRegister), typeof(ExpenseTrends), typeof(LabourInsight), typeof(ProjectCostBudget) })
         {
             Collect(root, properties, types);
         }
@@ -244,6 +244,8 @@ public class ProtonToolCatalogTests
         types.ShouldContain(typeof(LabourMonthRow));
         types.ShouldContain(typeof(LabourProjectRow));
         types.ShouldContain(typeof(LabourDepartmentRow));
+        types.ShouldContain(typeof(BudgetLineRow));
+        types.ShouldContain(typeof(BudgetVersionRow));
         foreach (var type in types)
         {
             type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -322,6 +324,24 @@ public class ProtonToolCatalogTests
         ProtonToolSearch.Core.ShouldContain(summary.Name);
         ProtonToolSearch.Core.ShouldNotContain(scenario.Name);
         scenario.InputSchema["required"]!.AsArray().Select(r => r!.ToString()).ShouldBe(["project_id"]);
+    }
+
+    /// <summary>
+    /// A project's cost budget is money: financial:view from its endpoint, one project so not heavy, found through tool
+    /// search, and a version never says who set it (no one beside an amount).
+    /// </summary>
+    [Fact]
+    public void The_budget_tool_mirrors_its_endpoint_and_is_deferred()
+    {
+        var budget = Tools.Single(t => t.Name == "get_project_budget");
+
+        budget.Endpoint.Name.ShouldBe($"ProjectBudgets.{nameof(ProjectBudgetsController.Get)}");
+        budget.Endpoint.Policies.ShouldBe([AuthorizationPolicies.PermissionPrefix + PermissionCodes.FinancialView]);
+        budget.Endpoint.Writes.ShouldBeFalse();
+        budget.Heavy.ShouldBeFalse();
+        ProtonToolSearch.Core.ShouldNotContain(budget.Name);
+        budget.InputSchema["required"]!.AsArray().Select(r => r!.ToString()).ShouldBe(["project_id"]);
+        typeof(BudgetVersionRow).GetProperties().Select(p => p.Name).ShouldNotContain("SetByName");
     }
 
     private static void Collect(Type type, HashSet<string> properties, HashSet<Type> seen)
