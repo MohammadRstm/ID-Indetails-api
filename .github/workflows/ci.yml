@@ -38,10 +38,16 @@ env:
   MYSQL_ROOT_PASSWORD: ci-only-root-password
 
 jobs:
+  # Two machines share the tests, each with its own database: the unit tests and half the integration tests on the
+  # first, the other half on the second. The images are built and checked alongside them, not after.
   test:
-    name: Build and tests
+    name: Build and tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,28 +77,82 @@ jobs:
       - name: Build
         run: dotnet build ID-Indetails.slnx -c Release --no-restore -warnaserror
 
-      # Proton reads a video through pictures ffmpeg takes, as the API's image does (its test is skipped without it).
-      # Non-interactive, so a package that asks a question can't wait for an answer until the job's time runs out.
-      # Optional: a slow Ubuntu mirror only means that test is skipped, not a failed run.
+      # Proton reads a video through pictures ffmpeg takes, as the API's image does: a unit test checks it (skipped
+      # without ffmpeg). A static build from GitHub, checked against its published checksum and kept in the cache for
+      # the month, instead of Ubuntu's package mirror on every run (anywhere from 20 seconds to 5 minutes). Optional:
+      # if it can't be had, only that test is skipped.
+      - name: Month, for the ffmpeg cache
+        id: month
+        if: matrix.shard == 1
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache ffmpeg
+        if: matrix.shard == 1
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/ffmpeg
+          key: ffmpeg-static-${{ steps.month.outputs.month }}
+
       - name: Install ffmpeg
-        timeout-minutes: 5
+        if: matrix.shard == 1
+        timeout-minutes: 3
         continue-on-error: true
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: command -v ffmpeg || (sudo -E apt-get update -q && sudo -E apt-get install -y -q --no-install-recommends ffmpeg)
+        run: |
+          # downloaded aside, and moved into the cached folder only once its checksum matches
+          if [ ! -x "$HOME/ffmpeg/ffmpeg" ]; then
+            name=ffmpeg-master-latest-linux64-gpl.tar.xz
+            base=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest
+            work=$(mktemp -d)
+            curl -fsSL --retry 3 -o "$work/ffmpeg.tar.xz" "$base/$name"
+            curl -fsSL --retry 3 -o "$work/checksums.sha256" "$base/checksums.sha256"
+            expected=$(awk -v f="$name" '$2 == f || $2 == "*" f { print $1 }' "$work/checksums.sha256")
+            actual=$(sha256sum "$work/ffmpeg.tar.xz" | cut -d ' ' -f 1)
+            if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+              echo "::warning::ffmpeg's checksum didn't match, so its test is skipped"
+              exit 1
+            fi
+            tar -xJf "$work/ffmpeg.tar.xz" -C "$work" --strip-components=2 --wildcards '*/bin/ffmpeg' '*/bin/ffprobe'
+            mkdir -p "$HOME/ffmpeg"
+            mv "$work/ffmpeg" "$work/ffprobe" "$HOME/ffmpeg/"
+          fi
+          echo "$HOME/ffmpeg" >> "$GITHUB_PATH"
 
       - name: Unit tests
+        if: matrix.shard == 1
         run: dotnet test ID-Indetails.UnitTests -c Release --no-build
 
       - name: Load-test tool tests
+        if: matrix.shard == 1
         run: dotnet test load-tests/tool-tests -c Release --no-build
 
+      # Every other test class (by file) on the first machine; the second runs everything the first doesn't, so a
+      # class can never be left out, whatever its file is called.
       - name: Integration tests
         env:
           ID_INDETAILS_TEST_MYSQL_ADMIN: Server=127.0.0.1;Port=3306;User=root;Password=${{ env.MYSQL_ROOT_PASSWORD }};
-        run: dotnet test ID-Indetails.IntegrationTests -c Release --no-build
+          SHARD: ${{ matrix.shard }}
+        run: |
+          first=()
+          i=0
+          while IFS= read -r file; do
+            if [ $((i % 2)) -eq 0 ]; then
+              ns=$(sed -n 's/^namespace \([A-Za-z0-9_.]*\).*/\1/p' "$file" | head -n 1)
+              first+=("$ns.$(basename "$file" .cs).")
+            fi
+            i=$((i + 1))
+          done < <(find ID-Indetails.IntegrationTests -name '*Tests.cs' -not -path '*/bin/*' -not -path '*/obj/*' | LC_ALL=C sort)
+          if [ "$SHARD" = 1 ]; then
+            filter=$(printf 'FullyQualifiedName~%s|' "${first[@]}")
+            filter=${filter%|}
+          else
+            filter=$(printf 'FullyQualifiedName!~%s&' "${first[@]}")
+            filter=${filter%&}
+          fi
+          echo "Shard $SHARD of 2: ${#first[@]} of $i test files run on the first"
+          dotnet test ID-Indetails.IntegrationTests -c Release --no-build --filter "$filter"
 
       - name: Check for vulnerable packages
+        if: matrix.shard == 1
         run: |
           dotnet list ID-Indetails.slnx package --vulnerable --include-transitive | tee vulnerable.txt
           if grep -q "has the following vulnerable packages" vulnerable.txt; then
@@ -100,9 +160,11 @@ jobs:
             exit 1
           fi
 
+  # Alongside the tests. The images' Ubuntu security fixes are fetched afresh once a day (SECURITY_REFRESH) rather
+  # than on every run; a deployment still fetches them every time (deploy.yml). Only master writes the layer cache,
+  # which every pull request reads.
   image:
     name: Docker images
-    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -112,29 +174,33 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      - name: Day, for the security fixes
+        id: day
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
       - name: Build the API image (not pushed)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: runtime
-          no-cache-filters: runtime
+          build-args: SECURITY_REFRESH=${{ steps.day.outputs.day }}
           load: true
           push: false
           tags: id-indetails-api:ci
           cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=api' || '' }}
 
       - name: Build the migrations image (not pushed)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: migrations
-          no-cache-filters: migrations
+          build-args: SECURITY_REFRESH=${{ steps.day.outputs.day }}
           load: true
           push: false
           tags: id-indetails-migrations:ci
           cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=api' || '' }}
 
       # As a deployment does it: migrate an empty database, then start the API in Production and wait for it.
       - name: Smoke-test the images
