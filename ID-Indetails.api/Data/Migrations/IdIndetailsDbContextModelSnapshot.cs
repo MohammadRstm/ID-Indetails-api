@@ -2047,6 +2047,73 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("notification_sent_keys", (string)null);
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.OneOffExpense", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<long>("GroupId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("group_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("name");
+
+                    b.Property<DateOnly>("SpentOn")
+                        .HasColumnType("date")
+                        .HasColumnName("spent_on");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_one_off_expenses");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_one_off_expenses_created_by_id");
+
+                    b.HasIndex("GroupId")
+                        .HasDatabaseName("ix_one_off_expenses_group_id");
+
+                    b.HasIndex("SpentOn")
+                        .HasDatabaseName("ix_one_off_expenses_spent_on");
+
+                    b.ToTable("one_off_expenses", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_one_off_expenses_amount_positive", "`amount` > 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.OverheadAmount", b =>
                 {
                     b.Property<long>("Id")
@@ -6245,6 +6312,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
 
+                    b.Property<long?>("VoiceFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("voice_file_id");
+
                     b.HasKey("Id")
                         .HasName("pk_site_logs");
 
@@ -6253,6 +6324,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("UserId", "CreatedAt")
                         .HasDatabaseName("ix_site_logs_user_id_created_at");
+
+                    b.HasIndex("VoiceFileId")
+                        .HasDatabaseName("ix_site_logs_voice_file_id");
 
                     b.ToTable("site_logs", (string)null);
                 });
@@ -8258,6 +8332,24 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Recipient");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.OneOffExpense", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_one_off_expenses_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.OverheadGroup", "Group")
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_one_off_expenses_overhead_groups_group_id");
+
+                    b.Navigation("Group");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.OverheadAmount", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -9178,6 +9270,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_site_logs_users_user_id");
+
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("VoiceFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_site_logs_files_voice_file_id");
 
                     b.Navigation("Project");
 

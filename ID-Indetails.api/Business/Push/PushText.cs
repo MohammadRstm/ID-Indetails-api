@@ -158,10 +158,11 @@ public static class PushText
 
     /// <summary>A chat message: who sent it and the start of what they wrote.</summary>
     /// <param name="teamName">Null for a direct message.</param>
-    public static PushMessageText ForMessage(string senderName, string? teamName, string? body, string messageKind, bool hasAttachments, bool mentioned)
+    /// <param name="voiceOnly">The message's only attachment is a voice note.</param>
+    public static PushMessageText ForMessage(string senderName, string? teamName, string? body, string messageKind, bool hasAttachments, bool mentioned, bool voiceOnly = false)
     {
         var sender = Named(senderName, Someone);
-        var preview = Preview(body) ?? (hasAttachments ? "Sent a photo or video." : "Sent a message.");
+        var preview = Preview(body) ?? AttachmentPreview(hasAttachments, voiceOnly);
         if (teamName is null)
         {
             return new(sender, preview);
@@ -174,8 +175,11 @@ public static class PushText
     }
 
     /// <summary>"Announcements", with who wrote it before the preview.</summary>
-    public static PushMessageText ForAnnouncement(string senderName, string? body, bool hasAttachments)
-        => new("Announcements", $"{Named(senderName, Someone)}: {Preview(body) ?? (hasAttachments ? "Sent a photo or video." : "Sent a message.")}");
+    public static PushMessageText ForAnnouncement(string senderName, string? body, bool hasAttachments, bool voiceOnly = false)
+        => new("Announcements", $"{Named(senderName, Someone)}: {Preview(body) ?? AttachmentPreview(hasAttachments, voiceOnly)}");
+
+    private static string AttachmentPreview(bool hasAttachments, bool voiceOnly)
+        => voiceOnly ? "Sent a voice message." : hasAttachments ? "Sent a photo or video." : "Sent a message.";
 
     public static PushMessageText LogReminder()
         => new("Log your hours", "Your working day ends soon and some of today's hours aren't logged yet.");

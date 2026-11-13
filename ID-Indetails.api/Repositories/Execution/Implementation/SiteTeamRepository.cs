@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Execution.Abstraction;
+using ID_Indetails.api.Repositories.Files.Abstraction;
 using Microsoft.EntityFrameworkCore;
 
 namespace ID_Indetails.api.Repositories.Execution.Implementation;
@@ -100,11 +101,20 @@ public sealed class SiteTeamRepository(IdIndetailsDbContext db) : ISiteTeamRepos
 
     public void AddLog(SiteLog log) => db.SiteLogs.Add(log);
 
-    private static async Task<IReadOnlyList<SiteLogRow>> Rows(IQueryable<SiteLog> logs, CancellationToken cancellationToken)
+    /// <summary>The logs with their writers and voice notes: one more query for the whole list, never one per log.</summary>
+    private async Task<IReadOnlyList<SiteLogRow>> Rows(IQueryable<SiteLog> logs, CancellationToken cancellationToken)
     {
         var rows = await logs
             .Select(l => new { Log = l, l.Project.Title, l.User.FirstName, l.User.LastName, l.User.Email })
             .ToListAsync(cancellationToken);
-        return rows.Select(r => new SiteLogRow(r.Log, r.Title, PersonName.Of(r.FirstName, r.LastName, r.Email))).ToList();
+        var voiceIds = rows.Where(r => r.Log.VoiceFileId is not null).Select(r => r.Log.VoiceFileId!.Value).Distinct().ToList();
+        var voices = voiceIds.Count == 0
+            ? new Dictionary<long, FileView>()
+            : await db.Files.AsNoTracking()
+                .Where(f => voiceIds.Contains(f.Id))
+                .Select(f => new FileView(f.Id, f.OriginalName, f.MimeType, f.SizeBytes, f.CreatedAt))
+                .ToDictionaryAsync(f => f.Id, cancellationToken);
+        return rows.Select(r => new SiteLogRow(
+            r.Log, r.Title, PersonName.Of(r.FirstName, r.LastName, r.Email), r.Log.VoiceFileId is { } id ? voices.GetValueOrDefault(id) : null)).ToList();
     }
 }

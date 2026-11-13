@@ -5,6 +5,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Employees;
+using ID_Indetails.api.DTO.Response.Execution;
 using ID_Indetails.api.DTO.Response.Files;
 using ID_Indetails.api.DTO.Response.Messaging;
 using ID_Indetails.api.DTO.Response.Website;
@@ -82,16 +83,23 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         }
     }
 
+    /// <summary>The first bytes of a WebM (EBML header), an Ogg and an M4A: recordings, as far as the API can tell.</summary>
+    public static readonly byte[] WebmVoice = [0x1A, 0x45, 0xDF, 0xA3, .. Enumerable.Range(0, 64).Select(i => (byte)i)];
+
+    public static readonly byte[] OggVoice = [.. Encoding.ASCII.GetBytes("OggS"), .. Enumerable.Range(0, 64).Select(i => (byte)i)];
+
+    public static readonly byte[] M4aVoice = [0x00, 0x00, 0x00, 0x18, .. Encoding.ASCII.GetBytes("ftypM4A "), .. new byte[32]];
+
     private readonly AuthTestSteps _steps = new(api);
     private HttpClient Client => _steps.Client;
 
-    public static async Task<HttpResponseMessage> UploadAsync(HttpClient client, byte[] bytes, string name, string? accessToken)
+    public static async Task<HttpResponseMessage> UploadAsync(HttpClient client, byte[] bytes, string name, string? accessToken, string route = "/api/files")
     {
         using var form = new MultipartFormDataContent();
         var part = new ByteArrayContent(bytes);
         part.Headers.ContentType = new MediaTypeHeaderValue("image/png");
         form.Add(part, "file", name);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/files") { Content = form };
+        using var request = new HttpRequestMessage(HttpMethod.Post, route) { Content = form };
         if (accessToken is not null)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -103,6 +111,14 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
     public static async Task<FileResponse> UploadPngAsync(HttpClient client, string accessToken, string name = "plan.png")
     {
         var response = await UploadAsync(client, Png, name, accessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        return await response.ReadAsync<FileResponse>();
+    }
+
+    /// <summary>Uploads a voice note (a WebM unless told otherwise) and returns its file.</summary>
+    public static async Task<FileResponse> UploadVoiceNoteAsync(HttpClient client, string accessToken, byte[]? bytes = null, string name = "note.webm")
+    {
+        var response = await UploadAsync(client, bytes ?? WebmVoice, name, accessToken, "/api/files/voice");
         ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
         return await response.ReadAsync<FileResponse>();
     }
@@ -208,6 +224,60 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await UploadAsync(Client, Encoding.ASCII.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"), "logo.png", superAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
         await (await UploadAsync(Client, [], "empty.png", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+    }
+
+    [Fact]
+    public async Task A_voice_note_is_stored_as_the_recording_its_bytes_say_it_is()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+
+        // the name and the browser's type are never trusted: a WebM called a PNG is still a WebM recording
+        var webm = await UploadVoiceNoteAsync(Client, superAdmin.AccessToken, name: "../../note.png");
+        webm.Kind.ShouldBe(FileKind.Audio);
+        webm.MimeType.ShouldBe("audio/webm");
+        webm.Name.ShouldBe("note.webm");
+        webm.SizeBytes.ShouldBe(WebmVoice.Length);
+
+        var ogg = await UploadVoiceNoteAsync(Client, superAdmin.AccessToken, OggVoice, "memo.mp3");
+        (ogg.Kind, ogg.MimeType, ogg.Name).ShouldBe((FileKind.Audio, "audio/ogg", "memo.ogg"));
+        var m4a = await UploadVoiceNoteAsync(Client, superAdmin.AccessToken, M4aVoice, "memo.wav");
+        (m4a.Kind, m4a.MimeType, m4a.Name).ShouldBe((FileKind.Audio, "audio/mp4", "memo.m4a"));
+
+        var played = await Client.GetAsync($"/api/files/{webm.Id}", superAdmin.AccessToken);
+        played.StatusCode.ShouldBe(HttpStatusCode.OK);
+        played.Content.Headers.ContentType!.MediaType.ShouldBe("audio/webm");
+        played.Headers.CacheControl!.NoStore.ShouldBeTrue();
+        (await played.Content.ReadAsByteArrayAsync()).ShouldBe(WebmVoice);
+    }
+
+    [Fact]
+    public async Task Only_recordings_are_accepted_as_voice_notes_and_audio_stays_out_of_the_photo_and_video_route()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+
+        foreach (var notARecording in new[] { Png, Heic, Encoding.ASCII.GetBytes("%PDF-1.7 hello world"), Array.Empty<byte>() })
+        {
+            var refused = await UploadAsync(Client, notARecording, "note.webm", superAdmin.AccessToken, "/api/files/voice");
+            await refused.ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+        }
+
+        (await UploadAsync(Client, Png, "note.webm", null, "/api/files/voice")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // POST /api/files has no audio: Ogg is refused and a WebM is still a video there
+        await (await UploadAsync(Client, OggVoice, "note.ogg", superAdmin.AccessToken)).ShouldFailWithAsync(422, ErrorCodes.FileTypeNotAllowed);
+        var video = await (await UploadAsync(Client, WebmVoice, "clip.webm", superAdmin.AccessToken)).ReadAsync<FileResponse>();
+        (video.Kind, video.MimeType).ShouldBe((FileKind.Video, "video/webm"));
+    }
+
+    [Fact]
+    public async Task A_voice_note_over_10_MB_is_refused()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        byte[] atTheLimit = [.. WebmVoice, .. new byte[10 * 1024 * 1024 - WebmVoice.Length]];
+
+        (await UploadVoiceNoteAsync(Client, superAdmin.AccessToken, atTheLimit)).SizeBytes.ShouldBe(atTheLimit.Length);
+        var tooBig = await UploadAsync(Client, [.. atTheLimit, 0], "long.webm", superAdmin.AccessToken, "/api/files/voice");
+        await tooBig.ShouldFailWithAsync(422, ErrorCodes.FileTooLarge);
     }
 
     [Fact]
@@ -347,6 +417,101 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await logged.ReadAsync<WorkEntryResponse>()).Attachment!.Id.ShouldBe(proof.Id);
         (await Client.GetAsync($"/api/files/{proof.Id}", designAdmin.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.OK);
         await (await Client.GetAsync($"/api/files/{proof.Id}", carl.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+    }
+
+    [Fact]
+    public async Task A_daily_logs_voice_note_is_played_by_its_writer_and_the_readers_of_every_log_only()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, siteAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Execution);
+        var (_, _, designAdmin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, rami) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, layla) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [rami.User.Id, layla.User.Id]);
+
+        var memo = await UploadVoiceNoteAsync(Client, rami.AccessToken);
+        var logged = await Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "", voiceFileId = memo.Id }, rami.AccessToken);
+        ((int)logged.StatusCode).ShouldBe(201, await logged.Content.ReadAsStringAsync());
+        (await logged.ReadAsync<SiteLogResponse>()).VoiceNote!.Id.ShouldBe(memo.Id);
+
+        // the writer, and whoever reads every log of Execution
+        foreach (var reader in new[] { rami, siteAdmin, superAdmin })
+        {
+            var played = await Client.GetAsync($"/api/files/{memo.Id}", reader.AccessToken);
+            played.StatusCode.ShouldBe(HttpStatusCode.OK);
+            played.Content.Headers.ContentType!.MediaType.ShouldBe("audio/webm");
+            played.Headers.CacheControl!.NoStore.ShouldBeTrue();
+            (await played.Content.ReadAsByteArrayAsync()).ShouldBe(WebmVoice);
+        }
+
+        // a colleague on the same site, Design's admin and a designer: as if it didn't exist
+        foreach (var other in new[] { layla, designAdmin, designer })
+        {
+            await (await Client.GetAsync($"/api/files/{memo.Id}", other.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+        }
+
+        // attached once: neither another log nor a chat message can take it
+        await (await Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "Again", voiceFileId = memo.Id }, rami.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.FileInUse);
+        await (await Client.PostJsonAsync($"/api/messages/direct/{superAdmin.User.Id}", new { body = "", attachmentIds = new[] { memo.Id } }, rami.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.FileInUse);
+    }
+
+    [Fact]
+    public async Task A_voice_note_on_a_log_is_never_cleaned_up_until_the_log_lets_it_go()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, rami) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var site = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [rami.User.Id]);
+        var first = await UploadVoiceNoteAsync(Client, rami.AccessToken);
+        var second = await UploadVoiceNoteAsync(Client, rami.AccessToken);
+        var neverUsed = await UploadVoiceNoteAsync(Client, rami.AccessToken);
+        var firstKey = await _steps.ScalarAsync<string>("SELECT storage_key FROM files WHERE id = @id", ("@id", first.Id));
+        var logged = await Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "", voiceFileId = first.Id }, rami.AccessToken);
+        var log = await logged.ReadAsync<SiteLogResponse>();
+        // a day and more old; the second recording is aged only once it is on the log, or the first clean-up would take it
+        Task AgeAsync(long id) => _steps.ExecuteAsync("UPDATE files SET created_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY) WHERE id = @id", ("@id", id));
+        await AgeAsync(first.Id);
+        await AgeAsync(neverUsed.Id);
+
+        async Task CleanUpAsync()
+        {
+            await using var scope = api.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<IFileService>().DeleteUnusedAsync();
+        }
+
+        async Task AssertPlayableAsync(long id, bool playable)
+        {
+            var response = await Client.GetAsync($"/api/files/{id}", rami.AccessToken);
+            if (playable)
+            {
+                response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            }
+            else
+            {
+                await response.ShouldFailWithAsync(404, ErrorCodes.NotFound);
+            }
+        }
+
+        // a day and more old, but it belongs to a log: kept, while a recording attached to nothing goes
+        await CleanUpAsync();
+        await AssertPlayableAsync(first.Id, true);
+        File.Exists(Path.Combine(api.FilesRoot, firstKey)).ShouldBeTrue();
+        await AssertPlayableAsync(neverUsed.Id, false);
+
+        // replaced: the old one is attached to nothing now, so it goes; the new one stays
+        (await Client.PutJsonAsync($"/api/site-logs/{log.Id}", new { body = "", voiceFileId = second.Id }, rami.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await AgeAsync(second.Id);
+        await CleanUpAsync();
+        await AssertPlayableAsync(first.Id, false);
+        File.Exists(Path.Combine(api.FilesRoot, firstKey)).ShouldBeFalse();
+        await AssertPlayableAsync(second.Id, true);
+
+        // removed (the words keep the log valid): it goes too
+        (await Client.PutJsonAsync($"/api/site-logs/{log.Id}", new { body = "Slab poured.", voiceFileId = (long?)null }, rami.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await CleanUpAsync();
+        await AssertPlayableAsync(second.Id, false);
     }
 
     /// <summary>An MP4's opening box: its size, "ftyp" and a known brand.</summary>

@@ -148,6 +148,69 @@ public class MessagingTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task A_message_carries_one_voice_note_that_only_the_chat_plays()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var engineering = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Engineering")).Id;
+        var data = (await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Data")).Id;
+        var engineer = await InTeamAsync(superAdmin, DomainCodes.Design, engineering);
+        var teammate = await InTeamAsync(superAdmin, DomainCodes.Design, engineering);
+        var analyst = await InTeamAsync(superAdmin, DomainCodes.Design, data);
+
+        // a voice-only message: no text, the recording as its only attachment
+        var voice = await FileTests.UploadVoiceNoteAsync(Client, engineer.AccessToken);
+        var sent = await SendAsync($"teams/{engineering}", new { body = "", attachmentIds = new[] { voice.Id } }, engineer);
+        sent.Body.ShouldBeNull();
+        var attached = sent.Attachments.ShouldHaveSingleItem();
+        (attached.Id, attached.Kind, attached.MimeType).ShouldBe((voice.Id, FileKind.Audio, "audio/webm"));
+
+        var played = await Client.GetAsync($"/api/files/{voice.Id}", teammate.AccessToken);
+        played.StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
+        played.Content.Headers.ContentType!.MediaType.ShouldBe("audio/webm");
+        await (await Client.GetAsync($"/api/files/{voice.Id}", analyst.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+
+        // two recordings are refused, and nothing is used up: either can still be sent alone
+        var first = await FileTests.UploadVoiceNoteAsync(Client, engineer.AccessToken);
+        var second = await FileTests.UploadVoiceNoteAsync(Client, engineer.AccessToken, FileTests.OggVoice, "second.ogg");
+        var refused = await Client.PostJsonAsync($"/api/messages/teams/{engineering}", new { body = "", attachmentIds = new[] { first.Id, second.Id } }, engineer.AccessToken);
+        await refused.ShouldFailWithAsync(422, ErrorCodes.TooManyVoiceNotes);
+        (await PageAsync($"teams/{engineering}", engineer)).Items.ShouldHaveSingleItem();
+        await SendAsync($"teams/{engineering}", new { body = "", attachmentIds = new[] { first.Id } }, engineer);
+        await SendAsync($"direct/{teammate.User.Id}", new { body = "", attachmentIds = new[] { second.Id } }, engineer);
+
+        // a voice note beside a photo is fine, and a recording is attached once like any file
+        var third = await FileTests.UploadVoiceNoteAsync(Client, engineer.AccessToken, FileTests.M4aVoice, "third.m4a");
+        var photo = await FileTests.UploadPngAsync(Client, engineer.AccessToken);
+        (await SendAsync($"teams/{engineering}", new { body = "See the crack", attachmentIds = new[] { third.Id, photo.Id } }, engineer))
+            .Attachments.Count.ShouldBe(2);
+        await (await Client.PostJsonAsync($"/api/messages/teams/{engineering}", new { body = "", attachmentIds = new[] { voice.Id } }, engineer.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.FileInUse);
+    }
+
+    [Fact]
+    public async Task An_announcement_can_be_a_voice_note_everyone_plays()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+
+        var voice = await FileTests.UploadVoiceNoteAsync(Client, superAdmin.AccessToken);
+        var news = await SendAsync("announcements", new { body = "", attachmentIds = new[] { voice.Id } }, superAdmin);
+        news.Attachments.ShouldHaveSingleItem().Kind.ShouldBe(FileKind.Audio);
+
+        foreach (var reader in new[] { designer, siteWorker })
+        {
+            (await PageAsync("announcements", reader)).Items.Single(m => m.Id == news.Id).Attachments.ShouldHaveSingleItem().Id.ShouldBe(voice.Id);
+            (await Client.GetAsync($"/api/files/{voice.Id}", reader.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.OK);
+        }
+
+        var one = await FileTests.UploadVoiceNoteAsync(Client, superAdmin.AccessToken);
+        var two = await FileTests.UploadVoiceNoteAsync(Client, superAdmin.AccessToken);
+        await (await Client.PostJsonAsync("/api/messages/announcements", new { body = "", attachmentIds = new[] { one.Id, two.Id } }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(422, ErrorCodes.TooManyVoiceNotes);
+    }
+
+    [Fact]
     public async Task Everyone_reads_the_announcements_and_only_super_admins_write_them()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

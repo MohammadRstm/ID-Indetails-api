@@ -99,6 +99,18 @@ public sealed class UpdateOverheadRequestValidator : AbstractValidator<UpdateOve
     }
 }
 
+public sealed class SaveOneOffExpenseRequestValidator : AbstractValidator<SaveOneOffExpenseRequest>
+{
+    public SaveOneOffExpenseRequestValidator()
+    {
+        RuleFor(x => x.Name).OverheadName();
+        RuleFor(x => x.GroupId).GreaterThan(0).WithMessage("Choose the category.");
+        RuleFor(x => x.Currency).Currency();
+        RuleFor(x => x.Amount).Amount("Amount", allowZero: false);
+        RuleFor(x => x.SpentOn).Must(d => d != default).WithMessage("Choose the day it was spent.");
+    }
+}
+
 public sealed class OverheadGroupRequestValidator : AbstractValidator<OverheadGroupRequest>
 {
     public OverheadGroupRequestValidator()

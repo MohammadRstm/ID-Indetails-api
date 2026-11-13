@@ -42,7 +42,7 @@ The database is the second line of defence. The API must still filter every quer
 | Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
 | Working time, hours ledger and time off | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days`, `time_off_requests` |
-| Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `account_labels`, `company_settings`, `domain_settings` |
+| Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `one_off_expenses`, `account_labels`, `company_settings`, `domain_settings` |
 
 ## Execution pricing
 
@@ -197,6 +197,10 @@ The `WebsiteAnalyticsPermission` migration seeds the `website_analytics:view` pe
 The `TimeOff` migration (9 Nov 2026) adds `time_off_requests` ([time-off.md](time-off.md)) with its checks (`ck_time_off_requests_days`, `_status`, `_is_paid`, `_ended_on`), foreign keys (RESTRICT) to the person, whoever decided and whoever ended it, and indexes on `(user_id, status, first_day)` and `(status, first_day)`. It seeds the `time_off:request` permission (limited to Design, held by employees) and the `time_off:decide` permission (held by super admins). `Down` drops the table and deletes both permissions and their role rows. The model now has 102 tables.
 
 The `BoqAuthors` migration (10 Nov 2026) adds `boqs.submitted_at` (datetime(3), null) and `boqs.submitted_lines` (mediumtext, null) with the checks `ck_boqs_submitted_internal` and `ck_boqs_submitted_lines`, and makes `boq:create` a company permission (`permissions.domain_code` NULL, with the new description). Data change: every existing internal draft gets `submitted_at = created_at` and no copy of its lines, so it counts as submitted and nothing disappears for those who managed pricing. `Down` drops the checks and columns and sets the permission back to Execution.
+
+The `OneOffExpenses` migration (11 Nov 2026) adds `one_off_expenses` ([company.md](company.md#one-off-expenses)): `name` (150), `group_id` (a foreign key to `overhead_groups`, RESTRICT), `currency`, `amount` (`decimal(18,2)`, checked above zero by `ck_one_off_expenses_amount_positive`), `spent_on` (a date, indexed), `created_at`, `created_by_id` (a foreign key to `users`, RESTRICT) and `updated_at`. It creates the table only: no existing table or data changes. `Down` drops it. The model now has 103 tables.
+
+The `SiteLogVoiceNotes` migration (11 Nov 2026) adds `site_logs.voice_file_id` (bigint, null) with `ix_site_logs_voice_file_id` and the foreign key `fk_site_logs_files_voice_file_id` to `files` (RESTRICT), the way `work_entries.attachment_file_id` points to its file: a daily log's voice note ([execution.md](execution.md#site-staff-and-daily-logs)). Existing logs keep NULL, and `body` stays NOT NULL (empty for a voice-only log). No data change; `Down` drops the foreign key, the index and the column.
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 

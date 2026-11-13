@@ -57,8 +57,8 @@ POST /api/proton/messages
   - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
-  255 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
-  - a built action (170), or one planned (13): each planned entry already has the tier and family it will be confirmed
+  258 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
+  - a built action (173), or one planned (13): each planned entry already has the tier and family it will be confirmed
     with. The planned ones are an Execution site's staff and daily logs, asking for and deciding pocket money, supervision taken, emailing,
     planning and scheduling invoices, and a payment's account label, waiting for the Execution changes to settle;
   - a place opened for the user (28): time off (see below), submitting, withdrawing and keeping a BOQ draft (the author's, on the BOQs page), what takes a password or a sign-in address (typed on its own form, never in a
@@ -104,7 +104,7 @@ POST /api/proton/messages
 | `list_expenses` | `GET /api/projects/{id}/expenses` | Design only: a project's expenses with their ids (for `propose_delete_expense`), a total per currency |
 | `list_boqs` / `get_boq` | `GET /api/projects/{id}/boqs`, `/api/boqs/{id}` | Execution only: the client BOQ, its VOs and internal drafts with their status, totals and last delivery, and what the agreed ones make the client pay; one BOQ's lines (100 at most), adjustment, supervision, TVA and client total. Client BOQs, VOs and the price only for those who see money or the pricing, as on the page |
 | `get_labour` | `GET /api/projects/{id}/labour-weeks` (+ `/labour-weeks/{week}`, `/labour-defaults`) | Execution only: the weeks reported (20 at most, newest first), the total, the crew's defaults, and one week's days, asked for by any of its days (a crew's day rate is a site cost, decision 13) |
-| `list_site_logs`, `list_my_site_logs`, `list_my_sites` | `GET /api/site-logs`, `/api/me/site-logs`, `/api/me/sites` | Execution only: everyone's daily logs (`site_log:view_all`), the user's own, and the sites they are on the staff of; by site, person, period or words; the text is the staff's own words |
+| `list_site_logs`, `list_my_site_logs`, `list_my_sites` | `GET /api/site-logs`, `/api/me/site-logs`, `/api/me/sites` | Execution only: everyone's daily logs (`site_log:view_all`), the user's own, and the sites they are on the staff of; by site, person, period or words; the text is the staff's own words, and `has_voice_note` says a log has a voice note, which Proton can't listen to |
 | `get_site_account` | `GET /api/projects/{id}/account-figures` + `/supervision-withdrawals` | Execution only, `financial:view`: the site's account as its Accounts part shows it (work, supervision, TVA, received, owed, costs, profit, supervision due, taken and left, pocket moves, cash in account, by label, by category, the 15 largest payees) and each time supervision was taken |
 | `get_pocket_money` | `GET /api/execution/pocket` + `/entries` | Execution only, `financial:view`: the balance, everything moved in and paid out, the requests waiting (each with the site's `site_cash_profit`), and its movements by site or period |
 | `get_invoice` | `GET /api/invoices/{id}` | one invoice in full: lines, total, paid and balance, terms, who it is billed to, the notes printed for the client, why it was voided, each time it was sent |
@@ -123,8 +123,8 @@ POST /api/proton/messages
 | `get_finance_projects` | `GET /api/finance/{domain}/projects` | ranked by agreed revenue, cost, profit against it, margin or hours (all time); unknown margins rank last both ways |
 | `get_money_attention` | `GET /api/finance/{domain}/attention` | |
 | `list_invoices` / `list_payments` | `GET /api/invoices`, `/api/payments` | by the period issued or received; paid in USD, balance in the invoice's currency; up to 100 matching rows as a dataset for `add_up` |
-| `get_company_overview` | `GET /api/company/overview` | received, project cost and `period_cash_profit` (the overview's gross profit), overhead by calendar days; without the fixed salaries, paid leave, overtime premium and net profit |
-| `list_overhead` | `GET /api/company/overhead` + `/groups` | the company's recurring expenses still running (or every one, `include_ended`), with their category, this month's amount and amount changes, and the categories: the ids `propose_overhead` and the `company_expense` form need |
+| `get_company_overview` | `GET /api/company/overview` | received, project cost and `period_cash_profit` (the overview's gross profit), recurring overhead by calendar days and the one-off expenses (`one_off_expenses`, each at its day's rate); without the fixed salaries, paid leave, overtime premium, the total of expenses (which holds the salaries) and net profit |
+| `list_overhead` | `GET /api/company/overhead`, `/groups` and `/one-offs` | the company's recurring expenses still running (or every one, `include_ended`), with their category, this month's amount and amount changes, the categories, and a month's one-off expenses (`one_off_month`, this month by default) with a total per currency and whether the user may change each: the ids `propose_overhead` and the `company_expense` form need |
 | `present_data` | — (open to whoever may list projects) | shows a dataset a tool returned as a chart, a table or headline figures; reads nothing |
 | `add_up` | — (open to whoever may list projects) | totals a number column of a dataset a tool returned, optionally where a text column has a value; refuses a dataset holding only part of its rows, percentages and compared headline figures; reads nothing |
 | `get_project_files` | `GET /api/projects/{id}/files` | Design only: titles, sections, sizes, uploader, for-client, comment counts, and whether each can be read |
@@ -249,7 +249,7 @@ existing services; the model only reads and explains them. Design and decisions:
 | `compare_work` | `IReportService.WorkTotalsAsync` | `report:view` (`GET /api/reports/work`); Design only | |
 | `compare_money` | `IDomainFinanceService.ProjectPeriodsAsync` | `financial:view` (`GET /api/finance/{domain}/summary`) | yes |
 | `review_project` | the project, its work totals, requirements, period and all-time money, attention rules | `project:view`; each part needs its own endpoint's permission | yes |
-| `get_company_summary` | projects, work totals, deadlines, period money, activity counts, overhead, attention | `project:view`; each block needs its own endpoint's permission | yes |
+| `get_company_summary` | projects, work totals, deadlines, period money, activity counts, overhead and one-off expenses, attention | `project:view`; each block needs its own endpoint's permission | yes |
 | `summarize_changes` | `IActivityFeedService.CountsAsync` and the feed, with `from`/`to` | `activity:view` (`GET /api/activity`) | |
 | `get_attention` | projects, money attention, deadlines, the Design overview | `project:view`; each signal source needs its own | yes |
 
@@ -741,12 +741,19 @@ an invoice's whole balance uses `full_balance`, so the server sets the amount.
 | `propose_exchange_rate` | `POST /api/exchange-rates` | the rate; irreversible. A backdated rate changes past costs, overhead and invoices (they convert at the rate of their day when read), and the card says so; payments keep their own rate. The tool's description says the daily feed adds today's LBP rate each morning, so once a currency has a rate from today a correction applies from tomorrow; the card says when the latest rate came from the feed ([billing.md](billing.md#the-daily-feed)) |
 | `propose_pocket_contribution` | `POST /api/execution/pocket/contributions` (an Execution client site) | the amount, typed on the card. `amount` is one the user gave; `round_off` works it out instead: what is over the site's last whole thousand of profit, so it is left round ($4,900 moves $900). Never all of the profit; a card made before the profit changed is refused (`proton_action_stale`) |
 | `propose_project_money` | `PUT /api/projects/{id}/payment` (a Design client project's customer payment), with why it changes (`reason`, asked for when not given) | the new amount. It corrects mistakes: work added or taken out is a VO (`propose_design_vo`). An Execution site's price is its agreed BOQ; its supervision and TVA are `propose_site_pricing` |
-| `propose_overhead` | the nine company-expense endpoints | an amount set or changed; the name to cancel an expense or remove a category |
+| `propose_overhead` | the twelve company-expense endpoints (nine for recurring expenses and categories, three for one-offs: `add_one_off`, `update_one_off`, `remove_one_off`; only this month's one-offs can be changed, and the day is from the first of this month up to today) | an amount set or changed; the name to cancel an expense, remove a category or remove a one-off |
 | `propose_delete` | requirement, meeting, client and project file deletes | the project's or client's name, or a general meeting's topic; a client with projects is archived instead |
 | `propose_working_time`, `propose_schedule`, `propose_hour_excuse` | the company week, someone's own week, excused hours | — ; the cards describe the effect in words and never show an amount |
 
 A tool standing in for endpoints with different permissions (issue and void an invoice) declares them as step
 endpoints: the one a proposal goes through is required on propose and again on confirm, on top of the tool's own.
+
+**One-off company expenses** (a refrigerator, a repair; [company.md](company.md#one-off-expenses)): `list_overhead` shows a
+month's, `propose_overhead` adds, changes or removes one of this month, and `get_company_overview` and
+`get_company_summary` report their total in USD (`one_off_expenses`). The overview's total of expenses is left out of
+Proton on purpose: it adds the fixed salaries, which would give them away beside the overhead and the profit. Left out: a
+surface that opens the one-off form (the app mirrors the surface list, and its `?add=one-off` page address is for the
+person and search for now), and a one-off form fill.
 
 ## Messages sent as the user (Stage 5, Phase 7)
 

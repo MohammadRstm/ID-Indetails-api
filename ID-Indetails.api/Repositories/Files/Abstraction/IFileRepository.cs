@@ -5,12 +5,23 @@ namespace ID_Indetails.api.Repositories.Files.Abstraction;
 /// <summary>An attached file, as lists show it.</summary>
 public sealed record FileView(long Id, string Name, string MimeType, long SizeBytes, DateTime CreatedAt);
 
+/// <summary>A daily log whose voice note a file is: who wrote it, and the domain of its site.</summary>
+public sealed record SiteLogUse(long UserId, string DomainCode);
+
 /// <summary>Everything a file is attached to, which decides who may download it.</summary>
 /// <param name="IsWebsite">A picture or the favicon of the company's public website.</param>
 /// <param name="ProjectDomains">The domains of the projects whose photo it is.</param>
-public sealed record FileUses(bool IsPhoto, bool IsLogo, IReadOnlyList<long> ConversationIds, IReadOnlyList<long> EntryIds, bool IsWebsite, IReadOnlyList<string> ProjectDomains)
+/// <param name="SiteLogs">The daily logs it is the voice note of.</param>
+public sealed record FileUses(
+    bool IsPhoto,
+    bool IsLogo,
+    IReadOnlyList<long> ConversationIds,
+    IReadOnlyList<long> EntryIds,
+    bool IsWebsite,
+    IReadOnlyList<string> ProjectDomains,
+    IReadOnlyList<SiteLogUse> SiteLogs)
 {
-    public bool IsUsed => IsPhoto || IsLogo || IsWebsite || ConversationIds.Count > 0 || EntryIds.Count > 0 || ProjectDomains.Count > 0;
+    public bool IsUsed => IsPhoto || IsLogo || IsWebsite || ConversationIds.Count > 0 || EntryIds.Count > 0 || ProjectDomains.Count > 0 || SiteLogs.Count > 0;
 }
 
 public interface IFileRepository

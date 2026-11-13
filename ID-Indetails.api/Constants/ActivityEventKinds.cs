@@ -193,6 +193,11 @@ public static class ActivityEventKinds
     public const string OverheadResumed = "overhead_resumed";
     public const string OverheadRemoved = "overhead_removed";
 
+    // One-off company expenses (subject: the expense, type "one_off_expense"; money in the amount column, the previous amount in prev_amount)
+    public const string OverheadOneOffAdded = "overhead_one_off_added";
+    public const string OverheadOneOffChanged = "overhead_one_off_changed";
+    public const string OverheadOneOffRemoved = "overhead_one_off_removed";
+
     // Account labels
     public const string AccountLabelChanged = "account_label_changed";
 

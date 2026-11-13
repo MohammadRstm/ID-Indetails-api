@@ -281,6 +281,28 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task The_pdf_is_the_filtered_list_as_a_file_for_salary_view_holders_only()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var siteWorker = await SalariedAsync(superAdmin, DomainCodes.Execution);
+
+        var response = await Client.GetAsync($"/api/company/salaries/pdf?month=2026-06&search={siteWorker.User.Email}", superAdmin.AccessToken);
+        ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
+        response.Content.Headers.ContentDisposition!.FileName!.Trim('"').ShouldBe("salaries-2026-06.pdf");
+        System.Text.Encoding.ASCII.GetString(await response.Content.ReadAsByteArrayAsync(), 0, 5).ShouldBe("%PDF-");
+
+        var inDomain = await Client.GetAsync($"/api/company/salaries/pdf?month=2026-06&domain=execution&role=employee&search={siteWorker.User.Email}", superAdmin.AccessToken);
+        ((int)inDomain.StatusCode).ShouldBe(200);
+        inDomain.Content.Headers.ContentDisposition!.FileName!.Trim('"').ShouldBe("salaries-2026-06-execution.pdf");
+
+        await (await Client.GetAsync("/api/company/salaries/pdf?month=2026-06", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.GetAsync("/api/company/salaries/pdf?month=2099-01", superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.SalaryMonthInFuture);
+    }
+
+    [Fact]
     public async Task Salaries_can_be_narrowed_to_one_role()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

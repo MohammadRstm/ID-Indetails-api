@@ -34,8 +34,10 @@ public sealed record DomainOverviewResponse(
     IReadOnlyList<UnconvertedCostResponse> UnconvertedCosts,
     IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
-/// <param name="Overhead">Company expenses charged to the period (by calendar days), in USD.</param>
+/// <param name="Overhead">Recurring company expenses charged to the period (by calendar days), in USD.</param>
 /// <param name="UnconvertedOverhead">Overhead with no exchange rate for its month, left out of <see cref="Overhead"/>.</param>
+/// <param name="OneOffExpenses">The one-off company expenses spent in the period, in full on their day, each converted at the rate of its day, in USD.</param>
+/// <param name="UnconvertedOneOffExpenses">One-off expenses with no exchange rate on their day, per currency, left out of <see cref="OneOffExpenses"/>.</param>
 /// <param name="FixedSalaries">The fixed salaries for the period (by calendar days, like overhead), in USD: the pay of everyone on a
 /// pure monthly salary who logs no hours (admins, super admins and Execution's site staff), so no project carries it.</param>
 /// <param name="UnconvertedFixedSalaries">Their pay in a currency with no rate for its month, left out of <see cref="FixedSalaries"/>.</param>
@@ -47,7 +49,9 @@ public sealed record DomainOverviewResponse(
 /// <param name="UnconvertedOvertimePremium">The premium in a currency with no rate for its month, left out of <see cref="OvertimePremium"/>.</param>
 /// <param name="AdminSalaries">The phone app's name for <see cref="FixedSalaries"/>, the same figure, until it moves.</param>
 /// <param name="UnconvertedAdminSalaries">The phone app's name for <see cref="UnconvertedFixedSalaries"/>, until it moves.</param>
-/// <param name="NetProfit">Both domains' profit less company overhead, the fixed salaries, paid leave and the overtime premium.</param>
+/// <param name="Expenses">Everything that comes off the profit: <see cref="Overhead"/> + <see cref="OneOffExpenses"/> +
+/// <see cref="FixedSalaries"/> + <see cref="PaidLeave"/> + <see cref="OvertimePremium"/>.</param>
+/// <param name="NetProfit">Both domains' profit less <see cref="Expenses"/>.</param>
 /// <param name="UnconvertedInvoices">Both domains' invoices with no exchange rate on their issue day.</param>
 public sealed record CompanyOverviewResponse(
     DateOnly From,
@@ -58,6 +62,8 @@ public sealed record CompanyOverviewResponse(
     decimal GrossProfit,
     decimal Overhead,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedOverhead,
+    decimal OneOffExpenses,
+    IReadOnlyList<CurrencyTotalResponse> UnconvertedOneOffExpenses,
     decimal FixedSalaries,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedFixedSalaries,
     decimal PaidLeave,
@@ -66,6 +72,7 @@ public sealed record CompanyOverviewResponse(
     IReadOnlyList<CurrencyTotalResponse> UnconvertedOvertimePremium,
     decimal AdminSalaries,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedAdminSalaries,
+    decimal Expenses,
     decimal NetProfit,
     decimal Invoiced,
     decimal Collected,
@@ -74,18 +81,27 @@ public sealed record CompanyOverviewResponse(
     int ClientsServed,
     IReadOnlyList<UnconvertedInvoicesResponse> UnconvertedInvoices);
 
-/// <summary>Company overhead charged to a period, as the overview charges it.</summary>
-/// <param name="Usd">By calendar days, converted at the rate of each month.</param>
+/// <summary>Company overhead and one-off expenses charged to a period, as the overview charges them.</summary>
+/// <param name="Usd">Recurring overhead by calendar days, converted at the rate of each month.</param>
 /// <param name="Unconverted">Overhead with no exchange rate for its month, left out of <see cref="Usd"/>.</param>
-public sealed record PeriodOverheadResponse(DateOnly From, DateOnly To, decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted);
+/// <param name="OneOffUsd">One-off expenses spent in the period, each converted at the rate of its day.</param>
+/// <param name="OneOffUnconverted">One-off expenses with no exchange rate on their day, left out of <see cref="OneOffUsd"/>.</param>
+public sealed record PeriodOverheadResponse(
+    DateOnly From,
+    DateOnly To,
+    decimal Usd,
+    IReadOnlyList<CurrencyTotalResponse> Unconverted,
+    decimal OneOffUsd,
+    IReadOnlyList<CurrencyTotalResponse> OneOffUnconverted);
 
 /// <summary>One month for both domains together, in USD.</summary>
+/// <param name="OneOffExpenses">The one-off company expenses spent in the month, each at the rate of its day.</param>
 /// <param name="FixedSalaries">The month's fixed salaries (admins, super admins and site staff), a company cost like overhead.</param>
 /// <param name="PaidLeave">What Design salaries paid for paid leave in the month, a company cost too.</param>
 /// <param name="OvertimePremium">What Design salaries paid for overtime past the month's threshold beyond the hourly rate.</param>
 /// <param name="ProfitBeforeOverhead">Revenue − project costs.</param>
-/// <param name="ProfitAfterOverhead">After company overhead only.</param>
-/// <param name="NetProfit">After company overhead, the fixed salaries, paid leave and the overtime premium, as the overview's net profit.</param>
+/// <param name="ProfitAfterOverhead">After company overhead and one-off expenses only.</param>
+/// <param name="NetProfit">After company overhead, one-off expenses, the fixed salaries, paid leave and the overtime premium, as the overview's net profit.</param>
 public sealed record CompanyMonthResponse(
     DateOnly Month,
     decimal Revenue,
@@ -94,6 +110,7 @@ public sealed record CompanyMonthResponse(
     decimal Materials,
     decimal GroundLabour,
     decimal Overhead,
+    decimal OneOffExpenses,
     decimal FixedSalaries,
     decimal PaidLeave,
     decimal OvertimePremium,
