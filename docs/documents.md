@@ -51,7 +51,8 @@ Every document opens with the company's letterhead (name, website and address fr
 - **Salaries** (internal, landscape, no watermark; its footer says it contains pay information):
   - The title "Salaries · November 2026", "In progress, to Nov 11, 2026" for the current month (otherwise "Closed month") and the filters in force (business, role, search).
   - One row per person: name and department, pay basis (with the salary or hourly rate), expected hours, hours logged (in schedule, made up and overtime; "Not tracked" for people who don't log hours), overtime paid, short hours, base pay, deduction, overtime pay and what is to pay, each in the person's currency.
-  - A total row per currency, then "No pay set: …" naming the filtered people with no pay.
+  - When anyone listed has a salary advance coming off the month, two more columns follow "To pay": "Advance" (what comes off, shown as a negative amount, "-" for people with none) and "To hand over" (the pay less the advance, never below 0). The other columns narrow to fit the page, and without an advance the table is unchanged. The CSV always has both columns ([company.md](company.md#salaries)).
+  - A total row per currency (with the advance and to-hand-over totals when those columns are there), then "No pay set: …" naming the filtered people with no pay.
   - It is `GET /api/company/salaries` with every row on one page (`SalaryService.ListAsync`), so the list, the CSV and the PDF can't disagree.
 - **Schedules** (internal, landscape, no watermark; `GET /api/company/schedules/pdf`, and the same people as CSV at `GET /api/company/schedules/export`):
   - The title "Schedules", "As of Nov 11, 2026", the filters, and the company default week (working days, hours, break, hours a week).

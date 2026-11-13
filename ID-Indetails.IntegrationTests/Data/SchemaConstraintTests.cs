@@ -572,6 +572,62 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
         (await ScalarAsync<int>("SELECT COUNT(*) FROM permissions WHERE code = 'project:pricing_manage'")).ShouldBe(1);
     }
 
+    // ---------- salary advances ----------
+
+    [Fact]
+    public async Task Only_super_admins_are_seeded_with_the_salary_advance_permission()
+    {
+        (await ScalarAsync<int>("SELECT COUNT(*) FROM permissions WHERE code = 'salary_advance:manage'")).ShouldBe(1);
+        (await ScalarAsync<int>("SELECT COUNT(*) FROM role_permissions WHERE permission_code = 'salary_advance:manage'")).ShouldBe(1);
+        (await ScalarAsync<int>(
+            "SELECT COUNT(*) FROM role_permissions WHERE permission_code = 'salary_advance:manage' AND role_code = 'super_admin'")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task An_advance_has_a_day_given_once_it_is_given_or_cancelled_and_only_then()
+    {
+        var user = await ActiveUserAsync("design");
+
+        await ShouldViolateAsync(AdvanceSql(user, "pending", "'2026-11-05'"), "ck_salary_advances_given_on");
+        await ShouldViolateAsync(AdvanceSql(user, "approved", "NULL"), "ck_salary_advances_given_on");
+        await ShouldViolateAsync(AdvanceSql(user, "declined", "'2026-11-05'"), "ck_salary_advances_given_on");
+        await ShouldViolateAsync(AdvanceSql(user, "waiting", "NULL"), "ck_salary_advances_status");
+        await ShouldViolateAsync(AdvanceSql(user, "approved", "'2026-11-05'", amount: 0), "ck_salary_advances_amount_positive");
+
+        (await InsertAsync(AdvanceSql(user, "pending", "NULL"))).ShouldBeGreaterThan(0);
+        (await InsertAsync(AdvanceSql(user, "approved", "'2026-11-05'"))).ShouldBeGreaterThan(0);
+        (await InsertAsync(AdvanceSql(user, "cancelled", "'2026-11-05'"))).ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task A_settlement_is_all_or_nothing_and_only_for_a_given_advance()
+    {
+        var user = await ActiveUserAsync("design");
+
+        await ShouldViolateAsync(AdvanceSql(user, "approved", "'2026-11-05'", settlement: "'cash', NULL, NULL"), "ck_salary_advances_settled");
+        await ShouldViolateAsync(AdvanceSql(user, "approved", "'2026-11-05'", settlement: "'forgiven', 100, '2026-11-20'"), "ck_salary_advances_settled_kind");
+        await ShouldViolateAsync(AdvanceSql(user, "cancelled", "'2026-11-05'", settlement: "'cash', 100, '2026-11-20'"), "ck_salary_advances_settled");
+        await ShouldViolateAsync(AdvanceSql(user, "approved", "'2026-11-05'", settlement: "'written_off', 0, '2026-11-20'"), "ck_salary_advances_settled");
+
+        (await InsertAsync(AdvanceSql(user, "approved", "'2026-11-05'", settlement: "'written_off', 100, '2026-11-20'"))).ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task A_repayment_is_a_first_of_the_month_once_per_advance_and_goes_with_its_advance()
+    {
+        var user = await ActiveUserAsync("design");
+        var advance = await InsertAsync(AdvanceSql(user, "approved", "'2026-11-05'"));
+
+        await ShouldViolateAsync(RepaymentSql(advance, "2026-11-15", 100), "ck_salary_advance_repayments_month");
+        await ShouldViolateAsync(RepaymentSql(advance, "2026-11-01", 0), "ck_salary_advance_repayments_amount_positive");
+
+        (await InsertAsync(RepaymentSql(advance, "2026-11-01", 100))).ShouldBeGreaterThan(0);
+        (await Should.ThrowAsync<MySqlException>(() => ExecuteAsync(RepaymentSql(advance, "2026-11-01", 50)))).Number.ShouldBe(1062);
+
+        await ExecuteAsync($"DELETE FROM salary_advances WHERE id = {advance}");
+        (await ScalarAsync<int>($"SELECT COUNT(*) FROM salary_advance_repayments WHERE advance_id = {advance}")).ShouldBe(0);
+    }
+
     // ---------- client portal (PortalUx) ----------
 
     [Fact]
@@ -690,6 +746,17 @@ public class SchemaConstraintTests(MigratedDatabaseFixture db) : IClassFixture<M
     private static string LabourWeekSql(long projectId, long userId, string weekStart) =>
         "INSERT INTO labour_weeks (project_id, week_start, submitted_at, submitted_by_id) " +
         $"VALUES ({projectId}, '{weekStart}', {Now}, {userId})";
+
+    /// <summary>
+    /// A salary advance of <paramref name="amount"/>; <paramref name="givenOn"/> is SQL. <paramref name="settlement"/> is
+    /// the SQL values of settled_kind, settled_amount and settled_on, none by default.
+    /// </summary>
+    private static string AdvanceSql(long userId, string status, string givenOn, decimal amount = 500, string settlement = "NULL, NULL, NULL") =>
+        "INSERT INTO salary_advances (user_id, amount, currency, status, created_at, created_by_id, given_on, settled_kind, settled_amount, settled_on) " +
+        $"VALUES ({userId}, {amount}, 'USD', '{status}', {Now}, {userId}, {givenOn}, {settlement})";
+
+    private static string RepaymentSql(long advanceId, string month, decimal amount) =>
+        $"INSERT INTO salary_advance_repayments (advance_id, month, amount) VALUES ({advanceId}, '{month}', {amount})";
 
     /// <summary>A staff member's chat message without text, deleted at <paramref name="deletedAt"/> (SQL).</summary>
     private static string PortalMessageSql(long projectId, long userId, string deletedAt) =>

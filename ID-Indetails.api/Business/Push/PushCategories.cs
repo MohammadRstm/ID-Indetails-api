@@ -69,6 +69,12 @@ public static class PushCategories
         [NotificationKinds.ClientAdded] = NotificationCategory.Money,
         [NotificationKinds.PayChanged] = NotificationCategory.Money,
         [NotificationKinds.HoursShort] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceRequested] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceWithdrawn] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceApproved] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceDeclined] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceRecorded] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceUnsettled] = NotificationCategory.Money,
 
         [NotificationKinds.InvitationAccepted] = NotificationCategory.People,
         [NotificationKinds.RoleChanged] = NotificationCategory.People,

@@ -298,6 +298,43 @@ public static class ErrorCodes
     /// <summary>422. Someone on time off can't log or change any hours until it's over.</summary>
     public const string OnTimeOff = "on_time_off";
 
+    // Salary advances
+    /// <summary>422. The person has no pay set today, so there is nothing an advance could come off.</summary>
+    public const string SalaryAdvanceNoPay = "salary_advance_no_pay";
+
+    /// <summary>422. The person already has a request waiting for a decision.</summary>
+    public const string SalaryAdvancePending = "salary_advance_pending";
+
+    /// <summary>422. The person's last advance isn't paid back yet: a new one waits until it is.</summary>
+    public const string SalaryAdvanceOpen = "salary_advance_open";
+
+    /// <summary>422. Someone already decided the request, or the person withdrew it.</summary>
+    public const string SalaryAdvanceDecided = "salary_advance_decided";
+
+    /// <summary>422. An advance, or a month's repayment, can't be more than the person's monthly pay.</summary>
+    public const string SalaryAdvanceOverPay = "salary_advance_over_pay";
+
+    /// <summary>400. An approved advance can't be more than was asked for.</summary>
+    public const string SalaryAdvanceMoreThanAsked = "salary_advance_more_than_asked";
+
+    /// <summary>400. The repayment months are missing, repeated, closed, too far ahead or not above zero.</summary>
+    public const string SalaryAdvanceMonthsInvalid = "salary_advance_months_invalid";
+
+    /// <summary>400. The repayment months don't add up to what is to be paid back.</summary>
+    public const string SalaryAdvanceMonthsTotal = "salary_advance_months_total";
+
+    /// <summary>400. An advance is given from the first of this month up to today.</summary>
+    public const string SalaryAdvanceGivenOn = "salary_advance_given_on";
+
+    /// <summary>422. The advance is settled, cancelled or not given, so it can't be changed.</summary>
+    public const string SalaryAdvanceClosed = "salary_advance_closed";
+
+    /// <summary>422. Nothing of the advance is left to plan or settle.</summary>
+    public const string SalaryAdvanceNothingLeft = "salary_advance_nothing_left";
+
+    /// <summary>422. An advance can be cancelled only while the month it was given in is still open.</summary>
+    public const string SalaryAdvanceCancelClosed = "salary_advance_cancel_closed";
+
     /// <summary>422. Someone on time off that day can't be put in a meeting.</summary>
     public const string MeetingAttendeeOff = "meeting_attendee_off";
     public const string ProjectPayPeriodInFuture = "project_pay_period_in_future";

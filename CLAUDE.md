@@ -133,6 +133,12 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     Their pay is a company cost: the company overview takes it off the net profit, never a project.
   - Paid leave on Design (a salary's paid excuses and paid time off, an hourly employee's paid time off) is a company
     cost too, its own line in the company overview.
+  - **Salary advances:** part of someone's pay handed over early, in their pay's currency. It changes when cash leaves,
+    never what anyone earns, the hourly rate, project cost or the overview; only a written-off rest is a company
+    expense, on its day. Anyone with pay asks; holders of `salary_advance:manage` (super admins) approve with the months
+    it comes off, decline, or record one. At most a month's pay, one at a time. Each month takes its share, never more
+    than its pay, and the rest moves on. A leaving month takes everything left, and settling takes only what is left
+    after the current month ([company.md](docs/company.md), "Salary advances").
   - Project profit is agreed revenue - project costs; overhead counts only at company level.
 - **Privacy:** employees never see their colleagues' hours or pay.
 - **Site staff:** an Execution site needs no staff to be created; staff are put on it when it needs them, and can all be taken off again. Each one is an active Execution employee. Staff write daily logs, which they can edit until midnight. Execution employees are paid monthly only.

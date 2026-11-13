@@ -251,6 +251,14 @@ public static class ProtonCoverage
         Open("TimeOff.Approve", "super admins approve time off on Company › Time off; Proton doesn't decide it yet"),
         Open("TimeOff.Decline", "super admins decline time off on Company › Time off; Proton doesn't decide it yet"),
         Open("TimeOff.Reject", "super admins take approved time off back on Company › Time off; Proton doesn't do it yet"),
+        Open("MySalaryAdvances.Ask", "pay amounts never reach Proton: a salary advance is asked for on the person's profile"),
+        Open("MySalaryAdvances.Withdraw", "pay amounts never reach Proton: a request for an advance is taken back on the person's profile"),
+        Open("SalaryAdvances.Record", "pay amounts never reach Proton: advances are given on Company › Salaries"),
+        Open("SalaryAdvances.Approve", "pay amounts never reach Proton: advances are approved on Company › Salaries"),
+        Open("SalaryAdvances.Decline", "pay amounts never reach Proton: requests for an advance are declined on Company › Salaries"),
+        Open("SalaryAdvances.ChangeMonths", "pay amounts never reach Proton: an advance's months are changed on Company › Salaries"),
+        Open("SalaryAdvances.Cancel", "pay amounts never reach Proton: an advance is cancelled on Company › Salaries"),
+        Open("SalaryAdvances.Settle", "pay amounts never reach Proton: what is left of an advance is settled on Company › Salaries"),
         ReadOnly("MyTime.OvertimePreview", "an employee's own overtime preview"),
 
         // People and access

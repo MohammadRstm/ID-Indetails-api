@@ -30,6 +30,9 @@ public sealed class SalaryService(
     IPermissionService permissions,
     IPayrollRepository payroll,
     IPayrollInputs inputs,
+    ISalaryAdvanceRepository advances,
+    ISalaryAdvanceSchedules advanceSchedules,
+    ISalaryAdvanceService advanceService,
     IClock clock) : ISalaryService
 {
     private sealed record Computed(User User, SalaryCalculator.Result Result, IReadOnlyList<HourExcuse> Excuses, SalaryCalculator.Input Input, PersonMonth Month);
@@ -38,7 +41,7 @@ public sealed class SalaryService(
     {
         (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
         var (month, computed, withoutPay) = await CalculateAsync(query.Month, query.Domain, query.Search, query.Role, null, cancellationToken);
-        var rows = computed.Select(c => ToRow(c)).ToList();
+        var rows = await RowsAsync(month, computed, cancellationToken);
         var policy = (await inputs.PoliciesAsync(cancellationToken)).LastOrDefault(p => p.EffectiveFrom <= clock.CompanyToday);
 
         return new SalariesResponse(
@@ -58,7 +61,8 @@ public sealed class SalaryService(
                 rows.Sum(r => r.OvertimePaidMinutes),
                 rows.Sum(r => r.ShortMinutes ?? 0),
                 rows.Any(r => r.ExpectedMinutes is not null) ? rows.Sum(r => r.ExpectedMinutes ?? 0) : null),
-            withoutPay.Select(u => new PersonWithoutPayResponse(u.Id, NameOf(u), u.RoleCode, u.DomainCode)).ToList());
+            withoutPay.Select(u => new PersonWithoutPayResponse(u.Id, NameOf(u), u.RoleCode, u.DomainCode)).ToList(),
+            await advanceService.SummaryAsync(cancellationToken));
     }
 
     public async Task<SalaryYearResponse> YearAsync(SalaryYearQuery query, CancellationToken cancellationToken = default)
@@ -124,8 +128,10 @@ public sealed class SalaryService(
             .Select(d => new SalaryDayResponse(d.Day, d.Hours!.Required))
             .ToList();
 
+        var repaid = await AdvanceRepaymentsAsync(month, computed, cancellationToken);
+
         return new SalaryDetailResponse(
-            ToRow(person),
+            ToRow(person, repaid.GetValueOrDefault(userId)),
             InProgress(month),
             result.PaidBreakDays,
             result.PaidBreakPay,
@@ -138,7 +144,8 @@ public sealed class SalaryService(
             workingDays,
             await ProjectsAsync(userId, month, result, input, cancellationToken),
             MonthTimeOffResponse.Of(person.Month),
-            result.TimeOffPay);
+            result.TimeOffPay,
+            await advanceService.ForSalaryAsync(person.User, month, cancellationToken));
     }
 
     /// <summary>The month's work grouped by project, each entry paid as Project pay pays it.</summary>
@@ -200,13 +207,13 @@ public sealed class SalaryService(
     {
         (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Require(PermissionCodes.SalaryView);
         var (month, computed, _) = await CalculateAsync(query.Month, query.Domain, query.Search, query.Role, null, cancellationToken);
-        var rows = computed.Select(c => ToRow(c)).ToList();
+        var rows = await RowsAsync(month, computed, cancellationToken);
         var csv = new StringBuilder();
         var monthText = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
         Csv.Line(csv, "Month", "Employee", "Email", "Domain", "Department", "Pay basis", "Monthly salary", "Hourly rate", "Currency",
             "Expected hours", "Hours in schedule", "Overtime made up", "Overtime", "Overtime paid", "Excused hours", "Short hours", "Flagged",
-            "Pro-rated", "Base pay", "Deduction", "Overtime pay", "To pay");
+            "Pro-rated", "Base pay", "Deduction", "Overtime pay", "To pay", "Advance", "To hand over");
 
         foreach (var r in rows)
         {
@@ -215,13 +222,15 @@ public sealed class SalaryService(
                 Csv.Hours(r.ExpectedMinutes), Csv.Hours(r.NormalMinutes), Csv.Hours(r.MadeUpMinutes), Csv.Hours(r.OvertimeMinutes),
                 Csv.Hours(r.OvertimePaidMinutes), Csv.Hours(r.ExcusedMinutes), Csv.Hours(r.ShortMinutes), r.Flagged ? "yes" : r.Behind ? "behind so far" : "no",
                 r.ProRated ? $"{r.WorkingDaysPaid}/{r.WorkingDays} days" : "no",
-                Csv.Money(r.BasePay), Csv.Money(r.Deduction), Csv.Money(r.OvertimePay), Csv.Money(r.Total));
+                Csv.Money(r.BasePay), Csv.Money(r.Deduction), Csv.Money(r.OvertimePay), Csv.Money(r.Total),
+                Csv.Money(r.AdvanceRepayment ?? 0), Csv.Money(r.ToHandOver));
         }
 
         foreach (var t in Totals(rows))
         {
             Csv.Line(csv, monthText, "TOTAL", null, null, null, null, null, null, t.Currency, null, null, null, null, null, null, null, null, null,
-                Csv.Money(t.BasePay), Csv.Money(t.Deduction), Csv.Money(t.OvertimePay), Csv.Money(t.Total));
+                Csv.Money(t.BasePay), Csv.Money(t.Deduction), Csv.Money(t.OvertimePay), Csv.Money(t.Total),
+                Csv.Money(t.AdvanceRepayment), Csv.Money(t.ToHandOver));
         }
 
         var domain = query.Domain is null ? string.Empty : "-" + query.Domain;
@@ -305,13 +314,38 @@ public sealed class SalaryService(
 
     private bool InProgress(DateOnly month) => clock.CompanyToday >= month && clock.CompanyToday < month.AddMonths(1);
 
-    private SalaryRowResponse ToRow(Computed c)
+    private async Task<List<SalaryRowResponse>> RowsAsync(DateOnly month, IReadOnlyList<Computed> computed, CancellationToken cancellationToken)
+    {
+        var repaid = await AdvanceRepaymentsAsync(month, computed, cancellationToken);
+        return computed.Select(c => ToRow(c, repaid.GetValueOrDefault(c.User.Id))).ToList();
+    }
+
+    /// <summary>What comes off each person's pay for advances in the month, for everyone listed at once; people with none are left out.</summary>
+    private async Task<IReadOnlyDictionary<long, decimal>> AdvanceRepaymentsAsync(
+        DateOnly month,
+        IReadOnlyList<Computed> computed,
+        CancellationToken cancellationToken)
+    {
+        var given = await advances.GivenToAsync(computed.Select(c => c.User.Id).ToList(), cancellationToken);
+        if (given.Count == 0)
+        {
+            return new Dictionary<long, decimal>();
+        }
+
+        var known = computed.ToDictionary(c => (c.User.Id, month), c => advanceSchedules.PayOf(c.Result, c.Input));
+        var scheduled = await advanceSchedules.ScheduleAsync(given, month, known, cancellationToken);
+        return scheduled.Values
+            .GroupBy(g => g.Advance.UserId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Schedule.TakenIn(month)))
+            .Where(p => p.Value > 0)
+            .ToDictionary(p => p.Key, p => p.Value);
+    }
+
+    private SalaryRowResponse ToRow(Computed c, decimal advance = 0)
     {
         var (user, r) = (c.User, c.Result);
         var estimate = MyTime.EstimateOf(r, c.Input, InProgress(c.Input.Month));
-        var monthlyPay = r.Terms.Basis == PayBasis.Monthly
-            ? r.Terms.Amount
-            : Math.Round(r.HourlyRate * PayRules.PaidMinutesInMonth(c.Input.Month, c.Input.Calendar) / 60m, 2, MidpointRounding.AwayFromZero);
+        var monthlyPay = SalaryCalculator.MonthlyPay(r, c.Input);
         return new SalaryRowResponse
         {
             UserId = user.Id,
@@ -352,12 +386,14 @@ public sealed class SalaryService(
             MonthlyPay = monthlyPay,
             EarnedSoFar = estimate.EarnedSoFar,
             FullMonthEstimate = estimate.FullMonth,
+            AdvanceRepayment = advance > 0 ? advance : null,
+            ToHandOver = Math.Max(0, (estimate.FullMonth ?? r.Total) - advance),
         };
     }
 
     private static IReadOnlyList<SalaryTotalResponse> Totals(IEnumerable<SalaryRowResponse> rows)
         => rows.GroupBy(r => r.Currency)
             .OrderBy(g => g.Key)
-            .Select(g => new SalaryTotalResponse(g.Key, g.Count(), g.Sum(r => r.BasePay), g.Sum(r => r.OvertimePay), g.Sum(r => r.Deduction), g.Sum(r => r.Total), g.Sum(r => r.EarnedSoFar)))
+            .Select(g => new SalaryTotalResponse(g.Key, g.Count(), g.Sum(r => r.BasePay), g.Sum(r => r.OvertimePay), g.Sum(r => r.Deduction), g.Sum(r => r.Total), g.Sum(r => r.EarnedSoFar), g.Sum(r => r.AdvanceRepayment ?? 0), g.Sum(r => r.ToHandOver)))
             .ToList();
 }

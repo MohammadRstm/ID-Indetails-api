@@ -227,6 +227,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IHourExcuseRepository, HourExcuseRepository>();
         services.AddScoped<ITimeOffRepository, TimeOffRepository>();
+        services.AddScoped<ISalaryAdvanceRepository, SalaryAdvanceRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IProjectDeletionRepository, ProjectDeletionRepository>();
@@ -313,6 +314,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMyTimeService, MyTimeService>();
         services.AddScoped<IHourExcuseService, HourExcuseService>();
         services.AddScoped<ITimeOffService, TimeOffService>();
+        services.AddScoped<ISalaryAdvanceSchedules, SalaryAdvanceSchedules>();
+        services.AddScoped<ISalaryAdvanceService, SalaryAdvanceService>();
         services.AddScoped<ITimeOffWatch, TimeOffWatch>();
         services.AddScoped<ITimeOffSchedule, TimeOffSchedule>();
         services.AddScoped<IProjectPayService, ProjectPayService>();

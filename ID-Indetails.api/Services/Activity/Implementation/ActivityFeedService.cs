@@ -118,6 +118,12 @@ public sealed class ActivityFeedService(
             hidden.Add(ActivityEventKinds.ScheduleChanged);
         }
 
+        // advances are pay: only those who see salaries or give advances see them
+        if (!actor.Has(PermissionCodes.SalaryView) && !actor.Has(PermissionCodes.SalaryAdvanceManage))
+        {
+            hidden.AddRange(ActivityEventKinds.SalaryAdvance);
+        }
+
         return new ActivityFeedSearch(
             query.Domain is { } domain ? actor.VisibleDomains.Where(d => d == domain).ToList() : actor.VisibleDomains,
             withCompany,

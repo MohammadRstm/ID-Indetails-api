@@ -26,6 +26,7 @@ using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.TimeOff.Abstraction;
 
@@ -49,6 +50,7 @@ public sealed class EmployeeService(
     IPresence presence,
     IWorkingTimeService workingTime,
     ITimeOffWatch timeOff,
+    ISalaryAdvanceService salaryAdvances,
     IClock clock) : IEmployeeService
 {
     private const string NotFoundMessage = "Employee not found.";
@@ -153,6 +155,7 @@ public sealed class EmployeeService(
         await invitations.RevokePendingForUserAsync(user.Id, now, cancellationToken);
         activity.Add(UserEvent(user, ActivityEventKinds.EmployeeDeactivated, actor.UserId, period is null ? null : new { lastWorkingDay = lastDay }));
         await timeOff.EndAsync(user, actor.UserId, "They left.", cancellationToken);
+        await salaryAdvances.NoteLeavingAsync(user, actor.UserId, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

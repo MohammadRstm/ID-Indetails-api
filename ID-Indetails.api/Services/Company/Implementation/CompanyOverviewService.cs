@@ -28,7 +28,8 @@ namespace ID_Indetails.api.Services.Company.Implementation;
 /// Company totals from the shared finance calculator: each domain's period figures are its Financials' own
 /// (<see cref="PeriodMoney.Of"/> over the same <see cref="MoneyRollup"/>), and its billing is <see cref="ProjectBilling"/>'s.
 /// Revenue is the money received, on the day it arrived; costs count on their day; overhead is charged by calendar days
-/// and converted at the rate of its month. Fixed salaries (the pay of everyone who logs no hours: admins, super admins
+/// and converted at the rate of its month. A salary advance written off is a company expense on the day it was settled,
+/// converted like a one-off expense (advances otherwise change no figure here). Fixed salaries (the pay of everyone who logs no hours: admins, super admins
 /// and Execution's site staff), Design paid leave and the overtime premium past a salary's threshold are company costs
 /// like overhead: no project carries them. Every figure needs company:view, checked here as well as on the endpoint.
 /// </summary>
@@ -37,6 +38,7 @@ public sealed class CompanyOverviewService(
     IMoneyRollupService rollups,
     IProjectFinanceRepository financeSources,
     IOverheadRepository overheads,
+    ISalaryAdvanceRepository salaryAdvances,
     IPayrollRepository payroll,
     IPayrollInputs payrollInputs,
     ICurrentUser currentUser,
@@ -156,10 +158,11 @@ public sealed class CompanyOverviewService(
 
         var (overhead, unconverted) = await OverheadAsync(shares.Select(s => (s.Month, s.Calendar)), data.Rates, cancellationToken);
         var (oneOffs, unconvertedOneOffs) = await OneOffsAsync(start, end, data.Rates, cancellationToken);
+        var (writeOffs, unconvertedWriteOffs) = await AdvanceWriteOffsAsync(start, end, data.Rates, cancellationToken);
         var salaryCosts = await SalaryCostsAsync(shares, data.Rates, cancellationToken);
         var (salaries, paidLeave, premium) = (salaryCosts.Fixed.Total, salaryCosts.PaidLeave.Total, salaryCosts.OvertimePremium.Total);
         var gross = domains.Sum(d => d.Profit);
-        var expenses = overhead + oneOffs + salaries + paidLeave + premium;
+        var expenses = overhead + oneOffs + salaries + paidLeave + premium + writeOffs;
 
         return new CompanyOverviewResponse(
             start,
@@ -178,6 +181,8 @@ public sealed class CompanyOverviewService(
             salaryCosts.PaidLeave.Unconverted,
             premium,
             salaryCosts.OvertimePremium.Unconverted,
+            writeOffs,
+            unconvertedWriteOffs,
             salaries,
             salaryCosts.Fixed.Unconverted,
             expenses,
@@ -229,11 +234,13 @@ public sealed class CompanyOverviewService(
 
         var lines = await overheads.ListAsync(cancellationToken);
         var oneOffExpenses = await overheads.OneOffsAsync(keys.Min(), keys.Max().AddMonths(1).AddDays(-1), cancellationToken);
+        var writtenOff = await salaryAdvances.WriteOffsAsync(keys.Min(), keys.Max().AddMonths(1).AddDays(-1), cancellationToken);
         var result = new List<CompanyMonthResponse>();
         foreach (var month in keys)
         {
             var (overhead, _) = OverheadOf(lines, [(month, 1m)], data.Rates);
-            var (oneOffs, _) = OneOffsOf(oneOffExpenses.Where(e => Recognition.MonthOf(e.SpentOn) == month), data.Rates);
+            var (oneOffs, _) = AtDayRates(oneOffExpenses.Where(e => Recognition.MonthOf(e.SpentOn) == month).Select(e => (e.SpentOn, e.Currency, e.Amount)), data.Rates);
+            var (advanceWriteOffs, _) = AtDayRates(writtenOff.Where(w => Recognition.MonthOf(w.Day) == month).Select(w => (w.Day, w.Currency, w.Amount)), data.Rates);
             // each domain as its Financials chart gives it, so a month adds up to the overview's gross profit to the cent
             var periods = businesses.Select(projects => data.Period(projects, month, month.AddMonths(1).AddDays(-1))).ToList();
             decimal Cost(Func<PeriodMoney.CostTotals, decimal> source) => PeriodMoney.Round(periods.Sum(p => source(p.Cost)));
@@ -242,8 +249,8 @@ public sealed class CompanyOverviewService(
 
             result.Add(new CompanyMonthResponse(
                 month, periods.Sum(p => p.Received), Cost(c => c.Labour), Cost(c => c.Expenses), Cost(c => c.SiteExpenses), Cost(c => c.GroundLabour),
-                overhead, oneOffs, fixedSalaries, paidLeave, premium, before, before - overhead - oneOffs,
-                before - overhead - oneOffs - fixedSalaries - paidLeave - premium));
+                overhead, oneOffs, fixedSalaries, paidLeave, premium, advanceWriteOffs, before, before - overhead - oneOffs,
+                before - overhead - oneOffs - fixedSalaries - paidLeave - premium - advanceWriteOffs));
         }
 
         return result;
@@ -267,23 +274,33 @@ public sealed class CompanyOverviewService(
         DateOnly to,
         ExchangeRateTable rates,
         CancellationToken cancellationToken)
-        => OneOffsOf(await overheads.OneOffsAsync(from, to, cancellationToken), rates);
+        => AtDayRates((await overheads.OneOffsAsync(from, to, cancellationToken)).Select(e => (e.SpentOn, e.Currency, e.Amount)), rates);
 
-    /// <summary>One-off expenses in full on their day, each converted at the rate of that day; one with no rate is listed apart.</summary>
-    private static (decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted) OneOffsOf(IEnumerable<OneOffExpense> expenses, ExchangeRateTable rates)
+    /// <summary>Advances written off from <paramref name="from"/> to <paramref name="to"/>, each in full on the day it was settled.</summary>
+    private async Task<(decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted)> AdvanceWriteOffsAsync(
+        DateOnly from,
+        DateOnly to,
+        ExchangeRateTable rates,
+        CancellationToken cancellationToken)
+        => AtDayRates((await salaryAdvances.WriteOffsAsync(from, to, cancellationToken)).Select(w => (w.Day, w.Currency, w.Amount)), rates);
+
+    /// <summary>Amounts in full on their day, each converted at the rate of that day (one-off expenses, written-off advances); one with no rate is listed apart.</summary>
+    private static (decimal Usd, IReadOnlyList<CurrencyTotalResponse> Unconverted) AtDayRates(
+        IEnumerable<(DateOnly Day, string Currency, decimal Amount)> amounts,
+        ExchangeRateTable rates)
     {
         var usd = 0m;
         var unconverted = new Dictionary<string, decimal>();
 
-        foreach (var expense in expenses)
+        foreach (var (day, currency, amount) in amounts)
         {
-            if (rates.ToUsd(expense.Amount, expense.Currency, expense.SpentOn) is { } converted)
+            if (rates.ToUsd(amount, currency, day) is { } converted)
             {
                 usd += converted;
             }
             else
             {
-                unconverted[expense.Currency] = unconverted.GetValueOrDefault(expense.Currency) + expense.Amount;
+                unconverted[currency] = unconverted.GetValueOrDefault(currency) + amount;
             }
         }
 

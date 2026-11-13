@@ -17,6 +17,7 @@ This page covers what the API does today, what is in progress, and what the prot
 | Design work: entries, comments, meetings, settings, reports (with utilization, hours only: `/api/reports/utilization`), activity, timeline, overtime, closed months, dashboards | [design.md](design.md) | #14, #22, #24, `MR-Insights-Labour` |
 | Self-service: hours, overtime, schedule, requirements, board layouts (employees don't see their pay) | [me.md](me.md) | #17, #22, #23, #24 |
 | Time off: requests, approval with or without pay, the hour block, alerts, pay | [time-off.md](time-off.md) | `MR-Time-Off` |
+| Salary advances: requests, approval or recording with repayment months, repayment from pay, settling and write-offs, Salaries' "To hand over" | [company.md](company.md#salary-advances), [me.md](me.md#my-salary-advances) | `MR-Salary-Advance` |
 | Notifications, scheduled checks, money insights, auto-archive | [notifications.md](notifications.md) | #19, #22 |
 | Messaging, live updates, online status and last seen | [messaging.md](messaging.md) | #20 |
 | Search | [search.md](search.md) | #22 |
