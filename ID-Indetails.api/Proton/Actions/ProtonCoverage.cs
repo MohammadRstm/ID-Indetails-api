@@ -320,6 +320,7 @@ public static class ProtonCoverage
         Elsewhere("PortalAuth.ResetPassword", "a client's new password, with their emailed token"),
         Elsewhere("PortalInvitations.Validate", "a client opening their own invitation"),
         Elsewhere("PortalInvitations.Accept", "a client accepting their own invitation, with a new password"),
+        Elsewhere("Portal.Contact", "a client's own message to the developer, from the portal", externalSend: true),
         // a project's files: uploads come from the person's device; arranging them and their comments are actions
         Open("ProjectFiles.StartUpload", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
         Open("ProjectFiles.PartLinks", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),

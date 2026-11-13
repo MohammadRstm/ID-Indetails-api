@@ -11,11 +11,20 @@ public sealed partial class CapturingEmailSender : IEmailSender
 
     public bool FailNextSend { get; set; }
 
+    /// <summary>Fails only the next email to this address; the others still go.</summary>
+    public string? FailNextSendTo { get; set; }
+
     public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
-        if (FailNextSend)
+        var failTo = FailNextSendTo is { } to && message.ToAddress.Equals(to, StringComparison.OrdinalIgnoreCase);
+        if (FailNextSend || failTo)
         {
             FailNextSend = false;
+            if (failTo)
+            {
+                FailNextSendTo = null;
+            }
+
             throw new InvalidOperationException("Simulated SMTP failure.");
         }
 

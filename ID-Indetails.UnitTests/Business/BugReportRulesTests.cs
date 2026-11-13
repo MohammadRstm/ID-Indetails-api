@@ -8,13 +8,13 @@ public class BugReportRulesTests
 {
     private static bool Valid(ReportBugRequest request) => new ReportBugRequestValidator().Validate(request).IsValid;
 
-    private static ReportBugRequest Report(string? page) => new() { Title = "It broke", Description = "It did", Page = page };
+    private static ReportBugRequest Message(string? page) => new() { Description = "I tried to save and it failed", Page = page };
 
     [Theory]
     [InlineData("/design/projects/12")]
     [InlineData("/company/overhead")]
     [InlineData(null)]
-    public void The_page_is_an_app_path(string? page) => Valid(Report(page)).ShouldBeTrue();
+    public void The_page_is_an_app_path(string? page) => Valid(Message(page)).ShouldBeTrue();
 
     [Theory]
     [InlineData("/reset-password?token=abc")]
@@ -22,13 +22,13 @@ public class BugReportRulesTests
     [InlineData("https://elsewhere.example/x")]
     [InlineData("design/projects")]
     [InlineData("/projects/<b>")]
-    public void Anything_but_a_path_is_refused_so_no_token_or_markup_travels(string page) => Valid(Report(page)).ShouldBeFalse();
+    public void Anything_but_a_path_is_refused_so_no_token_or_markup_travels(string page) => Valid(Message(page)).ShouldBeFalse();
 
     [Fact]
-    public void A_title_and_a_description_are_needed_and_the_title_is_one_line()
+    public void What_happened_is_needed_and_anything_else_is_optional()
     {
-        Valid(new ReportBugRequest { Title = " ", Description = "It did" }).ShouldBeFalse();
-        Valid(new ReportBugRequest { Title = "It broke", Description = "" }).ShouldBeFalse();
-        Valid(new ReportBugRequest { Title = "It\r\nbroke", Description = "It did" }).ShouldBeFalse();
+        Valid(new ReportBugRequest { Description = " " }).ShouldBeFalse();
+        Valid(new ReportBugRequest { Description = "It broke", Details = null }).ShouldBeTrue();
+        Valid(new ReportBugRequest { Description = "It broke", Details = new string('x', 4001) }).ShouldBeFalse();
     }
 }

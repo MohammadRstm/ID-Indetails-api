@@ -34,7 +34,7 @@ Every request counts against a global limit: 300 a minute per signed-in user, or
 - Refresh (the website's and the phone's): 60 a minute per IP on its own (`refresh`), since every page load refreshes and an office shares one address; the refresh token itself is the secret.
 - Change password (on either) and change sign-in address, which check the current password: 10 a minute per person (`credential`).
 - Requests that email an address the caller chooses (invoice and BOQ emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
-- Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Bug reports: 5 an hour per person. Setup: 5 an hour per IP.
+- Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Messages to the developer: 5 an hour per person, staff or client (`bug-report`). Setup: 5 an hour per IP.
 - The Website area's analytics, which ask Google Analytics: 30 a minute per person (`website-analytics`).
 
 All limits are in the `RateLimiting` configuration section. Going over answers `429 too_many_requests` with a `Retry-After` header, and is logged as a warning under the `ID_Indetails.api.Security` category with the caller (user id, or IP when signed out). Refused sign-ins are logged there too, with the IP only.

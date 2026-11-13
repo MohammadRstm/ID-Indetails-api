@@ -4,6 +4,9 @@ namespace ID_Indetails.api.Services.Support.Abstraction;
 
 public interface IBugReportService
 {
-    /// <summary>Emails the report to the support address, with who sent it and from which browser.</summary>
+    /// <summary>Emails a signed-in staff member's message to the developer, with who sent it and from which browser, and sends them a copy.</summary>
     Task SendAsync(ReportBugRequest request, string? userAgent, CancellationToken cancellationToken = default);
+
+    /// <summary>The same, for a client signed in to the portal.</summary>
+    Task SendFromClientAsync(ReportBugRequest request, string? userAgent, CancellationToken cancellationToken = default);
 }

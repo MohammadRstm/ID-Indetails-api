@@ -355,14 +355,16 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        // the developer's WhatsApp number comes with it, for the sign-in pages' Contact the developer
+        const string whatsApp = "96171317958";
 
-        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse(null, false, null));
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse(null, false, null, whatsApp));
         // the logo needn't wait for the rest of the settings: they still read as not set up
         var logoFile = await UploadPngAsync(Client, superAdmin.AccessToken, "logo.png");
         var first = await OkAsync<CompanySettingsResponse>(Client.PutJsonAsync("/api/company/logo", new { fileId = logoFile.Id }, superAdmin.AccessToken));
         first.LogoFileId.ShouldBe(logoFile.Id);
         first.IsSetUp.ShouldBeFalse();
-        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse(null, true, logoFile.Id));
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse(null, true, logoFile.Id, whatsApp));
 
         // saving the settings afterwards keeps it
         var saved = await OkAsync<CompanySettingsResponse>(
@@ -370,7 +372,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         saved.IsSetUp.ShouldBeTrue();
         saved.LogoFileId.ShouldBe(logoFile.Id);
 
-        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", true, logoFile.Id));
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", true, logoFile.Id, whatsApp));
         var logo = await Client.GetAsync("/api/company/logo");
         logo.StatusCode.ShouldBe(HttpStatusCode.OK);
         logo.Content.Headers.ContentType!.MediaType.ShouldBe("image/png");
@@ -380,7 +382,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PutJsonAsync("/api/company/logo", new { fileId = theirs.Id }, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         (await OkAsync<CompanySettingsResponse>(Client.DeleteAsync("/api/company/logo", superAdmin.AccessToken))).LogoFileId.ShouldBeNull();
-        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", false, null));
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", false, null, whatsApp));
         await (await Client.GetAsync("/api/company/logo")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }
 

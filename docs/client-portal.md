@@ -141,6 +141,7 @@ what each project's card shows (see [The client's project list](#the-clients-pro
 | `POST /api/portal/invitations/validate`, `/accept` | anyone with the link, `auth` limit | |
 | `POST /api/portal/auth/login`, `/refresh`, `/logout`, `/forgot-password`, `/reset-password` | the client | |
 | `GET /api/portal/me` | portal token | |
+| `POST /api/portal/contact` | portal token, `bug-report` limit (5 an hour per client) | A message to the developer, as staff send one ([me.md](me.md#contact-the-developer)) |
 
 Proton never calls any of these: they are `Never` in `ProtonCoverage`.
 

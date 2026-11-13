@@ -834,7 +834,7 @@ public static class ProtonFormSpecs
         [ProtonForm.Meeting] = new("the meeting form", W<MeetingsController>(nameof(MeetingsController.Create))),
         [ProtonForm.NewProject] = new("the new project form", W<ProjectsController>(nameof(ProjectsController.Create))),
         [ProtonForm.EditProject] = new("the project details form", W<ProjectsController>(nameof(ProjectsController.Update))),
-        [ProtonForm.ReportBug] = new("the bug report form", null, TypedOnly: true),
+        [ProtonForm.ReportBug] = new("the Contact the developer form", null, TypedOnly: true),
         [ProtonForm.Invite] = new("the invite form", W<InvitationsController>(nameof(InvitationsController.Create)), TypedOnly: true),
         [ProtonForm.Message] = new("a draft", null, TypedOnly: true),
         [ProtonForm.LogWork] = new("the log work form", W<WorkEntriesController>(nameof(WorkEntriesController.Create))),

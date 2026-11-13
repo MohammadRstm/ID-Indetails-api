@@ -135,23 +135,24 @@ public class ProtonMessageActionsTests(ProtonAllActionsApiFactory api) : IClassF
     }
 
     [Fact]
-    public async Task A_bug_report_is_emailed_to_the_developers_only_on_confirm()
+    public async Task A_message_to_the_developer_is_emailed_only_on_confirm()
     {
-        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (email, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var support = api.Services.GetRequiredService<IOptions<BugReportOptions>>().Value.ToAddress;
-        var title = "Overview went blank " + Guid.NewGuid().ToString("N")[..6];
+        var description = "The overview went blank " + Guid.NewGuid().ToString("N")[..6];
         var before = api.Emails.CountTo(support);
 
         var (card, _) = await ProposeAsync(superAdmin, "propose_report_bug",
-            new { title, description = "It said something went wrong.", page = "/design/overview" }, "Report that the overview went blank");
+            new { description, details = "It said something went wrong.", page = "/design/overview" }, "Tell the developer the overview went blank");
         card.PendingAction!.Preview.Irreversible.ShouldBeTrue();
-        card.PendingAction.Preview.Changes.Single(c => c.Label == "Title").After.ShouldBe(title);
+        card.PendingAction.Preview.Changes.Single(c => c.Label == "What happened").After.ShouldBe(description);
         api.Emails.CountTo(support).ShouldBe(before);
 
         await ConfirmAsync(superAdmin, card);
         api.Emails.CountTo(support).ShouldBe(before + 1);
-        api.Emails.LastTo(support).Subject.ShouldEndWith(title);
+        api.Emails.LastTo(support).TextBody.ShouldContain(description);
         api.Emails.LastTo(support).TextBody.ShouldContain("Proton");
+        api.Emails.LastTo(email).TextBody.ShouldContain(description);
     }
 
     [Fact]
