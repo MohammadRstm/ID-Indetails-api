@@ -270,6 +270,11 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
             MustMention: ["none", "no design project", "no project", "checked", "no rule"]),
         new("spending by category", ["How has Design's spending gone by category over the last 6 months?"], ["analyze_expense_trends"],
             MustMention: ["1,500", "1500"]),
+        // Design's labour by department, never a person's; utilization in hours to an admin without money, judging no one
+        new("labour by department", ["What has Design's labour cost by department over the last 3 months?"], ["analyze_labor_costs"],
+            MustMention: ["department"]),
+        new("team utilization", ["How much of their expected hours did each Design employee log this month?"], ["analyze_employee_utilization"],
+            NoMoney: true, MustMention: ["expected", "utilization", "utilisation"]),
         new("revenue in a period", ["How much revenue did Design bring in over the last 30 days?"],
             ["get_domain_finance", "compare_money", "get_money_by_month", "get_company_overview"], MustMention: ["received", "came in", "paid"]),
         new("expected isn't a forecast", ["How much revenue should Design expect next month?"], [],

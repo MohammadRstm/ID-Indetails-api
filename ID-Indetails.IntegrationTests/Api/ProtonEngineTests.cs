@@ -109,6 +109,9 @@ public class ProtonEngineTests(ProtonEngineApiFactory api) : IClassFixture<Proto
         // a business's risks and spending trends load the whole business: found through search too
         Deferred("detect_project_financial_risks").ShouldBeTrue();
         Deferred("analyze_expense_trends").ShouldBeTrue();
+        // Design's labour and its employees' utilization read every hour logged: found through search too
+        Deferred("analyze_labor_costs").ShouldBeTrue();
+        Deferred("analyze_employee_utilization").ShouldBeTrue();
         // the same list on every call, so it stays in the cached prefix
         api.Anthropic.Requests[1]["tools"]!.ToJsonString().ShouldBe(tools.ToJsonString());
     }
