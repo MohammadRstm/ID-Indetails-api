@@ -74,7 +74,7 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
 | Projects, status, pricing, payment history | [projects.md](docs/projects.md) |
 | Design: work entries, meetings, work views, outside-scope hours | [design.md](docs/design.md) |
 | Execution: BOQs and VOs, site expenses, labour, site staff, daily logs, pocket money, supervision taken, account figures | [execution.md](docs/execution.md) |
-| Money: the finance calculator, dashboards, Financials | [finance.md](docs/finance.md) |
+| Money: the finance calculator, dashboards, Financials, Financial Intelligence (a project's profitability and scenarios, a domain's risks and spending trends, the owner's thresholds) | [finance.md](docs/finance.md) |
 | Invoices and payments | [billing.md](docs/billing.md) |
 | Clients | [clients.md](docs/clients.md) |
 | People, pay, hours | [employees.md](docs/employees.md), [me.md](docs/me.md), [time-off.md](docs/time-off.md) |

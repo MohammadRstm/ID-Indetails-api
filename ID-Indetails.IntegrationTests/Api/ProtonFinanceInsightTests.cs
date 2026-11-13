@@ -304,4 +304,95 @@ public class ProtonFinanceInsightTests(ProtonApiFactory api) : IClassFixture<Pro
         which["status"]!.GetValue<string>().ShouldBe("invalid");
         which["message"]!.GetValue<string>().ShouldContain("design or execution");
     }
+
+    /// <summary>
+    /// Up to 45 minutes of work ending a couple of minutes ago, kept within today in Beirut so it is in this month and
+    /// on or after a person invited today joined.
+    /// </summary>
+    private static (string Start, string End) WorkToday()
+    {
+        var beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
+        var now = DateTime.UtcNow;
+        var end = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc).AddMinutes(-2);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now, beirut));
+        var midnight = TimeZoneInfo.ConvertTimeToUtc(today.ToDateTime(TimeOnly.MinValue), beirut);
+        var start = end.AddMinutes(-45) < midnight ? midnight : end.AddMinutes(-45);
+        return (start.ToString("yyyy-MM-dd HH:mm:ss"), end.ToString("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    /// <summary>Every property name anywhere in a JSON value, nested objects and arrays included.</summary>
+    private static IEnumerable<string> PropertyNames(JsonNode? node) => node switch
+    {
+        JsonObject o => o.SelectMany(p => PropertyNames(p.Value).Prepend(p.Key)),
+        JsonArray a => a.SelectMany(PropertyNames),
+        _ => [],
+    };
+
+    [Fact]
+    public async Task A_super_admin_reads_designs_labour_by_month_project_and_department_with_no_person_in_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var today = WorkEntryTestSteps.CompanyDay(DateTime.UtcNow);
+        var thisMonth = new DateOnly(today.Year, today.Month, 1);
+        var (designerEmail, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await OkAsync(Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
+            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = thisMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token));
+        var project = await Projects.CreateProjectAsync(token, DomainCodes.Design);
+        var (start, end) = WorkToday();
+        await new WorkEntryTestSteps(_steps).InsertAsync(designer.User.Id, project.Id, start, end);
+
+        var (labour, reply) = await CallAsync(superAdmin, "analyze_labor_costs", new { months = 3 });
+        var data = labour["data"]!;
+        data["domain"]!.GetValue<string>().ShouldBe(DomainCodes.Design);
+        var months = data["months"]!.AsArray();
+        months.Count.ShouldBe(3);
+        months[2]!["so_far"]!.GetValue<bool>().ShouldBeTrue();
+        months[2]!["labour"]!["hours"]!.GetValue<decimal>().ShouldBeGreaterThan(0m);
+        var mine = data["projects"]!.AsArray().SingleOrDefault(p => p!["project_id"]!.GetValue<long>() == project.Id)
+            ?? throw new ShouldAssertException("The project with labour this month isn't listed (more than 15 projects with labour?).");
+        mine["labour"]!["hours"]!.GetValue<decimal>().ShouldBeGreaterThan(0m);
+        // priced from the designer's pay; a weekend's hours are all overtime, priced as Salaries pays it
+        mine["labour"]!["cost"]!.GetValue<decimal>().ShouldBeGreaterThanOrEqualTo(0m);
+        data["departments"]!.AsArray().ShouldNotBeEmpty();
+
+        // the basis is shown under the answer; the datasets are by month, department and project
+        labour["basis"]!["partial"]!.GetValue<bool>().ShouldBeTrue();
+        labour["basis"]!["omitted"]!.ToJsonString().ShouldContain("Fixed salaries");
+        var titles = labour["datasets"]!.AsArray().Select(d => d!["title"]!.GetValue<string>()).ToList();
+        titles.ShouldContain("Design: labour by month");
+        titles.ShouldContain("Design: labour by department");
+        titles.ShouldContain("Design: labour by project");
+        reply.Sources.ShouldHaveSingleItem().Label.ShouldBe("Design's labour cost");
+
+        // never a person: no one's id, name, email or rate anywhere in what the model reads
+        PropertyNames(data).ShouldNotContain(n => n.Contains("user") || n.Contains("person") || n.Contains("people")
+            || n.Contains("employee") || n.Contains("email") || n.Contains("rate"));
+        labour.ToJsonString().ShouldNotContain(designerEmail, Case.Insensitive);
+
+        // 1 to 24 months, through the endpoint's own validator
+        var (tooMany, _) = await CallAsync(superAdmin, "analyze_labor_costs", new { months = 30 });
+        tooMany["status"]!.GetValue<string>().ShouldBe("invalid");
+        tooMany["message"]!.GetValue<string>().ShouldContain("24");
+    }
+
+    [Fact]
+    public async Task Designs_labour_needs_financial_view_and_is_design_only()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+
+        // an admin has no financial:view: the endpoint's policy keeps the tool from them, offered or asked for
+        var plain = await DesignAdminAsync(superAdmin);
+        (await CallAsync(plain, "analyze_labor_costs", new { })).Result["status"]!.GetValue<string>().ShouldBe("forbidden");
+        api.Anthropic.ToolsOffered(0).ShouldNotContain("analyze_labor_costs");
+
+        // with financial:view, a Design admin reads it
+        var viewer = await DesignAdminAsync(superAdmin, PermissionCodes.FinancialView);
+        (await CallAsync(viewer, "analyze_labor_costs", new { })).Result["data"]!["domain"]!.GetValue<string>().ShouldBe(DomainCodes.Design);
+
+        // Execution logs no hours, so its labour is never this tool's: an Execution admin who sees its money isn't offered it
+        var (_, _, siteMoney) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
+        (await CallAsync(siteMoney, "analyze_labor_costs", new { })).Result["status"]!.GetValue<string>().ShouldBe("forbidden");
+        api.Anthropic.ToolsOffered(0).ShouldNotContain("analyze_labor_costs");
+    }
 }

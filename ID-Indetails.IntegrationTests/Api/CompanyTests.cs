@@ -139,6 +139,41 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Schedules_download_as_a_pdf_and_a_csv_with_a_row_per_person()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        // Monday to Thursday, 8 to 4: 28 hours a week.
+        var ownWeek = new { days = Enumerable.Range(1, 4).Select(d => new { weekday = d, startMinute = 480, endMinute = 960 }) };
+        await OkAsync<PersonScheduleResponse>(Client.PutJsonAsync($"/api/employees/{designer.User.Id}/schedule", ownWeek, superAdmin.AccessToken));
+        var query = $"?domain=design&search={designer.User.LastName}";
+
+        var pdf = await Client.GetAsync($"/api/company/schedules/pdf{query}", superAdmin.AccessToken);
+        ((int)pdf.StatusCode).ShouldBe(200, await pdf.Content.ReadAsStringAsync());
+        pdf.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
+        pdf.Content.Headers.ContentDisposition!.FileName!.Trim('"').ShouldBe($"schedules-{Iso(Today)}.pdf");
+        System.Text.Encoding.ASCII.GetString(await pdf.Content.ReadAsByteArrayAsync(), 0, 5).ShouldBe("%PDF-");
+
+        var export = await Client.GetAsync($"/api/company/schedules/export{query}", superAdmin.AccessToken);
+        ((int)export.StatusCode).ShouldBe(200, await export.Content.ReadAsStringAsync());
+        export.Content.Headers.ContentType!.MediaType.ShouldBe("text/csv");
+        export.Content.Headers.ContentDisposition!.FileName!.Trim('"').ShouldBe($"schedules-{Iso(Today)}.csv");
+        var csv = await export.Content.ReadAsStringAsync();
+        csv.ShouldContain("Name,Business,Department,Position,Schedule,");
+        csv.ShouldContain(",Hours a week,Next change");
+        var row = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Single(l => l.Contains($"{designer.User.FirstName} {designer.User.LastName}"));
+        row.ShouldContain(",Design,");
+        row.ShouldContain(",Own,");
+        row.Split("08:00-16:00").Length.ShouldBe(5);
+        row.ShouldEndWith(",28,");
+
+        foreach (var path in new[] { "pdf", "export" })
+        {
+            await (await Client.GetAsync($"/api/company/schedules/{path}", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        }
+    }
+    [Fact]
     public async Task Company_expenses_keep_past_months_and_totals_per_currency()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

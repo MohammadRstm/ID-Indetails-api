@@ -4,6 +4,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Payroll;
 using ID_Indetails.api.RateLimiting;
+using ID_Indetails.api.Services.Documents.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -14,7 +15,7 @@ namespace ID_Indetails.api.Controllers;
 [ApiController]
 [Route("api/company/salaries")]
 [HasPermission(PermissionCodes.SalaryView)]
-public sealed class SalariesController(ISalaryService salaries) : ControllerBase
+public sealed class SalariesController(ISalaryService salaries, IDocumentService documents) : ControllerBase
 {
     [HttpGet]
     public Task<SalariesResponse> List([FromQuery] SalaryListQuery query, CancellationToken cancellationToken)
@@ -36,5 +37,14 @@ public sealed class SalariesController(ISalaryService salaries) : ControllerBase
     {
         var (fileName, csv) = await salaries.ExportAsync(query, cancellationToken);
         return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv)).ToArray(), "text/csv", fileName);
+    }
+
+    /// <summary>The same filtered list as a landscape PDF to print or keep (the people the CSV export has).</summary>
+    [HttpGet("pdf")]
+    [EnableRateLimiting(RateLimitPolicies.Export)]
+    public async Task<IActionResult> Pdf([FromQuery] SalaryListQuery query, CancellationToken cancellationToken)
+    {
+        var pdf = await documents.SalariesPdfAsync(query, cancellationToken);
+        return File(pdf.Content, "application/pdf", pdf.FileName);
     }
 }

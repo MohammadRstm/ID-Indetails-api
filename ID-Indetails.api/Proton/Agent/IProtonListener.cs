@@ -36,6 +36,8 @@ public static class ProtonStatus
         ["simulate_project_financial_scenario"] = "Simulating the change…",
         ["detect_project_financial_risks"] = "Checking the projects for financial risks…",
         ["analyze_expense_trends"] = "Going through the spending month by month…",
+        ["analyze_labor_costs"] = "Adding up the labour by month and department…",
+        ["analyze_employee_utilization"] = "Comparing logged hours with expected hours…",
         ["open_record"] = "Opening it…",
         ["open_page"] = "Opening it…",
         ["offer_choices"] = "Lining up the options…",

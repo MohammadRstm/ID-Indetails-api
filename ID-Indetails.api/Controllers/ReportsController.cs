@@ -10,8 +10,14 @@ namespace ID_Indetails.api.Controllers;
 /// <summary>The Design reports and dashboard. Callers who can't see Design get 404; money only with financial:view.</summary>
 [ApiController]
 [Route("api/reports")]
-public sealed class ReportsController(IReportService reportService) : ControllerBase
+public sealed class ReportsController(IReportService reportService, IUtilizationService utilization) : ControllerBase
 {
+    /// <summary>Design employees' logged against expected hours in a month, with excuses, overtime and project mix. Hours only.</summary>
+    [HttpGet("utilization")]
+    [HasPermission(PermissionCodes.ReportView)]
+    public Task<UtilizationResponse> Utilization([FromQuery] UtilizationQuery query, CancellationToken cancellationToken)
+        => utilization.MonthAsync(query, cancellationToken);
+
     [HttpGet("work")]
     [HasPermission(PermissionCodes.ReportView)]
     public Task<WorkReportResponse> Work([FromQuery] WorkReportQuery query, CancellationToken cancellationToken)

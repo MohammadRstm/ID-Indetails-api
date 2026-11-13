@@ -618,3 +618,146 @@ public sealed class AnalyzeExpenseTrendsTool(IDomainInsightService insights) : P
         return ProtonDatasets.WithRows(byMonth, unusual);
     }
 }
+
+public sealed record LabourInsightInput
+{
+    [Description("Months to return, ending with this one, 1 to 24 (default 12).")]
+    public int? Months { get; init; }
+}
+
+/// <summary>Labour over a span: never one person's.</summary>
+/// <param name="Cost">USD at the rate of each day: hours at each person's hourly cost that day, the overtime Salaries pays, and paid breaks.</param>
+/// <param name="OutsideScopeCost">The part of <paramref name="Cost"/> logged outside the agreed scope (its worked time; paid breaks stay with the day).</param>
+/// <param name="OutsideScopePct">Outside-scope cost as a whole percentage of the cost; empty with no cost.</param>
+public sealed record LabourFigures(decimal Cost, decimal Hours, decimal OutsideScopeCost, decimal OutsideScopeHours, int? OutsideScopePct)
+{
+    public static LabourFigures Of(LabourTotalsResponse t)
+        => new(t.Cost, ProtonText.Hours(t.Minutes), t.OutsideScopeCost, ProtonText.Hours(t.OutsideScopeMinutes), ProtonAnalysis.Pct(t.OutsideScopeShare));
+}
+
+/// <param name="SoFar">This month: it runs to today.</param>
+public sealed record LabourMonthRow(DateOnly Month, bool SoFar, LabourFigures Labour);
+
+/// <param name="SharePct">Its part of the span's labour cost, a whole percentage; empty with no cost.</param>
+public sealed record LabourProjectRow(long ProjectId, string Title, BillingType BillingType, LabourFigures Labour, int? SharePct);
+
+/// <summary>A department's labour. It never lists the people in it.</summary>
+/// <param name="Id">Null for the hours of people in no department.</param>
+/// <param name="SharePct">Its part of the span's labour cost, a whole percentage; empty with no cost.</param>
+public sealed record LabourDepartmentRow(long? Id, string Name, LabourFigures Labour, int? SharePct);
+
+/// <summary>Design's labour over the last months, as GET /api/finance/insights/design/labour returns it. No figure is about one person.</summary>
+/// <param name="Months">Oldest first, ending with this month (to today).</param>
+/// <param name="Projects">The costliest first, internal projects included, at most 15.</param>
+/// <param name="MoreProjects">How many more projects had labour than are listed.</param>
+/// <param name="Departments">The costliest first.</param>
+/// <param name="Unconverted">Labour with no exchange rate on its day, in its own currency: in no cost.</param>
+public sealed record LabourInsight(
+    string Domain,
+    LabourFigures Total,
+    IReadOnlyList<LabourMonthRow> Months,
+    IReadOnlyList<LabourProjectRow> Projects,
+    int MoreProjects,
+    IReadOnlyList<LabourDepartmentRow> Departments,
+    IReadOnlyList<string>? Unconverted,
+    string Note);
+
+/// <summary>
+/// Design's labour cost and hours month by month, by project and by department, with the part logged outside the agreed
+/// scope. It prices every project's hours, so it is heavy. Design only: Execution logs no hours (its labour is ground
+/// labour, in its spending). Never a person: every figure is a sum over a month, a project or a department.
+/// </summary>
+public sealed class AnalyzeLaborCostsTool(IDomainInsightService insights) : ProtonTool<LabourInsightInput>
+{
+    public const int MaxProjects = 15;
+
+    public override string Name => "analyze_labor_costs";
+
+    public override string Description =>
+        "Design's labour cost and hours month by month (12 months by default, up to 24, ending with this one), in USD at the " +
+        "rate of each day: totals, each month, the costliest projects (internal ones included) with their share, and each " +
+        "department with its share; the part logged outside the agreed scope (cost, hours, share); and labour with no " +
+        "exchange rate, listed apart. Never one person's cost or hourly cost. Design only. Use it for \"what does our labour " +
+        "cost\", \"labour by department\", \"how much work is outside scope\".";
+
+    public override string? OnlyInDomain => DomainCodes.Design;
+
+    public override bool Heavy => true;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<FinanceInsightsController>(nameof(FinanceInsightsController.Labour));
+
+    protected override async Task<ProtonToolOutput> RunAsync(LabourInsightInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var query = new LabourInsightQuery { Months = input.Months };
+        await context.ValidateAsync(query, cancellationToken);
+        var l = await insights.LabourAsync(DomainCodes.Design, query, cancellationToken);
+        var thisMonth = new DateOnly(context.Today.Year, context.Today.Month, 1);
+        var projects = l.Projects.Take(MaxProjects).ToList();
+        var labour = new LabourInsight(
+            l.Domain,
+            LabourFigures.Of(l.Total),
+            l.Months.Select(m => new LabourMonthRow(m.Month, m.Month == thisMonth, LabourFigures.Of(m.Totals))).ToList(),
+            projects.Select(p => new LabourProjectRow(p.ProjectId, p.Title, p.BillingType, LabourFigures.Of(p.Totals), ProtonAnalysis.Pct(p.LabourShare))).ToList(),
+            l.Projects.Count - projects.Count,
+            l.Departments.Select(d => new LabourDepartmentRow(d.TeamId, d.Name, LabourFigures.Of(d.Totals), ProtonAnalysis.Pct(d.LabourShare))).ToList(),
+            l.Unconverted.Count > 0 ? ProtonInsights.Amounts(l.Unconverted) : null,
+            "In USD at the rate of each day; this month runs to today, so its figures are so far. Internal projects are " +
+            "included. Outside scope is the hours an admin marked as outside the agreed scope. Departments and projects carry " +
+            "no people: never work out, estimate or hint at one person's pay or hourly cost, even for a department of one. " +
+            "Unconverted labour is in no cost.");
+        var period = new DayRange(l.Months.Count > 0 ? l.Months[0].Month : thisMonth, context.Today);
+        return new ProtonToolOutput(labour, projects.Select(p => new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, DomainCodes.Design)).ToList(), period)
+        {
+            Basis = ProtonInsights.Basis(
+                "Design's labour cost", period, true, "Design: every project's labour, internal ones included, by month, project and department",
+                l.Basis, []),
+            Datasets = Datasets(l, period, thisMonth),
+        };
+    }
+
+    /// <summary>Labour by month (a chart over time), by department and by project (each adds up to the total).</summary>
+    private static IReadOnlyList<ProtonDataset> Datasets(LabourInsightResponse l, DayRange period, DateOnly thisMonth)
+    {
+        var usd = (string key, string label) => ProtonDatasets.Figure(key, label, ProtonUnit.Usd);
+        var hours = ProtonDatasets.Figure("hours", "Hours", ProtonUnit.Hours);
+        var share = ProtonDatasets.Figure("share", "Share of the labour cost", ProtonUnit.Percent);
+        var words = ProtonDatasets.Period(period);
+        var notes = new List<string> { "In USD at the rate of each day, paid breaks included. Internal projects included. Never one person's cost." };
+        if (l.Unconverted.Count > 0)
+        {
+            notes.Add($"Left out for want of an exchange rate on their day: {string.Join(", ", ProtonInsights.Amounts(l.Unconverted))}.");
+        }
+
+        // nothing logged in these months: no months to chart
+        var byMonth = l.Total.Minutes == 0 && l.Total.Cost == 0 ? null : new ProtonDataset(
+            "Design: labour by month",
+            [ProtonDatasets.Label("month", "Month", ProtonColumnKind.Month), usd("cost", "Labour cost"), usd("outside_scope", "Outside scope"), hours],
+            l.Months.Select(m => new ProtonDataRow(
+                [ProtonCell.Of(m.Month), ProtonCell.Of(m.Totals.Cost), ProtonCell.Of(m.Totals.OutsideScopeCost), ProtonCell.Of(ProtonText.Hours(m.Totals.Minutes))],
+                Partial: m.Month == thisMonth)).ToList(),
+            words,
+            Notes: notes);
+        var departments = new ProtonDataset(
+            "Design: labour by department",
+            [ProtonDatasets.Label("department", "Department"), usd("cost", "Labour cost"), hours, share],
+            l.Departments.Take(ProtonDatasets.MaxRows).Select(d => ProtonDatasets.Row(
+                null, ProtonCell.Of(d.Name), ProtonCell.Of(d.Totals.Cost), ProtonCell.Of(ProtonText.Hours(d.Totals.Minutes)),
+                ProtonCell.Of(ProtonAnalysis.Pct(d.LabourShare)))).ToList(),
+            words,
+            l.Departments.Count,
+            PartsOfWhole: true,
+            Notes: ["A department's labour, never its people. The department is the one the hours were logged in."]);
+        var projects = new ProtonDataset(
+            "Design: labour by project",
+            [ProtonDatasets.Label("project", "Project"), usd("cost", "Labour cost"), hours, usd("outside_scope", "Outside scope"), share],
+            l.Projects.Take(ProtonDatasets.MaxRows).Select(p => ProtonDatasets.Row(
+                new ProtonRef(ProtonRefType.Project, p.ProjectId, p.Title, DomainCodes.Design),
+                ProtonCell.Of(p.Title), ProtonCell.Of(p.Totals.Cost), ProtonCell.Of(ProtonText.Hours(p.Totals.Minutes)),
+                ProtonCell.Of(p.Totals.OutsideScopeCost), ProtonCell.Of(ProtonAnalysis.Pct(p.LabourShare)))).ToList(),
+            words,
+            l.Projects.Count,
+            PartsOfWhole: true,
+            Notes: ["The costliest first, internal projects included."]);
+        return ProtonDatasets.WithRows(byMonth, departments, projects);
+    }
+}
