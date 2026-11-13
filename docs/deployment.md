@@ -85,10 +85,18 @@ Follow [server-setup.md](server-setup.md):
 - the first deployment and super admin;
 - nightly backups.
 
-Afterwards, protect `master`: require a pull request and the CI checks **Build and tests** and **Docker images**.
+Afterwards, protect `master`: require a pull request and the CI checks **Build and tests (1/2)**, **Build and tests
+(2/2)** and **Docker images**.
 CI doesn't run for changes to documentation or the load-test scripts alone (`paths-ignore` in `ci.yml`), so such a pull
 request never gets those checks and needs an administrator to merge it. (Branch protection on a private repository
 needs GitHub Pro.)
+
+CI's three jobs run side by side.
+- **The tests:** two machines share them, each with its own MySQL. The first runs the unit tests and every other
+  integration test file; the second runs every integration test the first doesn't, so none is left out.
+- **ffmpeg** (for one unit test) is a static build kept in the Actions cache for the month.
+- **The images:** CI fetches their Ubuntu security fixes afresh once a day (the `SECURITY_REFRESH` build argument)
+  rather than on every run. A deployment builds those layers uncached every time.
 
 ## Deploying
 
