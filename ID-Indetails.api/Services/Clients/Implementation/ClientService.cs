@@ -273,13 +273,17 @@ public sealed class ClientService(
     public async Task DeleteAsync(long clientId, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var client = await VisibleClientForUpdateAsync(actor, clientId, cancellationToken);
         Throw(ClientRules.CheckDelete(await clients.CountProjectsAsync(client.Id, cancellationToken)));
 
+        // A deleted project's trace names its client: the activity stays, unlinked, or the client couldn't go.
+        await clients.UnlinkActivityAsync(client.Id, cancellationToken);
         // The event keeps the name, since the client row (and its contacts) are gone afterwards.
         activity.Add(ClientEvent(client, ActivityEventKinds.ClientDeleted, actor.UserId, new { name = client.Name }));
         clients.Remove(client);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)

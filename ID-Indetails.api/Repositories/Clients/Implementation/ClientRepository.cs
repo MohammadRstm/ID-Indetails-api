@@ -141,5 +141,10 @@ public sealed class ClientRepository(IdIndetailsDbContext db) : IClientRepositor
 
     public void Add(Client client) => db.Clients.Add(client);
 
+    public Task UnlinkActivityAsync(long clientId, CancellationToken cancellationToken = default)
+        => db.ActivityEvents
+            .Where(e => e.ClientId == clientId)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.ClientId, (long?)null), cancellationToken);
+
     public void Remove(Client client) => db.Clients.Remove(client);
 }
