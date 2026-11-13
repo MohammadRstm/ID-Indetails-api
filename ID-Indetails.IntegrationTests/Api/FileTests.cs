@@ -382,7 +382,7 @@ public class FileTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PutJsonAsync("/api/company/logo", new { fileId = theirs.Id }, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
 
         (await OkAsync<CompanySettingsResponse>(Client.DeleteAsync("/api/company/logo", superAdmin.AccessToken))).LogoFileId.ShouldBeNull();
-        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", false, null));
+        (await OkAsync<BrandingResponse>(Client.GetAsync("/api/company/branding"))).ShouldBe(new BrandingResponse("Indetails", false, null, whatsApp));
         await (await Client.GetAsync("/api/company/logo")).ShouldFailWithAsync(404, ErrorCodes.NotFound);
     }
 
