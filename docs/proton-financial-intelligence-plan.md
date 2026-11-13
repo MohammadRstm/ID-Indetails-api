@@ -3,7 +3,8 @@
 **Status:** approved by the owner on 9 November 2026: the decisions in [§3](#3-decisions-that-shape-the-plan), the
 schema changes in [§6](#6-phase-2-data-foundations) and phase 5, and the delivery order in [§10](#10-delivery-order-prs).
 Built so far: phase 2h (PRs #195 / client #199), 1a-1 to 1a-4 and 1a-6 (#198 / client #201), and 1a-5 with the daily
-USD/LBP rate feed (#199 / client #204). Each migration still shows its tables and risks in its own PR (CLAUDE.md rule 9).
+USD/LBP rate feed (#199 / client #204), a project's profitability and scenarios (PR 3, #202 / client #206), and a
+domain's project risks and spending trends (PR 4, #203 / client #208). Each migration still shows its tables and risks in its own PR (CLAUDE.md rule 9).
 
 **Built on** [proton-financial-intelligence-discovery.md](proton-financial-intelligence-discovery.md) (PR #194). File
 references point to that report's sections ("D§9" = discovery report, section 9) or to code paths under
@@ -85,7 +86,7 @@ what each one blocks.
 | Q9 | Committed costs | **Decided (9 Nov):** record **commitments** (supplier, amount, currency, expected date, status: open, received, cancelled) on Execution sites first. Open ones count in the forecast cost and the cash-flow | phase 2d, phase 4 |
 | Q10 | Settlements that take profit to zero or below | **Decided (9 Nov):** completing with "excused" or "written off" stays as it is (outside the floor). FI lists a settlement that takes profit to 0 or below as a **risk**, and in the monthly review, with how much profit it took. **Read (10 Nov):** the risks list settlements on projects completed in the last 12 months | phase 1b risks |
 | Q11 | Expected revenue with today's supervision rate | **Decided (9 Nov):** past snapshots use the **rate in force on that date**, from the payment history (`ProjectPaymentChange`); today's figures use today's rate | phase 2g |
-| Q12 | Who sees Financial Intelligence | **Decided (9 Nov):** money insights to **`financial:view`** (super admins by default). Utilization hours to `report:view` (admins too). Employees: none. **No new permission** | every endpoint |
+| Q12 | Who sees Financial Intelligence | **Decided (9 Nov):** money insights to **`financial:view`** (super admins by default). Utilization hours to `report:view` (admins too). Employees: none. **No new permission**. **11 Nov:** `report:view` holders see each Design employee's logged, expected and excused hours on utilization, with no pay figure; the hours ledger (balance, shortfall, made-up hours) stays `salary:view` | every endpoint |
 | Q13 | Proactive alerts | **Decided (9 Nov):** in-app and push to `financial:view` holders: a **weekly digest every Monday plus immediate alerts** when a project hits the profit floor or a change is blocked. Push text uses percentages, never amounts | phase 5 |
 | Q14 | Payroll in company and cash analyses | **Decided (9 Nov):** **never to Proton** (as today). The cash-flow page shows payroll as one monthly total to `salary:view` holders only; Proton's forecasts say "excluding payroll" | phase 4 |
 | Q15 | "Similar projects" | **Decided (9 Nov):** projects get two **optional** fields, a **type** (villa, apartment, commercial, interior, ...) and an **area in m²**, set on the project form and editable any time. FI compares a project with past ones of the same type and size (margin, cost per m², duration) and helps price new ones; until they are filled in, it compares by domain, price band and duration | phase 2e, comparisons |
@@ -147,8 +148,8 @@ Each item ships with regression tests that pin today's numbers before the change
 | Project summary and profitability (PR 3) | `GET /api/finance/insights/projects/{id}` | `get_project_financial_summary` | margin bridge: base price, VOs, settlements, cost by source, labour share by department | `get_project_financials`, `CostHistoryAsync`, `ProfitFloorRules.StandingOf`, departments | READY |
 | Project risks (PR 4) | `GET /api/finance/insights/{domain}/risks` | `detect_project_financial_risks` | profit-floor standing, cost growth against progress, department over budget, pending blocked changes, unconverted costs, short runway (10 Nov: a running site's cash profit already below 0, or, on an active site, out within 24 working days at today's crew and day rate on the site money timeline's projection), settlement at or below zero (Q10, completed in the last 12 months); ranked by kind, then size (`ProjectRiskRules.Rank`) | the shared calculator, `ProfitFloorRules`, the site money timeline's `LabourRules.ProjectZero`, departments, blocked changes | PARTIAL (no forecasts yet) |
 | Expense trends and anomalies (PR 4) | `GET /api/finance/insights/{domain}/expenses` | `analyze_expense_trends` | category baselines and the Q16 thresholds; same amount twice (10 Nov: same project, item, amount and currency on the same day); unit-cost jumps per item name (normalised: trimmed, case-folded) | site and Design expenses; its own baseline (`ExpenseTrendRules`), as empty months count as 0 and `ProtonTrends.Baseline` needs every month above 0 | PARTIAL (three category schemes, free-text items) |
-| Labour cost (Design) | `GET /api/finance/insights/design/labour` | `analyze_labor_costs` | totals and series by project, department, month; outside-scope share; **no person money** | `LabourPricer`, `LabourByDepartmentAsync` | READY once built (Q2–Q4 are in, PRs #195 / client #199) |
-| Utilization (Design, hours only) | `GET /api/reports/utilization` | `analyze_employee_utilization` | logged against expected hours, overtime, excused, project mix | `HoursLedger`, `WorkInsightsService` | PARTIAL (no non-project time) |
+| Labour cost (Design) (PR 5) | `GET /api/finance/insights/design/labour?months=12` | `analyze_labor_costs` | totals and series by project, department, month; outside-scope cost and share (the worked time; paid breaks stay with the day); internal projects included; **no person money** (`LabourInsightRules`); Execution is `422 not_for_this_domain` | the shared calculator's batch `DepartmentLabourAsync` (one query per source) | READY |
+| Utilization (Design, hours only) (PR 5) | `GET /api/reports/utilization?month=` | `analyze_employee_utilization` | logged, expected, excused, available (expected − excused), overtime as employees see it, utilization = logged ÷ available, project mix; by person and department; Design employees only (`UtilizationRules`) | the hours ledger (`SalaryCalculator.LedgerOf`) | PARTIAL (no non-project time) |
 | Company performance | existing `get_company_overview`, `compare_money`, `get_money_by_month`, plus a trend block | — | — | after 1a-1 | READY once built (Q2–Q4 are in, PRs #195 / client #199) |
 | Scenario on one project (PR 3) | `GET /api/finance/insights/projects/{id}/scenario?...` | `simulate_project_financial_scenario` | levers from Q18 fed to `ExecutionPricing.PriceOf`, `ProjectFinance.Summarise`, `Tva`, `ProfitFloorRules`; before and after | pure rules only | READY for the levers listed |
 
@@ -265,9 +266,9 @@ Tool: `forecast_cash_flow`. It returns no payroll line and states that it leaves
 |---|---|---|---|
 | 1 | done: `MR-Finance-Consolidate` (#198 / client #201, merged) | 1a-1 to 1a-4, 1a-6, with regression tests | — |
 | 2 | done: `MR-Design-Expense-Rate` (#199 / client #204, merged) | 1a-5, and the daily USD/LBP rate feed | Q6 |
-| 3 | in review: `MR-Insights-Project` (API #202 / client #206) | summary, profitability bridge, simulator; client tab; Proton tools | Q1, Q5, Q18 |
-| 4 | this PR: `MR-Insights-Risks-Expenses` | risks v1, expense trends and anomalies | Q10, Q16 |
-| 5 | `MR-Insights-Labour` | labour cost and utilization | Q12 |
+| 3 | done: `MR-Insights-Project` (#202 / client #206, merged) | summary, profitability bridge, simulator; client tab; Proton tools | Q1, Q5, Q18 |
+| 4 | done: `MR-Insights-Risks-Expenses` (#203 / client #208, merged) | risks v1, expense trends and anomalies | Q10, Q16 |
+| 5 | this PR: `MR-Insights-Labour` | labour cost and utilization | Q12 |
 | 6 | done: `MR-Company-Salary-Costs` (#195 / client #199, merged) | 2h | — |
 | 7 | `MR-Budgets` → `MR-Planned-Hours` → `MR-Boq-Progress` | 2a, 2b, 2c, stacked migrations, entry screens | Q7, Q8, schema approval |
 | 8 | `MR-Insights-Forecast` | phase 3 | 7 |

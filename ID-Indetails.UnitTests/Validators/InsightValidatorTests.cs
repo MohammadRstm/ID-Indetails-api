@@ -110,4 +110,17 @@ public class InsightValidatorTests
         validator.Validate(new ExpenseTrendsQuery { Months = 0 }).Errors.Select(e => e.PropertyName).ShouldBe(["Months"]);
         validator.Validate(new ExpenseTrendsQuery { Months = 25 }).Errors.Select(e => e.PropertyName).ShouldBe(["Months"]);
     }
+
+    [Fact]
+    public void Labour_insights_cover_1_to_24_months_and_12_when_left_out()
+    {
+        var validator = new LabourInsightQueryValidator();
+
+        validator.Validate(new LabourInsightQuery()).IsValid.ShouldBeTrue();
+        validator.Validate(new LabourInsightQuery { Months = 1 }).IsValid.ShouldBeTrue();
+        validator.Validate(new LabourInsightQuery { Months = 24 }).IsValid.ShouldBeTrue();
+
+        validator.Validate(new LabourInsightQuery { Months = 0 }).Errors.Select(e => e.PropertyName).ShouldBe(["Months"]);
+        validator.Validate(new LabourInsightQuery { Months = 25 }).Errors.Select(e => e.PropertyName).ShouldBe(["Months"]);
+    }
 }

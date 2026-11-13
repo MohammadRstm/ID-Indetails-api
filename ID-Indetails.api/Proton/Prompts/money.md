@@ -39,6 +39,10 @@ its own currency and never counted as zero.
   history.
 - Runway: how long a site's cash profit lasts at today's crew and day rate, in working days (Monday to Saturday). A
   site whose cash profit is already below 0 has spent more than its client paid.
+- Outside scope: hours an admin marked as work outside a project's agreed scope. Its labour cost and its share of the
+  labour cost (`outside_scope_pct`) come from `analyze_labor_costs`, never one person's.
+- Utilization: the hours someone logged ÷ the hours there were to log (expected less excused), in a month. Hours only,
+  never money and never a judgement of the person.
 
 ## TVA
 

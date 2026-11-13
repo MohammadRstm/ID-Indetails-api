@@ -165,14 +165,32 @@ Rules (`Business/Meetings/MeetingRules.cs`):
 |---|---|---|
 | `GET /api/reports/work?from=&to=&projectId=&userId=&clientId=&internal=` | `report:view` | The Reports page for a range of company days (default: this quarter so far; at most three years). `clientId` keeps one client's projects, `internal=true` the projects with no client. `quarterly` (the last 6 quarters by company day) is added up by the database |
 | `GET /api/reports/overview?period=quarter\|month\|last30\|custom` | `report:view` | The Design dashboard for a period and the one before it. `custom` takes `from` and `to` (at most three years; `to` after today counts to today) and compares with as many days just before |
+| `GET /api/reports/utilization?month=` | `report:view` | How much of their expected hours each Design employee and department logged in a month, with excused hours, overtime and each person's project mix. Hours only (see "Utilization" below). `month` is any day of the month, this month when left out; a future month is `400 validation_failed` |
 
-Callers who can't see Design (an Execution admin holds `report:view` too) get `404`. Money is only included for callers with `financial:view`, and comes from the shared finance calculator.
+Callers who can't see Design (an Execution admin holds `report:view` too) get `404`. Money is only included for callers with `financial:view`, and comes from the shared finance calculator. Utilization never has money.
 
 - **Work report:** total minutes (with `overtimeMinutes`), entries, projects, people, the average entry and the busiest week; weekly minutes (3 to 20 weeks ending with the range); minutes by project (status, entries, people, share, weekly), by client (`null` for internal work) and by person (with each person's `overtimeMinutes`); people against the six busiest projects (each row with its `overtimeMinutes`, on every project); Design projects completed in the range (their dates, days taken, and all their minutes and people, whatever the filters); the last 6 quarters of all Design work (whatever the range and filters).
 - **Money** (`financial:view`): labour cost of the range's work; expenses of every Design project dated in the range, in USD (whatever the project and person filters, as in the prototype); their total; the all-time profit of every client project; revenue, cost and profit of each project worked on in the range; and labour cost by person. The prototype's monthly "revenue against cost" chart needs past progress, which isn't kept, so it isn't returned.
 - **Overview:** the period so far against the one before (quarter to date against the same number of days of last quarter, month to date against the whole last month, the last 30 days against the 30 before): minutes (with the period's `overtimeMinutes`), entries, the average entry, weekly minutes of both, how many active people logged this week, minutes by project (top 8), projects by status, and the busiest project this week.
 - **Needs attention** (at most 5, in this order): active projects with no work for 7 days or more (only while `notifyIdle` is on), active projects at 90% or more, projects on hold (with the days since they were put on hold), and how many employees haven't logged this week, with the first 3 of them by name (`people`).
 - **Overtime** is the overtime part of the minutes it stands next to (see "Overtime" above). With a project or person filter, the matching entries are still judged against each person's whole day.
+
+**Utilization** (`GET /api/reports/utilization`, `Services/Reports/Implementation/UtilizationService.cs`, rules in `Business/Reports/UtilizationRules.cs`): logged against expected hours, from the same hours ledger Salaries and a person's hours page use (`SalaryCalculator.LedgerOf`, [company.md](company.md), "The hours ledger"). Hours only, in minutes.
+
+- **Who is listed:** Design employees with a ledger in the month (`PayrollInputs.LedgerApplies`), employed in it. Admins, super admins and site staff are on fixed salaries and log no hours, so they aren't listed; neither is someone in a month paid as a fixed salary because they were an admin on any day of it.
+- **Each figure** (`UtilizationRules`):
+  - `loggedMinutes`: every minute logged in the month (to today while it runs);
+  - `expectedMinutes`: the required hours of the month's working days on the person's calendar, from joining and up to leaving, so far while the month runs;
+  - `excusedMinutes`: excused minutes and days, paid or not, and time off, within the expected hours;
+  - `availableMinutes` = expected − excused, never below 0: what there was to log;
+  - `overtimeMinutes`: the time past each day's required hours, as employees see it on their own overtime page;
+  - `utilization` = logged ÷ available, a fraction to 4 decimals (0.92 is 92%; past 1 with overtime); `null` with nothing available.
+- **The response:** `month` (its first day), `inProgress` (this month, which runs to today), `total`, `departments[]` and `people[]`, then `basis` (`method`, `assumptions`, `leftOut`).
+  - `total` and each department's `hours` are the sums of their people's minutes, with the utilization of that sum (not an average of percentages).
+  - `departments[]`: `teamId` (`null` for people in no department, named "No department", listed last), `name`, `people` (how many) and `hours`, by name. A department is the person's department today.
+  - `people[]`, by name: `userId`, `name`, `department`, `hours`, and `projects[]`, the project mix: each project's `projectId`, `title`, `minutes` and `share` of the person's logged minutes (a fraction), the most first.
+- **Never pay.** The shortfall, which overtime made up missing hours (`madeUpMinutes`), the overtime paid, the hours balance and any money are pay information and stay out ([company.md](company.md)).
+- **Who sees per-person hours (owner decision, 11 Nov 2026):** holders of `report:view` (admins and super admins by default) see each Design employee's logged, expected and excused hours, overtime and project mix here, with no pay figure. Until then a person's expected hours were `salary:view` only. These stay `salary:view` only: the hours ledger (`GET /api/employees/{userId}/hours`: the balance, shortfall and made-up hours), `madeUpMinutes` and `paidMinutes` on a person's overtime, Salaries and Project pay.
 
 ## Activity feed
 
