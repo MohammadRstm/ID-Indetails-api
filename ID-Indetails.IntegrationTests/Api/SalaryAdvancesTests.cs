@@ -191,9 +191,11 @@ public class SalaryAdvancesTests(ApiFactory api) : IClassFixture<ApiFactory>
         var told = (await OfKindAsync(employee, NotificationKinds.SalaryAdvanceApproved)).Single(n => n.SubjectId == asked.Id);
         (told.Payload?.GetRawText() ?? "{}").ShouldNotContain("amount");
         var json = await (await Client.GetAsync(Mine, employee.AccessToken)).Content.ReadAsStringAsync();
-        json.ShouldNotContain("decidedBy");
-        json.ShouldNotContain("salary", Case.Insensitive);
-        json.ShouldNotContain("monthlyPay");
+        // no pay figure of theirs: the reason codes say "salary_advance_…", so look for the pay fields themselves
+        foreach (var field in new[] { "decidedBy", "monthlyPay", "basePay", "hourlyRate", "toHandOver", "\"total\"" })
+        {
+            json.ShouldNotContain(field, Case.Insensitive);
+        }
         var mine = await MineOfAsync(employee);
         var item = mine.Items.ShouldHaveSingleItem();
         item.Status.ShouldBe(SalaryAdvanceStatus.Approved);
