@@ -279,23 +279,20 @@ public sealed record ReportBugArgs(ReportBugRequest Request);
 
 public sealed record ReportBugInput : ProtonActionInput
 {
-    [Description("A few words on what went wrong, on one line.")]
-    public required string Title { get; init; }
-
-    [Description("What happened, in the user's words.")]
+    [Description("What the user was trying to do, and what happened, in their words.")]
     public required string Description { get; init; }
 
-    [Description("How to make it happen again, if the user said.")]
-    public string? Steps { get; init; }
+    [Description("Anything else the user said that helps (how to make it happen again, what they expected), if they said.")]
+    public string? Details { get; init; }
 
     [Description("The page of the app it happened on, as a path (for example /design/projects). Only if the user said.")]
     public string? Page { get; init; }
 }
 
 /// <summary>
-/// Emails a bug report to the developers, through POST /api/bug-reports once confirmed. It sends nothing else, so the
-/// cap on what Proton emails outside the company counts it whole. The card shows every word; the user's name, email,
-/// role and business go with it, as they do from the report form.
+/// Emails a message to the developer ("Contact the developer"), through POST /api/bug-reports once confirmed, with a
+/// copy to the user's own address. It emails no one else, so the cap on what Proton emails outside the company counts
+/// it whole. The card shows every word; the user's name, email, role and business go with it, as from the form.
 /// </summary>
 public sealed class ProposeReportBugTool(IBugReportService bugReports) : ProtonActionTool<ReportBugInput, ReportBugArgs>
 {
@@ -304,8 +301,8 @@ public sealed class ProposeReportBugTool(IBugReportService bugReports) : ProtonA
     public override string Name => "propose_report_bug";
 
     public override string Description =>
-        "Propose emailing a bug report to the developers, from what the user told you about the problem, in their words. " +
-        "It is sent only when the user asks to report a problem and confirms the card.";
+        "Propose emailing a message to the developer (Contact the developer), from what the user told you about the problem, in their words. " +
+        "It is sent only when the user asks to report a problem or contact the developer, and confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
 
@@ -316,35 +313,30 @@ public sealed class ProposeReportBugTool(IBugReportService bugReports) : ProtonA
     {
         var request = new ReportBugRequest
         {
-            Title = input.Title.Trim(),
             Description = input.Description.Trim(),
-            Steps = string.IsNullOrWhiteSpace(input.Steps) ? null : input.Steps.Trim(),
+            Details = string.IsNullOrWhiteSpace(input.Details) ? null : input.Details.Trim(),
             Page = string.IsNullOrWhiteSpace(input.Page) ? null : input.Page.Trim(),
         };
-        var changes = new List<ProtonChange>
+        var changes = new List<ProtonChange> { new("What happened", null, request.Description) };
+        if (request.Details is not null)
         {
-            new("Title", null, request.Title),
-            new("What happened", null, request.Description),
-        };
-        if (request.Steps is not null)
-        {
-            changes.Add(new ProtonChange("Steps", null, request.Steps));
+            changes.Add(new ProtonChange("Anything else", null, request.Details));
         }
 
         changes.Add(new ProtonChange("Page", null, request.Page ?? "not given"));
 
         // what leaves the company is what the user said: figures in it need the user to look twice, as in a message
-        var figures = MessageText.HasFigures($"{request.Title} {request.Description} {request.Steps}");
-        var note = "Emailed to the developers with your name, email, role and business. It can't be unsent."
+        var figures = MessageText.HasFigures($"{request.Description} {request.Details}");
+        var note = "Emailed to the developer with your name, email, role and business, and a copy to you. It can't be unsent."
             + (figures ? " It contains figures: make sure they may leave the company." : string.Empty);
         var preview = new ProtonPreview(
-            "Report a problem to the developers",
+            "Contact the developer",
             changes,
             note,
             Confirm: figures ? ProtonConfirm.Typed : ProtonConfirm.TwoStep,
             Phrase: figures ? Phrase : null,
             Irreversible: true,
-            Reach: "Emailed to the developers.");
+            Reach: "Emailed to the developer.");
         return Task.FromResult<(ReportBugArgs, ProtonPreview, ProtonRef?)>((new ReportBugArgs(request), preview, null));
     }
 
@@ -352,8 +344,8 @@ public sealed class ProposeReportBugTool(IBugReportService bugReports) : ProtonA
 
     protected override async Task<ProtonActionDone> ExecuteAsync(ReportBugArgs args, ProtonToolContext context, CancellationToken cancellationToken)
     {
-        // no browser here: the report says it came through Proton
+        // no browser here: the message says it came through Proton
         await bugReports.SendAsync(args.Request, "Proton, the assistant (a confirmed action)", cancellationToken);
-        return new ProtonActionDone("Sent your report to the developers.", "bug_report", 0, []);
+        return new ProtonActionDone("Sent your message to the developer.", "bug_report", 0, []);
     }
 }

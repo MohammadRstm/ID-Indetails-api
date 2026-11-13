@@ -103,13 +103,12 @@ public sealed record EditProjectFill
     public DateOnly? TargetDate { get; init; }
 }
 
+/// <summary>The Contact the developer form: what the user was trying to do and what happened, and anything else.</summary>
 public sealed record ReportBugFill
 {
-    public string? Title { get; init; }
-
     public string? Description { get; init; }
 
-    public string? Steps { get; init; }
+    public string? Details { get; init; }
 }
 
 /// <summary>An invitation's address, position and team: never its role or pay.</summary>
@@ -579,9 +578,8 @@ public static partial class ProtonFormRules
                 Text("location", p.Location, NameLength);
                 break;
             case ProtonForm.ReportBug when fill.ReportBug is { } b:
-                Text("title", b.Title, NameLength);
                 Text("description", b.Description, TextLength);
-                Text("steps", b.Steps, TextLength);
+                Text("details", b.Details, TextLength);
                 break;
             case ProtonForm.Invite when fill.Invite is { } i:
                 Text("position", i.Position, NameLength);

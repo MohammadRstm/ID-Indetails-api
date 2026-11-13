@@ -24,7 +24,7 @@ public static class RateLimitPolicies
     /// <summary>File uploads: per signed-in user.</summary>
     public const string Upload = "upload";
 
-    /// <summary>Bug reports, which send an email each: per signed-in user, per hour.</summary>
+    /// <summary>Messages to the developer, which send an email each: per signed-in person (staff or client), per hour.</summary>
     public const string BugReport = "bug-report";
 
     /// <summary>Questions to Proton, which call a paid model: per signed-in user.</summary>

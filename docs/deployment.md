@@ -155,7 +155,8 @@ migration that removes anything.
 ### Tracing an error back
 
 - **From a person's report.** An error on our side shows the person a reference, such as "(ref 4bf92f35)": the start of
-  the error response's trace id. Bug reports also carry the references of the requests that failed lately in their
+  the error response's trace id. Its "Contact the developer" link sends that reference and the error's time with the
+  person's message, and every message also carries the references of the requests that failed lately in their
   browser. Every line that request wrote has that trace id:
 
   ```bash

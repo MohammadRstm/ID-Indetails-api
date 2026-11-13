@@ -263,7 +263,7 @@ public sealed class ProtonActionOptions
     public int MaxMessagesPerDay { get; init; } = 20;
 
     /// <summary>
-    /// Emails sent outside the company per person per company day (invoices, BOQs, quotes, invitations, bug reports):
+    /// Emails sent outside the company per person per company day (invoices, BOQs, quotes, invitations, messages to the developer):
     /// Proton calls the services, not the rate-limited endpoints, so this stands in for their limit.
     /// </summary>
     [Range(1, 500)]

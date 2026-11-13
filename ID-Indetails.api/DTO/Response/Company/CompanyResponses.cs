@@ -26,7 +26,8 @@ public sealed record CompanySettingsResponse(
 /// <param name="Name">Null until the company settings are saved.</param>
 /// <param name="HasLogo">Whether <c>GET /api/company/logo</c> has an image.</param>
 /// <param name="LogoFileId">The logo's file, which changes with every new logo: a client can add it to the logo's address so a cached image is never shown.</param>
-public sealed record BrandingResponse(string? Name, bool HasLogo, long? LogoFileId);
+/// <param name="SupportWhatsApp">The developer's WhatsApp number, digits only (wa.me/{number}), for "Contact the developer" and the sign-in pages.</param>
+public sealed record BrandingResponse(string? Name, bool HasLogo, long? LogoFileId, string SupportWhatsApp);
 
 /// <param name="RequiredMinutesPerDay">Hours required on a working day: the span minus the break (the break is paid).</param>
 /// <param name="OvertimeThresholdHours">A salary's overtime is paid only past this many hours a month; 0 pays all of it.</param>

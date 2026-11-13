@@ -15,7 +15,7 @@ Client portal files are separate: they go straight from the browser to the conte
 | `PUT /api/employees/{id}/photo`, `DELETE …` | `employee:manage` | `{ fileId }`: someone's profile photo, from the caller's upload. Other domains read as `404`; a super admin's needs `employee:invite_super_admin` |
 | `PUT /api/projects/{id}/photo`, `DELETE …` | `project:edit` | `{ fileId }`: the project's own photo, shown instead of its icon tile, from the caller's upload (a photo). Other domains read as `404`. Returns the project |
 | `PUT /api/company/logo`, `DELETE …` | `company_settings:manage` | `{ fileId }`: the company logo, at any time, before the rest of the settings too |
-| `GET /api/company/branding` | Anyone | `{ name, hasLogo }` for the sign-in page; `name` is null until the settings are saved |
+| `GET /api/company/branding` | Anyone | `{ name, hasLogo, logoFileId, supportWhatsApp }` for the sign-in page; `name` is null until the settings are saved |
 | `GET /api/company/logo` | Anyone | The logo's image, or `404` |
 
 Attachments go with what they are attached to: `attachmentIds` (up to 10, at most one of them a voice note) when sending a message ([messaging.md](messaging.md)), `attachmentFileId` when logging or editing a work entry ([design.md](design.md)), and `voiceFileId` when writing or editing a daily log ([execution.md](execution.md#site-staff-and-daily-logs)). Photo ids come back as `photoFileId` on the signed-in user, employees, chat contacts and the Employees page, on a project and the projects list, and as `logoFileId` on the company settings.

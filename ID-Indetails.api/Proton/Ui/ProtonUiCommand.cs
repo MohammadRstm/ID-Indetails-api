@@ -125,6 +125,8 @@ public enum ProtonSettingsSection
     Data,
     /// <summary>The account labels payments and site expenses are filed under.</summary>
     Labels,
+    /// <summary>Contact the developer: everyone signed in has it.</summary>
+    Contact,
 }
 
 public enum ProtonCompanyTab

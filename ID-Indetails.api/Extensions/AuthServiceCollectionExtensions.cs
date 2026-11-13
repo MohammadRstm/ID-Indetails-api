@@ -226,8 +226,11 @@ public static class AuthServiceCollectionExtensions
                 "upload:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                 _ => PerMinute(limits.UploadPermitsPerMinute)));
 
+            // a client's portal token is read unchecked, as for PortalWrite below: only to pick their own bucket
             options.AddPolicy(RateLimitPolicies.BugReport, context => RateLimitPartition.GetFixedWindowLimiter(
-                "bug-report:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                "bug-report:" + (context.User.FindFirst(AuthClaimTypes.UserId)?.Value
+                    ?? (PortalAccountOf(context) is { } account ? $"portal:{account}@{context.Connection.RemoteIpAddress}" : null)
+                    ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.BugReportPermitsPerHour, Window = TimeSpan.FromHours(1) }));
 
             options.AddPolicy(RateLimitPolicies.Proton, context => RateLimitPartition.GetFixedWindowLimiter(

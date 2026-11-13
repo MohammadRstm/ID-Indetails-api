@@ -113,12 +113,33 @@ The phones that receive the caller's pushes ([notifications.md](notifications.md
 - **Defaults.** Until the person saves their own, `GET` answers 22:00 to 07:00 with nothing muted and `isDefault: true`.
 - Stored in `user_notification_settings` and `user_notification_mutes`. Nobody reads or changes anyone else's.
 
-## Reporting a bug
+## Contact the developer
+
+Anyone signed in, staff or a client in the portal, can write to the developer. It used to be "Report a bug"; the route
+kept its name.
 
 | Endpoint | Who | What |
 |---|---|---|
-| `POST /api/bug-reports` | Signed in | `{ title, description, steps, page }`: emails the report to `BugReports:ToAddress` (`204`). Nothing is stored |
+| `POST /api/bug-reports` | Signed in (staff) | `{ description, details, page, installedApp, error, recentErrors }`: emails the message to `BugReports:ToAddress` and a copy to the sender (`204`). Nothing is stored |
+| `POST /api/portal/contact` | Portal token | The same, from a client ([client-portal.md](client-portal.md#endpoints)) |
 
-- `title` (one line, up to 120 characters) and `description` are required; `description` and `steps` take up to 4000 characters. `page` is the client path it happened on and must be a bare path (`/design/projects/12`): a query or fragment is refused, so a token in a link can't travel with it.
-- The API adds who sent it (name, user id, email, role and domain), the time and the browser (`User-Agent`, one line, at most 300 characters). Every value is HTML-encoded in the email (`Services/Email/Implementation/SupportEmails.cs`). The recipient is configuration and is never sent to the client.
-- Five reports per person per hour (`RateLimiting:BugReportPermitsPerHour`, `429` past it). If the email can't be sent the answer is `503 email_delivery_failed`, and the failure is logged.
+- `description` (what they were trying to do, and what happened) is required; it and `details` (anything else) take up
+  to 4000 characters. `page` is the client path it was sent from and must be a bare path (`/design/projects/12`): a
+  query or fragment is refused, so a token in a link can't travel with it.
+- `error` is the error they came from, when they followed an error's "Contact the developer" link: `{ ref, at,
+  message }`. `ref` is the error response's trace id (or the reference shown to them) and `at` when it happened; a page
+  that failed in the browser has no `ref` but the browser's own `message` (one line, at most 300 characters). One of
+  the two is needed. `recentErrors` are the requests that failed lately in that browser (at most 5), as before.
+- The API adds who sent it (name, user id or portal account id, email, and role and domain, or that it is a client),
+  the time, whether it came from the installed app or a browser tab, and the browser (`User-Agent`, one line, at most
+  300 characters). The error's time is shown in UTC, as the log has it, and in company time, with the short reference
+  to search the log for ([deployment.md](deployment.md#tracing-an-error-back)). Every value is HTML-encoded in the
+  email (`Services/Email/Implementation/SupportEmails.cs`).
+- **Replies** go to the sender: the email's Reply-To is their address.
+- **The sender's copy** has their own words and the error's reference, none of what the API adds. If only the copy
+  fails, it is logged and the message still counts as sent.
+- **Where it goes:** `BugReports:ToAddress` (`BUG_REPORTS_TO` on the server) is never sent to the client.
+  `BugReports:WhatsAppNumber` (`BUG_REPORTS_WHATSAPP`, digits with the country code, default `96171317958`) is
+  public: `GET /api/company/branding` returns it as `supportWhatsApp`, so the sign-in pages can show the WhatsApp link.
+- Five messages per person per hour, staff or client (`RateLimiting:BugReportPermitsPerHour`, `429` past it). If the
+  email can't be sent the answer is `503 email_delivery_failed`, and the failure is logged.

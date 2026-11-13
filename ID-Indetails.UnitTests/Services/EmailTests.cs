@@ -58,4 +58,54 @@ public class EmailTests
         mail.TextBody.ShouldContain(link);
         mail.InlineImages.ShouldNotBeNull().ShouldHaveSingleItem();
     }
+
+    private static BugReport Message(ContactError? error = null) => new(
+        "I tried to <save> the entry.",
+        "It was the second time.",
+        "/design/projects/4",
+        new ContactSender("Nadia Karam", "nadia@x.test", "user 12", "employee · design"),
+        "Mozilla/5.0",
+        false,
+        new StampedTime(new DateTime(2026, 11, 13, 12, 32, 5, DateTimeKind.Utc), new DateTime(2026, 11, 13, 14, 32, 5)),
+        error);
+
+    [Fact]
+    public void A_message_to_the_developer_shows_the_error_in_utc_as_the_log_has_it_and_replies_go_to_the_sender()
+    {
+        var error = new ContactError(
+            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            new StampedTime(new DateTime(2026, 11, 13, 12, 30, 0, DateTimeKind.Utc), new DateTime(2026, 11, 13, 14, 30, 0)),
+            null);
+        var mail = SupportEmails.BugReport("ID InDetails", "dev@x.test", Message(error));
+
+        mail.ToAddress.ShouldBe("dev@x.test");
+        (mail.ReplyToAddress, mail.ReplyToName).ShouldBe(("nadia@x.test", "Nadia Karam"));
+        mail.Subject.ShouldBe("ID InDetails: message from Nadia Karam (ref 4bf92f35)");
+        mail.HtmlBody.ShouldContain("I tried to &lt;save&gt; the entry.");
+        mail.TextBody.ShouldContain("When: 2026-11-13 12:30:00 UTC (2026-11-13 14:30 company time)");
+        mail.TextBody.ShouldContain("Search the log for: 4bf92f35");
+        mail.TextBody.ShouldContain("Opened in: a browser tab");
+    }
+
+    [Fact]
+    public void The_senders_copy_has_their_words_and_the_reference_and_nothing_the_server_adds()
+    {
+        var error = new ContactError("4bf92f35", new StampedTime(DateTime.UtcNow, new DateTime(2026, 11, 13, 14, 30, 0)), null);
+        var copy = SupportEmails.BugReportCopy("ID InDetails", Message(error));
+
+        (copy.ToAddress, copy.ToName).ShouldBe(("nadia@x.test", "Nadia Karam"));
+        copy.TextBody.ShouldContain("I tried to <save> the entry.");
+        copy.TextBody.ShouldContain("Error reference: 4bf92f35");
+        copy.TextBody.ShouldContain("When it happened: 13 Nov 2026, 14:30");
+        copy.TextBody.ShouldNotContain("user 12");
+        copy.TextBody.ShouldNotContain("Mozilla");
+        copy.ReplyToAddress.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", "4bf92f35")]
+    [InlineData("0HN7Q2:00000001", "0HN7Q2:00000001")]
+    [InlineData("4bf92f35", "4bf92f35")]
+    public void The_reference_a_person_reads_out_is_the_start_of_a_trace_id(string traceId, string reference)
+        => SupportEmails.RefOf(traceId).ShouldBe(reference);
 }

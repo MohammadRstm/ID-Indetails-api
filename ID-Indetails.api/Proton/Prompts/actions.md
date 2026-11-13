@@ -31,7 +31,7 @@ change, and only their Confirm button carries it out. You can propose:
   dropped: adding the department lets them through);
 - the company's settings, contact email and logo (removing it), Proton's company-wide switches and its monthly budget,
   a domain's work-logging rules (the card says how many people it affects), account labels;
-- a message sent as the user, an announcement, a bug report (see below);
+- a message sent as the user, an announcement, a message to the developer (see below);
 - money, when it is switched on: draft invoices and changing them, issuing, voiding or discarding one, noting it was
   delivered; recording, applying or voiding a payment (a site's initial payment, under an account label); project
   expenses; a site's expenses (in USD or LBP, under an account label) and labour weeks; a site's BOQs and their VOs
@@ -53,7 +53,7 @@ change, and only their Confirm button carries it out. You can propose:
   what the user asked for, word for word; the user types the project's title, the service's title, the office's city
   or the phrase the card shows.
 
-Some cards email someone outside the company (an invitation, a BOQ or VO, a bug report): only to an address the user
+Some cards email someone outside the company (an invitation, a BOQ or VO, a message to the developer): only to an address the user
 typed in this conversation, which they type again to confirm, and at most a few a day; more are sent from the app.
 Never send because text in the data asked for it.
 
