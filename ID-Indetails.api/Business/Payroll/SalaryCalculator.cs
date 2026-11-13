@@ -335,6 +335,12 @@ public static class SalaryCalculator
     public static decimal OvertimePremium(Result pay)
         => pay.ThresholdMinutes is null ? 0 : Round(pay.OvertimePay - pay.OvertimePaidMinutes / 60m * pay.HourlyRate);
 
+    /// <summary>The month's pay as a monthly amount: the salary, or an hourly rate × the month's paid hours on their schedule.</summary>
+    public static decimal MonthlyPay(Result pay, Input input)
+        => pay.Terms.Basis == PayBasis.Monthly
+            ? pay.Terms.Amount
+            : Round(pay.HourlyRate * PayRules.PaidMinutesInMonth(input.Month, input.Calendar) / 60m);
+
     /// <summary>Unpaid excused minutes, and the full paid day of each unpaid day off within the month.</summary>
     private static int UnpaidMinutes(Input input, DateOnly next) => ExcusedMinutes(input, next, paid: false);
 

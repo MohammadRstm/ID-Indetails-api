@@ -41,6 +41,12 @@ public static class PushText
         [NotificationKinds.ClientAdded] = new("Clients", "A new client was added."),
         [NotificationKinds.PayChanged] = new("Pay and hours", "Pay and hours update."),
         [NotificationKinds.HoursShort] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceRequested] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceWithdrawn] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceApproved] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceDeclined] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceRecorded] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceUnsettled] = new("Pay and hours", "Pay and hours update."),
     };
 
     /// <summary>A notification's push, from its kind, who acted, its project, its payload and its digest count.</summary>

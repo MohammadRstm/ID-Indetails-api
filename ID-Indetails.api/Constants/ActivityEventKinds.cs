@@ -218,4 +218,21 @@ public static class ActivityEventKinds
 
     public static readonly IReadOnlyList<string> TimeOff =
         [TimeOffRequested, TimeOffWithdrawn, TimeOffApproved, TimeOffDeclined, TimeOffExpired, TimeOffRejected, TimeOffEnded];
+
+    // Salary advances (company level, subject: the person; the advance and its status in the payload, never an amount).
+    // Only those who see salaries or give advances see them.
+    public const string SalaryAdvanceRequested = "salary_advance_requested";
+    public const string SalaryAdvanceWithdrawn = "salary_advance_withdrawn";
+    public const string SalaryAdvanceApproved = "salary_advance_approved";
+    public const string SalaryAdvanceDeclined = "salary_advance_declined";
+    public const string SalaryAdvanceRecorded = "salary_advance_recorded";
+    public const string SalaryAdvanceMonthsChanged = "salary_advance_months_changed";
+    public const string SalaryAdvanceCancelled = "salary_advance_cancelled";
+    public const string SalaryAdvanceSettled = "salary_advance_settled";
+
+    public static readonly IReadOnlyList<string> SalaryAdvance =
+    [
+        SalaryAdvanceRequested, SalaryAdvanceWithdrawn, SalaryAdvanceApproved, SalaryAdvanceDeclined, SalaryAdvanceRecorded,
+        SalaryAdvanceMonthsChanged, SalaryAdvanceCancelled, SalaryAdvanceSettled,
+    ];
 }

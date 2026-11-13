@@ -130,6 +130,26 @@ public static class NotificationKinds
     /// <summary>Someone on time off tried to log or change hours (subject: them). At most once an hour, to every super admin.</summary>
     public const string TimeOffHours = "time_off_hours";
 
+    // Salary advances (subject: the advance, type "salary_advance"; the leaver for unsettled). Never an amount.
+
+    /// <summary>Someone asked for a salary advance. To those who give advances and see them.</summary>
+    public const string SalaryAdvanceRequested = "salary_advance_requested";
+
+    /// <summary>Someone took back their pending request for an advance. To those who give advances and see them.</summary>
+    public const string SalaryAdvanceWithdrawn = "salary_advance_withdrawn";
+
+    /// <summary>Your request for a salary advance was approved.</summary>
+    public const string SalaryAdvanceApproved = "salary_advance_approved";
+
+    /// <summary>Your request for a salary advance was declined.</summary>
+    public const string SalaryAdvanceDeclined = "salary_advance_declined";
+
+    /// <summary>A super admin recorded a salary advance they gave you.</summary>
+    public const string SalaryAdvanceRecorded = "salary_advance_recorded";
+
+    /// <summary>Someone left with a salary advance still to pay back (subject: them). To those who give advances and see them.</summary>
+    public const string SalaryAdvanceUnsettled = "salary_advance_unsettled";
+
     /// <summary>A client was added (subject: the client). Sent to whoever manages the domain's clients.</summary>
     public const string ClientAdded = "client_added";
 

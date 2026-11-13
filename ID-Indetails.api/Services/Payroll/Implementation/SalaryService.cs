@@ -309,9 +309,7 @@ public sealed class SalaryService(
     {
         var (user, r) = (c.User, c.Result);
         var estimate = MyTime.EstimateOf(r, c.Input, InProgress(c.Input.Month));
-        var monthlyPay = r.Terms.Basis == PayBasis.Monthly
-            ? r.Terms.Amount
-            : Math.Round(r.HourlyRate * PayRules.PaidMinutesInMonth(c.Input.Month, c.Input.Calendar) / 60m, 2, MidpointRounding.AwayFromZero);
+        var monthlyPay = SalaryCalculator.MonthlyPay(r, c.Input);
         return new SalaryRowResponse
         {
             UserId = user.Id,

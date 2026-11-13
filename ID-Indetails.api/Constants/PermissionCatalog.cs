@@ -87,6 +87,7 @@ public static class PermissionCatalog
         new(P.HoursExcuse, "Excuse hours and days off in the hours ledger", Sensitivity: Pay),
         new(P.TimeOffRequest, "Ask for time off", DomainCodes.Design),
         new(P.TimeOffDecide, "Approve time off, with pay or without, decline it, or take approved time off back", Sensitivity: Pay),
+        new(P.SalaryAdvanceManage, "Give salary advances, decide people's requests for one, and settle what is left of them", Sensitivity: Pay),
 
         new(P.MessageAnnounce, "Write in Announcements, the chat everyone reads"),
 
@@ -103,7 +104,7 @@ public static class PermissionCatalog
     private static readonly string[] CompanyOnly =
     [
         P.CompanyView, P.OverheadManage, P.SalaryView, P.CompanySettingsManage,
-        P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse, P.TimeOffDecide,
+        P.WorkingTimeManage, P.ScheduleManage, P.HoursExcuse, P.TimeOffDecide, P.SalaryAdvanceManage,
         P.EmployeeInviteSuperAdmin, P.PermissionManage, P.ExchangeRateManage,
         P.OverheadCategoryManage, P.SessionManage, P.EmployeeChangeEmail,
         P.ProtonBudgetManage,
