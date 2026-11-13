@@ -812,6 +812,7 @@ money, and `open_surface project_departments` opens its departments window while
 
 **Time off is not covered yet** (9 Nov 2026, [time-off.md](time-off.md)). Its five write endpoints (`MeTimeOff.Ask`, `MeTimeOff.Withdraw`, `TimeOff.Approve`, `TimeOff.Decline`, `TimeOff.Reject`) are `Open` entries in `ProtonCoverage`: Proton sends the person to the Time off page, and there is no read tool for it. It is already held to the rule that blocks hours on a day off or during time off, because logging goes through `WorkEntryService`; the refusal reads as any other refused save.
 
+**Salary advances are left out on purpose** (13 Nov 2026, [company.md](company.md#salary-advances)). Proton never reads or proposes them, because pay amounts never reach Proton: an advance is part of someone's pay and its months are worked out from what Salaries says each month pays. Its eight write endpoints (`MySalaryAdvances.Ask`, `MySalaryAdvances.Withdraw`, `SalaryAdvances.Record`, `.Approve`, `.Decline`, `.ChangeMonths`, `.Cancel` and `.Settle`) are `Open` entries in `ProtonCoverage` (37 `Open` entries in all, pinned in `ProtonCoverageTests`): Proton sends the person to their profile, or a super admin to Company › Salaries, and there is no read tool, no tool description or prompt wording for them. Salaries and people's profiles still open as before.
 ## The blob (client, Stage 5 Phase 2)
 
 Proton appears as a soft, furry blob on every signed-in screen of people with `proton:use`, when Proton is switched

@@ -64,7 +64,7 @@ public class PushTextTests
     {
         string Body(string kind) => PushText.ForNotification(kind, "Rana", "Villa Haddad", Revealing, 1).Body;
 
-        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(18);
+        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(24);
         Body(NotificationKinds.PaymentRecorded).ShouldBe("Payment recorded. Open ID InDetails to see it.");
         Body(NotificationKinds.PocketRequested).ShouldBe("A site asks for pocket money. Open ID InDetails to decide.");
         Body(NotificationKinds.PocketRoundOff).ShouldBe("A site's profit can be rounded off into the pocket money. Open ID InDetails to see it.");
@@ -83,6 +83,12 @@ public class PushTextTests
         Body(NotificationKinds.ClientAdded).ShouldBe("A new client was added.");
         Body(NotificationKinds.PayChanged).ShouldBe("Pay and hours update.");
         Body(NotificationKinds.HoursShort).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceUnsettled).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceRecorded).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceDeclined).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceApproved).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceWithdrawn).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceRequested).ShouldBe("Pay and hours update.");
     }
 
     [Fact]

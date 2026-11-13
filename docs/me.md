@@ -73,6 +73,21 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - The caller sees the paid flag, the reason and the decision and rejection notes, but not who decided (`person`, `decidedByName` and `endedByName` are left out).
 - Who is off, for the "Off" flags, is `GET /api/time-off/away`, open to anyone signed in; it never shows the reason or the paid flag.
 
+## My salary advances
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/me/salary-advances` | Signed in | `{ canAsk, cannotAskBecause, currency, items }`: whether the caller may ask now, why not, the currency of their pay and their own advances, newest first |
+| `POST /api/me/salary-advances` | Signed in | `{ amount, reason }`: asks for part of their pay early. Returns `201` |
+| `POST /api/me/salary-advances/{id}/withdraw` | Signed in | Takes back a request that is still pending |
+
+- Anyone with pay set can ask: employees, site staff, admins and super admins. An advance is part of their pay handed over early, in the currency of their pay, and comes off what they are handed in the months a super admin chooses. The rules, who decides and what it changes are in [company.md](company.md#salary-advances).
+- `cannotAskBecause` is `salary_advance_no_pay` (no pay set today), `salary_advance_pending` (a request is waiting for a decision) or `salary_advance_open` (the last advance isn't paid back yet); `canAsk` is false with any of them, and asking then answers `422` with the same code. `currency` is null with no pay set.
+- The form never shows or checks the caller's pay: the cap (a month's pay) is checked when a super admin approves. The amount is above zero and the reason is required (500 characters at most).
+- Each item has its `status` (`pending`, `approved`, `declined`, `withdrawn` or `cancelled`), what was asked for (`askedAmount`) and given (`amount`), the `reason`, `decisionNote`, the day it was given, its `months` and what is still to pay back (`left`, null until it is given), and, once settled, how (`settledKind`: `cash` or `written_off`, and `settledOn`).
+- Each month in `months` says what it plans to take (`planned`) and whether it has closed. **`taken` is always null in the caller's own list:** in a short month it would show what they were paid. They never see their pay, nor who decided, recorded or settled it.
+- Someone else's advance reads as `404`, and withdrawing a request that was already decided is `422 salary_advance_decided`. Their requests and decisions reach them as notifications without amounts ([notifications.md](notifications.md)).
+
 ## My board layouts
 
 | Method and path | Needs | Purpose |

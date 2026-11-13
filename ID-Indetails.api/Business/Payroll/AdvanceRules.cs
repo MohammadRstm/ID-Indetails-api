@@ -15,8 +15,9 @@ namespace ID_Indetails.api.Business.Payroll;
 /// months have closed with nothing left.</item>
 /// <item>Each month takes what is planned for it plus what earlier months couldn't, but never more than that month's pay;
 /// the rest moves on to the next month. In a month the person's employment ends, everything left comes due.</item>
-/// <item>Settling closes what is left: repaid in cash, or written off as a company expense on its day. Nothing comes off
-/// pay from the month it is settled in.</item>
+/// <item>Settling closes what is left after the month it is settled in: that month still takes its share (a leaver's
+/// final pay first), and nothing comes off pay after it. The rest is repaid in cash, or written off as a company
+/// expense on its day.</item>
 /// </list>
 /// </summary>
 public static class AdvanceRules
@@ -26,8 +27,13 @@ public static class AdvanceRules
     /// <summary>Repayment months run from the first month allowed to at most this many months on.</summary>
     public const int MaxMonths = 12;
 
-    /// <summary>An advance as the rules need it: its amount, what each month plans to take, and when it was settled.</summary>
-    public sealed record Advance(long Id, decimal Amount, IReadOnlyDictionary<DateOnly, decimal> Planned, DateOnly? SettledOn);
+    /// <summary>An advance as the rules need it: its amount, what each month plans to take, and when and for how much it was settled.</summary>
+    public sealed record Advance(
+        long Id,
+        decimal Amount,
+        IReadOnlyDictionary<DateOnly, decimal> Planned,
+        DateOnly? SettledOn,
+        decimal? SettledAmount = null);
 
     /// <param name="Due">What the month had to take: its plan plus what earlier months couldn't, or everything left in a leaving month.</param>
     /// <param name="Taken">What came off the month's pay: what was due, but never more than the pay.</param>
@@ -91,13 +97,20 @@ public static class AdvanceRules
         decimal carried = 0;
         for (var month = advance.Planned.Keys.Min(); month <= through && left > 0; month = month.AddMonths(1))
         {
-            if (advance.SettledOn is { } settledOn && month >= MonthOf(settledOn))
+            var settledMonth = advance.SettledOn is { } settledOn ? MonthOf(settledOn) : (DateOnly?)null;
+            if (month > settledMonth)
             {
                 break;
             }
 
             var planned = advance.Planned.GetValueOrDefault(month);
             var due = leavingMonths.Contains(month) ? left : Math.Min(left, carried + planned);
+            if (month == settledMonth)
+            {
+                // the month it was settled in takes no more than what the settlement left to it
+                due = Math.Min(due, Math.Max(0, left - (advance.SettledAmount ?? 0)));
+            }
+
             if (due <= 0)
             {
                 continue;

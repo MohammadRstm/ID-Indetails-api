@@ -15,7 +15,7 @@ public class SalaryAndSchedulePdfTests
     private static readonly Letterhead Head = new("ID InDetails", "Beirut, Lebanon", "id-indetails.test", null);
     private static readonly DateOnly Today = new(2026, 11, 11);
 
-    private static SalaryRowResponse Row(int i, bool tracksHours = true) => new()
+    private static SalaryRowResponse Row(int i, bool tracksHours = true, decimal? advance = null) => new()
     {
         UserId = i,
         Name = $"Person {i}",
@@ -47,6 +47,8 @@ public class SalaryAndSchedulePdfTests
         Total = 1692.5m,
         MonthlyPay = 1760m,
         EarnedSoFar = 1692.5m,
+        AdvanceRepayment = advance,
+        ToHandOver = 1692.5m - (advance ?? 0),
     };
 
     private static SalariesResponse Salaries(IReadOnlyList<SalaryRowResponse> rows, bool inProgress = true) => new(
@@ -54,9 +56,10 @@ public class SalaryAndSchedulePdfTests
         inProgress,
         1.5m,
         new PagedResponse<SalaryRowResponse>(rows, 1, rows.Count, rows.Count),
-        [new SalaryTotalResponse("USD", rows.Count, rows.Sum(r => r.BasePay), rows.Sum(r => r.OvertimePay), rows.Sum(r => r.Deduction), rows.Sum(r => r.Total), rows.Sum(r => r.EarnedSoFar))],
+        [new SalaryTotalResponse("USD", rows.Count, rows.Sum(r => r.BasePay), rows.Sum(r => r.OvertimePay), rows.Sum(r => r.Deduction), rows.Sum(r => r.Total), rows.Sum(r => r.EarnedSoFar), rows.Sum(r => r.AdvanceRepayment ?? 0), rows.Sum(r => r.ToHandOver))],
         new SalarySummaryResponse(rows.Count, rows.Count, 0, 0, 0, 0, 0, 0, null),
-        [new PersonWithoutPayResponse(99, "Unpaid Person", "employee", "design")]);
+        [new PersonWithoutPayResponse(99, "Unpaid Person", "employee", "design")],
+        new SalaryAdvanceSummaryResponse(0, [], 0));
 
     private static PersonScheduleResponse Person(string name, string? domain, string? team, bool own = false, DateOnly? next = null, string? position = null) => new(
         name.Length,
@@ -117,6 +120,17 @@ public class SalaryAndSchedulePdfTests
         pages.ShouldBe(1);
         landscape.ShouldBeTrue();
         pictures.ShouldBe(0);
+    }
+
+    [Fact]
+    public void The_salaries_pdf_adds_the_advance_columns_only_when_someone_has_an_advance()
+    {
+        var plain = SalariesPdf.Render(new SalariesReport(Salaries([Row(1), Row(2)]), null, null, null, Today), Head);
+        var withAdvance = SalariesPdf.Render(new SalariesReport(Salaries([Row(1, advance: 300m), Row(2)]), null, null, null, Today), Head);
+
+        Inspect(withAdvance).Pages.ShouldBe(1);
+        Inspect(withAdvance).Landscape.ShouldBeTrue();
+        withAdvance.Length.ShouldBeGreaterThan(plain.Length);
     }
 
     [Fact]

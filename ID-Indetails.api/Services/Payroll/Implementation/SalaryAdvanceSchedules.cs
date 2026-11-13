@@ -72,9 +72,9 @@ public sealed class SalaryAdvanceSchedules(IPayrollInputs inputs, IClock clock) 
             return new MonthPay(pay.Terms.Currency, pay.Total);
         }
 
-        // while the month runs it counts as a whole month: a salary as it stands, hourly pay at the month's paid hours
+        // while the month runs: a salary's whole month as it stands, hourly pay as earned so far (what Salaries hands over)
         var fullMonth = MyTime.EstimateOf(pay, input, inProgress: true).FullMonth;
-        return new MonthPay(pay.Terms.Currency, fullMonth ?? Math.Max(pay.Total, SalaryCalculator.MonthlyPay(pay, input)));
+        return new MonthPay(pay.Terms.Currency, fullMonth ?? pay.Total);
     }
 
     public async Task<PayNow?> PayNowAsync(User person, CancellationToken cancellationToken = default)
@@ -87,7 +87,7 @@ public sealed class SalaryAdvanceSchedules(IPayrollInputs inputs, IClock clock) 
     }
 
     private static AdvanceRules.Advance ToRules(SalaryAdvance advance)
-        => new(advance.Id, advance.Amount, advance.Repayments.ToDictionary(r => r.Month, r => r.Amount), advance.SettledOn);
+        => new(advance.Id, advance.Amount, advance.Repayments.ToDictionary(r => r.Month, r => r.Amount), advance.SettledOn, advance.SettledAmount);
 
     /// <summary>Each currency's advances take from a month's pay only when the month is paid in that currency.</summary>
     private static Dictionary<long, AdvanceRules.Schedule> Schedules(

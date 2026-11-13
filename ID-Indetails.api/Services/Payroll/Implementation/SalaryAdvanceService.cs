@@ -345,8 +345,9 @@ public sealed class SalaryAdvanceService(
             var (advance, _) = await LockAsync(actor, id, cancellationToken);
             var currentMonth = CurrentMonth;
             var described = await advances.GetAsync(id, cancellationToken) ?? throw new NotFoundException(ErrorCodes.NotFound, NotFoundMessage);
+            // this month still takes its share (a leaver's final pay first): the settlement is what is left after it
             var schedule = (await schedules.ScheduleAsync([described], currentMonth, cancellationToken: cancellationToken)).GetValueOrDefault(id);
-            var left = advance.Amount - (schedule?.Schedule.TakenBefore(currentMonth) ?? 0);
+            var left = advance.Amount - (schedule?.Schedule.Months.Sum(m => m.Taken) ?? 0);
             AdvanceRules.CheckSettle(advance.Status, advance.SettledOn, left).ThrowIfDenied();
 
             var now = clock.UtcNow;
@@ -369,7 +370,8 @@ public sealed class SalaryAdvanceService(
         var rows = (await advances.OfUserAsync(person.Id, cancellationToken))
             .Where(a => a.Status == SalaryAdvanceStatus.Pending || a.Status == SalaryAdvanceStatus.Approved)
             .ToList();
-        var given = await schedules.ScheduleAsync(Given(rows), month, cancellationToken: cancellationToken);
+        // described as they stand today, so a past month's drawer doesn't show later months as taking nothing
+        var given = await schedules.ScheduleAsync(Given(rows), CurrentMonth, cancellationToken: cancellationToken);
         var shown = rows
             .Where(a => a.Status == SalaryAdvanceStatus.Pending
                 || (given.TryGetValue(a.Id, out var g)

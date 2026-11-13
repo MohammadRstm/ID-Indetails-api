@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_103_tables_with_snake_case_names()
+    public void Model_has_all_105_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(103);
+        tables.Count.ShouldBe(105);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -43,6 +43,8 @@ public class DatabaseModelTests
             "meeting_attendees",
             // a Design variation order's lines and departments' parts are part of it
             "design_vo_lines", "design_vo_allocations",
+            // the months an advance takes from are part of it
+            "salary_advance_repayments",
         };
 
         var cascading = Model.GetEntityTypes()
@@ -117,6 +119,8 @@ public class DatabaseModelTests
         CheckNames<ProjectFileComment>().ShouldContain("ck_project_file_comments_fixed");
         CheckNames<PortalComment>().ShouldContain("ck_portal_comments_body_unless_deleted");
         CheckNames<PortalMessage>().ShouldContain("ck_portal_messages_body_unless_deleted");
+        CheckNames<SalaryAdvance>().ShouldContain("ck_salary_advances_given_on");
+        CheckNames<SalaryAdvanceRepayment>().ShouldContain("ck_salary_advance_repayments_month");
     }
 
     [Fact]

@@ -31,8 +31,8 @@ public interface ISalaryAdvanceService
     Task<SalaryAdvanceResponse> SettleAsync(long id, SettleSalaryAdvanceRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The advances of these people that Salaries shows: given ones open or touching <paramref name="month"/>, worked out
-    /// up to that month, for the caller (who holds <c>salary:view</c> or <c>salary_advance:manage</c>).
+    /// The person's advances that their salary for <paramref name="month"/> shows: waiting ones, and given ones still open
+    /// or touching that month, as they stand today, for the caller (who holds <c>salary:view</c> or <c>salary_advance:manage</c>).
     /// </summary>
     Task<IReadOnlyList<SalaryAdvanceResponse>> ForSalaryAsync(User person, DateOnly month, CancellationToken cancellationToken = default);
 

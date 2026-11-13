@@ -36,11 +36,19 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `DELETE /api/account-labels/{id}` | `company_settings:manage` | Removes a label nothing is filed under (`204`); one that payments or site expenses carry is `422 account_label_in_use` and can only be archived |
 | `PUT /api/account-labels/order` | `company_settings:manage` | `{ ids }`: the new order of the labels that can be picked, every one once (`422 account_label_order_stale` otherwise); answers every label, archived ones included |
 | `GET /api/company/overview?from=&to=` | `company:view` | Both domains and the company for a period (this month to date by default) |
-| `GET /api/company/overview/monthly?months=13` or `?year=2026` | `company:view` | Revenue, costs, overhead, one-off expenses (`oneOffExpenses`), fixed salaries (`fixedSalaries`), paid leave (`paidLeave`) and the overtime premium (`overtimePremium`) per month: the profit before company expenses, after overhead and one-offs, and the net profit after all of them, as the overview's (whole months; the last 1–36 months, or a year's months from January, up to this month in the current year; a future year, or one before 2000, is `400`) |
+| `GET /api/company/overview/monthly?months=13` or `?year=2026` | `company:view` | Revenue, costs, overhead, one-off expenses (`oneOffExpenses`), fixed salaries (`fixedSalaries`), paid leave (`paidLeave`), the overtime premium (`overtimePremium`) and salary advances written off (`advanceWriteOffs`) per month: the profit before company expenses, after overhead and one-offs, and the net profit after all of them, as the overview's (whole months; the last 1–36 months, or a year's months from January, up to this month in the current year; a future year, or one before 2000, is `400`) |
 | `GET /api/company/salaries?month=YYYY-MM&domain=&role=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary; `role` (super_admin, admin, employee) narrows it to one role |
 | `GET /api/company/salaries/{userId}?month=YYYY-MM` | `salary:view` | How one person's pay adds up, and where their hours went (`projects`) |
 | `GET /api/company/salaries/export?month=YYYY-MM&domain=&role=&search=` | `salary:view` | The filtered list as CSV, with a total per currency (10 a minute per user) |
 | `GET /api/company/salaries/pdf?month=YYYY-MM&domain=&role=&search=` | `salary:view` | The same filtered list as a landscape PDF to print or keep, with a total per currency and the people with no pay set (10 a minute per user); see [documents.md](documents.md) |
+| `GET /api/company/salary-advances?view=pending\|open\|closed&page=&pageSize=` | `salary_advance:manage` or `salary:view` | Salary advances in the caller's domains: `pending` requests oldest first, `open` ones still to pay back (leavers with something unsettled included) and `closed` ones (paid back, settled, declined, withdrawn, cancelled), newest first. `pending` by default; page size 1–100 |
+| `GET /api/company/salary-advances/{id}` | `salary_advance:manage` or `salary:view` | One advance, with its months, what is repaid and left, and what the caller may do with it |
+| `POST /api/company/salary-advances` | `salary_advance:manage` | `{ userId, amount, givenOn?, months: [{ month, amount }], note? }`: records an advance a super admin handed over without a request. Returns `201` |
+| `POST /api/company/salary-advances/{id}/approve` | `salary_advance:manage` | `{ amount?, months: [{ month, amount }], note? }`: approves a pending request, for what was asked or less, and sets the months it comes off |
+| `POST /api/company/salary-advances/{id}/decline` | `salary_advance:manage` | `{ note? }`: declines a pending request |
+| `PUT /api/company/salary-advances/{id}/months` | `salary_advance:manage` | `{ months }`: changes the months still open (this one on) |
+| `POST /api/company/salary-advances/{id}/cancel` | `salary_advance:manage` | `{ note? }`: cancels an advance given by mistake, in the month it was given |
+| `POST /api/company/salary-advances/{id}/settle` | `salary_advance:manage` | `{ kind: "cash" \| "written_off", note? }`: closes what is left |
 | `GET /api/company/project-pay?unit=week\|month\|quarter&date=&projectId=` | `salary:view` | What each Design project paid its people in a period |
 | `GET /api/company/project-pay/export?…` | `salary:view` | The same as CSV (10 a minute per user) |
 | `POST /api/employees/{id}/hour-excuses` | `hours:excuse` | Excuses minutes, days or the whole month, paid or unpaid |
@@ -114,6 +122,13 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 
 **Leavers:** a person's final month ends on their last working day (included). Monthly pay is pro-rated to it the way a joining month is (`leftOn` on the row, and `workingDaysPaid` of `workingDays`), and their hours ledger ends there too, so the month counts as closed for them once they have left. Someone taken back later isn't paid, or counted short, for the days they were away between two periods: a month partly away is pro-rated, a month wholly away isn't listed.
 
+**Salary advances** ([below](#salary-advances)) change no pay: a row's `total`, the hourly rate and the overtime are the same with or without one. They only come off what is handed over:
+- A row has `advanceRepayment` (what comes off this month for the person's advances; null when nothing does) and `toHandOver`: the month's pay less the advance, never below 0. The pay is `fullMonthEstimate ?? total` while the month runs, otherwise `total`, so `toHandOver` = max(0, base − advance).
+- `totals[]` carry `advanceRepayment` (0 when nothing comes off) and `toHandOver`, per currency, as the rows add up.
+- The response's `advances` is a summary for the caller's domains: `pending` (requests waiting for a decision), `left` (what is still to pay back, per currency) and `unsettled` (people who left with something still to settle).
+- The detail's `advances` lists the person's advances that are waiting, open or come off that month, as `GET /api/company/salary-advances/{id}` shows them.
+- The CSV and the PDF add an "Advance" and a "To hand over" column. The PDF adds them only when someone listed has an advance, narrowing the other columns to fit ([documents.md](documents.md)).
+
 **Each row** also says the month's pay as a monthly amount (`monthlyPay`: the salary, or an hourly rate × the month's paid hours on their schedule) and, while a salaried month runs, what is earned so far (`earnedSoFar`) beside what the month comes to as things stand (`fullMonthEstimate`); once a month has closed, `earnedSoFar` is the total. The totals carry `earnedSoFar` too (`Business/Payroll/MyTime.cs`, `EstimateOf`):
 - `earnedSoFar` is the salary accrued so far plus overtime pay. It accrues with the hours required so far (required so far ÷ the whole month's) where the hours ledger applies, otherwise with the working days passed (none on the 1st).
 - `fullMonthEstimate` is the salary plus overtime so far, less what would be deducted if the month closed as short as it is now: the shortfall plus the paid break of each whole missed day, at the hourly rate, exactly as a closed month deducts it (`SalaryCalculator.ShortfallMinutes`).
@@ -159,6 +174,71 @@ Always calculated from the records, never stored (`Business/Payroll/`). The mont
 
 **Export:** UTF-8 CSV with a BOM. Values that start with `=`, `+`, `-` or `@` are prefixed with `'` so spreadsheets don't run them as formulas.
 
+## Salary advances
+
+Part of someone's pay handed over early. It comes off what they are handed in the months chosen for it. The rules are `Business/Payroll/AdvanceRules.cs` (pure) and `SalaryAdvanceService`; an advance is a `salary_advances` row with a `salary_advance_repayments` row for each month it plans to take from ([database.md](database.md)).
+
+**What never changes.** An advance changes when cash leaves, not what anything costs: what a person earns in a month, the hourly rate, overtime, deductions, project labour cost, Project pay, Financials, the profit floor and every figure of the company overview stay as they were. The only cost is an advance **written off** (below), a company expense on its day. Salaries shows what comes off each month and what is left to hand over ([above](#salaries)).
+
+**Who asks.** Anyone with pay set today (employees, site staff, admins, super admins), from `/api/me/salary-advances` ([me.md](me.md#my-salary-advances)): an amount and a reason, in the currency of their pay, with no account label. The form never shows or checks their pay, so the cap is checked when a request is approved. A person has one pending request at a time (`422 salary_advance_pending`) and none while an earlier advance still has something to pay back (`422 salary_advance_open`); with no pay set it is `422 salary_advance_no_pay`. They can withdraw a pending request.
+
+**Who gives and decides.** Holders of `salary_advance:manage`, a company permission super admins hold by default ([authorization.md](authorization.md)). Reading the list and one advance is also open to `salary:view`.
+- A holder approves a request (for what was asked or less, never more: `400 salary_advance_more_than_asked`, and with the months it comes off), declines it, or **records** an advance directly, for cash already handed over: the person, the amount, the day given, the months and a note.
+- Nobody gives or decides their own (`403 employee_change_not_allowed`), and a super admin's needs someone who also holds `employee:invite_super_admin` (`403 forbidden`).
+- Holders see and decide only people of the domains they can see; anyone else's advance reads as `404`.
+- The person and then the advance are locked (`SELECT … FOR UPDATE`), always in that order, so two decisions at once run one after the other and the first wins (`422 salary_advance_decided` for the second); a request, an approval and a recording can't overlap.
+- A recorded advance for someone with a request waiting is `422 salary_advance_pending`: decide that request instead.
+
+**The cap.** An advance is at most the person's monthly pay as Salaries shows it (`monthlyPay`: the salary, or an hourly rate × the month's paid hours), and so is each month's repayment (`422 salary_advance_over_pay`). With no pay set today nothing can be approved or recorded (`422 salary_advance_no_pay`).
+
+**One at a time.** An advance is open while it is given, not settled and has something left once the months before this one are counted. Asking, approving or recording for someone with an open one is `422 salary_advance_open`; a new one waits until the last has been paid back, settled or cancelled.
+
+**The months.** The advance comes off in one to twelve months:
+- each is the first day of a month, from the month it was given in (this month for an approval) to within twelve months of it, chosen once, above zero to the cent, and none above the monthly pay;
+- together they add up to the amount (`400 salary_advance_months_total`); any other fault is `400 salary_advance_months_invalid`;
+- a recorded advance's `givenOn` is from the first of this month up to today, today when left out (`400 salary_advance_given_on`), and its months start at its month.
+
+**How each month takes its share** (`AdvanceRules.Repayments`, worked out from what Salaries says each month pays, never stored):
+- A month takes what is planned for it plus what earlier months couldn't take, but never more than that month's pay (the full-month estimate while it runs, `total` once closed, rounded down to the cent). Whatever didn't fit moves on to the next month by itself, past the last planned month if need be, until it is paid.
+- In a month the person's employment ended in, everything left is due, up to the final pay.
+- The month an advance is settled in still takes its share (a leaver's final pay first), never more than the settlement left to it; nothing comes off after it.
+- Several advances of one person are taken oldest first from each month's pay.
+- A month paid in another currency, or one the person wasn't employed in, gives nothing: the share moves on. A month something is due in with no pay worked out is reported as missing until the pay is given.
+- The month in progress shows its share as things stand; it is final once the month closes.
+
+**Changing and closing.** Only a given advance that isn't settled can be changed (`422 salary_advance_closed` otherwise).
+- **Months** (`PUT …/months`): the open months (this one on) are replaced, and must add up to what the closed months didn't plan (`422 salary_advance_nothing_left` when every planned month has closed: what they couldn't take moves on by itself, or can be settled). Closed months never change.
+- **Cancel:** an advance given by mistake, only in the month it was given (`422 salary_advance_cancel_closed`). Nothing is repaid and the person can ask again.
+- **Settle** (`cash` or `written_off`): closes what is left after this month's share, as things stand: the amount less what every month up to this one took (`422 salary_advance_nothing_left` with nothing left). This month still takes its share, so a leaver's final pay comes first, and nothing comes off pay after it; the person can ask again. Paid in cash changes no company figure. **Written off** is a company expense on the day it was settled, in the advance's currency, converted at that day's rate ([Company overview](#company-overview)); it is never put on a project.
+
+**Leaving.** In the last month everything left comes due, up to the final pay. Whatever is still left stays open, and deactivating someone with an advance still to pay back sends `salary_advance_unsettled` to the other holders of the permission ([notifications.md](notifications.md)). The advance shows `unsettled` until a super admin marks it repaid in cash or writes it off. Someone taken back before it is settled keeps it, and a super admin can set months to take it from their new pay ([employees.md](employees.md#deactivating-and-reactivating)).
+
+**What is seen.** Super admins see every field of an advance: who asked or recorded it, who decided it, who settled it, what each closed month took (`taken`), what is repaid and left, `behind` (a closed month couldn't take all it was due), `unsettled` and what the caller may do (`canDecide`, `canChange`, `canCancel`). The person sees their own list only ([me.md](me.md#my-salary-advances)). Nothing in the activity feed or a notification carries an amount.
+
+**Activity and notifications.** Each step writes a company-level activity event with no amount, like `pay_changed`: `salary_advance_requested`, `_withdrawn`, `_approved`, `_declined`, `_recorded`, `_months_changed`, `_cancelled` and `_settled` (subject type `user`, the person; the advance and its status in the payload). Only people with `salary:view` or `salary_advance:manage` see them in the feed. The six notifications are in [notifications.md](notifications.md).
+
+**Proton** never reads or proposes advances: pay amounts never reach it ([proton.md](proton.md)).
+
+**Errors:**
+
+| Status and code | When |
+|---|---|
+| `422 salary_advance_no_pay` | The person has no pay set today |
+| `422 salary_advance_pending` | A request is already waiting |
+| `422 salary_advance_open` | The last advance isn't paid back yet |
+| `422 salary_advance_decided` | The request was already decided or withdrawn |
+| `422 salary_advance_over_pay` | The advance, or a month's repayment, is above the monthly pay |
+| `400 salary_advance_more_than_asked` | An approval above what was asked (field `amount`) |
+| `400 salary_advance_months_invalid` | No months, more than twelve, before the first allowed month, too far ahead, repeated, or not above zero (field `months`) |
+| `400 salary_advance_months_total` | The months don't add up to what is to be paid back (field `months`) |
+| `400 salary_advance_given_on` | A recorded day outside the first of this month to today (field `givenOn`) |
+| `422 salary_advance_closed` | The advance is settled, cancelled or wasn't given |
+| `422 salary_advance_nothing_left` | Every planned month has closed, or nothing is left to settle |
+| `422 salary_advance_cancel_closed` | The month it was given in has closed |
+| `403 employee_change_not_allowed` | Giving or deciding one's own advance |
+| `403 forbidden` | A super admin's advance without `employee:invite_super_admin`, or an endpoint without `salary_advance:manage` |
+| `404 not_found` | Unknown, or another person's advance (their own list), or one outside the caller's domains |
+
 ## Company overview
 
 Always calculated, from the shared finance calculator (`Business/Finance/`), in USD. Each domain's money comes from the same batch load as its Financials page (`MoneyRollup`): revenue, cost, profit and margin from the same period calculation (`PeriodMoney.Of`, see [finance.md](finance.md#rules)), outstanding from the billing rule (`ProjectBilling`). So the overview and a domain's Financials summary agree to the cent for the same days.
@@ -168,14 +248,15 @@ Always calculated, from the shared finance calculator (`Business/Finance/`), in 
 - **Cost:** every project cost dated inside the period, converted at the rate of its day. Costs with no rate that day are listed per domain in `unconvertedCosts[]`, never counted as 0.
 - **Invoices** are issued, live ones (drafts aren't counted here), converted at the rate of their issue day. Those with no rate are left out of invoiced and outstanding and listed per currency in `unconvertedInvoices[]`, per domain and for the company.
 - **Per domain:** revenue, cost, profit (revenue less the cost total rounded once) and margin; projects with work or costs in the period and active projects; active employees and who logged work; clients served and all clients; invoiced (issued in the period), collected (the period's payments net of TVA, the same as revenue) and outstanding today.
-- **Company:** both domains' profit (`grossProfit`, the domains' profits added up) less its **expenses** (`expenses`): the **company overhead**, charged by the calendar days of each month the period covers and converted at the rate on the first of the month, the **one-off expenses** (below), the **fixed salaries**, **paid leave** and the **overtime premium**. `netProfit` is `grossProfit` less `expenses`, so the client never adds them up. Each counts the pay of its months, as Salaries works it out, for the share of the month's calendar days the period covers, converted at the rate on the first of the month. Overhead or salaries with no rate for their month, and one-offs with none on their day, are listed as unconverted instead of being added in.
+- **Company:** both domains' profit (`grossProfit`, the domains' profits added up) less its **expenses** (`expenses`): the **company overhead**, charged by the calendar days of each month the period covers and converted at the rate on the first of the month, the **one-off expenses** (below), the **fixed salaries**, **paid leave**, the **overtime premium** and **salary advances written off**. `netProfit` is `grossProfit` less `expenses`, so the client never adds them up. Each counts the pay of its months, as Salaries works it out, for the share of the month's calendar days the period covers, converted at the rate on the first of the month. Overhead or salaries with no rate for their month, and one-offs with none on their day, are listed as unconverted instead of being added in.
   - **One-off expenses** (`oneOffExpenses`, `unconvertedOneOffExpenses`): the one-offs spent from `from` to `to`, each in full on its day and converted at the rate in force on that day, the rate lookup the project costs use. A closed month's figure never changes, because a one-off can't be changed once its month has closed.
   - **Fixed salaries** (`fixedSalaries`): the pay of everyone on a pure monthly salary who logs no hours, so no project carries it: admins and super admins (any month they held that role on a day, see above) and Execution's site staff (employees outside Design). Someone promoted on Monday 16 February 2026 has all of February as a fixed salary: the whole February salary is a company cost, and none of their February hours cost projects anything. Their months before February stay employee months. `adminSalaries` (and `unconvertedAdminSalaries`) carry the same figure under its old name for the phone app, until it moves.
   - **Paid leave** (`paidLeave`): what Design staff were paid for paid time off (`SalaryCalculator.PaidLeavePay`). On a salary it is the paid excused minutes and each paid day off (approved time off included) at its full paid day, at the month's hourly rate, as unpaid ones are deducted; a whole month off with pay is the month's base pay. On hourly pay it is their paid time off (`timeOffPay`); paid excuses pay hourly staff nothing. Nothing is logged for it, so no project carries it.
   - **Overtime premium** (`overtimePremium`): what Design salaries paid for overtime past the month's threshold (above) beyond the hourly rate: the overtime pay less those minutes at the hourly rate (`SalaryCalculator.OvertimePremium`). Projects carry every logged hour of such a month at the hourly rate, so the rest reaches no project. Months with no threshold (before November 2026), hourly pay and fixed salaries have none: their overtime is on projects, or there is none.
+  - **Advance write-offs** (`advanceWriteOffs`, `unconvertedAdvanceWriteOffs`): the salary advances written off (settled as `written_off`) from `from` to `to`, each in full on the day it was settled and converted at the rate in force that day, as one-off expenses are. It is part of `expenses` and comes off `netProfit`. Nothing else about an advance reaches the overview: a given advance, its repayments and a cash settlement change no figure ([Salary advances](#salary-advances)).
   - Design employees' other labour is already in the domains' costs, through their hours.
   - Payroll takes each person's current domain for past months too (no dated record of domain moves), as Salaries does.
-- **Monthly:** each month's revenue (money received), labour, expenses, site expenses (`materials` in the JSON), ground labour, overhead and one-off expenses (`oneOffExpenses`), with the profit before company expenses, after overhead and one-offs (`profitAfterOverhead`), and the net profit after all of them. This feeds the chart on the company expenses page, a year at a time.
+- **Monthly:** each month's revenue (money received), labour, expenses, site expenses (`materials` in the JSON), ground labour, overhead and one-off expenses (`oneOffExpenses`), with the profit before company expenses, after overhead and one-offs (`profitAfterOverhead`), and the net profit after all of them, which takes off the month's advance write-offs (`advanceWriteOffs`, each at the rate of the day it was settled) as well. This feeds the chart on the company expenses page, a year at a time.
   - Each domain's month is worked out as its Financials monthly chart works it out, and `profitBeforeOverhead` adds up the domains' profits (each one's received less its cost total rounded once). So a whole month's `profitBeforeOverhead` equals the overview's `grossProfit` for that month to the cent.
   - Each cost column is the domains' costs of that source added up, then rounded. As on the domain charts, the rounded columns can add up to a few cents away from revenue − profit.
 

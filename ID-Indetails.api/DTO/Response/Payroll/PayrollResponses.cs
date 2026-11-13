@@ -106,10 +106,30 @@ public sealed record SalaryRowResponse
 
     /// <summary>While a salaried month runs, what it comes to if things stay as they are; null otherwise.</summary>
     public decimal? FullMonthEstimate { get; init; }
+
+    /// <summary>What comes off this month's pay for salary advances; null when nothing does. It changes no pay, only what is handed over.</summary>
+    public decimal? AdvanceRepayment { get; init; }
+
+    /// <summary>
+    /// What is handed over: the month's pay less <see cref="AdvanceRepayment"/>, never below 0. The pay is the full-month
+    /// estimate while the month runs, otherwise <see cref="Total"/>.
+    /// </summary>
+    public required decimal ToHandOver { get; init; }
 }
 
 /// <param name="EarnedSoFar">The rows' <see cref="SalaryRowResponse.EarnedSoFar"/>: equal to <paramref name="Total"/> once the month has closed.</param>
-public sealed record SalaryTotalResponse(string Currency, int People, decimal BasePay, decimal OvertimePay, decimal Deduction, decimal Total, decimal EarnedSoFar);
+/// <param name="AdvanceRepayment">What comes off these salaries for advances; 0 when nothing does.</param>
+/// <param name="ToHandOver">The rows' <see cref="SalaryRowResponse.ToHandOver"/> added up.</param>
+public sealed record SalaryTotalResponse(
+    string Currency,
+    int People,
+    decimal BasePay,
+    decimal OvertimePay,
+    decimal Deduction,
+    decimal Total,
+    decimal EarnedSoFar,
+    decimal AdvanceRepayment,
+    decimal ToHandOver);
 
 /// <param name="ExpectedMinutes">Hours the schedules ask for, of the people under the hours rule; null when nobody listed is.</param>
 public sealed record SalarySummaryResponse(
@@ -129,6 +149,7 @@ public sealed record PersonWithoutPayResponse(long UserId, string Name, string R
 /// <param name="Month">First day of the month.</param>
 /// <param name="Totals">One line per currency; currencies are never added together.</param>
 /// <param name="WithoutPay">People of the filtered list left out because no pay is set for them.</param>
+/// <param name="Advances">Salary advances at a glance (requests waiting, what is left, leavers to settle).</param>
 public sealed record SalariesResponse(
     DateOnly Month,
     bool InProgress,
@@ -136,7 +157,8 @@ public sealed record SalariesResponse(
     PagedResponse<SalaryRowResponse> Rows,
     IReadOnlyList<SalaryTotalResponse> Totals,
     SalarySummaryResponse Summary,
-    IReadOnlyList<PersonWithoutPayResponse> WithoutPay);
+    IReadOnlyList<PersonWithoutPayResponse> WithoutPay,
+    SalaryAdvanceSummaryResponse Advances);
 
 /// <summary>What someone is owed for one month of the year.</summary>
 /// <param name="Amount">The monthly salary or hourly rate in force, in <paramref name="Currency"/>.</param>
@@ -211,6 +233,7 @@ public sealed record SalaryProjectResponse(
 /// <param name="Projects">Where their hours and overtime went, most time first. Empty for people who don't log hours.</param>
 /// <param name="TimeOff">The month's days of approved time off: read-only here, decided on Company › Time off.</param>
 /// <param name="TimeOffPay">What an hourly employee is paid for their paid time off; part of the base pay. 0 on a salary.</param>
+/// <param name="Advances">The person's advances that are waiting, open or come off this month.</param>
 public sealed record SalaryDetailResponse(
     SalaryRowResponse Salary,
     bool InProgress,
@@ -223,7 +246,8 @@ public sealed record SalaryDetailResponse(
     IReadOnlyList<SalaryDayResponse> WorkingDays,
     IReadOnlyList<SalaryProjectResponse> Projects,
     IReadOnlyList<MonthTimeOffResponse> TimeOff,
-    decimal TimeOffPay);
+    decimal TimeOffPay,
+    IReadOnlyList<SalaryAdvanceResponse> Advances);
 
 /// <summary>Approved time off in a month: <paramref name="Days"/> are its working days that month.</summary>
 public sealed record MonthTimeOffResponse(long RequestId, DateOnly FirstDay, DateOnly LastDay, bool IsPaid, IReadOnlyList<DateOnly> Days)

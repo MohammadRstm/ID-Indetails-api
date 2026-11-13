@@ -30,7 +30,7 @@ Every notification goes through one sender (`INotificationSender`), which applie
 - only active people who can see the notification's domain;
 - no money in payloads, so a notification can't reveal amounts to someone who later loses `financial:view`. The page it links to checks permissions as usual.
 
-Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged`, `work_digest` and `hours_missed_list` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`). The time-off kinds sent to the super admins (`time_off_requested`, `time_off_undecided`, `time_off_withdrawn`, `time_off_ended`, `time_off_online`, `time_off_hours`) need `time_off:decide`. No time-off notification carries the reason, and only `time_off_approved` carries whether it is paid ([time-off.md](time-off.md)).
+Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged`, `work_digest` and `hours_missed_list` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`). The salary advance kinds sent to those who give advances (`salary_advance_requested`, `salary_advance_withdrawn`, `salary_advance_unsettled`) need `salary_advance:manage`; the three sent to the person (`salary_advance_approved`, `salary_advance_declined`, `salary_advance_recorded`) need nothing. No salary advance notification carries an amount: [company.md](company.md#salary-advances). The time-off kinds sent to the super admins (`time_off_requested`, `time_off_undecided`, `time_off_withdrawn`, `time_off_ended`, `time_off_online`, `time_off_hours`) need `time_off:decide`. No time-off notification carries the reason, and only `time_off_approved` carries whether it is paid ([time-off.md](time-off.md)).
 
 "Holders of a permission" means the active people who hold it and can see the domain, super admins and people granted it from the other domain included. "The domain's people" means the active admins and employees whose home domain it is; super admins are left out of these broadcasts.
 
@@ -77,6 +77,12 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `time_off_ended` | Holders of `time_off:decide`, when someone leaves, moves out of Design or becomes an admin and had open time off | the person | `name`, `userId`, `why` |
 | `time_off_online` | Holders of `time_off:decide`, when someone on time off uses the app. Once a day per request (`time-off-online-{requestId}-{yyyyMMdd}`) | the person | `name`, `userId`, `lastDay` |
 | `time_off_hours` | Holders of `time_off:decide`, when someone on time off tries to log or change hours. Once an hour per request (`time-off-hours-{requestId}-{yyyyMMddHH}`) | the person | `name`, `userId`, `lastDay` |
+| `salary_advance_requested` | Holders of `salary_advance:manage` who see the person's domain (every super admin for a super admin), never the person asking, when someone asks for a salary advance | the advance (`salary_advance`) | `name` (never the amount nor the reason) |
+| `salary_advance_withdrawn` | The same, when the person takes back a pending request | the advance | `name` |
+| `salary_advance_approved` | The person, when a super admin approves their request | the advance | none (`{}`) |
+| `salary_advance_declined` | The person, when a super admin declines it | the advance | none (`{}`) |
+| `salary_advance_recorded` | The person, when a super admin records an advance they handed over without a request | the advance | none (`{}`) |
+| `salary_advance_unsettled` | Holders of `salary_advance:manage`, the person who deactivated them aside, when someone is deactivated with an advance still to pay back | the person (`user`) | `name`, `userId` |
 | `client_added` | Holders of `client:manage` in the client's domain | the client | `name`, `organisation` |
 | `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
@@ -145,7 +151,7 @@ Queued pushes live in memory: one queued when the API stops is lost, but the not
 | Part | Content |
 |---|---|
 | Title and body | Short text written by the server (`Business/Push/PushText.cs`). Other kinds may name the project and who acted ("Rana assigned you a requirement on Villa Haddad"). Messages show the sender and the first 100 characters |
-| Money kinds | A fixed neutral text, never a client's name, an amount, a margin, a cost or pay, nor the project's title: "Payment recorded. Open ID InDetails to see it.", "An invoice needs your attention.", "An invoice couldn't be sent automatically.", "Billing update. Open ID InDetails to see it.", "A project's money needs a look.", "A new client was added.", "Pay and hours update." |
+| Money kinds | A fixed neutral text, never a client's name, an amount, a margin, a cost or pay, nor the project's title: "Payment recorded. Open ID InDetails to see it.", "An invoice needs your attention.", "An invoice couldn't be sent automatically.", "Billing update. Open ID InDetails to see it.", "A project's money needs a look.", "A new client was added.", "Pay and hours update." (also the text of `pay_changed`, `hours_short` and every `salary_advance_*` kind) |
 | `data` | Ids only: `{ forUserId, kind, notificationId?, target }`. `kind` is a notification kind, `message`, `log_reminder` or `labour_week_reminder`. `target` is the screen to open (`Business/Push/PushTarget.cs`): a project (with `section`), a requirement, a work entry, a chat (`teamId` or the sender's `userId`; the page `announcements` for Announcements, whose pushes are titled "Announcements" and name the sender before the preview), a labour week, a person, a client, an invoice, a payment, or a page (`notifications`, `work`, ...) |
 | `badge` | Unread notifications (as the bell counts them) plus unread messages |
 | `channelId` | The Android channel: the category below, `reminders` for the log reminder, `quiet` during quiet hours |
@@ -161,7 +167,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
 | `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder`, `boq_submitted`, `boq_draft_edited` |
-| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `pocket_round_off`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
+| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `pocket_round_off`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short`, and the six `salary_advance_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `recorded`, `unsettled`) |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed`, and the twelve `time_off_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `rejected`, `expired`, `undecided`, `starts`, `back`, `ended`, `online`, `hours`) |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 

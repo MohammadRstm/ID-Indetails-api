@@ -47,10 +47,13 @@ public sealed record DomainOverviewResponse(
 /// <param name="OvertimePremium">What Design salaries paid in the period for overtime past their monthly threshold beyond the
 /// hourly rate, in USD: projects carry every logged hour at the hourly rate, so the rest reaches no project.</param>
 /// <param name="UnconvertedOvertimePremium">The premium in a currency with no rate for its month, left out of <see cref="OvertimePremium"/>.</param>
+/// <param name="AdvanceWriteOffs">Salary advances written off in the period (what a leaver never paid back), each in full on the day it
+/// was settled and converted at the rate of that day, in USD. Advances change nothing else here: only a write-off is a cost.</param>
+/// <param name="UnconvertedAdvanceWriteOffs">Write-offs in a currency with no rate on their day, per currency, left out of <see cref="AdvanceWriteOffs"/>.</param>
 /// <param name="AdminSalaries">The phone app's name for <see cref="FixedSalaries"/>, the same figure, until it moves.</param>
 /// <param name="UnconvertedAdminSalaries">The phone app's name for <see cref="UnconvertedFixedSalaries"/>, until it moves.</param>
 /// <param name="Expenses">Everything that comes off the profit: <see cref="Overhead"/> + <see cref="OneOffExpenses"/> +
-/// <see cref="FixedSalaries"/> + <see cref="PaidLeave"/> + <see cref="OvertimePremium"/>.</param>
+/// <see cref="FixedSalaries"/> + <see cref="PaidLeave"/> + <see cref="OvertimePremium"/> + <see cref="AdvanceWriteOffs"/>.</param>
 /// <param name="NetProfit">Both domains' profit less <see cref="Expenses"/>.</param>
 /// <param name="UnconvertedInvoices">Both domains' invoices with no exchange rate on their issue day.</param>
 public sealed record CompanyOverviewResponse(
@@ -70,6 +73,8 @@ public sealed record CompanyOverviewResponse(
     IReadOnlyList<CurrencyTotalResponse> UnconvertedPaidLeave,
     decimal OvertimePremium,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedOvertimePremium,
+    decimal AdvanceWriteOffs,
+    IReadOnlyList<CurrencyTotalResponse> UnconvertedAdvanceWriteOffs,
     decimal AdminSalaries,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedAdminSalaries,
     decimal Expenses,
@@ -99,9 +104,10 @@ public sealed record PeriodOverheadResponse(
 /// <param name="FixedSalaries">The month's fixed salaries (admins, super admins and site staff), a company cost like overhead.</param>
 /// <param name="PaidLeave">What Design salaries paid for paid leave in the month, a company cost too.</param>
 /// <param name="OvertimePremium">What Design salaries paid for overtime past the month's threshold beyond the hourly rate.</param>
+/// <param name="AdvanceWriteOffs">Salary advances written off in the month, each at the rate of the day it was settled.</param>
 /// <param name="ProfitBeforeOverhead">Revenue − project costs.</param>
 /// <param name="ProfitAfterOverhead">After company overhead and one-off expenses only.</param>
-/// <param name="NetProfit">After company overhead, one-off expenses, the fixed salaries, paid leave and the overtime premium, as the overview's net profit.</param>
+/// <param name="NetProfit">After company overhead, one-off expenses, the fixed salaries, paid leave, the overtime premium and advance write-offs, as the overview's net profit.</param>
 public sealed record CompanyMonthResponse(
     DateOnly Month,
     decimal Revenue,
@@ -114,6 +120,7 @@ public sealed record CompanyMonthResponse(
     decimal FixedSalaries,
     decimal PaidLeave,
     decimal OvertimePremium,
+    decimal AdvanceWriteOffs,
     decimal ProfitBeforeOverhead,
     decimal ProfitAfterOverhead,
     decimal NetProfit);
