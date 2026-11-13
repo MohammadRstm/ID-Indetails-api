@@ -1,6 +1,7 @@
 using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Models;
+using ID_Indetails.api.Repositories.Files.Abstraction;
 
 namespace ID_Indetails.api.Repositories.Execution.Abstraction;
 
@@ -10,8 +11,8 @@ public sealed record SiteStaffRow(long ProjectId, long UserId, string Name);
 /// <summary>A site its staff member oversees, as their list of sites shows it.</summary>
 public sealed record StaffSiteRow(long Id, string Title, string? ClientName, ProjectStatus Status, string? Location, DateTime AssignedAt);
 
-/// <summary>A daily log with what the API shows about it.</summary>
-public sealed record SiteLogRow(SiteLog Log, string ProjectTitle, string UserName);
+/// <summary>A daily log with what the API shows about it; <paramref name="Voice"/> is its voice note, if it has one.</summary>
+public sealed record SiteLogRow(SiteLog Log, string ProjectTitle, string UserName, FileView? Voice = null);
 
 /// <summary>
 /// Daily logs of the given sites, people and company days (UTC bounds: <paramref name="FromUtc"/> inclusive,

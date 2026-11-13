@@ -200,6 +200,8 @@ The `BoqAuthors` migration (10 Nov 2026) adds `boqs.submitted_at` (datetime(3), 
 
 The `OneOffExpenses` migration (11 Nov 2026) adds `one_off_expenses` ([company.md](company.md#one-off-expenses)): `name` (150), `group_id` (a foreign key to `overhead_groups`, RESTRICT), `currency`, `amount` (`decimal(18,2)`, checked above zero by `ck_one_off_expenses_amount_positive`), `spent_on` (a date, indexed), `created_at`, `created_by_id` (a foreign key to `users`, RESTRICT) and `updated_at`. It creates the table only: no existing table or data changes. `Down` drops it. The model now has 103 tables.
 
+The `SiteLogVoiceNotes` migration (11 Nov 2026) adds `site_logs.voice_file_id` (bigint, null) with `ix_site_logs_voice_file_id` and the foreign key `fk_site_logs_files_voice_file_id` to `files` (RESTRICT), the way `work_entries.attachment_file_id` points to its file: a daily log's voice note ([execution.md](execution.md#site-staff-and-daily-logs)). Existing logs keep NULL, and `body` stays NOT NULL (empty for a voice-only log). No data change; `Down` drops the foreign key, the index and the column.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Who connects

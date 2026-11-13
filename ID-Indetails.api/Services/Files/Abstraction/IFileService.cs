@@ -17,6 +17,9 @@ public interface IFileService
     /// <param name="uploadLength">The request's length, to refuse an upload over the day's allowance before storing it.</param>
     Task<FileResponse> UploadAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default);
 
+    /// <summary>A voice note: WebM, Ogg or MP4 audio up to 10 MB, told apart from video by the caller. Otherwise as <see cref="UploadAsync"/>.</summary>
+    Task<FileResponse> UploadVoiceAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// The file's content, if the caller may read it; otherwise not found. A photo with a <paramref name="size"/> comes
     /// as a smaller copy (<see cref="IPictureSizes"/>).

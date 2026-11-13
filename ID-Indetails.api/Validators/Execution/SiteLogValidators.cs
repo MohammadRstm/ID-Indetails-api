@@ -12,7 +12,10 @@ public sealed class SaveSiteLogRequestValidator : AbstractValidator<SaveSiteLogR
 {
     public SaveSiteLogRequestValidator()
     {
-        RuleFor(x => x.Body).ClientText("The log", SiteTeamRules.MaxLogLength, required: true);
+        RuleFor(x => x.Body).ClientText("The log", SiteTeamRules.MaxLogLength);
+        RuleFor(x => x.Body).Must((request, body) => !string.IsNullOrWhiteSpace(body) || request.VoiceFileId is not null)
+            .WithMessage("Write what happened or record a voice note.");
+        RuleFor(x => x.VoiceFileId).GreaterThan(0).When(x => x.VoiceFileId is not null).WithMessage("The voice note must be an uploaded recording.");
     }
 }
 

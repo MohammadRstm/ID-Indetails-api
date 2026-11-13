@@ -131,6 +131,15 @@ public class PushTextTests
     }
 
     [Fact]
+    public void A_voice_note_with_no_text_is_a_voice_message()
+    {
+        PushText.ForMessage("Rana", null, null, MessageKinds.Text, hasAttachments: true, false, voiceOnly: true).Body.ShouldBe("Sent a voice message.");
+        PushText.ForAnnouncement("Rana", null, hasAttachments: true, voiceOnly: true).Body.ShouldBe("Rana: Sent a voice message.");
+        // the words, when there are any, still come first
+        PushText.ForMessage("Rana", null, "Listen", MessageKinds.Text, hasAttachments: true, false, voiceOnly: true).Body.ShouldBe("Listen");
+    }
+
+    [Fact]
     public void An_announcement_is_titled_Announcements_and_names_who_wrote_it()
     {
         PushText.ForAnnouncement("Rana", "Closed on\nFriday", false).ShouldBe(new PushMessageText("Announcements", "Rana: Closed on Friday"));

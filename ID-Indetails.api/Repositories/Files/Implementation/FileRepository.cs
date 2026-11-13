@@ -25,7 +25,8 @@ public sealed class FileRepository(IdIndetailsDbContext db) : IFileRepository
             await db.WebsiteProjects.AnyAsync(p => p.ThumbnailFileId == id || p.HeroFileId == id, cancellationToken)
                 || await db.WebsiteProjectImages.AnyAsync(i => i.FileId == id, cancellationToken)
                 || await db.CompanySettings.AnyAsync(s => s.WebsiteFaviconFileId == id, cancellationToken),
-            await db.Projects.Where(p => p.PhotoFileId == id).Select(p => p.DomainCode).Distinct().ToListAsync(cancellationToken));
+            await db.Projects.Where(p => p.PhotoFileId == id).Select(p => p.DomainCode).Distinct().ToListAsync(cancellationToken),
+            await db.SiteLogs.Where(l => l.VoiceFileId == id).Select(l => new SiteLogUse(l.UserId, l.Project.DomainCode)).ToListAsync(cancellationToken));
 
     public async Task<bool> IsSharedPictureAsync(long id, CancellationToken cancellationToken = default)
         => await db.Users.AnyAsync(u => u.PhotoFileId == id, cancellationToken)
@@ -42,7 +43,8 @@ public sealed class FileRepository(IdIndetailsDbContext db) : IFileRepository
                 && !db.WebsiteProjectImages.Any(i => i.FileId == f.Id)
                 && !db.MessageAttachments.Any(a => a.FileId == f.Id)
                 && !db.Projects.Any(p => p.PhotoFileId == f.Id)
-                && !db.WorkEntries.Any(e => e.AttachmentFileId == f.Id))
+                && !db.WorkEntries.Any(e => e.AttachmentFileId == f.Id)
+                && !db.SiteLogs.Any(l => l.VoiceFileId == f.Id))
             .OrderBy(f => f.Id)
             .Take(limit)
             .ToListAsync(cancellationToken);

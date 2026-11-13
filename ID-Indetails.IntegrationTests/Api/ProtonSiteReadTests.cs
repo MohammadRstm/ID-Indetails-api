@@ -85,12 +85,17 @@ public class ProtonSiteReadTests(ProtonApiFactory api) : IClassFixture<ProtonApi
         var (_, _, rami) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         var site = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Execution, staffIds: [rami.User.Id]);
         await OkAsync(Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "Poured the ground floor slab" }, rami.AccessToken));
+        var memo = await FileTests.UploadVoiceNoteAsync(Client, rami.AccessToken);
+        await OkAsync(Client.PostJsonAsync($"/api/projects/{site.Id}/site-logs", new { body = "", voiceFileId = memo.Id }, rami.AccessToken));
 
         (await CallAsync(rami, "list_my_sites", new { }))["data"]!.AsArray().Select(s => s!["id"]!.GetValue<long>()).ShouldContain(site.Id);
         var mine = (await CallAsync(rami, "list_my_site_logs", new { project_id = site.Id }))["data"]!["logs"]!.AsArray();
-        mine.ShouldHaveSingleItem()!["text"]!.GetValue<string>().ShouldBe("Poured the ground floor slab");
+        mine.Count.ShouldBe(2);
+        // newest first: the voice note, which Proton can't listen to, then the words
+        (mine[0]!["has_voice_note"]!.GetValue<bool>(), mine[0]!["text"]!.GetValue<string>()).ShouldBe((true, ""));
+        (mine[1]!["has_voice_note"]!.GetValue<bool>(), mine[1]!["text"]!.GetValue<string>()).ShouldBe((false, "Poured the ground floor slab"));
 
-        var everyone = (await CallAsync(superAdmin, "list_site_logs", new { project_id = site.Id }))["data"]!["logs"]!.AsArray().ShouldHaveSingleItem()!;
+        var everyone = (await CallAsync(superAdmin, "list_site_logs", new { project_id = site.Id, search = "slab" }))["data"]!["logs"]!.AsArray().ShouldHaveSingleItem()!;
         everyone["person"]!.GetValue<string>().ShouldBe($"{rami.User.FirstName} {rami.User.LastName}");
         everyone["site"]!["id"]!.GetValue<long>().ShouldBe(site.Id);
 

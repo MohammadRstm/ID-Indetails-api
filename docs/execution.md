@@ -155,17 +155,24 @@ Site staff are Execution employees. They log no hours (they are paid monthly: an
 - The project shows them as `staff` (everyone, in the order they were put on) and as its `team` (the first 5 and the count), Execution only.
 - Sites that existed before got, as their staff, the Execution employees who had recorded their expenses or labour.
 
-**Daily logs** (`site_logs`): one thing noted on a day ("the concrete arrived with 3 bags missing"). A day can have many, each its own; the writer changes one only on the company day it was written (`422 site_log_locked`), and none is deleted: losses are analysed from them later.
+**Daily logs** (`site_logs`): one thing noted on a day ("the concrete arrived with 3 bags missing"), in words, as a voice note, or both. A day can have many, each its own; the writer changes one only on the company day it was written (`422 site_log_locked`), and none is deleted: losses are analysed from them later.
 
 | Method and path | Needs | Purpose |
 |---|---|---|
-| `POST /api/projects/{id}/site-logs` | `site_log:create`, on a site the caller oversees (`403 not_on_site_team`), while it is open | `{ body }` (1 to 2000 characters) |
-| `PUT /api/site-logs/{id}` | `site_log:create`, the writer, on the day | `{ body }`. Someone else's log reads as `404` |
+| `POST /api/projects/{id}/site-logs` | `site_log:create`, on a site the caller oversees (`403 not_on_site_team`), while it is open | `{ body, voiceFileId }`: `body` at most 2000 characters, saved trimmed; `voiceFileId` is the writer's own upload from `POST /api/files/voice`, or null |
+| `PUT /api/site-logs/{id}` | `site_log:create`, the writer, on the day | `{ body, voiceFileId }`. Someone else's log reads as `404` |
 | `GET /api/me/site-logs?projectId=&from=&to=&search=&page=&pageSize=` | `site_log:create` | The caller's logs, newest first. Days are company days, both inclusive; `search` matches the log or the site's title |
 | `GET /api/site-logs?userId=&projectId=&from=&to=&search=&page=&pageSize=` | `site_log:view_all` (Execution admins) | Everyone's logs on sites the caller can see |
 | `GET /api/me/sites` | `site_log:create` or `labour_report:create` | The sites the caller oversees, newest assignment first |
 
-Each log is `{ id, project: { id, title }, person: { id, name }, body, createdAt, updatedAt, canEdit }`.
+Each log is `{ id, project: { id, title }, person: { id, name }, body, voiceNote, createdAt, updatedAt, canEdit }`.
+
+**Voice notes on logs** ([files.md](files.md#voice-notes)):
+- **Text, voice or both.** A log needs words, a voice note or both: an empty or blank `body` with no `voiceFileId` is `400` on `body` ("Write what happened or record a voice note."). A voice-only log keeps `body` as an empty string.
+- **`voiceFileId`** must be the caller's own upload (someone else's reads as `404`, "File not found."), an audio file (`422 file_type_not_allowed`, "A voice note must be a recording.") and not attached anywhere else (`422 file_in_use`).
+- **Changing a log.** `voiceFileId: null` removes the voice note, the same id keeps it, a new id replaces it. A removed or replaced file is attached to nothing any more, so the cleanup job deletes it later.
+- **`voiceNote`** is the `FileResponse` of the recording (`kind: "audio"`), or null. Lists include it, loaded for the whole page in one query. It is played through `GET /api/files/{id}`, by the log's writer and by holders of `site_log:view_all` who can see Execution; anyone else gets `404`.
+- Proton's `list_site_logs` and `list_my_site_logs` say whether a log has a voice note (`has_voice_note`); Proton can't listen to it.
 
 ## Site staff views
 

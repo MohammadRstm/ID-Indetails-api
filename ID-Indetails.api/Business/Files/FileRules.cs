@@ -9,6 +9,8 @@ namespace ID_Indetails.api.Business.Files;
 /// <list type="bullet">
 /// <item>Only photos (JPEG, PNG, WebP, HEIC, up to 10 MB) and videos (MP4, MOV, WebM, up to 100 MB) are accepted.</item>
 /// <item>What a file is comes from its first bytes, never from its name or the type the browser claims.</item>
+/// <item>Voice notes (WebM, Ogg or MP4 audio, up to 10 MB) come in through their own route: WebM and MP4 audio look
+/// like video in their first bytes, so the caller says it is a voice note.</item>
 /// <item>The stored name is only for display: path parts and unusual characters are dropped.</item>
 /// </list>
 /// </summary>
@@ -16,6 +18,7 @@ public static class FileRules
 {
     public const long MaxImageBytes = 10 * 1024 * 1024;
     public const long MaxVideoBytes = 100 * 1024 * 1024;
+    public const long MaxAudioBytes = 10 * 1024 * 1024;
 
     /// <summary>What one person may upload in a day, so nobody can fill the disk the database shares.</summary>
     public const long DailyBytesPerPerson = 2L * 1024 * 1024 * 1024;
@@ -78,15 +81,45 @@ public static class FileRules
         return Mp4Brands.Contains(brand) ? new(FileKind.Video, "video/mp4", ".mp4") : null;
     }
 
+    /// <summary>What a voice note really is, from its first <see cref="HeaderLength"/> bytes: WebM, Ogg or MP4 audio; null for anything else.</summary>
+    public static Detected? DetectVoice(ReadOnlySpan<byte> header)
+    {
+        if (header.Length < HeaderLength)
+        {
+            return null;
+        }
+
+        if (header[0] == 0x1A && header[1] == 0x45 && header[2] == 0xDF && header[3] == 0xA3)
+        {
+            return new(FileKind.Audio, "audio/webm", ".webm");
+        }
+
+        if (Ascii(header[..4]) == "OggS")
+        {
+            return new(FileKind.Audio, "audio/ogg", ".ogg");
+        }
+
+        var brand = Ascii(header[8..12]);
+        return Ascii(header[4..8]) == "ftyp" && (brand == "M4A " || Mp4Brands.Contains(brand))
+            ? new(FileKind.Audio, "audio/mp4", ".m4a")
+            : null;
+    }
+
     /// <summary>A stored file's kind, from the type found when it was uploaded.</summary>
-    public static FileKind KindOf(string mimeType) => mimeType.StartsWith("image/", StringComparison.Ordinal) ? FileKind.Image : FileKind.Video;
+    public static FileKind KindOf(string mimeType)
+        => mimeType.StartsWith("image/", StringComparison.Ordinal) ? FileKind.Image
+            : mimeType.StartsWith("audio/", StringComparison.Ordinal) ? FileKind.Audio
+            : FileKind.Video;
 
     public static RuleDenial? CheckSize(FileKind kind, long sizeBytes)
     {
-        var max = kind == FileKind.Image ? MaxImageBytes : MaxVideoBytes;
-        return sizeBytes > max
-            ? RuleDenial.BusinessRule(ErrorCodes.FileTooLarge, $"{(kind == FileKind.Image ? "Photos" : "Videos")} can be at most {max / 1024 / 1024} MB.")
-            : null;
+        var (max, label) = kind switch
+        {
+            FileKind.Image => (MaxImageBytes, "Photos"),
+            FileKind.Audio => (MaxAudioBytes, "Voice notes"),
+            _ => (MaxVideoBytes, "Videos"),
+        };
+        return sizeBytes > max ? RuleDenial.BusinessRule(ErrorCodes.FileTooLarge, $"{label} can be at most {max / 1024 / 1024} MB.") : null;
     }
 
     /// <param name="uploadedToday">What the person uploaded in the last 24 hours, in bytes.</param>
