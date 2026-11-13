@@ -1,4 +1,6 @@
 using ID_Indetails.api.DTO.Request.Billing;
+using ID_Indetails.api.DTO.Request.Company;
+using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Request.Projects;
 using ID_Indetails.api.DTO.Response.Billing;
 using ID_Indetails.api.DTO.Request.Boqs;
@@ -8,8 +10,11 @@ namespace ID_Indetails.api.Services.Documents.Abstraction;
 
 public sealed record PdfFile(byte[] Content, string FileName);
 
+/// <summary>A CSV file (UTF-8 with a byte-order mark) and the name to save it as.</summary>
+public sealed record CsvFile(byte[] Content, string FileName);
+
 /// <summary>
-/// PDFs of invoices, quotes, BOQs and project reports, and emailing invoices, quotes and BOQs to the client. Who may
+/// PDFs of invoices, quotes, BOQs, project reports, salaries and schedules, and emailing invoices, quotes and BOQs to the client. Who may
 /// read or send one follows the services the figures come from.
 /// </summary>
 public interface IDocumentService
@@ -40,4 +45,13 @@ public interface IDocumentService
 
     /// <summary>A Design project's report, internal or for the client.</summary>
     Task<PdfFile> ProjectReportPdfAsync(long projectId, ProjectReportQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>A month of salaries for the filtered list as <c>GET /api/company/salaries</c> works it out (<c>salary:view</c>), internal.</summary>
+    Task<PdfFile> SalariesPdfAsync(SalaryListQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>Everyone's week, grouped as the Schedules page groups them (<c>schedule:manage</c>), internal.</summary>
+    Task<PdfFile> SchedulesPdfAsync(ScheduleListQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>The same people as <see cref="SchedulesPdfAsync"/>, one row each (<c>schedule:manage</c>).</summary>
+    Task<CsvFile> SchedulesCsvAsync(ScheduleListQuery query, CancellationToken cancellationToken = default);
 }

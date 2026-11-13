@@ -15,6 +15,8 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `GET /api/company/working-time` | Signed in | The policy in force today and every dated policy, newest first |
 | `POST /api/company/working-time` | `working_time:manage` | A new working week, break, overtime multiplier and overtime threshold from a date |
 | `GET /api/company/schedules?domain=&search=` | `schedule:manage` | Everyone's week (their own or the company's) and the hours it requires |
+| `GET /api/company/schedules/pdf?domain=&search=` | `schedule:manage` | The same list as a landscape PDF to print or keep (10 a minute per user); see [documents.md](documents.md) |
+| `GET /api/company/schedules/export?domain=&search=` | `schedule:manage` | The same list as CSV, a row per person (10 a minute per user) |
 | `PUT /api/employees/{id}/schedule` | `schedule:manage` | A person's own week, or back to the company week, from a date |
 | `GET /api/company/overhead` | `company:view` or `overhead:manage` | Every overhead line with its category, this month's totals per currency and per category |
 | `GET /api/company/overhead/monthly?months=13` | `company:view` or `overhead:manage` | Overhead per month, per currency (1–36 months, ending this month) |
@@ -36,6 +38,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `GET /api/company/salaries?month=YYYY-MM&domain=&role=&search=&page=&pageSize=` | `salary:view` | Everyone's pay for a month, totals per currency and a summary; `role` (super_admin, admin, employee) narrows it to one role |
 | `GET /api/company/salaries/{userId}?month=YYYY-MM` | `salary:view` | How one person's pay adds up, and where their hours went (`projects`) |
 | `GET /api/company/salaries/export?month=YYYY-MM&domain=&role=&search=` | `salary:view` | The filtered list as CSV, with a total per currency (10 a minute per user) |
+| `GET /api/company/salaries/pdf?month=YYYY-MM&domain=&role=&search=` | `salary:view` | The same filtered list as a landscape PDF to print or keep, with a total per currency and the people with no pay set (10 a minute per user); see [documents.md](documents.md) |
 | `GET /api/company/project-pay?unit=week\|month\|quarter&date=&projectId=` | `salary:view` | What each Design project paid its people in a period |
 | `GET /api/company/project-pay/export?…` | `salary:view` | The same as CSV (10 a minute per user) |
 | `POST /api/employees/{id}/hour-excuses` | `hours:excuse` | Excuses minutes, days or the whole month, paid or unpaid |

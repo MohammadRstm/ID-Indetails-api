@@ -25,6 +25,9 @@ public static class PdfLayout
 {
     public const double ContentWidthCm = 17.4;
 
+    /// <summary>The width between the margins of an A4 page turned on its side, for wide tables.</summary>
+    public const double LandscapeContentWidthCm = 26.1;
+
     private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
     private static readonly Color Ink = new(0x1F, 0x26, 0x25);
     private static readonly Color Muted = new(0x6B, 0x76, 0x74);
@@ -39,7 +42,8 @@ public static class PdfLayout
 
     /// <param name="footer">Shown at the bottom of every page, beside the page number.</param>
     /// <param name="forClient">A document the client receives: the company's mark goes behind every page (<see cref="PdfWatermark"/>).</param>
-    public static (Document Document, Section Section) NewDocument(string title, string footer, bool forClient = false)
+    /// <param name="landscape">A4 on its side, for tables with many columns. Its content is <see cref="LandscapeContentWidthCm"/> wide.</param>
+    public static (Document Document, Section Section) NewDocument(string title, string footer, bool forClient = false, bool landscape = false)
     {
         var document = new Document();
         document.Info.Title = title;
@@ -51,6 +55,13 @@ public static class PdfLayout
         var section = document.AddSection();
         section.PageSetup = document.DefaultPageSetup.Clone();
         section.PageSetup.PageFormat = PageFormat.A4;
+        section.PageSetup.Orientation = Orientation.Portrait;
+        if (landscape)
+        {
+            // A4 on its side, given as its size: MigraDoc's Landscape orientation came out as an upright page
+            section.PageSetup.PageWidth = Unit.FromCentimeter(29.7);
+            section.PageSetup.PageHeight = Unit.FromCentimeter(21);
+        }
         section.PageSetup.TopMargin = Unit.FromCentimeter(1.8);
         section.PageSetup.BottomMargin = Unit.FromCentimeter(2);
         section.PageSetup.LeftMargin = Unit.FromCentimeter(1.8);
@@ -60,7 +71,7 @@ public static class PdfLayout
         var foot = section.Footers.Primary.AddParagraph();
         foot.Format.Font.Size = 7.5;
         foot.Format.Font.Color = Muted;
-        foot.Format.AddTabStop(Unit.FromCentimeter(ContentWidthCm), TabAlignment.Right);
+        foot.Format.AddTabStop(Unit.FromCentimeter(landscape ? LandscapeContentWidthCm : ContentWidthCm), TabAlignment.Right);
         foot.AddText(footer);
         foot.AddTab();
         foot.AddText("Page ");
@@ -77,7 +88,9 @@ public static class PdfLayout
     }
 
     /// <param name="stamp">A word in red under the number, such as VOID or DRAFT.</param>
-    public static void AddLetterhead(Section section, Letterhead head, string kind, string number, string? stamp = null)
+    /// <param name="widthCm">The width of the page's content: <see cref="LandscapeContentWidthCm"/> on a landscape page.</param>
+    public static void AddLetterhead(
+        Section section, Letterhead head, string kind, string number, string? stamp = null, double widthCm = ContentWidthCm)
     {
         var table = section.AddTable();
         var hasLogo = head.Logo is not null;
@@ -86,7 +99,7 @@ public static class PdfLayout
             table.AddColumn(Unit.FromCentimeter(1.6));
         }
 
-        table.AddColumn(Unit.FromCentimeter(hasLogo ? 9.8 : 11.4));
+        table.AddColumn(Unit.FromCentimeter(widthCm - 6 - (hasLogo ? 1.6 : 0)));
         table.AddColumn(Unit.FromCentimeter(6));
         var row = table.AddRow();
         var at = 0;
@@ -229,6 +242,15 @@ public static class PdfLayout
         return row;
     }
 
+    /// <summary>A row of bold text across the whole table, naming the group of rows under it. It stays with the next row.</summary>
+    public static void AddGroupRow(Table table, string label)
+    {
+        var row = table.AddRow();
+        row.KeepWith = 1;
+        row.Cells[0].MergeRight = table.Columns.Count - 1;
+        Text(row.Cells[0].AddParagraph(label), 9.5, bold: true);
+    }
+
     /// <summary>A smaller grey line under a cell's text.</summary>
     public static void AddCellNote(Row row, int cell, string note)
         => Text(row.Cells[cell].AddParagraph(note), 8, color: Muted);
@@ -297,6 +319,30 @@ public static class PdfLayout
             _ => value.ToString("N2", Invariant) + " " + currency,
         };
         return amount < 0 ? "-" + body : body;
+    }
+
+    /// <summary>Hours and minutes as people say them: 8h, 7h 30m, 45m.</summary>
+    public static string Duration(int minutes)
+    {
+        var (hours, rest) = (minutes / 60, minutes % 60);
+        if (hours == 0)
+        {
+            return $"{rest}m";
+        }
+
+        return rest == 0 ? $"{hours}h" : $"{hours}h {rest}m";
+    }
+
+    /// <summary>A time of day from its minutes after midnight: 17:00, or 5:00 PM (24:00 is the end of the day).</summary>
+    public static string TimeOfDay(int minute, bool use24Hour)
+    {
+        var (hour, rest) = (minute / 60, minute % 60);
+        if (use24Hour)
+        {
+            return $"{hour}:{rest:00}";
+        }
+
+        return $"{(hour % 12 == 0 ? 12 : hour % 12)}:{rest:00} {(hour % 24 < 12 ? "AM" : "PM")}";
     }
 
     /// <summary>Sep 30, 2026.</summary>
