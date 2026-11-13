@@ -140,9 +140,20 @@ public sealed record OverheadListInput
 {
     [Description("Also the expenses that have ended. Default false: a cancelled one still runs to the end of its month, and can be resumed until then.")]
     public bool IncludeEnded { get; init; }
+
+    [Description("The month whose one-off expenses to list, as YYYY-MM, never a future one. Default: this month.")]
+    public string? OneOffMonth { get; init; }
 }
 
 public sealed record OverheadAmountRow(DateOnly From, decimal Amount);
+
+/// <param name="CanEdit">The user may change or remove it: its month is still the current one.</param>
+public sealed record OneOffRow(long Id, string Name, ProtonNamed Category, string Currency, decimal Amount, DateOnly SpentOn, bool CanEdit);
+
+/// <param name="Month">The first day of the month listed.</param>
+/// <param name="IsOpen">It is the current month, so its one-offs can still be changed.</param>
+/// <param name="Totals">One total per currency.</param>
+public sealed record OneOffList(DateOnly Month, bool IsOpen, IReadOnlyList<CurrencyTotalResponse> Totals, IReadOnlyList<OneOffRow> Items);
 
 /// <param name="ThisMonth">What it costs this month, in <paramref name="Currency"/>; empty when it isn't charged this month.</param>
 /// <param name="Amounts">Its monthly amount from each month it changed, a coming change included.</param>
@@ -159,12 +170,18 @@ public sealed record OverheadRow(
 /// <param name="Lines">How many expenses use it, past ones included; only one used by none can be removed.</param>
 public sealed record OverheadCategoryRow(long Id, string Name, int Lines);
 
-/// <param name="ThisMonth">This month's company expenses, one total per currency.</param>
-public sealed record OverheadList(IReadOnlyList<CurrencyTotalResponse> ThisMonth, IReadOnlyList<OverheadCategoryRow> Categories, IReadOnlyList<OverheadRow> Expenses);
+/// <param name="ThisMonth">This month's recurring company expenses, one total per currency.</param>
+/// <param name="OneOffs">The one-off company expenses of the month asked for (this month by default).</param>
+public sealed record OverheadList(
+    IReadOnlyList<CurrencyTotalResponse> ThisMonth,
+    IReadOnlyList<OverheadCategoryRow> Categories,
+    IReadOnlyList<OverheadRow> Expenses,
+    OneOffList OneOffs);
 
 /// <summary>
-/// The company's recurring expenses (overhead) and their categories, as GET /api/company/overhead and /groups return
-/// them, with the ids the overhead and company expense cards and forms need.
+/// The company's recurring expenses (overhead), their categories and a month's one-off expenses, as GET
+/// /api/company/overhead, /groups and /one-offs return them, with the ids the overhead and company expense cards and
+/// forms need.
 /// </summary>
 public sealed class ListOverheadTool(IOverheadService overhead) : ProtonTool<OverheadListInput>
 {
@@ -172,8 +189,9 @@ public sealed class ListOverheadTool(IOverheadService overhead) : ProtonTool<Ove
 
     public override string Description =>
         "The company's recurring expenses (rent, software… the app's Company expenses), each with its category, currency, " +
-        "this month's amount, when it started and ended and its amount changes, and the categories. Gives the ids " +
-        "propose_overhead and the company_expense form need.";
+        "this month's amount, when it started and ended and its amount changes, the categories, and a month's one-off " +
+        "expenses (a refrigerator, a repair: paid once, counted in full on the day), with a total per currency. Gives " +
+        "the ids propose_overhead and the company_expense form need.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<OverheadController>(nameof(OverheadController.Get));
 
@@ -187,6 +205,14 @@ public sealed class ListOverheadTool(IOverheadService overhead) : ProtonTool<Ove
                 l.Id, l.Name, new ProtonNamed(l.Group.Id, l.Group.Name), l.Currency, l.CurrentAmount, l.StartedOn, l.EndedOn,
                 l.Amounts.Select(a => new OverheadAmountRow(a.EffectiveFrom, a.Amount)).ToList()))
             .ToList();
-        return ProtonToolOutput.Of(new OverheadList(current.MonthTotals, groups.Select(g => new OverheadCategoryRow(g.Id, g.Name, g.Lines)).ToList(), lines));
+        var oneOffs = await overhead.OneOffsAsync(input.OneOffMonth?.Trim(), cancellationToken);
+        var oneOffRows = oneOffs.Items
+            .Select(e => new OneOffRow(e.Id, e.Name, new ProtonNamed(e.Group.Id, e.Group.Name), e.Currency, e.Amount, e.SpentOn, e.CanEdit))
+            .ToList();
+        return ProtonToolOutput.Of(new OverheadList(
+            current.MonthTotals,
+            groups.Select(g => new OverheadCategoryRow(g.Id, g.Name, g.Lines)).ToList(),
+            lines,
+            new OneOffList(oneOffs.Month, oneOffs.IsOpen, oneOffs.Totals, oneOffRows)));
     }
 }

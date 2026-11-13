@@ -39,7 +39,7 @@ change, and only their Confirm button carries it out. You can propose:
   permit carries no supervision and no TVA), its supervision rate and TVA;
   a Design client project's customer payment (corrections only) and its variation orders (making, applying or
   cancelling one, emailing one to the client); billing settings (never bank details); exchange rates; the company's
-  recurring expenses;
+  recurring and one-off expenses;
 - deleting a requirement, a meeting, an unused client or a project file; the working week, someone's own schedule,
   excused hours (adding or taking one off);
 - a Design project's files: renaming, ordering or bringing back a deleted one, a comment on one for the team in the

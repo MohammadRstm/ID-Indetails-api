@@ -1,6 +1,9 @@
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Activity;
+using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.Enums;
+using MySqlConnector;
 using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
@@ -15,6 +18,18 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Asia/Beirut"));
 
     private static string Iso(DateOnly day) => day.ToString("yyyy-MM-dd");
+
+    private async Task ExecuteAsync(string sql, params (string Name, object Value)[] parameters)
+    {
+        await using var connection = await api.Database.OpenConnectionAsync();
+        await using var command = new MySqlCommand(sql, connection);
+        foreach (var (name, value) in parameters)
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
+        await command.ExecuteNonQueryAsync();
+    }
 
     private async Task<T> OkAsync<T>(Task<HttpResponseMessage> call)
     {
@@ -306,5 +321,96 @@ public class CompanyTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(422, ErrorCodes.OverheadAlreadyCancelled);
         await (await Client.PostJsonAsync($"/api/company/overhead/{usd.Id}/currency", new { currency = "LBP", amount = 5m }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+    }
+
+    [Fact]
+    public async Task One_off_expenses_are_dated_this_month_and_a_closed_month_is_locked()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var thisMonth = new DateOnly(Today.Year, Today.Month, 1);
+        var token = superAdmin.AccessToken;
+        const string url = "/api/company/overhead/one-offs";
+
+        var fridge = await OkAsync<OneOffExpenseResponse>(Client.PostJsonAsync(url,
+            new { name = "  Refrigerator ", groupId = 1, currency = "usd", amount = 450m, spentOn = Iso(Today) }, token));
+        fridge.Name.ShouldBe("Refrigerator");
+        fridge.Currency.ShouldBe("USD");
+        fridge.Group.ShouldBe(new OverheadGroupSummaryResponse(1, "Software & services"));
+        fridge.SpentOn.ShouldBe(Today);
+        fridge.CanEdit.ShouldBeTrue();
+
+        var list = await OkAsync<OneOffExpenseListResponse>(Client.GetAsync(url, token));
+        list.Month.ShouldBe(thisMonth);
+        list.IsOpen.ShouldBeTrue();
+        list.Items.ShouldContain(i => i.Id == fridge.Id && i.CanEdit);
+        list.Totals.ShouldContain(t => t.Currency == "USD" && t.Total >= 450m);
+        (await OkAsync<List<OverheadMonthResponse>>(Client.GetAsync("/api/company/overhead/monthly?months=2", token)))[^1]
+            .OneOffTotals.ShouldContain(t => t.Currency == "USD" && t.Total >= 450m);
+
+        // changed in place, to the first of the month
+        var fixedUp = await OkAsync<OneOffExpenseResponse>(Client.PutJsonAsync($"{url}/{fridge.Id}",
+            new { name = "Fridge", groupId = 2, currency = "USD", amount = 500m, spentOn = Iso(thisMonth) }, token));
+        fixedUp.Name.ShouldBe("Fridge");
+        fixedUp.Group.Id.ShouldBe(2);
+        fixedUp.Amount.ShouldBe(500m);
+        fixedUp.SpentOn.ShouldBe(thisMonth);
+
+        // the day is this month, up to today
+        await (await Client.PostJsonAsync(url, new { name = "Late", groupId = 1, currency = "USD", amount = 1m, spentOn = Iso(Today.AddDays(1)) }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.OneOffOutsideThisMonth);
+        await (await Client.PutJsonAsync($"{url}/{fridge.Id}",
+                new { name = "Fridge", groupId = 2, currency = "USD", amount = 500m, spentOn = Iso(thisMonth.AddDays(-1)) }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.OneOffOutsideThisMonth);
+        await (await Client.PostJsonAsync(url, new { name = "Nowhere", groupId = 9999, currency = "USD", amount = 1m, spentOn = Iso(Today) }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.OverheadGroupNotFound);
+        await (await Client.PostJsonAsync(url, new { name = " ", groupId = 1, currency = "EUR", amount = 0m, spentOn = Iso(Today) }, token))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.PutJsonAsync($"{url}/9999999", new { name = "Nothing", groupId = 1, currency = "USD", amount = 1m, spentOn = Iso(Today) }, token))
+            .ShouldFailWithAsync(404, ErrorCodes.NotFound);
+
+        // a category a one-off uses stays, and counts it
+        var groups = await OkAsync<List<OverheadGroupResponse>>(Client.GetAsync("/api/company/overhead/groups", token));
+        groups.Single(g => g.Id == 2).Lines.ShouldBeGreaterThanOrEqualTo(1);
+        var snacks = await OkAsync<OverheadGroupResponse>(Client.PostJsonAsync("/api/company/overhead/groups", new { name = "Pantry" }, token));
+        var biscuits = await OkAsync<OneOffExpenseResponse>(Client.PostJsonAsync(url,
+            new { name = "Biscuits", groupId = snacks.Id, currency = "LBP", amount = 900_000m, spentOn = Iso(Today) }, token));
+        await (await Client.DeleteAsync($"/api/company/overhead/groups/{snacks.Id}", token)).ShouldFailWithAsync(422, ErrorCodes.OverheadGroupInUse);
+
+        // a past month is read-only, whatever the caller holds
+        await ExecuteAsync(
+            "INSERT INTO one_off_expenses (name, group_id, currency, amount, spent_on, created_at) " +
+            "VALUES ('Old repair', 1, 'USD', 80, @day, UTC_TIMESTAMP(3))", ("@day", thisMonth.AddMonths(-1).AddDays(14).ToDateTime(TimeOnly.MinValue)));
+        var previous = await OkAsync<OneOffExpenseListResponse>(Client.GetAsync($"{url}?month={thisMonth.AddMonths(-1):yyyy-MM}", token));
+        previous.IsOpen.ShouldBeFalse();
+        var old = previous.Items.Single(i => i.Name == "Old repair");
+        old.CanEdit.ShouldBeFalse();
+        await (await Client.PutJsonAsync($"{url}/{old.Id}",
+                new { name = "Old repair", groupId = 1, currency = "USD", amount = 90m, spentOn = Iso(Today) }, token))
+            .ShouldFailWithAsync(422, ErrorCodes.OneOffLocked);
+        await (await Client.DeleteAsync($"{url}/{old.Id}", token)).ShouldFailWithAsync(422, ErrorCodes.OneOffLocked);
+        await (await Client.GetAsync($"{url}?month={thisMonth.AddMonths(1):yyyy-MM}", token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+        await (await Client.GetAsync($"{url}?month=soon", token)).ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        // only overhead:manage changes them; whoever sees the company's expenses reads them
+        await (await Client.GetAsync(url, admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.PostJsonAsync(url, new { name = "Chair", groupId = 1, currency = "USD", amount = 60m, spentOn = Iso(Today) }, admin.AccessToken))
+            .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+        await (await Client.DeleteAsync($"{url}/{fridge.Id}", admin.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
+
+        (await Client.DeleteAsync($"{url}/{biscuits.Id}", token)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+        (await Client.DeleteAsync($"{url}/{fridge.Id}", token)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+        (await OkAsync<OneOffExpenseListResponse>(Client.GetAsync(url, token))).Items.ShouldNotContain(i => i.Id == fridge.Id);
+        await (await Client.DeleteAsync($"{url}/{fridge.Id}", token)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+
+        // each change is a company-level event with the amount, in the Company group
+        var feed = await OkAsync<PagedResponse<ActivityItemResponse>>(Client.GetAsync("/api/activity?group=company&pageSize=50", token));
+        var mine = feed.Items.Where(i => i.SubjectType == "one_off_expense" && i.SubjectId == fridge.Id).ToList();
+        mine.Select(i => i.Kind).ShouldBe(
+            [ActivityEventKinds.OverheadOneOffRemoved, ActivityEventKinds.OverheadOneOffChanged, ActivityEventKinds.OverheadOneOffAdded],
+            ignoreOrder: true);
+        mine.ShouldAllBe(i => i.Group == ActivityGroup.Company && i.Domain == null);
+        mine.Single(i => i.Kind == ActivityEventKinds.OverheadOneOffChanged).Amount.ShouldBe(500m);
+        mine.Single(i => i.Kind == ActivityEventKinds.OverheadOneOffChanged).PrevAmount.ShouldBe(450m);
     }
 }
