@@ -1,7 +1,6 @@
 using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Constants;
-using ID_Indetails.api.Enums;
 using Shouldly;
 
 namespace ID_Indetails.UnitTests.Business;
@@ -10,13 +9,6 @@ public class PayRulesTests
 {
     // Monday to Friday, 9 to 5 with a paid hour's break: 8 paid hours a day.
     private static readonly PersonCalendar Company = new([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
-
-    [Fact]
-    public void Hourly_pay_is_its_own_rate_whatever_the_month()
-    {
-        PayRules.HourlyRate(PayBasis.Hourly, 18.50m, new(2026, 2, 10), Company).ShouldBe(18.50m);
-        PayRules.HourlyRate(PayBasis.Hourly, 18.50m, new(2026, 7, 10), Company).ShouldBe(18.50m);
-    }
 
     [Theory]
     [InlineData(2026, 2, 160, 18.75)]     // 20 working days
@@ -28,7 +20,7 @@ public class PayRulesTests
         var day = new DateOnly(year, month, 15);
 
         PayRules.PaidMinutesInMonth(day, Company).ShouldBe(paidHours * 60);
-        PayRules.HourlyRate(PayBasis.Monthly, 3000m, day, Company).ShouldBe(rate);
+        PayRules.HourlyRate(3000m, day, Company).ShouldBe(rate);
     }
 
     [Fact]
@@ -40,7 +32,7 @@ public class PayRulesTests
             [new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)],
             [new PersonCalendar.Schedule(new(2026, 1, 1), false, days)]);
 
-        PayRules.HourlyRate(PayBasis.Monthly, 1040m, new(2026, 6, 1), partTime).ShouldBe(10m);
+        PayRules.HourlyRate(1040m, new(2026, 6, 1), partTime).ShouldBe(10m);
     }
 
     [Theory]
@@ -48,41 +40,15 @@ public class PayRulesTests
     [InlineData(1000, 5.43)]
     [InlineData(3000, 16.30)]
     public void A_salary_s_overtime_rate_is_suggested_as_the_salary_divided_by_184_hours(decimal salary, decimal rate)
-        => PayRules.SuggestedOvertimeRate(PayBasis.Monthly, salary).ShouldBe(rate);
-
-    [Fact]
-    public void Hourly_pay_is_its_own_overtime_rate()
-        => PayRules.SuggestedOvertimeRate(PayBasis.Hourly, 12m).ShouldBe(12m);
+        => PayRules.SuggestedOvertimeRate(salary).ShouldBe(rate);
 
     [Fact]
     public void A_month_with_no_working_days_has_no_rate()
     {
         var nothing = new PersonCalendar([new PersonCalendar.Policy(new(2000, 1, 1), 0, 540, 1020, 60, 1m)], []);
 
-        PayRules.HourlyRate(PayBasis.Monthly, 3000m, new(2026, 6, 1), nothing).ShouldBe(0m);
+        PayRules.HourlyRate(3000m, new(2026, 6, 1), nothing).ShouldBe(0m);
     }
-
-    [Theory]
-    [InlineData(RoleCodes.SuperAdmin, null, PayBasis.Monthly, true)]
-    [InlineData(RoleCodes.SuperAdmin, null, PayBasis.Hourly, false)]
-    [InlineData(RoleCodes.Admin, DomainCodes.Design, PayBasis.Monthly, true)]
-    [InlineData(RoleCodes.Admin, DomainCodes.Design, PayBasis.Hourly, false)]
-    [InlineData(RoleCodes.Employee, DomainCodes.Design, PayBasis.Hourly, true)]
-    [InlineData(RoleCodes.Employee, DomainCodes.Design, PayBasis.Monthly, true)]
-    // site staff log no hours
-    [InlineData(RoleCodes.Employee, DomainCodes.Execution, PayBasis.Hourly, false)]
-    [InlineData(RoleCodes.Employee, DomainCodes.Execution, PayBasis.Monthly, true)]
-    public void Admins_super_admins_and_site_staff_must_be_paid_monthly(string role, string? domain, PayBasis basis, bool allowed)
-        => (PayRules.CheckBasis(role, domain, basis) is null).ShouldBe(allowed);
-
-    [Theory]
-    [InlineData(RoleCodes.Admin, PayBasis.Hourly, false)]
-    [InlineData(RoleCodes.SuperAdmin, PayBasis.Hourly, false)]
-    [InlineData(RoleCodes.Admin, PayBasis.Monthly, true)]
-    [InlineData(RoleCodes.Admin, null, true)]
-    [InlineData(RoleCodes.Employee, PayBasis.Hourly, true)]
-    public void Someone_paid_hourly_needs_a_monthly_salary_before_becoming_an_admin(string newRole, PayBasis? basis, bool allowed)
-        => (PayRules.CheckRoleChange(newRole, basis) is null).ShouldBe(allowed);
 
     [Fact]
     public void A_role_counts_from_the_day_it_changed_and_the_last_change_of_a_day_wins()

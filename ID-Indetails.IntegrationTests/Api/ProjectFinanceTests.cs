@@ -39,8 +39,9 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        // 3,200 a month is 20 an hour in February 2026 (160 paid hours), and its overtime is set at 20 too
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "hourly", amount = 20m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 3200m, overtimeRate = 20m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var morning = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
         var afternoon = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
@@ -57,10 +58,9 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
         (await MoneyAsync(afternoon.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(88.57m);
 
-        // A salaried person's break is paid too: 3,200 a month is the same 20 an hour in February (160 paid hours), so
-        // the cost doesn't change.
+        // The suggested overtime rate (3,200 ÷ 184) moves only the overtime hour: the morning, all within hours, stays.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 3200m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
+            new { amount = 3200m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
     }
@@ -76,7 +76,7 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // 1,600 a month is 10 an hour in February 2026 (20 working days of 8 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);

@@ -72,7 +72,7 @@ public sealed class SalaryAdvanceSchedules(IPayrollInputs inputs, IClock clock) 
             return new MonthPay(pay.Terms.Currency, pay.Total);
         }
 
-        // while the month runs: a salary's whole month as it stands, hourly pay as earned so far (what Salaries hands over)
+        // while the month runs: the whole month as it stands (what Salaries hands over)
         var fullMonth = MyTime.EstimateOf(pay, input, inProgress: true).FullMonth;
         return new MonthPay(pay.Terms.Currency, fullMonth ?? pay.Total);
     }
@@ -82,7 +82,7 @@ public sealed class SalaryAdvanceSchedules(IPayrollInputs inputs, IClock clock) 
         var month = AdvanceRules.MonthOf(clock.CompanyToday);
         var personMonth = (await inputs.ForAsync([person], [month], cancellationToken)).Single();
         return SalaryCalculator.Calculate(personMonth.Input) is { } pay
-            ? new PayNow(pay.Terms.Currency, SalaryCalculator.MonthlyPay(pay, personMonth.Input))
+            ? new PayNow(pay.Terms.Currency, SalaryCalculator.MonthlyPay(pay))
             : null;
     }
 

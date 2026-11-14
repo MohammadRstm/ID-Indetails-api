@@ -1,5 +1,3 @@
-using ID_Indetails.api.Data;
-using ID_Indetails.api.Enums;
 using ID_Indetails.api.Extensions;
 using ID_Indetails.api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +11,6 @@ public class UserPayHistoryConfiguration : IEntityTypeConfiguration<UserPayHisto
     {
         builder.ToTable("user_pay_history", t =>
         {
-            t.HasCheckConstraint("ck_user_pay_history_basis", SnakeCaseEnum.CheckSql<PayBasis>("basis"));
             t.HasCheckConstraint("ck_user_pay_history_amount_positive", "`amount` > 0");
             t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`overtime_rate` >= 0");
         });

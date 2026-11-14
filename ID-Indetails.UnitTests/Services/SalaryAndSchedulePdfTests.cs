@@ -3,7 +3,6 @@ using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Payroll;
-using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Documents.Implementation;
 using PdfSharp.Pdf.IO;
 using Shouldly;
@@ -23,7 +22,6 @@ public class SalaryAndSchedulePdfTests
         Role = "employee",
         Domain = "design",
         Team = new TeamSummaryResponse(1, "Architecture"),
-        Basis = i % 2 == 0 ? PayBasis.Monthly : PayBasis.Hourly,
         Amount = 1760m,
         Currency = "USD",
         HourlyRate = 10m,

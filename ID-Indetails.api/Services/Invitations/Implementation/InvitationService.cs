@@ -64,11 +64,6 @@ public sealed class InvitationService(
             throw new ForbiddenException(ErrorCodes.InvitationNotAllowed, "Setting someone's pay needs the permission to change pay.");
         }
 
-        if (request.Pay is { } terms && PayRules.CheckBasis(request.Role, request.DomainCode, terms.Basis) is { } denial)
-        {
-            throw denial.ToException();
-        }
-
         if (EmployeeRules.CheckDepartment(request.Role, decision.DomainCode, request.TeamId) is { } noDepartment)
         {
             throw noDepartment.ToException();
@@ -116,11 +111,10 @@ public sealed class InvitationService(
             {
                 UserId = user.Id,
                 EffectiveFrom = pay.EffectiveFrom ?? clock.CompanyToday,
-                Basis = pay.Basis,
                 Amount = pay.Amount,
                 Currency = pay.Currency.ToUpperInvariant(),
                 OvertimeRate = pay.OvertimeRate ?? PayRules.SuggestedOvertimeRate(
-                    pay.Basis, pay.Amount, await workingTime.OvertimeThresholdOnAsync(pay.EffectiveFrom ?? clock.CompanyToday, cancellationToken)),
+                    pay.Amount, await workingTime.OvertimeThresholdOnAsync(pay.EffectiveFrom ?? clock.CompanyToday, cancellationToken)),
                 Note = "Set at invitation",
                 CreatedAt = now,
                 CreatedById = currentUser.Id,

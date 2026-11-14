@@ -26,7 +26,6 @@ public class ValueConverterTests
         AssertRoundTrip<UserStatus>();
         AssertRoundTrip<ProjectStatus>();
         AssertRoundTrip<BillingType>();
-        AssertRoundTrip<PayBasis>();
         AssertRoundTrip<ContactKind>();
         AssertRoundTrip<DeliveryChannel>();
         AssertRoundTrip<PaymentMethod>();

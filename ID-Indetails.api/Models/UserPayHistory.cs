@@ -1,5 +1,3 @@
-using ID_Indetails.api.Enums;
-
 namespace ID_Indetails.api.Models;
 
 /// <summary>
@@ -14,17 +12,15 @@ public class UserPayHistory
 
     public DateOnly EffectiveFrom { get; set; }
 
-    public PayBasis Basis { get; set; }
-
-    /// <summary>Hourly rate or monthly salary, depending on <see cref="Basis"/>.</summary>
+    /// <summary>The monthly salary: everyone is paid one.</summary>
     public decimal Amount { get; set; }
 
     public string Currency { get; set; } = "USD";
 
     /// <summary>
-    /// What an hour of overtime is paid at, before the company's multiplier: hourly pay's own rate, or the rate entered
-    /// with a salary (the salary ÷ 184 unless an admin typed another, <c>PayRules.SuggestedOvertimeRate</c>). A salary's
-    /// other hours are worth what the month gives (<c>PayRules.HourlyRate</c>).
+    /// What an hour of overtime is paid at, before the company's multiplier: the rate entered with the salary (the salary
+    /// ÷ 184 unless an admin typed another, <c>PayRules.SuggestedOvertimeRate</c>). Its other hours are worth what the
+    /// month gives (<c>PayRules.HourlyRate</c>).
     /// </summary>
     public decimal OvertimeRate { get; set; }
 

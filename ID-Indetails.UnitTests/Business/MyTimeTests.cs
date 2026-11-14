@@ -1,6 +1,5 @@
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
-using ID_Indetails.api.Enums;
 using Shouldly;
 
 namespace ID_Indetails.UnitTests.Business;
@@ -31,7 +30,7 @@ public class MyTimeTests
             today,
             new DateOnly(2025, 1, 1),
             ledgerApplies,
-            [new SalaryCalculator.PayTerms(new DateOnly(2025, 1, 1), PayBasis.Monthly, 1760m, "USD", 9.57m)],
+            [new SalaryCalculator.PayTerms(new DateOnly(2025, 1, 1), 1760m, "USD", 9.57m)],
             Calendar,
             worked.Select((day, i) => Work(i + 1, day, 540, 420)).ToList(),
             []);

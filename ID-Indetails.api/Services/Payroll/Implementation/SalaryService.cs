@@ -10,7 +10,6 @@ using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Payroll;
-using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
@@ -53,7 +52,6 @@ public sealed class SalaryService(
             Totals(rows),
             new SalarySummaryResponse(
                 rows.Count,
-                rows.Count(r => r.Basis == PayBasis.Monthly),
                 rows.Sum(r => r.NormalMinutes),
                 computed.Sum(c => c.Result.OvertimeMinutes),
                 rows.Sum(r => r.MadeUpMinutes),
@@ -100,7 +98,7 @@ public sealed class SalaryService(
                     user.PhotoFileId,
                     user.Position,
                     g.OrderBy(p => p.Month)
-                        .Select(p => new SalaryYearMonthResponse(p.Month, p.Result!.Terms.Basis, p.Result.Terms.Amount, p.Result.Terms.Currency, p.Result.Total))
+                        .Select(p => new SalaryYearMonthResponse(p.Month, p.Result!.Terms.Amount, p.Result.Terms.Currency, p.Result.Total))
                         .ToList());
             })
             .ToList();
@@ -133,8 +131,6 @@ public sealed class SalaryService(
         return new SalaryDetailResponse(
             ToRow(person, repaid.GetValueOrDefault(userId)),
             InProgress(month),
-            result.PaidBreakDays,
-            result.PaidBreakPay,
             result.DeductionMinutes,
             result.Ledger?.MissedDays ?? [],
             result.Work.Where(w => w.Overtime > 0)
@@ -144,7 +140,6 @@ public sealed class SalaryService(
             workingDays,
             await ProjectsAsync(userId, month, result, input, cancellationToken),
             MonthTimeOffResponse.Of(person.Month),
-            result.TimeOffPay,
             await advanceService.ForSalaryAsync(person.User, month, cancellationToken));
     }
 
@@ -211,14 +206,13 @@ public sealed class SalaryService(
         var csv = new StringBuilder();
         var monthText = month.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
-        Csv.Line(csv, "Month", "Employee", "Email", "Domain", "Department", "Pay basis", "Monthly salary", "Hourly rate", "Currency",
+        Csv.Line(csv, "Month", "Employee", "Email", "Domain", "Department", "Monthly salary", "Hourly rate", "Currency",
             "Expected hours", "Hours in schedule", "Overtime made up", "Overtime", "Overtime paid", "Excused hours", "Short hours", "Flagged",
             "Pro-rated", "Base pay", "Deduction", "Overtime pay", "To pay", "Advance", "To hand over");
 
         foreach (var r in rows)
         {
-            Csv.Line(csv, monthText, r.Name, r.Email, r.Domain, r.Team?.Name, r.Basis.ToString().ToLowerInvariant(),
-                r.Basis == PayBasis.Monthly ? Csv.Money(r.Amount) : null, Csv.Money(r.HourlyRate), r.Currency,
+            Csv.Line(csv, monthText, r.Name, r.Email, r.Domain, r.Team?.Name, Csv.Money(r.Amount), Csv.Money(r.HourlyRate), r.Currency,
                 Csv.Hours(r.ExpectedMinutes), Csv.Hours(r.NormalMinutes), Csv.Hours(r.MadeUpMinutes), Csv.Hours(r.OvertimeMinutes),
                 Csv.Hours(r.OvertimePaidMinutes), Csv.Hours(r.ExcusedMinutes), Csv.Hours(r.ShortMinutes), r.Flagged ? "yes" : r.Behind ? "behind so far" : "no",
                 r.ProRated ? $"{r.WorkingDaysPaid}/{r.WorkingDays} days" : "no",
@@ -345,7 +339,7 @@ public sealed class SalaryService(
     {
         var (user, r) = (c.User, c.Result);
         var estimate = MyTime.EstimateOf(r, c.Input, InProgress(c.Input.Month));
-        var monthlyPay = SalaryCalculator.MonthlyPay(r, c.Input);
+        var monthlyPay = SalaryCalculator.MonthlyPay(r);
         return new SalaryRowResponse
         {
             UserId = user.Id,
@@ -354,7 +348,6 @@ public sealed class SalaryService(
             Role = user.RoleCode,
             Domain = user.DomainCode,
             Team = user.Team is null ? null : new TeamSummaryResponse(user.Team.Id, user.Team.Name),
-            Basis = r.Terms.Basis,
             Amount = r.Terms.Amount,
             Currency = r.Terms.Currency,
             HourlyRate = r.HourlyRate,

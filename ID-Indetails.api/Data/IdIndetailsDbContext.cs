@@ -179,7 +179,6 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<BlockedChangeKind>(configurationBuilder);
         StoreAsSnakeCase<BlockedChangeStatus>(configurationBuilder);
         StoreAsSnakeCase<BillingType>(configurationBuilder);
-        StoreAsSnakeCase<PayBasis>(configurationBuilder);
         StoreAsSnakeCase<ContactKind>(configurationBuilder);
         StoreAsSnakeCase<DeliveryChannel>(configurationBuilder);
         StoreAsSnakeCase<PaymentMethod>(configurationBuilder);

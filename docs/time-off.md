@@ -95,11 +95,10 @@ Granted time off (approved, rejected or ended) feeds pay as **day excuses**, one
 - The hours ledger doesn't expect hours on those days, and a month doesn't read as short because of them.
 - Missed-hours and log reminders skip them.
 - Paid days count toward the overtime threshold; unpaid days don't.
-- On a salary, a paid day changes nothing and an unpaid day deducts the full paid day.
-- On an hourly rate, each paid working day pays the person's normal paid day (the day's hours plus its paid break, `Span × rate`). An unpaid day pays nothing. This is `timeOffPay` in the salary detail, and it is part of the base pay.
+- A paid day changes nothing on the salary, and an unpaid day deducts the full paid day.
 - It is a company cost and is never charged to a project.
 
-Differences from an excuse by hand: time off may be for a future month, it has a status, it is decided by request, and a paid day pays hourly staff (an excuse never does).
+Differences from an excuse by hand: time off may be for a future month, it has a status, and it is decided by request.
 
 Salary detail (`GET /api/company/salaries/{userId}`) carries `timeOff` (each request touching the month: `requestId`, `firstDay`, `lastDay`, `isPaid`, `days`: its working days in the month) and `timeOffPay`. `GET /api/me/hours` carries the same `timeOff` list per month. Both are read-only: time off is decided on the Time off page, not on Salaries.
 

@@ -196,7 +196,7 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var department = await _steps.DesignDepartmentAsync();
-        var salary = new { basis = "monthly", amount = 2000m, currency = "USD" };
+        var salary = new { amount = 2000m, currency = "USD" };
 
         await (await Client.PostJsonAsync("/api/invitations",
                 new { email = AuthTestSteps.NewEmail(), role = RoleCodes.Employee, domainCode = DomainCodes.Design }, superAdmin.AccessToken))
@@ -262,25 +262,25 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var first = await Client.PostJsonAsync(url,
-            new { basis = "monthly", amount = 1000, currency = "usd", effectiveFrom = today.AddMonths(-3) }, designAdmin.AccessToken);
+            new { amount = 1000, currency = "usd", effectiveFrom = today.AddMonths(-3) }, designAdmin.AccessToken);
         ((int)first.StatusCode).ShouldBe(201, await first.Content.ReadAsStringAsync());
         (await first.ReadAsync<PayResponse>()).Amount.ShouldBe(1000m);
 
-        await (await Client.PostJsonAsync(url, new { basis = "monthly", amount = 1200, effectiveFrom = today.AddMonths(-4) }, designAdmin.AccessToken))
+        await (await Client.PostJsonAsync(url, new { amount = 1200, effectiveFrom = today.AddMonths(-4) }, designAdmin.AccessToken))
             .ShouldFailWithAsync(422, ErrorCodes.PayChangeNotAfterLatest);
-        await (await Client.PostJsonAsync(url, new { basis = "monthly", amount = 1200, effectiveFrom = today.AddDays(2) }, designAdmin.AccessToken))
+        await (await Client.PostJsonAsync(url, new { amount = 1200, effectiveFrom = today.AddDays(2) }, designAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.PayDateInFuture);
-        await (await Client.PostJsonAsync($"/api/employees/{designAdmin.User.Id}/pay", new { basis = "hourly", amount = 50 }, designAdmin.AccessToken))
+        await (await Client.PostJsonAsync($"/api/employees/{designAdmin.User.Id}/pay", new { amount = 5000 }, designAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.EmployeeChangeNotAllowed);
 
-        ((int)(await Client.PostJsonAsync(url, new { basis = "hourly", amount = 12.5, note = "Switched to hourly" }, designAdmin.AccessToken)).StatusCode)
+        ((int)(await Client.PostJsonAsync(url, new { amount = 1250, note = "A raise" }, designAdmin.AccessToken)).StatusCode)
             .ShouldBe(201);
 
         var history = await OkAsync<List<PayResponse>>(Client.GetAsync(url, designAdmin.AccessToken));
-        history.Select(p => p.Amount).ShouldBe([12.5m, 1000m]);
+        history.Select(p => p.Amount).ShouldBe([1250m, 1000m]);
 
         var profile = await OkAsync<EmployeeResponse>(Client.GetAsync($"/api/employees/{employee.User.Id}", designAdmin.AccessToken));
-        profile.CurrentPay!.Basis.ShouldBe(PayBasis.Hourly);
+        profile.CurrentPay!.Amount.ShouldBe(1250m);
 
         await (await Client.GetAsync(url, employee.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
     }
@@ -295,22 +295,18 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         foreach (var rate in new[] { 0m, -1m, 4232.01m })
         {
-            await (await Client.PostJsonAsync(url, new { basis = "monthly", amount = 4232, overtimeRate = rate }, superAdmin.AccessToken))
+            await (await Client.PostJsonAsync(url, new { amount = 4232, overtimeRate = rate }, superAdmin.AccessToken))
                 .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
         }
 
-        // hourly pay is its own overtime rate
-        await (await Client.PostJsonAsync(url, new { basis = "hourly", amount = 12.5, overtimeRate = 20 }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
-
-        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { basis = "monthly", amount = 4232, effectiveFrom = today.AddMonths(-3) }, superAdmin.AccessToken)))
+        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { amount = 4232, effectiveFrom = today.AddMonths(-3) }, superAdmin.AccessToken)))
             .OvertimeRate.ShouldBe(23m);
-        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { basis = "monthly", amount = 4232, overtimeRate = 25, effectiveFrom = today.AddMonths(-2) }, superAdmin.AccessToken)))
+        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { amount = 4232, overtimeRate = 25, effectiveFrom = today.AddMonths(-2) }, superAdmin.AccessToken)))
             .OvertimeRate.ShouldBe(25m);
         // a raise gets a new suggestion
-        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { basis = "monthly", amount = 5520, effectiveFrom = today.AddMonths(-1) }, superAdmin.AccessToken)))
+        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { amount = 5520, effectiveFrom = today.AddMonths(-1) }, superAdmin.AccessToken)))
             .OvertimeRate.ShouldBe(30m);
-        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { basis = "hourly", amount = 12.5 }, superAdmin.AccessToken)))
+        (await OkAsync<PayResponse>(Client.PostJsonAsync(url, new { amount = 2300 }, superAdmin.AccessToken)))
             .OvertimeRate.ShouldBe(12.5m);
 
         var history = await OkAsync<List<PayResponse>>(Client.GetAsync(url, superAdmin.AccessToken));

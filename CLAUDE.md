@@ -40,7 +40,7 @@ ID InDetails is a company of architectural engineers. This repository is the API
 **Proton**, the AI assistant, answers questions and fills in forms.
 
 - **Domains** are the company's businesses, and almost everything belongs to one:
-  - **Design** runs on logged hours: work entries, overtime, pay by the hour.
+  - **Design** runs on logged hours: work entries and overtime, priced from each person's monthly salary.
   - **Execution** runs construction sites on BOQs and VOs (which set the price of the work), cost-only site expenses,
     weekly ground labour and site staff with daily logs. Payments and expenses are filed under company account labels,
     and the supervision the company takes from a site is recorded. **Pocket money** is money super admins set aside from Execution sites by hand and pay back, on request, to sites that run short.
@@ -120,19 +120,19 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     supervision taken − moved to the pocket + paid by it. A payment's money is never edited; only its account label can
     change.
 - **Pay:**
+  - Everyone is paid a monthly salary: there is no hourly pay (removed 15 November 2026).
   - The break is a dated company setting. While it is above 0 it is paid but not logged (9–5 with a 60-minute break
     requires 7h and pays 8h). From 1 December 2026 it is 0: the whole 8-hour day is logged and required, and earlier
     months keep their paid break.
   - The hourly rate is the salary ÷ that month's scheduled paid hours.
   - From 1 November 2026 a salary's overtime is paid only past the month's threshold: max(the working time's
     `overtimeThresholdHours`, 184; the month's expected hours), counting every logged hour plus paid excuses. It is
-    fixed whatever the joining date. The premium is a company cost, never put on projects. Hourly pay is unchanged.
+    fixed whatever the joining date. The premium is a company cost, never put on projects.
     Employees see their overtime minutes as before; only Salaries shows what is paid ([company.md](docs/company.md),
     "The overtime threshold").
   - Fixed salaries: admins, super admins and Execution site staff are on a pure monthly salary and never log hours.
     Their pay is a company cost: the company overview takes it off the net profit, never a project.
-  - Paid leave on Design (a salary's paid excuses and paid time off, an hourly employee's paid time off) is a company
-    cost too, its own line in the company overview.
+  - Paid leave on Design (paid excuses and paid time off) is a company cost too, its own line in the company overview.
   - **Salary advances:** part of someone's pay handed over early, in their pay's currency. It changes when cash leaves,
     never what anyone earns, the hourly rate, project cost or the overview; only a written-off rest is a company
     expense, on its day. Anyone with pay asks; holders of `salary_advance:manage` (super admins) approve with the months
@@ -141,7 +141,7 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     after the current month ([company.md](docs/company.md), "Salary advances").
   - Project profit is agreed revenue - project costs; overhead counts only at company level.
 - **Privacy:** employees never see their colleagues' hours or pay.
-- **Site staff:** an Execution site needs no staff to be created; staff are put on it when it needs them, and can all be taken off again. Each one is an active Execution employee. Staff write daily logs, which they can edit until midnight. Execution employees are paid monthly only.
+- **Site staff:** an Execution site needs no staff to be created; staff are put on it when it needs them, and can all be taken off again. Each one is an active Execution employee. Staff write daily logs, which they can edit until midnight.
 - **Project type and area** (decided 9 November 2026, not built yet): projects get two optional fields, a type (villa,
   apartment, commercial, interior, ...) and an area in m², set on the project form and editable any time. Financial
   Intelligence compares a project with past ones of the same type and size, and falls back to domain, price band and
