@@ -3,7 +3,6 @@ using ID_Indetails.api.Business.Pay;
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.Push;
 using ID_Indetails.api.Business.WorkingTime;
-using ID_Indetails.api.Enums;
 using Shouldly;
 using Work = ID_Indetails.api.Business.Payroll.Overtime.Work;
 
@@ -28,11 +27,9 @@ public class LoggedBreakTests
         []);
 
     // 1,840 a month is 10 an hour in December (23 days of 8 paid hours).
-    // overtime at the rate a pay change is given when none is typed: the salary ÷ 184, or hourly pay's own rate
+    // overtime at the rate a pay change is given when none is typed: the salary ÷ 184
     private static readonly SalaryCalculator.PayTerms Monthly =
-        new(new(2026, 1, 1), PayBasis.Monthly, 1840m, "USD", PayRules.SuggestedOvertimeRate(PayBasis.Monthly, 1840m));
-    private static readonly SalaryCalculator.PayTerms Hourly =
-        new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD", PayRules.SuggestedOvertimeRate(PayBasis.Hourly, 20m));
+        new(new(2026, 1, 1), 1840m, "USD", PayRules.SuggestedOvertimeRate(1840m));
 
     private static IEnumerable<DateOnly> WorkingDays(DateOnly month)
         => HoursLedger.Days(month, month.AddMonths(1)).Where(d => Calendar.HoursOn(d) is not null);
@@ -100,23 +97,6 @@ public class LoggedBreakTests
         result.Ledger!.MissedDays.ShouldBe([new DateOnly(2026, 12, 31)]);
         SalaryCalculator.ShortfallMinutes(result.Ledger, Calendar).ShouldBe(480);
         result.Deduction.ShouldBe(80m);
-    }
-
-    [Fact]
-    public void Hourly_staff_are_paid_the_hours_they_log_with_no_paid_break_on_top()
-    {
-        // Without the hours ledger, so overtime isn't spent making up a short month. November: 7h at 20, the paid break
-        // at 20 and the 8th logged hour as overtime at 1.5x.
-        var november = Pay(Hourly, November, [new Work(1, Monday30November, 540, 480)], ledger: false);
-        november.PaidBreakDays.ShouldBe(1);
-        november.BasePay.ShouldBe(160m);
-        november.OvertimePay.ShouldBe(30m);
-
-        var december = Pay(Hourly, December, [new Work(1, December, 540, 480)], ledger: false);
-        december.PaidBreakDays.ShouldBe(0);
-        december.PaidBreakPay.ShouldBe(0m);
-        december.BasePay.ShouldBe(160m);
-        december.OvertimePay.ShouldBe(0m);
     }
 
     [Fact]

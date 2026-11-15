@@ -210,6 +210,8 @@ The `SalaryAdvances` migration (13 Nov 2026) is additive ([company.md](company.m
 - The `salary_advance:manage` permission, held by super admins.
 - `Down` drops both tables and the permission.
 
+The `RemovePayBasis` migration (15 Nov 2026) removes hourly pay ([employees.md](employees.md#pay)). It first turns each `user_pay_history` row with `basis = 'hourly'` into a monthly one: the amount stays as it is and `overtime_rate` becomes `ROUND(amount / 184, 2)`, the rate a salary is given. Monthly rows aren't touched: amount, currency, overtime rate and `effective_from` stay exactly as they were. It then drops `ck_user_pay_history_basis` and the `basis` column. `Down` adds the column back as `'monthly'` for every row, with its check; the hourly rows can't come back.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Who connects

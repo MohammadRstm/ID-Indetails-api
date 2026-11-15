@@ -7156,12 +7156,6 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("amount");
 
-                    b.Property<string>("Basis")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("basis");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime(3)")
@@ -7209,8 +7203,6 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("user_pay_history", null, t =>
                         {
                             t.HasCheckConstraint("ck_user_pay_history_amount_positive", "`amount` > 0");
-
-                            t.HasCheckConstraint("ck_user_pay_history_basis", "`basis` IN ('hourly', 'monthly')");
 
                             t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`overtime_rate` >= 0");
                         });

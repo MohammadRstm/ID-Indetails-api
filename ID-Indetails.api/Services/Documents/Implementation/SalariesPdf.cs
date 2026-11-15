@@ -1,7 +1,6 @@
 using System.Globalization;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Payroll;
-using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Services.Documents.Implementation;
 
@@ -37,7 +36,7 @@ public static class SalariesPdf
                 false,
                 [
                     r.Name,
-                    r.Basis == PayBasis.Monthly ? "Monthly" : "Hourly",
+                    PdfLayout.Money(r.Amount, r.Currency),
                     r.ExpectedMinutes is { } expected ? PdfLayout.Duration(expected) : "-",
                     r.TracksHours ? PdfLayout.Duration(r.NormalMinutes + r.MadeUpMinutes + r.OvertimeMinutes) : "Not tracked",
                     r.TracksHours ? PdfLayout.Duration(r.OvertimePaidMinutes) : "-",
@@ -48,7 +47,6 @@ public static class SalariesPdf
                     PdfLayout.Money(r.Total, r.Currency),
                     .. Advance(advances, r.AdvanceRepayment, r.ToHandOver, r.Currency)]);
             PdfLayout.AddCellNote(row, 0, r.Team?.Name ?? (r.Domain is { } domain ? Capitalised(domain) : "Company"));
-            PdfLayout.AddCellNote(row, 1, PdfLayout.Money(r.Amount, r.Currency) + (r.Basis == PayBasis.Hourly ? " / h" : string.Empty));
         }
 
         foreach (var t in salaries.Totals)
@@ -91,7 +89,7 @@ public static class SalariesPdf
             return
             [
                 new("Person", 3.9),
-                new("Pay basis", 2.3),
+                new("Salary", 2.3),
                 new("Expected", 1.5, AlignRight: true),
                 new("Logged", 1.9, AlignRight: true),
                 new("Overtime paid", 1.6, AlignRight: true),
@@ -108,7 +106,7 @@ public static class SalariesPdf
         return
         [
             new("Person", 5.0),
-            new("Pay basis", 3.0),
+            new("Salary", 3.0),
             new("Expected", 1.8, AlignRight: true),
             new("Logged", 2.4, AlignRight: true),
             new("Overtime paid", 1.9, AlignRight: true),

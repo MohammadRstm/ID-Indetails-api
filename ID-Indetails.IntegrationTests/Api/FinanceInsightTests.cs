@@ -149,7 +149,7 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (designerEmail, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         // 1,600 a month is 10 an hour in February 2026 (160 paid hours)
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, token)).IsSuccessStatusCode.ShouldBeTrue();
+            new { amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, token)).IsSuccessStatusCode.ShouldBeTrue();
         var client = await Projects.CreateClientAsync(token, DomainCodes.Design);
         var created = await Client.PostJsonAsync("/api/projects", new
         {
@@ -591,7 +591,7 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         var lastMonth = thisMonth.AddMonths(-1);
         var (designerEmail, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-                new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = lastMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token))
+                new { amount = 1600m, currency = "USD", effectiveFrom = lastMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token))
             .IsSuccessStatusCode.ShouldBeTrue();
         var client = await Projects.CreateClientAsync(token, DomainCodes.Design);
         var created = await Client.PostJsonAsync("/api/projects", new

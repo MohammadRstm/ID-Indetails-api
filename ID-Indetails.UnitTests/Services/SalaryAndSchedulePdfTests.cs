@@ -3,7 +3,6 @@ using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Common;
 using ID_Indetails.api.DTO.Response.Company;
 using ID_Indetails.api.DTO.Response.Payroll;
-using ID_Indetails.api.Enums;
 using ID_Indetails.api.Services.Documents.Implementation;
 using PdfSharp.Pdf.IO;
 using Shouldly;
@@ -23,7 +22,6 @@ public class SalaryAndSchedulePdfTests
         Role = "employee",
         Domain = "design",
         Team = new TeamSummaryResponse(1, "Architecture"),
-        Basis = i % 2 == 0 ? PayBasis.Monthly : PayBasis.Hourly,
         Amount = 1760m,
         Currency = "USD",
         HourlyRate = 10m,
@@ -57,7 +55,7 @@ public class SalaryAndSchedulePdfTests
         1.5m,
         new PagedResponse<SalaryRowResponse>(rows, 1, rows.Count, rows.Count),
         [new SalaryTotalResponse("USD", rows.Count, rows.Sum(r => r.BasePay), rows.Sum(r => r.OvertimePay), rows.Sum(r => r.Deduction), rows.Sum(r => r.Total), rows.Sum(r => r.EarnedSoFar), rows.Sum(r => r.AdvanceRepayment ?? 0), rows.Sum(r => r.ToHandOver))],
-        new SalarySummaryResponse(rows.Count, rows.Count, 0, 0, 0, 0, 0, 0, null),
+        new SalarySummaryResponse(rows.Count, 0, 0, 0, 0, 0, 0, null),
         [new PersonWithoutPayResponse(99, "Unpaid Person", "employee", "design")],
         new SalaryAdvanceSummaryResponse(0, [], 0));
 

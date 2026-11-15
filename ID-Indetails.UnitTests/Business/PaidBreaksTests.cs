@@ -45,7 +45,7 @@ public class PaidBreaksTests
         var shares = new[] { new PaidBreaks.Share(10, new(2026, 1, 20), 60m), new PaidBreaks.Share(10, new(2026, 3, 10), 30m) };
         var history = new[]
         {
-            // Hourly, then salaried from March: the break is paid either way.
+            // One rate, then a new salary from March: each break at its own day's rate.
             new ProjectFinance.PayRate(1, new(2026, 1, 1), 20m, "USD", 20m),
             new ProjectFinance.PayRate(1, new(2026, 3, 1), 12m, "USD", 11.5m),
         };
@@ -66,7 +66,7 @@ public class PaidBreaksTests
         // of March is a fixed salary.
         var roles = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 3, 11), RoleCodes.Employee, RoleCodes.Admin)]);
         var history = ProjectFinance.RatesOf(
-            [new ProjectFinance.PayRecord(1, new(2026, 1, 1), PayBasis.Monthly, 3200m, "USD", 17.39m)], Calendar, until: new(2026, 3, 20), roles);
+            [new ProjectFinance.PayRecord(1, new(2026, 1, 1), 3200m, "USD", 17.39m)], Calendar, until: new(2026, 3, 20), roles);
         var shares = new[] { new PaidBreaks.Share(10, Tuesday, 60m), new PaidBreaks.Share(10, new(2026, 3, 3), 60m) };
 
         PaidBreaks.Price(shares, history).Select(p => p.Cost.Amount).ShouldBe([20m, 0m]);

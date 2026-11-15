@@ -172,7 +172,7 @@ public static class AdvanceRules
 
     /// <summary>Giving an advance, by approving a request or recording one: how much, and the months it comes off.</summary>
     /// <param name="asked">What the person asked for; null when it is recorded directly.</param>
-    /// <param name="monthlyPay">The person's pay for a month, as Salaries shows it: the salary, or an hourly rate × the month's paid hours.</param>
+    /// <param name="monthlyPay">The person's pay for a month, as Salaries shows it: the salary.</param>
     /// <param name="hasPay">Whether the person has pay set today.</param>
     /// <param name="firstMonth">The earliest month it may come off: the month it is given in.</param>
     public static RuleDenial? CheckGive(

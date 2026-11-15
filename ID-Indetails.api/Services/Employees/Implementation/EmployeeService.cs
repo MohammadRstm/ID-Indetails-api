@@ -295,8 +295,6 @@ public sealed class EmployeeService(
         var (decision, denial) = EmployeeRules.CheckRoleChange(actor, TargetOf(user), request.Role, request.DomainCode, superAdmins);
         Throw(denial);
         Throw(await CheckHandOutAsync(actor, user.Id, decision!.Role, decision.Domain, cancellationToken));
-        var pay = await employees.GetPayInForceAsync(user.Id, clock.CompanyToday, cancellationToken);
-        Throw(PayRules.CheckRoleChange(decision.Role, pay?.Basis));
 
         var previousRole = user.RoleCode;
         var previousDomain = user.DomainCode;
@@ -410,7 +408,6 @@ public sealed class EmployeeService(
 
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckPayChange(actor, TargetOf(user)));
-        Throw(PayRules.CheckBasis(user.RoleCode, user.DomainCode, request.Basis));
 
         var effectiveFrom = request.EffectiveFrom ?? clock.CompanyToday;
         var latest = await employees.GetLatestPayDateAsync(user.Id, cancellationToken);
@@ -420,11 +417,10 @@ public sealed class EmployeeService(
         {
             UserId = user.Id,
             EffectiveFrom = effectiveFrom,
-            Basis = request.Basis,
             Amount = request.Amount,
             Currency = request.Currency.ToUpperInvariant(),
             OvertimeRate = request.OvertimeRate ?? PayRules.SuggestedOvertimeRate(
-                request.Basis, request.Amount, await workingTime.OvertimeThresholdOnAsync(effectiveFrom, cancellationToken)),
+                request.Amount, await workingTime.OvertimeThresholdOnAsync(effectiveFrom, cancellationToken)),
             Note = Clean(request.Note),
             CreatedAt = clock.UtcNow,
             CreatedById = actor.UserId,
@@ -659,7 +655,7 @@ public sealed class EmployeeService(
     };
 
     private static PayResponse ToPay(UserPayHistory p)
-        => new(p.Id, p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.OvertimeRate, p.Note, p.CreatedAt, p.CreatedById);
+        => new(p.Id, p.EffectiveFrom, p.Amount, p.Currency, p.OvertimeRate, p.Note, p.CreatedAt, p.CreatedById);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

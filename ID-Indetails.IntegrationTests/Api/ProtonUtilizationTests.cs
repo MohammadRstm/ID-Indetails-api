@@ -62,7 +62,7 @@ public class ProtonUtilizationTests(ProtonApiFactory api) : IClassFixture<Proton
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-                new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = thisMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token))
+                new { amount = 1600m, currency = "USD", effectiveFrom = thisMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await Projects.CreateProjectAsync(token, DomainCodes.Design);
         var (start, end, minutes) = WorkToday();

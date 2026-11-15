@@ -1,5 +1,4 @@
 using FluentValidation;
-using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Validators.Common;
 
@@ -27,17 +26,11 @@ public static class MoneyRules
             .Must(v => v is null || decimal.Round(v.Value, 2) == v).WithMessage($"{label} can have at most 2 decimals.");
 
     /// <summary>
-    /// A salary's overtime rate: more than zero and no more than the salary, or empty for the suggested one. Hourly pay is
-    /// its own overtime rate, so it takes none.
+    /// A salary's overtime rate: more than zero and no more than the salary, or empty for the suggested one.
     /// </summary>
-    public static IRuleBuilderOptions<T, decimal?> OvertimeRate<T>(
-        this IRuleBuilder<T, decimal?> rule,
-        Func<T, PayBasis> basis,
-        Func<T, decimal> amount)
+    public static IRuleBuilderOptions<T, decimal?> OvertimeRate<T>(this IRuleBuilder<T, decimal?> rule, Func<T, decimal> amount)
         => rule
             .Amount("Overtime rate", allowZero: false)
-            .Must((request, rate) => rate is null || basis(request) == PayBasis.Monthly)
-            .WithMessage("Hourly pay is its own overtime rate: leave the overtime rate empty.")
             .Must((request, rate) => rate is null || rate <= amount(request))
             .WithMessage("The overtime rate can't be more than the salary.");
 

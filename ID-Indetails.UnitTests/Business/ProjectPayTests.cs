@@ -1,6 +1,5 @@
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.WorkingTime;
-using ID_Indetails.api.Enums;
 using Shouldly;
 
 namespace ID_Indetails.UnitTests.Business;
@@ -8,7 +7,7 @@ namespace ID_Indetails.UnitTests.Business;
 public class ProjectPayTests
 {
     // 1,760 a month is 10 an hour in June 2026 (22 days of 8 paid hours); overtime from 9.57 (1,760 ÷ 184), at 1.5x.
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD", 9.57m);
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), 1760m, "USD", 9.57m);
     private static readonly PersonCalendar Calendar = new([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1.5m)], []);
 
     [Fact]

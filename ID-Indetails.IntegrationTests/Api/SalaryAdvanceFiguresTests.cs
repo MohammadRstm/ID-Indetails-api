@@ -49,7 +49,7 @@ public class SalaryAdvanceFiguresTests(ApiFactory api) : IClassFixture<ApiFactor
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
-            new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         return person;
     }

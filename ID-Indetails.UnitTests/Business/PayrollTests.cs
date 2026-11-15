@@ -19,10 +19,8 @@ public class PayrollTests
 
     private static Work At(long id, int day, int startHour, int hours) => new(id, new DateOnly(2026, 6, day), startHour * 60, hours * 60);
 
-    // 1,760 a month is 10 an hour in June (22 days of 8 paid hours), with overtime from 9.57 (1,760 ÷ 184); 20 an hour
-    // for the hourly terms, overtime included.
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1760m, "USD", 9.57m);
-    private static readonly SalaryCalculator.PayTerms Hourly = new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD", 20m);
+    // 1,760 a month is 10 an hour in June (22 days of 8 paid hours), with overtime from 9.57 (1,760 ÷ 184).
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), 1760m, "USD", 9.57m);
 
     private static SalaryCalculator.Result Pay(
         SalaryCalculator.PayTerms terms,
@@ -138,20 +136,6 @@ public class PayrollTests
     }
 
     [Fact]
-    public void Hourly_staff_are_paid_what_they_log_plus_the_paid_break_and_overtime_at_the_multiplier()
-    {
-        // A full month of 8h days would be needed to owe nothing; here, one 8h day with no ledger.
-        var result = Pay(Hourly, new(2026, 1, 1), [At(1, 1, 9, 8)], ledger: false);
-
-        result.NormalMinutes.ShouldBe(420);
-        result.OvertimeMinutes.ShouldBe(60);
-        result.PaidBreakDays.ShouldBe(1);
-        result.BasePay.ShouldBe(160m);      // 7h + the paid hour, at 20
-        result.OvertimePay.ShouldBe(30m);   // 1h at 20 x 1.5
-        result.Total.ShouldBe(190m);
-    }
-
-    [Fact]
     public void Salaried_overtime_is_paid_at_the_multiplier_when_nothing_is_short()
     {
         var result = Pay(Monthly, new(2026, 1, 1), [At(1, 6, 10, 2)], ledger: false);
@@ -225,40 +209,21 @@ public class PayrollTests
     }
 
     [Fact]
-    public void Paid_leave_is_a_whole_month_s_base_pay_and_paid_time_off_on_any_pay_but_never_on_a_fixed_salary()
+    public void Paid_leave_is_a_whole_month_s_base_pay_and_paid_time_off_but_never_on_a_fixed_salary()
     {
         SalaryCalculator.Input With(SalaryCalculator.PayTerms terms, bool fixedSalary, SalaryCalculator.Excuse excuse)
             => new(June, July10, new(2026, 1, 1), !fixedSalary, [terms], Calendar(), [], [excuse], FixedSalary: fixedSalary);
         decimal PaidLeave(SalaryCalculator.Input input) => SalaryCalculator.PaidLeavePay(input, SalaryCalculator.Calculate(input)!);
         var twoHours = new SalaryCalculator.Excuse(ExcuseKind.Minutes, 120, [], true);
-        // Tuesday 2 June, 8 paid hours: 80 on the salary (10 an hour), 160 on hourly pay (20 an hour)
+        // Tuesday 2 June, 8 paid hours: 80 on the salary (10 an hour); two hours excused are 20
         var dayOff = new SalaryCalculator.Excuse(ExcuseKind.Days, null, [new(2026, 6, 2)], true, TimeOff: true);
 
         PaidLeave(With(Monthly, false, new SalaryCalculator.Excuse(ExcuseKind.WholeMonth, null, [], true))).ShouldBe(1760m);
         PaidLeave(With(Monthly, false, dayOff)).ShouldBe(80m);
-        PaidLeave(With(Hourly, false, dayOff)).ShouldBe(160m);
-        // an excuse pays hourly staff nothing; a fixed salary is a company cost whole, its time off included
-        PaidLeave(With(Hourly, false, twoHours)).ShouldBe(0m);
+        PaidLeave(With(Monthly, false, twoHours)).ShouldBe(20m);
+        // a fixed salary is a company cost whole, its time off included
         PaidLeave(With(Monthly, true, twoHours)).ShouldBe(0m);
         PaidLeave(With(Monthly, true, dayOff)).ShouldBe(0m);
-    }
-
-    [Fact]
-    public void Paid_time_off_pays_an_hourly_employee_their_normal_day_but_an_excuse_pays_nothing()
-    {
-        // Tuesday 2 and Wednesday 3 June off; Saturday the 6th is no working day, so it adds nothing
-        var off = new SalaryCalculator.Excuse(ExcuseKind.Days, null, [new(2026, 6, 2), new(2026, 6, 3), new(2026, 6, 6)], true, TimeOff: true);
-        var paid = Pay(Hourly, new(2026, 1, 1), [], ledger: false, off);
-        paid.TimeOffDays.ShouldBe(2);
-        paid.TimeOffPay.ShouldBe(320m);
-        paid.BasePay.ShouldBe(320m);
-
-        var unpaid = Pay(Hourly, new(2026, 1, 1), [], ledger: false, off with { IsPaid = false });
-        unpaid.TimeOffDays.ShouldBe(2);
-        unpaid.TimeOffPay.ShouldBe(0m);
-
-        Pay(Hourly, new(2026, 1, 1), [], ledger: false, new SalaryCalculator.Excuse(ExcuseKind.Days, null, [new(2026, 6, 2)], true))
-            .BasePay.ShouldBe(0m);
     }
 
     [Fact]
@@ -269,7 +234,7 @@ public class PayrollTests
         var paid = Pay(Monthly, new(2026, 6, 29), [], excuses: off);
         paid.Ledger!.Short.ShouldBe(0);
         paid.Deduction.ShouldBe(0m);
-        paid.TimeOffPay.ShouldBe(0m);
+        paid.TimeOffDays.ShouldBe(2);
         paid.BasePay.ShouldBe(160m);
 
         var unpaid = Pay(Monthly, new(2026, 6, 29), [], excuses: off with { IsPaid = false });

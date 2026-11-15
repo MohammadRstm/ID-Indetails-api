@@ -13,8 +13,7 @@ namespace ID_Indetails.api.Business.TimeOff;
 /// <item>Approved: a super admin may reject it until its last day. The days before the rejection day stay time off; it
 /// and the days after are work days again. Leaving, moving out of Design or becoming an admin ends it the same way.</item>
 /// <item>Every calendar day of the period is "off" (no hours, the flag, the alerts); pay counts only its working days,
-/// as day excuses: a paid day off costs nothing on a salary and pays an hourly employee their normal day; an unpaid one
-/// is deducted as the full paid day.</item>
+/// as day excuses: a paid day off costs nothing on a salary; an unpaid one is deducted as the full paid day.</item>
 /// </list>
 /// </summary>
 public static class TimeOffRules

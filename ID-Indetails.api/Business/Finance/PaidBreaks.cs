@@ -5,8 +5,8 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Business.Finance;
 
 /// <summary>
-/// The daily break is paid: 7 required hours are 8 paid hours. Project cost counts everyone's paid break as labour, hourly
-/// and salaried alike, on the days Salaries pays it: each working day they did some work within their hours, the day's
+/// The daily break is paid: 7 required hours are 8 paid hours. Project cost counts everyone's paid break as labour, on the
+/// days Salaries pays it: each working day they did some work within their hours, the day's
 /// paid break (none on days of 6 hours or less), at that day's rate, shared across the day's projects by the in-hours
 /// minutes worked on each. (Project pay leaves breaks out; that is a separate report.)
 /// </summary>

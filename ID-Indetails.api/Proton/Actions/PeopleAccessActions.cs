@@ -12,7 +12,6 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Proton.Tools;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
-using ID_Indetails.api.Repositories.Employees.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Invitations.Abstraction;
 using ID_Indetails.api.Services.Permissions.Abstraction;
@@ -67,7 +66,6 @@ public sealed record PersonAccessInput : ProtonActionInput
 /// </summary>
 public sealed class ProposeEmployeeAccessTool(
     IEmployeeService employees,
-    IEmployeeRepository payRecords,
     IPermissionService permissions,
     ITeamService teams)
     : ProtonActionTool<PersonAccessInput, PersonAccessArgs>
@@ -102,8 +100,6 @@ public sealed class ProposeEmployeeAccessTool(
                 var (decision, denial) = EmployeeRules.CheckRoleChange(context.Access, target, role, input.Domain.Code(), superAdmins);
                 PeopleText.Refuse(denial);
                 PeopleText.Refuse(EmployeeRules.CheckRoleHandOut(context.Access, await PeopleText.DefaultsAsync(permissions, decision!.Role, decision.Domain, cancellationToken), []));
-                PeopleText.Refuse(PayRules.CheckRoleChange(
-                    decision.Role, (await payRecords.GetPayInForceAsync(person.Id, context.Today, cancellationToken))?.Basis));
 
                 // Design's employees and admins each belong to a department, and a new business clears it
                 if (EmployeeRules.NeedsDepartment(decision.Role, decision.Domain) && (decision.Domain != person.Domain || person.Team is null))
@@ -256,8 +252,7 @@ public sealed record PermissionsInput : ProtonActionInput
 public sealed class ProposePermissionsTool(
     IPermissionManagementService management,
     IPermissionService permissions,
-    IEmployeeService employees,
-    IEmployeeRepository payRecords)
+    IEmployeeService employees)
     : ProtonActionTool<PermissionsInput, PermissionsArgs>
 {
     private const int MaxChanges = 20;
@@ -310,11 +305,6 @@ public sealed class ProposePermissionsTool(
         {
             throw new ProtonToolInputException(
                 $"Nothing would change for {string.Join(", ", unchanged)}: they already hold or lack it, or only employees log hours. Leave it out.");
-        }
-
-        if (plan.PreviousRole is not null)
-        {
-            PeopleText.Refuse(PayRules.CheckRoleChange(plan.Role, (await payRecords.GetPayInForceAsync(person.Id, context.Today, cancellationToken))?.Basis));
         }
 
         var name = AccessText.Name(person);

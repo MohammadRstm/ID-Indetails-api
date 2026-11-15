@@ -1,7 +1,6 @@
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Payroll;
-using ID_Indetails.api.Enums;
 using MySqlConnector;
 using Shouldly;
 
@@ -44,7 +43,7 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, domain);
         await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
-            new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         return person;
     }
@@ -150,43 +149,14 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task An_hourly_rate_shows_as_a_month_of_its_paid_hours()
-    {
-        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
-        (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
-            new { basis = "hourly", amount = 10m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
-            .IsSuccessStatusCode.ShouldBeTrue();
-
-        var row = (await OkAsync<SalariesResponse>(Client.GetAsync($"/api/company/salaries?month=2026-06&search={person.User.Email}", superAdmin.AccessToken)))
-            .Rows.Items.ShouldHaveSingleItem();
-
-        // June 2026: 22 working days of 8 paid hours at 10; nothing logged, so nothing earned
-        row.MonthlyPay.ShouldBe(1760m);
-        row.Total.ShouldBe(0m);
-        row.EarnedSoFar.ShouldBe(0m);
-    }
-
-    [Fact]
     public async Task A_super_admin_is_paid_their_salary_whatever_hours_they_log()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null,
-            new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" });
+            new { amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" });
         await _steps.SetJoinedOnAsync(partner.User.Id, "2026-01-01");
 
-        // a fixed salary can't depend on hours, at a pay change or an invitation, and can't be left out of one
-        await (await Client.PostJsonAsync($"/api/employees/{partner.User.Id}/pay",
-                new { basis = "hourly", amount = 20m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.FixedSalaryPaidMonthly);
-        await (await Client.PostJsonAsync("/api/invitations", new
-            {
-                email = $"super-{Guid.NewGuid():N}@example.test",
-                role = RoleCodes.SuperAdmin,
-                pay = new { basis = "hourly", amount = 20m, currency = "USD" },
-            }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.FixedSalaryPaidMonthly);
+        // a fixed salary can't be left out of an invitation
         await (await Client.PostJsonAsync("/api/invitations", new
             {
                 email = $"admin-{Guid.NewGuid():N}@example.test",
@@ -211,7 +181,6 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         row.OvertimePay.ShouldBe(0m);
         row.Total.ShouldBe(1760m);
         var detail = await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{partner.User.Id}?month=2026-06", superAdmin.AccessToken));
-        detail.PaidBreakPay.ShouldBe(0m);
         detail.Projects.ShouldBeEmpty();
     }
 
@@ -242,7 +211,6 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         var row = year.Rows.ShouldHaveSingleItem();
         row.UserId.ShouldBe(siteWorker.User.Id);
         var june = row.Months.Single(m => m.Month == new DateOnly(2026, 6, 1));
-        june.Basis.ShouldBe(PayBasis.Monthly);
         june.Amount.ShouldBe(1760m);
         june.Total.ShouldBe(1760m);
         year.Totals.Single(t => t.Month == new DateOnly(2026, 6, 1)).Total.ShouldBe(1760m);
@@ -307,7 +275,7 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
-        await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design, pay: new { basis = "monthly", amount = 1760m, currency = "USD" });
+        await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design, pay: new { amount = 1760m, currency = "USD" });
 
         foreach (var role in RoleCodes.All)
         {
@@ -340,7 +308,6 @@ public class SalaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync($"/api/employees/{superAdmin.User.Id}/hour-excuses",
                 new { month = "2026-06", kind = "whole_month" }, admin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
-        PayBasis.Monthly.ShouldBe(PayBasis.Monthly);
     }
 
     [Fact]

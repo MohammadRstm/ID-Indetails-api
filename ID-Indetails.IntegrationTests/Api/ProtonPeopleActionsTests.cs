@@ -216,7 +216,7 @@ public class ProtonPeopleActionsTests(ProtonAllActionsApiFactory api) : IClassFi
         // excuses are read from the person's salary for the month, as the Salaries page shows them
         await _steps.SetJoinedOnAsync(designer.User.Id, "2026-01-01");
         await OkAsync<JsonNode>(Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken));
+            new { amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken));
         var excuse = await OkAsync<ID_Indetails.api.DTO.Response.Payroll.HourExcuseResponse>(
             Client.PostJsonAsync($"/api/employees/{designer.User.Id}/hour-excuses", new { month, kind = "minutes", minutes = 90 }, superAdmin.AccessToken));
 

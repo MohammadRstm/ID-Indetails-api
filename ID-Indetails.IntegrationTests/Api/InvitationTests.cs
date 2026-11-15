@@ -23,7 +23,7 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
             domainCode = "design",
             teamId = await _steps.DesignDepartmentAsync(),
             position = "Design Director",
-            pay = new { basis = "monthly", amount = 3000, currency = "usd" },
+            pay = new { amount = 3000, currency = "usd" },
         }, superAdmin.AccessToken);
         ((int)created.StatusCode).ShouldBe(201);
         (await created.ReadAsync<InvitationResponse>()).Domain.ShouldBe("design");
@@ -53,9 +53,9 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
         jwt.GetClaim(AuthClaimTypes.Position).Value.ShouldBe("Design Director");
 
         (await _steps.ScalarAsync<string>("SELECT status FROM users WHERE email = @e", ("@e", email))).ShouldBe("active");
-        // a salary has no fixed hourly rate: it is worked out month by month
+        // the monthly salary it was invited with
         (await _steps.ScalarAsync<decimal>(
-            "SELECT p.amount FROM user_pay_history p JOIN users u ON u.id = p.user_id WHERE u.email = @e AND p.basis = 'monthly'",
+            "SELECT p.amount FROM user_pay_history p JOIN users u ON u.id = p.user_id WHERE u.email = @e",
             ("@e", email))).ShouldBe(3000m);
         // its overtime rate is suggested as the salary ÷ 184
         (await _steps.ScalarAsync<decimal>(
@@ -90,7 +90,7 @@ public class InvitationTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
 
         await (await Client.PostJsonAsync("/api/invitations",
-                new { email = AuthTestSteps.NewEmail(), role = "super_admin", pay = new { basis = "monthly", amount = 2000, currency = "usd" } },
+                new { email = AuthTestSteps.NewEmail(), role = "super_admin", pay = new { amount = 2000, currency = "usd" } },
                 designAdmin.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
 

@@ -48,7 +48,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         // 1,760 a month is 10 an hour in June (176 paid hours); 6 hours in June (09:00-15:00 in Beirut) cost 60, plus
         // 10 for the paid hour of break.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
         await ExecuteAsync(
@@ -117,9 +117,9 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     /// <summary>
-    /// Money in both domains: half an hour from <paramref name="workUtc"/> (09:00 in Beirut on a weekday) by someone paid
-    /// 10.01 an hour, which with the paid hour of break is 15.015 of labour, a fraction of a cent; a Design expense and
-    /// payment; a site expense and payment.
+    /// Money in both domains: half an hour from <paramref name="workUtc"/> (09:00 in Beirut on a weekday) by someone on a
+    /// salary of 1,681.68 (10.01 an hour in August 2025's 168 paid hours), which with the paid hour of break is 15.015 of
+    /// labour that month, a fraction of a cent; a Design expense and payment; a site expense and payment.
     /// </summary>
     private async Task MoneyInBothDomainsAsync(
         AuthResponse superAdmin, DateTime workUtc, string spentOn, string receivedOn, decimal designReceived, decimal siteReceived)
@@ -128,7 +128,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var projects = new ProjectTestSteps(_steps);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "hourly", amount = 10.01m, currency = "USD", effectiveFrom = "2025-01-01" }, token))
+            new { amount = 1681.68m, currency = "USD", effectiveFrom = "2025-01-01" }, token))
             .IsSuccessStatusCode.ShouldBeTrue();
 
         var project = await projects.CreateProjectAsync(token, DomainCodes.Design, revenue: 10_000m);
@@ -208,11 +208,11 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, partner) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.SuperAdmin, null,
-            new { basis = "monthly", amount = 1100m, currency = "USD", effectiveFrom = "2026-01-01" });
+            new { amount = 1100m, currency = "USD", effectiveFrom = "2026-01-01" });
         await _steps.SetJoinedOnAsync(partner.User.Id, "2026-01-01");
         // an admin's fixed salary is a company cost too: admins log no hours either
         var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design,
-            new { basis = "monthly", amount = 2000m, currency = "USD", effectiveFrom = "2026-01-01" });
+            new { amount = 2000m, currency = "USD", effectiveFrom = "2026-01-01" });
         await _steps.SetJoinedOnAsync(admin.User.Id, "2026-01-01");
 
         // all of March 2026, then its first 16 of 31 days
@@ -245,7 +245,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         await _steps.SetJoinedOnAsync(designer.User.Id, "2026-01-01");
         // 1,600 a month is 10 an hour in February 2026 (20 working days of 8 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
         const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
@@ -326,7 +326,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         {
             await _steps.SetJoinedOnAsync(person.User.Id, "2025-01-01");
             (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
-                new { basis = "monthly", amount, currency = "USD", effectiveFrom = "2025-01-01" }, superAdmin.AccessToken))
+                new { amount, currency = "USD", effectiveFrom = "2025-01-01" }, superAdmin.AccessToken))
                 .IsSuccessStatusCode.ShouldBeTrue();
         }
 
@@ -374,7 +374,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await _steps.SetJoinedOnAsync(designer.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1680m, currency = "USD", overtimeRate = 15m, effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 1680m, currency = "USD", overtimeRate = 15m, effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
 

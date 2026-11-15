@@ -5,31 +5,29 @@ using ID_Indetails.api.Enums;
 namespace ID_Indetails.api.Business.Payroll;
 
 /// <summary>
-/// What someone is owed for a month. Terms are the pay in force at the end of the month (or today,
-/// while it is in progress). An hour of monthly pay is the salary ÷ the month's paid hours (<see cref="PayRules.HourlyRate"/>),
-/// which keeps the salary fixed; overtime is paid at the pay's own overtime rate instead (the salary ÷ 184 unless set
-/// otherwise, <see cref="PayRules.SuggestedOvertimeRate"/>), whatever the month.
+/// What someone is owed for a month. Everyone is paid a monthly salary. Terms are the pay in force at the end of the
+/// month (or today, while it is in progress). An hour of it is the salary ÷ the month's paid hours
+/// (<see cref="PayRules.HourlyRate"/>), which keeps the salary fixed; overtime is paid at the pay's own overtime rate
+/// instead (the salary ÷ 184 unless set otherwise, <see cref="PayRules.SuggestedOvertimeRate"/>), whatever the month.
 /// <list type="bullet">
-/// <item><b>Monthly:</b> the salary, pro-rated on the paid hours of the days they were employed if they joined, left or came back
+/// <item>The salary, pro-rated on the paid hours of the days they were employed if they joined, left or came back
 /// mid-month (days away between two periods of employment aren't paid), plus overtime at the multiplier. In a closed month the hours ledger's shortfall is deducted at the
 /// month's hourly rate, and each missed working day also loses its paid break, so it costs the full paid day.
 /// Unpaid excuses are deducted the same way (an unpaid day off costs the full paid day).
 /// From 1 November 2026 (the working time's overtime threshold, 184 hours) a salary's overtime is paid only for the hours
 /// counted past the month's threshold, see <see cref="Threshold"/>.</item>
-/// <item><b>Hourly:</b> logged hours at the rate in force that day, overtime that made up a shortfall at the
-/// plain rate, the rest at the multiplier, plus the paid break of each working day they worked, plus their normal paid
-/// day for each working day of paid time off (an excuse pays them nothing).</item>
 /// </list>
 /// </summary>
 public static class SalaryCalculator
 {
     /// <param name="OvertimeRate">What an hour of overtime is paid at, before the multiplier: stored with the pay.</param>
-    public sealed record PayTerms(DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency, decimal OvertimeRate)
+    /// <param name="Amount">The monthly salary.</param>
+    public sealed record PayTerms(DateOnly EffectiveFrom, decimal Amount, string Currency, decimal OvertimeRate)
     {
-        public decimal HourlyRateOn(DateOnly day, PersonCalendar calendar) => PayRules.HourlyRate(Basis, Amount, day, calendar);
+        public decimal HourlyRateOn(DateOnly day, PersonCalendar calendar) => PayRules.HourlyRate(Amount, day, calendar);
     }
 
-    /// <param name="TimeOff">Days of approved time off rather than an excuse: paid ones also pay an hourly employee their normal day.</param>
+    /// <param name="TimeOff">Days of approved time off rather than an excuse.</param>
     public sealed record Excuse(ExcuseKind Kind, int? Minutes, IReadOnlyList<DateOnly> Days, bool IsPaid, bool TimeOff = false);
 
     public sealed record Input(
@@ -52,7 +50,6 @@ public static class SalaryCalculator
     /// <param name="CountedMinutes">What counts toward the threshold: every logged minute plus paid excuses; 0 where none applies.</param>
     /// <param name="PaidOvertimeByWork">The overtime paid as overtime, by work entry.</param>
     /// <param name="TimeOffDays">Working days of time off in the month, paid and unpaid.</param>
-    /// <param name="TimeOffPay">What an hourly employee is paid for their paid time off; part of <paramref name="BasePay"/>. 0 on a salary, which already pays it.</param>
     public sealed record Result(
         PayTerms Terms,
         decimal HourlyRate,
@@ -67,8 +64,6 @@ public static class SalaryCalculator
         bool ProRated,
         int WorkingDays,
         int WorkingDaysPaid,
-        int PaidBreakDays,
-        decimal PaidBreakPay,
         int DeductionMinutes,
         decimal Deduction,
         decimal BasePay,
@@ -76,8 +71,7 @@ public static class SalaryCalculator
         int? ThresholdMinutes = null,
         int CountedMinutes = 0,
         IReadOnlyDictionary<long, int>? PaidOvertimeByWork = null,
-        int TimeOffDays = 0,
-        decimal TimeOffPay = 0)
+        int TimeOffDays = 0)
     {
         public decimal Total => BasePay + OvertimePay;
     }
@@ -125,43 +119,21 @@ public static class SalaryCalculator
             || lastDay < next.AddDays(-1)
             || (input.Gaps ?? []).Any(g => g.From < next && g.To >= input.Month);
 
-        decimal basePay, overtimePay, paidBreakPay = 0, deduction = 0, timeOffPay = 0;
-        int paidBreakDays = 0, deductionMinutes = 0;
-        var threshold = terms.Basis == PayBasis.Monthly && !input.FixedSalary ? ThresholdOf(input, monthDays, work) : null;
+        var threshold = !input.FixedSalary ? ThresholdOf(input, monthDays, work) : null;
         var paidByWork = threshold is null
             ? work.ToDictionary(w => w.Id, w => w.Overtime - MadeUp(w))
             : PastThreshold(work, MadeUp, threshold.Past);
 
-        if (terms.Basis == PayBasis.Monthly)
-        {
-            var monthMinutes = monthDays.Sum(d => d.Hours!.Span);
-            var employedMinutes = monthDays.Where(d => Employed(d.Day)).Sum(d => d.Hours!.Span);
-            basePay = proRated && monthMinutes > 0 ? terms.Amount * employedMinutes / monthMinutes : terms.Amount;
-            overtimePay = work.Sum(w => OvertimePay(w, terms, paidByWork.GetValueOrDefault(w.Id)));
+        var monthMinutes = monthDays.Sum(d => d.Hours!.Span);
+        var employedMinutes = monthDays.Where(d => Employed(d.Day)).Sum(d => d.Hours!.Span);
+        var basePay = proRated && monthMinutes > 0 ? terms.Amount * employedMinutes / monthMinutes : terms.Amount;
+        var overtimePay = work.Sum(w => OvertimePay(w, terms, paidByWork.GetValueOrDefault(w.Id)));
 
-            deductionMinutes = (ledger is { Flagged: true } ? ShortfallMinutes(ledger, input.Calendar) : 0) + UnpaidMinutes(input, next);
-            deduction = input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth && !e.IsPaid)
-                ? basePay
-                : Math.Min(basePay, deductionMinutes / 60m * rate);
-            basePay -= deduction;
-        }
-        else
-        {
-            decimal RateOn(DateOnly day) => (TermsOn(input.PayHistory, day) ?? terms).HourlyRateOn(day, input.Calendar);
-
-            var breakDays = work.Where(w => w.Normal > 0)
-                .Select(w => w.Day)
-                .Distinct()
-                .Select(day => (Day: day, Hours: input.Calendar.HoursOn(day)))
-                .Where(d => d.Hours is { PaidBreak: > 0 })
-                .ToList();
-            paidBreakDays = breakDays.Count;
-            paidBreakPay = breakDays.Sum(d => d.Hours!.PaidBreak / 60m * RateOn(d.Day));
-            timeOffPay = PaidTimeOff(input, next, Employed).Sum(d => d.Hours.Span / 60m * RateOn(d.Day));
-
-            basePay = work.Sum(w => (w.Normal + MadeUp(w)) / 60m * RateOn(w.Day)) + paidBreakPay + timeOffPay;
-            overtimePay = work.Sum(w => OvertimePay(w, TermsOn(input.PayHistory, w.Day) ?? terms, paidByWork.GetValueOrDefault(w.Id)));
-        }
+        var deductionMinutes = (ledger is { Flagged: true } ? ShortfallMinutes(ledger, input.Calendar) : 0) + UnpaidMinutes(input, next);
+        var deduction = input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth && !e.IsPaid)
+            ? basePay
+            : Math.Min(basePay, deductionMinutes / 60m * rate);
+        basePay -= deduction;
 
         return new Result(
             terms,
@@ -177,8 +149,6 @@ public static class SalaryCalculator
             proRated,
             monthDays.Count,
             paidDays,
-            paidBreakDays,
-            Round(paidBreakPay),
             deductionMinutes,
             Round(deduction),
             Round(basePay),
@@ -186,19 +156,8 @@ public static class SalaryCalculator
             threshold?.Minutes,
             threshold?.Counted ?? 0,
             paidByWork,
-            TimeOffDaysOf(input, next, Employed),
-            Round(timeOffPay));
+            TimeOffDaysOf(input, next, Employed));
     }
-
-    /// <summary>The working days of paid time off they were employed on, once each.</summary>
-    private static IEnumerable<(DateOnly Day, WorkHours Hours)> PaidTimeOff(Input input, DateOnly next, Func<DateOnly, bool> employed)
-        => input.Excuses.Where(e => e.TimeOff && e.IsPaid)
-            .SelectMany(e => e.Days)
-            .Distinct()
-            .Where(d => d >= input.Month && d < next && employed(d))
-            .Select(d => (Day: d, Hours: input.Calendar.HoursOn(d)))
-            .Where(d => d.Hours is not null)
-            .Select(d => (d.Day, d.Hours!));
 
     private static int TimeOffDaysOf(Input input, DateOnly next, Func<DateOnly, bool> employed)
         => input.Excuses.Where(e => e.TimeOff)
@@ -213,7 +172,7 @@ public static class SalaryCalculator
     public static bool HasThreshold(Input input)
         => !input.FixedSalary
             && input.Calendar.PolicyOn(input.Month).OvertimeThresholdHours > 0
-            && PaidTermsOf(input) is { Basis: PayBasis.Monthly };
+            && PaidTermsOf(input) is not null;
 
     /// <summary>The terms the month is paid on; null when the person had no pay yet, or wasn't employed on any day of it.</summary>
     private static PayTerms? PaidTermsOf(Input input)
@@ -304,21 +263,15 @@ public static class SalaryCalculator
 
     /// <summary>
     /// What a month paid for paid leave. Nothing is logged for it, so no project carries it: it is a company cost.
-    /// A salary: the paid excused minutes and the full paid day of each paid day off (paid time off included), at the
-    /// month's hourly rate, as unpaid ones are deducted; a whole month off with pay is the month's base pay. Hourly pay:
-    /// its paid time off (<see cref="Result.TimeOffPay"/>); paid excuses pay it nothing. A fixed salary is a company cost
-    /// whole, so it has none.
+    /// The paid excused minutes and the full paid day of each paid day off (paid time off included), at the month's
+    /// hourly rate, as unpaid ones are deducted; a whole month off with pay is the month's base pay. A fixed salary is a
+    /// company cost whole, so it has none.
     /// </summary>
     public static decimal PaidLeavePay(Input input, Result pay)
     {
         if (input.FixedSalary)
         {
             return 0;
-        }
-
-        if (pay.Terms.Basis != PayBasis.Monthly)
-        {
-            return pay.TimeOffPay;
         }
 
         return input.Excuses.Any(e => e.Kind == ExcuseKind.WholeMonth && e.IsPaid)
@@ -330,16 +283,13 @@ public static class SalaryCalculator
     /// What a salary paid for overtime past its threshold beyond the hourly rate. Projects price every logged hour of a
     /// month with a threshold at the hourly rate (<c>EntrySplit.NoPremium</c>), while the overtime past it is paid at the
     /// overtime rate × the multiplier: the rest reaches no project, so it is a company cost. None where no threshold
-    /// applies: hourly pay puts its overtime on projects, and a fixed salary has none.
+    /// applies: projects then carry the overtime at its own rate, and a fixed salary has none.
     /// </summary>
     public static decimal OvertimePremium(Result pay)
         => pay.ThresholdMinutes is null ? 0 : Round(pay.OvertimePay - pay.OvertimePaidMinutes / 60m * pay.HourlyRate);
 
-    /// <summary>The month's pay as a monthly amount: the salary, or an hourly rate × the month's paid hours on their schedule.</summary>
-    public static decimal MonthlyPay(Result pay, Input input)
-        => pay.Terms.Basis == PayBasis.Monthly
-            ? pay.Terms.Amount
-            : Round(pay.HourlyRate * PayRules.PaidMinutesInMonth(input.Month, input.Calendar) / 60m);
+    /// <summary>The month's pay as a monthly amount: the salary it is paid on.</summary>
+    public static decimal MonthlyPay(Result pay) => pay.Terms.Amount;
 
     /// <summary>Unpaid excused minutes, and the full paid day of each unpaid day off within the month.</summary>
     private static int UnpaidMinutes(Input input, DateOnly next) => ExcusedMinutes(input, next, paid: false);

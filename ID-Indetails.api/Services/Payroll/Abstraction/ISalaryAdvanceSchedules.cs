@@ -10,7 +10,7 @@ public sealed record GivenAdvance(SalaryAdvance Advance, AdvanceRules.Schedule S
 public sealed record MonthPay(string Currency, decimal Available);
 
 /// <summary>Someone's pay this month: what an advance is asked for in and capped at.</summary>
-/// <param name="MonthlyPay">The month's pay as a monthly amount, as Salaries shows it: the salary, or an hourly rate × the month's paid hours.</param>
+/// <param name="MonthlyPay">The month's pay as a monthly amount, as Salaries shows it: the salary.</param>
 public sealed record PayNow(string Currency, decimal MonthlyPay);
 
 /// <summary>Works out how given advances come off pay, from Salaries' own figures.</summary>

@@ -91,7 +91,7 @@ public sealed class PayrollInputs(
         var result = new List<PersonMonth>();
         foreach (var person in people)
         {
-            var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.OvertimeRate)).ToList();
+            var terms = pay[person.Id].Select(p => new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Amount, p.Currency, p.OvertimeRate)).ToList();
             var calendar = calendars[person.Id];
             var employment = EmploymentOf(person);
 

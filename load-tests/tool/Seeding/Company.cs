@@ -144,7 +144,7 @@ public sealed class Company(World world, ApiClient api, SeedingApi host, SeedMai
 
         await api.PostAsync(payer.Token, $"/api/employees/{world.FirstSuperAdmin.Id}/pay", new ChangePayRequest
         {
-            Basis = PayBasis.Monthly, Amount = 6000m, EffectiveFrom = day, Note = "LT founding director",
+            Amount = 6000m, EffectiveFrom = day, Note = "LT founding director",
         });
         world.Tally.Add("pay_records");
     }
@@ -252,11 +252,10 @@ public sealed class Company(World world, ApiClient api, SeedingApi host, SeedMai
 
     private InvitationPayRequest PayFor(Person person) => person.Persona switch
     {
-        Persona.SuperAdmin => new() { Basis = PayBasis.Monthly, Amount = Random.Amount(4000m, 6000m, 250m) },
-        Persona.DesignAdmin or Persona.ExecutionAdmin => new() { Basis = PayBasis.Monthly, Amount = Random.Amount(2500m, 3800m, 100m) },
-        _ when Random.Chance(0.1) => new() { Basis = PayBasis.Hourly, Amount = Random.Amount(8m, 18m, 0.5m) },
-        Persona.DesignEmployee => new() { Basis = PayBasis.Monthly, Amount = Random.Amount(900m, 2200m, 50m) },
-        _ => new() { Basis = PayBasis.Monthly, Amount = Random.Amount(700m, 1600m, 50m) },
+        Persona.SuperAdmin => new() { Amount = Random.Amount(4000m, 6000m, 250m) },
+        Persona.DesignAdmin or Persona.ExecutionAdmin => new() { Amount = Random.Amount(2500m, 3800m, 100m) },
+        Persona.DesignEmployee => new() { Amount = Random.Amount(900m, 2200m, 50m) },
+        _ => new() { Amount = Random.Amount(700m, 1600m, 50m) },
     };
 
     private async Task SetPartTimeSchedulesAsync(DateOnly day)
@@ -301,7 +300,7 @@ public sealed class Company(World world, ApiClient api, SeedingApi host, SeedMai
         {
             await api.PostAsync(Admin, $"/api/employees/{person.Id}/pay", new ChangePayRequest
             {
-                Basis = PayBasis.Monthly, Amount = Random.Amount(1000m, 2400m, 50m), EffectiveFrom = day, Note = "LT pay review",
+                Amount = Random.Amount(1000m, 2400m, 50m), EffectiveFrom = day, Note = "LT pay review",
             });
             world.Tally.Add("pay_records");
         }

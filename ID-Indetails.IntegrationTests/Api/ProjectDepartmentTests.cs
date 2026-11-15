@@ -165,7 +165,7 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         // 14,320,000 LBP a month is 89,500 LBP an hour in February 2026 (160 paid hours)
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 14_320_000m, currency = "LBP", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 14_320_000m, currency = "LBP", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await ProjectAsync(superAdmin, [architecture]);
 
