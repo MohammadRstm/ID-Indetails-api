@@ -85,6 +85,9 @@ public sealed record SalaryRowResponse
 
     public required int WorkingDaysPaid { get; init; }
 
+    /// <summary>The pay changed during the month: its days are paid at more than one salary (the detail's parts).</summary>
+    public bool PayChanged { get; init; }
+
     public required decimal Deduction { get; init; }
 
     public required decimal BasePay { get; init; }
