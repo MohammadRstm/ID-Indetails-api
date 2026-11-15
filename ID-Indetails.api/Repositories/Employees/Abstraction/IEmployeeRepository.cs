@@ -23,6 +23,12 @@ public interface IEmployeeRepository
     Task<IReadOnlyList<UserPayHistory>> ActivePayAsync(long userId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Which version of someone's pay is in force: the id of their newest pay row, superseded or not (0 with none). Any
+    /// pay change adds a row, so it changes with every one.
+    /// </summary>
+    Task<long> PayVersionAsync(long userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Locks every active super admin's row until the transaction ends and returns how many
     /// there are, so two people can't each remove "another" super admin at the same moment.
     /// </summary>

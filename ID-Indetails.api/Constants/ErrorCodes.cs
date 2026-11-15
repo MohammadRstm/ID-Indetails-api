@@ -163,6 +163,8 @@ public static class ErrorCodes
 
     /// <summary>422. The blocked change was already forced through or dismissed.</summary>
     public const string BlockedChangeDecided = "blocked_change_decided";
+    public const string PayChangeHeld = "pay_change_held";
+    public const string PayChangeStale = "pay_change_stale";
 
     /// <summary>422. BOQs belong to Execution client projects; any other project has none.</summary>
     public const string BoqExecutionOnly = "boq_execution_only";

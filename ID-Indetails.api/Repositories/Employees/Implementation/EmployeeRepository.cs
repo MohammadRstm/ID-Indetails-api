@@ -84,6 +84,12 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
             .OrderByDescending(p => p.EffectiveFrom)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<long> PayVersionAsync(long userId, CancellationToken cancellationToken = default)
+        => await db.UserPayHistory
+            .IgnoreQueryFilters()
+            .Where(p => p.UserId == userId)
+            .MaxAsync(p => (long?)p.Id, cancellationToken) ?? 0;
+
     public async Task<IReadOnlyList<UserPayHistory>> ActivePayAsync(long userId, CancellationToken cancellationToken = default)
         => await db.UserPayHistory
             .Where(p => p.UserId == userId)

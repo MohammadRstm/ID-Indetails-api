@@ -131,7 +131,14 @@ A client project's profit may not reach zero unless someone who sees its money s
 
   - A change is decided **once**: it is marked forced or dismissed before anything else (an atomic update on a pending row), so a second force or dismiss is `422 blocked_change_decided`. If the forced change fails on its own checks (the project closed meanwhile, the labour week changed: `409 labour_week_changed`), it is pending again and the error is returned.
   - Its `resultId` is what forcing made: the expense, the first site expense, the work entry.
-- **Changes nobody made** (pay, schedules, exchange rates, a voided payment) aren't refused: the hourly scheduler sends `profit_low` and `profit_at_zero` for them, under the same keys, so nobody hears it twice (see [notifications.md](notifications.md)).
+- **A pay change** is held the same way (15 Nov 2026), as kind `pay_change`, when re-pricing from its day would take a **running** client project held to the floor (active or on hold, with an agreed amount) to zero profit or below ([employees.md](employees.md#pay)). The change is made and measured inside its transaction, as its preview is, and rolled back:
+  - The requester gets `422 pay_change_held` with `blockedChangeId`: "the super admins were asked to decide".
+  - The hardest-hit project is the blocked change's `project_id`. Its payload (`HeldPayChange`) keeps the person, the request, every project it reaches and the person's pay version at the time (the id of their newest pay row).
+  - Only **super admins** are told (`pay_change_held`, with the person's name, the day and the project, never an amount), and only they see it (`404` for anyone else, `financial:view` or not), force it or dismiss it. Nobody decides a hold on their own pay (`403 employee_change_not_allowed`).
+  - `GET` adds `person` and `projects`: each project it reaches with `profitNow` and, while it waits, `profitIfForced` from the same preview.
+  - Forcing replays the pay change as its requester (they stay its creator; the forcer is `decidedBy`), past the floor. Only then is the employee told (`pay_changed`). A hold whose person's pay changed since is refused (`422 pay_change_stale`): dismiss it and make the change again.
+  - Proton never decides a pay hold.
+- **Changes nobody made** (schedules, exchange rates, a voided payment) aren't refused: the hourly scheduler sends `profit_low` and `profit_at_zero` for them, under the same keys, so nobody hears it twice (see [notifications.md](notifications.md)).
 
 ## Status
 

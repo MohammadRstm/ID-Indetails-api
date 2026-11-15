@@ -67,6 +67,11 @@ public sealed class ProposeBlockedChangeTool(IBlockedChangeService changes) : Pr
 
         var by = change.RequestedBy.Name;
         var target = new ProtonRef(ProtonRefType.Project, change.ProjectId, change.ProjectTitle, change.Domain);
+        if (change.Kind == BlockedChangeKind.PayChange)
+        {
+            throw new ProtonToolInputException("A held pay change is decided in the app by a super admin: pay never reaches Proton.");
+        }
+
         var waiting = change.Kind == BlockedChangeKind.WorkEntryDepartment;
         if (waiting && input.Step == ProtonBlockedChangeStep.Force)
         {

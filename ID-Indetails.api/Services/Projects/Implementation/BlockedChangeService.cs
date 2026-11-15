@@ -6,6 +6,7 @@ using ID_Indetails.api.Business.Execution;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Boqs;
+using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Request.Expenses;
 using ID_Indetails.api.DTO.Request.Labour;
 using ID_Indetails.api.DTO.Request.Projects;
@@ -17,10 +18,12 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Boqs.Abstraction;
+using ID_Indetails.api.Repositories.Employees.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Boqs.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
+using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Labour.Abstraction;
@@ -46,6 +49,9 @@ public sealed class BlockedChangeService(
     IBoqRepository boqRows,
     IDesignVoService designVos,
     IDesignVoRepository designVoRows,
+    IEmployeeService employees,
+    IEmployeeRepository payRecords,
+    IProjectRepository projectRows,
     IClock clock) : IBlockedChangeService
 {
     public async Task<BlockedChangeResponse> GetAsync(long id, CancellationToken cancellationToken = default)
@@ -59,6 +65,11 @@ public sealed class BlockedChangeService(
         {
             throw new BusinessRuleException(ErrorCodes.DepartmentStillMissing,
                 "These hours go through on their own once their logger's department is added to the project.");
+        }
+
+        if (row.Change.Kind == BlockedChangeKind.PayChange)
+        {
+            await CheckPayHoldAsync(row.Change, actor, forcing: true, cancellationToken);
         }
 
         await DecideAsync(row, BlockedChangeStatus.Forced, actor, cancellationToken);
@@ -87,7 +98,13 @@ public sealed class BlockedChangeService(
     public async Task<BlockedChangeResponse> DismissAsync(long id, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
-        await DecideAsync(await RowAsync(actor, id, cancellationToken), BlockedChangeStatus.Dismissed, actor, cancellationToken);
+        var row = await RowAsync(actor, id, cancellationToken);
+        if (row.Change.Kind == BlockedChangeKind.PayChange)
+        {
+            await CheckPayHoldAsync(row.Change, actor, forcing: false, cancellationToken);
+        }
+
+        await DecideAsync(row, BlockedChangeStatus.Dismissed, actor, cancellationToken);
         return await DescribeAsync(await RowAsync(actor, id, cancellationToken), cancellationToken);
     }
 
@@ -133,8 +150,32 @@ public sealed class BlockedChangeService(
                 return null;
             case BlockedChangeKind.DesignVo:
                 return (await designVos.ConfirmAsync(Read<object?>(change).ItemId!.Value, cancellationToken)).Id;
+            case BlockedChangeKind.PayChange:
+                // the change stays the requester's: they are recorded as making it, and the forcer as deciding the hold
+                var pay = ReadPay(change);
+                await ActAsAsync(change.RequestedById, cancellationToken);
+                return (await employees.ChangePayAsync(pay.UserId, pay.Request, cancellationToken)).Id;
             default:
                 throw new InvalidOperationException($"No replay for {change.Kind}.");
+        }
+    }
+
+    /// <summary>
+    /// Nobody decides a hold on their own pay; and one held before the person's pay changed again can only be dismissed,
+    /// as it would now replace a change made since.
+    /// </summary>
+    private async Task CheckPayHoldAsync(Models.BlockedChange change, UserAccess actor, bool forcing, CancellationToken cancellationToken)
+    {
+        var held = ReadPay(change);
+        if (held.UserId == actor.UserId)
+        {
+            throw new ForbiddenException(ErrorCodes.EmployeeChangeNotAllowed, "You cannot decide a change to your own pay.");
+        }
+
+        if (forcing && await payRecords.PayVersionAsync(held.UserId, cancellationToken) != held.PayVersion)
+        {
+            throw new BusinessRuleException(ErrorCodes.PayChangeStale,
+                "Their pay changed after this was held, so it can't be forced through: dismiss it and make the change again.");
         }
     }
 
@@ -154,6 +195,7 @@ public sealed class BlockedChangeService(
     {
         var money = await finance.GetAsync(row.Project, cancellationToken);
         var c = row.Change;
+        var (person, held) = c.Kind == BlockedChangeKind.PayChange ? await HeldPayAsync(c, cancellationToken) : (null, null);
         return new BlockedChangeResponse(
             c.Id,
             row.Project.Id,
@@ -166,12 +208,67 @@ public sealed class BlockedChangeService(
             c.RequestedAt,
             c.DecidedById is { } by && row.DecidedByName is { } byName ? new PersonRefResponse(by, byName) : null,
             c.DecidedAt,
-            money.Summary.Profit);
+            money.Summary.Profit,
+            person,
+            held);
+    }
+
+    /// <summary>
+    /// Whose pay a held change is, and the projects it reaches: their profit today and, while it waits, what forcing it
+    /// now would leave, from the same preview the pay form shows.
+    /// </summary>
+    private async Task<(PersonRefResponse? Person, IReadOnlyList<BlockedProjectResponse>? Projects)> HeldPayAsync(
+        Models.BlockedChange change,
+        CancellationToken cancellationToken)
+    {
+        var held = ReadPay(change);
+        var user = await users.GetByIdAsync(held.UserId, cancellationToken);
+        var person = user is null ? null : new PersonRefResponse(user.Id, PersonName.Of(user.FirstName, user.LastName, user.Email));
+
+        var projects = new List<Models.Project>();
+        foreach (var projectId in held.ProjectIds)
+        {
+            if (await projectRows.GetAsync(projectId, cancellationToken) is { } project)
+            {
+                projects.Add(project);
+            }
+        }
+
+        var money = projects.Count == 0 ? null : await finance.GetAsync(projects, cancellationToken);
+        DTO.Response.Employees.PayPreviewResponse? preview = null;
+        if (change.Status == BlockedChangeStatus.Pending)
+        {
+            try
+            {
+                preview = await employees.PreviewPayAsync(held.UserId, held.Request, cancellationToken);
+            }
+            catch (AppException)
+            {
+                // it no longer fits (a decider's own pay, a date the rules now refuse): the profit today is still shown
+            }
+        }
+
+        return (person, projects
+            .Select(p => new BlockedProjectResponse(
+                p.Id,
+                p.Title,
+                money![p.Id].Summary.Profit,
+                preview?.Projects.FirstOrDefault(x => x.ProjectId == p.Id)?.ProfitAfter))
+            .ToList());
     }
 
     /// <summary>What the change was, in words. A BOQ's number is read from the BOQ itself.</summary>
     private async Task<string> SummaryAsync(Models.BlockedChange change, CancellationToken cancellationToken)
     {
+        if (change.Kind == BlockedChangeKind.PayChange)
+        {
+            var held = ReadPay(change);
+            var user = await users.GetByIdAsync(held.UserId, cancellationToken);
+            var name = user is null ? "Someone" : PersonName.Of(user.FirstName, user.LastName, user.Email);
+            var from = held.Request.EffectiveFrom is { } day ? $" from {day:d MMM yyyy}" : string.Empty;
+            return $"Pay of {name}: {held.Request.Amount:N2} {held.Request.Currency.ToUpperInvariant()} a month{from}";
+        }
+
         if (change.Kind == BlockedChangeKind.DesignVo)
         {
             var vo = await designVoRows.GetAsync(Read<object?>(change).ItemId!.Value, cancellationToken);
@@ -231,6 +328,10 @@ public sealed class BlockedChangeService(
 
     private static string Counted(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 
+    private static HeldPayChange ReadPay(Models.BlockedChange change)
+        => JsonSerializer.Deserialize<HeldPayChange>(change.Payload, ProfitFloor.Json)
+            ?? throw new InvalidOperationException($"Blocked change {change.Id} has no pay change.");
+
     private static BlockedRequest<T> Read<T>(Models.BlockedChange change)
         => JsonSerializer.Deserialize<BlockedRequest<T>>(change.Payload, ProfitFloor.Json)
             ?? throw new InvalidOperationException($"Blocked change {change.Id} has no request.");
@@ -238,7 +339,10 @@ public sealed class BlockedChangeService(
     private async Task<BlockedChangeRow> RowAsync(UserAccess actor, long id, CancellationToken cancellationToken)
     {
         var row = await changes.GetAsync(id, cancellationToken);
-        return row is not null && actor.CanSee(row.Project.DomainCode) ? row : throw new NotFoundException("Change not found.");
+        // a held pay change is the super admins' alone, as pay is
+        return row is not null && actor.CanSee(row.Project.DomainCode) && (row.Change.Kind != BlockedChangeKind.PayChange || actor.IsSuperAdmin)
+            ? row
+            : throw new NotFoundException("Change not found.");
     }
 
     /// <summary>Refused changes are about money: whoever sees it decides.</summary>

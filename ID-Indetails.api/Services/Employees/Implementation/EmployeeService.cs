@@ -28,6 +28,8 @@ using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.TimeOff.Abstraction;
 
@@ -53,6 +55,7 @@ public sealed class EmployeeService(
     ITimeOffWatch timeOff,
     ISalaryAdvanceService salaryAdvances,
     IPayChangeEffects payEffects,
+    IProfitFloor floor,
     IClock clock) : IEmployeeService
 {
     private const string NotFoundMessage = "Employee not found.";
@@ -410,7 +413,17 @@ public sealed class EmployeeService(
 
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckPayChange(actor, TargetOf(user)));
+
+        // the profit floor: measured before and after, unless a super admin is forcing a held change through
+        var from = request.EffectiveFrom ?? clock.CompanyToday;
+        var version = await employees.PayVersionAsync(user.Id, cancellationToken);
+        var before = floor.Forcing ? null : await payEffects.MeasureAsync(user.Id, from, cancellationToken);
         var (pay, _) = await StagePayChangeAsync(user, request, actor.UserId, cancellationToken);
+        if (before is not null)
+        {
+            HoldAtTheFloor(user, request, from, version, before, await payEffects.MeasureAsync(user.Id, from, cancellationToken), actor.UserId);
+        }
+
         var effectiveFrom = pay.EffectiveFrom;
 
         // Amounts stay out of the activity feed, which people without financial access can read.
@@ -482,6 +495,35 @@ public sealed class EmployeeService(
         users.AddPayHistory(pay);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         return (pay, replacedAsItWas);
+    }
+
+    /// <summary>
+    /// Holds the pay change (its transaction rolls back and it is kept as a blocked change) when it takes a running client
+    /// project's profit to zero or below. The hardest-hit project names it; the payload keeps the request, every project
+    /// it reaches, and the pay version it was held at, so forcing it after another pay change is refused.
+    /// </summary>
+    private static void HoldAtTheFloor(User user, ChangePayRequest request, DateOnly from, long version, PayEffects before, PayEffects after, long requestedById)
+    {
+        var reached = after.Projects
+            .Where(a => a.HeldToFloor && ProfitFloorRules.ReachesZero(before.Projects.Single(b => b.ProjectId == a.ProjectId).Profit, a.Profit))
+            .OrderBy(a => a.Profit)
+            .ToList();
+        if (reached.Count == 0)
+        {
+            return;
+        }
+
+        var worst = reached[0];
+        var held = new HeldPayChange(worst.ProjectId, user.Id, request, version, reached.Select(p => p.ProjectId).ToList());
+        throw new PayChangeHeldException(
+            worst.ProjectId,
+            worst.Title,
+            worst.Domain,
+            JsonSerializer.Serialize(held, ProfitFloor.Json),
+            requestedById,
+            PersonName.Of(user.FirstName, user.LastName, user.Email),
+            from,
+            reached.Count);
     }
 
     /// <summary>The preview from the effects before and after; project money only where the caller may see it.</summary>
