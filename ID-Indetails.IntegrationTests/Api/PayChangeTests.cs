@@ -60,6 +60,7 @@ public class PayChangeTests(ApiFactory api) : IClassFixture<ApiFactory>
         // 10 days of 1,760's share (800) and 12 of 2,112's (1,152)
         var june = await JuneAsync(superAdmin, staff.User.Id);
         june.Salary.Total.ShouldBe(1952m);
+        june.Salary.PayChanged.ShouldBeTrue();
         june.Parts.Select(p => (p.From, p.To, p.Salary, p.Days, p.Pay)).ShouldBe([
             (new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 12), 1760m, 10, 800m),
             (new DateOnly(2026, 6, 15), new DateOnly(2026, 6, 30), 2112m, 12, 1152m),
@@ -74,6 +75,7 @@ public class PayChangeTests(ApiFactory api) : IClassFixture<ApiFactory>
         var corrected = await JuneAsync(superAdmin, staff.User.Id);
         corrected.Salary.Total.ShouldBe(1800m);
         corrected.Parts.ShouldHaveSingleItem().Days.ShouldBe(22);
+        corrected.Salary.PayChanged.ShouldBeFalse();
 
         var history = await OkAsync<List<PayResponse>>(Client.GetAsync($"/api/employees/{staff.User.Id}/pay", superAdmin.AccessToken));
         history.Select(p => (p.EffectiveFrom, p.Amount, Replaced: p.SupersededAt is not null)).ShouldBe([

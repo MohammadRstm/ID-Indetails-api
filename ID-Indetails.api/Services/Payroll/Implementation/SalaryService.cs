@@ -373,6 +373,7 @@ public sealed class SalaryService(
             Position = user.Position,
             WorkingDays = r.WorkingDays,
             WorkingDaysPaid = r.WorkingDaysPaid,
+            PayChanged = r.Parts is { Count: > 1 },
             Deduction = r.Deduction,
             BasePay = r.BasePay,
             OvertimePay = r.OvertimePay,
