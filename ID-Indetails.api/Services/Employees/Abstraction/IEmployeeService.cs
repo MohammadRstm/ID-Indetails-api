@@ -33,6 +33,9 @@ public interface IEmployeeService
 
     Task<PayResponse> ChangePayAsync(long userId, ChangePayRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>What the pay change would do, without making it.</summary>
+    Task<PayPreviewResponse> PreviewPayAsync(long userId, ChangePayRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>The signed-in user's own name and phone.</summary>
     Task<CurrentUserResponse> UpdateMyProfileAsync(UpdateMyProfileRequest request, CancellationToken cancellationToken = default);
 

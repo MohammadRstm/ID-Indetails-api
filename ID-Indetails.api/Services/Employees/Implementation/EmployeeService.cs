@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Pay;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Request.Files;
@@ -51,6 +52,7 @@ public sealed class EmployeeService(
     IWorkingTimeService workingTime,
     ITimeOffWatch timeOff,
     ISalaryAdvanceService salaryAdvances,
+    IPayChangeEffects payEffects,
     IClock clock) : IEmployeeService
 {
     private const string NotFoundMessage = "Employee not found.";
@@ -408,24 +410,8 @@ public sealed class EmployeeService(
 
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckPayChange(actor, TargetOf(user)));
-
-        var effectiveFrom = request.EffectiveFrom ?? clock.CompanyToday;
-        var latest = await employees.GetLatestPayDateAsync(user.Id, cancellationToken);
-        Throw(PayChangePolicy.Check(effectiveFrom, clock.CompanyToday, latest));
-
-        var pay = new UserPayHistory
-        {
-            UserId = user.Id,
-            EffectiveFrom = effectiveFrom,
-            Amount = request.Amount,
-            Currency = request.Currency.ToUpperInvariant(),
-            OvertimeRate = request.OvertimeRate ?? PayRules.SuggestedOvertimeRate(
-                request.Amount, await workingTime.OvertimeThresholdOnAsync(effectiveFrom, cancellationToken)),
-            Note = Clean(request.Note),
-            CreatedAt = clock.UtcNow,
-            CreatedById = actor.UserId,
-        };
-        users.AddPayHistory(pay);
+        var (pay, _) = await StagePayChangeAsync(user, request, actor.UserId, cancellationToken);
+        var effectiveFrom = pay.EffectiveFrom;
 
         // Amounts stay out of the activity feed, which people without financial access can read.
         activity.Add(UserEvent(user, ActivityEventKinds.PayChanged, actor.UserId, new { effectiveFrom }));
@@ -435,6 +421,94 @@ public sealed class EmployeeService(
         await transaction.CommitAsync(cancellationToken);
 
         return ToPay(pay);
+    }
+
+    public async Task<PayPreviewResponse> PreviewPayAsync(long userId, ChangePayRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
+        Throw(EmployeeRules.CheckPayChange(actor, TargetOf(user)));
+        var from = request.EffectiveFrom ?? clock.CompanyToday;
+        var before = await payEffects.MeasureAsync(user.Id, from, cancellationToken);
+        var (pay, replaced) = await StagePayChangeAsync(user, request, actor.UserId, cancellationToken);
+        var after = await payEffects.MeasureAsync(user.Id, from, cancellationToken);
+
+        // nothing of it is kept: the transaction ends without a commit, which rolls the change back
+        unitOfWork.DiscardChanges();
+        return PreviewOf(pay.EffectiveFrom, replaced, before, after, actor);
+    }
+
+    /// <summary>
+    /// Makes a pay change within the caller's transaction (<see cref="PayChangePolicy"/>): every active entry from its day
+    /// onward is marked superseded and saved first, as the new entry may share a day with one of them, then the new entry
+    /// is added and saved. Returns the new entry and what it replaced, as it was.
+    /// </summary>
+    private async Task<(UserPayHistory Pay, IReadOnlyList<PayResponse> Replaced)> StagePayChangeAsync(
+        User user,
+        ChangePayRequest request,
+        long actorId,
+        CancellationToken cancellationToken)
+    {
+        var effectiveFrom = request.EffectiveFrom ?? clock.CompanyToday;
+        var currency = request.Currency.ToUpperInvariant();
+        var active = await employees.ActivePayAsync(user.Id, cancellationToken);
+        Throw(PayChangePolicy.Check(effectiveFrom, clock.CompanyToday, currency, active.LastOrDefault(p => p.EffectiveFrom < effectiveFrom)?.Currency));
+
+        var now = clock.UtcNow;
+        var replaced = active.Where(p => p.EffectiveFrom >= effectiveFrom).ToList();
+        var replacedAsItWas = replaced.Select(ToPay).ToList();
+        foreach (var row in replaced)
+        {
+            row.SupersededAt = now;
+            row.SupersededById = actorId;
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var pay = new UserPayHistory
+        {
+            UserId = user.Id,
+            EffectiveFrom = effectiveFrom,
+            Amount = request.Amount,
+            Currency = currency,
+            OvertimeRate = request.OvertimeRate ?? PayRules.SuggestedOvertimeRate(
+                request.Amount, await workingTime.OvertimeThresholdOnAsync(effectiveFrom, cancellationToken)),
+            Note = Clean(request.Note),
+            CreatedAt = now,
+            CreatedById = actorId,
+        };
+        users.AddPayHistory(pay);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return (pay, replacedAsItWas);
+    }
+
+    /// <summary>The preview from the effects before and after; project money only where the caller may see it.</summary>
+    private static PayPreviewResponse PreviewOf(DateOnly from, IReadOnlyList<PayResponse> replaced, PayEffects before, PayEffects after, UserAccess actor)
+    {
+        var months = after.Months.Select(a =>
+        {
+            var b = before.Months.Single(m => m.Start == a.Start);
+            return new PayPreviewMonthResponse(a.Start, b.Salary, b.Currency, a.Salary, a.Currency, b.Advance, a.Advance, a.AdvanceCurrency ?? b.AdvanceCurrency);
+        }).ToList();
+
+        var projects = after.Projects
+            .Where(a => actor.Has(PermissionCodes.FinancialView) && actor.CanSee(a.Domain))
+            .Select(a => (Before: before.Projects.Single(b => b.ProjectId == a.ProjectId), After: a))
+            .Where(p => p.Before.Labour != p.After.Labour)
+            .Select(p => new PayPreviewProjectResponse(
+                p.After.ProjectId,
+                p.After.Title,
+                p.Before.Labour,
+                p.After.Labour,
+                p.Before.Profit,
+                p.After.Profit,
+                p.After.HeldToFloor && ProfitFloorRules.ReachesZero(p.Before.Profit, p.After.Profit)))
+            .OrderBy(p => p.ProfitAfter)
+            .ToList();
+
+        return new PayPreviewResponse(from, replaced, months, projects);
     }
 
     public async Task<CurrentUserResponse> UpdateMyProfileAsync(
@@ -655,7 +729,7 @@ public sealed class EmployeeService(
     };
 
     private static PayResponse ToPay(UserPayHistory p)
-        => new(p.Id, p.EffectiveFrom, p.Amount, p.Currency, p.OvertimeRate, p.Note, p.CreatedAt, p.CreatedById);
+        => new(p.Id, p.EffectiveFrom, p.Amount, p.Currency, p.OvertimeRate, p.Note, p.CreatedAt, p.CreatedById, p.SupersededAt, p.SupersededById);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

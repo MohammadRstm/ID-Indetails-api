@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Pay;
+using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Enums;
@@ -189,6 +190,27 @@ public static class ProjectFinance
     /// <summary>The rate in force on the day, from a person's history ordered by date; their earliest rate for days before it.</summary>
     public static PayRate RateOn(IReadOnlyList<PayRate> history, DateOnly day)
         => history.LastOrDefault(r => r.EffectiveFrom <= day) ?? history[0];
+
+    /// <summary>
+    /// A person's hourly cost over a month: each working day's rate weighted by its paid hours, so a month with a pay
+    /// change shows the rate its days were paid at together (the month's blended rate, as Salaries has it). Null for a
+    /// month with no working days on their calendar.
+    /// </summary>
+    public static PayRate? MonthRate(IReadOnlyList<PayRate> history, DateOnly month, PersonCalendar calendar)
+    {
+        var start = new DateOnly(month.Year, month.Month, 1);
+        var days = HoursLedger.Days(start, start.AddMonths(1))
+            .Select(d => (Day: d, Minutes: calendar.HoursOn(d)?.Span ?? 0))
+            .Where(d => d.Minutes > 0)
+            .ToList();
+        if (days.Count == 0)
+        {
+            return null;
+        }
+
+        var cost = days.Sum(d => RateOn(history, d.Day).HourlyCost * d.Minutes) / days.Sum(d => d.Minutes);
+        return RateOn(history, days[0].Day) with { EffectiveFrom = start, HourlyCost = Math.Round(cost, 4, MidpointRounding.AwayFromZero) };
+    }
 
     public static Costs ToUsd(IEnumerable<CostItem> items, ExchangeRateTable rates)
     {

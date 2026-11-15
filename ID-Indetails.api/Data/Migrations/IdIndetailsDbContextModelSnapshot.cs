@@ -7151,6 +7151,12 @@ namespace ID_Indetails.api.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<DateOnly?>("ActiveEffectiveFrom")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("date")
+                        .HasColumnName("active_effective_from")
+                        .HasComputedColumnSql("IF(`superseded_at` IS NULL, `effective_from`, NULL)", true);
+
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
@@ -7186,6 +7192,15 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("decimal(18,4)")
                         .HasColumnName("overtime_rate");
 
+                    b.Property<DateTime?>("SupersededAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("superseded_at");
+
+                    b.Property<long?>("SupersededById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("superseded_by_id");
+
                     b.Property<long>("UserId")
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
@@ -7196,15 +7211,20 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("CreatedById")
                         .HasDatabaseName("ix_user_pay_history_created_by_id");
 
-                    b.HasIndex("UserId", "EffectiveFrom")
+                    b.HasIndex("SupersededById")
+                        .HasDatabaseName("ix_user_pay_history_superseded_by_id");
+
+                    b.HasIndex("UserId", "ActiveEffectiveFrom")
                         .IsUnique()
-                        .HasDatabaseName("ix_user_pay_history_user_id_effective_from");
+                        .HasDatabaseName("ix_user_pay_history_user_id_active_effective_from");
 
                     b.ToTable("user_pay_history", null, t =>
                         {
                             t.HasCheckConstraint("ck_user_pay_history_amount_positive", "`amount` > 0");
 
                             t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`overtime_rate` >= 0");
+
+                            t.HasCheckConstraint("ck_user_pay_history_superseded", "(`superseded_at` IS NULL) = (`superseded_by_id` IS NULL)");
                         });
                 });
 
@@ -9684,6 +9704,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_user_pay_history_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SupersededById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_user_pay_history_users_superseded_by_id");
 
                     b.HasOne("ID_Indetails.api.Models.User", "User")
                         .WithMany("PayHistory")

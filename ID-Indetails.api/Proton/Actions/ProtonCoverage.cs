@@ -269,6 +269,7 @@ public static class ProtonCoverage
         Action("Employees.RestoreSignIn", "propose_end_sessions", T2, ProtonFamily.Access),
         Open("Employees.ChangeEmail", "it takes a password or a sign-in address, which never go through a chat: Proton opens the form", externalSend: true),
         Open("Employees.ChangePay", "pay amounts never reach Proton: it opens the person's pay"),
+        ReadOnly("Employees.PreviewPay", "the pay form's preview of what a pay change does"),
         Action("Employees.ChangeRole", "propose_employee_access", T2, ProtonFamily.Access),
         Action("Employees.Move", "propose_employee_access", T2, ProtonFamily.Access),
         Open("Employees.SetPhoto", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),

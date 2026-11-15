@@ -230,6 +230,7 @@ public sealed record SalaryProjectResponse(
 /// <param name="Projects">Where their hours and overtime went, most time first. Empty for people who don't log hours.</param>
 /// <param name="TimeOff">The month's days of approved time off: read-only here, decided on Company › Time off.</param>
 /// <param name="Advances">The person's advances that are waiting, open or come off this month.</param>
+/// <param name="Parts">The stretches of the month on one salary, oldest first: two or more when the pay changed in it.</param>
 public sealed record SalaryDetailResponse(
     SalaryRowResponse Salary,
     bool InProgress,
@@ -240,7 +241,13 @@ public sealed record SalaryDetailResponse(
     IReadOnlyList<SalaryDayResponse> WorkingDays,
     IReadOnlyList<SalaryProjectResponse> Projects,
     IReadOnlyList<MonthTimeOffResponse> TimeOff,
-    IReadOnlyList<SalaryAdvanceResponse> Advances);
+    IReadOnlyList<SalaryAdvanceResponse> Advances,
+    IReadOnlyList<SalaryPartResponse> Parts);
+
+/// <summary>A stretch of a month paid on one salary: its working days and what they earned before any deduction.</summary>
+/// <param name="From">Its first working day the person was employed on.</param>
+/// <param name="To">Its last one.</param>
+public sealed record SalaryPartResponse(DateOnly From, DateOnly To, decimal Salary, decimal OvertimeRate, int Days, decimal Pay);
 
 /// <summary>Approved time off in a month: <paramref name="Days"/> are its working days that month.</summary>
 public sealed record MonthTimeOffResponse(long RequestId, DateOnly FirstDay, DateOnly LastDay, bool IsPaid, IReadOnlyList<DateOnly> Days)

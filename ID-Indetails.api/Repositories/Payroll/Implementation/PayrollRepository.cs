@@ -45,6 +45,12 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
     public async Task<IReadOnlyList<UserPayHistory>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
         => await db.UserPayHistory.AsNoTracking().Where(p => userIds.Contains(p.UserId)).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Project>> ProjectsWorkedOnAsync(long userId, DateTime fromUtc, CancellationToken cancellationToken = default)
+        => await db.Projects
+            .AsNoTracking()
+            .Where(p => db.WorkEntries.Any(e => e.ProjectId == p.Id && e.UserId == userId && e.DeletedAt == null && e.StartedAt >= fromUtc))
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyDictionary<long, string>> RolesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default)
         => await db.Users
             .AsNoTracking()

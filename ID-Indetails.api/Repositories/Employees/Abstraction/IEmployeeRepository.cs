@@ -13,13 +13,14 @@ public interface IEmployeeRepository
 
     Task<EmployeeRow?> GetAsync(long userId, CancellationToken cancellationToken = default);
 
-    /// <summary>Newest first.</summary>
+    /// <summary>Every pay row, superseded ones included, newest first.</summary>
     Task<IReadOnlyList<UserPayHistory>> GetPayHistoryAsync(long userId, CancellationToken cancellationToken = default);
 
     /// <summary>The pay row in force on <paramref name="day"/>: the latest one dated on or before it.</summary>
     Task<UserPayHistory?> GetPayInForceAsync(long userId, DateOnly day, CancellationToken cancellationToken = default);
 
-    Task<DateOnly?> GetLatestPayDateAsync(long userId, CancellationToken cancellationToken = default);
+    /// <summary>The active pay rows, oldest first and tracked, so a pay change can mark the ones it replaces.</summary>
+    Task<IReadOnlyList<UserPayHistory>> ActivePayAsync(long userId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Locks every active super admin's row until the transaction ends and returns how many

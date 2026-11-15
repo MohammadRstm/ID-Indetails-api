@@ -104,9 +104,21 @@ public sealed class EmployeesController(IEmployeeService employeeService, ISignI
     public Task<IReadOnlyList<PayResponse>> GetPay(long userId, CancellationToken cancellationToken)
         => employeeService.GetPayHistoryAsync(userId, cancellationToken);
 
-    /// <summary>A new pay change, from today or an earlier day after the latest change.</summary>
+    /// <summary>
+    /// A pay change, from today or any earlier day: it replaces every active entry from its day onward (kept, marked
+    /// superseded). A change of currency starts on the 1st (422 <c>pay_currency_change_not_first</c>).
+    /// </summary>
     [HttpPost("{userId:long}/pay")]
     [HasPermission(PermissionCodes.EmployeePayManage)]
     public async Task<ActionResult<PayResponse>> ChangePay(long userId, ChangePayRequest request, CancellationToken cancellationToken)
         => StatusCode(StatusCodes.Status201Created, await employeeService.ChangePayAsync(userId, request, cancellationToken));
+
+    /// <summary>
+    /// What a pay change would do, without making it: each month's salary and advance repayment before and after, and,
+    /// for callers with financial:view, the labour and profit of the projects it re-prices. The same request as a change.
+    /// </summary>
+    [HttpPost("{userId:long}/pay/preview")]
+    [HasPermission(PermissionCodes.EmployeePayManage)]
+    public Task<PayPreviewResponse> PreviewPay(long userId, ChangePayRequest request, CancellationToken cancellationToken)
+        => employeeService.PreviewPayAsync(userId, request, cancellationToken);
 }

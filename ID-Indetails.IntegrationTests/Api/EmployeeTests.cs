@@ -253,7 +253,7 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Pay_changes_only_add_to_the_end_of_the_history()
+    public async Task A_pay_change_dated_on_or_before_the_latest_replaces_what_follows()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, designAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
@@ -266,8 +266,9 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
         ((int)first.StatusCode).ShouldBe(201, await first.Content.ReadAsStringAsync());
         (await first.ReadAsync<PayResponse>()).Amount.ShouldBe(1000m);
 
-        await (await Client.PostJsonAsync(url, new { amount = 1200, effectiveFrom = today.AddMonths(-4) }, designAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.PayChangeNotAfterLatest);
+        // dated before the first: it replaces it, which is kept as superseded
+        ((int)(await Client.PostJsonAsync(url, new { amount = 1200, effectiveFrom = today.AddMonths(-4) }, designAdmin.AccessToken)).StatusCode)
+            .ShouldBe(201);
         await (await Client.PostJsonAsync(url, new { amount = 1200, effectiveFrom = today.AddDays(2) }, designAdmin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.PayDateInFuture);
         await (await Client.PostJsonAsync($"/api/employees/{designAdmin.User.Id}/pay", new { amount = 5000 }, designAdmin.AccessToken))
@@ -277,7 +278,7 @@ public class EmployeeTests(ApiFactory api) : IClassFixture<ApiFactory>
             .ShouldBe(201);
 
         var history = await OkAsync<List<PayResponse>>(Client.GetAsync(url, designAdmin.AccessToken));
-        history.Select(p => p.Amount).ShouldBe([1250m, 1000m]);
+        history.Select(p => (p.Amount, Replaced: p.SupersededAt is not null)).ShouldBe([(1250m, false), (1000m, true), (1200m, false)]);
 
         var profile = await OkAsync<EmployeeResponse>(Client.GetAsync($"/api/employees/{employee.User.Id}", designAdmin.AccessToken));
         profile.CurrentPay!.Amount.ShouldBe(1250m);

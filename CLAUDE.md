@@ -121,10 +121,18 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     change.
 - **Pay:**
   - Everyone is paid a monthly salary: there is no hourly pay (removed 15 November 2026).
+  - **Pay is per day.** Each working day someone is employed earns the salary in force that day × its paid minutes ÷
+    the month's paid minutes, so a month is split at a pay change. Work, paid breaks, overtime and whole days off use
+    their own day's rate; undated minutes (a shortfall, excuse minutes) use the month's blended rate.
+  - **Pay changes** ask from when: today by default, any earlier day, closed months included, never a future one. A
+    change dated D replaces every active entry from D onward (kept as superseded), so a mistake is fixed by a change
+    dated on its day. A currency change starts on the 1st. Everything derived from pay is live and follows at once;
+    only an advance's settled amount and write-off are stored. The form previews the effect first
+    (`POST /api/employees/{id}/pay/preview`).
   - The break is a dated company setting. While it is above 0 it is paid but not logged (9–5 with a 60-minute break
     requires 7h and pays 8h). From 1 December 2026 it is 0: the whole 8-hour day is logged and required, and earlier
     months keep their paid break.
-  - The hourly rate is the salary ÷ that month's scheduled paid hours.
+  - The hourly rate of a day is its salary ÷ that month's scheduled paid hours.
   - From 1 November 2026 a salary's overtime is paid only past the month's threshold: max(the working time's
     `overtimeThresholdHours`, 184; the month's expected hours), counting every logged hour plus paid excuses. It is
     fixed whatever the joining date. The premium is a company cost, never put on projects.

@@ -140,7 +140,8 @@ public sealed class SalaryService(
             workingDays,
             await ProjectsAsync(userId, month, result, input, cancellationToken),
             MonthTimeOffResponse.Of(person.Month),
-            await advanceService.ForSalaryAsync(person.User, month, cancellationToken));
+            await advanceService.ForSalaryAsync(person.User, month, cancellationToken),
+            (result.Parts ?? []).Select(p => new SalaryPartResponse(p.From, p.To, p.Salary, p.OvertimeRate, p.Days, p.Pay)).ToList());
     }
 
     /// <summary>The month's work grouped by project, each entry paid as Project pay pays it.</summary>

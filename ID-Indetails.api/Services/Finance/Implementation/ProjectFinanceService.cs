@@ -63,7 +63,10 @@ public sealed class ProjectFinanceService(
     }
 
     public async Task<IReadOnlyList<DepartmentLabour>> LabourByDepartmentAsync(Project project, CancellationToken cancellationToken = default)
-        => DepartmentLabourOf(project.Id, await LoadAsync([project], cancellationToken));
+    {
+        var loaded = await LoadAsync([project], cancellationToken);
+        return DepartmentLabourOf(project.Id, loaded, await CalendarsOfAsync(loaded, cancellationToken));
+    }
 
     public async Task<IReadOnlyDictionary<long, IReadOnlyList<DepartmentLabour>>> DepartmentLabourAsync(
         IReadOnlyCollection<Project> projects,
@@ -75,10 +78,15 @@ public sealed class ProjectFinanceService(
         }
 
         var loaded = await LoadAsync(projects, cancellationToken);
-        return projects.ToDictionary(p => p.Id, p => DepartmentLabourOf(p.Id, loaded));
+        var calendars = await CalendarsOfAsync(loaded, cancellationToken);
+        return projects.ToDictionary(p => p.Id, p => DepartmentLabourOf(p.Id, loaded, calendars));
     }
 
-    private IReadOnlyList<DepartmentLabour> DepartmentLabourOf(long projectId, Loaded loaded)
+    /// <summary>The calendars of everyone with a pay rate, for the month rate the department screens show.</summary>
+    private Task<IReadOnlyDictionary<long, PersonCalendar>> CalendarsOfAsync(Loaded loaded, CancellationToken cancellationToken)
+        => payrollInputs.CalendarsAsync(loaded.PayRates.Select(r => r.UserId).Distinct().ToList(), cancellationToken);
+
+    private IReadOnlyList<DepartmentLabour> DepartmentLabourOf(long projectId, Loaded loaded, IReadOnlyDictionary<long, PersonCalendar> calendars)
     {
         var entries = loaded.Entries[projectId].ToList();
 
@@ -95,9 +103,11 @@ public sealed class ProjectFinanceService(
             (teamOn.GetValueOrDefault((b.UserId, b.Cost.Day)), b.UserId, b.Cost.Day, Minutes: 0, Items: (IReadOnlyList<Cost>)[b.Cost], OutsideScope: false)));
 
         var rates = loaded.PayRates.GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => g.OrderBy(r => r.EffectiveFrom).ToList());
-        decimal? RateIn(long userId, DateOnly day)
-            => rates.TryGetValue(userId, out var history) && ProjectFinance.RateOn(history, day) is var rate
-                ? loaded.Rates.ToUsd(rate.HourlyCost, rate.Currency, day)
+        // the month's blended rate: a month with a pay change shows the rate its days were paid at together
+        decimal? RateIn(long userId, DateOnly month)
+            => rates.TryGetValue(userId, out var history) && calendars.TryGetValue(userId, out var calendar)
+                && ProjectFinance.MonthRate(history, month, calendar) is { } rate
+                ? loaded.Rates.ToUsd(rate.HourlyCost, rate.Currency, month)
                 : null;
 
         return costs
@@ -112,7 +122,7 @@ public sealed class ProjectFinanceService(
                     g.Key.Month,
                     g.Sum(c => c.Minutes),
                     items.Sum(i => i.Usd ?? 0),
-                    RateIn(g.Key.UserId, g.Min(c => c.Day)),
+                    RateIn(g.Key.UserId, g.Key.Month),
                     items.Where(i => i.Usd is null)
                         .GroupBy(i => i.Item.Currency.ToUpperInvariant())
                         .Select(u => new ProjectFinance.UnconvertedCost(CostSource.Labour, u.Key, u.Sum(i => i.Item.Amount)))
