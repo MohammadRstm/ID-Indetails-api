@@ -212,6 +212,8 @@ The `SalaryAdvances` migration (13 Nov 2026) is additive ([company.md](company.m
 
 The `RemovePayBasis` migration (15 Nov 2026) removes hourly pay ([employees.md](employees.md#pay)). It first turns each `user_pay_history` row with `basis = 'hourly'` into a monthly one: the amount stays as it is and `overtime_rate` becomes `ROUND(amount / 184, 2)`, the rate a salary is given. Monthly rows aren't touched: amount, currency, overtime rate and `effective_from` stay exactly as they were. It then drops `ck_user_pay_history_basis` and the `basis` column. `Down` adds the column back as `'monthly'` for every row, with its check; the hourly rows can't come back.
 
+The `SupersededPayEntries` migration (15 Nov 2026) lets a pay change correct what follows it ([employees.md](employees.md#pay)). It adds to `user_pay_history`: `superseded_at` (datetime(3), null) and `superseded_by_id` (a foreign key to `users`, null, with `ix_user_pay_history_superseded_by_id`), with `ck_user_pay_history_superseded` (both set or both empty), and the stored generated column `active_effective_from` (`effective_from` while active, NULL once superseded). The unique index on (`user_id`, `effective_from`) becomes `ix_user_pay_history_user_id_active_effective_from` on (`user_id`, `active_effective_from`); the new index is made first, so `user_id`'s foreign key always has one. No data changes: every row stays active. `Down` deletes the superseded rows (only active ones fit the old index) and restores the old index.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Who connects

@@ -315,6 +315,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IHourExcuseService, HourExcuseService>();
         services.AddScoped<ITimeOffService, TimeOffService>();
         services.AddScoped<ISalaryAdvanceSchedules, SalaryAdvanceSchedules>();
+        services.AddScoped<IPayChangeEffects, PayChangeEffects>();
         services.AddScoped<ISalaryAdvanceService, SalaryAdvanceService>();
         services.AddScoped<ITimeOffWatch, TimeOffWatch>();
         services.AddScoped<ITimeOffSchedule, TimeOffSchedule>();

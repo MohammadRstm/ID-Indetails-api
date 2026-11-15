@@ -69,7 +69,7 @@ public static class ErrorCodes
     public const string EmailUnchanged = "email_unchanged";
     public const string SuperAdminHasNoDomain = "super_admin_has_no_domain";
     public const string PayDateInFuture = "pay_date_in_future";
-    public const string PayChangeNotAfterLatest = "pay_change_not_after_latest";
+    public const string PayCurrencyChangeNotFirst = "pay_currency_change_not_first";
 
     // Teams
     public const string TeamNameTaken = "team_name_taken";
