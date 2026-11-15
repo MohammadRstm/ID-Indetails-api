@@ -116,6 +116,9 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
   - **Profit floor:** a client project with an agreed amount can't have its profit lowered to zero or below. The change
     is refused (`profit_floor`) and kept as a blocked change, which only someone with `financial:view` can force
     through, once. Changes that raise profit always pass ([projects.md](docs/projects.md), "Profit floor").
+  - **A pay change** that takes a running client project to zero profit is held (`pay_change_held`, blocked change
+    `pay_change`): only super admins are told, with no amounts, and only they force or dismiss it, never on their own
+    pay. A forced change stays the requester's, and the employee hears of it only when it lands.
   - Supervision taken (the company withdrawing its supervision fee) is not a cost. Cash in account = received − cost −
     supervision taken − moved to the pocket + paid by it. A payment's money is never edited; only its account label can
     change.

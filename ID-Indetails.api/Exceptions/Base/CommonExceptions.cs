@@ -73,6 +73,24 @@ public sealed class ProfitFloorException(long projectId, string projectTitle, st
         projectId, projectTitle, domain, kind, payload, requestedById);
 
 /// <summary>
+/// 422 <c>pay_change_held</c>. The pay change would take a running client project's profit to zero or below
+/// (<paramref name="projectId"/>, the hardest hit; the payload lists them all). Kept for the super admins, who alone can
+/// force it through or dismiss it.
+/// </summary>
+public sealed class PayChangeHeldException(
+    long projectId, string projectTitle, string domain, string payload, long requestedById, string personName, DateOnly effectiveFrom, int projectCount)
+    : BlockedChangeException(ErrorCodes.PayChangeHeld,
+        "This pay change would take a project's profit to zero or below, so it wasn't saved. The super admins were asked to decide.",
+        projectId, projectTitle, domain, BlockedChangeKind.PayChange, payload, requestedById)
+{
+    public string PersonName { get; } = personName;
+
+    public DateOnly EffectiveFrom { get; } = effectiveFrom;
+
+    public int ProjectCount { get; } = projectCount;
+}
+
+/// <summary>
 /// 422 <c>department_not_on_project</c>. Hours logged by someone whose department isn't on the project: kept, and they
 /// go through once the department is added. Its owner and the super admins are told.
 /// </summary>

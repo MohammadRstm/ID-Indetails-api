@@ -184,6 +184,12 @@ public static class NotificationKinds
     /// </summary>
     public const string ChangeBlocked = "change_blocked";
 
+    /// <summary>
+    /// A pay change was held because it would take a running client project's profit to zero or below (subject: the
+    /// blocked change). To the super admins only, who alone force it through or dismiss it; it carries no amounts.
+    /// </summary>
+    public const string PayChangeHeld = "pay_change_held";
+
     /// <summary>A client project's profit is down to 10% of its agreed amount or less (subject: the project). Once per project, to whoever sees the domain's money.</summary>
     public const string ProfitLow = "profit_low";
 

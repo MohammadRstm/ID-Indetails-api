@@ -328,7 +328,7 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_blocked_changes_decided", "(`status` = 'pending') = (`decided_at` IS NULL)");
 
-                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw', 'work_entry_department', 'design_vo')");
+                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw', 'work_entry_department', 'design_vo', 'pay_change')");
 
                             t.HasCheckConstraint("ck_blocked_changes_status", "`status` IN ('pending', 'forced', 'dismissed')");
                         });

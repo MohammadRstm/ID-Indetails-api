@@ -120,6 +120,7 @@ Everyone is paid a monthly salary: there is no hourly pay (removed 15 Nov 2026; 
 - Everything worked out from pay follows the new history at once: Salaries, its PDF and CSV, the year, project labour and Project pay, the company overview, MyTime and advance repayments. Nothing is stored but an advance's settled amount and write-off.
 - **Pay is per day** (see [company.md](company.md), "Salaries"): each working day someone is employed earns the salary in force that day × its paid minutes ÷ the month's, so a month with a change is split at it.
 - Only a change that lands notifies the employee (`pay_changed`, with the day and no amount).
+- **The profit floor:** a change that would take a running client project's profit to zero or below is held for the super admins, who alone force or dismiss it (`422 pay_change_held`, see [projects.md](projects.md), "Profit floor").
 
 **The preview** (`POST /api/employees/{id}/pay/preview`, the same body) makes the change inside a transaction, measures it, and rolls it back, so it shows exactly what the change lands:
 - `replaces`: the active entries from its day on that it would replace.

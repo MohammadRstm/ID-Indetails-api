@@ -24,6 +24,7 @@ public static class NotificationAccess
         [NotificationKinds.PocketRequested] = PermissionCodes.FinancialView,
         [NotificationKinds.PocketRoundOff] = PermissionCodes.FinancialView,
         [NotificationKinds.ChangeBlocked] = PermissionCodes.FinancialView,
+        [NotificationKinds.PayChangeHeld] = PermissionCodes.EmployeePayManage,
         [NotificationKinds.ProfitLow] = PermissionCodes.FinancialView,
         [NotificationKinds.ProfitAtZero] = PermissionCodes.FinancialView,
         [NotificationKinds.TimeOffRequested] = PermissionCodes.TimeOffDecide,

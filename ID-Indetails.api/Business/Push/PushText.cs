@@ -27,6 +27,7 @@ public static class PushText
         [NotificationKinds.PocketRequested] = new("Pocket money", "A site asks for pocket money. Open ID InDetails to decide."),
         [NotificationKinds.PocketRoundOff] = new("Pocket money", "A site's profit can be rounded off into the pocket money. Open ID InDetails to see it."),
         [NotificationKinds.ChangeBlocked] = new("Project money", "A change was stopped to keep a project above zero profit. Open ID InDetails to decide."),
+        [NotificationKinds.PayChangeHeld] = new("Pay", "A pay change was held to keep a project above zero profit. Open ID InDetails to decide."),
         [NotificationKinds.ProfitLow] = new("Project money", "A project is close to zero profit."),
         [NotificationKinds.ProfitAtZero] = new("Project money", "A project is at zero profit or below."),
         [NotificationKinds.InvoiceOverdue] = new("Invoices", "An invoice needs your attention."),
