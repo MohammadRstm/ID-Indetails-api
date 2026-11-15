@@ -264,9 +264,9 @@ public sealed class BlockedChangeService(
         {
             var held = ReadPay(change);
             var user = await users.GetByIdAsync(held.UserId, cancellationToken);
-            var name = user is null ? "Someone" : PersonName.Of(user.FirstName, user.LastName, user.Email);
+            var whose = user is null ? "Someone" : PersonName.Of(user.FirstName, user.LastName, user.Email);
             var from = held.Request.EffectiveFrom is { } day ? $" from {day:d MMM yyyy}" : string.Empty;
-            return $"Pay of {name}: {held.Request.Amount:N2} {held.Request.Currency.ToUpperInvariant()} a month{from}";
+            return $"Pay of {whose}: {held.Request.Amount:N2} {held.Request.Currency.ToUpperInvariant()} a month{from}";
         }
 
         if (change.Kind == BlockedChangeKind.DesignVo)
