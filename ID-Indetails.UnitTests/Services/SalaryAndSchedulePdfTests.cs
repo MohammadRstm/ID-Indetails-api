@@ -55,7 +55,7 @@ public class SalaryAndSchedulePdfTests
         1.5m,
         new PagedResponse<SalaryRowResponse>(rows, 1, rows.Count, rows.Count),
         [new SalaryTotalResponse("USD", rows.Count, rows.Sum(r => r.BasePay), rows.Sum(r => r.OvertimePay), rows.Sum(r => r.Deduction), rows.Sum(r => r.Total), rows.Sum(r => r.EarnedSoFar), rows.Sum(r => r.AdvanceRepayment ?? 0), rows.Sum(r => r.ToHandOver))],
-        new SalarySummaryResponse(rows.Count, rows.Count, 0, 0, 0, 0, 0, 0, null),
+        new SalarySummaryResponse(rows.Count, 0, 0, 0, 0, 0, 0, null),
         [new PersonWithoutPayResponse(99, "Unpaid Person", "employee", "design")],
         new SalaryAdvanceSummaryResponse(0, [], 0));
 
