@@ -52,7 +52,7 @@ public class DocumentPdfTests
             CreatedBy = new PersonRefResponse(1, "Rana Saab"),
             CreatedAt = new DateTime(2026, 9, 30, 9, 0, 0, DateTimeKind.Utc),
         },
-        "Villa Haddad", "Broummana", "Haddad Holdings");
+        "Villa Haddad", "ID26Q4003-VH", "Broummana", "Haddad Holdings");
 
     [Fact]
     public void A_design_variation_order_is_one_page_with_the_companys_mark_and_says_when_it_waits_for_approval()
