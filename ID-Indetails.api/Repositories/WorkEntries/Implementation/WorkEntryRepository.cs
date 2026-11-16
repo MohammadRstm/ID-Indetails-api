@@ -113,7 +113,8 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             .OrderByDescending(p => p.CreatedAt)
             .ThenByDescending(p => p.Id)
             .Select(p => new WorkProject(
-                p.Id, p.Title, p.Description, p.Client != null ? p.Client.Name : null, p.Status, p.ProgressPct, p.StartDate, p.CreatedAt, p.Icon, p.Tint, p.Location))
+                p.Id, p.Title, p.Description, p.Client != null ? p.Client.Name : null, p.Status, p.ProgressPct, p.StartDate, p.CreatedAt, p.Icon, p.Tint, p.Location,
+                p.ProjectCode + "-" + p.BuildingCode))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<Contribution>> ContributionsAsync(

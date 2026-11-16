@@ -57,9 +57,11 @@ public sealed record ContributorResponse(long Id, string Name);
 public sealed record LastActivityResponse(long PersonId, string PersonName, DateTime StartedAt);
 
 /// <summary>An open Design project with the caller's own time on it. Other people's hours stay private.</summary>
+/// <param name="Code">The full code, ID26Q4001-VK.</param>
 public sealed record MyProjectResponse(
     long Id,
     string Title,
+    string Code,
     string? Description,
     string? Icon,
     string? Tint,

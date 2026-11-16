@@ -29,6 +29,7 @@ public class ProjectLookTests(ApiFactory api) : IClassFixture<ApiFactory>
         var mine = (await response.ReadAsync<List<MyProjectResponse>>()).Single(p => p.Id == project.Id);
         mine.Icon.ShouldBe("compass");
         mine.Tint.ShouldBe("#3366ff");
+        mine.Code.ShouldBe(project.Code);
         mine.LastActivity!.PersonId.ShouldBe(designer.User.Id);
     }
 }
