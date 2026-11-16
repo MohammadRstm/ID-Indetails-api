@@ -31,7 +31,7 @@ public static class BoqPdf
         PdfLayout.AddFacts(
             section,
             [new Fact("Prepared for", document.ClientName)],
-            [new Fact("Project", document.ProjectTitle, document.ProjectLocation)],
+            [Fact.Project(document.ProjectTitle, document.ProjectCode, document.ProjectLocation)],
             [new Fact("Date", PdfLayout.Date(date))]);
         PdfLayout.AddTitle(section, boq.Title, $"{label} {number}");
         if (boq.Kind == BoqKind.Client)

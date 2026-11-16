@@ -5,7 +5,8 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Billing;
 
-public sealed record InvoiceProjectResponse(long Id, string Title, string? Location = null);
+/// <param name="Code">The project's full code, ID26Q4001-VK.</param>
+public sealed record InvoiceProjectResponse(long Id, string Title, string Code, string? Location = null);
 
 public sealed record InvoiceClientResponse(long Id, string DisplayName);
 

@@ -5,7 +5,7 @@ using ID_Indetails.api.Models;
 namespace ID_Indetails.api.Services.Boqs.Abstraction;
 
 /// <summary>A client BOQ or VO with what its PDF and email show beside it: the project and its client.</summary>
-public sealed record BoqDocument(BoqDetailResponse Boq, string ProjectTitle, string? ProjectLocation, string ClientName);
+public sealed record BoqDocument(BoqDetailResponse Boq, string ProjectTitle, string ProjectCode, string? ProjectLocation, string ClientName);
 
 /// <summary>
 /// Bills of quantities of Execution client projects in the caller's visible domains: internal drafts, the client BOQ and

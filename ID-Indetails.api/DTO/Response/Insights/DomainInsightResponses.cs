@@ -9,7 +9,8 @@ namespace ID_Indetails.api.DTO.Response.Insights;
 public sealed record ProjectRiskResponse(ProjectRiskKind Kind, decimal? Amount, string Fact, string Rule);
 
 /// <summary>One project and everything that fired for it, most pressing first.</summary>
-public sealed record ProjectRiskGroupResponse(long ProjectId, string Title, ProjectStatus Status, IReadOnlyList<ProjectRiskResponse> Risks);
+/// <param name="Code">The project's full code, ID26Q4001-VK.</param>
+public sealed record ProjectRiskGroupResponse(long ProjectId, string Title, string Code, ProjectStatus Status, IReadOnlyList<ProjectRiskResponse> Risks);
 
 /// <summary>How many projects have a risk of this kind.</summary>
 public sealed record RiskCountResponse(ProjectRiskKind Kind, int Projects);

@@ -215,9 +215,11 @@ public sealed record SalaryDayResponse(DateOnly Date, int RequiredMinutes);
 /// <param name="MadeUpMinutes">Overtime that made up hours they were short, paid as normal hours.</param>
 /// <param name="OvertimeMinutes">The rest of the overtime, paid at the overtime rate.</param>
 /// <param name="Pay">In <paramref name="Currency"/>; a person paid in two currencies that month has a row for each.</param>
+/// <param name="Code">The project's full code, ID26Q4001-VK.</param>
 public sealed record SalaryProjectResponse(
     long ProjectId,
     string Title,
+    string Code,
     string? Icon,
     string? Tint,
     int Entries,

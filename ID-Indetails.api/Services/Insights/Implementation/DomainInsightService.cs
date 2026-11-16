@@ -94,7 +94,7 @@ public sealed class DomainInsightService(
             TotalsOf(result.Total),
             result.Months.Select(m => new LabourMonthResponse(m.Start, TotalsOf(m.Totals))).ToList(),
             result.Projects.Select(p => new LabourProjectResponse(
-                p.Id!.Value, byId[p.Id.Value].Title, byId[p.Id.Value].BillingType, TotalsOf(p.Totals), p.LabourShare)).ToList(),
+                p.Id!.Value, byId[p.Id.Value].Title, CodeOf(byId[p.Id.Value]), byId[p.Id.Value].BillingType, TotalsOf(p.Totals), p.LabourShare)).ToList(),
             result.Departments.Select(d => new LabourDepartmentResponse(
                 d.Id,
                 d.Id is { } id ? teamNames.GetValueOrDefault(id, "A former department") : "No department",
@@ -166,6 +166,7 @@ public sealed class DomainInsightService(
             .Select(g => new ProjectRiskGroupResponse(
                 g.ProjectId,
                 byId[g.ProjectId].Title,
+                CodeOf(byId[g.ProjectId]),
                 byId[g.ProjectId].Status,
                 g.Risks.Select(r => new ProjectRiskResponse(r.Kind, r.Amount is { } amount ? PeriodMoney.Round(amount) : null, r.Fact, r.Rule)).ToList()))
             .ToList();
@@ -367,4 +368,6 @@ public sealed class DomainInsightService(
             assumptions,
             leftOut);
     }
+
+    private static string CodeOf(Project project) => ProjectCodeRules.Full(project.ProjectCode, project.BuildingCode);
 }

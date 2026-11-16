@@ -26,7 +26,8 @@ public sealed record WorkEntryView(
     FileView? Attachment,
     string? ProjectIcon = null,
     string? ProjectTint = null,
-    bool OutsideScope = false);
+    bool OutsideScope = false,
+    string? ProjectCode = null);
 
 /// <summary>
 /// Live entries on Design projects. Times are UTC; <paramref name="From"/> is inclusive and <paramref name="To"/>

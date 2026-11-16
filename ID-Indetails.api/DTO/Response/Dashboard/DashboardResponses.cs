@@ -5,7 +5,7 @@ namespace ID_Indetails.api.DTO.Response.Dashboard;
 
 public sealed record StatusTotalResponse(ProjectStatus Status, int Count);
 
-public sealed record RunningProjectResponse(long ProjectId, string Title, DateOnly StartDate, int Days);
+public sealed record RunningProjectResponse(long ProjectId, string Title, string Code, DateOnly StartDate, int Days);
 
 /// <summary>The cards of a domain dashboard that hold no money or hours: the key figures and projects by status.</summary>
 /// <param name="Clients">Clients that aren't archived.</param>
@@ -17,7 +17,7 @@ public sealed record DashboardResponse(
     IReadOnlyList<StatusTotalResponse> ProjectsByStatus,
     IReadOnlyList<RunningProjectResponse> LongestRunning);
 
-public sealed record DeadlineProjectResponse(long Id, string Title, string? Icon, string? Tint);
+public sealed record DeadlineProjectResponse(long Id, string Title, string Code, string? Icon, string? Tint);
 
 /// <param name="DaysLeft">Days from today to the deadline; negative once overdue.</param>
 public sealed record DeadlineResponse(

@@ -111,7 +111,8 @@ public sealed class PayrollRepository(IdIndetailsDbContext db) : IPayrollReposit
             .AsNoTracking()
             .Where(p => p.DomainCode == domain)
             .OrderByDescending(p => p.CreatedAt)
-            .Select(p => new ProjectLabel(p.Id, p.Title, p.Client != null ? p.Client.Name : null, p.Client != null ? p.Client.Organisation : null))
+            .Select(p => new ProjectLabel(
+                p.Id, p.Title, p.Client != null ? p.Client.Name : null, p.Client != null ? p.Client.Organisation : null, p.ProjectCode + "-" + p.BuildingCode))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyDictionary<long, ProjectLook>> ProjectLooksAsync(

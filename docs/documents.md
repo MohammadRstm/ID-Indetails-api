@@ -30,7 +30,7 @@ is created and corrected by holders of `financial:write`.
 
 ## What each document shows
 
-Every document opens with the company's letterhead (name, website and address from the company settings, and the logo when it is a PNG or JPEG). Every page of what the client receives (invoices, client BOQs and VOs, and the client project summary) has the company's mark behind it (`PdfWatermark`): the split "0" of the logo in pale green, half of it at the middle of the right edge and a quarter of it in the bottom-left corner, both fading out from the page edge before the content. It is drawn once as a faded picture behind the text, which stays text. The internal project report has none. Every page ends with a footer line and "Page X of Y". Long tables run onto more pages and repeat their header row. Money is written in full (`$1,250.00`, `1,500,000 LBP`), and dates as `Sep 30, 2026` in the company time zone.
+Every document opens with the company's letterhead (name, website and address from the company settings, and the logo when it is a PNG or JPEG). Every page of what the client receives (invoices, client BOQs and VOs, and the client project summary) has the company's mark behind it (`PdfWatermark`): the split "0" of the logo in pale green, half of it at the middle of the right edge and a quarter of it in the bottom-left corner, both fading out from the page edge before the content. It is drawn once as a faded picture behind the text, which stays text. The internal project report has none. Every page ends with a footer line and "Page X of Y". Long tables run onto more pages and repeat their header row. Money is written in full (`$1,250.00`, `1,500,000 LBP`), and dates as `Sep 30, 2026` in the company time zone. Where a document names its project, the project's full code (`ID26Q4001-VK`, see [projects.md](projects.md#project-codes)) is written under the name, with where it is.
 
 - **Invoice:**
   - Billed to (`billToName` or the client, and `billToContact`), the project, the issue date and the due date.
@@ -47,6 +47,7 @@ Every document opens with the company's letterhead (name, website and address fr
   - `from` and `to` narrow the work counted (hours, team, the work table and the log). They default to the project's start and today, or its completion day. Money is always the whole project.
   - `sections` (repeat the key) picks from: `summary`, `info`, `timeline`, `work`, `expenses`, `financials`, `billing`, `client`, `log`. The default is all of them except `log`, which lists the 12 most recent entries. `billing` is left out of internal projects.
   - The figures come from the same services as the project page (project money, project work, timeline, expenses, invoices, payments, client), so the report and the page always agree.
+  - Its title line and its project information give the project's full code (it used to give its id as "Reference").
   - The prototype's "Performance" charts are not in the PDF yet.
 - **Salaries** (internal, landscape, no watermark; its footer says it contains pay information):
   - The title "Salaries · November 2026", "In progress, to Nov 11, 2026" for the current month (otherwise "Closed month") and the filters in force (business, role, search).

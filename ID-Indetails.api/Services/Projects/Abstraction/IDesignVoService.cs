@@ -4,7 +4,7 @@ using ID_Indetails.api.DTO.Response.Projects;
 namespace ID_Indetails.api.Services.Projects.Abstraction;
 
 /// <summary>A Design variation order with what its PDF and email say about the client and the project.</summary>
-public sealed record DesignVoDocument(DesignVoResponse Vo, string ProjectTitle, string? ProjectLocation, string ClientName);
+public sealed record DesignVoDocument(DesignVoResponse Vo, string ProjectTitle, string ProjectCode, string? ProjectLocation, string ClientName);
 
 /// <summary>
 /// Variation orders of Design client projects: read with <c>financial:view</c>, made, confirmed and cancelled with

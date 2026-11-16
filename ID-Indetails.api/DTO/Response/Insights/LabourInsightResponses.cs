@@ -11,7 +11,8 @@ public sealed record LabourTotalsResponse(decimal Cost, int Minutes, decimal Out
 public sealed record LabourMonthResponse(DateOnly Month, LabourTotalsResponse Totals);
 
 /// <param name="LabourShare">Its part of the span's labour cost, a fraction; null with no cost.</param>
-public sealed record LabourProjectResponse(long ProjectId, string Title, BillingType BillingType, LabourTotalsResponse Totals, decimal? LabourShare);
+/// <param name="Code">The project's full code, ID26Q4001-VK.</param>
+public sealed record LabourProjectResponse(long ProjectId, string Title, string Code, BillingType BillingType, LabourTotalsResponse Totals, decimal? LabourShare);
 
 /// <summary>A department's labour, never its people.</summary>
 /// <param name="TeamId">Null for hours logged by people in no department.</param>

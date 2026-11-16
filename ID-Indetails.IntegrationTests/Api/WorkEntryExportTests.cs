@@ -43,7 +43,7 @@ public class WorkEntryExportTests(ApiFactory api) : IClassFixture<ApiFactory>
         var lines = await LinesAsync(await Client.GetAsync($"/api/work-entries/export?projectId={project.Id}", admin.AccessToken));
         // the hours paid as overtime cost the overtime rate (the pay's own, x the multiplier): at the seeded 1x, an
         // overtime rate equal to the hour's worth costs the same either way
-        lines[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Department,Project,Client,Task,Outside scope," +
+        lines[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Department,Project,Code,Client,Task,Outside scope," +
             "Hourly rate,Overtime paid hours,Overtime rate,Currency,Labour cost,Entry id");
         lines.Length.ShouldBe(2);
         lines[1].ShouldContain(",1.50,");
@@ -51,7 +51,8 @@ public class WorkEntryExportTests(ApiFactory api) : IClassFixture<ApiFactory>
         lines[1].ShouldEndWith(",20.00,USD,30.00," + entry.Id);
 
         var withoutMoney = await LinesAsync(await Client.GetAsync($"/api/work-entries/export?projectId={project.Id}", lead.AccessToken));
-        withoutMoney[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Department,Project,Client,Task,Outside scope,Entry id");
+        withoutMoney[0].ShouldBe("Date,Weekday,Start,End,Hours,Overtime hours,Employee,Email,Department,Project,Code,Client,Task,Outside scope,Entry id");
+        withoutMoney[1].ShouldContain($",{project.Title},{project.Code},");
         withoutMoney[1].ShouldEndWith("\"Logo, second round\",No," + entry.Id);
 
         await (await Client.GetAsync("/api/work-entries/export", designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
