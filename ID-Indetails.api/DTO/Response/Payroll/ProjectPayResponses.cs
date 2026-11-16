@@ -24,9 +24,11 @@ public sealed record ProjectPayPersonResponse(
     string? Position,
     decimal? MonthlySalary);
 
+/// <param name="Code">The project's full code, ID26Q4001-VK.</param>
 public sealed record ProjectPayProjectResponse(
     long ProjectId,
     string Title,
+    string Code,
     string? Client,
     int NormalMinutes,
     int OvertimeMinutes,

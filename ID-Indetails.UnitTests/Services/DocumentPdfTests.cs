@@ -76,7 +76,7 @@ public class DocumentPdfTests
     {
         Id = 7,
         Number = "HL-2026-014",
-        Project = new InvoiceProjectResponse(3, "Villa Haddad"),
+        Project = new InvoiceProjectResponse(3, "Villa Haddad", "ID26Q4003-VH"),
         Client = new InvoiceClientResponse(2, "Haddad Holdings"),
         Currency = "USD",
         Total = lines * 100m,
@@ -114,7 +114,7 @@ public class DocumentPdfTests
             null, null, null, 4, adjustment, value, items, subtotal, total - subtotal, 0.10m, total * 0.10m, 0.11m, total * 0.11m, total * 1.21m + permitsUsd,
             permitsUsd, [], null, null);
 
-        return new BoqDocument(boq, "Site 12", "Beit Mery", "Haddad Holdings");
+        return new BoqDocument(boq, "Site 12", "ID26Q4012-S12", "Beit Mery", "Haddad Holdings");
     }
 
     [Theory]

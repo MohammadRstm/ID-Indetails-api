@@ -254,7 +254,7 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
         ProjectStatus ProjectStatus, string ProjectDomain, long? ClientId, string? ClientName, string? ClientOrganisation, string Description,
         DateTime StartedAt, DateTime EndedAt, int Minutes, DateTime CreatedAt, DateTime? UpdatedAt, int CommentCount,
         long? AttachmentId, string? AttachmentName, string? AttachmentMimeType, long? AttachmentSize, DateTime? AttachmentCreatedAt,
-        string? ProjectIcon, string? ProjectTint, bool OutsideScope);
+        string? ProjectIcon, string? ProjectTint, bool OutsideScope, string ProjectCode);
 
     /// <summary>Loads the entries of an already ordered and paged query, with the details shown for each.</summary>
     private static async Task<IReadOnlyList<WorkEntryView>> ViewsAsync(IQueryable<WorkEntry> entries, CancellationToken cancellationToken)
@@ -264,7 +264,7 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
             e.Project.Status, e.Project.DomainCode, e.Project.ClientId, e.Project.Client != null ? e.Project.Client.Name : null,
             e.Project.Client != null ? e.Project.Client.Organisation : null, e.Description, e.StartedAt, e.EndedAt, e.DurationMinutes, e.CreatedAt, e.UpdatedAt, e.Comments.Count(),
             e.AttachmentFileId, e.AttachmentFile!.OriginalName, e.AttachmentFile.MimeType, e.AttachmentFile.SizeBytes, e.AttachmentFile.CreatedAt,
-            e.Project.Icon, e.Project.Tint, e.OutsideScope))
+            e.Project.Icon, e.Project.Tint, e.OutsideScope, e.Project.ProjectCode + "-" + e.Project.BuildingCode))
             .ToListAsync(cancellationToken);
 
         return rows.Select(r => new WorkEntryView(
@@ -276,6 +276,7 @@ public sealed class WorkEntryRepository(IdIndetailsDbContext db) : IWorkEntryRep
                 : null,
             r.ProjectIcon,
             r.ProjectTint,
-            r.OutsideScope)).ToList();
+            r.OutsideScope,
+            r.ProjectCode)).ToList();
     }
 }

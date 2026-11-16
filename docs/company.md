@@ -50,7 +50,7 @@ Settings, working time, personal schedules and company overhead. These belong to
 | `POST /api/company/salary-advances/{id}/cancel` | `salary_advance:manage` | `{ note? }`: cancels an advance given by mistake, in the month it was given |
 | `POST /api/company/salary-advances/{id}/settle` | `salary_advance:manage` | `{ kind: "cash" \| "written_off", note? }`: closes what is left |
 | `GET /api/company/project-pay?unit=week\|month\|quarter&date=&projectId=` | `salary:view` | What each Design project paid its people in a period |
-| `GET /api/company/project-pay/export?…` | `salary:view` | The same as CSV (10 a minute per user) |
+| `GET /api/company/project-pay/export?…` | `salary:view` | The same as CSV, each project with its full code (10 a minute per user) |
 | `POST /api/employees/{id}/hour-excuses` | `hours:excuse` | Excuses minutes, days or the whole month, paid or unpaid |
 | `DELETE /api/hour-excuses/{id}` | `hours:excuse` | Removes an excuse (kept in history) |
 

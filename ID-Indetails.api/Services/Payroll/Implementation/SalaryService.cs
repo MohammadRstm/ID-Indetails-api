@@ -176,16 +176,17 @@ public sealed class SalaryService(
             .ToList();
 
         var ids = priced.Select(p => p.ProjectId).Distinct().ToList();
-        var titles = (await payroll.ProjectsAsync(DomainCodes.Design, cancellationToken))
+        var labels = (await payroll.ProjectsAsync(DomainCodes.Design, cancellationToken))
             .Where(p => ids.Contains(p.Id))
-            .ToDictionary(p => p.Id, p => p.Title);
+            .ToDictionary(p => p.Id);
         var looks = await payroll.ProjectLooksAsync(ids, cancellationToken);
 
         return priced
             .GroupBy(p => (p.ProjectId, p.Pay.Currency))
             .Select(g => new SalaryProjectResponse(
                 g.Key.ProjectId,
-                titles.GetValueOrDefault(g.Key.ProjectId, "Project"),
+                labels.GetValueOrDefault(g.Key.ProjectId)?.Title ?? "Project",
+                labels.GetValueOrDefault(g.Key.ProjectId)?.Code ?? string.Empty,
                 looks.GetValueOrDefault(g.Key.ProjectId)?.Icon,
                 looks.GetValueOrDefault(g.Key.ProjectId)?.Tint,
                 g.Count(),

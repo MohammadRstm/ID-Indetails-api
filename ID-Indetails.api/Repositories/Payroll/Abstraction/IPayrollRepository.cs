@@ -61,6 +61,6 @@ public sealed record WorkEntryTime(long Id, long UserId, long ProjectId, DateTim
 
 public sealed record RoleChangeRow(long UserId, DateTime OccurredAt, string From, string To);
 
-public sealed record ProjectLabel(long Id, string Title, string? ClientName, string? ClientOrganisation);
+public sealed record ProjectLabel(long Id, string Title, string? ClientName, string? ClientOrganisation, string Code);
 
 public sealed record ProjectLook(string? Icon, string? Tint);

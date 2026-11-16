@@ -15,7 +15,7 @@ public class EmailTests
     {
         Id = 7,
         Number = "HL-2026-014",
-        Project = new InvoiceProjectResponse(3, "Villa <Haddad>"),
+        Project = new InvoiceProjectResponse(3, "Villa <Haddad>", "ID26Q4003-VH"),
         Client = new InvoiceClientResponse(2, "Haddad Holdings"),
         Currency = "USD",
         Total = 1200m,

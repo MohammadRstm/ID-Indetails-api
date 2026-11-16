@@ -11,7 +11,12 @@ namespace ID_Indetails.api.Services.Documents.Implementation;
 public sealed record Letterhead(string CompanyName, string? Address, string? Website, byte[]? Logo);
 
 /// <param name="Note">A smaller line under the value.</param>
-public sealed record Fact(string Label, string Value, string? Note = null);
+public sealed record Fact(string Label, string Value, string? Note = null)
+{
+    /// <summary>A document's project: its name, with its full code and where it is under it.</summary>
+    public static Fact Project(string title, string code, string? location)
+        => new("Project", title, string.IsNullOrWhiteSpace(location) ? code : $"{code} · {location}");
+}
 
 public sealed record TableColumn(string Header, double WidthCm, bool AlignRight = false);
 

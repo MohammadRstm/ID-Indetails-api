@@ -79,9 +79,11 @@ public sealed record FinanceMonthResponse(
     IReadOnlyList<UnconvertedCostResponse> Unconverted);
 
 /// <summary>A project's all-time money, as the Financials projects table shows it.</summary>
+/// <param name="Code">The project's full code, ID26Q4001-VK.</param>
 public sealed record FinanceProjectResponse(
     long ProjectId,
     string Title,
+    string Code,
     string? ClientName,
     ProjectStatus Status,
     BillingType BillingType,

@@ -53,6 +53,7 @@ public sealed class ProjectPayService(
                 return new ProjectPayProjectResponse(
                     project.Id,
                     project.Title,
+                    project.Code,
                     ClientOf(project),
                     people.Sum(p => p.NormalMinutes),
                     people.Sum(p => p.OvertimeMinutes),
@@ -85,14 +86,14 @@ public sealed class ProjectPayService(
         var to = report.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var csv = new StringBuilder();
 
-        Csv.Line(csv, "Period", "From", "To", "Project", "Client", "Department", "Employee", "Email", "Entries",
+        Csv.Line(csv, "Period", "From", "To", "Project", "Code", "Client", "Department", "Employee", "Email", "Entries",
             "Normal hours", "Overtime hours", "Total hours", "Hourly rate", "Currency", "Pay");
 
         foreach (var project in report.Projects)
         {
             foreach (var p in project.People)
             {
-                Csv.Line(csv, period, from, to, project.Title, project.Client, p.Team?.Name, p.Name, p.Email,
+                Csv.Line(csv, period, from, to, project.Title, project.Code, project.Client, p.Team?.Name, p.Name, p.Email,
                     p.Entries.ToString(CultureInfo.InvariantCulture),
                     Csv.Hours(p.NormalMinutes), Csv.Hours(p.OvertimeMinutes), Csv.Hours(p.NormalMinutes + p.OvertimeMinutes),
                     Csv.Money(p.HourlyRate), p.Currency, Csv.Money(p.Pay));
