@@ -35,6 +35,12 @@ public sealed class ProjectsController(
     public Task<ProjectListTotalsResponse> Totals([FromQuery] ProjectListQuery query, CancellationToken cancellationToken)
         => projectService.TotalsAsync(query, cancellationToken);
 
+    /// <summary>For the project form: the code a new project would get, and whether the one typed is taken.</summary>
+    [HttpGet("next-code")]
+    [HasAnyPermission(PermissionCodes.ProjectCreate, PermissionCodes.ProjectEdit)]
+    public Task<NextProjectCodeResponse> NextCode([FromQuery] NextProjectCodeQuery query, CancellationToken cancellationToken)
+        => projectService.NextCodeAsync(query, cancellationToken);
+
     /// <summary>Money is included only for callers with financial access.</summary>
     [HttpGet("{projectId:long}")]
     [HasPermission(PermissionCodes.ProjectView)]

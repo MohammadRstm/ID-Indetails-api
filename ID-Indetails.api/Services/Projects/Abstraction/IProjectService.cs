@@ -20,6 +20,9 @@ public interface IProjectService
 
     Task<ProjectResponse> UpdateAsync(long projectId, UpdateProjectRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>The project code a new project of the domain would get, and which project has a typed one, if any.</summary>
+    Task<NextProjectCodeResponse> NextCodeAsync(NextProjectCodeQuery query, CancellationToken cancellationToken = default);
+
     /// <summary>Design only, while revenue isn't locked: client work or internal, and the client.</summary>
     Task<ProjectResponse> UpdateBillingAsync(long projectId, UpdateProjectBillingRequest request, CancellationToken cancellationToken = default);
 

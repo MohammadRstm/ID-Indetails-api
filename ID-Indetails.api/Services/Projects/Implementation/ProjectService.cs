@@ -225,11 +225,16 @@ public sealed class ProjectService(
         var ownerId = request.OwnerId ?? actor.UserId;
         await EnsureOwnerAsync(actor, ownerId, domain, cancellationToken);
 
+        var projectCode = request.ProjectCode is { } typed ? ProjectCodeRules.Clean(typed) : await NextCodeAsync(domain, cancellationToken);
+        await EnsureCodeFreeAsync(domain, projectCode, null, cancellationToken);
+
         var now = clock.UtcNow;
         var project = new Project
         {
             DomainCode = domain,
             Title = request.Title.Trim(),
+            ProjectCode = projectCode,
+            BuildingCode = ProjectCodeRules.Clean(request.BuildingCode ?? ProjectCodeRules.BuildingCodeOf(request.Title)),
             Description = Clean(request.Description),
             Location = Clean(request.Location),
             Icon = Clean(request.Icon),
@@ -286,7 +291,11 @@ public sealed class ProjectService(
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         projects.Add(project);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        // someone else may have taken the code since it was checked
+        if (!await unitOfWork.TrySaveChangesAsync(cancellationToken))
+        {
+            throw CodeTaken(projectCode);
+        }
 
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectCreated, actor.UserId));
         if (split.Count > 0)
@@ -334,6 +343,18 @@ public sealed class ProjectService(
             await notifier.OwnerSetAsync(project, actor.UserId, cancellationToken);
         }
 
+        // left out, the codes stay: the phone app and older callers don't send them
+        if (request.ProjectCode is { } typed && ProjectCodeRules.Clean(typed) is var projectCode && projectCode != project.ProjectCode)
+        {
+            await EnsureCodeFreeAsync(project.DomainCode, projectCode, project.Id, cancellationToken);
+            project.ProjectCode = projectCode;
+        }
+
+        if (request.BuildingCode is { } buildingCode)
+        {
+            project.BuildingCode = ProjectCodeRules.Clean(buildingCode);
+        }
+
         project.Title = request.Title.Trim();
         project.Description = Clean(request.Description);
         project.Location = Clean(request.Location);
@@ -356,10 +377,31 @@ public sealed class ProjectService(
         project.UpdatedAt = clock.UtcNow;
         activity.Add(ProjectEvent(project, ActivityEventKinds.ProjectUpdated, actor.UserId));
 
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        if (!await unitOfWork.TrySaveChangesAsync(cancellationToken))
+        {
+            throw CodeTaken(project.ProjectCode);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         return await DescribeAsync(actor, project.Id, cancellationToken);
+    }
+
+    public async Task<NextProjectCodeResponse> NextCodeAsync(NextProjectCodeQuery query, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var domain = query.Domain!;
+        if (!actor.CanSee(domain))
+        {
+            throw new NotFoundException("Domain not found.");
+        }
+
+        var holder = query.Check is { } check && ProjectCodeRules.IsProjectCode(check)
+            ? await projects.CodeHolderAsync(domain, ProjectCodeRules.Clean(check), query.ProjectId, cancellationToken)
+            : null;
+        return new NextProjectCodeResponse(
+            await NextCodeAsync(domain, cancellationToken),
+            holder is { } taken ? new ProjectCodeHolderResponse(taken.Id, taken.Title) : null);
     }
 
     public async Task<ProjectResponse> UpdateBillingAsync(
@@ -624,6 +666,24 @@ public sealed class ProjectService(
         Throw(ProjectRules.CheckClient(row.Client.ArchivedAt is not null));
     }
 
+    /// <summary>The domain's next project code for this quarter (company time).</summary>
+    private async Task<string> NextCodeAsync(string domain, CancellationToken cancellationToken)
+    {
+        var today = clock.CompanyToday;
+        return ProjectCodeRules.Next(today, await projects.ProjectCodesAsync(domain, ProjectCodeRules.PeriodOf(today), cancellationToken));
+    }
+
+    private async Task EnsureCodeFreeAsync(string domain, string projectCode, long? projectId, CancellationToken cancellationToken)
+    {
+        if (await projects.CodeHolderAsync(domain, projectCode, projectId, cancellationToken) is { } holder)
+        {
+            throw new BusinessRuleException(ErrorCodes.ProjectCodeTaken, $"{projectCode} is already the code of {holder.Title}.");
+        }
+    }
+
+    private static BusinessRuleException CodeTaken(string projectCode)
+        => new(ErrorCodes.ProjectCodeTaken, $"{projectCode} is already the code of another project.");
+
     /// <summary>Someone the caller can't see (a super admin, for a caller in one domain) reads as no one, so ids can't be probed.</summary>
     private async Task EnsureOwnerAsync(UserAccess actor, long ownerId, string domain, CancellationToken cancellationToken)
     {
@@ -645,6 +705,9 @@ public sealed class ProjectService(
             Id = p.Id,
             Domain = p.DomainCode,
             Title = p.Title,
+            ProjectCode = p.ProjectCode,
+            BuildingCode = p.BuildingCode,
+            Code = ProjectCodeRules.Full(p.ProjectCode, p.BuildingCode),
             Description = p.Description,
             Location = p.Location,
             Icon = p.Icon,
@@ -818,6 +881,9 @@ public sealed class ProjectService(
         Id = p.Id,
         Domain = p.DomainCode,
         Title = p.Title,
+        ProjectCode = p.ProjectCode,
+        BuildingCode = p.BuildingCode,
+        Code = ProjectCodeRules.Full(p.ProjectCode, p.BuildingCode),
         Description = p.Description,
         Location = p.Location,
         Icon = p.Icon,

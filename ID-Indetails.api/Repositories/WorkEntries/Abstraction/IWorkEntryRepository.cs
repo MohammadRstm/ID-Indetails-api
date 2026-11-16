@@ -67,7 +67,8 @@ public sealed record WorkProject(
     DateTime CreatedAt,
     string? Icon,
     string? Tint,
-    string? Location);
+    string? Location,
+    string Code);
 
 /// <summary>One person's live work on one project.</summary>
 public sealed record Contribution(long ProjectId, long UserId, string UserName, int Minutes, int Entries, DateTime LastStartedAt);

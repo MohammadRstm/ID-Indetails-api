@@ -85,6 +85,7 @@ public static class ErrorCodes
     public const string ClientIsArchived = "client_archived";
     public const string OwnerNotAllowed = "owner_not_allowed";
     public const string ProjectLocked = "project_locked";
+    public const string ProjectCodeTaken = "project_code_taken";
     public const string ProjectHasBilling = "project_has_billing";
     public const string NotForThisDomain = "not_for_this_domain";
     /// <summary>A simulated change that doesn't apply to this project, such as a price change on internal work.</summary>

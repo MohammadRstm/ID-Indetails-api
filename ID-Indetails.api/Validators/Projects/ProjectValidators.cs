@@ -40,6 +40,10 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         // the client looks the icon up by name: only names, nothing a lookup could turn into something else
         RuleFor(x => x.Icon).Matches("^[A-Za-z0-9_-]+$").WithMessage("Icon must be one of the app's icon names.");
         RuleFor(x => x.Tint).ProjectTint();
+        RuleFor(x => x.ProjectCode).Must(ProjectCodeRules.IsProjectCode).When(x => x.ProjectCode is not null)
+            .WithMessage(ProjectCodeRules.ProjectCodeMessage);
+        RuleFor(x => x.BuildingCode).Must(ProjectCodeRules.IsBuildingCode).When(x => x.BuildingCode is not null)
+            .WithMessage(ProjectCodeRules.BuildingCodeMessage);
         RuleFor(x => x.DomainCode).ValidBusiness().When(x => x.DomainCode is not null);
         RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
         RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
@@ -99,6 +103,21 @@ public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProj
         RuleFor(x => x.Icon).Matches("^[A-Za-z0-9_-]+$").WithMessage("Icon must be one of the app's icon names.");
         RuleFor(x => x.Tint).ProjectTint();
         RuleFor(x => x.OwnerId).GreaterThan(0).WithMessage("Owner is required.");
+        RuleFor(x => x.ProjectCode).Must(ProjectCodeRules.IsProjectCode).When(x => x.ProjectCode is not null)
+            .WithMessage(ProjectCodeRules.ProjectCodeMessage);
+        RuleFor(x => x.BuildingCode).Must(ProjectCodeRules.IsBuildingCode).When(x => x.BuildingCode is not null)
+            .WithMessage(ProjectCodeRules.BuildingCodeMessage);
+    }
+}
+
+public sealed class NextProjectCodeQueryValidator : AbstractValidator<NextProjectCodeQuery>
+{
+    public NextProjectCodeQueryValidator()
+    {
+        RuleFor(x => x.Domain).ValidBusiness();
+        RuleFor(x => x.Check).MaximumLength(ProjectCodeRules.MaxProjectCodeLength)
+            .WithMessage($"A project code is at most {ProjectCodeRules.MaxProjectCodeLength} characters.");
+        RuleFor(x => x.ProjectId).GreaterThan(0).When(x => x.ProjectId is not null).WithMessage("Project is invalid.");
     }
 }
 

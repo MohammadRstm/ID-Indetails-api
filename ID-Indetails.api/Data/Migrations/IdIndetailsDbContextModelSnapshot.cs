@@ -4209,6 +4209,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(20)")
                         .HasColumnName("billing_type");
 
+                    b.Property<string>("BuildingCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("building_code");
+
                     b.Property<long?>("ClientId")
                         .HasColumnType("bigint")
                         .HasColumnName("client_id");
@@ -4269,6 +4275,12 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Property<byte>("ProgressPct")
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("progress_pct");
+
+                    b.Property<string>("ProjectCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("project_code");
 
                     b.Property<decimal?>("ProjectFee")
                         .HasPrecision(18, 2)
@@ -4358,6 +4370,10 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("ClientId", "DomainCode")
                         .HasDatabaseName("ix_projects_client_id_domain_code");
+
+                    b.HasIndex("DomainCode", "ProjectCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_projects_domain_code_project_code");
 
                     b.HasIndex("DomainCode", "Status")
                         .HasDatabaseName("ix_projects_domain_code_status");

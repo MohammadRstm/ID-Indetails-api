@@ -84,6 +84,7 @@ public sealed class MyWorkService(
                 return new MyProjectResponse(
                     p.Id,
                     p.Title,
+                    p.Code,
                     p.Description,
                     p.Icon,
                     p.Tint,

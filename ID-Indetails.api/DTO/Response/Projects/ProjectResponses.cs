@@ -10,6 +10,12 @@ public sealed record ProjectClientResponse(long Id, string DisplayName);
 
 public sealed record ProjectOwnerResponse(long Id, string Name);
 
+/// <param name="ProjectCode">The next code of this quarter in the domain: ID26Q4007.</param>
+/// <param name="TakenBy">The project that already has the code checked, if any.</param>
+public sealed record NextProjectCodeResponse(string ProjectCode, ProjectCodeHolderResponse? TakenBy);
+
+public sealed record ProjectCodeHolderResponse(long Id, string Title);
+
 /// <summary>One change of a project's agreed payment, newest first in a list.</summary>
 /// <param name="Amount">USD: Design's customer payment, Execution's project fee.</param>
 /// <param name="PreviousAmount">Null for the payment agreed at the start.</param>
@@ -172,6 +178,15 @@ public sealed record ProjectSummaryResponse
 
     public string Title { get; init; } = string.Empty;
 
+    /// <summary>ID26Q4001, unique in the domain.</summary>
+    public string ProjectCode { get; init; } = string.Empty;
+
+    /// <summary>Usually the name's initials: VK.</summary>
+    public string BuildingCode { get; init; } = string.Empty;
+
+    /// <summary>The full code, ID26Q4001-VK: the project code and the building code.</summary>
+    public string Code { get; init; } = string.Empty;
+
     /// <summary>Shown under the project's name in lists and on employees' project cards.</summary>
     public string? Description { get; init; }
 
@@ -240,6 +255,15 @@ public sealed record ProjectResponse
     public string Domain { get; init; } = string.Empty;
 
     public string Title { get; init; } = string.Empty;
+
+    /// <summary>ID26Q4001, unique in the domain.</summary>
+    public string ProjectCode { get; init; } = string.Empty;
+
+    /// <summary>Usually the name's initials: VK.</summary>
+    public string BuildingCode { get; init; } = string.Empty;
+
+    /// <summary>The full code, ID26Q4001-VK: the project code and the building code.</summary>
+    public string Code { get; init; } = string.Empty;
 
     public string? Description { get; init; }
 

@@ -83,9 +83,12 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
             query = query.Where(p => p.StartDate <= period.To && (p.CompletedAt == null || p.CompletedAt >= period.FromUtc));
         }
 
+        // a word matches the name, the description or either code, and the full code (ID26Q4001-VK) as one word
         foreach (var word in (search.Text ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
-            query = query.Where(p => p.Title.Contains(word) || (p.Description != null && p.Description.Contains(word)));
+            query = query.Where(p => p.Title.Contains(word)
+                || (p.Description != null && p.Description.Contains(word))
+                || (p.ProjectCode + "-" + p.BuildingCode).Contains(word));
         }
 
         return query;
@@ -126,6 +129,25 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
             .FromSql($"SELECT * FROM `projects` WHERE `id` = {id} FOR UPDATE")
             .ToListAsync(cancellationToken))
             .SingleOrDefault();
+
+    public async Task<IReadOnlyList<string>> ProjectCodesAsync(string domain, string prefix, CancellationToken cancellationToken = default)
+        => await db.Projects.AsNoTracking()
+            .Where(p => p.DomainCode == domain && p.ProjectCode.StartsWith(prefix))
+            .Select(p => p.ProjectCode)
+            .ToListAsync(cancellationToken);
+
+    public async Task<(long Id, string Title)?> CodeHolderAsync(
+        string domain,
+        string projectCode,
+        long? exceptId,
+        CancellationToken cancellationToken = default)
+    {
+        var holder = await db.Projects.AsNoTracking()
+            .Where(p => p.DomainCode == domain && p.ProjectCode == projectCode && p.Id != exceptId)
+            .Select(p => new { p.Id, p.Title })
+            .FirstOrDefaultAsync(cancellationToken);
+        return holder is null ? null : (holder.Id, holder.Title);
+    }
 
     public async Task<bool> HasBillingRecordsAsync(long projectId, CancellationToken cancellationToken = default)
         => await db.Invoices.AnyAsync(i => i.ProjectId == projectId, cancellationToken)

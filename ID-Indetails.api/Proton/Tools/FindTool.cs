@@ -13,7 +13,7 @@ namespace ID_Indetails.api.Proton.Tools;
 
 public sealed record FindInput
 {
-    [Description("The name or part of it, as the user said it: \"Alpha\", \"the CRM project\", \"John\".")]
+    [Description("The name or part of it, or a project's code, as the user said it: \"Alpha\", \"the CRM project\", \"ID26Q4001\", \"John\".")]
     public required string Text { get; init; }
 
     [Description("What to look for. Leave out to look for projects, clients and people; website_project only when the user means a project on the company's public website.")]
@@ -50,7 +50,8 @@ public sealed class FindTool(IProjectService projects, IClientService clients, I
     public override string Name => "find";
 
     public override string Description =>
-        "Find projects, clients or people by name and get their ids, or a project on the company's website (type " +
+        "Find projects (by name or by code: ID26Q4001-VK, ID26Q4001 or VK), clients or people by name and get their ids, " +
+        "or a project on the company's website (type " +
         "website_project). Use it before any other tool whenever the user names something. Several matches: ask the " +
         "user which one. No match: say so.";
 
@@ -130,7 +131,7 @@ public sealed class FindTool(IProjectService projects, IClientService clients, I
                 await context.ValidateAsync(query, cancellationToken);
                 var page = await projects.ListAsync(query, cancellationToken);
                 return page.Items
-                    .Select(p => new FoundRecord(type, p.Id, p.Title, p.Domain, $"{p.Status}, client: {p.Client?.DisplayName ?? "internal"}"))
+                    .Select(p => new FoundRecord(type, p.Id, p.Title, p.Domain, $"{p.Code}, {p.Status}, client: {p.Client?.DisplayName ?? "internal"}"))
                     .ToList();
             }
             case ProtonRefType.Client:
