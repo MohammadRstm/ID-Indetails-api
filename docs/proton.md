@@ -83,7 +83,7 @@ POST /api/proton/messages
 
 | Tool | Stands in for | Notes |
 |---|---|---|
-| `find` | project, client and employee lists | name → ids; drops filler words, tries single words if the phrase matches nothing |
+| `find` | project, client and employee lists | name → ids (a project also by its code, such as `ID26Q4001-VK`); drops filler words, tries single words if the phrase matches nothing |
 | `list_projects` | `GET /api/projects` | filters, sorting, `overdue_only` |
 | `get_project_departments` | `GET /api/projects/{id}/departments` (+ `/history` with `financial:view`) | Design client projects: each department's share, budget, cost, minutes, what is left, `unconverted_labour` (labour with no exchange rate on its day, listed, not counted) and its people with their minutes (never a person's cost, which with their minutes is their hourly cost); money only with `financial:view` |
 | `list_design_vos` | `GET /api/projects/{id}/design-vos` (+ `/outside-scope`) | Design only, `financial:view`: the price, each VO's lines, status, split and department amounts, the hours outside the agreed scope, and the department ids for a split |
@@ -444,7 +444,7 @@ submits or sends anything itself.
 
 - **`fill_form {form, id?, <form>: values}`** (`Proton/Ui/ProtonForms.cs`): one typed record per form (decision 11b,
   no loose dictionary). The forms are `client`, `meeting`, `new_project` (no money: revenue, rates and pay don't
-  exist in it), `edit_project`, `report_bug`, `invite` (address, position and team, never role or pay) and `message`.
+  exist in it; the codes only when the user gives them, or the form suggests them), `edit_project`, `report_bug`, `invite` (address, position and team, never role or pay) and `message`.
   - Shape problems go back to the model field by field (lengths, email format, times).
   - It needs the endpoint the form saves through, and any record it names must be visible to the user.
   - `report_bug`, `invite` and `message` fill only on a typed turn. An invitation's email only when the user typed that
@@ -620,8 +620,8 @@ fingerprint column on `proton_usage`, which needs its own approval.
 | `propose_update_requirement` | low | `PUT …/requirements/{id}` | text, deadline, assignees; refused if the requirement changed since |
 | `propose_set_requirement_done` | low | `POST …/requirements/{id}/done` (`/undone`) | |
 | `propose_change_project_status` | medium | `POST /api/projects/{id}/hold` (`/resume`) | hold and resume only: completing, archiving and reopening lock or unlock revenue |
-| `propose_update_project` | medium | `PUT /api/projects/{id}` | title, description, location, target date, owner; refused if the project changed since |
-| `propose_create_project` | medium | `POST /api/projects` | a Design project, client or internal, or an Execution site for an Execution client with its staff if they are known (checked by `SiteTeamRules.CheckStaff`; none is fine, they can come later); no money fields, so no revenue, rates or crew defaults |
+| `propose_update_project` | medium | `PUT /api/projects/{id}` | title, codes (a project code another project of its domain has is refused before the card), description, location, target date, owner; refused if the project changed since |
+| `propose_create_project` | medium | `POST /api/projects` | a Design project, client or internal, or an Execution site for an Execution client with its staff if they are known (checked by `SiteTeamRules.CheckStaff`; none is fine, they can come later); no money fields, so no revenue, rates or crew defaults. The card shows the full code it will be saved with: the codes the user gave, or the next code of the quarter and the name's initials |
 | `propose_create_client` | low | `POST /api/clients` | the contacts the user gave; a shared name is a warning on the card, another client's contact is refused; opens the new client |
 | `propose_update_client` | low | `PUT /api/clients/{id}` | details, plus contacts added or removed (the rest kept); refused if the client changed since |
 | `propose_set_client_archived` | low | `POST /api/clients/{id}/archive` (`/restore`) | |

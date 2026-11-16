@@ -99,6 +99,12 @@ public sealed record UpdateProjectInput : ProtonActionInput
 
     [Description("The new owner (an admin of the project's domain, or a super admin; id from find).")]
     public long? OwnerId { get; init; }
+
+    [Description("The new project code: ID26Q4001, not used by another project of its business.")]
+    public string? ProjectCode { get; init; }
+
+    [Description("The new building code: 1 to 10 letters or digits, usually the name's initials.")]
+    public string? BuildingCode { get; init; }
 }
 
 /// <summary>Changes a project's details or owner, through PUT /api/projects/{id} once confirmed. Money is not part of it.</summary>
@@ -108,7 +114,7 @@ public sealed class ProposeUpdateProjectTool(IProjectService projects, IEmployee
     public override string Name => "propose_update_project";
 
     public override string Description =>
-        "Propose changing a project's title, description, location, target date or owner. Revenue, client and pricing " +
+        "Propose changing a project's title, codes, description, location, target date or owner. Revenue, client and pricing " +
         "are changed in the app. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
@@ -123,6 +129,8 @@ public sealed class ProposeUpdateProjectTool(IProjectService projects, IEmployee
         var after = before with
         {
             Title = input.Title?.Trim() ?? before.Title,
+            ProjectCode = input.ProjectCode is { } code ? await ProjectText.FreeCodeAsync(projects, project.Domain, code, project.Id, cancellationToken) : before.ProjectCode,
+            BuildingCode = input.BuildingCode is { } building ? ProjectText.BuildingCode(building) : before.BuildingCode,
             Description = input.Description ?? before.Description,
             Location = input.Location ?? before.Location,
             TargetDate = input.ClearTargetDate ? null : input.TargetDate ?? before.TargetDate,
@@ -131,6 +139,8 @@ public sealed class ProposeUpdateProjectTool(IProjectService projects, IEmployee
 
         var changes = new List<ProtonChange>();
         Add(changes, "Title", before.Title, after.Title);
+        Add(changes, "Project code", before.ProjectCode, after.ProjectCode);
+        Add(changes, "Building code", before.BuildingCode, after.BuildingCode);
         Add(changes, "Description", ProtonText.Cut(before.Description, 200), ProtonText.Cut(after.Description, 200));
         Add(changes, "Location", before.Location, after.Location);
         Add(changes, "Target date", ProjectText.Date(before.TargetDate), ProjectText.Date(after.TargetDate));
@@ -199,6 +209,12 @@ public sealed record CreateProjectInput : ProtonActionInput
     public string? Description { get; init; }
 
     public string? Location { get; init; }
+
+    [Description("Only when the user gives one: ID26Q4001. Left out, it gets the next code of this quarter in its business.")]
+    public string? ProjectCode { get; init; }
+
+    [Description("Only when the user gives one: 1 to 10 letters or digits. Left out, it is the name's initials.")]
+    public string? BuildingCode { get; init; }
 }
 
 /// <summary>
@@ -286,9 +302,16 @@ public sealed class ProposeCreateProjectTool(
             ownerName = $"{owner.FirstName} {owner.LastName}".Trim();
         }
 
+        // the card shows the codes it will be saved with
+        var projectCode = input.ProjectCode is { } code
+            ? await ProjectText.FreeCodeAsync(projects, domain, code, null, cancellationToken)
+            : (await projects.NextCodeAsync(new NextProjectCodeQuery { Domain = domain }, cancellationToken)).ProjectCode;
+        var buildingCode = input.BuildingCode is { } building ? ProjectText.BuildingCode(building) : ProjectCodeRules.BuildingCodeOf(input.Title);
         var request = new CreateProjectRequest
         {
             Title = input.Title.Trim(),
+            ProjectCode = projectCode,
+            BuildingCode = buildingCode,
             Description = input.Description,
             Location = input.Location,
             DomainCode = domain,
@@ -306,6 +329,7 @@ public sealed class ProposeCreateProjectTool(
         var changes = new List<ProtonChange>
         {
             new("Name", null, request.Title),
+            new("Code", null, ProjectCodeRules.Full(projectCode, buildingCode)),
             new("Client", null, clientName),
             new("Owner", null, ownerName),
             new("Status", null, "Active"),
@@ -360,7 +384,29 @@ internal static class ProjectText
         Tint = p.Tint,
         TargetDate = p.TargetDate,
         OwnerId = p.Owner.Id,
+        ProjectCode = p.ProjectCode,
+        BuildingCode = p.BuildingCode,
     };
+
+    /// <summary>A project code the user gave, in capitals, when it has the right form and no other project of the domain has it.</summary>
+    public static async Task<string> FreeCodeAsync(
+        IProjectService projects, string domain, string code, long? projectId, CancellationToken cancellationToken)
+    {
+        if (!ProjectCodeRules.IsProjectCode(code))
+        {
+            throw new ProtonToolInputException($"Project code: {ProjectCodeRules.ProjectCodeMessage}");
+        }
+
+        var check = await projects.NextCodeAsync(new NextProjectCodeQuery { Domain = domain, Check = code, ProjectId = projectId }, cancellationToken);
+        return check.TakenBy is { } holder
+            ? throw new ProtonToolInputException($"{ProjectCodeRules.Clean(code)} is already the code of {holder.Title}. The next free one is {check.ProjectCode}.")
+            : ProjectCodeRules.Clean(code);
+    }
+
+    public static string BuildingCode(string code)
+        => ProjectCodeRules.IsBuildingCode(code)
+            ? ProjectCodeRules.Clean(code)
+            : throw new ProtonToolInputException($"Building code: {ProjectCodeRules.BuildingCodeMessage}");
 
     public static string Status(ProjectStatus status) => status == ProjectStatus.Hold ? "On hold" : status.ToString();
 

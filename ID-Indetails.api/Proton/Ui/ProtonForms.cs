@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.RegularExpressions;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Proton.Ui;
@@ -90,6 +91,12 @@ public sealed record NewProjectFill
     public string? Location { get; init; }
 
     public DateOnly? TargetDate { get; init; }
+
+    [Description("Only when the user gives one: ID26Q4001. Left out, the form suggests the next code.")]
+    public string? ProjectCode { get; init; }
+
+    [Description("Only when the user gives one: 1 to 10 letters or digits. Left out, the form suggests the name's initials.")]
+    public string? BuildingCode { get; init; }
 }
 
 public sealed record EditProjectFill
@@ -101,6 +108,12 @@ public sealed record EditProjectFill
     public string? Location { get; init; }
 
     public DateOnly? TargetDate { get; init; }
+
+    [Description("ID26Q4001.")]
+    public string? ProjectCode { get; init; }
+
+    [Description("1 to 10 letters or digits, usually the name's initials.")]
+    public string? BuildingCode { get; init; }
 }
 
 /// <summary>The Contact the developer form: what the user was trying to do and what happened, and anything else.</summary>
@@ -517,6 +530,19 @@ public static partial class ProtonFormRules
             }
         }
 
+        void Codes(string? projectCode, string? buildingCode)
+        {
+            if (projectCode is not null && !ProjectCodeRules.IsProjectCode(projectCode))
+            {
+                problems.Add($"project_code: {ProjectCodeRules.ProjectCodeMessage}");
+            }
+
+            if (buildingCode is not null && !ProjectCodeRules.IsBuildingCode(buildingCode))
+            {
+                problems.Add($"building_code: {ProjectCodeRules.BuildingCodeMessage}");
+            }
+        }
+
         void Rows(string field, int? count, int max, bool required = false)
         {
             if (count > max || required && count is null or 0)
@@ -571,11 +597,13 @@ public static partial class ProtonFormRules
                 Text("title", p.Title, NameLength);
                 Text("description", p.Description, TextLength);
                 Text("location", p.Location, NameLength);
+                Codes(p.ProjectCode, p.BuildingCode);
                 break;
             case ProtonForm.EditProject when fill.EditProject is { } p:
                 Text("title", p.Title, NameLength);
                 Text("description", p.Description, TextLength);
                 Text("location", p.Location, NameLength);
+                Codes(p.ProjectCode, p.BuildingCode);
                 break;
             case ProtonForm.ReportBug when fill.ReportBug is { } b:
                 Text("description", b.Description, TextLength);
