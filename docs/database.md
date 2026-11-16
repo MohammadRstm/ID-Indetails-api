@@ -89,6 +89,7 @@ bytes live in the content store, never in MySQL or on the server's disk. See [cl
 - An active user has a password and a name.
 - Internal projects have no client and zero revenue; revenue is never negative; progress is 0–100.
 - Execution projects are always client work and always have a work price; Design projects have none (`ck_projects_execution_money_fields`).
+- A project code (`projects.project_code`, such as ID26Q4001) is used once per domain (`ix_projects_domain_code_project_code`); the building code (`projects.building_code`) is not unique. Their form is checked by the API, not the database ([projects.md](projects.md#project-codes)).
 - A supervision rate is a fraction from 0 to 1.
 - A site expense has either quantity and unit cost or a lump-sum amount, and one of the five categories.
 - No labour day falls on a Sunday.

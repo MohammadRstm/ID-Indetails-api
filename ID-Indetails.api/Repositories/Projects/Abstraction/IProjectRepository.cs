@@ -59,6 +59,12 @@ public interface IProjectRepository
     /// <summary>The project's payment changes, newest first, with who made each. Not tracked.</summary>
     Task<IReadOnlyList<PaymentChangeRow>> PaymentChangesAsync(long projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>The project codes of the domain that start with <paramref name="prefix"/> (a quarter's, ID26Q4).</summary>
+    Task<IReadOnlyList<string>> ProjectCodesAsync(string domain, string prefix, CancellationToken cancellationToken = default);
+
+    /// <summary>The project of the domain with this project code, other than <paramref name="exceptId"/>.</summary>
+    Task<(long Id, string Title)?> CodeHolderAsync(string domain, string projectCode, long? exceptId, CancellationToken cancellationToken = default);
+
     /// <summary>Whether any invoice or payment (voided ones included) was made for the project.</summary>
     Task<bool> HasBillingRecordsAsync(long projectId, CancellationToken cancellationToken = default);
 

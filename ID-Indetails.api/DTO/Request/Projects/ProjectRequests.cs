@@ -49,6 +49,12 @@ public sealed record CreateProjectRequest
 
     public string? Tint { get; init; }
 
+    /// <summary>ID26Q4001, not used in the domain yet. Left out, it is the next code of this quarter.</summary>
+    public string? ProjectCode { get; init; }
+
+    /// <summary>1 to 10 letters or digits. Left out, it is the title's initials.</summary>
+    public string? BuildingCode { get; init; }
+
     /// <summary>May be empty when the caller works in only one domain.</summary>
     public string? DomainCode { get; init; }
 
@@ -134,6 +140,24 @@ public sealed record UpdateProjectRequest
     public DateOnly? StartDate { get; init; }
 
     public long OwnerId { get; init; }
+
+    /// <summary>Left out, the project code stays as it is.</summary>
+    public string? ProjectCode { get; init; }
+
+    /// <summary>Left out, the building code stays as it is.</summary>
+    public string? BuildingCode { get; init; }
+}
+
+/// <summary>The project code a new project of a domain would get, and whether a typed one is taken.</summary>
+public sealed record NextProjectCodeQuery
+{
+    public string? Domain { get; init; }
+
+    /// <summary>A code to check, as it is typed.</summary>
+    public string? Check { get; init; }
+
+    /// <summary>The project being edited: its own code isn't taken.</summary>
+    public long? ProjectId { get; init; }
 }
 
 /// <summary>Design only: client work or internal, and the client. Becoming internal drops the payment to 0.</summary>
