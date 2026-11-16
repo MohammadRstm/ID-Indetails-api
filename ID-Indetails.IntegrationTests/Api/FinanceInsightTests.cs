@@ -500,7 +500,8 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         // kinds in snake_case, names in camelCase
         json.EnumerateObject().Select(p => p.Name).ShouldBe(["domain", "today", "checked", "projects", "counts", "basis"], ignoreOrder: true);
         var group = json.GetProperty("projects").EnumerateArray().Single(p => p.GetProperty("projectId").GetInt64() == project.Id);
-        group.EnumerateObject().Select(p => p.Name).ShouldBe(["projectId", "title", "status", "risks"], ignoreOrder: true);
+        group.EnumerateObject().Select(p => p.Name).ShouldBe(["projectId", "title", "code", "status", "risks"], ignoreOrder: true);
+        group.GetProperty("code").GetString().ShouldBe(project.Code);
         group.GetProperty("status").GetString().ShouldBe("active");
         var atZero = group.GetProperty("risks")[0];
         atZero.EnumerateObject().Select(p => p.Name).ShouldBe(["kind", "amount", "fact", "rule"], ignoreOrder: true);
