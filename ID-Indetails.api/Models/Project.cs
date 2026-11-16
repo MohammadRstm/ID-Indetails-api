@@ -15,6 +15,12 @@ public class Project
 
     public string Title { get; set; } = string.Empty;
 
+    /// <summary>ID26Q4001: unique in its domain (see <see cref="Business.Projects.ProjectCodeRules"/>).</summary>
+    public string ProjectCode { get; set; } = string.Empty;
+
+    /// <summary>Usually the name's initials: VK. Not unique; with the project code it makes the full code, ID26Q4001-VK.</summary>
+    public string BuildingCode { get; set; } = string.Empty;
+
     public string? Description { get; set; }
 
     /// <summary>Where the work is: a site's address, a building, a town. Free text, optional.</summary>
