@@ -5,7 +5,8 @@ namespace ID_Indetails.api.DTO.Response.WorkEntries;
 
 public sealed record WeekTotalResponse(DateOnly WeekStart, int Minutes, int Entries);
 
-public sealed record DayTotalResponse(DateOnly Day, int Minutes);
+/// <param name="Tint">The colour of the project with the most time that day, to draw the day in; null on a day without work.</param>
+public sealed record DayTotalResponse(DateOnly Day, int Minutes, string? Tint);
 
 /// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>
 public sealed record ProjectTimeResponse(
