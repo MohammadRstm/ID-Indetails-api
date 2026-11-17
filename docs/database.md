@@ -217,6 +217,8 @@ The `SupersededPayEntries` migration (15 Nov 2026) lets a pay change correct wha
 
 The `PayChangeHolds` migration (15 Nov 2026) adds `pay_change` to `ck_blocked_changes_kind`, for a pay change held at the profit floor ([projects.md](projects.md), "Profit floor"). Nothing else changes: the person, the request, the projects and the pay version live in the blocked change's payload. `Down` deletes the held pay changes and restores the check.
 
+The `ProjectColors` migration (17 Nov 2026) only moves data: every project without a colour (`projects.tint` null or empty) gets one of the palette ([projects.md](projects.md#colours)), the active and on-hold projects first, in turn, so the first sixteen differ. Colours already set are kept, and no column changes. `Down` leaves the colours, since they can't be told from colours people chose afterwards.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Who connects
