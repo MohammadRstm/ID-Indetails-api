@@ -242,6 +242,19 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
     }
 
     [Fact]
+    public async Task An_update_may_change_the_colour_by_its_palette_name()
+    {
+        var (superAdmin, project) = await DesignProjectAsync();
+        await _steps.ExecuteAsync("UPDATE projects SET tint = '#123456' WHERE id = @id", ("@id", project.Id));
+
+        var reply = await ProposeAsync(superAdmin, "propose_update_project", new { project_id = project.Id, color = "Green" });
+        reply.PendingAction!.Preview.Changes.ShouldHaveSingleItem().ShouldBe(new ProtonChange("Colour", "#123456", "green (#2F9E44)"));
+        (await ConfirmAsync(superAdmin, reply.PendingAction.Id, reply.ConversationId)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await (await Client.GetAsync($"/api/projects/{project.Id}", superAdmin.AccessToken)).ReadAsync<ProjectResponse>())
+            .Tint.ShouldBe("#2F9E44");
+    }
+
+    [Fact]
     public async Task When_the_service_refuses_at_confirmation_nothing_is_written_and_the_failure_is_recorded()
     {
         var (superAdmin, project) = await DesignProjectAsync();

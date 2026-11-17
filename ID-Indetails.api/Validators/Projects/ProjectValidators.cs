@@ -167,8 +167,7 @@ internal static class ProjectRuleExtensions
         => rule.Null().WithMessage("The work price comes from the agreed BOQs: it can't be typed in.");
 
     public static IRuleBuilderOptions<T, string?> ProjectTint<T>(this IRuleBuilder<T, string?> rule)
-        => rule.Matches("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
-            .WithMessage("Tint must be a colour like #1F6FEB.");
+        => rule.Must(v => v is null || ProjectColorRules.IsColor(v)).WithMessage(ProjectColorRules.ColorMessage);
 }
 
 public sealed class ProjectReportQueryValidator : AbstractValidator<ProjectReportQuery>

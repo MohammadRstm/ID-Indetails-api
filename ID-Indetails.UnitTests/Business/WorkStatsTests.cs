@@ -22,6 +22,23 @@ public class WorkStatsTests
     }
 
     [Fact]
+    public void Each_day_s_top_project_is_the_one_with_the_most_minutes_that_day()
+    {
+        var worked = new[]
+        {
+            At(2026, 9, 29, 9, 0, 60, projectId: 7), At(2026, 9, 29, 11, 0, 45, projectId: 3), At(2026, 9, 29, 14, 0, 30, projectId: 3),
+            At(2026, 9, 30, 9, 0, 60, projectId: 9), At(2026, 9, 30, 11, 0, 60, projectId: 4),
+        };
+
+        var top = WorkStats.TopProjectByDay(worked);
+
+        top[new DateOnly(2026, 9, 29)].ShouldBe(3);
+        // a tie goes to the lower project id, so the day keeps its colour
+        top[new DateOnly(2026, 9, 30)].ShouldBe(4);
+        top.ContainsKey(new DateOnly(2026, 10, 1)).ShouldBeFalse();
+    }
+
+    [Fact]
     public void Weekly_totals_cover_every_week_oldest_first_even_empty_ones()
     {
         var worked = new[] { At(2026, 9, 29, 9, 0, 60), At(2026, 9, 30, 9, 0, 30), At(2026, 9, 15, 9, 0, 45), At(2026, 8, 1, 9, 0, 999) };

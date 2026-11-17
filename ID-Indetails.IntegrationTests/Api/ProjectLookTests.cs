@@ -1,4 +1,6 @@
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
+using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.DTO.Response.WorkEntries;
 using Shouldly;
 
@@ -31,5 +33,31 @@ public class ProjectLookTests(ApiFactory api) : IClassFixture<ApiFactory>
         mine.Tint.ShouldBe("#3366ff");
         mine.Code.ShouldBe(project.Code);
         mine.LastActivity!.PersonId.ShouldBe(designer.User.Id);
+    }
+
+    [Fact]
+    public async Task A_new_project_gets_a_palette_colour_which_an_edit_keeps_unless_it_sends_another()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        ProjectColorRules.Palette.Select(c => c.Hex).ShouldContain(project.Tint.ShouldNotBeNull());
+
+        var kept = await (await Client.PutJsonAsync($"/api/projects/{project.Id}",
+            new { title = project.Title, ownerId = project.Owner.Id }, superAdmin.AccessToken)).ReadAsync<ProjectResponse>();
+        kept.Tint.ShouldBe(project.Tint);
+
+        var changed = await (await Client.PutJsonAsync($"/api/projects/{project.Id}",
+            new { title = project.Title, ownerId = project.Owner.Id, tint = "#123456" }, superAdmin.AccessToken)).ReadAsync<ProjectResponse>();
+        changed.Tint.ShouldBe("#123456");
+
+        await (await Client.PutJsonAsync($"/api/projects/{project.Id}",
+            new { title = project.Title, ownerId = project.Owner.Id, tint = "green" }, superAdmin.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        // a colour given at creation is kept as it is
+        var given = await (await Client.PostJsonAsync("/api/projects",
+            new { title = "Given colour", billingType = "internal", domainCode = DomainCodes.Design, tint = "#ABCDEF" }, superAdmin.AccessToken))
+            .ReadAsync<ProjectResponse>();
+        given.Tint.ShouldBe("#ABCDEF");
     }
 }

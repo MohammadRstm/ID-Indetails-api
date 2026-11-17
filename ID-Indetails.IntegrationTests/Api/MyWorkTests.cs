@@ -37,6 +37,9 @@ public class MyWorkTests(ApiFactory api) : IClassFixture<ApiFactory>
         summary.Weekly.Count.ShouldBe(16);
         summary.Weekly.Sum(w => w.Minutes).ShouldBe(90);
         summary.Week.Count.ShouldBe(7);
+        // each day is drawn in the colour of the project with the most of the caller's time that day
+        summary.Daily.ShouldContain(d => d.Tint == brand.Tint);
+        summary.Week.Where(d => d.Minutes == 0).ShouldAllBe(d => d.Tint == null);
         summary.ActiveDaysLastYear.ShouldBeGreaterThanOrEqualTo(1);
         summary.ByProject.Select(p => p.ProjectId).ShouldBe([brand.Id, web.Id]);
 
