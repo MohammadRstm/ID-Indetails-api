@@ -40,7 +40,9 @@ Every project has two codes, decided 16 November 2026. The rules live in `Busine
 ## Colours
 
 Every project has a colour (`tint`, decided 17 November 2026). Its tile and the work logged on it are drawn in it: the
-day timelines, My work, reports, its own charts. The rules live in `Business/Projects/ProjectColorRules.cs`.
+day timelines, My work, reports, its own charts. A whole day of someone's work (the week's bars, the heat map) is drawn
+in the colour of the project with the most of their time that day ([design.md](design.md), the work summary). The rules
+live in `Business/Projects/ProjectColorRules.cs`.
 
 - **The palette:** 16 colours, each readable with a white icon on it and visible on the dark theme: blue `#2F6FEB`,
   indigo `#5B5BD6`, violet `#8B5CF6`, purple `#9D3FC7`, magenta `#C026A3`, pink `#D6336C`, coral `#E0603F`, orange
