@@ -44,6 +44,9 @@ public sealed record ProjectMoneyResponse
 {
     public string Currency { get; init; } = "USD";
 
+    /// <summary>The price in CFA francs, typed in by hand as a reference; null when none was given. In no calculation.</summary>
+    public decimal? CfaPrice { get; init; }
+
     /// <summary>
     /// Design: the agreed revenue. Execution: the agreed amount (the work price from the agreed BOQs plus supervision, plus
     /// the permits), calculated live while the project is open and frozen when it is finalised.

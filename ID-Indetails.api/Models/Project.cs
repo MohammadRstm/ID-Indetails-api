@@ -80,6 +80,12 @@ public class Project
     /// </summary>
     public decimal? PermitsPrice { get; set; }
 
+    /// <summary>
+    /// What the project is worth in CFA francs, typed in by hand as a reference for whoever sees the money (<c>financial:view</c>).
+    /// Optional and in no calculation: the project's money stays in USD.
+    /// </summary>
+    public decimal? CfaPrice { get; set; }
+
     /// <summary>Execution only: the company's supervision on the work price, 0.10 = 10%. Null for Design.</summary>
     public decimal? SupervisionRate { get; set; }
 

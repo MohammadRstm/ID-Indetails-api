@@ -90,6 +90,9 @@ public sealed record CreateProjectRequest
     /// <summary>Execution only: the crew size and day rate new labour weeks start from. Needs <c>labour_report:manage</c>.</summary>
     public SetLabourDefaultsRequest? LabourDefaults { get; init; }
 
+    /// <summary>Optional, and needs <c>financial:view</c>: the price in CFA francs, whole francs, a reference in no calculation.</summary>
+    public decimal? CfaPrice { get; init; }
+
     /// <summary>Execution only, required: the employees who oversee the site (at least one).</summary>
     public IReadOnlyList<long>? StaffIds { get; init; }
 
@@ -146,6 +149,9 @@ public sealed record UpdateProjectRequest
 
     /// <summary>Left out, the building code stays as it is.</summary>
     public string? BuildingCode { get; init; }
+
+    /// <summary>Needs <c>financial:view</c>: the price in CFA francs, whole francs. Left out, it stays as it is; 0 clears it.</summary>
+    public decimal? CfaPrice { get; init; }
 }
 
 /// <summary>The project code a new project of a domain would get, and whether a typed one is taken.</summary>
