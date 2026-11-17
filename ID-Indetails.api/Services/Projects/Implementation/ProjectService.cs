@@ -189,6 +189,11 @@ public sealed class ProjectService(
             throw new ForbiddenException(ErrorCodes.Forbidden, "Setting the customer payment or its TVA needs the permission to write project money.");
         }
 
+        if (request.CfaPrice is not null && !actor.Has(PermissionCodes.FinancialView))
+        {
+            throw CfaPriceForbidden();
+        }
+
         if (request.SupervisionRate is not null && !actor.Has(PermissionCodes.ProjectPricingManage))
         {
             throw new ForbiddenException(ErrorCodes.Forbidden, "Setting a site's supervision needs the permission to manage pricing.");
@@ -252,6 +257,7 @@ public sealed class ProjectService(
             SupervisionRate = domain == DomainCodes.Execution ? request.SupervisionRate ?? ExecutionPricing.DefaultSupervisionRate : null,
             // TVA is on what a client pays: internal work has none
             TvaRate = request.BillingType == BillingType.Client ? request.TvaRate ?? Tva.DefaultRate : 0,
+            CfaPrice = request.CfaPrice is > 0 ? request.CfaPrice : null,
             CreatedAt = now,
             CreatedById = actor.UserId,
         };
@@ -333,6 +339,11 @@ public sealed class ProjectService(
         var actor = await ActorAsync(cancellationToken);
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         var project = await VisibleProjectForUpdateAsync(actor, projectId, cancellationToken);
+        // only whoever sees the money sends it; the others' forms leave it out, and it stays
+        if (request.CfaPrice is not null && !actor.Has(PermissionCodes.FinancialView))
+        {
+            throw CfaPriceForbidden();
+        }
 
         if (request.OwnerId != project.OwnerId)
         {
@@ -361,6 +372,11 @@ public sealed class ProjectService(
         project.Icon = Clean(request.Icon);
         project.Tint = Clean(request.Tint);
         project.TargetDate = request.TargetDate;
+        if (request.CfaPrice is { } cfaPrice)
+        {
+            project.CfaPrice = cfaPrice > 0 ? cfaPrice : null;
+        }
+
         if (request.StartDate is { } start && start != project.StartDate)
         {
             var weeks = await labour.ListWeeksAsync(project.Id, cancellationToken);
@@ -386,6 +402,9 @@ public sealed class ProjectService(
 
         return await DescribeAsync(actor, project.Id, cancellationToken);
     }
+
+    private static ForbiddenException CfaPriceForbidden()
+        => new(ErrorCodes.Forbidden, "Setting the CFA price needs the permission to see project money.");
 
     public async Task<NextProjectCodeResponse> NextCodeAsync(NextProjectCodeQuery query, CancellationToken cancellationToken = default)
     {
@@ -760,6 +779,7 @@ public sealed class ProjectService(
         return new ProjectMoneyResponse
         {
             Currency = p.RevenueCurrency,
+            CfaPrice = p.CfaPrice,
             Revenue = summary.Revenue,
             IsLocked = p.RevenueLockedAt is not null,
             TvaRate = p.TvaRate,

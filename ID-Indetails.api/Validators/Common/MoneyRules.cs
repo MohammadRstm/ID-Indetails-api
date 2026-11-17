@@ -39,6 +39,12 @@ public static class MoneyRules
             .Must(r => r is null || (r > 0 && decimal.Round(r.Value, 6) == r)).WithMessage("Exchange rate must be more than zero with at most 6 decimals.")
             .Must(r => r is null || r <= MaxRate).WithMessage("Exchange rate is too large.");
 
+    /// <summary>A project's price in CFA francs: an amount in whole francs, the currency having no cents.</summary>
+    public static IRuleBuilderOptions<T, decimal?> CfaPrice<T>(this IRuleBuilder<T, decimal?> rule)
+        => rule
+            .Amount("The CFA price")
+            .Must(v => v is null || decimal.Truncate(v.Value) == v).WithMessage("The CFA price is in whole francs.");
+
     /// <summary>An amount at its rate (amount ÷ rate) is a US dollar amount too: it must fit as well.</summary>
     public static bool FitsInUsd(decimal amount, decimal? rate) => rate is not > 0 || amount / rate.Value <= MaxAmount;
 

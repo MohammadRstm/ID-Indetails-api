@@ -54,6 +54,7 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.LabourDefaults!).SetValidator(new SetLabourDefaultsRequestValidator()).When(x => x.LabourDefaults is not null);
         RuleForEach(x => x.DepartmentIds).GreaterThan(0).WithMessage("A department is invalid.");
+        RuleFor(x => x.CfaPrice).CfaPrice();
     }
 }
 
@@ -107,6 +108,7 @@ public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProj
             .WithMessage(ProjectCodeRules.ProjectCodeMessage);
         RuleFor(x => x.BuildingCode).Must(ProjectCodeRules.IsBuildingCode).When(x => x.BuildingCode is not null)
             .WithMessage(ProjectCodeRules.BuildingCodeMessage);
+        RuleFor(x => x.CfaPrice).CfaPrice();
     }
 }
 

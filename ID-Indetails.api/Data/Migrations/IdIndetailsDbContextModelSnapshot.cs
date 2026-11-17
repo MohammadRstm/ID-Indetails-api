@@ -4215,6 +4215,11 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(10)")
                         .HasColumnName("building_code");
 
+                    b.Property<decimal?>("CfaPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("cfa_price");
+
                     b.Property<long?>("ClientId")
                         .HasColumnType("bigint")
                         .HasColumnName("client_id");
