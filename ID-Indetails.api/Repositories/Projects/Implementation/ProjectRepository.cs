@@ -136,6 +136,12 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
             .Select(p => p.ProjectCode)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<string>> OpenProjectTintsAsync(CancellationToken cancellationToken = default)
+        => await db.Projects.AsNoTracking()
+            .Where(p => (p.Status == ProjectStatus.Active || p.Status == ProjectStatus.Hold) && p.Tint != null)
+            .Select(p => p.Tint!)
+            .ToListAsync(cancellationToken);
+
     public async Task<(long Id, string Title)?> CodeHolderAsync(
         string domain,
         string projectCode,

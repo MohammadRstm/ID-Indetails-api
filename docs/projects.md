@@ -13,7 +13,7 @@ A project belongs to one domain. The rules live in `Business/Projects/`. A proje
 | `GET /api/projects/{id}/report?kind=&from=&to=&sections=` | `financial:view` and `work_entry:view_all` | A Design project's report as a PDF, internal or the client summary ([documents.md](documents.md)) |
 | `GET /api/projects/{id}/cost-timeline` | `financial:view` | Its cost and payments week by week, from its start to this week (or the week it was finalised), in USD: each week's hours, labour cost (paid breaks included) and total cost, and the cost and payments to date. Weeks start on the company's week start. For the payment-vs-cost and weekly labour charts and the project report. Either domain; Execution sites also have `/site-money/timeline` |
 | `POST /api/projects` | `project:create` | Creates a project (below) |
-| `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, tint, target date and owner. `projectCode` and `buildingCode` (optional) change the codes; left out, they stay as they are. `cfaPrice` (optional, needs `financial:view`, else `403`) changes the CFA price: left out, it stays; `0` clears it (see "Money"). `startDate` (optional) moves the start date: never into the future, and on a site never past the week of its first ground labour reported (`400` on `startDate`); moving it earlier moves the site's first labour defaults with it |
+| `PUT /api/projects/{id}` | `project:edit` | Replaces title, description, icon, target date and owner. `tint` (optional) changes the project's colour: left out, it stays (see "Colours"). `projectCode` and `buildingCode` (optional) change the codes; left out, they stay as they are. `cfaPrice` (optional, needs `financial:view`, else `403`) changes the CFA price: left out, it stays; `0` clears it (see "Money"). `startDate` (optional) moves the start date: never into the future, and on a site never past the week of its first ground labour reported (`400` on `startDate`); moving it earlier moves the site's first labour defaults with it |
 | `PUT /api/projects/{id}/billing` | `project:edit` and `financial:view` | Design only: client work or internal, and the client. Becoming internal drops the payment to 0 |
 | `PUT /api/projects/{id}/payment` | `project:edit` and `financial:write` | Design client projects only: `{ revenue, description }`, the customer payment and why it changes (see "Payment changes") |
 | `PUT /api/projects/{id}/pricing` | `project:pricing_manage` | Execution only: `{ supervisionRate?, tvaRate?, description }`, the supervision rate and TVA (left out, one stays as it is), and why they change. The work price (`projectFee`) is never sent: `400`. There is no material markup any more |
@@ -37,9 +37,27 @@ Every project has two codes, decided 16 November 2026. The rules live in `Busine
 - **The full code** (`code`) joins them: `ID26Q4001-VK`. Project responses, list rows and search results carry all three.
 - Both are typed in capitals or not (they are kept in capitals), and both can be changed with the project's details (`project:edit`), in any status. Projects that existed before were numbered by the migration per domain and quarter of their start date, in start date order.
 
+## Colours
+
+Every project has a colour (`tint`, decided 17 November 2026). Its tile and the work logged on it are drawn in it: the
+day timelines, My work, reports, its own charts. The rules live in `Business/Projects/ProjectColorRules.cs`.
+
+- **The palette:** 16 colours, each readable with a white icon on it and visible on the dark theme: blue `#2F6FEB`,
+  indigo `#5B5BD6`, violet `#8B5CF6`, purple `#9D3FC7`, magenta `#C026A3`, pink `#D6336C`, coral `#E0603F`, orange
+  `#D9730D`, amber `#B7791F`, olive `#7C8A16`, green `#2F9E44`, emerald `#0F9F75`, teal `#0E8A84`, cyan `#0B8DB8`,
+  slate `#5F7085` and brown `#9C6644`.
+- **A new project** sent without a `tint` gets one of the palette at random, among those no active or on-hold project
+  has, in any domain. When every one is taken, it gets one of those the fewest open projects have. Projects Proton
+  creates get one the same way. Two projects created at the same moment may still get the same colour.
+- **Changing it:** anyone who edits the project (`project:edit`) may pick any colour, `#RRGGBB` (`#RRGGBBAA`, which
+  older projects may have, is accepted too; anything else is `400` on `tint`). Left out of an edit, the colour stays:
+  a project never loses its colour.
+- Projects that had no colour got one of the palette from the `ProjectColors` migration ([database.md](database.md)).
+
 ## Creating a project
 
 - The start date is today (company time zone). The owner defaults to the caller.
+- **Colour:** `tint` is optional. Left out, the project gets a colour of the palette (see "Colours").
 - **CFA price:** `cfaPrice` is optional, in whole francs, and needs `financial:view` (`403`) (see "Money").
 - **Codes:** `projectCode` and `buildingCode` are optional. Left out, the project gets the next code of the quarter and its name's initials (see "Project codes"). The app suggests both as the form is filled in.
 - **Design:** `billingType` is `client` (a `clientId` is required, `revenue` optional) or `internal` (no client, no revenue). No work price. Sending a `revenue` needs `financial:write` (`403`; on an Execution site, `financial:view`): admins create the project and a super admin sets its customer payment later.
