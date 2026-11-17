@@ -9,6 +9,9 @@ public interface IMeetingService
 
     Task<IReadOnlyList<MeetingResponse>> ListForProjectAsync(long projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>Who may be invited to the project's meetings: everyone who sees the project but the caller, by name.</summary>
+    Task<IReadOnlyList<MeetingInviteeResponse>> InviteesAsync(long projectId, CancellationToken cancellationToken = default);
+
     Task<MeetingResponse> CreateAsync(long projectId, SaveMeetingRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>A meeting about no project, for the people chosen (see <c>MeetingRules</c>).</summary>

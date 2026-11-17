@@ -44,6 +44,7 @@ public static class PushCategories
         [NotificationKinds.MeetingInvited] = NotificationCategory.Meetings,
         [NotificationKinds.MeetingMoved] = NotificationCategory.Meetings,
         [NotificationKinds.MeetingCancelled] = NotificationCategory.Meetings,
+        [NotificationKinds.MeetingSoon] = NotificationCategory.Meetings,
 
         [NotificationKinds.MaterialsAdded] = NotificationCategory.Sites,
         [NotificationKinds.BoqSubmitted] = NotificationCategory.Sites,

@@ -12,6 +12,7 @@ public sealed class NotificationSchedulerOptions
     /// <summary>Deletes notifications past a week, at start-up and then daily (NotificationCleanupJob).</summary>
     public bool CleanupEnabled { get; init; } = true;
 
+    /// <summary>Every check but the meeting reminders, which run every minute.</summary>
     [Range(1, 1440)]
     public int IntervalMinutes { get; init; } = 60;
 }

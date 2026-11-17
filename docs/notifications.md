@@ -48,10 +48,10 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `entry_comment` | The work entry's author | the work entry | `authorName`, `text`, `entryDescription` |
 | `log_department_blocked` | The project's owner and every super admin, when someone logs hours on a project their department isn't on (see [projects.md](projects.md#departments)). Rolling per project and department (`log-department-{projectId}-{teamId}`) | the blocked change | `projectTitle`, `personName`, `departmentName`, `teamId` |
 | `work_entry_released` | The person whose hours waited for their department, once it was added. Rolling per project and outcome | the project | `projectTitle`, `released`, `reason` (when not released) |
-| `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
-| `meeting_invited` | A general meeting's attendees, when they are added | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
-| `meeting_moved` | A general meeting's attendees, when its time changes | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
-| `meeting_cancelled` | A general meeting's attendees, when it is deleted or they are taken out | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
+| `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a project meeting; those of them it invites get `meeting_invited` instead | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
+| `meeting_invited` | A general meeting's attendees and a project meeting's invitees, when they are added (as it is set, or later) | the meeting (a project meeting's carries its project) | `authorName`, `projectTitle` (null for a general meeting), `topic`, `startsAt`, `endsAt` |
+| `meeting_moved` | The same people, when its time changes | the meeting | the same |
+| `meeting_cancelled` | The same people, when it is deleted or they are taken out | the meeting | the same |
 | `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` (someone recorded expenses on a site; the kind keeps its name, the text says "Expenses added") |
 | `labour_week_submitted` | Holders of `labour_report:manage` | the project | `weekStart`, `updated`, `projectTitle` |
 | `project_created` | The domain's people | the project | `projectTitle` |
@@ -100,7 +100,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 
 ## Scheduled notifications
 
-Nobody's action sends these, so they have no actor. A background timer (`Jobs/NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default); `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
+Nobody's action sends these, so they have no actor. A background timer (`Jobs/NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default), except the meeting reminders, which it runs every minute; `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
 
 Every scheduled notification carries a key (`digest_key`) and goes to a person only once per key, however often the checks run. What was sent is remembered in `notification_sent_keys` (person and key), not by the notification, so it still holds after the notification is deleted (see [Keeping notifications](#keeping-notifications)). Its key stops a second API instance from sending it twice. Invoice, profit and portal-mention notifications that go once (`SendOnceAsync`) work the same way.
 
@@ -125,6 +125,7 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `invoice_send_due` | A scheduled invoice with no address to email reached its day, so it isn't issued. Key `invoice-send-due:{id}:{sendOn}` | Whoever scheduled it, to send it themselves | the invoice | `sendOn` |
 | `invoice_send_failed` | A scheduled invoice's email failed; it is tried again on every run. Key `invoice-send-failed:{id}:{sendOn}` | Whoever scheduled it | the invoice | `sendTo` |
 | `invoice_reminder_due` | An overdue invoice is due a reminder, but there is no address to email it to. Key `invoice-reminder-due:{id}` | Holders of `invoice:send` in its domain, to chase it themselves | the invoice | `number` |
+| `meeting_soon` | A meeting starts within 10 minutes (`MeetingRules.ReminderMinutes`), checked every minute. A meeting set less than 10 minutes ahead is reminded at once (within a minute, next to its invitation); none is sent once it has started. Key `meeting-soon-{id}-{startsAt}` (`yyyyMMddHHmm`), so a moved meeting is reminded again, and someone invited after the reminder went out still gets it. A notification and its push, so mutes and quiet hours apply as to the other meeting kinds (`Services/Meetings/Implementation/MeetingReminders.cs`) | A project meeting's invitees and a general meeting's attendees, never whoever set it | the meeting (a project meeting's carries its project) | `projectTitle`, `topic`, `startsAt`, `endsAt`, `startTime` (`HH:mm` company time, for the push) |
 
 The same timer also runs the domains' auto-archive (see [projects.md](projects.md), "Status"). Percentages (`usedPct`, `marginPct`) are money information, so they only go to holders of `financial:view`, and no notification carries an amount (N5).
 
@@ -166,7 +167,7 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `work` | `work_logged`, `work_digest`, `entry_comment`, `log_department_blocked`, `work_entry_released`, `weekly_summary`, `hours_excused`, `schedule_changed`, `hours_missed`, `hours_missed_list` |
 | `requirements` | `requirement_assigned`, `requirements_added`, `requirement_done`, `requirement_due_soon`, `requirement_overdue` |
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
-| `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
+| `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled`, `meeting_soon` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder`, `boq_submitted`, `boq_draft_edited` |
 | `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `pocket_round_off`, `change_blocked`, `pay_change_held`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short`, and the six `salary_advance_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `recorded`, `unsettled`) |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed`, and the twelve `time_off_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `rejected`, `expired`, `undecided`, `starts`, `back`, `ended`, `online`, `hours`) |
@@ -187,7 +188,7 @@ The website gets the phone app's pushes, with the same text, data and checks, th
 
 ### Reminders
 
-Push only: no notification row, so the website's bell is unchanged. The notification scheduler checks them every hour; each goes to a person at most once a day, remembered in memory (a restart can repeat one).
+Push only: no notification row, so the website's bell is unchanged. The notification scheduler checks them every hour; each goes to a person at most once a day, remembered in memory (a restart can repeat one). The meeting reminder (`meeting_soon`) is a notification instead, with a key that survives restarts ([Scheduled notifications](#scheduled-notifications)).
 
 | Kind | When | To |
 |---|---|---|

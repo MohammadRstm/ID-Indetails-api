@@ -61,6 +61,8 @@ public static class PushText
 
         var actor = Named(actorName, Someone);
         var project = Named(projectTitle, AProject);
+        // a general meeting has no project
+        var onProject = string.IsNullOrWhiteSpace(projectTitle) ? "" : $" on {project}";
         return kind switch
         {
             NotificationKinds.RequirementAssigned => new("New requirement", $"{actor} assigned you a requirement on {project}."),
@@ -125,9 +127,12 @@ public static class PushText
                 : $"{project} has had no work for a while."),
 
             NotificationKinds.MeetingScheduled => new("Meeting set", $"{actor} set a meeting on {project}."),
-            NotificationKinds.MeetingInvited => new("Meeting", $"{actor} invited you to a meeting."),
-            NotificationKinds.MeetingMoved => new("Meeting moved", $"{actor} moved a meeting you're in."),
-            NotificationKinds.MeetingCancelled => new("Meeting cancelled", $"{actor} cancelled a meeting you were in."),
+            NotificationKinds.MeetingInvited => new("Meeting", $"{actor} invited you to a meeting{onProject}."),
+            NotificationKinds.MeetingMoved => new("Meeting moved", $"{actor} moved a meeting you're in{onProject}."),
+            NotificationKinds.MeetingCancelled => new("Meeting cancelled", $"{actor} cancelled a meeting you were in{onProject}."),
+            NotificationKinds.MeetingSoon => new("Meeting soon", Text(payload, "startTime") is { } time
+                ? $"Your meeting{onProject} starts at {time}."
+                : $"Your meeting{onProject} starts soon."),
 
             NotificationKinds.MaterialsAdded => new("Expenses added", Int(payload, "count") is > 1 and var expenses
                 ? $"{actor} added {expenses} expenses on {project}."

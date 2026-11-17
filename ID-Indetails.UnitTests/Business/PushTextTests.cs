@@ -31,9 +31,9 @@ public class PushTextTests
         """).RootElement;
 
     [Fact]
-    public void There_are_74_notification_kinds_and_each_has_its_own_text()
+    public void There_are_75_notification_kinds_and_each_has_its_own_text()
     {
-        AllKinds.Count.ShouldBe(74);
+        AllKinds.Count.ShouldBe(75);
         foreach (var kind in AllKinds)
         {
             var text = PushText.ForNotification(kind, "Rana Haddad", "Villa Haddad", Revealing, 2);
@@ -161,6 +161,20 @@ public class PushTextTests
         preview.Length.ShouldBe(PushText.MaxPreviewLength);
         preview.ShouldEndWith("…");
         PushText.Preview("   ").ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_meeting_names_its_project_and_a_reminder_its_start_but_never_the_topic()
+    {
+        var payload = JsonDocument.Parse("""{"topic":"Haddad budget","startTime":"14:30"}""").RootElement;
+
+        PushText.ForNotification(NotificationKinds.MeetingSoon, null, "Villa Haddad", payload, 1)
+            .ShouldBe(new PushMessageText("Meeting soon", "Your meeting on Villa Haddad starts at 14:30."));
+        PushText.ForNotification(NotificationKinds.MeetingSoon, null, null, payload, 1).Body.ShouldBe("Your meeting starts at 14:30.");
+        PushText.ForNotification(NotificationKinds.MeetingSoon, null, null, null, 1).Body.ShouldBe("Your meeting starts soon.");
+        PushText.ForNotification(NotificationKinds.MeetingInvited, "Rana", "Tower B", payload, 1).Body.ShouldBe("Rana invited you to a meeting on Tower B.");
+        PushText.ForNotification(NotificationKinds.MeetingInvited, "Rana", null, payload, 1).Body.ShouldBe("Rana invited you to a meeting.");
+        PushCategories.Of(NotificationKinds.MeetingSoon).ShouldBe(NotificationCategory.Meetings);
     }
 
     [Fact]
