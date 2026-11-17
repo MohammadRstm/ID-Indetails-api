@@ -78,7 +78,8 @@ public sealed record PushTarget
             NotificationKinds.RequirementsAdded => ProjectPart(projectId, projectDomain, "requirements"),
             NotificationKinds.MeetingScheduled => ProjectPart(projectId, projectDomain, "meetings"),
             // a general meeting has no project: its people see it among their meetings
-            NotificationKinds.MeetingInvited or NotificationKinds.MeetingMoved or NotificationKinds.MeetingCancelled => OfPage("meetings"),
+            NotificationKinds.MeetingInvited or NotificationKinds.MeetingMoved or NotificationKinds.MeetingCancelled or NotificationKinds.MeetingSoon
+                => ProjectPart(projectId, projectDomain, "meetings") ?? OfPage("meetings"),
             NotificationKinds.MaterialsAdded => ProjectPart(projectId, projectDomain, "materials"),
             NotificationKinds.LabourWeekSubmitted => projectId is { } site && WeekStartOf(payload) is { } week
                 ? LabourWeek(site, week)

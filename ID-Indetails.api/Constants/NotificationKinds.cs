@@ -31,14 +31,23 @@ public static class NotificationKinds
     /// <summary>Someone who doesn't manage meetings set one (subject: the meeting). Sent to the domain's meeting managers.</summary>
     public const string MeetingScheduled = "meeting_scheduled";
 
-    /// <summary>You were added to a general meeting (subject: the meeting). To its attendees, from whoever set it.</summary>
+    /// <summary>
+    /// You were added to a general meeting, or invited to a project meeting (subject: the meeting; a project meeting's
+    /// project). From whoever set it or added you.
+    /// </summary>
     public const string MeetingInvited = "meeting_invited";
 
-    /// <summary>A general meeting you are in moved to another time (subject: the meeting).</summary>
+    /// <summary>A meeting you are in or invited to moved to another time (subject: the meeting).</summary>
     public const string MeetingMoved = "meeting_moved";
 
-    /// <summary>A general meeting you were in was cancelled, or you were taken out of it (subject: the meeting).</summary>
+    /// <summary>A meeting you were in or invited to was cancelled, or you were taken out of it (subject: the meeting).</summary>
     public const string MeetingCancelled = "meeting_cancelled";
+
+    /// <summary>
+    /// A meeting you are in or invited to starts within 10 minutes (subject: the meeting; key
+    /// <c>meeting-soon-{id}-{startsAt}</c>). Scheduled, once per person and start time.
+    /// </summary>
+    public const string MeetingSoon = "meeting_soon";
 
     /// <summary>Someone recorded expenses on a site (subject: the project; the count in the payload). The kind keeps its stored name.</summary>
     public const string MaterialsAdded = "materials_added";

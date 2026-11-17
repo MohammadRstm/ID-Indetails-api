@@ -16,6 +16,9 @@ public enum ScheduledCheck
     LabourWeekReminders,
     MissedHours,
     TimeOff,
+
+    /// <summary>Run every minute, the rest every <c>NotificationScheduler:IntervalMinutes</c>.</summary>
+    MeetingReminders,
 }
 
 /// <summary>

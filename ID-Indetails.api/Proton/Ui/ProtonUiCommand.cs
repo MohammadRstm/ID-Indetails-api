@@ -61,6 +61,8 @@ public enum ProtonPage
     WebsiteContact,
     WebsiteSite,
     WebsiteStaff,
+    // an employee's own month of meetings
+    Calendar,
 }
 
 /// <summary>
