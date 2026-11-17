@@ -189,6 +189,10 @@ public sealed class MyWorkService(
         var yearAgo = today.AddDays(-(DailyDays - 1));
         var (activeDays, longestStreak) = WorkStats.Streaks(worked, yearAgo, today);
         var words = query.Search?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        // a day is drawn in the colour of the project with the most time that day
+        var topProject = WorkStats.TopProjectByDay(worked);
+        var tints = views.GroupBy(e => e.ProjectId).ToDictionary(g => g.Key, g => g.First().ProjectTint);
+        string? TintOn(DateOnly day) => topProject.TryGetValue(day, out var projectId) ? tints[projectId] : null;
 
         var inRange = views.Where(e =>
         {
@@ -207,7 +211,7 @@ public sealed class MyWorkService(
             WorkStats.Minutes(worked, today, today),
             Enumerable.Range(0, 7)
                 .Select(i => weekStart.AddDays(i))
-                .Select(d => new DayTotalResponse(d, WorkStats.Minutes(worked, d, d)))
+                .Select(d => new DayTotalResponse(d, WorkStats.Minutes(worked, d, d), TintOn(d)))
                 .ToList(),
             WorkStats.Minutes(worked, weekStart, today),
             WorkStats.Minutes(worked, weekStart.AddDays(-7), weekStart.AddDays(-1)),
@@ -222,7 +226,7 @@ public sealed class MyWorkService(
             activeDays,
             longestStreak,
             ToWeeks(WorkStats.Weekly(worked, today, SummaryWeeks, calendar.FirstDayOfWeek)),
-            WorkStats.Daily(worked.Where(w => w.Day >= yearAgo)).Select(d => new DayTotalResponse(d.Day, d.Minutes)).ToList(),
+            WorkStats.Daily(worked.Where(w => w.Day >= yearAgo)).Select(d => new DayTotalResponse(d.Day, d.Minutes, TintOn(d.Day))).ToList(),
             inRange
                 .GroupBy(e => e.ProjectId)
                 .Select(g => new ProjectTimeResponse(

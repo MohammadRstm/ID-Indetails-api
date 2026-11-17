@@ -444,7 +444,7 @@ submits or sends anything itself.
 
 - **`fill_form {form, id?, <form>: values}`** (`Proton/Ui/ProtonForms.cs`): one typed record per form (decision 11b,
   no loose dictionary). The forms are `client`, `meeting`, `new_project` (no money: revenue, rates and pay don't
-  exist in it; the codes only when the user gives them, or the form suggests them), `edit_project`, `report_bug`, `invite` (address, position and team, never role or pay) and `message`.
+  exist in it; the codes only when the user gives them, or the form suggests them), `edit_project` (not the colour: Proton changes it with `propose_update_project`), `report_bug`, `invite` (address, position and team, never role or pay) and `message`.
   - The `meeting` form fills what it is about, the day, the times, the topic and the description, never its invitees: people are picked in the form, or named on a `propose_schedule_meeting` card.
   - Shape problems go back to the model field by field (lengths, email format, times).
   - It needs the endpoint the form saves through, and any record it names must be visible to the user.
@@ -621,7 +621,7 @@ fingerprint column on `proton_usage`, which needs its own approval.
 | `propose_update_requirement` | low | `PUT …/requirements/{id}` | text, deadline, assignees; refused if the requirement changed since |
 | `propose_set_requirement_done` | low | `POST …/requirements/{id}/done` (`/undone`) | |
 | `propose_change_project_status` | medium | `POST /api/projects/{id}/hold` (`/resume`) | hold and resume only: completing, archiving and reopening lock or unlock revenue |
-| `propose_update_project` | medium | `PUT /api/projects/{id}` | title, codes (a project code another project of its domain has is refused before the card), description, location, target date, owner; refused if the project changed since |
+| `propose_update_project` | medium | `PUT /api/projects/{id}` | title, codes (a project code another project of its domain has is refused before the card), description, location, target date, colour (a palette colour by its name, or a hex colour the user gives), owner; refused if the project changed since |
 | `propose_create_project` | medium | `POST /api/projects` | a Design project, client or internal, or an Execution site for an Execution client with its staff if they are known (checked by `SiteTeamRules.CheckStaff`; none is fine, they can come later); no money fields, so no revenue, rates or crew defaults. The card shows the full code it will be saved with: the codes the user gave, or the next code of the quarter and the name's initials |
 | `propose_create_client` | low | `POST /api/clients` | the contacts the user gave; a shared name is a warning on the card, another client's contact is refused; opens the new client |
 | `propose_update_client` | low | `PUT /api/clients/{id}` | details, plus contacts added or removed (the rest kept); refused if the client changed since |

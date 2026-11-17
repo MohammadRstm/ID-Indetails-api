@@ -243,7 +243,7 @@ public sealed class ProjectService(
             Description = Clean(request.Description),
             Location = Clean(request.Location),
             Icon = Clean(request.Icon),
-            Tint = Clean(request.Tint),
+            Tint = Clean(request.Tint) ?? ProjectColorRules.Pick(await projects.OpenProjectTintsAsync(cancellationToken), Random.Shared),
             Status = ProjectStatus.Active,
             BillingType = request.BillingType,
             ClientId = request.ClientId,
@@ -370,7 +370,8 @@ public sealed class ProjectService(
         project.Description = Clean(request.Description);
         project.Location = Clean(request.Location);
         project.Icon = Clean(request.Icon);
-        project.Tint = Clean(request.Tint);
+        // every project keeps a colour: left out, it stays
+        project.Tint = Clean(request.Tint) ?? project.Tint;
         project.TargetDate = request.TargetDate;
         if (request.CfaPrice is { } cfaPrice)
         {

@@ -105,6 +105,10 @@ public sealed record UpdateProjectInput : ProtonActionInput
 
     [Description("The new building code: 1 to 10 letters or digits, usually the name's initials.")]
     public string? BuildingCode { get; init; }
+
+    [Description("The new colour its tile and work are drawn in: one of blue, indigo, violet, purple, magenta, pink, coral, orange, " +
+        "amber, olive, green, emerald, teal, cyan, slate, brown, or a hex colour like #2F6FEB when the user gives one.")]
+    public string? Color { get; init; }
 }
 
 /// <summary>Changes a project's details or owner, through PUT /api/projects/{id} once confirmed. Money is not part of it.</summary>
@@ -114,7 +118,7 @@ public sealed class ProposeUpdateProjectTool(IProjectService projects, IEmployee
     public override string Name => "propose_update_project";
 
     public override string Description =>
-        "Propose changing a project's title, codes, description, location, target date or owner. Revenue, client and pricing " +
+        "Propose changing a project's title, codes, description, location, target date, colour or owner. Revenue, client and pricing " +
         "are changed in the app. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Medium;
@@ -135,6 +139,7 @@ public sealed class ProposeUpdateProjectTool(IProjectService projects, IEmployee
             Location = input.Location ?? before.Location,
             TargetDate = input.ClearTargetDate ? null : input.TargetDate ?? before.TargetDate,
             OwnerId = input.OwnerId ?? before.OwnerId,
+            Tint = input.Color is { } color ? ProjectText.Color(color) : before.Tint,
         };
 
         var changes = new List<ProtonChange>();
@@ -144,6 +149,7 @@ public sealed class ProposeUpdateProjectTool(IProjectService projects, IEmployee
         Add(changes, "Description", ProtonText.Cut(before.Description, 200), ProtonText.Cut(after.Description, 200));
         Add(changes, "Location", before.Location, after.Location);
         Add(changes, "Target date", ProjectText.Date(before.TargetDate), ProjectText.Date(after.TargetDate));
+        Add(changes, "Colour", ProjectText.ColorName(before.Tint), ProjectText.ColorName(after.Tint));
         if (after.OwnerId != before.OwnerId)
         {
             var owner = await employees.GetAsync(after.OwnerId, cancellationToken);
@@ -407,6 +413,13 @@ internal static class ProjectText
         => ProjectCodeRules.IsBuildingCode(code)
             ? ProjectCodeRules.Clean(code)
             : throw new ProtonToolInputException($"Building code: {ProjectCodeRules.BuildingCodeMessage}");
+
+    /// <summary>A palette colour by its name, or a hex colour as given.</summary>
+    public static string Color(string color)
+        => ProjectColorRules.HexOf(color)
+            ?? (ProjectColorRules.IsColor(color) ? color.Trim().ToUpperInvariant() : throw new ProtonToolInputException($"Colour: {ProjectColorRules.ColorMessage}"));
+
+    public static string? ColorName(string? hex) => ProjectColorRules.NameOf(hex) is { } name ? $"{name} ({hex})" : hex;
 
     public static string Status(ProjectStatus status) => status == ProjectStatus.Hold ? "On hold" : status.ToString();
 
