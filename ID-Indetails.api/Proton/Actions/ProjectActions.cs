@@ -106,8 +106,9 @@ public sealed record UpdateProjectInput : ProtonActionInput
     [Description("The new building code: 1 to 10 letters or digits, usually the name's initials.")]
     public string? BuildingCode { get; init; }
 
-    [Description("The new colour its tile and work are drawn in: one of blue, indigo, violet, purple, magenta, pink, coral, orange, " +
-        "amber, olive, green, emerald, teal, cyan, slate, brown, or a hex colour like #2F6FEB when the user gives one.")]
+    [Description("The new colour its tile and work are drawn in, by its palette name: raspberry, rose, cocoa, burgundy, dusty rose, " +
+        "oxblood, coral, terracotta, brick, chestnut, copper, taupe, walnut, ochre, olive, moss, sage, jade, forest, lagoon, petrol, " +
+        "turquoise, slate, steel, navy, dusk, storm, aubergine, mulberry, heather; or a hex colour like #2A7F62 when the user gives one.")]
     public string? Color { get; init; }
 }
 

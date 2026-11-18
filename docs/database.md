@@ -219,6 +219,8 @@ The `PayChangeHolds` migration (15 Nov 2026) adds `pay_change` to `ck_blocked_ch
 
 The `ProjectColors` migration (17 Nov 2026) only moves data: every project without a colour (`projects.tint` null or empty) gets one of the palette ([projects.md](projects.md#colours)), the active and on-hold projects first, in turn, so the first sixteen differ. Colours already set are kept, and no column changes. `Down` leaves the colours, since they can't be told from colours people chose afterwards.
 
+The `ProjectPalette` migration (18 Nov 2026) only moves data: every project gets a colour of the new thirty-colour palette ([projects.md](projects.md#colours)), replacing the sixteen colours and any picked on the old colour wheel. Each business on its own, its active and on-hold projects first, oldest first, so up to thirty differ; the palette is walked seven at a time so neighbours differ a lot. No column changes; `Down` keeps the new colours.
+
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
 ## Who connects

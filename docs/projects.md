@@ -39,22 +39,34 @@ Every project has two codes, decided 16 November 2026. The rules live in `Busine
 
 ## Colours
 
-Every project has a colour (`tint`, decided 17 November 2026). Its tile and the work logged on it are drawn in it: the
+Every project has a colour (`tint`, decided 17 November 2026; the palette changed on 18 November 2026). Its tile and the work logged on it are drawn in it: the
 day timelines, My work, reports, its own charts. A whole day of someone's work (the week's bars, the heat map) is drawn
 in the colour of the project with the most of their time that day ([design.md](design.md), the work summary). The rules
 live in `Business/Projects/ProjectColorRules.cs`.
 
-- **The palette:** 16 colours, each readable with a white icon on it and visible on the dark theme: blue `#2F6FEB`,
-  indigo `#5B5BD6`, violet `#8B5CF6`, purple `#9D3FC7`, magenta `#C026A3`, pink `#D6336C`, coral `#E0603F`, orange
-  `#D9730D`, amber `#B7791F`, olive `#7C8A16`, green `#2F9E44`, emerald `#0F9F75`, teal `#0E8A84`, cyan `#0B8DB8`,
-  slate `#5F7085` and brown `#9C6644`.
-- **A new project** sent without a `tint` gets one of the palette at random, among those no active or on-hold project
-  has, in any domain. When every one is taken, it gets one of those the fewest open projects have. Projects Proton
+- **The palette:** 30 deep colours (18 November 2026), picked from Coolors' elegant palettes so that no two are close
+  and each reads with a white icon on it. In hue order, as the picker shows them: raspberry `#A53860`, rose `#DA627D`,
+  cocoa `#3D2C2E`, burgundy `#6E0D25`, dusty rose `#A26769`, oxblood `#81171B`, coral `#FE5F55`, terracotta `#C75146`,
+  brick `#AD2E24`, chestnut `#6A381F`, copper `#DA7422`, taupe `#6F5E53`, walnut `#8E6E53`, ochre `#A59132`, olive
+  `#625834`, moss `#48483A`, sage `#808F85`, jade `#2A7F62`, forest `#26413C`, lagoon `#407076`, petrol `#0B525B`,
+  turquoise `#1B9AAA`, slate `#4C5760`, steel `#748CAB`, navy `#1D2D44`, dusk `#4B4E6D`, storm `#6A6B83`, aubergine
+  `#4D194D`, mulberry `#6D466B` and heather `#A28F9D`. Proton knows them by these names.
+- **Each business on its own:** Design and Execution use the same thirty, each counting only its own active and on-hold
+  projects. A colour a Design project has is still free for an Execution site.
+- **A new project** sent without a `tint` gets one at random among those no active or on-hold project of its business
+  has. When every one is taken, it gets one of those the fewest have: the colours are used again. Projects Proton
   creates get one the same way. Two projects created at the same moment may still get the same colour.
-- **Changing it:** anyone who edits the project (`project:edit`) may pick any colour, `#RRGGBB` (`#RRGGBBAA`, which
-  older projects may have, is accepted too; anything else is `400` on `tint`). Left out of an edit, the colour stays:
-  a project never loses its colour.
-- Projects that had no colour got one of the palette from the `ProjectColors` migration ([database.md](database.md)).
+- **The picker:** `GET /api/projects/colors?domain=` (`project:create` or `project:edit`) lists the thirty, each with
+  the business's open project that has it (`takenBy`, the oldest when several share it; `null` when free). The client
+  shows them in a grid, the taken ones faded.
+- **Swapping:** `POST /api/projects/{id}/swap-color` `{ "otherProjectId": 12 }` (`project:edit`) trades the two
+  projects' colours in one go and returns the project. Both must be of the same business (`422 not_for_this_domain`),
+  and another project (`400`).
+- **Changing it:** `tint` on an edit still takes any `#RRGGBB` (`#RRGGBBAA` too), so older forms and Proton keep
+  working, but the client only offers the palette. Left out of an edit, the colour stays.
+- The `ProjectPalette` migration gave every project a colour of the thirty: each business's active and on-hold projects
+  first, oldest first, so up to thirty of them differ, walking the palette seven at a time so neighbours differ a lot
+  ([database.md](database.md)). It replaced the 16 colours of the `ProjectColors` migration.
 
 ## Creating a project
 

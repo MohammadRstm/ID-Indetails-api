@@ -112,6 +112,22 @@ public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProj
     }
 }
 
+public sealed class ProjectColorsQueryValidator : AbstractValidator<ProjectColorsQuery>
+{
+    public ProjectColorsQueryValidator()
+    {
+        RuleFor(x => x.Domain).ValidBusiness();
+    }
+}
+
+public sealed class SwapProjectColorRequestValidator : AbstractValidator<SwapProjectColorRequest>
+{
+    public SwapProjectColorRequestValidator()
+    {
+        RuleFor(x => x.OtherProjectId).GreaterThan(0).WithMessage("Pick the project to swap colours with.");
+    }
+}
+
 public sealed class NextProjectCodeQueryValidator : AbstractValidator<NextProjectCodeQuery>
 {
     public NextProjectCodeQueryValidator()

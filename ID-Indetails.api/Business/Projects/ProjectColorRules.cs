@@ -3,21 +3,27 @@ using System.Text.RegularExpressions;
 namespace ID_Indetails.api.Business.Projects;
 
 /// <summary>
-/// A project's colour (its <c>tint</c>), which its tile and the work logged on it are drawn in. A new project gets one
-/// of the palette's at random, avoiding the colours of the active and on-hold projects while any is free. Anyone who
-/// edits the project may then pick any colour.
+/// A project's colour (its <c>tint</c>), which its tile and the work logged on it are drawn in: one of the palette's
+/// thirty deep colours (decided 18 November 2026, picked from Coolors' elegant palettes so no two are close). Each
+/// business uses the same thirty on its own: a new project gets one its business's active and on-hold projects don't
+/// have, and once all are taken they are used again. Whoever edits a project picks another free one, or swaps with the
+/// project that has it.
 /// </summary>
 public static partial class ProjectColorRules
 {
     public const string ColorMessage = "The colour must be a hex colour like #1F6FEB.";
 
-    /// <summary>Each reads with a white icon on it and shows on the dark theme too. Named for Proton.</summary>
+    /// <summary>
+    /// In hue order, which the picker shows. Each reads with a white icon on it (contrast 3:1 or more). Named for Proton.
+    /// </summary>
     public static readonly IReadOnlyList<(string Name, string Hex)> Palette =
     [
-        ("blue", "#2F6FEB"), ("indigo", "#5B5BD6"), ("violet", "#8B5CF6"), ("purple", "#9D3FC7"),
-        ("magenta", "#C026A3"), ("pink", "#D6336C"), ("coral", "#E0603F"), ("orange", "#D9730D"),
-        ("amber", "#B7791F"), ("olive", "#7C8A16"), ("green", "#2F9E44"), ("emerald", "#0F9F75"),
-        ("teal", "#0E8A84"), ("cyan", "#0B8DB8"), ("slate", "#5F7085"), ("brown", "#9C6644"),
+        ("raspberry", "#A53860"), ("rose", "#DA627D"), ("cocoa", "#3D2C2E"), ("burgundy", "#6E0D25"), ("dusty rose", "#A26769"),
+        ("oxblood", "#81171B"), ("coral", "#FE5F55"), ("terracotta", "#C75146"), ("brick", "#AD2E24"), ("chestnut", "#6A381F"),
+        ("copper", "#DA7422"), ("taupe", "#6F5E53"), ("walnut", "#8E6E53"), ("ochre", "#A59132"), ("olive", "#625834"),
+        ("moss", "#48483A"), ("sage", "#808F85"), ("jade", "#2A7F62"), ("forest", "#26413C"), ("lagoon", "#407076"),
+        ("petrol", "#0B525B"), ("turquoise", "#1B9AAA"), ("slate", "#4C5760"), ("steel", "#748CAB"), ("navy", "#1D2D44"),
+        ("dusk", "#4B4E6D"), ("storm", "#6A6B83"), ("aubergine", "#4D194D"), ("mulberry", "#6D466B"), ("heather", "#A28F9D"),
     ];
 
     /// <summary>#RRGGBB, or #RRGGBBAA as older projects may have.</summary>

@@ -16,6 +16,12 @@ public sealed record NextProjectCodeResponse(string ProjectCode, ProjectCodeHold
 
 public sealed record ProjectCodeHolderResponse(long Id, string Title);
 
+/// <summary>
+/// One of the palette's colours, in the picker's order, and the business's active or on-hold project that has it (the
+/// oldest, when all thirty are in use and several share it); null when it is free.
+/// </summary>
+public sealed record ProjectColorResponse(string Name, string Hex, ProjectCodeHolderResponse? TakenBy);
+
 /// <summary>One change of a project's agreed payment, newest first in a list.</summary>
 /// <param name="Amount">USD: Design's customer payment, Execution's project fee.</param>
 /// <param name="PreviousAmount">Null for the payment agreed at the start.</param>

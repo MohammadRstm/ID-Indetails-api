@@ -247,11 +247,11 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
         var (superAdmin, project) = await DesignProjectAsync();
         await _steps.ExecuteAsync("UPDATE projects SET tint = '#123456' WHERE id = @id", ("@id", project.Id));
 
-        var reply = await ProposeAsync(superAdmin, "propose_update_project", new { project_id = project.Id, color = "Green" });
-        reply.PendingAction!.Preview.Changes.ShouldHaveSingleItem().ShouldBe(new ProtonChange("Colour", "#123456", "green (#2F9E44)"));
+        var reply = await ProposeAsync(superAdmin, "propose_update_project", new { project_id = project.Id, color = "Jade" });
+        reply.PendingAction!.Preview.Changes.ShouldHaveSingleItem().ShouldBe(new ProtonChange("Colour", "#123456", "jade (#2A7F62)"));
         (await ConfirmAsync(superAdmin, reply.PendingAction.Id, reply.ConversationId)).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await (await Client.GetAsync($"/api/projects/{project.Id}", superAdmin.AccessToken)).ReadAsync<ProjectResponse>())
-            .Tint.ShouldBe("#2F9E44");
+            .Tint.ShouldBe("#2A7F62");
     }
 
     [Fact]

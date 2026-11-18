@@ -155,6 +155,18 @@ public sealed record UpdateProjectRequest
 }
 
 /// <summary>The project code a new project of a domain would get, and whether a typed one is taken.</summary>
+/// <summary>The business whose colours to list.</summary>
+public sealed record ProjectColorsQuery
+{
+    public string? Domain { get; init; }
+}
+
+/// <summary>The project of the same business to trade colours with.</summary>
+public sealed record SwapProjectColorRequest
+{
+    public long OtherProjectId { get; init; }
+}
+
 public sealed record NextProjectCodeQuery
 {
     public string? Domain { get; init; }
