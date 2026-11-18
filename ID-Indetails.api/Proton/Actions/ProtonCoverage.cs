@@ -306,6 +306,8 @@ public static class ProtonCoverage
         Open("Auth.ChangePassword", "it takes a password or a sign-in address, which never go through a chat: Proton opens the form"),
         Open("Auth.ChangeEmail", "it takes a password or a sign-in address, which never go through a chat: Proton opens the form"),
         Elsewhere("Setup.CreateSuperAdmin", "the first super admin, made with the setup key before anyone can sign in"),
+        Elsewhere("DevSignIn.SignIn", "the development sign-in, from the sign-in page before there is a session (Development only)"),
+        Elsewhere("DevSignIn.PortalSignIn", "the development sign-in to the client portal, from the sign-in page (Development only)"),
         // the phone app: its sign-in, its device for pushes, and the person's push settings
         Elsewhere("MobileAuth.Login", "the phone app's own sign-in"),
         Elsewhere("MobileAuth.Refresh", "the phone app rotating its own sign-in token"),

@@ -147,6 +147,25 @@ Warnings and the retries go to the `ID_Indetails.api.Security` log category. Cla
 
 A stolen token is still caught: used after the phone moved on, it is "two holders"; used before, the phone's next refresh presents the superseded token, which ends everything. The 5-minute window only exists for phone sessions, and only for a token whose successors were never used.
 
+## Development sign-in
+
+Testing the app as each kind of user would otherwise need everyone's password. In the **Development environment only**, the sign-in page offers a picker of every account that can sign in, and choosing one signs in as it without its password:
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/dev/accounts` | The accounts, in groups: super admins, each domain's admins then employees (Design, Execution, Website), then clients' portal accounts. Only active staff who aren't suspended, and active portal accounts. |
+| `POST /api/dev/sign-in` `{ "userId": 12 }` | Signs in as that staff member: the same response and refresh cookie as `POST /api/auth/login`. `404` for anyone who can't sign in. |
+| `POST /api/dev/portal-sign-in` `{ "accountId": 3 }` | Signs in to the client portal as that client, with the portal's cookie. `404` for an account that isn't active. |
+
+They take no password, so they must never exist where real people sign in:
+
+- `Program.cs` turns them on with `AddDevSignIn(builder.Environment.IsDevelopment())`. Off, `DevSignInController` is taken out of the app and its services aren't registered: its addresses answer like ones that don't exist. Production runs as `Production` (the Dockerfile sets it).
+- They are not in the OpenAPI document, so the client's generated types don't have them.
+- The client shows the picker only in the Vite dev server (`import.meta.env.DEV`). A production build leaves its code out.
+- Every such sign-in is logged as a warning in the `ID_Indetails.api.Security` category.
+
+`DevSignInAbsentTests` checks that the test host and a Production host have no such addresses.
+
 ## Using it from the React client
 
 - **Send cookies.** Call the auth endpoints with credentials (`withCredentials: true` in axios) so the browser sends and stores the refresh cookie.

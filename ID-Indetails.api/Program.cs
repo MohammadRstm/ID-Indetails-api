@@ -13,6 +13,9 @@ builder.Services.AddAuth(builder.Configuration);
 // Before the application services: they end by wrapping the content store with Proton's guards.
 builder.Services.AddContentStore(builder.Configuration, builder.Environment);
 builder.Services.AddApplicationServices();
+// Signing in as any account without its password, for the sign-in page's account picker: Development only. Anywhere
+// else (production runs as Production) its controller isn't part of the app and its services aren't registered.
+builder.Services.AddDevSignIn(builder.Environment.IsDevelopment());
 builder.Services.AddHosting(builder.Configuration, builder.Environment);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();

@@ -57,15 +57,15 @@ POST /api/proton/messages
   - a change a tool staged without saving is dropped, and the call is refused, so the next save in the request (a
     proposal row) can't write it.
 - **Every write endpoint is on a checked list.** `Proton/Actions/ProtonCoverage.cs` says how Proton handles each of the
-  258 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
+  271 write endpoints. Proton is to do everything the person signed in can do, so there is no "never" any more:
   - a built action (173), or one planned (13): each planned entry already has the tier and family it will be confirmed
     with. The planned ones are an Execution site's staff and daily logs, asking for and deciding pocket money, supervision taken, emailing,
     planning and scheduling invoices, and a payment's account label, waiting for the Execution changes to settle;
-  - a place opened for the user (28): time off (see below), submitting, withdrawing and keeping a BOQ draft (the author's, on the BOQs page), what takes a password or a sign-in address (typed on its own form, never in a
+  - a place opened for the user (37): time off (see below), submitting, withdrawing and keeping a BOQ draft (the author's, on the BOQs page), what takes a password or a sign-in address (typed on its own form, never in a
     chat), someone's pay (pay amounts never reach Proton), and uploads, which need a file from the person's device;
-  - elsewhere (31): what isn't the signed-in person's to do: signing in, someone else's invitation, the client's side of
+  - elsewhere (34): what isn't the signed-in person's to do: signing in (the development sign-in too), someone else's invitation, the client's side of
     the portal, the phone app's own device, a website visitor's message, the development file store;
-  - a read-only POST (2), or Proton's own controls (11).
+  - a read-only POST (3), or Proton's own controls (11).
 
   An action that emails someone outside the company (an invoice, a BOQ, an invitation, a message to the developer) is flagged
   `ExternalSend` and is always strong: Proton calls the service, not the rate-limited endpoint.
