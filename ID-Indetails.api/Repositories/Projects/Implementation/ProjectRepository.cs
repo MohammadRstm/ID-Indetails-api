@@ -136,11 +136,20 @@ public sealed class ProjectRepository(IdIndetailsDbContext db) : IProjectReposit
             .Select(p => p.ProjectCode)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<string>> OpenProjectTintsAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> OpenProjectTintsAsync(string domain, CancellationToken cancellationToken = default)
         => await db.Projects.AsNoTracking()
-            .Where(p => (p.Status == ProjectStatus.Active || p.Status == ProjectStatus.Hold) && p.Tint != null)
+            .Where(p => p.DomainCode == domain && (p.Status == ProjectStatus.Active || p.Status == ProjectStatus.Hold) && p.Tint != null)
             .Select(p => p.Tint!)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<(long Id, string Title, string Tint)>> OpenProjectColorsAsync(string domain, CancellationToken cancellationToken = default)
+        => (await db.Projects.AsNoTracking()
+            .Where(p => p.DomainCode == domain && (p.Status == ProjectStatus.Active || p.Status == ProjectStatus.Hold) && p.Tint != null)
+            .OrderBy(p => p.Id)
+            .Select(p => new { p.Id, p.Title, Tint = p.Tint! })
+            .ToListAsync(cancellationToken))
+            .Select(p => (p.Id, p.Title, p.Tint))
+            .ToList();
 
     public async Task<(long Id, string Title)?> CodeHolderAsync(
         string domain,

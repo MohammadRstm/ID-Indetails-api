@@ -123,6 +123,7 @@ public static class ProtonCoverage
         Action("Projects.UpdatePayment", "propose_project_money", T2, ProtonFamily.Money),
         Action("Projects.UpdateBilling", "propose_project_billing", T2, ProtonFamily.Money),
         Planned("Projects.UpdateStaff", T1, ProtonFamily.Core),
+        Open("Projects.SwapColor", "it changes another project's colour too: Proton opens the colour picker, where the swap is shown"),
         Open("Projects.SetPhoto", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
         Open("Projects.RemovePhoto", "the photo is chosen and taken off in the same place on the project's page: it opens it"),
         Action("ProjectDepartments.Set", "propose_project_departments", T1, ProtonFamily.Core),

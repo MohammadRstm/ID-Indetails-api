@@ -243,7 +243,7 @@ public sealed class ProjectService(
             Description = Clean(request.Description),
             Location = Clean(request.Location),
             Icon = Clean(request.Icon),
-            Tint = Clean(request.Tint) ?? ProjectColorRules.Pick(await projects.OpenProjectTintsAsync(cancellationToken), Random.Shared),
+            Tint = Clean(request.Tint) ?? ProjectColorRules.Pick(await projects.OpenProjectTintsAsync(domain, cancellationToken), Random.Shared),
             Status = ProjectStatus.Active,
             BillingType = request.BillingType,
             ClientId = request.ClientId,
@@ -422,6 +422,59 @@ public sealed class ProjectService(
         return new NextProjectCodeResponse(
             await NextCodeAsync(domain, cancellationToken),
             holder is { } taken ? new ProjectCodeHolderResponse(taken.Id, taken.Title) : null);
+    }
+
+    public async Task<IReadOnlyList<ProjectColorResponse>> ColorsAsync(ProjectColorsQuery query, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var domain = query.Domain!;
+        if (!actor.CanSee(domain))
+        {
+            throw new NotFoundException("Domain not found.");
+        }
+
+        var open = await projects.OpenProjectColorsAsync(domain, cancellationToken);
+        return ProjectColorRules.Palette
+            .Select(c =>
+            {
+                var holder = open.FirstOrDefault(p => string.Equals(p.Tint.Trim(), c.Hex, StringComparison.OrdinalIgnoreCase));
+                return new ProjectColorResponse(c.Name, c.Hex, holder.Id == 0 ? null : new ProjectCodeHolderResponse(holder.Id, holder.Title));
+            })
+            .ToList();
+    }
+
+    public async Task<ProjectResponse> SwapColorAsync(long projectId, SwapProjectColorRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        if (request.OtherProjectId == projectId)
+        {
+            throw new RequestValidationException(ErrorCodes.ValidationFailed, "otherProjectId", "Pick another project to swap colours with.");
+        }
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        // locked in the same order whoever swaps, so two swaps at once can't wait on each other
+        var first = await VisibleProjectForUpdateAsync(actor, Math.Min(projectId, request.OtherProjectId), cancellationToken);
+        var second = await VisibleProjectForUpdateAsync(actor, Math.Max(projectId, request.OtherProjectId), cancellationToken);
+        if (first.DomainCode != second.DomainCode)
+        {
+            throw new BusinessRuleException(ErrorCodes.NotForThisDomain, "Colours are swapped between projects of the same business.");
+        }
+
+        if (!string.Equals(first.Tint, second.Tint, StringComparison.OrdinalIgnoreCase))
+        {
+            (first.Tint, second.Tint) = (second.Tint, first.Tint);
+            var now = clock.UtcNow;
+            foreach (var p in new[] { first, second })
+            {
+                p.UpdatedAt = now;
+                activity.Add(ProjectEvent(p, ActivityEventKinds.ProjectUpdated, actor.UserId, new { change = "color" }));
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return await DescribeAsync(actor, projectId, cancellationToken);
     }
 
     public async Task<ProjectResponse> UpdateBillingAsync(
