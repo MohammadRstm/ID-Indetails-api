@@ -75,8 +75,13 @@ public sealed class ProposeBlockedChangeTool(IBlockedChangeService changes) : Pr
         var waiting = change.Kind == BlockedChangeKind.WorkEntryDepartment;
         if (waiting && input.Step == ProtonBlockedChangeStep.Force)
         {
-            throw new ProtonToolInputException(
-                $"These hours wait for {by}'s department, not the profit floor: they go through on their own once it is added to {change.ProjectTitle} (propose_project_departments). They can only be dropped.");
+            return (new BlockedChangeArgs(input.Step, change.Id, change.Summary),
+                new ProtonPreview($"Approve {by}'s hours on {change.ProjectTitle}",
+                    [new ProtonChange("Hours waiting", change.Summary, "logged")],
+                    $"Logged by {by}, whose department isn't one of {change.ProjectTitle}'s. Approving logs these hours alone, without adding the " +
+                    "department: they count outside the project's departments, with no share of its price. A change is decided once.",
+                    Irreversible: true),
+                target);
         }
 
         if (input.Step == ProtonBlockedChangeStep.Dismiss)
@@ -85,7 +90,7 @@ public sealed class ProposeBlockedChangeTool(IBlockedChangeService changes) : Pr
                 new ProtonPreview($"Drop the refused change on {change.ProjectTitle}",
                     [new ProtonChange("Refused change", change.Summary, "dropped")],
                     waiting
-                        ? $"Logged by {by}. The hours are dropped and never counted, even if the department is added later; a change is decided once."
+                        ? $"Logged by {by}. The hours are turned down: dropped and never counted, even if the department is added later, and {by} is told; a change is decided once."
                         : $"Asked by {by}. Nothing is made and the project's profit stays as it is; a change is decided once.",
                     Irreversible: true),
                 target);

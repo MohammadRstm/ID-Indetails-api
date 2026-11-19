@@ -27,6 +27,7 @@ using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Expenses.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
 using ID_Indetails.api.Services.Labour.Abstraction;
+using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
 using ID_Indetails.api.Services.SiteExpenses.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
@@ -52,6 +53,7 @@ public sealed class BlockedChangeService(
     IEmployeeService employees,
     IEmployeeRepository payRecords,
     IProjectRepository projectRows,
+    INotificationSender notifications,
     IClock clock) : IBlockedChangeService
 {
     public async Task<BlockedChangeResponse> GetAsync(long id, CancellationToken cancellationToken = default)
@@ -61,12 +63,6 @@ public sealed class BlockedChangeService(
     {
         var actor = await ActorAsync(cancellationToken);
         var row = await RowAsync(actor, id, cancellationToken);
-        if (row.Change.Kind == BlockedChangeKind.WorkEntryDepartment)
-        {
-            throw new BusinessRuleException(ErrorCodes.DepartmentStillMissing,
-                "These hours go through on their own once their logger's department is added to the project.");
-        }
-
         if (row.Change.Kind == BlockedChangeKind.PayChange)
         {
             await CheckPayHoldAsync(row.Change, actor, forcing: true, cancellationToken);
@@ -90,6 +86,12 @@ public sealed class BlockedChangeService(
         finally
         {
             floor.Forcing = false;
+            workEntries.LetOutsideDepartment = false;
+        }
+
+        if (row.Change.Kind == BlockedChangeKind.WorkEntryDepartment)
+        {
+            await TellLoggerAsync(row, actor, approved: true, cancellationToken);
         }
 
         return await DescribeAsync(await RowAsync(actor, id, cancellationToken), cancellationToken);
@@ -105,8 +107,22 @@ public sealed class BlockedChangeService(
         }
 
         await DecideAsync(row, BlockedChangeStatus.Dismissed, actor, cancellationToken);
+        if (row.Change.Kind == BlockedChangeKind.WorkEntryDepartment)
+        {
+            await TellLoggerAsync(row, actor, approved: false, cancellationToken);
+        }
+
         return await DescribeAsync(await RowAsync(actor, id, cancellationToken), cancellationToken);
     }
+
+    /// <summary>Tells whoever logged hours waiting for approval that they went through, or were turned down.</summary>
+    private Task TellLoggerAsync(BlockedChangeRow row, UserAccess actor, bool approved, CancellationToken cancellationToken)
+        => notifications.SendDigestAsync(
+            new NotificationDraft(NotificationKinds.WorkEntryReleased, actor.UserId, row.Project.DomainCode, row.Project.Id, "project", row.Project.Id,
+                new { projectTitle = row.Project.Title, released = approved, approved, turnedDown = !approved }),
+            $"log-released-{row.Project.Id}-{(approved ? "yes" : "turned-down")}",
+            [row.Change.RequestedById],
+            cancellationToken: cancellationToken);
 
     /// <summary>Makes the refused request again, through the same service and checks; returns what it made, if anything.</summary>
     private async Task<long?> ReplayAsync(Models.BlockedChange change, CancellationToken cancellationToken)
@@ -128,6 +144,11 @@ public sealed class BlockedChangeService(
                 return null;
             case BlockedChangeKind.WorkEntryCreate:
                 await ActAsAsync(change.RequestedById, cancellationToken);
+                return (await workEntries.CreateAsync(Read<SaveWorkEntryRequest>(change).Request, cancellationToken)).Id;
+            case BlockedChangeKind.WorkEntryDepartment:
+                // approved: these hours alone, counted outside the project's departments, without adding theirs
+                await ActAsAsync(change.RequestedById, cancellationToken);
+                workEntries.LetOutsideDepartment = true;
                 return (await workEntries.CreateAsync(Read<SaveWorkEntryRequest>(change).Request, cancellationToken)).Id;
             case BlockedChangeKind.WorkEntryUpdate:
                 var entry = Read<SaveWorkEntryRequest>(change);
