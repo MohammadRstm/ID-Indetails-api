@@ -48,21 +48,22 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // Tuesday 10 February 2026 in Beirut (UTC+2): 09:00-13:00 on one project, 13:00-17:00 on the other.
         // The 9-to-5 day needs 7 hours, so the last hour is overtime and the in-hours split is 240 / 180 minutes;
-        // the paid 60-minute break is shared the same way: 34.29 and 25.71 minutes.
+        // the day's 7 hours are logged, so the whole paid 60-minute break is shared the same way, in whole minutes: 34.29
+        // and 25.71 round down to 34 and 25, and the minute left goes to the morning, the bigger part: 35 and 25.
         const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
             "VALUES (@u, @p, 'Drawings', @start, @end, UTC_TIMESTAMP(3))";
         await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", morning.Id), ("@start", "2026-02-10 07:00:00"), ("@end", "2026-02-10 11:00:00"));
         await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", afternoon.Id), ("@start", "2026-02-10 11:00:00"), ("@end", "2026-02-10 15:00:00"));
 
-        // 4 h x 20 = 80, plus 34.29 minutes of break at 20 an hour = 11.43.
-        (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
-        (await MoneyAsync(afternoon.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(88.57m);
+        // 4 h x 20 = 80, plus 35 minutes of break at 20 an hour = 11.67.
+        (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.67m);
+        (await MoneyAsync(afternoon.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(88.33m);
 
         // The suggested overtime rate (3,200 ÷ 184) moves only the overtime hour: the morning, all within hours, stays.
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { amount = 3200m, currency = "USD", effectiveFrom = "2026-02-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
-        (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.43m);
+        (await MoneyAsync(morning.Id, superAdmin.AccessToken)).Cost.Labour.ShouldBe(91.67m);
     }
 
     [Fact]
@@ -84,7 +85,8 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
         // 6 hours by the designer (08:00-14:00 in Beirut, so a working day with in-hours work: the paid hour of break
         // is cost too), and 30 minutes by a colleague with no pay record. The first hour is before the day's start, so
         // overtime; it made up no short month (February is before she joined), so it costs her overtime rate, 1,600 ÷ 184
-        // = 8.70, not 10: 5h at 10, 1h at 8.70 and the break at 10.
+        // = 8.70, not 10: 5h at 10 and 1h at 8.70. The 5 in-hours hours are 5 of the day's 7, so 5/7 of the hour of break,
+        // 43 minutes, at 10.
         const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
             "VALUES (@u, @p, 'Drawings', '2026-02-10 06:00:00', @end, UTC_TIMESTAMP(3))";
         await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", project.Id), ("@end", "2026-02-10 12:00:00"));
@@ -95,11 +97,11 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var money = await MoneyAsync(project.Id, admin.AccessToken);
 
-        money.Cost.Labour.ShouldBe(68.70m);
+        money.Cost.Labour.ShouldBe(65.86m);
         money.Cost.Expenses.ShouldBe(110m);
-        money.Cost.Total.ShouldBe(178.70m);
+        money.Cost.Total.ShouldBe(175.86m);
         money.Cost.UnpricedLabourMinutes.ShouldBe(30);
-        money.Profit.ShouldBe(9821.30m);
+        money.Profit.ShouldBe(9824.14m);
         money.LabourHours.ShouldBe(6.5m);
 
         // No requirements done and under 10 hours: too early for a margin.

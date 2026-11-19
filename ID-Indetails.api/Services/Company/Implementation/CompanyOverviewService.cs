@@ -345,7 +345,8 @@ public sealed class CompanyOverviewService(
     /// period covers (like overhead), converted at the rate on the first of the month:
     /// <list type="bullet">
     /// <item>fixed salaries: the whole pay of each month someone was paid without logging hours (<see cref="PaidAsFixed"/>);</item>
-    /// <item>paid leave: what a Design salary paid for its paid excused time off (<see cref="SalaryCalculator.PaidLeavePay"/>).
+    /// <item>paid leave: what a Design salary paid for its paid excused time off (<see cref="SalaryCalculator.PaidLeavePay"/>),
+    /// and for the part of its breaks no project carries, on days logged only in part (<see cref="SalaryCalculator.UnsharedBreakPay"/>).
     /// Its logged hours are already project cost;</item>
     /// <item>the overtime premium: what a Design salary paid for overtime past its threshold beyond the hourly rate its
     /// projects carry it at (<see cref="SalaryCalculator.OvertimePremium"/>).</item>
@@ -375,7 +376,7 @@ public sealed class CompanyOverviewService(
                 continue;
             }
 
-            costs.PaidLeave.Add(SalaryCalculator.PaidLeavePay(month.Input, pay) * share, currency, key, rates);
+            costs.PaidLeave.Add((SalaryCalculator.PaidLeavePay(month.Input, pay) + SalaryCalculator.UnsharedBreakPay(month.Input, pay)) * share, currency, key, rates);
             costs.OvertimePremium.Add(SalaryCalculator.OvertimePremium(pay) * share, currency, key, rates);
         }
 

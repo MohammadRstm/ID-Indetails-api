@@ -223,7 +223,22 @@ public sealed class ProjectFinanceService(
         CancellationToken cancellationToken = default)
     {
         var priced = payRates.Select(r => r.UserId).ToHashSet();
-        var theirs = work.Where(e => priced.Contains(e.UserId)).ToList();
+        var shares = await SharesAsync(work.Where(e => priced.Contains(e.UserId)).ToList(), cancellationToken);
+        var rates = payRates.ToLookup(r => r.UserId);
+        return shares
+            .SelectMany(s => PaidBreaks.Price(s.Shares, rates[s.UserId].ToList()).Select(p => new BreakCost(s.UserId, p.ProjectId, p.Cost)))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<BreakShare>> BreakSharesAsync(IReadOnlyCollection<WorkEntryRow> work, CancellationToken cancellationToken = default)
+        => (await SharesAsync(work, cancellationToken))
+            .SelectMany(s => s.Shares.Select(x => new BreakShare(s.UserId, x.ProjectId, x.Day, (int)x.Minutes)))
+            .ToList();
+
+    /// <summary>Each person's break shares on the days of the given work, from all their work of those days.</summary>
+    private async Task<IReadOnlyList<(long UserId, IReadOnlyList<PaidBreaks.Share> Shares)>> SharesAsync(
+        IReadOnlyList<WorkEntryRow> theirs, CancellationToken cancellationToken)
+    {
         if (theirs.Count == 0)
         {
             return [];
@@ -234,21 +249,18 @@ public sealed class ProjectFinanceService(
         var allWork = (await payroll.WorkAsync(userIds, theirs.Min(e => e.StartedAt).AddDays(-1), theirs.Max(e => e.StartedAt).AddDays(1), cancellationToken))
             .ToLookup(e => e.UserId);
         var calendars = await payrollInputs.CalendarsAsync(userIds, cancellationToken);
-        var rates = payRates.ToLookup(r => r.UserId);
 
-        var costs = new List<BreakCost>();
+        var result = new List<(long, IReadOnlyList<PaidBreaks.Share>)>();
         foreach (var userId in userIds)
         {
-            var calendar = calendars[userId];
             var days = allWork[userId]
                 .Select(e => (Entry: e, Local: clock.ToCompanyTime(e.StartedAt)))
                 .Select(x => new PaidBreaks.Work(x.Entry.Id, x.Entry.ProjectId, DateOnly.FromDateTime(x.Local), (int)x.Local.TimeOfDay.TotalMinutes, x.Entry.Minutes))
                 .ToList();
-            var shares = PaidBreaks.Allocate(days, calendar).Where(s => workedDays.Contains((userId, s.Day)));
-            costs.AddRange(PaidBreaks.Price(shares, rates[userId].ToList()).Select(p => new BreakCost(userId, p.ProjectId, p.Cost)));
+            result.Add((userId, PaidBreaks.Allocate(days, calendars[userId]).Where(s => workedDays.Contains((userId, s.Day))).ToList()));
         }
 
-        return costs;
+        return result;
     }
 
     public async Task<IReadOnlyDictionary<long, PaidOvertime>> PaidOvertimeAsync(
