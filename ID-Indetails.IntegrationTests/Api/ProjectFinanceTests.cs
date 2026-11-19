@@ -97,11 +97,11 @@ public class ProjectFinanceTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var money = await MoneyAsync(project.Id, admin.AccessToken);
 
-        money.Cost.Labour.ShouldBe(65.86m);
+        money.Cost.Labour.ShouldBe(65.87m);
         money.Cost.Expenses.ShouldBe(110m);
-        money.Cost.Total.ShouldBe(175.86m);
+        money.Cost.Total.ShouldBe(175.87m);
         money.Cost.UnpricedLabourMinutes.ShouldBe(30);
-        money.Profit.ShouldBe(9824.14m);
+        money.Profit.ShouldBe(9824.13m);
         money.LabourHours.ShouldBe(6.5m);
 
         // No requirements done and under 10 hours: too early for a margin.

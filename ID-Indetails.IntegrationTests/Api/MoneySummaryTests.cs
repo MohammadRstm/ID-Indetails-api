@@ -48,7 +48,8 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { title = "Studio tooling", billingType = "internal" }, admin.AccessToken)).ReadAsync<ProjectResponse>();
 
         // Tuesday 10 February 2026 (Beirut is UTC+2): an hour on the project (09:00-10:00) and an hour on internal work
-        // (11:00-12:00), 10 each, and the paid hour of break shared between them, 5 each. Then an LBP expense converted
+        // (11:00-12:00), 10 each. 2 of the 7 required hours share 17 minutes of the paid break: 9 to the project (the tie goes
+        // to the first), 1.50, and 8 to internal work, 1.33. Then an LBP expense converted
         // at today's rate (10), and one dated before any LBP rate. The API refuses that one now (exchange_rate_missing), but
         // expenses recorded before the rule can be like it, so it is recorded in USD and switched to LBP in the database.
         await Work.InsertAsync(designer.User.Id, project.Id, "2026-02-10 07:00:00", "2026-02-10 08:00:00");
@@ -79,15 +80,15 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         // From December 2025, so the period holds the work, both expenses and today.
         var summary = await OkAsync<FinanceSummaryResponse>("/api/finance/design/summary?from=2025-12-01", admin.AccessToken);
         summary.Revenue.ShouldBe(1500m);
-        summary.Cost.Labour.ShouldBe(30m);
+        summary.Cost.Labour.ShouldBe(22.83m);
         summary.LabourMinutes.ShouldBe(120);
         summary.Cost.Expenses.ShouldBe(10m);
-        summary.Cost.Total.ShouldBe(40m);
-        summary.Profit.ShouldBe(1460m);
+        summary.Cost.Total.ShouldBe(32.83m);
+        summary.Profit.ShouldBe(1467.17m);
         summary.Unconverted.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
         summary.ClientProjects.ShouldBe(1);
         summary.InternalProjects.ShouldBe(1);
-        summary.AllTimeInternalCost.ShouldBe(15m);
+        summary.AllTimeInternalCost.ShouldBe(11.33m);
         // 10,000 agreed, 1,500 of it received
         summary.StillToEarn.ShouldBe(8500m);
         summary.Billing.Invoiced.ShouldBe(3000m);
@@ -103,21 +104,21 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         // The unconverted expense belongs to December: a period without it doesn't list it.
         var thisYear = await OkAsync<FinanceSummaryResponse>("/api/finance/design/summary?from=2026-01-01", admin.AccessToken);
         thisYear.Unconverted.ShouldBeEmpty();
-        thisYear.Cost.Total.ShouldBe(40m);
+        thisYear.Cost.Total.ShouldBe(32.83m);
 
         var projects = await OkAsync<FinanceProjectsResponse>("/api/finance/design/projects", admin.AccessToken);
         var row = projects.Projects.Single(p => p.ProjectId == project.Id);
         row.Revenue.ShouldBe(10_000m);
-        row.Cost.Total.ShouldBe(25m);
-        row.Profit.ShouldBe(9975m);
+        row.Cost.Total.ShouldBe(21.50m);
+        row.Profit.ShouldBe(9978.50m);
         row.MarginKnown.ShouldBeTrue();
-        projects.Projects.Single(p => p.ProjectId == internalWork.Id).Profit.ShouldBe(-15m);
-        projects.Totals.InternalCost.ShouldBe(15m);
+        projects.Projects.Single(p => p.ProjectId == internalWork.Id).Profit.ShouldBe(-11.33m);
+        projects.Totals.InternalCost.ShouldBe(11.33m);
 
         var months = await OkAsync<List<FinanceMonthResponse>>("/api/finance/design/monthly?months=36", admin.AccessToken);
         months.Count.ShouldBe(36);
         months.Sum(m => m.Revenue).ShouldBe(1500m);
-        months.Single(m => m.Month == new DateOnly(2026, 2, 1)).Labour.ShouldBe(30m);
+        months.Single(m => m.Month == new DateOnly(2026, 2, 1)).Labour.ShouldBe(22.83m);
         months.Single(m => m.Month == new DateOnly(2025, 12, 1)).Unconverted
             .ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
         months.Where(m => m.Month != new DateOnly(2025, 12, 1)).SelectMany(m => m.Unconverted).ShouldBeEmpty();
@@ -147,7 +148,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         client.Money.Billing.Outstanding.ShouldBe(2000m);
 
         var costs = await OkAsync<FinanceCostsResponse>("/api/finance/design/costs?from=2025-12-01", admin.AccessToken);
-        costs.LabourByPerson.Single().Usd.ShouldBe(30m);
+        costs.LabourByPerson.Single().Usd.ShouldBe(22.83m);
         costs.LabourByPerson.Single().Minutes.ShouldBe(120);
         costs.ExpensesByCategory.Sum(c => c.Usd).ShouldBe(10m);
         costs.Unconverted.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "LBP", 1_790_000m)]);
@@ -164,7 +165,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         // The project page's billing uses the same rule as the Financials page.
         var detailMoney = (await OkAsync<ProjectResponse>($"/api/projects/{project.Id}", admin.AccessToken)).Money!;
-        detailMoney.Cost.Labour.ShouldBe(15m);
+        detailMoney.Cost.Labour.ShouldBe(11.50m);
         detailMoney.Billing.Invoiced.ShouldBe(3000m);
         detailMoney.Billing.IssuedCount.ShouldBe(1);
         detailMoney.Billing.Received.ShouldBe(1500m);

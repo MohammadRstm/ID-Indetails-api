@@ -25,8 +25,8 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
         var brand = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         var web = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
 
-        // Tuesday 10 February 2026 (Beirut is UTC+2): 2 hours on brand and 1 on web within hours, so the paid hour of
-        // break is shared 40/20 minutes: brand 60 + 20, web 30 + 10.
+        // Tuesday 10 February 2026 (Beirut is UTC+2): 2 hours on brand and 1 on web within hours. 3 of the 7 required hours
+        // share 26 minutes of the paid break, 18/8 in whole minutes (the remainder to brand): brand 60 + 9, web 30 + 4.
         await Work.InsertAsync(anna.User.Id, brand.Id, "2026-02-10 07:00:00", "2026-02-10 09:00:00");
         await Work.InsertAsync(anna.User.Id, web.Id, "2026-02-10 11:00:00", "2026-02-10 12:00:00");
 
@@ -44,9 +44,9 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
         var cost = await response.ReadAsync<EmployeeLabourCostResponse>();
         cost.EntryCount.ShouldBe(3);
         cost.ThisQuarter.Usd.ShouldBe(eveningCost);
-        cost.AllTime.Usd.ShouldBe(120m + eveningCost);
+        cost.AllTime.Usd.ShouldBe(103m + eveningCost);
         cost.AllTime.UnpricedMinutes.ShouldBe(0);
-        cost.ByProject.Select(p => (p.ProjectId, p.Cost.Usd)).ShouldBe([(brand.Id, 80m + eveningCost), (web.Id, 40m)]);
+        cost.ByProject.Select(p => (p.ProjectId, p.Cost.Usd)).ShouldBe([(brand.Id, 69m + eveningCost), (web.Id, 34m)]);
         cost.ByProject[0].Title.ShouldBe(brand.Title);
 
         await (await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", anna.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
@@ -63,6 +63,6 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
         hidden.AllTime.Usd.ShouldBe(0m);
         hidden.ByProject.ShouldBeEmpty();
         (await (await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", superAdmin.AccessToken))
-            .ReadAsync<EmployeeLabourCostResponse>()).AllTime.Usd.ShouldBe(120m + eveningCost);
+            .ReadAsync<EmployeeLabourCostResponse>()).AllTime.Usd.ShouldBe(103m + eveningCost);
     }
 }

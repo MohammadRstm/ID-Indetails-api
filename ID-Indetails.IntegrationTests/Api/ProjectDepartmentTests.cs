@@ -169,8 +169,8 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await ProjectAsync(superAdmin, [architecture]);
 
-        // 3 hours in Architecture on Tuesday 10 February 2026 (09:00-12:00 in Beirut) and the paid hour of break: 4 hours,
-        // 358,000 LBP, on a day with no LBP rate yet
+        // 3 hours in Architecture on Tuesday 10 February 2026 (09:00-12:00 in Beirut) and their share of the paid break
+        // (3 of the 7 required hours: 26 minutes): 206 minutes, 307,283.33 LBP, on a day with no LBP rate yet
         await _steps.ExecuteAsync(
             "INSERT INTO work_entries (user_id, project_id, team_id, description, started_at, ended_at, created_at) " +
             "VALUES (@u, @p, @t, 'Drawings', '2026-02-10 07:00:00', '2026-02-10 10:00:00', UTC_TIMESTAMP(3))",
@@ -178,7 +178,7 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var money = (await DepartmentsAsync(superAdmin, project.Id)).Departments.Single(d => d.Id == architecture).Money!;
         money.Minutes.ShouldBe(180);
-        money.Unconverted.ShouldBe([new CurrencyAmountResponse("LBP", 358_000m)]);
+        money.Unconverted.ShouldBe([new CurrencyAmountResponse("LBP", 307_283.33m)]);
         money.Cost.ShouldBe(0m);
         money.Left.ShouldBe(money.Budget);
         var person = money.People.ShouldHaveSingleItem();
@@ -190,11 +190,11 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
             .IsSuccessStatusCode.ShouldBeTrue();
         var converted = (await DepartmentsAsync(superAdmin, project.Id)).Departments.Single(d => d.Id == architecture).Money!;
         converted.Unconverted.ShouldBeEmpty();
-        converted.Cost.ShouldBe(4m);
-        converted.Left.ShouldBe(converted.Budget - 4m);
+        converted.Cost.ShouldBe(3.43m);
+        converted.Left.ShouldBe(converted.Budget - 3.43m);
         var month = converted.People.ShouldHaveSingleItem().Months.ShouldHaveSingleItem();
         month.HourlyRate.ShouldBe(1m);
-        month.Cost.ShouldBe(4m);
+        month.Cost.ShouldBe(3.43m);
     }
 
     [Fact]

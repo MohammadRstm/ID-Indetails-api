@@ -46,8 +46,8 @@ public class ReportTests(ApiFactory api) : IClassFixture<ApiFactory>
         report.Quarterly.Count.ShouldBe(6);
         report.Matrix.Rows.Single(r => r.UserId == ben.User.Id).TotalMinutes.ShouldBe(60);
         report.Money.ShouldNotBeNull();
-        // 3 hours at 40, plus her paid hour of break at 40 (it was a working day with in-hours work).
-        report.Money!.LabourByPerson.Single(p => p.UserId == anna.User.Id).LabourCost.Usd.ShouldBe(160m);
+        // 3 hours at 40, plus her share of the paid break at 40: 3 of the 7 required hours, 26 minutes.
+        report.Money!.LabourByPerson.Single(p => p.UserId == anna.User.Id).LabourCost.Usd.ShouldBe(137.33m);
         report.Money.ProfitByProject.ShouldContain(p => p.ProjectId == brand.Id);
 
         var filtered = await (await Client.GetAsync($"/api/reports/work?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&userId={anna.User.Id}", admin.AccessToken))
