@@ -231,7 +231,7 @@ public sealed class ProjectFinanceService(
     }
 
     public async Task<IReadOnlyList<BreakShare>> BreakSharesAsync(IReadOnlyCollection<WorkEntryRow> work, CancellationToken cancellationToken = default)
-        => (await SharesAsync(work, cancellationToken))
+        => (await SharesAsync(work.ToList(), cancellationToken))
             .SelectMany(s => s.Shares.Select(x => new BreakShare(s.UserId, x.ProjectId, x.Day, (int)x.Minutes)))
             .ToList();
 
