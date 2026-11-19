@@ -274,7 +274,7 @@ Judgements and simulations on one project or a whole domain, kept apart from the
 **How each figure is worked out:**
 
 - **`cost`**: hours × each person's hourly cost in force on the day worked, with overtime as Salaries pays it and every paid break, in USD at the rate of each day. Exactly the project cost's labour: hours and breaks in a month someone was an admin or super admin cost nothing, and from November 2026 a salary's hours carry no overtime premium.
-- **`minutes`**: the hours logged. Paid breaks add cost, never minutes.
+- **`minutes`**: the hours logged. Paid breaks add cost, never minutes. A day's break goes to its projects in whole minutes: all of it once the day's required hours are logged, its part before (5 of 7 hours, 5/7 of it); the rest is a company cost, with paid leave ([company.md](company.md)).
 - **`outsideScopeMinutes`** and **`outsideScopeCost`**: the hours ticked as outside the agreed scope ([design.md](design.md), "Outside the original scope") and the cost of their worked time. Paid breaks stay with the day: they are never outside the scope, even on a day logged wholly outside it.
 - **`outsideScopeShare`**: outside-scope cost ÷ cost, a fraction to 4 decimals (0.12 is 12%); `null` with no cost.
 - **`labourShare`** (a project's or a department's): its cost ÷ the window's labour cost, a fraction to 4 decimals; `null` with no cost.

@@ -84,6 +84,10 @@ public sealed class WorkInsightsService(
         var pricer = actor.Has(PermissionCodes.FinancialView)
             ? await LabourPricer.LoadAsync(financeSources, projectFinance, inRange.Select(ToRow).ToList(), clock, cancellationToken)
             : null;
+        // the break each person's days on the project carry: hours, so seen with them; its cost is in the labour cost
+        var breaks = (await projectFinance.BreakSharesAsync(inRange.Select(e => new WorkEntryRow(e.Id, e.ProjectId, e.UserId, e.StartedAt, e.Minutes)).ToList(), cancellationToken))
+            .Where(b => b.ProjectId == projectId)
+            .ToList();
 
         var contributors = inRange
             .GroupBy(e => e.UserId)
@@ -100,7 +104,8 @@ public sealed class WorkInsightsService(
                     g.Max(e => e.StartedAt),
                     WorkStats.Weekly(worked.Where(w => w.UserId == g.Key), today, SparkWeeks, calendar.FirstDayOfWeek).Select(w => w.Minutes).ToList(),
                     pricer?.Price(g.Select(ToRow)),
-                    g.Where(e => e.OutsideScope).Sum(e => e.Minutes));
+                    g.Where(e => e.OutsideScope).Sum(e => e.Minutes),
+                    breaks.Where(b => b.UserId == g.Key && g.Any(e => clock.ToCompanyDate(e.StartedAt) == b.Day)).Sum(b => b.Minutes));
             })
             .OrderByDescending(c => c.Minutes)
             .ToList();

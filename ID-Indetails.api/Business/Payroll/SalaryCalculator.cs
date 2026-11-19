@@ -350,6 +350,23 @@ public static class SalaryCalculator
     }
 
     /// <summary>
+    /// What a salary paid for the part of its breaks no project carries: a day logged only in part shares only that part
+    /// of its break with its projects (<see cref="Finance.PaidBreaks"/>), while the whole break is paid.
+    /// </summary>
+    public static decimal UnsharedBreakPay(Input input, Result pay)
+    {
+        if (input.FixedSalary)
+        {
+            return 0;
+        }
+
+        var work = input.Work.Select(w => new Finance.PaidBreaks.Work(w.Id, 0, w.Day, w.Start, w.Minutes)).ToList();
+        return Round(Finance.PaidBreaks.Unshared(work, input.Calendar)
+            .Where(d => d.Day >= input.Month && d.Day < input.Month.AddMonths(1))
+            .Sum(d => d.Minutes / 60m * HourlyRateOn(input, pay.Terms, d.Day)));
+    }
+
+    /// <summary>
     /// What a salary paid for overtime past its threshold beyond the hourly rate. Projects price every logged hour of a
     /// month with a threshold at its day's hourly rate (<c>EntrySplit.NoPremium</c>), while the overtime past it is paid
     /// at the overtime rate × the multiplier: the rest reaches no project, so it is a company cost. None where no

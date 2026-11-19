@@ -133,8 +133,12 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     only an advance's settled amount and write-off are stored. The form previews the effect first
     (`POST /api/employees/{id}/pay/preview`).
   - The break is a dated company setting. While it is above 0 it is paid but not logged (9–5 with a 60-minute break
-    requires 7h and pays 8h). From 1 December 2026 it is 0: the whole 8-hour day is logged and required, and earlier
-    months keep their paid break.
+    requires 7h and pays 8h). Since 19 November 2026 it is 60 again (it was 0 from 16 to 18 November, when the padded
+    hour was trimmed from the 8-hour days), and the planned 0 from 1 December is dropped.
+  - **The break goes to projects** (19 November 2026): a day with its required hours logged shares the whole break across
+    its projects by the in-hours minutes worked on each, in whole minutes; a day logged in part shares that part (5 of 7
+    hours, 5/7 of it), and the rest is a company cost, counted with paid leave. Projects show each contributor's break
+    minutes (`breakMinutes`).
   - The hourly rate of a day is its salary ÷ that month's scheduled paid hours.
   - From 1 November 2026 a salary's overtime is paid only past the month's threshold: max(the working time's
     `overtimeThresholdHours`, 184; the month's expected hours), counting every logged hour plus paid excuses. It is

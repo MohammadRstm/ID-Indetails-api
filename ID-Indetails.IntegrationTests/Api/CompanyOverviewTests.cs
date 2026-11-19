@@ -46,7 +46,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
 
         // 1,760 a month is 10 an hour in June (176 paid hours); 6 hours in June (09:00-15:00 in Beirut) cost 60, plus
-        // 10 for the paid hour of break.
+        // 8.50 for their share of the paid break (6 of the 7 required hours: 51 minutes).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
             new { amount = 1760m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
@@ -78,13 +78,13 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var design = june.Domains.Single(d => d.Domain == DomainCodes.Design);
         design.Revenue.ShouldBe(4000m);
         design.Collected.ShouldBe(4000m);
-        design.Cost.ShouldBe(70m);
-        design.Profit.ShouldBe(3930m);
-        design.Margin.ShouldBe(0.9825m);
+        design.Cost.ShouldBe(68.50m);
+        design.Profit.ShouldBe(3931.50m);
+        design.Margin.ShouldBe(0.9829m);
         design.ProjectsWithActivity.ShouldBe(1);
         design.Loggers.ShouldBe(1);
         june.Domains.Single(d => d.Domain == DomainCodes.Execution).Revenue.ShouldBe(0m);
-        june.NetProfit.ShouldBe(3930m - june.Overhead - june.FixedSalaries - june.PaidLeave - june.OvertimePremium);
+        june.NetProfit.ShouldBe(3931.50m - june.Overhead - june.FixedSalaries - june.PaidLeave - june.OvertimePremium);
         design.UnconvertedCosts.ShouldBe([new UnconvertedCostResponse(CostSource.Expenses, "EUR", 50m)]);
         design.Invoiced.ShouldBe(0m);
         design.UnconvertedInvoices.ShouldBe([new UnconvertedInvoicesResponse("EUR", 3000m, 1)]);
@@ -99,8 +99,8 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var months = await OkAsync<List<CompanyMonthResponse>>(Client.GetAsync("/api/company/overview/monthly?months=36", superAdmin.AccessToken));
         var juneMonth = months.Single(m => m.Month == new DateOnly(2026, 6, 1));
         juneMonth.Revenue.ShouldBe(4000m);
-        juneMonth.Labour.ShouldBe(70m);
-        juneMonth.ProfitBeforeOverhead.ShouldBe(3930m);
+        juneMonth.Labour.ShouldBe(68.50m);
+        juneMonth.ProfitBeforeOverhead.ShouldBe(3931.50m);
         months.Single(m => m.Month == new DateOnly(2026, 7, 1)).Revenue.ShouldBe(6000m);
 
         // a year's months, January first, the same figures
@@ -250,7 +250,8 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design, revenue: 10_000m);
         const string entrySql = "INSERT INTO work_entries (user_id, project_id, description, started_at, ended_at, created_at) " +
             "VALUES (@u, @p, 'Drawings', @start, @end, UTC_TIMESTAMP(3))";
-        // 6 hours on Tuesday 10 February (08:00-14:00 in Beirut) cost 60, plus 10 for the paid hour of break.
+        // 6 hours on Tuesday 10 February (08:00-14:00 in Beirut) cost 60, plus 7.17 for their share of the paid break:
+        // 5 of them are within hours (from 09:00), 5 of the 7 required, so 43 minutes.
         await ExecuteAsync(entrySql, ("@u", designer.User.Id), ("@p", project.Id), ("@start", "2026-02-10 06:00:00"), ("@end", "2026-02-10 12:00:00"));
 
         async Task<decimal> LabourAsync()
@@ -260,7 +261,7 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
         async Task<SalaryRowResponse> FebruarySalaryAsync()
             => (await OkAsync<SalaryDetailResponse>(Client.GetAsync($"/api/company/salaries/{designer.User.Id}?month=2026-02", superAdmin.AccessToken))).Salary;
 
-        (await LabourAsync()).ShouldBe(70m);
+        (await LabourAsync()).ShouldBe(67.17m);
         var before = await FebruaryAsync();
         var salaryBefore = await FebruarySalaryAsync();
         salaryBefore.TracksHours.ShouldBeTrue();
@@ -271,10 +272,10 @@ public class CompanyOverviewTests(ApiFactory api) : IClassFixture<ApiFactory>
             new { role = RoleCodes.Admin }, superAdmin.AccessToken));
         promoted.FixedPayFrom.ShouldNotBeNull().Day.ShouldBe(1);
         promoted.CurrentPay.ShouldNotBeNull().Amount.ShouldBe(1600m);
-        (await LabourAsync()).ShouldBe(70m);
+        (await LabourAsync()).ShouldBe(67.17m);
         var after = await FebruaryAsync();
         after.AdminSalaries.ShouldBe(before.AdminSalaries);
-        after.Domains.Single(d => d.Domain == DomainCodes.Design).Cost.ShouldBe(70m);
+        after.Domains.Single(d => d.Domain == DomainCodes.Design).Cost.ShouldBe(67.17m);
         var salaryAfter = await FebruarySalaryAsync();
         salaryAfter.TracksHours.ShouldBeTrue();
         salaryAfter.Total.ShouldBe(salaryBefore.Total);
