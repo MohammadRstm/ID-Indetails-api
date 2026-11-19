@@ -47,8 +47,9 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var first = work.Contributors[0];
         first.UserId.ShouldBe(anna.User.Id);
         first.SharePct.ShouldBe(75);
-        // 3 hours at 30, plus her paid hour of break at 30.
-        first.LabourCost!.Usd.ShouldBe(120m);
+        // 3 hours at 30, plus her share of the paid break: 3 of the 7 required hours, so 26 of its 60 minutes at 30.
+        first.LabourCost!.Usd.ShouldBe(103m);
+        first.BreakMinutes.ShouldBe(26);
         work.Contributors[1].Weekly.Sum().ShouldBe(60);
         work.Contributors[1].LabourCost!.UnpricedMinutes.ShouldBe(60);
 
