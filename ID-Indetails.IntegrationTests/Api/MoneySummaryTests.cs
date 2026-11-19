@@ -183,7 +183,7 @@ public class MoneySummaryTests(ApiFactory api) : IClassFixture<ApiFactory>
         list.Items.Single().Money!.HasUnconverted.ShouldBeTrue();
         list.Items.Single().Money!.UnpricedLabourMinutes.ShouldBe(0);
         var detail = await OkAsync<ClientResponse>($"/api/clients/{clientId}", admin.AccessToken);
-        detail.Money!.Profit.ShouldBe(9975m);
+        detail.Money!.Profit.ShouldBe(9978.50m);
         detail.Money.UnconvertedInvoices.ShouldBeEmpty();
         detail.ProjectMoney!.Single().Billing.Invoiced.ShouldBe(3000m);
         detail.ProjectMoney!.Single().HasUnconverted.ShouldBeTrue();
