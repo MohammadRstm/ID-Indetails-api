@@ -18,6 +18,7 @@ using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Boqs.Abstraction;
+using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Employees.Abstraction;
 using ID_Indetails.api.Repositories.Projects.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -54,6 +55,7 @@ public sealed class BlockedChangeService(
     IEmployeeRepository payRecords,
     IProjectRepository projectRows,
     INotificationSender notifications,
+    IUnitOfWork unitOfWork,
     IClock clock) : IBlockedChangeService
 {
     public async Task<BlockedChangeResponse> GetAsync(long id, CancellationToken cancellationToken = default)
@@ -116,13 +118,16 @@ public sealed class BlockedChangeService(
     }
 
     /// <summary>Tells whoever logged hours waiting for approval that they went through, or were turned down.</summary>
-    private Task TellLoggerAsync(BlockedChangeRow row, UserAccess actor, bool approved, CancellationToken cancellationToken)
-        => notifications.SendDigestAsync(
+    private async Task TellLoggerAsync(BlockedChangeRow row, UserAccess actor, bool approved, CancellationToken cancellationToken)
+    {
+        await notifications.SendDigestAsync(
             new NotificationDraft(NotificationKinds.WorkEntryReleased, actor.UserId, row.Project.DomainCode, row.Project.Id, "project", row.Project.Id,
                 new { projectTitle = row.Project.Title, released = approved, approved, turnedDown = !approved }),
             $"log-released-{row.Project.Id}-{(approved ? "yes" : "turned-down")}",
             [row.Change.RequestedById],
             cancellationToken: cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
 
     /// <summary>Makes the refused request again, through the same service and checks; returns what it made, if anything.</summary>
     private async Task<long?> ReplayAsync(Models.BlockedChange change, CancellationToken cancellationToken)

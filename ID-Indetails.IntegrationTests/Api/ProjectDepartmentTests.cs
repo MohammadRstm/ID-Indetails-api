@@ -178,7 +178,7 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
         // kept, not logged: the owner and the super admins are told
         var refused = await (await Work.TryLogAsync(engineer.AccessToken, project.Id, start, 45))
             .ShouldFailWithAsync(422, ErrorCodes.DepartmentNotOnProject);
-        refused.Message.ShouldContain(structure.Name);
+        refused.Message.ShouldContain(project.Title);
         (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM work_entries WHERE user_id = @u", ("@u", engineer.User.Id))).ShouldBe(0);
         (await _steps.ScalarAsync<string>(
                 "SELECT status FROM blocked_changes WHERE project_id = @p AND kind = 'work_entry_department'", ("@p", project.Id)))
