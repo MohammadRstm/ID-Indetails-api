@@ -15,6 +15,7 @@ using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Meetings.Implementation;
 using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Settings.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
 
@@ -33,6 +34,7 @@ public sealed class MyWorkService(
     IDomainSettingsService domainSettings,
     IMeetingRepository meetings,
     IOvertimeService overtime,
+    IBlockedChangeRepository blockedChanges,
     IClock clock) : IMyWorkService
 {
     public const int SummaryWeeks = 16;
@@ -169,7 +171,13 @@ public sealed class MyWorkService(
             mine.Sum(e => e.Minutes),
             mine.Sum(e => overtimeById.GetValueOrDefault(e.Id)),
             mine.Select(e => WorkEntryMapper.ToResponse(e, actor.UserId, settings, clock, overtimeById)).ToList(),
-            domainMeetings.Select(MeetingMapper.ToResponse).ToList());
+            domainMeetings.Select(MeetingMapper.ToResponse).ToList(),
+            (await blockedChanges.WaitingHoursAsync(actor.UserId, cancellationToken))
+                .Select(w => (w, Request: WaitingHours.Of(w.Change, ProfitFloor.Json)))
+                .Where(x => x.Request is { } r && WorkEntryRules.AsUtc(r.StartedAt) < to && WorkEntryRules.AsUtc(r.EndedAt) > from)
+                .Select(x => new WaitingHoursResponse(x.w.Change.Id, x.w.Change.ProjectId, x.w.ProjectTitle, x.Request!.Description ?? string.Empty,
+                    WorkEntryRules.AsUtc(x.Request.StartedAt), WorkEntryRules.AsUtc(x.Request.EndedAt)))
+                .ToList());
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken) => permissions.GetAccessAsync(currentUser.Id, cancellationToken);

@@ -59,6 +59,17 @@ public sealed class BlockedChangeRepository(IdIndetailsDbContext db) : IBlockedC
             .ThenBy(c => c.Id)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<(BlockedChange Change, string ProjectTitle)>> WaitingHoursAsync(long userId, CancellationToken cancellationToken = default)
+        => (await db.BlockedChanges
+            .AsNoTracking()
+            .Where(c => c.RequestedById == userId && c.Kind == BlockedChangeKind.WorkEntryDepartment && c.Status == BlockedChangeStatus.Pending)
+            .OrderBy(c => c.RequestedAt)
+            .ThenBy(c => c.Id)
+            .Select(c => new { Change = c, c.Project.Title })
+            .ToListAsync(cancellationToken))
+            .Select(x => (x.Change, x.Title))
+            .ToList();
+
     public async Task<IReadOnlyList<BlockedChange>> PendingAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default)
         => await db.BlockedChanges
             .AsNoTracking()

@@ -97,8 +97,7 @@ public sealed class PayChangeHeldException(
 public sealed class DepartmentBlockedException(
     long projectId, string projectTitle, string domain, string payload, long requestedById, long ownerId, long teamId, string departmentName, string personName)
     : BlockedChangeException(ErrorCodes.DepartmentNotOnProject,
-        $"{departmentName} isn't one of {projectTitle}'s departments yet, so your hours are kept until it is added. "
-        + "Its owner and the super admins were told; you'll hear when they go through, so don't log them again.",
+        $"Your department isn't part of {projectTitle}. Your hours wait for approval.",
         projectId, projectTitle, domain, BlockedChangeKind.WorkEntryDepartment, payload, requestedById)
 {
     public long OwnerId { get; } = ownerId;
