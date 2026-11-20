@@ -94,6 +94,96 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
             """,
             cancellationToken);
 
+    public Task<long?> ReadUpToAsync(long userId, long conversationId, CancellationToken cancellationToken = default)
+        => db.ConversationReads
+            .Where(r => r.UserId == userId && r.ConversationId == conversationId)
+            .Select(r => r.LastReadMessageId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<MarkerMove>> MoveDeliveredAsync(
+        long userId,
+        IReadOnlyCollection<long> conversationIds,
+        DateTime now,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = conversationIds.ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var newest = await db.Messages.AsNoTracking()
+            .Where(m => ids.Contains(m.ConversationId) && m.SenderId != userId)
+            .GroupBy(m => m.ConversationId)
+            .Select(g => new { ConversationId = g.Key, Last = g.Max(m => m.Id) })
+            .ToListAsync(cancellationToken);
+        var markers = await db.ConversationReads.AsNoTracking()
+            .Where(r => r.UserId == userId && ids.Contains(r.ConversationId))
+            .Select(r => new { r.ConversationId, r.LastReadMessageId, r.LastDeliveredMessageId })
+            .ToDictionaryAsync(r => r.ConversationId, r => Math.Max(r.LastReadMessageId ?? 0, r.LastDeliveredMessageId ?? 0), cancellationToken);
+
+        var moves = newest
+            .Select(n => new MarkerMove(n.ConversationId, markers.GetValueOrDefault(n.ConversationId), n.Last))
+            .Where(m => m.To > m.From)
+            .ToList();
+        foreach (var move in moves)
+        {
+            await db.Database.ExecuteSqlAsync(
+                $"""
+                INSERT INTO `conversation_reads` (`user_id`, `conversation_id`, `last_delivered_message_id`, `updated_at`)
+                VALUES ({userId}, {move.ConversationId}, {move.To}, {now}) AS new
+                ON DUPLICATE KEY UPDATE
+                    `last_delivered_message_id` = GREATEST(COALESCE(`conversation_reads`.`last_delivered_message_id`, 0), new.`last_delivered_message_id`)
+                """,
+                cancellationToken);
+        }
+
+        return moves;
+    }
+
+    public async Task<IReadOnlyList<ReadMarker>> MarkersAsync(IReadOnlyCollection<long> conversationIds, CancellationToken cancellationToken = default)
+    {
+        var ids = conversationIds.ToList();
+        return await db.ConversationReads.AsNoTracking()
+            .Where(r => ids.Contains(r.ConversationId))
+            .Select(r => new ReadMarker(r.ConversationId, r.UserId, r.LastReadMessageId, r.LastDeliveredMessageId, r.UpdatedAt))
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task RecordReadsAsync(
+        long userId,
+        long conversationId,
+        long afterId,
+        long upToId,
+        DateTime joined,
+        DateTime now,
+        CancellationToken cancellationToken = default)
+        => db.Database.ExecuteSqlAsync(
+            $"""
+            INSERT IGNORE INTO `message_reads` (`message_id`, `user_id`, `read_at`)
+            SELECT `id`, {userId}, {now} FROM `messages`
+            WHERE `conversation_id` = {conversationId} AND `id` > {afterId} AND `id` <= {upToId}
+                AND `sender_id` <> {userId} AND `created_at` >= {joined}
+            """,
+            cancellationToken);
+
+    public async Task<IReadOnlyDictionary<long, DateTime>> ReadTimesAsync(long messageId, CancellationToken cancellationToken = default)
+        => await db.MessageReads.AsNoTracking()
+            .Where(r => r.MessageId == messageId)
+            .ToDictionaryAsync(r => r.UserId, r => r.ReadAt, cancellationToken);
+
+    public async Task<IReadOnlyList<long>> SendersBetweenAsync(
+        long conversationId,
+        long afterId,
+        long upToId,
+        long exceptUserId,
+        CancellationToken cancellationToken = default)
+        => await db.Messages.AsNoTracking()
+            .Where(m => m.ConversationId == conversationId && m.Id > afterId && m.Id <= upToId && m.SenderId != exceptUserId)
+            .Select(m => m.SenderId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<ConversationState>> StatesAsync(
         long userId,
         IReadOnlyCollection<long> teamIds,
@@ -148,7 +238,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
         CancellationToken cancellationToken = default)
     {
         var conversations = await ChatsOf(userId, teamIds)
-            .Select(c => new { c.Id, c.Type, OtherUserId = c.DmUserLowId == userId ? c.DmUserHighId : c.DmUserLowId })
+            .Select(c => new { c.Id, c.Type, c.TeamId, OtherUserId = c.DmUserLowId == userId ? c.DmUserHighId : c.DmUserLowId })
             .ToListAsync(cancellationToken);
         if (conversations.Count == 0)
         {
@@ -179,7 +269,7 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
 
         return conversations
             .Where(c => unread.ContainsKey(c.Id))
-            .Select(c => new UnreadChat(c.Id, c.Type == ConversationType.Dm ? c.OtherUserId : null, unread[c.Id], mentioned.Contains(c.Id)))
+            .Select(c => new UnreadChat(c.Id, c.Type, c.TeamId, c.Type == ConversationType.Dm ? c.OtherUserId : null, unread[c.Id], mentioned.Contains(c.Id)))
             .ToList();
     }
 
@@ -221,10 +311,13 @@ public sealed class MessagingRepository(IdIndetailsDbContext db) : IMessagingRep
                     u.Position,
                     u.Status,
                     u.PhotoFileId,
+                    u.CreatedAt,
+                    u.LastSeenAt,
                 })
                 .ToListAsync(cancellationToken))
             .Select(u => new ChatPerson(
-                u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.RoleCode, u.DomainCode, u.TeamId, u.TeamName, u.Position, u.Status, u.PhotoFileId))
+                u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.RoleCode, u.DomainCode, u.TeamId, u.TeamName, u.Position, u.Status, u.PhotoFileId,
+                u.CreatedAt, u.LastSeenAt))
             .OrderBy(p => p.Name)
             .ToList();
 

@@ -10,6 +10,7 @@ public sealed class LiveUpdates(ILivePublisher publisher, IPortalLivePublisher p
 {
     private readonly HashSet<long> _notifications = [];
     private readonly HashSet<(long UserId, LiveChat Chat)> _chats = [];
+    private readonly HashSet<(long UserId, LiveChat Chat)> _receipts = [];
     private readonly HashSet<(long ProjectId, long UserId)> _portalStaff = [];
     private readonly HashSet<(long ProjectId, long AccountId)> _portalClients = [];
     private readonly HashSet<long> _portalNotifications = [];
@@ -18,6 +19,8 @@ public sealed class LiveUpdates(ILivePublisher publisher, IPortalLivePublisher p
     public void NotificationsChanged(IEnumerable<long> userIds) => _notifications.UnionWith(userIds);
 
     public void ChatChanged(long userId, LiveChat chat) => _chats.Add((userId, chat));
+
+    public void ReceiptsChanged(IEnumerable<long> userIds, LiveChat chat) => _receipts.UnionWith(userIds.Select(id => (id, chat)));
 
     public void PortalChanged(long projectId, IEnumerable<long> userIds, IEnumerable<long> accountIds)
     {
@@ -39,6 +42,11 @@ public sealed class LiveUpdates(ILivePublisher publisher, IPortalLivePublisher p
         foreach (var chat in _chats.GroupBy(c => c.Chat))
         {
             await publisher.PublishAsync(chat.Select(c => c.UserId).ToList(), LiveSignals.Messages, chat.Key, cancellationToken);
+        }
+
+        foreach (var chat in _receipts.GroupBy(c => c.Chat))
+        {
+            await publisher.PublishAsync(chat.Select(c => c.UserId).ToList(), LiveSignals.Receipts, chat.Key, cancellationToken);
         }
 
         foreach (var project in _portalStaff.GroupBy(p => p.ProjectId))
@@ -68,6 +76,7 @@ public sealed class LiveUpdates(ILivePublisher publisher, IPortalLivePublisher p
     {
         _notifications.Clear();
         _chats.Clear();
+        _receipts.Clear();
         _portalStaff.Clear();
         _portalClients.Clear();
         _portalNotifications.Clear();
