@@ -1,5 +1,3 @@
-using ID_Indetails.api.Enums;
-
 namespace ID_Indetails.api.DTO.Request.Invitations;
 
 /// <summary>What the inviter decides. The invitee fills in their own name, phone and password later.</summary>
@@ -23,15 +21,10 @@ public sealed record CreateInvitationRequest
 
 public sealed record InvitationPayRequest
 {
-    public PayBasis Basis { get; init; }
-
-    /// <summary>Hourly rate or monthly salary, depending on <see cref="Basis"/>.</summary>
+    /// <summary>The monthly salary: everyone is paid one.</summary>
     public decimal Amount { get; init; }
 
-    /// <summary>
-    /// What an hour of a salary's overtime is paid at, before the multiplier. Leave it empty for the salary ÷ 184. Hourly
-    /// pay is its own overtime rate, so it takes none.
-    /// </summary>
+    /// <summary>What an hour of overtime is paid at, before the multiplier. Leave it empty for the salary ÷ 184.</summary>
     public decimal? OvertimeRate { get; init; }
 
     public string Currency { get; init; } = "USD";

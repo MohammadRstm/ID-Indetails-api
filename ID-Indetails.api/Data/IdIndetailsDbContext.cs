@@ -125,6 +125,9 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
 
     public DbSet<OverheadItem> OverheadItems => Set<OverheadItem>();
     public DbSet<OverheadAmount> OverheadAmounts => Set<OverheadAmount>();
+    public DbSet<OneOffExpense> OneOffExpenses => Set<OneOffExpense>();
+    public DbSet<SalaryAdvance> SalaryAdvances => Set<SalaryAdvance>();
+    public DbSet<SalaryAdvanceRepayment> SalaryAdvanceRepayments => Set<SalaryAdvanceRepayment>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
     public DbSet<DomainSettings> DomainSettings => Set<DomainSettings>();
 
@@ -180,7 +183,6 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<BlockedChangeKind>(configurationBuilder);
         StoreAsSnakeCase<BlockedChangeStatus>(configurationBuilder);
         StoreAsSnakeCase<BillingType>(configurationBuilder);
-        StoreAsSnakeCase<PayBasis>(configurationBuilder);
         StoreAsSnakeCase<ContactKind>(configurationBuilder);
         StoreAsSnakeCase<DeliveryChannel>(configurationBuilder);
         StoreAsSnakeCase<PaymentMethod>(configurationBuilder);
@@ -215,6 +217,8 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
         StoreAsSnakeCase<DesignVoSplit>(configurationBuilder);
         StoreAsSnakeCase<OwedSettlement>(configurationBuilder);
         StoreAsSnakeCase<TimeOffStatus>(configurationBuilder);
+        StoreAsSnakeCase<SalaryAdvanceStatus>(configurationBuilder);
+        StoreAsSnakeCase<SalaryAdvanceSettlement>(configurationBuilder);
     }
 
     private static void StoreAsSnakeCase<TEnum>(ModelConfigurationBuilder configurationBuilder)

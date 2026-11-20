@@ -44,6 +44,7 @@ public static class PushCategories
         [NotificationKinds.MeetingInvited] = NotificationCategory.Meetings,
         [NotificationKinds.MeetingMoved] = NotificationCategory.Meetings,
         [NotificationKinds.MeetingCancelled] = NotificationCategory.Meetings,
+        [NotificationKinds.MeetingSoon] = NotificationCategory.Meetings,
 
         [NotificationKinds.MaterialsAdded] = NotificationCategory.Sites,
         [NotificationKinds.BoqSubmitted] = NotificationCategory.Sites,
@@ -62,6 +63,7 @@ public static class PushCategories
         [NotificationKinds.PocketRequested] = NotificationCategory.Money,
         [NotificationKinds.PocketRoundOff] = NotificationCategory.Money,
         [NotificationKinds.ChangeBlocked] = NotificationCategory.Money,
+        [NotificationKinds.PayChangeHeld] = NotificationCategory.Money,
         [NotificationKinds.ProfitLow] = NotificationCategory.Money,
         [NotificationKinds.ProfitAtZero] = NotificationCategory.Money,
         [NotificationKinds.ProjectClosed] = NotificationCategory.Money,
@@ -69,6 +71,12 @@ public static class PushCategories
         [NotificationKinds.ClientAdded] = NotificationCategory.Money,
         [NotificationKinds.PayChanged] = NotificationCategory.Money,
         [NotificationKinds.HoursShort] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceRequested] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceWithdrawn] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceApproved] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceDeclined] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceRecorded] = NotificationCategory.Money,
+        [NotificationKinds.SalaryAdvanceUnsettled] = NotificationCategory.Money,
 
         [NotificationKinds.InvitationAccepted] = NotificationCategory.People,
         [NotificationKinds.RoleChanged] = NotificationCategory.People,

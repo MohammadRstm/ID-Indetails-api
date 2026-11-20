@@ -20,13 +20,14 @@ public class ProjectCostTimelineTests(ApiFactory api) : IClassFixture<ApiFactory
         var (_, _, siteAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
         // 1,600 a month is 10 an hour in February 2026 (160 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design, revenue: 10_000m);
         await _steps.ExecuteAsync("UPDATE projects SET start_date = '2026-02-09' WHERE id = @id", ("@id", project.Id));
 
-        // Beirut is UTC+2 in February. Tuesday 10 February, 2 hours within hours: 20 plus the paid hour of break.
-        // Tuesday 17 February, 1 hour: 10 plus the break, and a 50 expense the next day.
+        // Beirut is UTC+2 in February. Tuesday 10 February, 2 hours within hours: 20 plus their share of the paid break, 2 of
+        // the 7 required hours, 17 minutes (2.83). Tuesday 17 February, 1 hour: 10 plus 9 minutes (1.50), and a 50 expense
+        // the next day.
         await Work.InsertAsync(designer.User.Id, project.Id, "2026-02-10 07:00:00", "2026-02-10 09:00:00");
         await Work.InsertAsync(designer.User.Id, project.Id, "2026-02-17 07:00:00", "2026-02-17 08:00:00");
         (await Client.PostJsonAsync($"/api/projects/{project.Id}/expenses",
@@ -41,10 +42,10 @@ public class ProjectCostTimelineTests(ApiFactory api) : IClassFixture<ApiFactory
         // Weeks start on Monday until the company says otherwise, and run to this week.
         timeline.Currency.ShouldBe("USD");
         timeline.Weeks.Take(2).ShouldBe([
-            new CostWeekResponse(new DateOnly(2026, 2, 9), 120, 30m, 30m, 30m, 1000m),
-            new CostWeekResponse(new DateOnly(2026, 2, 16), 60, 20m, 70m, 100m, 1000m),
+            new CostWeekResponse(new DateOnly(2026, 2, 9), 120, 22.83m, 22.83m, 22.83m, 1000m),
+            new CostWeekResponse(new DateOnly(2026, 2, 16), 60, 11.50m, 61.50m, 84.33m, 1000m),
         ]);
-        timeline.Weeks[^1].CostToDate.ShouldBe(100m);
+        timeline.Weeks[^1].CostToDate.ShouldBe(84.33m);
 
         await (await Client.GetAsync($"/api/projects/{project.Id}/cost-timeline", designer.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await (await Client.GetAsync($"/api/projects/{project.Id}/cost-timeline", siteAdmin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);

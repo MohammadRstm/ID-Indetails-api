@@ -68,10 +68,8 @@ public static class ErrorCodes
     public const string DomainUnchanged = "domain_unchanged";
     public const string EmailUnchanged = "email_unchanged";
     public const string SuperAdminHasNoDomain = "super_admin_has_no_domain";
-    public const string FixedSalaryPaidMonthly = "fixed_salary_paid_monthly";
-    public const string FixedSalaryNeedsMonthlyPay = "fixed_salary_needs_monthly_pay";
     public const string PayDateInFuture = "pay_date_in_future";
-    public const string PayChangeNotAfterLatest = "pay_change_not_after_latest";
+    public const string PayCurrencyChangeNotFirst = "pay_currency_change_not_first";
 
     // Teams
     public const string TeamNameTaken = "team_name_taken";
@@ -87,6 +85,7 @@ public static class ErrorCodes
     public const string ClientIsArchived = "client_archived";
     public const string OwnerNotAllowed = "owner_not_allowed";
     public const string ProjectLocked = "project_locked";
+    public const string ProjectCodeTaken = "project_code_taken";
     public const string ProjectHasBilling = "project_has_billing";
     public const string NotForThisDomain = "not_for_this_domain";
     /// <summary>A simulated change that doesn't apply to this project, such as a price change on internal work.</summary>
@@ -110,6 +109,7 @@ public static class ErrorCodes
     // Messaging
     public const string NoTeamChat = "no_team_chat";
     public const string TeamHasChat = "team_has_chat";
+    public const string TooManyVoiceNotes = "too_many_voice_notes";
 
     // Files
     public const string FileTypeNotAllowed = "file_type_not_allowed";
@@ -164,6 +164,8 @@ public static class ErrorCodes
 
     /// <summary>422. The blocked change was already forced through or dismissed.</summary>
     public const string BlockedChangeDecided = "blocked_change_decided";
+    public const string PayChangeHeld = "pay_change_held";
+    public const string PayChangeStale = "pay_change_stale";
 
     /// <summary>422. BOQs belong to Execution client projects; any other project has none.</summary>
     public const string BoqExecutionOnly = "boq_execution_only";
@@ -238,6 +240,12 @@ public static class ErrorCodes
     public const string OverheadGroupExists = "overhead_group_exists";
     public const string OverheadGroupInUse = "overhead_group_in_use";
 
+    /// <summary>400. A one-off expense is dated from the first of this month up to today.</summary>
+    public const string OneOffOutsideThisMonth = "one_off_outside_this_month";
+
+    /// <summary>422. A one-off expense of a closed month can't be changed or removed.</summary>
+    public const string OneOffLocked = "one_off_locked";
+
     /// <summary>409. Another account label already has this name, whatever its case.</summary>
     public const string AccountLabelTaken = "account_label_taken";
 
@@ -296,6 +304,43 @@ public static class ErrorCodes
 
     /// <summary>422. Someone on time off can't log or change any hours until it's over.</summary>
     public const string OnTimeOff = "on_time_off";
+
+    // Salary advances
+    /// <summary>422. The person has no pay set today, so there is nothing an advance could come off.</summary>
+    public const string SalaryAdvanceNoPay = "salary_advance_no_pay";
+
+    /// <summary>422. The person already has a request waiting for a decision.</summary>
+    public const string SalaryAdvancePending = "salary_advance_pending";
+
+    /// <summary>422. The person's last advance isn't paid back yet: a new one waits until it is.</summary>
+    public const string SalaryAdvanceOpen = "salary_advance_open";
+
+    /// <summary>422. Someone already decided the request, or the person withdrew it.</summary>
+    public const string SalaryAdvanceDecided = "salary_advance_decided";
+
+    /// <summary>422. An advance, or a month's repayment, can't be more than the person's monthly pay.</summary>
+    public const string SalaryAdvanceOverPay = "salary_advance_over_pay";
+
+    /// <summary>400. An approved advance can't be more than was asked for.</summary>
+    public const string SalaryAdvanceMoreThanAsked = "salary_advance_more_than_asked";
+
+    /// <summary>400. The repayment months are missing, repeated, closed, too far ahead or not above zero.</summary>
+    public const string SalaryAdvanceMonthsInvalid = "salary_advance_months_invalid";
+
+    /// <summary>400. The repayment months don't add up to what is to be paid back.</summary>
+    public const string SalaryAdvanceMonthsTotal = "salary_advance_months_total";
+
+    /// <summary>400. An advance is given from the first of this month up to today.</summary>
+    public const string SalaryAdvanceGivenOn = "salary_advance_given_on";
+
+    /// <summary>422. The advance is settled, cancelled or not given, so it can't be changed.</summary>
+    public const string SalaryAdvanceClosed = "salary_advance_closed";
+
+    /// <summary>422. Nothing of the advance is left to plan or settle.</summary>
+    public const string SalaryAdvanceNothingLeft = "salary_advance_nothing_left";
+
+    /// <summary>422. An advance can be cancelled only while the month it was given in is still open.</summary>
+    public const string SalaryAdvanceCancelClosed = "salary_advance_cancel_closed";
 
     /// <summary>422. Someone on time off that day can't be put in a meeting.</summary>
     public const string MeetingAttendeeOff = "meeting_attendee_off";

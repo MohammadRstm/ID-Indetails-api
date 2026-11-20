@@ -140,7 +140,7 @@ public class SiteTeamTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Execution_employees_record_no_site_expenses_unless_given_it_and_are_paid_monthly()
+    public async Task Execution_employees_record_no_site_expenses_unless_given_it()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, rami) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
@@ -148,17 +148,5 @@ public class SiteTeamTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         await (await Client.PostJsonAsync($"/api/projects/{site.Id}/site-expenses", new { items = new[] { new { name = "Tiles", amount = 100m } } }, rami.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.Forbidden);
-
-        (await (await Client.PostJsonAsync($"/api/employees/{rami.User.Id}/pay",
-                new { basis = "hourly", amount = 8m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.FixedSalaryPaidMonthly)).Message.ShouldContain("Execution staff");
-        await (await Client.PostJsonAsync("/api/invitations", new
-            {
-                email = $"site-{Guid.NewGuid():N}@example.test",
-                role = RoleCodes.Employee,
-                domainCode = DomainCodes.Execution,
-                pay = new { basis = "hourly", amount = 8m, currency = "USD" },
-            }, superAdmin.AccessToken))
-            .ShouldFailWithAsync(400, ErrorCodes.FixedSalaryPaidMonthly);
     }
 }

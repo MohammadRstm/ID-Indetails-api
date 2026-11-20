@@ -31,6 +31,28 @@ public class ProjectDeletionTests(ApiFactory api) : IClassFixture<ApiFactory>
     private Task<long> CountAsync(string sql, long id) => _steps.ScalarAsync<long>(sql, ("@id", id));
 
     [Fact]
+    public async Task A_client_whose_project_was_deleted_can_then_be_deleted_and_the_projects_trace_stays()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var token = superAdmin.AccessToken;
+        var project = await Projects.CreateProjectAsync(token, DomainCodes.Design);
+        var clientId = project.Client!.Id;
+        await ArchiveAsync(project.Id, token);
+        var deleted = await DeleteAsync(project.Id, project.Title, token);
+        ((int)deleted.StatusCode).ShouldBe(204, await deleted.Content.ReadAsStringAsync());
+
+        // the deleted project's trace names its client, which used to stop the client being deleted
+        const string trace = "SELECT COUNT(*) FROM activity_events WHERE kind = 'project_deleted' AND subject_id = @id";
+        (await CountAsync(trace + " AND client_id IS NOT NULL", project.Id)).ShouldBe(1);
+
+        var gone = await Client.DeleteAsync($"/api/clients/{clientId}", token);
+        ((int)gone.StatusCode).ShouldBe(204, await gone.Content.ReadAsStringAsync());
+        (await CountAsync("SELECT COUNT(*) FROM clients WHERE id = @id", clientId)).ShouldBe(0);
+        // the trace is kept, no longer pointing at the client
+        (await CountAsync(trace + " AND client_id IS NULL", project.Id)).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task A_project_made_by_mistake_is_deleted_with_everything_on_it_once_archived_and_named()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();

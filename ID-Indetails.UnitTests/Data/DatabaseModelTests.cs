@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_104_tables_with_snake_case_names()
+    public void Model_has_all_107_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(104);
+        tables.Count.ShouldBe(107);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -45,6 +45,8 @@ public class DatabaseModelTests
             "design_vo_lines", "design_vo_allocations",
             // a project's cost budget versions go with the project (an archived one made by mistake), and a version's lines with it
             "project_budgets", "project_budget_lines",
+            // the months an advance takes from are part of it
+            "salary_advance_repayments",
         };
 
         var cascading = Model.GetEntityTypes()
@@ -121,6 +123,8 @@ public class DatabaseModelTests
         CheckNames<PortalMessage>().ShouldContain("ck_portal_messages_body_unless_deleted");
         CheckNames<ProjectBudgetLine>().ShouldContain("ck_project_budget_lines_one_key");
         CheckNames<ProjectBudgetLine>().ShouldContain("ck_project_budget_lines_amount_non_negative");
+        CheckNames<SalaryAdvance>().ShouldContain("ck_salary_advances_given_on");
+        CheckNames<SalaryAdvanceRepayment>().ShouldContain("ck_salary_advance_repayments_month");
     }
 
     [Fact]

@@ -10,7 +10,6 @@ using ID_Indetails.api.DTO.Request.Payroll;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Expenses;
 using ID_Indetails.api.DTO.Response.Payroll;
-using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Repositories.Payroll.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
@@ -33,7 +32,7 @@ public sealed class ProjectPayService(
     ICompanySettingsService settings,
     IClock clock) : IProjectPayService
 {
-    private sealed record PricedWork(long ProjectId, long UserId, DateOnly Day, ProjectPay.EntryPay Pay, PayBasis? Basis, decimal? MonthlySalary);
+    private sealed record PricedWork(long ProjectId, long UserId, DateOnly Day, ProjectPay.EntryPay Pay, decimal? MonthlySalary);
 
     public async Task<ProjectPayResponse> GetAsync(ProjectPayQuery query, CancellationToken cancellationToken = default)
     {
@@ -54,6 +53,7 @@ public sealed class ProjectPayService(
                 return new ProjectPayProjectResponse(
                     project.Id,
                     project.Title,
+                    project.Code,
                     ClientOf(project),
                     people.Sum(p => p.NormalMinutes),
                     people.Sum(p => p.OvertimeMinutes),
@@ -86,15 +86,15 @@ public sealed class ProjectPayService(
         var to = report.To.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var csv = new StringBuilder();
 
-        Csv.Line(csv, "Period", "From", "To", "Project", "Client", "Department", "Employee", "Email", "Pay basis", "Entries",
+        Csv.Line(csv, "Period", "From", "To", "Project", "Code", "Client", "Department", "Employee", "Email", "Entries",
             "Normal hours", "Overtime hours", "Total hours", "Hourly rate", "Currency", "Pay");
 
         foreach (var project in report.Projects)
         {
             foreach (var p in project.People)
             {
-                Csv.Line(csv, period, from, to, project.Title, project.Client, p.Team?.Name, p.Name, p.Email,
-                    p.Basis?.ToString().ToLowerInvariant(), p.Entries.ToString(CultureInfo.InvariantCulture),
+                Csv.Line(csv, period, from, to, project.Title, project.Code, project.Client, p.Team?.Name, p.Name, p.Email,
+                    p.Entries.ToString(CultureInfo.InvariantCulture),
                     Csv.Hours(p.NormalMinutes), Csv.Hours(p.OvertimeMinutes), Csv.Hours(p.NormalMinutes + p.OvertimeMinutes),
                     Csv.Money(p.HourlyRate), p.Currency, Csv.Money(p.Pay));
             }
@@ -137,7 +137,7 @@ public sealed class ProjectPayService(
         var userIds = users.Keys.ToList();
         periodWork = periodWork.Where(e => users.ContainsKey(e.UserId)).ToList();
         var pay = (await payroll.PayHistoryAsync(userIds, cancellationToken)).ToLookup(p => p.UserId, p =>
-            new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.OvertimeRate));
+            new SalaryCalculator.PayTerms(p.EffectiveFrom, p.Amount, p.Currency, p.OvertimeRate));
         var calendars = await inputs.CalendarsAsync(userIds, cancellationToken);
 
         // Overtime is decided per day and made-up hours per month, so every month the period touches is needed in full.
@@ -160,8 +160,7 @@ public sealed class ProjectPayService(
                     e.UserId,
                     split.Work.Day,
                     ProjectPay.Of(split.Work, split.MadeUp, terms, calendars[e.UserId], split.NoPremium),
-                    terms?.Basis,
-                    terms?.Basis == PayBasis.Monthly ? terms.Amount : null);
+                    terms?.Amount);
             })
             .ToList();
 
@@ -177,7 +176,6 @@ public sealed class ProjectPayService(
             name.Length > 0 ? name : user.Email,
             user.Email,
             user.Team is null ? null : new TeamSummaryResponse(user.Team.Id, user.Team.Name),
-            latest.Basis,
             work.Count,
             work.Sum(w => w.Pay.Normal),
             work.Sum(w => w.Pay.Overtime),

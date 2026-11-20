@@ -5,9 +5,10 @@ using Microsoft.Extensions.Options;
 namespace ID_Indetails.api.Jobs;
 
 /// <summary>
-/// Runs every scheduled check at start-up and then on a timer. Each check gets its own scope, so one that fails
-/// (logged, then retried on the next tick) doesn't stop the others. With several API instances, the unique
-/// recipient and key index makes a racing duplicate fail instead of being sent twice.
+/// Runs every scheduled check at start-up and then on a timer: the meeting reminders every minute, the others every
+/// <c>IntervalMinutes</c>. Each check gets its own scope, so one that fails (logged, then retried on the next tick)
+/// doesn't stop the others. With several API instances, the unique recipient and key index makes a racing duplicate
+/// fail instead of being sent twice.
 /// </summary>
 public sealed class NotificationScheduler(
     IServiceScopeFactory scopes,
@@ -21,10 +22,12 @@ public sealed class NotificationScheduler(
             return;
         }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(options.Value.IntervalMinutes));
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        var minute = 0;
         do
         {
-            foreach (var check in Enum.GetValues<ScheduledCheck>())
+            var everyCheck = minute++ % options.Value.IntervalMinutes == 0;
+            foreach (var check in Enum.GetValues<ScheduledCheck>().Where(c => everyCheck || c == ScheduledCheck.MeetingReminders))
             {
                 try
                 {

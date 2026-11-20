@@ -15,13 +15,29 @@ public class PaidBreaksTests
     private static readonly DateOnly Saturday = new(2026, 2, 14);
 
     [Fact]
-    public void The_break_is_shared_across_the_days_projects_by_in_hours_minutes()
+    public void A_full_day_shares_the_whole_break_across_its_projects_by_in_hours_minutes_in_whole_minutes()
     {
+        // 5 hours on one, 2 on the other: the 7 required hours, so the whole hour of break; 42.86 and 17.14 minutes
+        // round down to 42 and 17, and the minute left goes to the project with the most of the day
         var shares = PaidBreaks.Allocate(
-            [new PaidBreaks.Work(1, 10, Tuesday, 540, 180), new PaidBreaks.Work(2, 20, Tuesday, 720, 60)],
+            [new PaidBreaks.Work(1, 10, Tuesday, 540, 300), new PaidBreaks.Work(2, 20, Tuesday, 840, 120)],
             Calendar);
 
-        shares.ShouldBe([new PaidBreaks.Share(10, Tuesday, 45m), new PaidBreaks.Share(20, Tuesday, 15m)], ignoreOrder: true);
+        shares.ShouldBe([new PaidBreaks.Share(10, Tuesday, 43m), new PaidBreaks.Share(20, Tuesday, 17m)], ignoreOrder: true);
+        PaidBreaks.Unshared([new PaidBreaks.Work(1, 10, Tuesday, 540, 300), new PaidBreaks.Work(2, 20, Tuesday, 840, 120)], Calendar).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_day_logged_in_part_shares_that_part_of_the_break_and_the_rest_reaches_no_project()
+    {
+        // 4 of the 7 required hours: 4/7 of the hour, 34 minutes, shared 3 to 1 (25.5 and 8.5: 26 and 8)
+        var work = new[] { new PaidBreaks.Work(1, 10, Tuesday, 540, 180), new PaidBreaks.Work(2, 20, Tuesday, 720, 60) };
+
+        PaidBreaks.Allocate(work, Calendar).ShouldBe([new PaidBreaks.Share(10, Tuesday, 26m), new PaidBreaks.Share(20, Tuesday, 8m)], ignoreOrder: true);
+        PaidBreaks.Unshared(work, Calendar).ShouldBe([(Tuesday, 26)]);
+        PaidBreaks.SharedOf(60, 420, 420).ShouldBe(60);
+        PaidBreaks.SharedOf(60, 480, 420).ShouldBe(60);
+        PaidBreaks.SharedOf(60, 210, 420).ShouldBe(30);
     }
 
     [Fact]
@@ -45,7 +61,7 @@ public class PaidBreaksTests
         var shares = new[] { new PaidBreaks.Share(10, new(2026, 1, 20), 60m), new PaidBreaks.Share(10, new(2026, 3, 10), 30m) };
         var history = new[]
         {
-            // Hourly, then salaried from March: the break is paid either way.
+            // One rate, then a new salary from March: each break at its own day's rate.
             new ProjectFinance.PayRate(1, new(2026, 1, 1), 20m, "USD", 20m),
             new ProjectFinance.PayRate(1, new(2026, 3, 1), 12m, "USD", 11.5m),
         };
@@ -66,7 +82,7 @@ public class PaidBreaksTests
         // of March is a fixed salary.
         var roles = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new(2026, 3, 11), RoleCodes.Employee, RoleCodes.Admin)]);
         var history = ProjectFinance.RatesOf(
-            [new ProjectFinance.PayRecord(1, new(2026, 1, 1), PayBasis.Monthly, 3200m, "USD", 17.39m)], Calendar, until: new(2026, 3, 20), roles);
+            [new ProjectFinance.PayRecord(1, new(2026, 1, 1), 3200m, "USD", 17.39m)], Calendar, until: new(2026, 3, 20), roles);
         var shares = new[] { new PaidBreaks.Share(10, Tuesday, 60m), new PaidBreaks.Share(10, new(2026, 3, 3), 60m) };
 
         PaidBreaks.Price(shares, history).Select(p => p.Cost.Amount).ShouldBe([20m, 0m]);

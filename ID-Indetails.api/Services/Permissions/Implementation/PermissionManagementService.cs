@@ -11,7 +11,6 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
-using ID_Indetails.api.Repositories.Employees.Abstraction;
 using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
@@ -22,7 +21,6 @@ namespace ID_Indetails.api.Services.Permissions.Implementation;
 public sealed class PermissionManagementService(
     ICurrentUser currentUser,
     IUserRepository users,
-    IEmployeeRepository employees,
     IPermissionRepository permissionRepository,
     IPermissionService permissions,
     IActivityEventRepository activity,
@@ -125,12 +123,6 @@ public sealed class PermissionManagementService(
             grants,
             existing.Select(o => new EffectivePermissions.Override(o.PermissionCode, o.Effect)),
             request.Changes.Select(c => new PermissionChangePlanner.Change(c.Code, c.Action)));
-
-        if (plan.PreviousRole is not null
-            && PayRules.CheckRoleChange(plan.Role, (await employees.GetPayInForceAsync(user.Id, clock.CompanyToday, cancellationToken))?.Basis) is { } payDenial)
-        {
-            throw payDenial.ToException();
-        }
 
         var now = clock.UtcNow;
         var reasons = request.Changes.ToDictionary(c => c.Code, c => string.IsNullOrWhiteSpace(c.Reason) ? null : c.Reason.Trim());

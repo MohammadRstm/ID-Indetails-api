@@ -27,5 +27,10 @@ public class SiteLogConfiguration : IEntityTypeConfiguration<SiteLog>
             .WithMany()
             .HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<StoredFile>()
+            .WithMany()
+            .HasForeignKey(x => x.VoiceFileId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

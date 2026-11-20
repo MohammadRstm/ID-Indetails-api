@@ -1,32 +1,30 @@
-using System.Globalization;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Constants;
 
 namespace ID_Indetails.api.Business.Pay;
 
 /// <summary>
-/// When a pay change may apply. Pay history is only ever added to at the end:
+/// When a pay change may apply.
 /// <list type="bullet">
-/// <item>A change applies from today or an earlier day, never a future one.</item>
-/// <item>It must apply after the latest existing change. Anything else would either rewrite
-/// or silently cancel later changes, so a mistake is corrected with a new, later change.</item>
+/// <item>From today or any earlier day, closed months included, never a future one.</item>
+/// <item>A change dated D replaces every active entry from D onward (they are kept, marked superseded), so a mistake is
+/// corrected with a change dated on its day, and the entries before D stay.</item>
+/// <item>A change of currency starts on the 1st of a month, so every month is paid in one currency.</item>
 /// </list>
-/// A change dated in the past still re-prices work done since that day, because salaries and
-/// labour costs are always calculated from the history.
+/// Everything worked out from pay follows the new history at once: nothing is stored but an advance's settlement.
 /// </summary>
 public static class PayChangePolicy
 {
-    public static RuleDenial? Check(DateOnly effectiveFrom, DateOnly companyToday, DateOnly? latestEffectiveFrom)
+    /// <param name="currencyBefore">The currency of the active entry in force the day before <paramref name="effectiveFrom"/>; null when there is none.</param>
+    public static RuleDenial? Check(DateOnly effectiveFrom, DateOnly companyToday, string currency, string? currencyBefore)
     {
         if (effectiveFrom > companyToday)
         {
             return RuleDenial.Invalid(ErrorCodes.PayDateInFuture, "effectiveFrom", "A pay change cannot apply from a future date.");
         }
 
-        return latestEffectiveFrom is { } latest && effectiveFrom <= latest
-            ? RuleDenial.BusinessRule(
-                ErrorCodes.PayChangeNotAfterLatest,
-                $"Pay already changed on {latest.ToString("d MMM yyyy", CultureInfo.InvariantCulture)}. A new change must apply after that date.")
+        return currencyBefore is not null && !string.Equals(currency, currencyBefore, StringComparison.OrdinalIgnoreCase) && effectiveFrom.Day != 1
+            ? RuleDenial.Invalid(ErrorCodes.PayCurrencyChangeNotFirst, "effectiveFrom", "A change of currency starts on the 1st of a month.")
             : null;
     }
 }

@@ -27,8 +27,7 @@ public class OvertimeThresholdTests
         []);
 
     // 1,840 a month: overtime at 10 an hour (the salary ÷ 184), × 1.5
-    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), PayBasis.Monthly, 1840m, "USD", 10m);
-    private static readonly SalaryCalculator.PayTerms Hourly = new(new(2026, 1, 1), PayBasis.Hourly, 20m, "USD", 20m);
+    private static readonly SalaryCalculator.PayTerms Monthly = new(new(2026, 1, 1), 1840m, "USD", 10m);
 
     private static long _id;
 
@@ -135,13 +134,8 @@ public class OvertimeThresholdTests
     }
 
     [Fact]
-    public void Hourly_pay_and_months_without_a_threshold_pay_all_overtime_as_before()
+    public void Months_without_a_threshold_pay_all_overtime_as_before()
     {
-        var calendar = CalendarOf();
-        var hourly = Pay(calendar, [.. FullDays(calendar), DayOff(6, 10)], Hourly);
-        hourly.ThresholdMinutes.ShouldBeNull();
-        hourly.OvertimePay.ShouldBe(300m);
-
         var off = CalendarOf(threshold: 0);
         var salary = Pay(off, [.. FullDays(off, skip: 3), DayOff(6, 10)]);
         salary.ThresholdMinutes.ShouldBeNull();
@@ -158,7 +152,7 @@ public class OvertimeThresholdTests
         var cases = new List<SalaryCalculator.Input>();
         foreach (var calendar in new[] { on, off })
         {
-            foreach (var terms in new SalaryCalculator.PayTerms?[] { Monthly, Hourly, null })
+            foreach (var terms in new SalaryCalculator.PayTerms?[] { Monthly, null })
             {
                 foreach (var fixedSalary in new[] { false, true })
                 {
@@ -189,10 +183,9 @@ public class OvertimeThresholdTests
     [Fact]
     public void A_salarys_suggested_overtime_rate_follows_the_threshold()
     {
-        PayRules.SuggestedOvertimeRate(PayBasis.Monthly, 1840m, 184).ShouldBe(10m);
-        PayRules.SuggestedOvertimeRate(PayBasis.Monthly, 1840m, 200).ShouldBe(9.2m);
-        PayRules.SuggestedOvertimeRate(PayBasis.Monthly, 1840m).ShouldBe(10m);
-        PayRules.SuggestedOvertimeRate(PayBasis.Hourly, 20m, 200).ShouldBe(20m);
+        PayRules.SuggestedOvertimeRate(1840m, 184).ShouldBe(10m);
+        PayRules.SuggestedOvertimeRate(1840m, 200).ShouldBe(9.2m);
+        PayRules.SuggestedOvertimeRate(1840m).ShouldBe(10m);
     }
 
     [Fact]
@@ -203,8 +196,7 @@ public class OvertimeThresholdTests
         // 10 hours past the threshold are paid at 10 × 1.5: 150. Projects carry them at the hourly rate (1,840 ÷ 184
         // paid hours in December, 10): 100. The other 50 reach no project.
         SalaryCalculator.OvertimePremium(Pay(calendar, [.. FullDays(calendar), DayOff(6, 10)])).ShouldBe(50m);
-        // under the threshold no overtime is paid; hourly pay puts its overtime on projects itself
+        // under the threshold no overtime is paid
         SalaryCalculator.OvertimePremium(Pay(calendar, [.. FullDays(calendar, skip: 3), DayOff(6, 10)])).ShouldBe(0m);
-        SalaryCalculator.OvertimePremium(Pay(calendar, [.. FullDays(calendar), DayOff(6, 10)], Hourly)).ShouldBe(0m);
     }
 }

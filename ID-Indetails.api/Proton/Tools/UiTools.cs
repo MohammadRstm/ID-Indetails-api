@@ -219,6 +219,7 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
             // the person's own pages: their route decides who has them (employees)
             [ProtonPage.MyWork] = (null, null, false, "your work"),
             [ProtonPage.MyProfile] = (null, null, false, "your profile"),
+            [ProtonPage.Calendar] = (ProtonEndpoint.Of<MeetingsController>(nameof(MeetingsController.List)), null, false, "your calendar"),
             // Execution's own: the pocket money and everyone's daily logs for admins, a site staff member's daily log and sites
             [ProtonPage.Pocket] = (ProtonEndpoint.Of<PocketController>(nameof(PocketController.Get)), DomainCodes.Execution, false, "the pocket money"),
             [ProtonPage.SiteLogs] = (ProtonEndpoint.Of<SiteLogsController>(nameof(SiteLogsController.List)), DomainCodes.Execution, false, "the daily logs"),
@@ -255,7 +256,7 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
     /// <summary>The person's own pages: only employees have them (an admin's profile is the company area's).</summary>
     private static readonly IReadOnlySet<ProtonPage> EmployeePages = new HashSet<ProtonPage>
     {
-        ProtonPage.MyWork, ProtonPage.MyProfile, ProtonPage.DailyLog, ProtonPage.MySites,
+        ProtonPage.MyWork, ProtonPage.MyProfile, ProtonPage.DailyLog, ProtonPage.MySites, ProtonPage.Calendar,
     };
 
     /// <summary>Pages an employee has only in Design: site staff work from My sites and their daily log instead.</summary>
@@ -281,7 +282,8 @@ public sealed class OpenPageTool(ProtonRecords records) : ProtonTool<OpenPageInp
         "tab: each Design employee's logged against expected hours), settings, notifications, messages, help, and in the company area " +
         "the overview, expenses, schedules, salaries, project pay, Proton's budget, company settings, the profile and the " +
         "start page; in Execution the pocket money and everyone's daily logs (site_logs); for employees their own my_work (Design), " +
-        "daily_log and my_sites (Execution site staff) and my_profile (they don't see their pay); in the Website area (the company's public " +
+        "daily_log and my_sites (Execution site staff), calendar (the meetings they see, by month) and my_profile (they don't see " +
+        "their pay); in the Website area (the company's public " +
         "website) its projects, analytics, services, locations, contact (email and social links), site (favicon, under " +
         "construction, watermark check) and staff. Only these pages exist for Proton; it can't open any address. It never reads what salary or pay pages show.";
 
@@ -834,7 +836,7 @@ public static class ProtonFormSpecs
         [ProtonForm.Meeting] = new("the meeting form", W<MeetingsController>(nameof(MeetingsController.Create))),
         [ProtonForm.NewProject] = new("the new project form", W<ProjectsController>(nameof(ProjectsController.Create))),
         [ProtonForm.EditProject] = new("the project details form", W<ProjectsController>(nameof(ProjectsController.Update))),
-        [ProtonForm.ReportBug] = new("the bug report form", null, TypedOnly: true),
+        [ProtonForm.ReportBug] = new("the Contact the developer form", null, TypedOnly: true),
         [ProtonForm.Invite] = new("the invite form", W<InvitationsController>(nameof(InvitationsController.Create)), TypedOnly: true),
         [ProtonForm.Message] = new("a draft", null, TypedOnly: true),
         [ProtonForm.LogWork] = new("the log work form", W<WorkEntriesController>(nameof(WorkEntriesController.Create))),

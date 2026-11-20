@@ -15,6 +15,12 @@ public class Project
 
     public string Title { get; set; } = string.Empty;
 
+    /// <summary>ID26Q4001: unique in its domain (see <see cref="Business.Projects.ProjectCodeRules"/>).</summary>
+    public string ProjectCode { get; set; } = string.Empty;
+
+    /// <summary>Usually the name's initials: VK. Not unique; with the project code it makes the full code, ID26Q4001-VK.</summary>
+    public string BuildingCode { get; set; } = string.Empty;
+
     public string? Description { get; set; }
 
     /// <summary>Where the work is: a site's address, a building, a town. Free text, optional.</summary>
@@ -73,6 +79,12 @@ public class Project
     /// and no TVA on them. 0 until a BOQ with permits is agreed.
     /// </summary>
     public decimal? PermitsPrice { get; set; }
+
+    /// <summary>
+    /// What the project is worth in CFA francs, typed in by hand as a reference for whoever sees the money (<c>financial:view</c>).
+    /// Optional and in no calculation: the project's money stays in USD.
+    /// </summary>
+    public decimal? CfaPrice { get; set; }
 
     /// <summary>Execution only: the company's supervision on the work price, 0.10 = 10%. Null for Design.</summary>
     public decimal? SupervisionRate { get; set; }

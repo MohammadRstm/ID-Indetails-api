@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Company;
@@ -10,14 +11,16 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.Company.Abstraction;
+using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Company.Abstraction;
 
 namespace ID_Indetails.api.Services.Company.Implementation;
 
-/// <summary>Company overhead (see <c>Business/Company/OverheadRules</c>).</summary>
+/// <summary>Company overhead and one-off expenses (see <c>Business/Company/OverheadRules</c> and <c>OneOffExpenseRules</c>).</summary>
 public sealed class OverheadService(
     ICurrentUser currentUser,
+    IPermissionService permissions,
     IOverheadRepository overheads,
     IActivityEventRepository activity,
     IUnitOfWork unitOfWork,
@@ -48,6 +51,7 @@ public sealed class OverheadService(
     public async Task<IReadOnlyList<OverheadMonthResponse>> MonthlyAsync(int months, CancellationToken cancellationToken = default)
     {
         var items = await overheads.ListAsync(cancellationToken);
+        var oneOffs = await overheads.OneOffsAsync(ThisMonth.AddMonths(1 - months), OverheadRules.MonthEnd(ThisMonth), cancellationToken);
 
         return Enumerable.Range(0, months)
             .Select(i => ThisMonth.AddMonths(i - months + 1))
@@ -58,8 +62,86 @@ public sealed class OverheadService(
                     .GroupBy(x => x.Currency)
                     .Select(g => new CurrencyTotalResponse(g.Key, g.Sum(x => x.Amount!.Value)))
                     .OrderBy(t => t.Currency)
-                    .ToList()))
+                    .ToList(),
+                TotalsOf(oneOffs.Where(e => OverheadRules.MonthStart(e.SpentOn) == month))))
             .ToList();
+    }
+
+    public async Task<OneOffExpenseListResponse> OneOffsAsync(string? month, CancellationToken cancellationToken = default)
+    {
+        var first = ThisMonth;
+        if (month is not null)
+        {
+            first = DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+                ? parsed
+                : throw new RequestValidationException(ErrorCodes.ValidationFailed, "month", "Month must look like 2026-06.");
+        }
+
+        if (first > ThisMonth)
+        {
+            throw new RequestValidationException(ErrorCodes.ValidationFailed, "month", "One-off expenses can't be shown for a future month.");
+        }
+
+        var canManage = await CanManageAsync(cancellationToken);
+        var items = await overheads.OneOffsAsync(first, OverheadRules.MonthEnd(first), cancellationToken);
+        return new OneOffExpenseListResponse(
+            first, first == ThisMonth, items.Select(e => DescribeOneOff(e, canManage)).ToList(), TotalsOf(items));
+    }
+
+    public async Task<OneOffExpenseResponse> CreateOneOffAsync(SaveOneOffExpenseRequest request, CancellationToken cancellationToken = default)
+    {
+        OneOffExpenseRules.CheckSpentOn(request.SpentOn, clock.CompanyToday).ThrowIfDenied();
+        var expense = new OneOffExpense
+        {
+            Name = request.Name.Trim(),
+            Group = await GroupAsync(request.GroupId, cancellationToken),
+            Currency = request.Currency.ToUpperInvariant(),
+            Amount = request.Amount,
+            SpentOn = request.SpentOn,
+            CreatedAt = clock.UtcNow,
+            CreatedById = currentUser.Id,
+        };
+
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+        overheads.AddOneOff(expense);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        RecordOneOff(expense, ActivityEventKinds.OverheadOneOffAdded, null);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return DescribeOneOff(expense, await CanManageAsync(cancellationToken));
+    }
+
+    public async Task<OneOffExpenseResponse> UpdateOneOffAsync(long id, SaveOneOffExpenseRequest request, CancellationToken cancellationToken = default)
+    {
+        var expense = await FindOneOffAsync(id, cancellationToken);
+        OneOffExpenseRules.CheckOpen(expense.SpentOn, clock.CompanyToday).ThrowIfDenied();
+        OneOffExpenseRules.CheckSpentOn(request.SpentOn, clock.CompanyToday).ThrowIfDenied();
+        if (expense.GroupId != request.GroupId)
+        {
+            expense.Group = await GroupAsync(request.GroupId, cancellationToken);
+        }
+
+        var previous = expense.Amount;
+        expense.Name = request.Name.Trim();
+        expense.Currency = request.Currency.ToUpperInvariant();
+        expense.Amount = request.Amount;
+        expense.SpentOn = request.SpentOn;
+        expense.UpdatedAt = clock.UtcNow;
+
+        RecordOneOff(expense, ActivityEventKinds.OverheadOneOffChanged, previous);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return DescribeOneOff(expense, await CanManageAsync(cancellationToken));
+    }
+
+    public async Task RemoveOneOffAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var expense = await FindOneOffAsync(id, cancellationToken);
+        OneOffExpenseRules.CheckOpen(expense.SpentOn, clock.CompanyToday).ThrowIfDenied();
+
+        RecordOneOff(expense, ActivityEventKinds.OverheadOneOffRemoved, null);
+        overheads.RemoveOneOff(expense);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<OverheadLineResponse> CreateAsync(CreateOverheadRequest request, CancellationToken cancellationToken = default)
@@ -280,6 +362,42 @@ public sealed class OverheadService(
 
     private async Task<OverheadItem> FindAsync(long id, CancellationToken cancellationToken)
         => await overheads.GetForUpdateAsync(id, cancellationToken) ?? throw new NotFoundException(NotFoundMessage);
+
+    private async Task<OneOffExpense> FindOneOffAsync(long id, CancellationToken cancellationToken)
+        => await overheads.GetOneOffForUpdateAsync(id, cancellationToken) ?? throw new NotFoundException(NotFoundMessage);
+
+    private async Task<bool> CanManageAsync(CancellationToken cancellationToken)
+        => (await permissions.GetAccessAsync(currentUser.Id, cancellationToken)).Has(PermissionCodes.OverheadManage);
+
+    private static IReadOnlyList<CurrencyTotalResponse> TotalsOf(IEnumerable<OneOffExpense> expenses)
+        => expenses.GroupBy(e => e.Currency)
+            .Select(g => new CurrencyTotalResponse(g.Key, g.Sum(e => e.Amount)))
+            .OrderBy(t => t.Currency)
+            .ToList();
+
+    private OneOffExpenseResponse DescribeOneOff(OneOffExpense expense, bool canManage)
+        => new(
+            expense.Id,
+            expense.Name,
+            new OverheadGroupSummaryResponse(expense.Group.Id, expense.Group.Name),
+            expense.Currency,
+            expense.Amount,
+            expense.SpentOn,
+            expense.CreatedAt,
+            canManage && OneOffExpenseRules.IsOpen(expense.SpentOn, clock.CompanyToday));
+
+    private void RecordOneOff(OneOffExpense expense, string kind, decimal? previousAmount)
+        => activity.Add(new ActivityEvent
+        {
+            Kind = kind,
+            OccurredAt = clock.UtcNow,
+            ActorId = currentUser.Id,
+            SubjectType = "one_off_expense",
+            SubjectId = expense.Id,
+            Amount = expense.Amount,
+            PrevAmount = previousAmount,
+            Payload = JsonSerializer.Serialize(new { name = expense.Name, currency = expense.Currency, details = new { spentOn = expense.SpentOn, category = expense.Group.Name } }),
+        });
 
     private static decimal? AmountFor(OverheadItem item, DateOnly month)
         => OverheadRules.AmountFor(month, item.StartedOn, item.EndedOn, item.Amounts.Select(a => new OverheadRules.Amount(a.EffectiveFrom, a.Amount)));

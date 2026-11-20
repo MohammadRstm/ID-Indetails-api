@@ -1,6 +1,7 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Finance;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Reports;
@@ -75,6 +76,7 @@ public sealed class ReportService(
                 return new ReportProjectResponse(
                     g.Key,
                     g.First().ProjectTitle,
+                    g.First().ProjectCode ?? string.Empty,
                     g.First().ProjectStatus,
                     minutes,
                     g.Count(),
@@ -96,7 +98,7 @@ public sealed class ReportService(
             .OrderByDescending(p => p.Minutes)
             .ToList();
 
-        var matrixProjects = byProject.Take(MatrixProjects).Select(p => new ReportMatrixProjectResponse(p.ProjectId, p.Title)).ToList();
+        var matrixProjects = byProject.Take(MatrixProjects).Select(p => new ReportMatrixProjectResponse(p.ProjectId, p.Title, p.Code)).ToList();
         var cells = views.GroupBy(e => (e.UserId, e.ProjectId)).ToDictionary(g => g.Key, g => g.Sum(e => e.Minutes));
         var matrix = new ReportMatrixResponse(
             matrixProjects,
@@ -140,7 +142,8 @@ public sealed class ReportService(
             views
                 .GroupBy(e => e.ProjectId)
                 .Select(g => new ProjectTotalResponse(
-                    g.Key, g.First().ProjectTitle, g.First().ProjectStatus, g.Sum(e => e.Minutes), g.Count(), g.Select(e => e.UserId).Distinct().Count()))
+                    g.Key, g.First().ProjectTitle, g.First().ProjectCode ?? string.Empty, g.First().ProjectStatus, g.Sum(e => e.Minutes), g.Count(),
+                    g.Select(e => e.UserId).Distinct().Count()))
                 .OrderByDescending(p => p.Minutes)
                 .ToList(),
             views
@@ -335,6 +338,7 @@ public sealed class ReportService(
                 return new CompletedProjectResponse(
                     p.Id,
                     p.Title,
+                    ProjectCodeRules.Full(p.ProjectCode, p.BuildingCode),
                     p.StartDate,
                     completedOn,
                     completedOn.DayNumber - p.StartDate.DayNumber,
@@ -388,7 +392,7 @@ public sealed class ReportService(
                 .Select(p =>
                 {
                     var summary = finance[p.ProjectId].Summary;
-                    return new ProjectProfitResponse(p.ProjectId, p.Title, summary.Revenue, summary.Cost, summary.Profit);
+                    return new ProjectProfitResponse(p.ProjectId, p.Title, p.Code, summary.Revenue, summary.Cost, summary.Profit);
                 })
                 .ToList(),
             views

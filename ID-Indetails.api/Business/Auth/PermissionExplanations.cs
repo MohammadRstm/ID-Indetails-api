@@ -89,6 +89,7 @@ public static class PermissionExplanations
         [PermissionCodes.HoursExcuse] = "Excuse hours or days off in people's hours balance, so they don't count as missing.",
         [PermissionCodes.TimeOffRequest] = "Ask for whole days off ahead of time, and take the request back while it waits for a decision.",
         [PermissionCodes.TimeOffDecide] = "Approve time off with pay or without, decline it, and take approved time off back until its last day. You're told when someone on time off logs hours or uses the app.",
+        [PermissionCodes.SalaryAdvanceManage] = "Give people part of their pay early, approve or decline their requests for an advance, set the months it comes off their pay, and close what is left by cash or a write-off. You're told when someone asks.",
 
         // Messages
         [PermissionCodes.MessageAnnounce] = "Write in Announcements, the chat every active member of staff reads and is told about on their phone. Everyone else only reads it.",

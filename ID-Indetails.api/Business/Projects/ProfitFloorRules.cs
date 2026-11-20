@@ -30,6 +30,9 @@ public static class ProfitFloorRules
             : agreed > 0 && profit / agreed <= WarnMargin ? Standing.Close
             : Standing.Fine;
 
+    /// <summary>Whether a change takes the profit down to zero or below: what the floor holds back.</summary>
+    public static bool ReachesZero(decimal before, decimal after) => after < before && StandingOf(after, 0) == Standing.AtZero;
+
     /// <summary>The profit as a whole percentage of the agreed amount, for alerts (which never carry amounts).</summary>
     public static int MarginPct(decimal profit, decimal agreed)
         => agreed > 0 ? (int)Math.Round(profit / agreed * 100, MidpointRounding.AwayFromZero) : 0;

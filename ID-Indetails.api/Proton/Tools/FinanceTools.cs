@@ -705,7 +705,9 @@ public sealed record DomainOverview(
 
 /// <param name="SoFar">The period runs to today: its figures are so far.</param>
 /// <param name="PeriodCashProfit">Received less project cost, before overhead (the overview's gross profit).</param>
-/// <param name="Overhead">Company expenses charged to the period by calendar days, in USD.</param>
+/// <param name="Overhead">Recurring company expenses charged to the period by calendar days, in USD.</param>
+/// <param name="OneOffExpenses">One-off company expenses spent in the period, in full on their day, in USD.</param>
+/// <param name="UnconvertedOneOffExpenses">One-off expenses with no exchange rate on their day, left out of <paramref name="OneOffExpenses"/>.</param>
 public sealed record CompanyOverview(
     DateOnly From,
     DateOnly To,
@@ -715,6 +717,8 @@ public sealed record CompanyOverview(
     decimal PeriodCashProfit,
     decimal Overhead,
     IReadOnlyList<CurrencyTotalResponse> UnconvertedOverhead,
+    decimal OneOffExpenses,
+    IReadOnlyList<CurrencyTotalResponse> UnconvertedOneOffExpenses,
     decimal Invoiced,
     decimal Outstanding,
     int ProjectsWithActivity,
@@ -723,8 +727,9 @@ public sealed record CompanyOverview(
     string Note);
 
 /// <summary>
-/// The company overview, as GET /api/company/overview returns it, without admin salaries — and therefore without net
-/// profit, which would give the salaries away (gross profit − overhead − net profit).
+/// The company overview, as GET /api/company/overview returns it, without the fixed salaries — and therefore without
+/// net profit and the total of expenses, which would give the salaries away (gross profit − overhead − one-off expenses
+/// − net profit).
 /// </summary>
 public sealed class GetCompanyOverviewTool(ICompanyOverviewService overview) : ProtonTool<CompanyOverviewInput>
 {
@@ -732,8 +737,9 @@ public sealed class GetCompanyOverviewTool(ICompanyOverviewService overview) : P
 
     public override string Description =>
         "The whole company's money for a period, in USD, per domain and in total: money received, project cost, cash " +
-        "profit (received − project cost, the overview's gross profit), the overhead charged to the period, invoiced, " +
-        "and outstanding today. Net profit isn't available here.";
+        "profit (received − project cost, the overview's gross profit), the recurring overhead charged to the period, the " +
+        "one-off company expenses spent in it, invoiced, and outstanding today. Net profit and the total of the company's " +
+        "expenses (which include salaries) aren't available here.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get));
 
@@ -743,10 +749,10 @@ public sealed class GetCompanyOverviewTool(ICompanyOverviewService overview) : P
         var o = await overview.GetAsync(range.From, range.To, cancellationToken);
         return new ProtonToolOutput(
             new CompanyOverview(
-                o.From, o.To, o.To >= context.Today, o.Revenue, o.Cost, o.GrossProfit, o.Overhead, o.UnconvertedOverhead, o.Invoiced,
-                o.Outstanding, o.ProjectsWithActivity, o.ClientsServed, o.Domains.Select(DomainOverview.Of).ToList(),
+                o.From, o.To, o.To >= context.Today, o.Revenue, o.Cost, o.GrossProfit, o.Overhead, o.UnconvertedOverhead,
+                o.OneOffExpenses, o.UnconvertedOneOffExpenses, o.Invoiced, o.Outstanding, o.ProjectsWithActivity, o.ClientsServed, o.Domains.Select(DomainOverview.Of).ToList(),
                 "The Company overview page calls received \"revenue\" and \"collected\", and period cash profit \"gross profit\". " +
-                "Admin salaries and net profit are not available to Proton; that page shows them."),
+                "Salaries, the total of expenses and net profit are not available to Proton; that page shows them."),
             [],
             new DayRange(o.From, o.To));
     }

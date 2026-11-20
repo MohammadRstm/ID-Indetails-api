@@ -6,10 +6,13 @@ public sealed record SiteSummaryQuery
     public long[] Ids { get; init; } = [];
 }
 
-/// <summary>What happened on site, in the writer's words.</summary>
+/// <summary>What happened on site, in the writer's words, a voice note, or both.</summary>
 public sealed record SaveSiteLogRequest
 {
     public string Body { get; init; } = string.Empty;
+
+    /// <summary>The writer's own upload from <c>POST /api/files/voice</c>. On a change: null removes the voice note, the same id keeps it.</summary>
+    public long? VoiceFileId { get; init; }
 }
 
 /// <summary>Daily logs, newest first. Days are company days, both inclusive.</summary>

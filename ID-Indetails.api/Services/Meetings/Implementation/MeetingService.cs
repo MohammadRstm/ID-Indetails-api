@@ -25,9 +25,10 @@ namespace ID_Indetails.api.Services.Meetings.Implementation;
 /// <summary>
 /// Project meetings and general meetings (see <see cref="MeetingRules"/>). Everyone who sees a project sees its
 /// meetings; a general meeting is for its attendees. Meetings the caller can't see are not found. When someone who
-/// doesn't manage meetings sets a project meeting, the people who do (other than them) are notified; a general
-/// meeting's attendees are told when they are invited, when it moves, and when it is cancelled for them. Nobody is put
-/// in a meeting, or has one moved onto, a day of their time off; the meetings they were already in stay.
+/// doesn't manage meetings sets a project meeting, the people who do (other than them and its invitees) are notified.
+/// A project meeting's invitees and a general meeting's attendees are told when they are invited, when it moves, and
+/// when it is cancelled for them. Nobody is put in a meeting, or has one moved onto, a day of their time off; the
+/// meetings they were already in stay.
 /// </summary>
 public sealed class MeetingService(
     ICurrentUser currentUser,
@@ -65,15 +66,30 @@ public sealed class MeetingService(
             .ToList();
     }
 
+    public async Task<IReadOnlyList<MeetingInviteeResponse>> InviteesAsync(long projectId, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        var project = await VisibleProjectAsync(actor, projectId, cancellationToken);
+        var ids = (await ProjectPeopleAsync(project, cancellationToken)).Where(id => id != actor.UserId).ToList();
+        return (await meetings.PeopleAsync(ids, cancellationToken))
+            .Select(p => new MeetingInviteeResponse(p.Id, p.Name, p.PhotoFileId, p.Team))
+            .ToList();
+    }
+
     public async Task<MeetingResponse> CreateAsync(long projectId, SaveMeetingRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
         var project = await VisibleProjectAsync(actor, projectId, cancellationToken);
         Throw(MeetingRules.CheckNewMeeting(project.Status));
-        Throw(NoAttendees(request));
+        var inviteeIds = await ProjectInviteesAsync(actor, project, request.AttendeeIds ?? [], cancellationToken);
 
         var meeting = new ProjectMeeting { ProjectId = project.Id, CreatedAt = clock.UtcNow, CreatedById = actor.UserId };
         Apply(meeting, request);
+        await CheckOffAsync(meeting, inviteeIds, cancellationToken);
+        foreach (var userId in inviteeIds)
+        {
+            meeting.Attendees.Add(new MeetingAttendee { UserId = userId });
+        }
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         meetings.Add(meeting);
@@ -81,9 +97,10 @@ public sealed class MeetingService(
         activity.Add(MeetingEvent(meeting, project.DomainCode, ActivityEventKinds.MeetingCreated, actor.UserId));
         if (!actor.Has(PermissionCodes.MeetingManage))
         {
-            await NotifyManagersAsync(meeting, project, actor.UserId, cancellationToken);
+            await NotifyManagersAsync(meeting, project, actor.UserId, inviteeIds, cancellationToken);
         }
 
+        await TellAttendeesAsync(NotificationKinds.MeetingInvited, meeting, project, inviteeIds, actor.UserId, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -107,7 +124,7 @@ public sealed class MeetingService(
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         meetings.Add(meeting);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        await TellAttendeesAsync(NotificationKinds.MeetingInvited, meeting, attendeeIds, actor.UserId, cancellationToken);
+        await TellAttendeesAsync(NotificationKinds.MeetingInvited, meeting, null, attendeeIds, actor.UserId, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -123,42 +140,41 @@ public sealed class MeetingService(
         if (meeting.Project is { } project)
         {
             Throw(MeetingRules.CheckProject(project.Status));
-            Throw(NoAttendees(request));
         }
 
         var (startsAt, endsAt) = (meeting.StartsAt, meeting.EndsAt);
         Apply(meeting, request);
         meeting.UpdatedAt = clock.UtcNow;
         meeting.UpdatedById = actor.UserId;
+        var moved = (startsAt, endsAt) != (meeting.StartsAt, meeting.EndsAt);
 
-        if (meeting.Project is { } owner)
+        var before = meeting.Attendees.Select(a => a.UserId).ToHashSet();
+        var after = request.AttendeeIds is not { } chosen
+            ? before
+            : (meeting.Project is { } owner
+                ? await ProjectInviteesAsync(actor, owner, chosen, cancellationToken)
+                : await AttendeesAsync(actor, meeting.DomainCode, chosen, cancellationToken)).ToHashSet();
+        await CheckOffAsync(meeting, moved ? after.ToList() : after.Except(before).ToList(), cancellationToken);
+        foreach (var gone in meeting.Attendees.Where(a => !after.Contains(a.UserId)).ToList())
         {
-            activity.Add(MeetingEvent(meeting, owner.DomainCode, ActivityEventKinds.MeetingUpdated, actor.UserId));
+            meeting.Attendees.Remove(gone);
         }
-        else
+
+        foreach (var userId in after.Where(u => !before.Contains(u)))
         {
-            var before = meeting.Attendees.Select(a => a.UserId).ToHashSet();
-            var after = request.AttendeeIds is { } chosen
-                ? (await AttendeesAsync(actor, meeting.DomainCode, chosen, cancellationToken)).ToHashSet()
-                : before;
-            var moved = (startsAt, endsAt) != (meeting.StartsAt, meeting.EndsAt);
-            await CheckOffAsync(meeting, moved ? after.ToList() : after.Except(before).ToList(), cancellationToken);
-            foreach (var gone in meeting.Attendees.Where(a => !after.Contains(a.UserId)).ToList())
-            {
-                meeting.Attendees.Remove(gone);
-            }
+            meeting.Attendees.Add(new MeetingAttendee { UserId = userId });
+        }
 
-            foreach (var userId in after.Where(u => !before.Contains(u)))
-            {
-                meeting.Attendees.Add(new MeetingAttendee { UserId = userId });
-            }
+        if (meeting.Project is { } onProject)
+        {
+            activity.Add(MeetingEvent(meeting, onProject.DomainCode, ActivityEventKinds.MeetingUpdated, actor.UserId));
+        }
 
-            await TellAttendeesAsync(NotificationKinds.MeetingInvited, meeting, after.Except(before).ToList(), actor.UserId, cancellationToken);
-            await TellAttendeesAsync(NotificationKinds.MeetingCancelled, meeting, before.Except(after).ToList(), actor.UserId, cancellationToken);
-            if ((startsAt, endsAt) != (meeting.StartsAt, meeting.EndsAt))
-            {
-                await TellAttendeesAsync(NotificationKinds.MeetingMoved, meeting, before.Intersect(after).ToList(), actor.UserId, cancellationToken);
-            }
+        await TellAttendeesAsync(NotificationKinds.MeetingInvited, meeting, meeting.Project, after.Except(before).ToList(), actor.UserId, cancellationToken);
+        await TellAttendeesAsync(NotificationKinds.MeetingCancelled, meeting, meeting.Project, before.Except(after).ToList(), actor.UserId, cancellationToken);
+        if (moved)
+        {
+            await TellAttendeesAsync(NotificationKinds.MeetingMoved, meeting, meeting.Project, before.Intersect(after).ToList(), actor.UserId, cancellationToken);
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -183,10 +199,9 @@ public sealed class MeetingService(
         {
             activity.Add(MeetingEvent(meeting, owner.DomainCode, ActivityEventKinds.MeetingDeleted, actor.UserId));
         }
-        else
-        {
-            await TellAttendeesAsync(NotificationKinds.MeetingCancelled, meeting, meeting.Attendees.Select(a => a.UserId).ToList(), actor.UserId, cancellationToken);
-        }
+
+        await TellAttendeesAsync(
+            NotificationKinds.MeetingCancelled, meeting, meeting.Project, meeting.Attendees.Select(a => a.UserId).ToList(), actor.UserId, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -224,14 +239,25 @@ public sealed class MeetingService(
         return ids;
     }
 
+    /// <summary>A project meeting's invitees: optional, each someone who sees the project (see <see cref="MeetingRules.CheckInvitees"/>).</summary>
+    private async Task<IReadOnlyList<long>> ProjectInviteesAsync(UserAccess actor, Project project, IReadOnlyList<long> chosen, CancellationToken cancellationToken)
+    {
+        var ids = chosen.Distinct().Where(id => id != actor.UserId).ToList();
+        if (ids.Count > 0)
+        {
+            Throw(MeetingRules.CheckInvitees(ids, (await ProjectPeopleAsync(project, cancellationToken)).ToHashSet()));
+        }
+
+        return ids;
+    }
+
+    /// <summary>Everyone who sees the project: the active people who hold <c>project:view</c> and see its domain, super admins included.</summary>
+    private Task<IReadOnlyList<long>> ProjectPeopleAsync(Project project, CancellationToken cancellationToken)
+        => notifications.HoldersAsync(project.DomainCode, PermissionCodes.ProjectView, cancellationToken);
+
     /// <summary>No one goes into a meeting on a day of their time off.</summary>
     private Task CheckOffAsync(ProjectMeeting meeting, IReadOnlyList<long> attendeeIds, CancellationToken cancellationToken)
         => timeOff.CheckMeetingAsync(attendeeIds, clock.ToCompanyDate(meeting.StartsAt), clock.ToCompanyDate(meeting.EndsAt.AddMinutes(-1)), cancellationToken);
-
-    private static RuleDenial? NoAttendees(SaveMeetingRequest request)
-        => request.AttendeeIds is null
-            ? null
-            : RuleDenial.Invalid(ErrorCodes.ValidationFailed, "attendeeIds", "A project meeting is for everyone on the project: it has no attendees.");
 
     private async Task<Project> VisibleProjectAsync(UserAccess actor, long projectId, CancellationToken cancellationToken)
     {
@@ -257,7 +283,9 @@ public sealed class MeetingService(
         => MeetingRules.CheckChange(
             actor.Has(PermissionCodes.MeetingManage), actor.Has(PermissionCodes.MeetingCreate), meeting.CreatedById, actor.UserId);
 
-    private async Task NotifyManagersAsync(ProjectMeeting meeting, Project project, long actorId, CancellationToken cancellationToken)
+    /// <summary>Its invitees among them get their invitation instead.</summary>
+    private async Task NotifyManagersAsync(
+        ProjectMeeting meeting, Project project, long actorId, IReadOnlyList<long> inviteeIds, CancellationToken cancellationToken)
         => await notifications.SendAsync(
             new NotificationDraft(
                 NotificationKinds.MeetingScheduled,
@@ -274,10 +302,12 @@ public sealed class MeetingService(
                     startsAt = meeting.StartsAt,
                     endsAt = meeting.EndsAt,
                 }),
-            await notifications.HoldersAsync(project.DomainCode, PermissionCodes.MeetingManage, cancellationToken),
+            (await notifications.HoldersAsync(project.DomainCode, PermissionCodes.MeetingManage, cancellationToken)).Except(inviteeIds),
             cancellationToken);
 
-    private async Task TellAttendeesAsync(string kind, ProjectMeeting meeting, IReadOnlyList<long> attendeeIds, long actorId, CancellationToken cancellationToken)
+    /// <summary>A project meeting's invitees or a general meeting's attendees; a project meeting's carry its project.</summary>
+    private async Task TellAttendeesAsync(
+        string kind, ProjectMeeting meeting, Project? project, IReadOnlyList<long> attendeeIds, long actorId, CancellationToken cancellationToken)
     {
         if (attendeeIds.Count == 0)
         {
@@ -288,11 +318,18 @@ public sealed class MeetingService(
             new NotificationDraft(
                 kind,
                 actorId,
-                meeting.DomainCode,
-                null,
+                project?.DomainCode ?? meeting.DomainCode,
+                project?.Id,
                 "meeting",
                 meeting.Id,
-                new { authorName = currentUser.FullName, topic = meeting.Topic, startsAt = meeting.StartsAt, endsAt = meeting.EndsAt }),
+                new
+                {
+                    authorName = currentUser.FullName,
+                    projectTitle = project?.Title,
+                    topic = meeting.Topic,
+                    startsAt = meeting.StartsAt,
+                    endsAt = meeting.EndsAt,
+                }),
             attendeeIds,
             cancellationToken);
     }

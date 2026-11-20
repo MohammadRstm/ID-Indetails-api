@@ -12,7 +12,7 @@ public sealed class OverheadRepository(IdIndetailsDbContext db) : IOverheadRepos
                 .AsNoTracking()
                 .OrderBy(g => g.SortOrder)
                 .ThenBy(g => g.Name)
-                .Select(g => new { Group = g, Lines = db.OverheadItems.Count(o => o.GroupId == g.Id) })
+                .Select(g => new { Group = g, Lines = db.OverheadItems.Count(o => o.GroupId == g.Id) + db.OneOffExpenses.Count(o => o.GroupId == g.Id) })
                 .ToListAsync(cancellationToken))
             .Select(x => (x.Group, x.Lines))
             .ToList();
@@ -23,8 +23,9 @@ public sealed class OverheadRepository(IdIndetailsDbContext db) : IOverheadRepos
     public Task<bool> GroupNameTakenAsync(string name, long? exceptId, CancellationToken cancellationToken = default)
         => db.OverheadGroups.AnyAsync(g => g.Name == name && g.Id != exceptId, cancellationToken);
 
-    public Task<int> LinesInGroupAsync(long id, CancellationToken cancellationToken = default)
-        => db.OverheadItems.CountAsync(o => o.GroupId == id, cancellationToken);
+    public async Task<int> LinesInGroupAsync(long id, CancellationToken cancellationToken = default)
+        => await db.OverheadItems.CountAsync(o => o.GroupId == id, cancellationToken)
+            + await db.OneOffExpenses.CountAsync(o => o.GroupId == id, cancellationToken);
 
     public void AddGroup(OverheadGroup group) => db.OverheadGroups.Add(group);
 
@@ -41,4 +42,20 @@ public sealed class OverheadRepository(IdIndetailsDbContext db) : IOverheadRepos
     public void AddAmount(OverheadAmount amount) => db.OverheadAmounts.Add(amount);
 
     public void Remove(OverheadItem item) => db.OverheadItems.Remove(item);
+
+    public async Task<IReadOnlyList<OneOffExpense>> OneOffsAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken = default)
+        => await db.OneOffExpenses
+            .AsNoTracking()
+            .Include(o => o.Group)
+            .Where(o => o.SpentOn >= from && o.SpentOn <= to)
+            .OrderByDescending(o => o.SpentOn)
+            .ThenByDescending(o => o.Id)
+            .ToListAsync(cancellationToken);
+
+    public Task<OneOffExpense?> GetOneOffForUpdateAsync(long id, CancellationToken cancellationToken = default)
+        => db.OneOffExpenses.Include(o => o.Group).SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
+
+    public void AddOneOff(OneOffExpense expense) => db.OneOffExpenses.Add(expense);
+
+    public void RemoveOneOff(OneOffExpense expense) => db.OneOffExpenses.Remove(expense);
 }

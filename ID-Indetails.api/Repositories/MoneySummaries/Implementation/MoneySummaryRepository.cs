@@ -32,7 +32,7 @@ public sealed class MoneySummaryRepository(IdIndetailsDbContext db) : IMoneySumm
             .OrderBy(p => p.StartDate)
             .ThenBy(p => p.Id)
             .Take(count)
-            .Select(p => new RunningProjectRow(p.Id, p.Title, p.StartDate))
+            .Select(p => new RunningProjectRow(p.Id, p.Title, p.ProjectCode + "-" + p.BuildingCode, p.StartDate))
             .ToListAsync(cancellationToken);
 
     public Task<int> ActiveClientCountAsync(string domainCode, CancellationToken cancellationToken = default)

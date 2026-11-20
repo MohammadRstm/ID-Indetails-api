@@ -361,10 +361,15 @@ public sealed class MessagingService(
         long? protonActionId = null)
     {
         var attachments = new List<MessageAttachment>();
+        var types = new List<string>();
         foreach (var fileId in attachmentIds)
         {
-            attachments.Add(new MessageAttachment { FileId = (await fileClaims.ClaimAsync(fileId, null, cancellationToken)).Id });
+            var file = await fileClaims.ClaimAsync(fileId, null, cancellationToken);
+            attachments.Add(new MessageAttachment { FileId = file.Id });
+            types.Add(file.MimeType);
         }
+
+        MessagingRules.CheckVoiceNotes(types).ThrowIfDenied();
 
         var message = new Message
         {

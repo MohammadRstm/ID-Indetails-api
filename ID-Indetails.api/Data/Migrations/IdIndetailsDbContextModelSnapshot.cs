@@ -328,7 +328,7 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             t.HasCheckConstraint("ck_blocked_changes_decided", "(`status` = 'pending') = (`decided_at` IS NULL)");
 
-                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw', 'work_entry_department', 'design_vo')");
+                            t.HasCheckConstraint("ck_blocked_changes_kind", "`kind` IN ('expense', 'material_add', 'material_update', 'labour_week', 'work_entry_create', 'work_entry_update', 'payment', 'pricing', 'boq_agree', 'boq_withdraw', 'work_entry_department', 'design_vo', 'pay_change')");
 
                             t.HasCheckConstraint("ck_blocked_changes_status", "`status` IN ('pending', 'forced', 'dismissed')");
                         });
@@ -2047,6 +2047,73 @@ namespace ID_Indetails.api.Data.Migrations
                     b.ToTable("notification_sent_keys", (string)null);
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.OneOffExpense", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long?>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<long>("GroupId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("group_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("name");
+
+                    b.Property<DateOnly>("SpentOn")
+                        .HasColumnType("date")
+                        .HasColumnName("spent_on");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_one_off_expenses");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_one_off_expenses_created_by_id");
+
+                    b.HasIndex("GroupId")
+                        .HasDatabaseName("ix_one_off_expenses_group_id");
+
+                    b.HasIndex("SpentOn")
+                        .HasDatabaseName("ix_one_off_expenses_spent_on");
+
+                    b.ToTable("one_off_expenses", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_one_off_expenses_amount_positive", "`amount` > 0");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.OverheadAmount", b =>
                 {
                     b.Property<long>("Id")
@@ -2821,6 +2888,11 @@ namespace ID_Indetails.api.Data.Migrations
                         {
                             Code = "time_off:decide",
                             Description = "Approve time off, with pay or without, decline it, or take approved time off back"
+                        },
+                        new
+                        {
+                            Code = "salary_advance:manage",
+                            Description = "Give salary advances, decide people's requests for one, and settle what is left of them"
                         },
                         new
                         {
@@ -4137,6 +4209,17 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("varchar(20)")
                         .HasColumnName("billing_type");
 
+                    b.Property<string>("BuildingCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("building_code");
+
+                    b.Property<decimal?>("CfaPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("cfa_price");
+
                     b.Property<long?>("ClientId")
                         .HasColumnType("bigint")
                         .HasColumnName("client_id");
@@ -4197,6 +4280,12 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Property<byte>("ProgressPct")
                         .HasColumnType("tinyint unsigned")
                         .HasColumnName("progress_pct");
+
+                    b.Property<string>("ProjectCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("project_code");
 
                     b.Property<decimal?>("ProjectFee")
                         .HasPrecision(18, 2)
@@ -4286,6 +4375,10 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("ClientId", "DomainCode")
                         .HasDatabaseName("ix_projects_client_id_domain_code");
+
+                    b.HasIndex("DomainCode", "ProjectCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_projects_domain_code_project_code");
 
                     b.HasIndex("DomainCode", "Status")
                         .HasDatabaseName("ix_projects_domain_code_status");
@@ -5942,6 +6035,11 @@ namespace ID_Indetails.api.Data.Migrations
                         new
                         {
                             RoleCode = "super_admin",
+                            PermissionCode = "salary_advance:manage"
+                        },
+                        new
+                        {
+                            RoleCode = "super_admin",
                             PermissionCode = "message:announce"
                         },
                         new
@@ -6181,6 +6279,178 @@ namespace ID_Indetails.api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.SalaryAdvance", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<decimal?>("AskedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("asked_amount");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<long?>("CancelledById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("cancelled_by_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("created_at");
+
+                    b.Property<long>("CreatedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("decided_at");
+
+                    b.Property<long?>("DecidedById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("decided_by_id");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("decision_note");
+
+                    b.Property<DateOnly?>("GivenOn")
+                        .HasColumnType("date")
+                        .HasColumnName("given_on");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<decimal?>("SettledAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("settled_amount");
+
+                    b.Property<long?>("SettledById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("settled_by_id");
+
+                    b.Property<string>("SettledKind")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("settled_kind");
+
+                    b.Property<DateOnly?>("SettledOn")
+                        .HasColumnType("date")
+                        .HasColumnName("settled_on");
+
+                    b.Property<string>("SettlementNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("settlement_note");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_salary_advances");
+
+                    b.HasIndex("CancelledById")
+                        .HasDatabaseName("ix_salary_advances_cancelled_by_id");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_salary_advances_created_by_id");
+
+                    b.HasIndex("DecidedById")
+                        .HasDatabaseName("ix_salary_advances_decided_by_id");
+
+                    b.HasIndex("SettledById")
+                        .HasDatabaseName("ix_salary_advances_settled_by_id");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("ix_salary_advances_status_created_at");
+
+                    b.HasIndex("UserId", "Status")
+                        .HasDatabaseName("ix_salary_advances_user_id_status");
+
+                    b.ToTable("salary_advances", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_salary_advances_amount_positive", "`amount` > 0 AND (`asked_amount` IS NULL OR `asked_amount` > 0)");
+
+                            t.HasCheckConstraint("ck_salary_advances_given_on", "(`status` IN ('approved', 'cancelled')) = (`given_on` IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_salary_advances_settled", "(`settled_kind` IS NULL) = (`settled_on` IS NULL) AND (`settled_kind` IS NULL) = (`settled_amount` IS NULL) AND (`settled_kind` IS NULL OR `status` = 'approved') AND (`settled_amount` IS NULL OR `settled_amount` > 0)");
+
+                            t.HasCheckConstraint("ck_salary_advances_settled_kind", "`settled_kind` IN ('cash', 'written_off')");
+
+                            t.HasCheckConstraint("ck_salary_advances_status", "`status` IN ('pending', 'approved', 'declined', 'withdrawn', 'cancelled')");
+                        });
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.SalaryAdvanceRepayment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AdvanceId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("advance_id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date")
+                        .HasColumnName("month");
+
+                    b.HasKey("Id")
+                        .HasName("pk_salary_advance_repayments");
+
+                    b.HasIndex("AdvanceId", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("ix_salary_advance_repayments_advance_id_month");
+
+                    b.ToTable("salary_advance_repayments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_salary_advance_repayments_amount_positive", "`amount` > 0");
+
+                            t.HasCheckConstraint("ck_salary_advance_repayments_month", "DAY(`month`) = 1");
+                        });
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.SiteExpense", b =>
                 {
                     b.Property<long>("Id")
@@ -6343,6 +6613,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
 
+                    b.Property<long?>("VoiceFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("voice_file_id");
+
                     b.HasKey("Id")
                         .HasName("pk_site_logs");
 
@@ -6351,6 +6625,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("UserId", "CreatedAt")
                         .HasDatabaseName("ix_site_logs_user_id_created_at");
+
+                    b.HasIndex("VoiceFileId")
+                        .HasDatabaseName("ix_site_logs_voice_file_id");
 
                     b.ToTable("site_logs", (string)null);
                 });
@@ -6993,16 +7270,16 @@ namespace ID_Indetails.api.Data.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<DateOnly?>("ActiveEffectiveFrom")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("date")
+                        .HasColumnName("active_effective_from")
+                        .HasComputedColumnSql("IF(`superseded_at` IS NULL, `effective_from`, NULL)", true);
+
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("amount");
-
-                    b.Property<string>("Basis")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("basis");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasPrecision(3)
@@ -7034,6 +7311,15 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("decimal(18,4)")
                         .HasColumnName("overtime_rate");
 
+                    b.Property<DateTime?>("SupersededAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("superseded_at");
+
+                    b.Property<long?>("SupersededById")
+                        .HasColumnType("bigint")
+                        .HasColumnName("superseded_by_id");
+
                     b.Property<long>("UserId")
                         .HasColumnType("bigint")
                         .HasColumnName("user_id");
@@ -7044,17 +7330,20 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasIndex("CreatedById")
                         .HasDatabaseName("ix_user_pay_history_created_by_id");
 
-                    b.HasIndex("UserId", "EffectiveFrom")
+                    b.HasIndex("SupersededById")
+                        .HasDatabaseName("ix_user_pay_history_superseded_by_id");
+
+                    b.HasIndex("UserId", "ActiveEffectiveFrom")
                         .IsUnique()
-                        .HasDatabaseName("ix_user_pay_history_user_id_effective_from");
+                        .HasDatabaseName("ix_user_pay_history_user_id_active_effective_from");
 
                     b.ToTable("user_pay_history", null, t =>
                         {
                             t.HasCheckConstraint("ck_user_pay_history_amount_positive", "`amount` > 0");
 
-                            t.HasCheckConstraint("ck_user_pay_history_basis", "`basis` IN ('hourly', 'monthly')");
-
                             t.HasCheckConstraint("ck_user_pay_history_rate_non_negative", "`overtime_rate` >= 0");
+
+                            t.HasCheckConstraint("ck_user_pay_history_superseded", "(`superseded_at` IS NULL) = (`superseded_by_id` IS NULL)");
                         });
                 });
 
@@ -8356,6 +8645,24 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Recipient");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.OneOffExpense", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_one_off_expenses_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.OverheadGroup", "Group")
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_one_off_expenses_overhead_groups_group_id");
+
+                    b.Navigation("Group");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.OverheadAmount", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.User", null)
@@ -9269,6 +9576,55 @@ namespace ID_Indetails.api.Data.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("ID_Indetails.api.Models.SalaryAdvance", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_salary_advances_users_cancelled_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_salary_advances_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_salary_advances_users_decided_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SettledById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_salary_advances_users_settled_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_salary_advances_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.SalaryAdvanceRepayment", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.SalaryAdvance", "Advance")
+                        .WithMany("Repayments")
+                        .HasForeignKey("AdvanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_salary_advance_repayments_salary_advances_advance_id");
+
+                    b.Navigation("Advance");
+                });
+
             modelBuilder.Entity("ID_Indetails.api.Models.SiteExpense", b =>
                 {
                     b.HasOne("ID_Indetails.api.Models.AccountLabel", null)
@@ -9309,6 +9665,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_site_logs_users_user_id");
+
+                    b.HasOne("ID_Indetails.api.Models.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("VoiceFileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_site_logs_files_voice_file_id");
 
                     b.Navigation("Project");
 
@@ -9494,6 +9856,12 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasForeignKey("CreatedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_user_pay_history_users_created_by_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SupersededById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_user_pay_history_users_superseded_by_id");
 
                     b.HasOne("ID_Indetails.api.Models.User", "User")
                         .WithMany("PayHistory")
@@ -9781,6 +10149,11 @@ namespace ID_Indetails.api.Data.Migrations
             modelBuilder.Entity("ID_Indetails.api.Models.Role", b =>
                 {
                     b.Navigation("RolePermissions");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.SalaryAdvance", b =>
+                {
+                    b.Navigation("Repayments");
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.User", b =>

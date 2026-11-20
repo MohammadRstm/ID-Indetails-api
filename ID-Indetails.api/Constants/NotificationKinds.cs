@@ -31,14 +31,23 @@ public static class NotificationKinds
     /// <summary>Someone who doesn't manage meetings set one (subject: the meeting). Sent to the domain's meeting managers.</summary>
     public const string MeetingScheduled = "meeting_scheduled";
 
-    /// <summary>You were added to a general meeting (subject: the meeting). To its attendees, from whoever set it.</summary>
+    /// <summary>
+    /// You were added to a general meeting, or invited to a project meeting (subject: the meeting; a project meeting's
+    /// project). From whoever set it or added you.
+    /// </summary>
     public const string MeetingInvited = "meeting_invited";
 
-    /// <summary>A general meeting you are in moved to another time (subject: the meeting).</summary>
+    /// <summary>A meeting you are in or invited to moved to another time (subject: the meeting).</summary>
     public const string MeetingMoved = "meeting_moved";
 
-    /// <summary>A general meeting you were in was cancelled, or you were taken out of it (subject: the meeting).</summary>
+    /// <summary>A meeting you were in or invited to was cancelled, or you were taken out of it (subject: the meeting).</summary>
     public const string MeetingCancelled = "meeting_cancelled";
+
+    /// <summary>
+    /// A meeting you are in or invited to starts within 10 minutes (subject: the meeting; key
+    /// <c>meeting-soon-{id}-{startsAt}</c>). Scheduled, once per person and start time.
+    /// </summary>
+    public const string MeetingSoon = "meeting_soon";
 
     /// <summary>Someone recorded expenses on a site (subject: the project; the count in the payload). The kind keeps its stored name.</summary>
     public const string MaterialsAdded = "materials_added";
@@ -130,6 +139,26 @@ public static class NotificationKinds
     /// <summary>Someone on time off tried to log or change hours (subject: them). At most once an hour, to every super admin.</summary>
     public const string TimeOffHours = "time_off_hours";
 
+    // Salary advances (subject: the advance, type "salary_advance"; the leaver for unsettled). Never an amount.
+
+    /// <summary>Someone asked for a salary advance. To those who give advances and see them.</summary>
+    public const string SalaryAdvanceRequested = "salary_advance_requested";
+
+    /// <summary>Someone took back their pending request for an advance. To those who give advances and see them.</summary>
+    public const string SalaryAdvanceWithdrawn = "salary_advance_withdrawn";
+
+    /// <summary>Your request for a salary advance was approved.</summary>
+    public const string SalaryAdvanceApproved = "salary_advance_approved";
+
+    /// <summary>Your request for a salary advance was declined.</summary>
+    public const string SalaryAdvanceDeclined = "salary_advance_declined";
+
+    /// <summary>A super admin recorded a salary advance they gave you.</summary>
+    public const string SalaryAdvanceRecorded = "salary_advance_recorded";
+
+    /// <summary>Someone left with a salary advance still to pay back (subject: them). To those who give advances and see them.</summary>
+    public const string SalaryAdvanceUnsettled = "salary_advance_unsettled";
+
     /// <summary>A client was added (subject: the client). Sent to whoever manages the domain's clients.</summary>
     public const string ClientAdded = "client_added";
 
@@ -163,6 +192,12 @@ public static class NotificationKinds
     /// change). To whoever sees the domain's money, to force it through or dismiss it.
     /// </summary>
     public const string ChangeBlocked = "change_blocked";
+
+    /// <summary>
+    /// A pay change was held because it would take a running client project's profit to zero or below (subject: the
+    /// blocked change). To the super admins only, who alone force it through or dismiss it; it carries no amounts.
+    /// </summary>
+    public const string PayChangeHeld = "pay_change_held";
 
     /// <summary>A client project's profit is down to 10% of its agreed amount or less (subject: the project). Once per project, to whoever sees the domain's money.</summary>
     public const string ProfitLow = "profit_low";

@@ -64,14 +64,54 @@ public sealed record EmployeeResponse : EmployeeSummaryResponse
 }
 
 /// <summary>One dated pay change.</summary>
-/// <param name="OvertimeRate">What an hour of overtime is paid at, before the multiplier: hourly pay's own rate, or the one set with a salary.</param>
+/// <param name="Amount">The monthly salary.</param>
+/// <param name="OvertimeRate">What an hour of overtime is paid at, before the multiplier: the one set with the salary.</param>
+/// <param name="SupersededAt">When a later change dated on or before this one replaced it; null while it is active.</param>
+/// <param name="SupersededById">Who made that change.</param>
 public sealed record PayResponse(
     long Id,
     DateOnly EffectiveFrom,
-    PayBasis Basis,
     decimal Amount,
     string Currency,
     decimal OvertimeRate,
     string? Note,
     DateTime CreatedAt,
-    long? CreatedById);
+    long? CreatedById,
+    DateTime? SupersededAt = null,
+    long? SupersededById = null);
+
+/// <summary>
+/// What a pay change would do, worked out by making it and rolling it back: the figures are exactly what it lands.
+/// </summary>
+/// <param name="Replaces">The active entries from its day onward that it replaces.</param>
+/// <param name="Months">Each month from its day's month to this one.</param>
+/// <param name="Projects">The projects whose labour it moves, worst profit first; only for callers who see their money.</param>
+public sealed record PayPreviewResponse(
+    DateOnly EffectiveFrom,
+    IReadOnlyList<PayResponse> Replaces,
+    IReadOnlyList<PayPreviewMonthResponse> Months,
+    IReadOnlyList<PayPreviewProjectResponse> Projects);
+
+/// <summary>A month as Salaries works it out, before and after: null where no pay covers it.</summary>
+/// <param name="AdvanceBefore">What salary advances take from the month's pay, in <paramref name="AdvanceCurrency"/>.</param>
+/// <param name="AdvanceCurrency">The advances' currency; null when the person has none.</param>
+public sealed record PayPreviewMonthResponse(
+    DateOnly Month,
+    decimal? SalaryBefore,
+    string? CurrencyBefore,
+    decimal? SalaryAfter,
+    string? CurrencyAfter,
+    decimal AdvanceBefore,
+    decimal AdvanceAfter,
+    string? AdvanceCurrency);
+
+/// <summary>A project's labour and profit before and after, in USD.</summary>
+/// <param name="ReachesZero">A running client project held to the profit floor whose profit drops to zero or below.</param>
+public sealed record PayPreviewProjectResponse(
+    long ProjectId,
+    string Title,
+    decimal LabourBefore,
+    decimal LabourAfter,
+    decimal ProfitBefore,
+    decimal ProfitAfter,
+    bool ReachesZero);

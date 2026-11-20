@@ -31,9 +31,9 @@ public class PushTextTests
         """).RootElement;
 
     [Fact]
-    public void There_are_67_notification_kinds_and_each_has_its_own_text()
+    public void There_are_75_notification_kinds_and_each_has_its_own_text()
     {
-        AllKinds.Count.ShouldBe(67);
+        AllKinds.Count.ShouldBe(75);
         foreach (var kind in AllKinds)
         {
             var text = PushText.ForNotification(kind, "Rana Haddad", "Villa Haddad", Revealing, 2);
@@ -64,11 +64,12 @@ public class PushTextTests
     {
         string Body(string kind) => PushText.ForNotification(kind, "Rana", "Villa Haddad", Revealing, 1).Body;
 
-        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(18);
+        AllKinds.Count(k => PushCategories.Of(k) == NotificationCategory.Money).ShouldBe(25);
         Body(NotificationKinds.PaymentRecorded).ShouldBe("Payment recorded. Open ID InDetails to see it.");
         Body(NotificationKinds.PocketRequested).ShouldBe("A site asks for pocket money. Open ID InDetails to decide.");
         Body(NotificationKinds.PocketRoundOff).ShouldBe("A site's profit can be rounded off into the pocket money. Open ID InDetails to see it.");
         Body(NotificationKinds.ChangeBlocked).ShouldBe("A change was stopped to keep a project above zero profit. Open ID InDetails to decide.");
+        Body(NotificationKinds.PayChangeHeld).ShouldBe("A pay change was held to keep a project above zero profit. Open ID InDetails to decide.");
         Body(NotificationKinds.ProfitLow).ShouldBe("A project is close to zero profit.");
         Body(NotificationKinds.ProfitAtZero).ShouldBe("A project is at zero profit or below.");
         Body(NotificationKinds.InvoiceOverdue).ShouldBe("An invoice needs your attention.");
@@ -83,6 +84,12 @@ public class PushTextTests
         Body(NotificationKinds.ClientAdded).ShouldBe("A new client was added.");
         Body(NotificationKinds.PayChanged).ShouldBe("Pay and hours update.");
         Body(NotificationKinds.HoursShort).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceUnsettled).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceRecorded).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceDeclined).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceApproved).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceWithdrawn).ShouldBe("Pay and hours update.");
+        Body(NotificationKinds.SalaryAdvanceRequested).ShouldBe("Pay and hours update.");
     }
 
     [Fact]
@@ -131,6 +138,15 @@ public class PushTextTests
     }
 
     [Fact]
+    public void A_voice_note_with_no_text_is_a_voice_message()
+    {
+        PushText.ForMessage("Rana", null, null, MessageKinds.Text, hasAttachments: true, false, voiceOnly: true).Body.ShouldBe("Sent a voice message.");
+        PushText.ForAnnouncement("Rana", null, hasAttachments: true, voiceOnly: true).Body.ShouldBe("Rana: Sent a voice message.");
+        // the words, when there are any, still come first
+        PushText.ForMessage("Rana", null, "Listen", MessageKinds.Text, hasAttachments: true, false, voiceOnly: true).Body.ShouldBe("Listen");
+    }
+
+    [Fact]
     public void An_announcement_is_titled_Announcements_and_names_who_wrote_it()
     {
         PushText.ForAnnouncement("Rana", "Closed on\nFriday", false).ShouldBe(new PushMessageText("Announcements", "Rana: Closed on Friday"));
@@ -145,6 +161,20 @@ public class PushTextTests
         preview.Length.ShouldBe(PushText.MaxPreviewLength);
         preview.ShouldEndWith("…");
         PushText.Preview("   ").ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_meeting_names_its_project_and_a_reminder_its_start_but_never_the_topic()
+    {
+        var payload = JsonDocument.Parse("""{"topic":"Haddad budget","startTime":"14:30"}""").RootElement;
+
+        PushText.ForNotification(NotificationKinds.MeetingSoon, null, "Villa Haddad", payload, 1)
+            .ShouldBe(new PushMessageText("Meeting soon", "Your meeting on Villa Haddad starts at 14:30."));
+        PushText.ForNotification(NotificationKinds.MeetingSoon, null, null, payload, 1).Body.ShouldBe("Your meeting starts at 14:30.");
+        PushText.ForNotification(NotificationKinds.MeetingSoon, null, null, null, 1).Body.ShouldBe("Your meeting starts soon.");
+        PushText.ForNotification(NotificationKinds.MeetingInvited, "Rana", "Tower B", payload, 1).Body.ShouldBe("Rana invited you to a meeting on Tower B.");
+        PushText.ForNotification(NotificationKinds.MeetingInvited, "Rana", null, payload, 1).Body.ShouldBe("Rana invited you to a meeting.");
+        PushCategories.Of(NotificationKinds.MeetingSoon).ShouldBe(NotificationCategory.Meetings);
     }
 
     [Fact]

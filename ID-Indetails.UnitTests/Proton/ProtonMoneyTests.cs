@@ -23,7 +23,7 @@ public class ProtonMoneyTests
     private static JsonElement Details(object payload) => JsonSerializer.SerializeToElement(payload);
 
     private static FinanceProjectResponse Project(string title, decimal? margin) => new(
-        title.Length, title, null, ProjectStatus.Active, margin is null ? BillingType.Internal : BillingType.Client, 1000, 0, 10,
+        title.Length, title, "ID26Q4001-P", null, ProjectStatus.Active, margin is null ? BillingType.Internal : BillingType.Client, 1000, 0, 10,
         new ProjectCostResponse(0, 0, 0, 0, 0, [], 0), 0, margin, margin is not null, null, 0);
 
     /// <summary>"Lowest margins" means the projects that have one: internal and too-early projects never fill the list.</summary>

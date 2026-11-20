@@ -216,7 +216,8 @@ public sealed class DesignVoService(
         var vo = await vos.GetAsync(id, cancellationToken) ?? throw new NotFoundException(NotFoundMessage);
         var project = DesignClientProject(actor, vo.Project);
         var client = project.Client is { } c ? ClientRules.DisplayName(c.Name, c.Organisation) : "Client";
-        return new DesignVoDocument((await DescribeAsync([vo], cancellationToken))[0], project.Title, project.Location, client);
+        return new DesignVoDocument(
+            (await DescribeAsync([vo], cancellationToken))[0], project.Title, ProjectCodeRules.Full(project.ProjectCode, project.BuildingCode), project.Location, client);
     }
 
     /// <summary>Since the latest applied VO, or the project's first day: the hours a new one can show.</summary>

@@ -1,5 +1,4 @@
 using ID_Indetails.api.Business.WorkingTime;
-using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.Business.Payroll;
 
@@ -52,7 +51,7 @@ public static class MyTime
 
     public static Estimate EstimateOf(SalaryCalculator.Result pay, SalaryCalculator.Input input, bool inProgress)
     {
-        if (!inProgress || pay.Terms.Basis != PayBasis.Monthly)
+        if (!inProgress)
         {
             return new Estimate(pay.Total, null, 0);
         }

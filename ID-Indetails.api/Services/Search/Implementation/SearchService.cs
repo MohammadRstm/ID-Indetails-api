@@ -2,6 +2,7 @@ using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Employees;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Search;
 using ID_Indetails.api.DTO.Response.Search;
@@ -73,7 +74,8 @@ public sealed class SearchService(
             : [];
 
         return new SearchResponse(
-            foundProjects.Select(p => new SearchProjectResponse(p.Id, p.DomainCode, p.Title, p.Icon, p.Tint, p.Status)).ToList(),
+            foundProjects.Select(p => new SearchProjectResponse(
+                p.Id, p.DomainCode, p.Title, ProjectCodeRules.Full(p.ProjectCode, p.BuildingCode), p.Icon, p.Tint, p.Status)).ToList(),
             foundClients
                 .Select(r => new SearchClientResponse(
                     r.Client.Id,

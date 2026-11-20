@@ -35,7 +35,7 @@ public sealed record ListProjectsInput
     [Description("The person who owns (is responsible for) the projects.")]
     public long? OwnerId { get; init; }
 
-    [Description("Words of the title; every word must match.")]
+    [Description("Words of the title or a code (ID26Q4001, VK or ID26Q4001-VK); every word must match.")]
     public string? Search { get; init; }
 
     [Description("Only active or on-hold projects whose target date has passed. Projects without a target date are never overdue.")]
@@ -64,9 +64,11 @@ public sealed record ProjectMoneyRow(
 
 public sealed record ProjectWorkRow(decimal Hours, decimal HoursLast14Days, int Contributors, DateTime? LastWorkAt);
 
+/// <param name="Code">The full code: the project code (ID26Q4001) and the building code (VK).</param>
 public sealed record ProjectRow(
     long Id,
     string Title,
+    string Code,
     string Domain,
     ProjectStatus Status,
     string? Client,
@@ -91,7 +93,7 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
     public override string Name => "list_projects";
 
     public override string Description =>
-        "List and count projects with filters (status, domain, client, owner, title words, year/quarter, overdue). " +
+        "List and count projects with filters (status, domain, client, owner, title words or a code, year/quarter, overdue). " +
         "Rows carry hours and money only when this user may see them; money is all time, against the agreed revenue.";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<ProjectsController>(nameof(ProjectsController.List));
@@ -144,7 +146,8 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
         var overdue = rows.Any(r => r.Overdue);
         var columns = new List<ProtonColumn>
         {
-            ProtonDatasets.Label("project", "Project"), ProtonDatasets.Label("status", "Status", ProtonColumnKind.Status),
+            ProtonDatasets.Label("project", "Project"), ProtonDatasets.Label("code", "Code"),
+            ProtonDatasets.Label("status", "Status", ProtonColumnKind.Status),
             ProtonDatasets.Label("client", "Client"), ProtonDatasets.Label("owner", "Owner"),
             ProtonDatasets.Label("target", "Target date", ProtonColumnKind.Date), ProtonDatasets.Figure("progress", "Progress", ProtonUnit.Percent),
         };
@@ -170,7 +173,7 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
         {
             var cells = new List<ProtonCell>
             {
-                ProtonCell.Of(r.Title), ProtonDatasets.Status(r.Status), ProtonCell.Of(r.Client), ProtonCell.Of(r.Owner), ProtonCell.Of(r.TargetDate),
+                ProtonCell.Of(r.Title), ProtonCell.Of(r.Code), ProtonDatasets.Status(r.Status), ProtonCell.Of(r.Client), ProtonCell.Of(r.Owner), ProtonCell.Of(r.TargetDate),
                 ProtonCell.Of(r.ProgressPct),
             };
             if (overdue)
@@ -224,6 +227,7 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
     private static ProjectRow Row(ProjectSummaryResponse p, DateOnly today) => new(
         p.Id,
         p.Title,
+        p.Code,
         p.Domain,
         p.Status,
         p.Client?.DisplayName,
@@ -241,9 +245,13 @@ public sealed class ListProjectsTool(IProjectService projects) : ProtonTool<List
             : null);
 }
 
+/// <param name="ProjectCode">ID26Q4001: the domain's projects are numbered per quarter.</param>
+/// <param name="BuildingCode">Usually the name's initials; with the project code it makes the full code, ID26Q4001-VK.</param>
 public sealed record ProjectCard(
     long Id,
     string Title,
+    string ProjectCode,
+    string BuildingCode,
     string Domain,
     ProjectStatus Status,
     BillingType BillingType,
@@ -271,7 +279,7 @@ public sealed class GetProjectTool(IProjectService projects) : ProtonTool<Projec
     public override string Name => "get_project";
 
     public override string Description =>
-        "A project's details: status, client, owner, dates, progress, whether it is overdue, and an Execution site's " +
+        "A project's details: its codes, status, client, owner, dates, progress, whether it is overdue, and an Execution site's " +
         "staff (the employees who oversee it and write its daily logs), and a Design project's departments by name (get_project_departments " +
         "has their shares and budgets). Use get_project_team for who worked on a Design " +
         "project and get_project_financials for its money.";
@@ -282,7 +290,7 @@ public sealed class GetProjectTool(IProjectService projects) : ProtonTool<Projec
     {
         var p = await projects.GetAsync(input.ProjectId, cancellationToken);
         var card = new ProjectCard(
-            p.Id, p.Title, p.Domain, p.Status, p.BillingType,
+            p.Id, p.Title, p.ProjectCode, p.BuildingCode, p.Domain, p.Status, p.BillingType,
             ProtonText.Cut(p.Description, 600), p.Location,
             p.Client is { } c ? new ProtonNamed(c.Id, c.DisplayName) : null,
             new ProtonNamed(p.Owner.Id, p.Owner.Name),

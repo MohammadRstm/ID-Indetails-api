@@ -24,6 +24,17 @@ public interface IOverheadService
 
     Task<OverheadLineResponse> ResumeAsync(long id, CancellationToken cancellationToken = default);
 
+    /// <summary>The one-off expenses of a month (<c>YYYY-MM</c>; this month when empty), newest day first, with a total per currency.</summary>
+    Task<OneOffExpenseListResponse> OneOffsAsync(string? month, CancellationToken cancellationToken = default);
+
+    Task<OneOffExpenseResponse> CreateOneOffAsync(SaveOneOffExpenseRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Only while its day is in the current month (see <see cref="Business.Company.OneOffExpenseRules"/>).</summary>
+    Task<OneOffExpenseResponse> UpdateOneOffAsync(long id, SaveOneOffExpenseRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Only while its day is in the current month.</summary>
+    Task RemoveOneOffAsync(long id, CancellationToken cancellationToken = default);
+
     /// <summary>Every category of company expenses, first to last ("Other" last).</summary>
     Task<IReadOnlyList<OverheadGroupResponse>> GroupsAsync(CancellationToken cancellationToken = default);
 

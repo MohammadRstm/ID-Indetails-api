@@ -101,6 +101,22 @@ public sealed record UpdateOverheadRequest
     public long GroupId { get; init; }
 }
 
+/// <summary>A cost paid once, on a day of this month up to today.</summary>
+public sealed record SaveOneOffExpenseRequest
+{
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Its category (<c>GET /api/company/overhead/groups</c>).</summary>
+    public long GroupId { get; init; }
+
+    public string Currency { get; init; } = "USD";
+
+    public decimal Amount { get; init; }
+
+    /// <summary>The day it was spent.</summary>
+    public DateOnly SpentOn { get; init; }
+}
+
 /// <summary>A category of company expenses: its name.</summary>
 public sealed record OverheadGroupRequest
 {

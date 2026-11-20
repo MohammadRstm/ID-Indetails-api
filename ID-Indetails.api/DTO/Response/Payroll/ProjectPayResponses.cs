@@ -1,20 +1,17 @@
 using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Expenses;
-using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Payroll;
 
-/// <param name="Basis">Pay basis on their latest day of work in the period; null without a pay record.</param>
 /// <param name="RateChanged">Their hourly rate changed during the period.</param>
 /// <param name="Priced">False when they had no pay record (their time is paid 0).</param>
-/// <param name="MonthlySalary">The salary behind their hourly rate on that latest day, when they are paid monthly.</param>
+/// <param name="MonthlySalary">The salary behind their hourly rate on their latest day of work in the period; null without a pay record.</param>
 public sealed record ProjectPayPersonResponse(
     long UserId,
     string Name,
     string Email,
     TeamSummaryResponse? Team,
-    PayBasis? Basis,
     int Entries,
     int NormalMinutes,
     int OvertimeMinutes,
@@ -27,9 +24,11 @@ public sealed record ProjectPayPersonResponse(
     string? Position,
     decimal? MonthlySalary);
 
+/// <param name="Code">The project's full code, ID26Q4001-VK.</param>
 public sealed record ProjectPayProjectResponse(
     long ProjectId,
     string Title,
+    string Code,
     string? Client,
     int NormalMinutes,
     int OvertimeMinutes,

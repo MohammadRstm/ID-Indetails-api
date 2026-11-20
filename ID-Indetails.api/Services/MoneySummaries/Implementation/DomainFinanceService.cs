@@ -165,13 +165,14 @@ public sealed class DomainFinanceService(
         static string Pct(decimal? margin) => margin is { } m ? (m * 100).ToString("0.0", CultureInfo.InvariantCulture) : string.Empty;
 
         var csv = new StringBuilder();
-        Csv.Line(csv, "Project", "Client", "Status", "Billing", "Revenue", "Currency", "Hours", "Labour cost", "Expenses", "Site expenses",
+        Csv.Line(csv, "Project", "Code", "Client", "Status", "Billing", "Revenue", "Currency", "Hours", "Labour cost", "Expenses", "Site expenses",
             "Ground labour", "Total cost", "Profit", "Margin %");
         foreach (var p in projects.Projects)
         {
             Csv.Line(
                 csv,
                 p.Title,
+                p.Code,
                 p.ClientName ?? "Internal",
                 p.Status.ToString().ToLowerInvariant(),
                 p.BillingType == BillingType.Client ? "Client" : "Internal",
@@ -211,6 +212,7 @@ public sealed class DomainFinanceService(
                 return new FinanceProjectResponse(
                     p.Id,
                     p.Title,
+                    ProjectCodeRules.Full(p.ProjectCode, p.BuildingCode),
                     ClientName(p),
                     p.Status,
                     p.BillingType,

@@ -4,9 +4,11 @@ using ID_Indetails.api.Enums;
 
 namespace ID_Indetails.api.DTO.Response.Reports;
 
+/// <param name="Code">The project's full code, ID26Q4001-VK.</param>
 public sealed record ReportProjectResponse(
     long ProjectId,
     string Title,
+    string Code,
     ProjectStatus Status,
     int Minutes,
     int Entries,
@@ -20,7 +22,7 @@ public sealed record ReportClientResponse(long? ClientId, string? Name, int Minu
 /// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>
 public sealed record ReportPersonResponse(long UserId, string Name, int Minutes, int OvertimeMinutes, int Entries);
 
-public sealed record ReportMatrixProjectResponse(long ProjectId, string Title);
+public sealed record ReportMatrixProjectResponse(long ProjectId, string Title, string Code);
 
 /// <param name="OvertimeMinutes">The part of <paramref name="TotalMinutes"/> that is overtime, on every project.</param>
 /// <param name="Cells">Minutes on each of the matrix's projects, in the same order.</param>
@@ -30,11 +32,11 @@ public sealed record ReportMatrixRowResponse(long UserId, string Name, int Total
 public sealed record ReportMatrixResponse(IReadOnlyList<ReportMatrixProjectResponse> Projects, IReadOnlyList<ReportMatrixRowResponse> Rows);
 
 /// <param name="Minutes">All the project's work, not only the range's.</param>
-public sealed record CompletedProjectResponse(long ProjectId, string Title, DateOnly StartDate, DateOnly CompletedOn, int Days, int Minutes, int People);
+public sealed record CompletedProjectResponse(long ProjectId, string Title, string Code, DateOnly StartDate, DateOnly CompletedOn, int Days, int Minutes, int People);
 
 public sealed record QuarterTotalResponse(DateOnly QuarterStart, int Minutes);
 
-public sealed record ProjectProfitResponse(long ProjectId, string Title, decimal Revenue, decimal Cost, decimal Profit);
+public sealed record ProjectProfitResponse(long ProjectId, string Title, string Code, decimal Revenue, decimal Cost, decimal Profit);
 
 public sealed record PersonLabourCostResponse(long UserId, string Name, LabourCostResponse LabourCost);
 
@@ -123,7 +125,7 @@ public sealed record OverviewResponse(
     int ProjectCount,
     int ThisWeekMinutes);
 
-public sealed record ProjectTotalResponse(long ProjectId, string Title, ProjectStatus Status, int Minutes, int Entries, int People);
+public sealed record ProjectTotalResponse(long ProjectId, string Title, string Code, ProjectStatus Status, int Minutes, int Entries, int People);
 
 public sealed record PersonTotalResponse(long UserId, string Name, int Minutes, int Entries, int Projects);
 

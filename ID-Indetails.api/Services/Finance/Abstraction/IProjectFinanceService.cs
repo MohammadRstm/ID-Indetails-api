@@ -32,6 +32,13 @@ public interface IProjectFinanceService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The break minutes each project carries for the people of the given work, on the days of it (see
+    /// <c>Business/Finance/PaidBreaks</c>): whole minutes, without their cost. Like <see cref="PaidBreaksAsync"/>, it
+    /// loads their other work of those days.
+    /// </summary>
+    Task<IReadOnlyList<BreakShare>> BreakSharesAsync(IReadOnlyCollection<WorkEntryRow> work, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// The part of each entry of the given work paid as overtime, as Salaries pays it, with the company's multiplier
     /// that day, by entry id, for everyone with a pay record (see <c>IPayrollInputs.EntrySplitsAsync</c>). Loads the
     /// people's whole months. An entry missing from it has none.
@@ -105,6 +112,9 @@ public sealed record ProjectCostHistory(
     IReadOnlyList<WorkDay> Work);
 
 public sealed record BreakCost(long UserId, long ProjectId, ProjectFinance.CostItem Cost);
+
+/// <summary>A person's break minutes a project carries on a day.</summary>
+public sealed record BreakShare(long UserId, long ProjectId, DateOnly Day, int Minutes);
 
 /// <summary>Someone's hours and their cost in a month, in the department they were logged in (null: none), in USD.</summary>
 /// <param name="Cost">What converted, at the rate of each day.</param>

@@ -52,7 +52,7 @@ public static class ProjectReportPdf
         // the client summary goes to the client; the internal report stays plain
         var (document, section) = PdfLayout.NewDocument($"{title} · {project.Title}", footer, forClient: client);
         PdfLayout.AddLetterhead(section, head, title, "Generated " + PdfLayout.Date(report.Today));
-        PdfLayout.AddTitle(section, project.Title, $"{PdfLayout.Date(report.From)} to {PdfLayout.Date(report.To)} · Reference {project.Id}");
+        PdfLayout.AddTitle(section, project.Title, $"{PdfLayout.Date(report.From)} to {PdfLayout.Date(report.To)} · {project.Code}");
 
         var money = project.Money;
         var isInternal = project.BillingType == BillingType.Internal;
@@ -117,7 +117,7 @@ public static class ProjectReportPdf
             PdfLayout.AddHeading(section, "Project information");
             PdfLayout.AddFactGrid(section,
             [
-                new("Reference", project.Id.ToString(CultureInfo.InvariantCulture)),
+                new("Code", project.Code),
                 new("Owner", project.Owner.Name),
                 new("Start date", PdfLayout.Date(project.StartDate)),
                 report.CompletedOn is { } completed

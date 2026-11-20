@@ -1,3 +1,4 @@
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Data;
 using ID_Indetails.api.Enums;
@@ -51,6 +52,8 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
 
         builder.Property(x => x.DomainCode).IsRequired().HasMaxLength(16);
         builder.Property(x => x.Title).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.ProjectCode).IsRequired().HasMaxLength(ProjectCodeRules.MaxProjectCodeLength);
+        builder.Property(x => x.BuildingCode).IsRequired().HasMaxLength(ProjectCodeRules.MaxBuildingCodeLength);
         builder.Property(x => x.Description).IsLongText();
         builder.Property(x => x.Location).HasMaxLength(200);
         builder.Property(x => x.Icon).HasMaxLength(40);
@@ -64,6 +67,8 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
         builder.Property(x => x.SupervisionRate).HasPrecision(5, 4);
 
         builder.HasIndex(x => new { x.DomainCode, x.Status });
+        // each business numbers its own projects, so the same code may be used once in each
+        builder.HasIndex(x => new { x.DomainCode, x.ProjectCode }).IsUnique();
 
         builder.HasOne(x => x.Domain)
             .WithMany()

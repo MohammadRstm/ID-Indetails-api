@@ -11,7 +11,10 @@ public sealed record SaveMeetingRequest
 
     public string? Description { get; init; }
 
-    /// <summary>A general meeting's people, replacing them; null leaves them as they are. A project meeting takes none.</summary>
+    /// <summary>
+    /// A general meeting's people, or a project meeting's invitees (optional, each someone who sees the project), replacing
+    /// them; null leaves them as they are.
+    /// </summary>
     public IReadOnlyList<long>? AttendeeIds { get; init; }
 }
 
