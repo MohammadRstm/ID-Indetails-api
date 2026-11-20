@@ -109,6 +109,7 @@ public sealed class ProjectDeletionRepository(IdIndetailsDbContext db) : IProjec
         await db.ProjectRequirements.Where(r => r.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectMeetings.Where(m => m.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectDepartmentChanges.Where(c => c.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+        await db.ProjectDepartmentPlans.Where(p => p.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectDepartments.Where(d => d.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectBudgets.Where(b => b.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
         await db.ProjectStaff.Where(s => s.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);

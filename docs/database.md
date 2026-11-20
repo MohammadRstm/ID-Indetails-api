@@ -37,7 +37,7 @@ The database is the second line of defence. The API must still filter every quer
 |---|---|
 | Identity and access | `domains`, `roles`, `permissions`, `role_permissions`, `user_permission_overrides`, `users`, `teams`, `employment_periods`, `user_pay_history`, `refresh_tokens`, `user_invitations`, `password_reset_tokens` |
 | Clients | `clients`, `client_contacts` |
-| Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings` (with general meetings, about no project), `meeting_attendees`, `project_expenses` (Design's), `blocked_changes`, `project_budgets` and `project_budget_lines` (cost budgets, in versions) |
+| Projects | `projects`, `project_payment_changes`, `project_requirements`, `requirement_assignees`, `project_meetings` (with general meetings, about no project), `meeting_attendees`, `project_expenses` (Design's), `blocked_changes`, `project_budgets` and `project_budget_lines` (cost budgets, in versions), `project_department_plans` (planned hours per department) |
 | Design work | `work_entries`, `work_entry_comments` |
 | Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
@@ -226,6 +226,15 @@ The `PayChangeHolds` migration (15 Nov 2026) adds `pay_change` to `ck_blocked_ch
 The `ProjectColors` migration (17 Nov 2026) only moves data: every project without a colour (`projects.tint` null or empty) gets one of the palette ([projects.md](projects.md#colours)), the active and on-hold projects first, in turn, so the first sixteen differ. Colours already set are kept, and no column changes. `Down` leaves the colours, since they can't be told from colours people chose afterwards.
 
 The `ProjectPalette` migration (18 Nov 2026) only moves data: every project gets a colour of the new thirty-colour palette ([projects.md](projects.md#colours)), replacing the sixteen colours and any picked on the old colour wheel. Each business on its own, its active and on-hold projects first, oldest first, so up to thirty differ; the palette is walked seven at a time so neighbours differ a lot. No column changes; `Down` keeps the new colours.
+
+The `DepartmentPlans` migration (11 Nov 2026) adds the hours planned for each department of a Design project
+([projects.md](projects.md#planned-hours)):
+
+- `project_department_plans` (id, `project_id`, `team_id`, `planned_minutes` int, `set_by_id`, `set_at`), one row per
+  department, unique on `(project_id, team_id)`, with foreign keys to `projects` (CASCADE, like the cost budget), `teams`
+  and `users` (RESTRICT), and the check `ck_project_department_plans_planned_minutes_positive` (`planned_minutes > 0`).
+  A change updates the row and clearing deletes it; the revision is the `department_plan_set` activity event.
+- No data changes. `Down` drops the table. The model now has 105 tables.
 
 `company_settings`, `domain_settings` and `billing_settings` are not seeded. They need the real company name, invoice prefixes and bank details.
 
