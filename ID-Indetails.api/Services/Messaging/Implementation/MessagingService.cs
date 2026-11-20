@@ -26,7 +26,7 @@ namespace ID_Indetails.api.Services.Messaging.Implementation;
 /// Chats are addressed by team or by person, never by an internal id. A conversation row is created with its first
 /// message; Announcements, the one chat everyone reads, was created with the migration that added it. A team chat the
 /// caller isn't in, or a person they can't reach, reads as not found. Sending marks the chat read for the sender.
-/// Messages can't be edited or deleted.
+/// Messages can't be edited or deleted. Their ticks and "Seen by" come from the read markers (<see cref="MessageReceipts"/>).
 /// </summary>
 public sealed class MessagingService(
     ICurrentUser currentUser,
@@ -37,29 +37,41 @@ public sealed class MessagingService(
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IPushQueue pushes,
+    IPresence presence,
     IClock clock) : IMessagingService
 {
     private const string ChatNotFound = "Chat not found.";
     private const string PersonNotFound = "Person not found.";
+    private const string MessageNotFound = "Message not found.";
 
     /// <summary>The caller's team chats, the states of the conversations they may still read, and the people in their direct chats.</summary>
     private sealed record Inbox(IReadOnlyList<ChatTeam> Teams, IReadOnlyList<ConversationState> States, IReadOnlyDictionary<long, ChatPerson> People);
+
+    /// <summary>A conversation the caller may read: a team's chat (with the team), a direct chat (with the other person), or Announcements.</summary>
+    private sealed record ChatContext(long ConversationId, ConversationType Type, ChatTeam? Team, ChatPerson? Other);
 
     public async Task<IReadOnlyList<ConversationResponse>> ConversationsAsync(CancellationToken cancellationToken = default)
     {
         var me = await ViewerAsync(cancellationToken);
         var (teams, states, people) = await InboxAsync(me, cancellationToken);
+        var active = await messaging.ActivePeopleAsync(cancellationToken);
+        var teamById = teams.ToDictionary(t => t.Id);
+        var chats = states.ToDictionary(s => s.Id, s => new ChatContext(
+            s.Id, s.Type, s.TeamId is { } teamId ? teamById.GetValueOrDefault(teamId) : null, s.OtherUserId is { } other ? people.GetValueOrDefault(other) : null));
         var lastIds = states.Where(s => s.LastMessageId is not null).Select(s => s.LastMessageId!.Value).ToList();
-        var last = (await DescribeAsync(await messaging.MessagesByIdAsync(lastIds, cancellationToken), cancellationToken))
-            .ToDictionary(m => m.Id);
+        var lastViews = await messaging.MessagesByIdAsync(lastIds, cancellationToken);
+        var receipts = await ReceiptsAsync(me, lastViews.Select(m => (chats[m.ConversationId], m)).ToList(), active, cancellationToken);
+        var last = (await DescribeAsync(lastViews, receipts, cancellationToken)).ToDictionary(m => m.Id);
         MessageResponse? LastOf(ConversationState? s) => s?.LastMessageId is { } id ? last.GetValueOrDefault(id) : null;
 
         var byTeam = states.Where(s => s.TeamId is not null).ToDictionary(s => s.TeamId!.Value);
         var teamChats = teams.Select(t =>
         {
             var state = byTeam.GetValueOrDefault(t.Id);
+            var online = active.Count(p => p.Id != me.Id && presence.IsOnline(p.Id) && MessagingRules.IsMember(Rule(p), Chat(t)));
             return new ConversationResponse(
-                ConversationType.Group, new ChatTeamResponse(t.Id, t.Name, t.Domain), null, LastOf(state), state?.Unread ?? 0, state?.UnreadMention ?? false);
+                ConversationType.Group, new ChatTeamResponse(t.Id, t.Name, t.Domain), null, LastOf(state), state?.Unread ?? 0, state?.UnreadMention ?? false,
+                online);
         });
         var directChats = states
             .Where(s => s.OtherUserId is { } other && people.ContainsKey(other))
@@ -80,6 +92,57 @@ public sealed class MessagingService(
     {
         var unread = await UnreadAsync(await ViewerAsync(cancellationToken), cancellationToken);
         return new MessagesBadgeResponse(unread.Sum(c => c.Unread), unread.Any(c => c.UnreadMention));
+    }
+
+    public async Task<MessagesBadgeResponse> ReceiveAsync(CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var unread = await UnreadAsync(me, cancellationToken);
+        var byId = unread.ToDictionary(c => c.Id);
+        foreach (var move in await messaging.MoveDeliveredAsync(me.Id, byId.Keys.ToList(), clock.UtcNow, cancellationToken))
+        {
+            var chat = byId[move.ConversationId];
+            await ReceiptsMovedAsync(me, move.ConversationId, chat.Type, chat.TeamId, move.From, move.To, cancellationToken);
+        }
+
+        return new MessagesBadgeResponse(unread.Sum(c => c.Unread), unread.Any(c => c.UnreadMention));
+    }
+
+    public async Task<MessageReceiptsResponse> ReceiptsAsync(long messageId, CancellationToken cancellationToken = default)
+    {
+        var me = await ViewerAsync(cancellationToken);
+        var message = (await messaging.MessagesByIdAsync([messageId], cancellationToken)).SingleOrDefault();
+        var chat = message is null ? null : await ContextAsync(me, message.ConversationId, cancellationToken);
+        if (message is null || chat is null)
+        {
+            throw new NotFoundException(MessageNotFound);
+        }
+
+        var announces = chat.Type == ConversationType.Announcements && (await permissions.GetAccessAsync(me.Id, cancellationToken)).Has(PermissionCodes.MessageAnnounce);
+        if (!MessageReceipts.CanSee(chat.Type, me.Id, me.Role == RoleCodes.SuperAdmin, announces, message.Sender.Id))
+        {
+            throw new ForbiddenException(ErrorCodes.Forbidden, "Only whoever sent a message sees who has read it.");
+        }
+
+        IReadOnlyList<ChatPerson> active = chat.Type == ConversationType.Dm ? [] : await messaging.ActivePeopleAsync(cancellationToken);
+        var markers = await MarkersAsync([chat.ConversationId], cancellationToken);
+        IReadOnlyDictionary<long, DateTime> times = chat.Type == ConversationType.Announcements
+            ? await messaging.ReadTimesAsync(message.Id, cancellationToken)
+            : new Dictionary<long, DateTime>();
+        var standing = Standing(chat, message, active, markers);
+
+        ReceiptPersonResponse Person(ChatPerson p, DateTime? at = null) => new(p.Id, p.Name, p.PhotoFileId, at);
+        var seen = standing
+            .Where(s => s.State == MessageReceipts.State.Seen)
+            .Select(s => Person(s.Person, MessageReceipts.SeenAt(message.Id, s.Marker!, times.TryGetValue(s.Person.Id, out var at) ? at : null)))
+            .OrderByDescending(p => p.At).ThenBy(p => p.Name)
+            .ToList();
+        return new MessageReceiptsResponse(
+            message.Id,
+            Summary(standing.Select(s => s.State).ToList()),
+            seen,
+            standing.Where(s => s.State == MessageReceipts.State.Delivered).Select(s => Person(s.Person)).ToList(),
+            standing.Where(s => s.State == MessageReceipts.State.NotReceived).Select(s => Person(s.Person)).ToList());
     }
 
     public async Task<int> UnreadCountForAsync(long userId, CancellationToken cancellationToken = default)
@@ -108,7 +171,8 @@ public sealed class MessagingService(
     {
         var me = await ViewerAsync(cancellationToken);
         var team = await TeamChatAsync(me, teamId, cancellationToken);
-        return await PageAsync(await messaging.TeamConversationAsync(team.Id, cancellationToken), query, cancellationToken);
+        var conversation = await messaging.TeamConversationAsync(team.Id, cancellationToken);
+        return await PageAsync(me, conversation is null ? null : new ChatContext(conversation.Id, ConversationType.Group, team, null), query, cancellationToken);
     }
 
     public Task<MessageResponse> SendToTeamAsync(long teamId, SendMessageRequest request, CancellationToken cancellationToken = default)
@@ -130,7 +194,7 @@ public sealed class MessagingService(
         TeamChanged(team, memberIds);
         pushes.Message(message.Id, team.Id, memberIds.Where(id => id != me.Id), mentionIds);
 
-        return await OneAsync(message.Id, cancellationToken);
+        return await OneAsync(me, new ChatContext(conversation.Id, ConversationType.Group, team, null), message.Id, cancellationToken);
     }
 
     public async Task<MessagesBadgeResponse> MarkTeamReadAsync(long teamId, CancellationToken cancellationToken = default)
@@ -146,7 +210,8 @@ public sealed class MessagingService(
     {
         var me = await ViewerAsync(cancellationToken);
         var other = await ReachableAsync(me, userId, cancellationToken);
-        return await PageAsync(await messaging.DirectConversationAsync(me.Id, other.Id, cancellationToken), query, cancellationToken);
+        var conversation = await messaging.DirectConversationAsync(me.Id, other.Id, cancellationToken);
+        return await PageAsync(me, conversation is null ? null : new ChatContext(conversation.Id, ConversationType.Dm, null, other), query, cancellationToken);
     }
 
     public Task<MessageResponse> SendDirectAsync(long userId, SendMessageRequest request, CancellationToken cancellationToken = default)
@@ -179,7 +244,7 @@ public sealed class MessagingService(
         live.ChatChanged(me.Id, new LiveChat(null, other.Id));
         pushes.Message(message.Id, null, [other.Id], []);
 
-        return await OneAsync(message.Id, cancellationToken);
+        return await OneAsync(me, new ChatContext(conversation.Id, ConversationType.Dm, null, other), message.Id, cancellationToken);
     }
 
     public async Task<MessagesBadgeResponse> MarkDirectReadAsync(long userId, CancellationToken cancellationToken = default)
@@ -193,8 +258,9 @@ public sealed class MessagingService(
 
     public async Task<MessagePageResponse> AnnouncementsAsync(MessagePageQuery query, CancellationToken cancellationToken = default)
     {
-        await ViewerAsync(cancellationToken);
-        return await PageAsync(await messaging.AnnouncementsAsync(cancellationToken), query, cancellationToken);
+        var me = await ViewerAsync(cancellationToken);
+        var conversation = await messaging.AnnouncementsAsync(cancellationToken);
+        return await PageAsync(me, conversation is null ? null : new ChatContext(conversation.Id, ConversationType.Announcements, null, null), query, cancellationToken);
     }
 
     public Task<MessageResponse> AnnounceAsync(SendMessageRequest request, CancellationToken cancellationToken = default)
@@ -218,7 +284,7 @@ public sealed class MessagingService(
         }
 
         pushes.Message(message.Id, null, everyone.Where(id => id != me.Id), [], announcement: true);
-        return await OneAsync(message.Id, cancellationToken);
+        return await OneAsync(me, new ChatContext(conversation.Id, ConversationType.Announcements, null, null), message.Id, cancellationToken);
     }
 
     public async Task<MessagesBadgeResponse> MarkAnnouncementsReadAsync(CancellationToken cancellationToken = default)
@@ -230,28 +296,7 @@ public sealed class MessagingService(
     }
 
     public async Task<bool> CanReadConversationAsync(long conversationId, CancellationToken cancellationToken = default)
-    {
-        var me = await ViewerAsync(cancellationToken);
-        var conversation = await messaging.ConversationAsync(conversationId, cancellationToken);
-        if (conversation?.Type == ConversationType.Announcements)
-        {
-            return true;
-        }
-
-        if (conversation?.TeamId is { } teamId)
-        {
-            return (await VisibleTeamsAsync(me, cancellationToken)).Any(t => t.Id == teamId);
-        }
-
-        if (conversation is null || (conversation.DmUserLowId != me.Id && conversation.DmUserHighId != me.Id))
-        {
-            return false;
-        }
-
-        var otherId = conversation.DmUserLowId == me.Id ? conversation.DmUserHighId!.Value : conversation.DmUserLowId!.Value;
-        var other = (await messaging.PeopleAsync([otherId], cancellationToken)).SingleOrDefault();
-        return other is not null && MessagingRules.CanReach(Rule(me), Rule(other));
-    }
+        => await ContextAsync(await ViewerAsync(cancellationToken), conversationId, cancellationToken) is not null;
 
     public async Task<long> PostTaskCommentAsync(
         long commenterId,
@@ -293,6 +338,31 @@ public sealed class MessagingService(
     {
         var me = (await messaging.PeopleAsync([currentUser.Id], cancellationToken)).SingleOrDefault();
         return me is { Status: UserStatus.Active } ? me : throw new ForbiddenException(ErrorCodes.Forbidden, "You don't have permission to do this.");
+    }
+
+    /// <summary>The conversation, if the caller may read it now: Announcements, a team chat they are in, or their direct chat with someone they can reach.</summary>
+    private async Task<ChatContext?> ContextAsync(ChatPerson me, long conversationId, CancellationToken cancellationToken)
+    {
+        var conversation = await messaging.ConversationAsync(conversationId, cancellationToken);
+        if (conversation?.Type == ConversationType.Announcements)
+        {
+            return new ChatContext(conversation.Id, ConversationType.Announcements, null, null);
+        }
+
+        if (conversation?.TeamId is { } teamId)
+        {
+            var team = (await VisibleTeamsAsync(me, cancellationToken)).SingleOrDefault(t => t.Id == teamId);
+            return team is null ? null : new ChatContext(conversation.Id, ConversationType.Group, team, null);
+        }
+
+        if (conversation is null || (conversation.DmUserLowId != me.Id && conversation.DmUserHighId != me.Id))
+        {
+            return null;
+        }
+
+        var otherId = conversation.DmUserLowId == me.Id ? conversation.DmUserHighId!.Value : conversation.DmUserLowId!.Value;
+        var other = (await messaging.PeopleAsync([otherId], cancellationToken)).SingleOrDefault();
+        return other is not null && MessagingRules.CanReach(Rule(me), Rule(other)) ? new ChatContext(conversation.Id, ConversationType.Dm, null, other) : null;
     }
 
     private async Task<IReadOnlyList<ChatTeam>> VisibleTeamsAsync(ChatPerson me, CancellationToken cancellationToken)
@@ -391,6 +461,10 @@ public sealed class MessagingService(
         return message;
     }
 
+    /// <summary>
+    /// Moves the caller's read marker to the chat's newest message. In Announcements it also records when they read
+    /// each new one, and whoever sees these messages' receipts is told their ticks changed.
+    /// </summary>
     private async Task MarkReadAsync(ChatPerson me, Conversation? conversation, CancellationToken cancellationToken)
     {
         if (conversation is null || await messaging.LastMessageIdAsync(conversation.Id, cancellationToken) is not { } lastId)
@@ -398,26 +472,143 @@ public sealed class MessagingService(
             return;
         }
 
+        var before = await messaging.ReadUpToAsync(me.Id, conversation.Id, cancellationToken) ?? 0;
         await messaging.MoveReadMarkerAsync(me.Id, conversation.Id, lastId, clock.UtcNow, cancellationToken);
+        if (lastId <= before)
+        {
+            return;
+        }
+
+        if (conversation.Type == ConversationType.Announcements)
+        {
+            await messaging.RecordReadsAsync(me.Id, conversation.Id, before, lastId, me.CreatedAt, clock.UtcNow, cancellationToken);
+        }
+
+        await ReceiptsMovedAsync(me, conversation.Id, conversation.Type, conversation.TeamId, before, lastId, cancellationToken);
     }
 
-    private async Task<MessagePageResponse> PageAsync(Conversation? conversation, MessagePageQuery query, CancellationToken cancellationToken)
+    /// <summary>
+    /// The caller received or read the messages after <paramref name="from"/> up to <paramref name="to"/>: their senders
+    /// see the new ticks, and in team chats and Announcements so do the super admins.
+    /// </summary>
+    private async Task ReceiptsMovedAsync(
+        ChatPerson me,
+        long conversationId,
+        ConversationType type,
+        long? teamId,
+        long from,
+        long to,
+        CancellationToken cancellationToken)
     {
-        if (conversation is null)
+        var told = (await messaging.SendersBetweenAsync(conversationId, from, to, me.Id, cancellationToken)).ToHashSet();
+        if (type != ConversationType.Dm)
+        {
+            told.UnionWith((await messaging.ActivePeopleAsync(cancellationToken)).Where(p => p.Role == RoleCodes.SuperAdmin && p.Id != me.Id).Select(p => p.Id));
+        }
+
+        if (told.Count == 0)
+        {
+            return;
+        }
+
+        live.ReceiptsChanged(told, type switch
+        {
+            ConversationType.Group => new LiveChat(teamId, null),
+            ConversationType.Announcements => LiveChat.ForAnnouncements,
+            _ => new LiveChat(null, me.Id),
+        });
+    }
+
+    private async Task<MessagePageResponse> PageAsync(ChatPerson me, ChatContext? chat, MessagePageQuery query, CancellationToken cancellationToken)
+    {
+        if (chat is null)
         {
             return new MessagePageResponse([], false);
         }
 
-        var newestFirst = await messaging.MessagesAsync(conversation.Id, query.Before, query.Limit + 1, cancellationToken);
+        var newestFirst = await messaging.MessagesAsync(chat.ConversationId, query.Before, query.Limit + 1, cancellationToken);
         var page = newestFirst.Take(query.Limit).Reverse().ToList();
-        return new MessagePageResponse(await DescribeAsync(page, cancellationToken), newestFirst.Count > query.Limit);
+        var receipts = await ReceiptsAsync(me, page.Select(m => (chat, m)).ToList(), null, cancellationToken);
+        return new MessagePageResponse(await DescribeAsync(page, receipts, cancellationToken), newestFirst.Count > query.Limit);
     }
 
-    private async Task<MessageResponse> OneAsync(long messageId, CancellationToken cancellationToken)
-        => (await DescribeAsync(await messaging.MessagesByIdAsync([messageId], cancellationToken), cancellationToken)).Single();
+    private async Task<MessageResponse> OneAsync(ChatPerson me, ChatContext chat, long messageId, CancellationToken cancellationToken)
+    {
+        var views = await messaging.MessagesByIdAsync([messageId], cancellationToken);
+        var receipts = await ReceiptsAsync(me, views.Select(m => (chat, m)).ToList(), null, cancellationToken);
+        return (await DescribeAsync(views, receipts, cancellationToken)).Single();
+    }
 
-    /// <summary>Keeps the order given, and adds the entry behind each shared comment.</summary>
-    private async Task<IReadOnlyList<MessageResponse>> DescribeAsync(IReadOnlyList<MessageView> messages, CancellationToken cancellationToken)
+    /// <summary>The ticks of the messages whose receipts the caller sees (<see cref="MessageReceipts.CanSee"/>), by message.</summary>
+    private async Task<IReadOnlyDictionary<long, MessageReceiptResponse>> ReceiptsAsync(
+        ChatPerson me,
+        IReadOnlyList<(ChatContext Chat, MessageView Message)> items,
+        IReadOnlyList<ChatPerson>? active,
+        CancellationToken cancellationToken)
+    {
+        var announces = items.Any(i => i.Chat.Type == ConversationType.Announcements && i.Message.Sender.Id != me.Id)
+            && (await permissions.GetAccessAsync(me.Id, cancellationToken)).Has(PermissionCodes.MessageAnnounce);
+        var shown = items
+            .Where(i => MessageReceipts.CanSee(i.Chat.Type, me.Id, me.Role == RoleCodes.SuperAdmin, announces, i.Message.Sender.Id))
+            .ToList();
+        if (shown.Count == 0)
+        {
+            return new Dictionary<long, MessageReceiptResponse>();
+        }
+
+        if (active is null && shown.Any(i => i.Chat.Type != ConversationType.Dm))
+        {
+            active = await messaging.ActivePeopleAsync(cancellationToken);
+        }
+
+        var markers = await MarkersAsync(shown.Select(i => i.Chat.ConversationId).Distinct().ToList(), cancellationToken);
+        return shown.ToDictionary(
+            i => i.Message.Id,
+            i => Summary(Standing(i.Chat, i.Message, active ?? [], markers).Select(s => s.State).ToList()));
+    }
+
+    private async Task<IReadOnlyDictionary<(long ConversationId, long UserId), MessageReceipts.Marker>> MarkersAsync(
+        IReadOnlyCollection<long> conversationIds,
+        CancellationToken cancellationToken)
+        => (await messaging.MarkersAsync(conversationIds, cancellationToken))
+            .ToDictionary(m => (m.ConversationId, m.UserId), m => new MessageReceipts.Marker(m.Read, m.Delivered, m.ReadMovedAt));
+
+    /// <summary>Where each person the message is for stands on it: everyone in the chat now but its sender.</summary>
+    private static IReadOnlyList<(ChatPerson Person, MessageReceipts.State State, MessageReceipts.Marker? Marker)> Standing(
+        ChatContext chat,
+        MessageView message,
+        IReadOnlyList<ChatPerson> active,
+        IReadOnlyDictionary<(long ConversationId, long UserId), MessageReceipts.Marker> markers)
+    {
+        IEnumerable<ChatPerson> inChat = chat.Type switch
+        {
+            ConversationType.Dm => chat.Other is { } other ? [other] : [],
+            ConversationType.Group => chat.Team is { } team ? active.Where(p => MessagingRules.IsMember(Rule(p), Chat(team))) : [],
+            _ => active,
+        };
+
+        return inChat
+            .Where(p => MessageReceipts.IsFor(p.Id, p.CreatedAt, message.Sender.Id, message.CreatedAt, chat.Type))
+            .Select(p =>
+            {
+                var marker = markers.GetValueOrDefault((chat.ConversationId, p.Id));
+                return (p, MessageReceipts.StateOf(message.Id, marker), marker);
+            })
+            .ToList();
+    }
+
+    private static MessageReceiptResponse Summary(IReadOnlyCollection<MessageReceipts.State> states)
+        => new(
+            MessageReceipts.TicksOf(states),
+            states.Count(s => s == MessageReceipts.State.Seen),
+            states.Count(s => s != MessageReceipts.State.NotReceived),
+            states.Count);
+
+    /// <summary>Keeps the order given, and adds the entry behind each shared comment and the ticks the caller sees.</summary>
+    private async Task<IReadOnlyList<MessageResponse>> DescribeAsync(
+        IReadOnlyList<MessageView> messages,
+        IReadOnlyDictionary<long, MessageReceiptResponse>? receipts,
+        CancellationToken cancellationToken)
     {
         var entryIds = messages.Where(m => m.RefEntryId is not null).Select(m => m.RefEntryId!.Value).Distinct().ToList();
         var shared = entryIds.Count > 0 ? (await entries.ViewsByIdAsync(entryIds, cancellationToken)).ToDictionary(e => e.Id) : [];
@@ -432,7 +623,8 @@ public sealed class MessagingService(
                 m.Attachments.Select(FileMapper.ToResponse).ToList(),
                 m.RefEntryId is { } entryId && shared.TryGetValue(entryId, out var e) ? TaskCard(m, e, viewer!) : null,
                 m.CreatedAt,
-                m.ViaProton))
+                m.ViaProton,
+                receipts?.GetValueOrDefault(m.Id)))
             .ToList();
     }
 
@@ -461,6 +653,7 @@ public sealed class MessagingService(
 
     private static MessagingRules.TeamChat Chat(ChatTeam t) => new(t.Id, t.Domain);
 
-    private static ContactResponse ToContact(ChatPerson p) => new(
-        p.Id, p.Name, p.Role, p.Domain, p.TeamId is { } id ? new TeamSummaryResponse(id, p.TeamName ?? string.Empty) : null, p.Position, p.PhotoFileId);
+    private ContactResponse ToContact(ChatPerson p) => new(
+        p.Id, p.Name, p.Role, p.Domain, p.TeamId is { } id ? new TeamSummaryResponse(id, p.TeamName ?? string.Empty) : null, p.Position, p.PhotoFileId,
+        presence.IsOnline(p.Id), p.LastSeenAt);
 }

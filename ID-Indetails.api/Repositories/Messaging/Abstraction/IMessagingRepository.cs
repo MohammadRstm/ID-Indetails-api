@@ -14,7 +14,9 @@ public sealed record ChatPerson(
     string? TeamName,
     string? Position,
     UserStatus Status,
-    long? PhotoFileId);
+    long? PhotoFileId,
+    DateTime CreatedAt = default,
+    DateTime? LastSeenAt = null);
 
 public sealed record ChatTeam(long Id, string Name, string Domain);
 
@@ -44,7 +46,14 @@ public sealed record ConversationState(
     bool UnreadMention);
 
 /// <summary>A conversation of the user with something unread, as <see cref="ConversationState"/> counts it.</summary>
-public sealed record UnreadChat(long Id, long? OtherUserId, int Unread, bool UnreadMention);
+public sealed record UnreadChat(long Id, ConversationType Type, long? TeamId, long? OtherUserId, int Unread, bool UnreadMention);
+
+/// <summary>Someone's read and received markers in a conversation.</summary>
+/// <param name="ReadMovedAt">When the read marker last moved.</param>
+public sealed record ReadMarker(long ConversationId, long UserId, long? Read, long? Delivered, DateTime ReadMovedAt);
+
+/// <summary>A marker that moved forward in a conversation, from the message it was at (0 for none) to another.</summary>
+public sealed record MarkerMove(long ConversationId, long From, long To);
 
 public interface IMessagingRepository
 {
@@ -90,9 +99,48 @@ public interface IMessagingRepository
 
     Task<long?> LastMessageIdAsync(long conversationId, CancellationToken cancellationToken = default);
 
-    /// <summary>The user's read marker in the conversation. Tracked.</summary>
     /// <summary>Moves the person's read marker forward to <paramref name="messageId"/> (never back), creating it if needed.</summary>
     Task MoveReadMarkerAsync(long userId, long conversationId, long messageId, DateTime now, CancellationToken cancellationToken = default);
+
+    /// <summary>The message the person has read up to in the conversation, if any.</summary>
+    Task<long?> ReadUpToAsync(long userId, long conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Moves the person's received marker in these conversations forward to the newest message others sent there, where
+    /// neither of their markers is there yet. Returns the moves, from the further of their two markers.
+    /// </summary>
+    Task<IReadOnlyList<MarkerMove>> MoveDeliveredAsync(
+        long userId,
+        IReadOnlyCollection<long> conversationIds,
+        DateTime now,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Everyone's markers in these conversations. Not tracked.</summary>
+    Task<IReadOnlyList<ReadMarker>> MarkersAsync(IReadOnlyCollection<long> conversationIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records that the person read, now, the messages after <paramref name="afterId"/> up to <paramref name="upToId"/>
+    /// that others sent since <paramref name="joined"/>. For Announcements; a message already recorded keeps its time.
+    /// </summary>
+    Task RecordReadsAsync(
+        long userId,
+        long conversationId,
+        long afterId,
+        long upToId,
+        DateTime joined,
+        DateTime now,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>When each person read the message, where recorded (Announcements only).</summary>
+    Task<IReadOnlyDictionary<long, DateTime>> ReadTimesAsync(long messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>Who other than <paramref name="exceptUserId"/> sent the messages after <paramref name="afterId"/> up to <paramref name="upToId"/>.</summary>
+    Task<IReadOnlyList<long>> SendersBetweenAsync(
+        long conversationId,
+        long afterId,
+        long upToId,
+        long exceptUserId,
+        CancellationToken cancellationToken = default);
 
 
     /// <summary>

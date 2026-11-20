@@ -11,6 +11,8 @@ public sealed record ChatTeamResponse(long Id, string Name, string Domain);
 
 /// <summary>Someone the caller can message directly, or a member of a team chat.</summary>
 /// <param name="PhotoFileId">Their profile photo, read through <c>GET /api/files/{id}</c>.</param>
+/// <param name="Online">Whether they have the app open now.</param>
+/// <param name="LastSeenAt">When they last used the app (recorded at most every few minutes, and when they close it).</param>
 public sealed record ContactResponse(
     long Id,
     string Name,
@@ -18,7 +20,9 @@ public sealed record ContactResponse(
     string? Domain,
     TeamSummaryResponse? Team,
     string? Position,
-    long? PhotoFileId);
+    long? PhotoFileId,
+    bool Online = false,
+    DateTime? LastSeenAt = null);
 
 /// <summary>The work entry a shared comment is about, as it is now.</summary>
 /// <param name="Attachment">The entry's photo or video, if it has one.</param>
@@ -33,8 +37,28 @@ public sealed record TaskCommentResponse(
     int? Minutes,
     FileResponse? Attachment);
 
+/// <summary>A message's ticks and how many of the people it is for have received and seen it.</summary>
+/// <param name="Delivered">How many have received it, those who have seen it included.</param>
+/// <param name="Of">How many it is for: everyone in the chat but its sender.</param>
+public sealed record MessageReceiptResponse(ReceiptStatus Status, int Seen, int Delivered, int Of);
+
+/// <param name="At">When they saw it, where known: always in Announcements, otherwise only for the last message they read.</param>
+public sealed record ReceiptPersonResponse(long Id, string Name, long? PhotoFileId, DateTime? At = null);
+
+/// <summary>Who has seen a message, who has received it without reading it yet, and who hasn't received it.</summary>
+public sealed record MessageReceiptsResponse(
+    long MessageId,
+    MessageReceiptResponse Summary,
+    IReadOnlyList<ReceiptPersonResponse> Seen,
+    IReadOnlyList<ReceiptPersonResponse> Delivered,
+    IReadOnlyList<ReceiptPersonResponse> NotReceived);
+
 /// <param name="Kind"><c>text</c>, or <c>task_comment</c> for a shared work-entry comment.</param>
 /// <param name="TaskComment">For <c>task_comment</c> messages; null once the entry is deleted.</param>
+/// <param name="Receipt">
+/// Only for those who see it: the sender of their own messages, the super admins in team chats, and whoever may
+/// announce in Announcements. Null for everyone else.
+/// </param>
 public sealed record MessageResponse(
     long Id,
     ChatPersonResponse Sender,
@@ -44,19 +68,22 @@ public sealed record MessageResponse(
     IReadOnlyList<FileResponse> Attachments,
     TaskCommentResponse? TaskComment,
     DateTime CreatedAt,
-    bool ViaProton = false);
+    bool ViaProton = false,
+    MessageReceiptResponse? Receipt = null);
 
 /// <summary>Oldest first. <paramref name="HasMore"/> says older messages exist.</summary>
 public sealed record MessagePageResponse(IReadOnlyList<MessageResponse> Items, bool HasMore);
 
 /// <summary>A team chat (<c>group</c>, with <paramref name="Team"/>) or a direct chat (<c>dm</c>, with <paramref name="Person"/>).</summary>
+/// <param name="OnlineCount">Team chats: how many of the others in it have the app open now.</param>
 public sealed record ConversationResponse(
     ConversationType Type,
     ChatTeamResponse? Team,
     ContactResponse? Person,
     MessageResponse? LastMessage,
     int Unread,
-    bool UnreadMention);
+    bool UnreadMention,
+    int? OnlineCount = null);
 
 /// <summary>For the header: every unread message, and whether any of them mentions the caller.</summary>
 public sealed record MessagesBadgeResponse(int Unread, bool Mention);

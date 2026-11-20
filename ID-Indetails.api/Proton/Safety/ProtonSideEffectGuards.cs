@@ -172,6 +172,12 @@ public static class ProtonSideEffectGuards
             inner.ChatChanged(userId, chat);
         }
 
+        public void ReceiptsChanged(IEnumerable<long> userIds, LiveChat chat)
+        {
+            ProtonReadOnly.ThrowIfActive("signalling a live update");
+            inner.ReceiptsChanged(userIds, chat);
+        }
+
         public void PortalChanged(long projectId, IEnumerable<long> userIds, IEnumerable<long> accountIds)
         {
             ProtonReadOnly.ThrowIfActive("signalling a live update");

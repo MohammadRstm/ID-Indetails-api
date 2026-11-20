@@ -8,9 +8,9 @@ All of them need only a signed-in, active user, except writing in Announcements 
 
 | Method and path | Purpose |
 |---|---|
-| `GET /api/messages/conversations` | Announcements first (`type: announcements`, no team or person, even before anyone wrote in it), then every team chat the caller is in (with or without messages) and their direct chats with messages, most recent first. Each has the team or the person, the last message, the unread count and, for team chats, whether an unread message mentions the caller |
-| `GET /api/messages/badge` | `{ unread, mention }` for the header: every unread message, and whether any mentions the caller. It counts as the inbox does, with fewer queries: no last messages, and no looking for mentions or people when nothing is unread |
-| `GET /api/messages/contacts` | The people the caller can message directly, by name |
+| `GET /api/messages/conversations` | Announcements first (`type: announcements`, no team or person, even before anyone wrote in it), then every team chat the caller is in (with or without messages) and their direct chats with messages, most recent first. Each has the team or the person, the last message (with its `receipt`, if the caller sees it), the unread count and, for team chats, whether an unread message mentions the caller and `onlineCount`: how many of the others in it have the app open. A person carries `online` and `lastSeenAt` |
+| `GET /api/messages/badge` | `{ unread, mention }` for the header: every unread message, and whether any mentions the caller. It counts as the inbox does, with fewer queries: no last messages, and no looking for mentions or people when nothing is unread. Loading it means the caller's device has their messages, so it moves their received markers ([ticks](#ticks-and-seen-by)) |
+| `GET /api/messages/contacts` | The people the caller can message directly, by name, each with `online` and `lastSeenAt` |
 | `GET /api/messages/teams/{teamId}/members` | Everyone in a team chat, for picking mentions |
 | `GET /api/messages/teams/{teamId}?before=&limit=50` | A page of the chat, oldest first, with `hasMore`. `before` (a message id) pages back; `limit` is 1–100 |
 | `POST /api/messages/teams/{teamId}` | `{ body, mentionIds }`. Returns `201` |
@@ -21,6 +21,23 @@ All of them need only a signed-in, active user, except writing in Announcements 
 | `GET /api/messages/announcements?before=&limit=50` | A page of Announcements, as for team chats |
 | `POST /api/messages/announcements` | `message:announce`: `{ body, attachmentIds }`, no mentions (`400`). Returns `201` |
 | `POST /api/messages/announcements/read` | As for team chats |
+| `GET /api/messages/{messageId}/receipts` | Who has seen the message (`seen`, each with `at` where known), who has received it without reading it (`delivered`) and who hasn't (`notReceived`), with the `summary`. For the people who see receipts ([below](#ticks-and-seen-by)): `403` for anyone else in the chat, `404` for a message they can't read |
+
+### Ticks and Seen by
+
+Decided 20 November 2026 (`Business/Messaging/MessageReceipts.cs`):
+
+- **Ticks.** Each message carries `receipt: { status, seen, delivered, of }` for those who see it: `sent` (one grey tick), `delivered` once everyone it is for has received it (two grey), `read` once all of them have read it (two blue). `of` is how many it is for, `seen` how many have read it, `delivered` how many have received it, readers included. A message for nobody (a team chat of one) stays `sent`.
+- **Who it is for.** Everyone in the chat now but its sender: the other person in a direct chat, the team chat's members, every active member of staff in Announcements, but there only those who had joined when it was sent.
+- **Received** means one of the person's devices has their messages: loading the badge (`GET /api/messages/badge`, which the app does whenever a message arrives while it is open) moves their `conversation_reads.last_delivered_message_id` up to the newest message others sent in each chat with something unread. Reading counts as receiving. Proton reading messages for someone moves nothing.
+- **Read** is the read marker, which the app moves only while the chat is on screen.
+- **Who sees receipts.** A message's sender, for their own messages, in every chat. In team chats the super admins see them for every message too. In Announcements, whoever may announce (`message:announce`). Everyone else gets `receipt: null`.
+- **When they read it.** Announcements record when each person read each one (`message_reads`, from 20 November 2026 on; what was read before has no time). In the other chats the read marker keeps only when it last moved, so `at` is given only when it is the last message that person read.
+- **Live.** When someone receives or reads messages, their senders get the `receipts` signal for that chat (as they see it), and in team chats and Announcements so do the super admins.
+
+### Last seen
+
+Contacts, team members and the people of direct chats carry `online` (the app open now, [below](#online-and-last-seen)) and `lastSeenAt`, for everyone who can message them. The app shows "Online", or "Last seen …", in the list of chats and at the top of a direct chat, and how many are online in a team chat.
 
 ## Rules
 
@@ -49,6 +66,7 @@ A SignalR connection at `/hubs/live` tells signed-in clients that something chan
 |---|---|---|---|
 | `notifications` | — | Whoever got a notification, or read theirs (for their other devices) | `GET /api/notifications/unread-count`, and the open list |
 | `messages` | `{ teamId, userId, announcements }`: one of `teamId` and `userId` set, or `announcements: true` | Everyone in a team chat that got a message; both sides of a direct message; every active person when Announcements gets one; whoever read a chat (for their other devices) | `GET /api/messages/badge`, the conversation list, and that chat if it's open |
+| `receipts` | As for `messages` | The senders of messages someone just received or read, and in team chats and Announcements the super admins | That chat if it's open, its open "Seen by", and the conversation list |
 
 - **Connecting.** It needs a signed-in user. Browsers pass the access token as the `access_token` query parameter, because WebSockets can't send headers; that parameter is only read on `/hubs/live`, and request logging stays at Warning so query strings aren't logged. The React client uses `@microsoft/signalr` with `accessTokenFactory`.
 - **When.** Signals are staged while a request runs and sent only once it has succeeded (`Middlewares/LiveUpdatesMiddleware`), so a refused or failed request signals nobody. The scheduled notification checks send theirs after each check. A signal that can't be sent is logged and dropped; the request still succeeds.
