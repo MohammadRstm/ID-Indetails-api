@@ -23,6 +23,7 @@ public static class ActivityGroups
         [ActivityEventKinds.DesignVoTvaSet] = ActivityGroup.Money,
         [ActivityEventKinds.MaterialMarkupSet] = ActivityGroup.Money,
         [ActivityEventKinds.SupervisionRateSet] = ActivityGroup.Money,
+        [ActivityEventKinds.BudgetSet] = ActivityGroup.Money,
         [ActivityEventKinds.ProjectFinalized] = ActivityGroup.Money,
         [ActivityEventKinds.OwedExcused] = ActivityGroup.Money,
         [ActivityEventKinds.OwedWrittenOff] = ActivityGroup.Money,

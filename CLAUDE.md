@@ -122,6 +122,10 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
   - Supervision taken (the company withdrawing its supervision fee) is not a cost. Cash in account = received − cost −
     supervision taken − moved to the pocket + paid by it. A payment's money is never edited; only its account label can
     change.
+  - **Cost budgets** (optional): a project's cost budget is kept in versions (`project_budgets`, `project_budget_lines`),
+    each with a reason, set with `financial:write` (Design) or `project:pricing_manage` (Execution). Each line's cost
+    comes from the shared calculator (department labour, expenses, site expenses by category, ground labour), never a
+    second formula. A department with a line in any version can't be deleted.
 - **Pay:**
   - Everyone is paid a monthly salary: there is no hourly pay (removed 15 November 2026).
   - **Pay is per day.** Each working day someone is employed earns the salary in force that day × its paid minutes ÷

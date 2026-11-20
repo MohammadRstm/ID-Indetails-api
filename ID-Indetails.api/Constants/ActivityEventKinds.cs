@@ -62,6 +62,10 @@ public static class ActivityEventKinds
     public const string MaterialMarkupSet = "material_markup_set";
 
     public const string SupervisionRateSet = "supervision_rate_set";
+
+    /// <summary>A new version of the project's cost budget (subject: the project; its total in the amount, the previous version's in prev_amount, the version in the payload).</summary>
+    public const string BudgetSet = "budget_set";
+
     public const string ProjectHold = "project_hold";
     public const string ProjectResumed = "project_resumed";
     public const string ProjectCompleted = "project_completed";

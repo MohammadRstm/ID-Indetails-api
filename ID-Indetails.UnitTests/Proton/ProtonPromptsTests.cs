@@ -59,6 +59,17 @@ public class ProtonPromptsTests
         ProtonPrompts.Chat.ShouldContain("- `standing`:");
     }
 
+    /// <summary>A cost budget: over only for a line above its amount, never a department's share of the price, no one named.</summary>
+    [Fact]
+    public void The_chat_prompt_says_how_to_present_a_cost_budget()
+    {
+        ProtonPrompts.Chat.ShouldContain("# Cost budgets");
+        ProtonPrompts.Chat.ShouldContain("`get_project_budget`");
+        ProtonPrompts.Chat.ShouldContain("\"Over budget\" only for a line whose cost so far is above its amount");
+        ProtonPrompts.Chat.ShouldContain("- Cost budget (`get_project_budget`):");
+        ProtonPrompts.Chat.ShouldContain("It is not a department's budget in `get_project_departments`");
+    }
+
     /// <summary>
     /// A business's risks and spending: each judgement with the rule that fired, nothing at risk or unusual without one,
     /// a projection as an estimate, internal projects never listed, and what was left out said.

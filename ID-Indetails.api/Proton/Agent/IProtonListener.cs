@@ -38,6 +38,7 @@ public static class ProtonStatus
         ["analyze_expense_trends"] = "Going through the spending month by month…",
         ["analyze_labor_costs"] = "Adding up the labour by month and department…",
         ["analyze_employee_utilization"] = "Comparing logged hours with expected hours…",
+        ["get_project_budget"] = "Checking the budget against the cost so far…",
         ["open_record"] = "Opening it…",
         ["open_page"] = "Opening it…",
         ["offer_choices"] = "Lining up the options…",

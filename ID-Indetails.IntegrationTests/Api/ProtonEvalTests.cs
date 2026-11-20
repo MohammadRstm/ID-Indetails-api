@@ -273,6 +273,9 @@ public class ProtonEvalTests(ProtonEvalApiFactory api, ITestOutputHelper output)
         // Design's labour by department, never a person's; utilization in hours to an admin without money, judging no one
         new("labour by department", ["What has Design's labour cost by department over the last 3 months?"], ["analyze_labor_costs"],
             MustMention: ["department"]),
+        // a cost budget: Villa Mounir has none, so nothing is called over budget
+        new("budget left", ["How much of Villa Mounir's budget is left?"], ["get_project_budget"],
+            MustMention: ["no budget", "no cost budget", "hasn't", "has not", "doesn't have", "does not have"]),
         new("team utilization", ["How much of their expected hours did each Design employee log this month?"], ["analyze_employee_utilization"],
             NoMoney: true, MustMention: ["expected", "utilization", "utilisation"]),
         new("revenue in a period", ["How much revenue did Design bring in over the last 30 days?"],
