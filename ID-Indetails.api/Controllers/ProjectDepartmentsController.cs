@@ -41,4 +41,13 @@ public sealed class ProjectDepartmentsController(IProjectDepartmentService depar
     [HasPermission(PermissionCodes.FinancialWrite)]
     public Task<ProjectDepartmentsResponse> SetShares(long projectId, SetDepartmentSharesRequest request, CancellationToken cancellationToken)
         => departments.SetSharesAsync(projectId, request, cancellationToken);
+
+    /// <summary>
+    /// Sets or clears the hours planned for some departments (<c>plannedHours</c> null clears one); the others keep theirs.
+    /// 400 for a department not on the project.
+    /// </summary>
+    [HttpPut("plan")]
+    [HasPermission(PermissionCodes.ProjectEdit)]
+    public Task<ProjectDepartmentsResponse> SetPlan(long projectId, SetDepartmentPlanRequest request, CancellationToken cancellationToken)
+        => departments.SetPlanAsync(projectId, request, cancellationToken);
 }

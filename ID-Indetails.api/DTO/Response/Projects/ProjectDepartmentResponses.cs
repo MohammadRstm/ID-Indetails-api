@@ -7,7 +7,10 @@ namespace ID_Indetails.api.DTO.Response.Projects;
 /// <summary>A department on a project, by name.</summary>
 public sealed record ProjectDepartmentRefResponse(long Id, string Name);
 
-/// <summary>A Design project's departments; their shares and money only for callers with <c>financial:view</c>.</summary>
+/// <summary>
+/// A Design project's departments with their planned hours; their shares and money only for callers with
+/// <c>financial:view</c>, their logged hours and progress also for those with <c>work_entry:view_all</c>.
+/// </summary>
 public sealed record ProjectDepartmentsResponse
 {
     /// <summary>"Full file" when every Design department works on it; null otherwise.</summary>
@@ -33,6 +36,21 @@ public sealed record ProjectDepartmentResponse
 
     /// <summary>Null without <c>financial:view</c>.</summary>
     public DepartmentMoneyResponse? Money { get; init; }
+
+    /// <summary>The hours planned for it, in minutes; null while it has no plan. Shown to whoever sees the departments.</summary>
+    public int? PlannedMinutes { get; init; }
+
+    /// <summary>
+    /// The minutes logged in it on the project. Null for a caller who sees neither the money (<c>financial:view</c>) nor
+    /// everyone's hours (<c>work_entry:view_all</c>): a department may be one person, whose hours are theirs.
+    /// </summary>
+    public int? LoggedMinutes { get; init; }
+
+    /// <summary>
+    /// Logged ÷ planned minutes, a fraction to four places (0.5 is half); above 1 once more is logged than planned. Null
+    /// without a plan, or when <see cref="LoggedMinutes"/> is.
+    /// </summary>
+    public decimal? Progress { get; init; }
 }
 
 /// <summary>A department's budget and labour, in USD: its share of the price before TVA, and the cost of the hours logged in it.</summary>

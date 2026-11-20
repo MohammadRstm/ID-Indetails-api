@@ -37,6 +37,7 @@ public sealed class FinanceInsightService(
     IProjectDepartmentService departments,
     IDesignVoRepository designVos,
     IBoqRepository boqs,
+    IBoqProgressRepository boqProgress,
     IClock clock) : IFinanceInsightService
 {
     /// <summary>The full weeks a delay is priced at.</summary>
@@ -75,6 +76,7 @@ public sealed class FinanceInsightService(
             summary.MarginKnown,
             StandingOf(project, summary.Revenue, summary.Profit),
             project.ProgressPct,
+            await ExecutedProgressAsync(project, cancellationToken),
             summary.RecognisedToDate,
             summary.Projected is { } p ? new ProjectProjectionResponse(p.Cost, p.Profit, p.Margin) : null,
             money.Received,
@@ -194,19 +196,36 @@ public sealed class FinanceInsightService(
             (money.Supervision ?? 0) - SupervisionOn(settlement) - SupervisionOn(paidAhead));
     }
 
+    /// <summary>
+    /// An Execution client site's progress by value today (<see cref="BoqProgressRules"/>): null elsewhere, and until a line
+    /// has a recorded quantity. Only shown: the projection keeps using the progress percentage until forecasting uses it.
+    /// </summary>
+    private async Task<decimal?> ExecutedProgressAsync(Project project, CancellationToken cancellationToken)
+    {
+        if (project.DomainCode != DomainCodes.Execution || project.BillingType != BillingType.Client)
+        {
+            return null;
+        }
+
+        var lines = await boqProgress.AgreedLinesAsync(project.Id, cancellationToken);
+        var latest = await boqProgress.LatestAsync(project.Id, clock.CompanyToday, cancellationToken);
+        var sheet = BoqProgressRules.Of(lines.Select(l => l.Line), latest.ToDictionary(p => p.Key, p => p.Value.ExecutedQuantity));
+        return sheet.Recorded ? sheet.Progress : null;
+    }
+
     private static IReadOnlyList<DepartmentInsightResponse> DepartmentsOf(ProjectDepartmentsResponse response, decimal labour)
     {
         decimal? ShareOfLabour(decimal cost) => labour > 0 ? Math.Round(cost / labour, 4, MidpointRounding.AwayFromZero) : null;
-        DepartmentInsightResponse Row(long? id, string name, decimal? share, DepartmentMoneyResponse money) => new(
-            id, name, share, money.Budget, money.Cost, money.Left, money.Minutes, ShareOfLabour(money.Cost), money.Unconverted);
+        DepartmentInsightResponse Row(long? id, string name, decimal? share, DepartmentMoneyResponse money, int? plannedMinutes, decimal? progress) => new(
+            id, name, share, money.Budget, money.Cost, money.Left, money.Minutes, ShareOfLabour(money.Cost), money.Unconverted, plannedMinutes, progress);
 
         var rows = response.Departments
             .Where(d => d.Money is not null)
-            .Select(d => Row(d.Id, d.Name, d.Share, d.Money!))
+            .Select(d => Row(d.Id, d.Name, d.Share, d.Money!, d.PlannedMinutes, d.Progress))
             .ToList();
         if (response.Other is { } other)
         {
-            rows.Add(Row(null, "Other hours", null, other));
+            rows.Add(Row(null, "Other hours", null, other, null, null));
         }
 
         return rows;

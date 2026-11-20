@@ -59,6 +59,16 @@ public class ProtonPromptsTests
         ProtonPrompts.Chat.ShouldContain("- `standing`:");
     }
 
+    /// <summary>A site's progress by value: read with its tool, never guessed while nothing is recorded, never a new projection.</summary>
+    [Fact]
+    public void The_chat_prompt_says_how_to_present_a_sites_progress_by_value()
+    {
+        ProtonPrompts.Chat.ShouldContain("`get_boq_progress`");
+        ProtonPrompts.Chat.ShouldContain("none recorded the site has no progress by value, so say so");
+        ProtonPrompts.Chat.ShouldContain("`executed_progress_pct`");
+        ProtonPrompts.Chat.ShouldContain("never redo the projection with it");
+    }
+
     /// <summary>A cost budget: over only for a line above its amount, never a department's share of the price, no one named.</summary>
     [Fact]
     public void The_chat_prompt_says_how_to_present_a_cost_budget()

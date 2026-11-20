@@ -14,6 +14,8 @@ public sealed record BridgeStepResponse(BridgeStepKind Kind, decimal Amount);
 /// <param name="Id">Null for the hours of people in no department, or in one no longer on the project.</param>
 /// <param name="Share">Its part of the price, a fraction (0.25 is 25%); null for the other hours.</param>
 /// <param name="LabourShare">Its share of the project's labour cost, a fraction, while there is any.</param>
+/// <param name="PlannedMinutes">The hours planned for it, in minutes; null without a plan, and for the other hours.</param>
+/// <param name="Progress">Its minutes ÷ its planned minutes, a fraction to four places (may pass 1); null without a plan.</param>
 public sealed record DepartmentInsightResponse(
     long? Id,
     string Name,
@@ -23,7 +25,9 @@ public sealed record DepartmentInsightResponse(
     decimal Left,
     int Minutes,
     decimal? LabourShare,
-    IReadOnlyList<CurrencyAmountResponse> Unconverted);
+    IReadOnlyList<CurrencyAmountResponse> Unconverted,
+    int? PlannedMinutes,
+    decimal? Progress);
 
 /// <summary>
 /// One project's profitability, all time, in USD net of TVA: agreed revenue, cost by source and agreed profit (with a
@@ -36,6 +40,11 @@ public sealed record DepartmentInsightResponse(
 /// <param name="SiteCashProfit">A site's all-time received net of TVA − cost − moved to the pocket + paid by it.</param>
 /// <param name="Bridge">From the base price to the agreed profit; the steps add up to it.</param>
 /// <param name="Departments">Design only.</param>
+/// <param name="ExecutedProgress">
+/// An Execution client site's progress by value: the value executed on its agreed BOQ and VO lines ÷ their agreed value, a
+/// fraction to four places (may pass 1). Null on Design, on internal work, and until a line has a recorded quantity. Shown
+/// beside <paramref name="ProgressPct"/>, which the projection still uses.
+/// </param>
 public sealed record ProjectInsightResponse(
     long ProjectId,
     string Title,
@@ -50,6 +59,7 @@ public sealed record ProjectInsightResponse(
     bool MarginKnown,
     ProfitStanding? Standing,
     int ProgressPct,
+    decimal? ExecutedProgress,
     decimal RecognisedToDate,
     ProjectProjectionResponse? Projected,
     decimal Received,

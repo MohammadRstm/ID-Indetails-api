@@ -2,6 +2,7 @@ using System.ComponentModel;
 using ID_Indetails.api.Business.Proton;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Controllers;
+using ID_Indetails.api.DTO.Request.Boqs;
 using ID_Indetails.api.DTO.Request.Execution;
 using ID_Indetails.api.DTO.Response.Boqs;
 using ID_Indetails.api.DTO.Response.Common;
@@ -145,6 +146,92 @@ public sealed class GetBoqTool(IBoqService boqs) : ProtonTool<BoqInput>
             b.Lines.Take(MaxLines).Select(l => new BoqLineRow(
                 l.Position, l.Nature, l.Code, ProtonText.Cut(l.Description, 300)!, l.Quantity, l.WasteRate * 100, l.FinalQuantity, l.Unit, l.Rate, l.TotalUsd)).ToList(),
             b.Deliveries.Select(d => new BoqDeliveryRow(d.Channel, d.Recipient, d.TotalUsd, d.SentAt, d.SentBy?.Name)).ToList()));
+    }
+}
+
+public sealed record BoqProgressInput
+{
+    [Description("An Execution site: an id from find or another tool.")]
+    public required long ProjectId { get; init; }
+
+    [Description("A past day, to see the progress as it stood then. Leave out for today.")]
+    public DateOnly? AsOf { get; init; }
+}
+
+/// <summary>A work line of an agreed client BOQ or VO, and what was executed on it.</summary>
+/// <param name="Boq">The BOQ's or VO's number, or its title.</param>
+/// <param name="Quantity">The final quantity (with waste), in its unit: what progress is measured against.</param>
+/// <param name="TakesProgress">False on a line that takes work away (a negative rate): nothing on it is executed.</param>
+/// <param name="ExecutedQuantity">The latest quantity recorded on or before the day; empty when none was.</param>
+/// <param name="ProgressPct">Executed as a whole percentage of the quantity (above 100 past it).</param>
+/// <param name="UnitPriceUsd">The rate with its BOQ's adjustment spread over it, net of TVA; empty without financial:view.</param>
+public sealed record BoqProgressRow(
+    long BoqLineId,
+    string Boq,
+    string? Code,
+    string Description,
+    string? Unit,
+    decimal Quantity,
+    bool TakesProgress,
+    decimal? ExecutedQuantity,
+    DateOnly? ExecutedOn,
+    int? ProgressPct,
+    decimal? UnitPriceUsd,
+    decimal? AgreedValueUsd,
+    decimal? ValueExecutedUsd);
+
+/// <summary>A site's progress by value, as GET /api/projects/{id}/boqs/progress returns it, without who recorded each figure.</summary>
+/// <param name="ProgressPct">The value executed as a whole percentage of the agreed value (above 100 past it); empty until a line has a record.</param>
+/// <param name="AgreedValueUsd">The agreed lines' work, net of TVA, without supervision; empty without financial:view.</param>
+/// <param name="LinesTotal">How many lines there are; at most 100 are shown.</param>
+public sealed record SiteBoqProgress(
+    long ProjectId,
+    DateOnly AsOf,
+    int? ProgressPct,
+    decimal? AgreedValueUsd,
+    decimal? ValueExecutedUsd,
+    int LinesTotal,
+    IReadOnlyList<BoqProgressRow> Lines,
+    string Note);
+
+/// <summary>
+/// An Execution site's progress by value: each work line of its agreed client BOQ and VOs with its quantity and the latest
+/// executed quantity site staff recorded, and the value executed against the agreed value.
+/// </summary>
+public sealed class GetBoqProgressTool(IBoqProgressService progress) : ProtonTool<BoqProgressInput>
+{
+    private const int MaxLines = 100;
+
+    public override string Name => "get_boq_progress";
+
+    public override string Description =>
+        "An Execution site's progress by value: each work line of its agreed client BOQ and VOs with its quantity, the latest " +
+        "executed quantity recorded (by site staff or a pricing manager) and its progress, and the site's value executed as a " +
+        "percentage of the agreed value; with financial:view, each line's unit price and values in USD net of TVA. Use it for " +
+        "\"how far along is the site\", \"how much of the BOQ is done\", \"what was executed on the tiling\".";
+
+    public override string? OnlyInDomain => DomainCodes.Execution;
+
+    public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<BoqProgressController>(nameof(BoqProgressController.Get));
+
+    protected override async Task<ProtonToolOutput> RunAsync(BoqProgressInput input, ProtonToolContext context, CancellationToken cancellationToken)
+    {
+        var p = await progress.GetAsync(input.ProjectId, new BoqProgressQuery { AsOf = input.AsOf }, cancellationToken);
+        return ProtonToolOutput.Of(new SiteBoqProgress(
+            p.ProjectId,
+            p.AsOf,
+            ProtonAnalysis.Pct(p.Progress),
+            p.AgreedValue,
+            p.ValueExecuted,
+            p.Lines.Count,
+            p.Lines.Take(MaxLines).Select(l => new BoqProgressRow(
+                l.BoqLineId, l.BoqNumber ?? l.BoqTitle, l.Code, ProtonText.Cut(l.Description, 300)!, l.Unit, l.Quantity, l.TakesProgress,
+                l.ExecutedQuantity, l.ExecutedOn, ProtonAnalysis.Pct(l.Progress), l.UnitPrice, l.AgreedValue, l.ValueExecuted)).ToList(),
+            p.Progress is null
+                ? "No executed quantity is recorded on this site's agreed BOQ lines yet, so it has no progress by value: say so, never guess one."
+                : "Executed quantities are cumulative, as site staff last recorded them on or before as_of. Progress by value is the value " +
+                  "executed ÷ the agreed value of the agreed client BOQ and VOs (work only, net of TVA, no supervision or permits). " +
+                  "It is not the project's progress percentage, which the projection uses."));
     }
 }
 

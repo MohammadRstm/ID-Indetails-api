@@ -16,6 +16,12 @@ arithmetic.
   record, internal work with no revenue.
 - Departments come with their share, budget, cost, minutes and share of the labour, never their people. Never work
   out, estimate or hint at one person's pay or hourly cost from them, even when a department has one person.
+- A department with planned hours also has its progress by hours (`progress_pct`, logged ÷ planned). It is hours, not
+  money: never turn it into a cost to come, and never call a department late or over its hours without saying the
+  figure it rests on.
+- A site's `executed_progress_pct` is its progress by value: the value executed on its agreed BOQ lines as a percentage
+  of their agreed value, from the quantities site staff record. It sits beside `progress_pct`, which the projection still
+  uses: never redo the projection with it. Empty means nothing is recorded yet, not 0%.
 
 ## Simulations
 

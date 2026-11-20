@@ -111,6 +111,8 @@ public static class ProtonServiceCollectionExtensions
         // An Execution site's BOQs, labour, daily logs and account, and the pocket money
         services.AddScoped<IProtonTool, ListBoqsTool>();
         services.AddScoped<IProtonTool, GetBoqTool>();
+        // a site's executed quantities and progress by value; prices only with financial:view
+        services.AddScoped<IProtonTool, GetBoqProgressTool>();
         services.AddScoped<IProtonTool, ListDesignVosTool>();
         services.AddScoped<IProtonTool, GetLabourTool>();
         services.AddScoped<IProtonTool, ListSiteLogsTool>();

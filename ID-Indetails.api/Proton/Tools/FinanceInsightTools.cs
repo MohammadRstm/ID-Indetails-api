@@ -23,6 +23,8 @@ public sealed record BridgeRow(BridgeStepKind Step, decimal Amount);
 /// <param name="SharePercent">Its part of the price; null for those other hours.</param>
 /// <param name="LabourSharePercent">Its share of the project's labour cost, while there is any.</param>
 /// <param name="UnconvertedLabour">Labour with no exchange rate on its day, per currency: not in the cost or what is left.</param>
+/// <param name="PlannedMinutes">The hours planned for it, in minutes; null without a plan.</param>
+/// <param name="ProgressPct">Minutes logged as a whole percentage of the planned ones (above 100 once past the plan); null without a plan.</param>
 public sealed record InsightDepartmentRow(
     long? Id,
     string Name,
@@ -32,7 +34,9 @@ public sealed record InsightDepartmentRow(
     decimal Left,
     int MinutesLogged,
     decimal? LabourSharePercent,
-    IReadOnlyList<CurrencyAmountResponse>? UnconvertedLabour);
+    IReadOnlyList<CurrencyAmountResponse>? UnconvertedLabour,
+    int? PlannedMinutes,
+    int? ProgressPct);
 
 /// <summary>One project's profitability, all time, as GET /api/finance/insights/projects/{id} returns it.</summary>
 /// <param name="AgreedRevenue">The contract value, net of TVA, not cash.</param>
@@ -45,6 +49,10 @@ public sealed record InsightDepartmentRow(
 /// <param name="SiteCashProfit">Execution: received net of TVA, less cost, less what was moved to the pocket money, plus what it paid in.</param>
 /// <param name="Bridge">From the base price to the agreed profit, in order; the steps add up to it.</param>
 /// <param name="Departments">Design only.</param>
+/// <param name="ExecutedProgressPct">
+/// An Execution site's progress by value: the value executed on its agreed BOQ lines as a whole percentage of their agreed
+/// value (above 100 past it); empty on Design, on internal work and until site staff record a quantity.
+/// </param>
 public sealed record ProjectFinancialSummary(
     long ProjectId,
     string Title,
@@ -60,6 +68,7 @@ public sealed record ProjectFinancialSummary(
     int? AgreedMarginPct,
     ProfitStanding? Standing,
     int ProgressPct,
+    int? ExecutedProgressPct,
     decimal RecognisedToDate,
     ProtonProjection? Projected,
     decimal Received,
@@ -140,10 +149,12 @@ public sealed class GetProjectFinancialSummaryTool(IFinanceInsightService insigh
     public override string Description =>
         "One project's profitability, all time, in USD: agreed revenue (net of TVA) and with TVA, cost by source, agreed profit " +
         "and margin, its standing against the profit floor (fine, close or at_zero), progress, recognised to date and projection; " +
+        "on a site its progress by value (the value executed on its agreed BOQ lines as a percentage of their agreed value, beside " +
+        "the progress the projection uses); " +
         "what the client paid and still owes (TVA included); on a site its site cash profit and the pocket money moved out and " +
         "paid in; the bridge from the base price to the agreed profit (variation orders, a settlement, supervision, permits, " +
-        "each cost, pocket money); and on a Design project each department's share, budget, cost, minutes and share of the " +
-        "labour, never its people. Use it for \"how profitable is it\", \"where does its profit come from\", \"how close is it to the floor\".";
+        "each cost, pocket money); and on a Design project each department's share, budget, cost, minutes, share of the " +
+        "labour and, where it has planned hours, those and its progress by hours (logged as a percentage of planned), never its people. Use it for \"how profitable is it\", \"where does its profit come from\", \"how close is it to the floor\".";
 
     public override ProtonEndpoint Endpoint { get; } = ProtonEndpoint.Of<FinanceInsightsController>(nameof(FinanceInsightsController.Project));
 
@@ -155,13 +166,13 @@ public sealed class GetProjectFinancialSummaryTool(IFinanceInsightService insigh
             p.ProjectId, p.Title, p.Domain, p.Status, p.BillingType,
             p.AgreedRevenue, p.AgreedWithTva, p.TvaRate * 100, site ? p.SupervisionRate * 100 : null,
             p.Cost, p.AgreedProfit, ProtonAnalysis.Pct(p.Margin), p.Standing,
-            p.ProgressPct, p.RecognisedToDate, ProtonProjection.Of(p.Projected),
+            p.ProgressPct, site ? ProtonAnalysis.Pct(p.ExecutedProgress) : null, p.RecognisedToDate, ProtonProjection.Of(p.Projected),
             p.Received, p.ReceivedTva, p.Owed,
             site ? p.SiteCashProfit : null, site ? p.ToPocket : null, site ? p.FromPocket : null,
             p.Bridge.Select(s => new BridgeRow(s.Kind, s.Amount)).ToList(),
             p.Departments?.Select(d => new InsightDepartmentRow(
                 d.Id, d.Name, d.Share * 100, d.Budget, d.Cost, d.Left, d.Minutes, d.LabourShare * 100,
-                d.Unconverted.Count > 0 ? d.Unconverted : null)).ToList(),
+                d.Unconverted.Count > 0 ? d.Unconverted : null, d.PlannedMinutes, ProtonAnalysis.Pct(d.Progress))).ToList(),
             "All time, in USD. Agreed revenue, cost, agreed_profit and the bridge are net of TVA; agreed_with_tva, received " +
             "and owed include it. The bridge's steps add up to agreed_profit. Departments carry no people: never work out " +
             "one person's pay or hourly cost from them.");

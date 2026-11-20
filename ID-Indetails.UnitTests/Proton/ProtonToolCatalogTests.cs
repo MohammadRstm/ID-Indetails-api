@@ -344,6 +344,30 @@ public class ProtonToolCatalogTests
         typeof(BudgetVersionRow).GetProperties().Select(p => p.Name).ShouldNotContain("SetByName");
     }
 
+    /// <summary>
+    /// A site's progress by value reads like its endpoint (the site's staff, money or pricing), only in Execution, found
+    /// through tool search, and says no one beside a value: the records' authors stay out of it.
+    /// </summary>
+    [Fact]
+    public void The_boq_progress_tool_mirrors_its_endpoint_and_is_deferred()
+    {
+        var progress = Tools.Single(t => t.Name == "get_boq_progress");
+
+        progress.Endpoint.Name.ShouldBe($"BoqProgress.{nameof(BoqProgressController.Get)}");
+        progress.Endpoint.Policies.ShouldBe([AuthorizationPolicies.PermissionPrefix + string.Join(AuthorizationPolicies.AnyOfSeparator,
+            PermissionCodes.SiteLogCreate, PermissionCodes.SiteLogViewAll, PermissionCodes.FinancialView, PermissionCodes.ProjectPricingManage)]);
+        progress.Endpoint.Writes.ShouldBeFalse();
+        progress.Heavy.ShouldBeFalse();
+        progress.OnlyInDomain.ShouldBe(DomainCodes.Execution);
+        ProtonToolSearch.Core.ShouldNotContain(progress.Name);
+        progress.InputSchema["required"]!.AsArray().Select(r => r!.ToString()).ShouldBe(["project_id"]);
+
+        var properties = new HashSet<string>();
+        Collect(typeof(SiteBoqProgress), properties, []);
+        properties.ShouldNotContain("RecordedBy");
+        properties.ShouldNotContain("History");
+    }
+
     private static void Collect(Type type, HashSet<string> properties, HashSet<Type> seen)
     {
         type = Nullable.GetUnderlyingType(type) ?? type;
