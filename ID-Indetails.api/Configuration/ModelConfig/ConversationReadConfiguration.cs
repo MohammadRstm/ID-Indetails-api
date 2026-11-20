@@ -26,5 +26,10 @@ public class ConversationReadConfiguration : IEntityTypeConfiguration<Conversati
             .WithMany()
             .HasForeignKey(x => x.LastReadMessageId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Message>()
+            .WithMany()
+            .HasForeignKey(x => x.LastDeliveredMessageId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

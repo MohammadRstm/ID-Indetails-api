@@ -22,9 +22,14 @@ public sealed class MessagesController(IMessagingService messagingService) : Con
     public Task<IReadOnlyList<ConversationResponse>> Conversations(CancellationToken cancellationToken)
         => messagingService.ConversationsAsync(cancellationToken);
 
+    /// <summary>Loading the badge means the caller's device has their messages: it also moves their received markers.</summary>
     [HttpGet("badge")]
     public Task<MessagesBadgeResponse> Badge(CancellationToken cancellationToken)
-        => messagingService.BadgeAsync(cancellationToken);
+        => messagingService.ReceiveAsync(cancellationToken);
+
+    [HttpGet("{messageId:long}/receipts")]
+    public Task<MessageReceiptsResponse> Receipts(long messageId, CancellationToken cancellationToken)
+        => messagingService.ReceiptsAsync(messageId, cancellationToken);
 
     [HttpGet("contacts")]
     public Task<IReadOnlyList<ContactResponse>> Contacts(CancellationToken cancellationToken)

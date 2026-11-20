@@ -936,6 +936,10 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("conversation_id");
 
+                    b.Property<long?>("LastDeliveredMessageId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_delivered_message_id");
+
                     b.Property<long?>("LastReadMessageId")
                         .HasColumnType("bigint")
                         .HasColumnName("last_read_message_id");
@@ -950,6 +954,9 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasIndex("ConversationId")
                         .HasDatabaseName("ix_conversation_reads_conversation_id");
+
+                    b.HasIndex("LastDeliveredMessageId")
+                        .HasDatabaseName("ix_conversation_reads_last_delivered_message_id");
 
                     b.HasIndex("LastReadMessageId")
                         .HasDatabaseName("ix_conversation_reads_last_read_message_id");
@@ -1935,6 +1942,30 @@ namespace ID_Indetails.api.Data.Migrations
                         .HasDatabaseName("ix_message_mentions_user_id");
 
                     b.ToTable("message_mentions", (string)null);
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.MessageRead", b =>
+                {
+                    b.Property<long>("MessageId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("message_id");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("ReadAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime(3)")
+                        .HasColumnName("read_at");
+
+                    b.HasKey("MessageId", "UserId")
+                        .HasName("pk_message_reads");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_message_reads_user_id");
+
+                    b.ToTable("message_reads", (string)null);
                 });
 
             modelBuilder.Entity("ID_Indetails.api.Models.Notification", b =>
@@ -8281,6 +8312,12 @@ namespace ID_Indetails.api.Data.Migrations
 
                     b.HasOne("ID_Indetails.api.Models.Message", null)
                         .WithMany()
+                        .HasForeignKey("LastDeliveredMessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_conversation_reads_messages_last_delivered_message_id");
+
+                    b.HasOne("ID_Indetails.api.Models.Message", null)
+                        .WithMany()
                         .HasForeignKey("LastReadMessageId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_conversation_reads_messages_last_read_message_id");
@@ -8652,6 +8689,27 @@ namespace ID_Indetails.api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_message_mentions_users_user_id");
+
+                    b.Navigation("Message");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ID_Indetails.api.Models.MessageRead", b =>
+                {
+                    b.HasOne("ID_Indetails.api.Models.Message", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_message_reads_messages_message_id");
+
+                    b.HasOne("ID_Indetails.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_message_reads_users_user_id");
 
                     b.Navigation("Message");
 

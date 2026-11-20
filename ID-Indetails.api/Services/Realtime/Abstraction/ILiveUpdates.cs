@@ -18,6 +18,9 @@ public interface ILiveUpdates
     /// <summary>A chat changed for this person: a new message, or they read it on another device.</summary>
     void ChatChanged(long userId, LiveChat chat);
 
+    /// <summary>Messages in this chat (as these people see it) were received or read: their ticks and "Seen by" changed.</summary>
+    void ReceiptsChanged(IEnumerable<long> userIds, LiveChat chat);
+
     /// <summary>A project's client portal discussion changed, for these staff members and these clients.</summary>
     void PortalChanged(long projectId, IEnumerable<long> userIds, IEnumerable<long> accountIds);
 
@@ -48,6 +51,9 @@ public static class LiveSignals
 {
     public const string Notifications = "notifications";
     public const string Messages = "messages";
+
+    /// <summary><c>{ teamId, userId, announcements }</c> as for <see cref="Messages"/>: that chat's ticks changed.</summary>
+    public const string Receipts = "receipts";
 
     /// <summary><c>{ projectId }</c>: that project's client portal discussion changed.</summary>
     public const string Portal = "portal";
