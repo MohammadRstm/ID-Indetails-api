@@ -37,7 +37,7 @@ namespace ID_Indetails.api.Data.Migrations
                         column: x => x.message_id,
                         principalTable: "messages",
                         principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "fk_message_reads_users_user_id",
                         column: x => x.user_id,

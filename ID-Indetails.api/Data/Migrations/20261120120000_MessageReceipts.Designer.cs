@@ -8556,7 +8556,7 @@ namespace ID_Indetails.api.Data.Migrations
                     b.HasOne("ID_Indetails.api.Models.Message", "Message")
                         .WithMany()
                         .HasForeignKey("MessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_message_reads_messages_message_id");
 
