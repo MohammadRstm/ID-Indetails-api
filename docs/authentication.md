@@ -34,7 +34,7 @@ Every request counts against a global limit: 300 a minute per signed-in user, or
 - Refresh (the website's and the phone's): 60 a minute per IP on its own (`refresh`), since every page load refreshes and an office shares one address; the refresh token itself is the secret.
 - Change password (on either) and change sign-in address, which check the current password: 10 a minute per person (`credential`).
 - Requests that email an address the caller chooses (invoice and BOQ emails, the invoice plan, invitations and resends, a new sign-in address): 10 a minute per person (`email`).
-- Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Bug reports: 5 an hour per person. Setup: 5 an hour per IP.
+- Exports and PDFs: 10 a minute per person (`export`). Uploads: 30 a minute per person. Messages to the developer: 5 an hour per person, staff or client (`bug-report`). Setup: 5 an hour per IP.
 - The Website area's analytics, which ask Google Analytics: 30 a minute per person (`website-analytics`).
 
 All limits are in the `RateLimiting` configuration section. Going over answers `429 too_many_requests` with a `Retry-After` header, and is logged as a warning under the `ID_Indetails.api.Security` category with the caller (user id, or IP when signed out). Refused sign-ins are logged there too, with the IP only.
@@ -146,6 +146,25 @@ The phone app can't use the cookie, so it has its own endpoints (`Controllers/Mo
 Warnings and the retries go to the `ID_Indetails.api.Security` log category. Claiming a token (rotating P, or superseding the newest) is one conditional update, so of two refreshes at once only one gets a new token; the other gets `401 refresh_token_reused`. The app sends one refresh at a time.
 
 A stolen token is still caught: used after the phone moved on, it is "two holders"; used before, the phone's next refresh presents the superseded token, which ends everything. The 5-minute window only exists for phone sessions, and only for a token whose successors were never used.
+
+## Development sign-in
+
+Testing the app as each kind of user would otherwise need everyone's password. In the **Development environment only**, the sign-in page offers a picker of every account that can sign in, and choosing one signs in as it without its password:
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/dev/accounts` | The accounts, in groups: super admins, each domain's admins then employees (Design, Execution, Website), then clients' portal accounts. Only active staff who aren't suspended, and active portal accounts. |
+| `POST /api/dev/sign-in` `{ "userId": 12 }` | Signs in as that staff member: the same response and refresh cookie as `POST /api/auth/login`. `404` for anyone who can't sign in. |
+| `POST /api/dev/portal-sign-in` `{ "accountId": 3 }` | Signs in to the client portal as that client, with the portal's cookie. `404` for an account that isn't active. |
+
+They take no password, so they must never exist where real people sign in:
+
+- `Program.cs` turns them on with `AddDevSignIn(builder.Environment.IsDevelopment())`. Off, `DevSignInController` is taken out of the app and its services aren't registered: its addresses answer like ones that don't exist. Production runs as `Production` (the Dockerfile sets it).
+- They are not in the OpenAPI document, so the client's generated types don't have them.
+- The client shows the picker only in the Vite dev server (`import.meta.env.DEV`). A production build leaves its code out.
+- Every such sign-in is logged as a warning in the `ID_Indetails.api.Security` category.
+
+`DevSignInAbsentTests` checks that the test host and a Production host have no such addresses.
 
 ## Using it from the React client
 

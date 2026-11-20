@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Files;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.Enums;
 
@@ -13,6 +14,7 @@ namespace ID_Indetails.api.Business.Messaging;
 /// <item>Super admins message anyone directly; everyone else messages their own domain and the super admins, never the
 /// other domain. Nobody messages themselves, and only active people receive messages.</item>
 /// <item>Mentions exist only in group chats, and only of the chat's members.</item>
+/// <item>A message carries at most one voice note (an audio file) among its attachments.</item>
 /// </list>
 /// Chats mirror the organisation, so they follow role and team rather than permissions.
 /// </summary>
@@ -40,6 +42,12 @@ public static class MessagingRules
         => to.Status == UserStatus.Active
             ? null
             : RuleDenial.BusinessRule(ErrorCodes.UserDeactivated, "Only active people can receive messages.");
+
+    /// <param name="attachmentTypes">The stored type (MIME) of each file attached to the message.</param>
+    public static RuleDenial? CheckVoiceNotes(IEnumerable<string> attachmentTypes)
+        => attachmentTypes.Count(type => FileRules.KindOf(type) == FileKind.Audio) > 1
+            ? RuleDenial.BusinessRule(ErrorCodes.TooManyVoiceNotes, "A message can carry one voice note.")
+            : null;
 
     public static RuleDenial? CheckMentions(IReadOnlyCollection<long> mentionIds, IReadOnlySet<long>? memberIds)
     {

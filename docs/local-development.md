@@ -77,6 +77,10 @@ docker compose logs -f mysql   # follow server logs
 
 Schema changes (EF Core migrations) are never applied without explicit approval. See CLAUDE.md §9.
 
+## Signing in as anyone
+
+A local API runs in the Development environment, where the sign-in page has an account picker: choose any active staff member or client and you are signed in as them, without their password. It exists in development only; see [authentication.md](authentication.md#development-sign-in).
+
 ## Request cost log
 
 In development the API logs every request's time and database commands, to find slow endpoints:

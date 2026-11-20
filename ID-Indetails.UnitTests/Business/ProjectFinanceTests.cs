@@ -28,7 +28,7 @@ public class ProjectFinanceTests
     private static Costs CostOf(decimal labour = 0, decimal expenses = 0, decimal siteExpenses = 0, decimal ground = 0)
         => new(labour, expenses, siteExpenses, ground, []);
 
-    private static readonly PayRecord Salary = new(7, Jan1, PayBasis.Monthly, 1760m, "USD", 9.57m);
+    private static readonly PayRecord Salary = new(7, Jan1, 1760m, "USD", 9.57m);
 
     /// <summary>One hour on each day, priced at 1,760 a month from 1 January 2026 (10.4762 an hour in May, 10 in June, 9.5652 in July).</summary>
     private static IEnumerable<decimal> HourOn(RoleHistory roles, params DateOnly[] days)
@@ -38,14 +38,14 @@ public class ProjectFinanceTests
             .Items.Select(i => i.Amount);
 
     [Fact]
-    public void A_salary_costs_its_rate_of_each_month_and_hourly_pay_its_own_rate()
+    public void A_salary_costs_its_rate_of_each_month_from_the_day_it_starts()
     {
-        // Monday to Friday, 9 to 5: May 2026 has 168 paid hours, June 176, July 184.
+        // Monday to Friday, 9 to 5: May 2026 has 168 paid hours, June 176, July 184, August 168.
         var calendar = new PersonCalendar([new PersonCalendar.Policy(new(2000, 1, 1), 62, 540, 1020, 60, 1m)], []);
         PayRecord[] history =
         [
-            new(7, new DateOnly(2026, 7, 10), PayBasis.Hourly, 12m, "USD", 12m),
-            new(7, new DateOnly(2026, 5, 15), PayBasis.Monthly, 1760m, "USD", 9.57m),
+            new(7, new DateOnly(2026, 7, 10), 2208m, "USD", 12m),
+            new(7, new DateOnly(2026, 5, 15), 1760m, "USD", 9.57m),
         ];
 
         // the overtime rate is the pay's own, whatever the month
@@ -55,6 +55,7 @@ public class ProjectFinanceTests
             new PayRate(7, new DateOnly(2026, 6, 1), 10m, "USD", 9.57m),
             new PayRate(7, new DateOnly(2026, 7, 1), 9.5652m, "USD", 9.57m),
             new PayRate(7, new DateOnly(2026, 7, 10), 12m, "USD", 12m),
+            new PayRate(7, new DateOnly(2026, 8, 1), 13.1429m, "USD", 12m),
         ]);
     }
 
@@ -105,8 +106,9 @@ public class ProjectFinanceTests
     [Fact]
     public void Time_before_the_first_pay_record_keeps_the_role_held_then()
     {
-        // Paid by the hour from 1 March; an admin until becoming an employee on 10 February, and the other way round.
-        PayRecord[] pay = [new(7, Mar1, PayBasis.Hourly, 12m, "USD", 12m)];
+        // Paid from 1 March, 12 an hour (2,112 in March's 176 paid hours); an admin until becoming an employee on
+        // 10 February, and the other way round.
+        PayRecord[] pay = [new(7, Mar1, 2112m, "USD", 12m)];
         WorkedTime[] work = [new(7, new DateOnly(2026, 1, 20), 60, 0, 1m), new(7, new DateOnly(2026, 2, 2), 60, 0, 1m), new(7, new DateOnly(2026, 3, 5), 60, 0, 1m)];
         var demoted = new RoleHistory(RoleCodes.Employee, [new RoleHistory.Change(new DateOnly(2026, 2, 10), RoleCodes.Admin, RoleCodes.Employee)]);
         var promoted = new RoleHistory(RoleCodes.Admin, [new RoleHistory.Change(new DateOnly(2026, 2, 10), RoleCodes.Employee, RoleCodes.Admin)]);

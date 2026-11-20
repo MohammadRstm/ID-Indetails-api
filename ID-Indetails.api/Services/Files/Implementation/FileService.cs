@@ -20,9 +20,10 @@ namespace ID_Indetails.api.Services.Files.Implementation;
 
 /// <summary>
 /// Photos are stored made small (<see cref="Pictures"/>): upright, at most <see cref="Pictures.MaxEdge"/> px on their
-/// longest side, as WebP. Videos are stored as they come, written straight to disk as they arrive.
+/// longest side, as WebP. Videos and voice notes are stored as they come, written straight to disk as they arrive.
 /// Who may download a file: whoever uploaded it; any signed-in person for a profile photo or the company logo; the
-/// chat's people for a message attachment; whoever may read the work entry for its attachment. Anyone else gets
+/// chat's people for a message attachment; whoever may read the work entry for its attachment; the writer and the
+/// readers of everyone's logs for a daily log's voice note. Anyone else gets
 /// not found. Uploads attached to nothing within a day are deleted.
 /// </summary>
 public sealed class FileService(
@@ -40,21 +41,28 @@ public sealed class FileService(
     private const int CleanupBatch = 200;
     private const string NotFound = "File not found.";
 
-    public async Task<FileResponse> UploadAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
+    public Task<FileResponse> UploadAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
+        => StoreAsync(content, fileName, uploadLength, voiceNote: false, cancellationToken);
+
+    public Task<FileResponse> UploadVoiceAsync(Stream content, string? fileName, long uploadLength, CancellationToken cancellationToken = default)
+        => StoreAsync(content, fileName, uploadLength, voiceNote: true, cancellationToken);
+
+    private async Task<FileResponse> StoreAsync(Stream content, string? fileName, long uploadLength, bool voiceNote, CancellationToken cancellationToken)
     {
         var me = await ActiveAsync(cancellationToken);
         var header = new byte[FileRules.HeaderLength];
         var read = await content.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken);
-        var detected = FileRules.Detect(header.AsSpan(0, read))
+        var detected = (voiceNote ? FileRules.DetectVoice(header.AsSpan(0, read)) : FileRules.Detect(header.AsSpan(0, read)))
             ?? throw new BusinessRuleException(
-                ErrorCodes.FileTypeNotAllowed, "Only photos (JPEG, PNG, WebP, HEIC) and videos (MP4, MOV, WebM) can be uploaded.");
+                ErrorCodes.FileTypeNotAllowed,
+                voiceNote ? "Voice notes can be WebM, Ogg or MP4 audio." : "Only photos (JPEG, PNG, WebP, HEIC) and videos (MP4, MOV, WebM) can be uploaded.");
         // the upload's length (the file and its small envelope) is checked before anything is stored
         FileRules.CheckDailyQuota(await files.BytesUploadedSinceAsync(me.UserId, clock.UtcNow.AddDays(-1), cancellationToken), uploadLength).ThrowIfDenied();
 
         var whole = new PrefixedStream(header.AsMemory(0, read), content);
         var (key, stored) = detected.Kind == FileKind.Image
             ? await SavePhotoAsync(whole, detected, cancellationToken)
-            : await SaveVideoAsync(whole, detected, cancellationToken);
+            : await SaveStreamedAsync(whole, detected, cancellationToken);
         var file = new StoredFile
         {
             StorageKey = key,
@@ -97,8 +105,8 @@ public sealed class FileService(
             : (await storage.SaveAsync(new MemoryStream(original), detected.Extension, cancellationToken), detected);
     }
 
-    /// <summary>A video, written to disk as it arrives; refused (and removed) when it turns out too big.</summary>
-    private async Task<(string Key, FileRules.Detected Stored)> SaveVideoAsync(Stream video, FileRules.Detected detected, CancellationToken cancellationToken)
+    /// <summary>A video or voice note, written to disk as it arrives; refused (and removed) when it turns out too big.</summary>
+    private async Task<(string Key, FileRules.Detected Stored)> SaveStreamedAsync(Stream video, FileRules.Detected detected, CancellationToken cancellationToken)
     {
         var key = await storage.SaveAsync(video, detected.Extension, cancellationToken);
         if (FileRules.CheckSize(detected.Kind, storage.SizeOf(key)) is { } tooBig)
@@ -160,6 +168,12 @@ public sealed class FileService(
 
         if (uses.EntryIds.Count > 0
             && (await entries.ViewsByIdAsync(uses.EntryIds, cancellationToken)).Any(e => WorkEntryQueryService.CanRead(me, e)))
+        {
+            return true;
+        }
+
+        // a log's voice note is played by its writer and by whoever reads everyone's logs on that site's domain
+        if (uses.SiteLogs.Any(l => l.UserId == me.UserId || (me.Has(PermissionCodes.SiteLogViewAll) && me.CanSee(l.DomainCode))))
         {
             return true;
         }

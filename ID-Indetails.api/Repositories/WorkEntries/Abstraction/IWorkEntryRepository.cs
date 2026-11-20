@@ -26,7 +26,8 @@ public sealed record WorkEntryView(
     FileView? Attachment,
     string? ProjectIcon = null,
     string? ProjectTint = null,
-    bool OutsideScope = false);
+    bool OutsideScope = false,
+    string? ProjectCode = null);
 
 /// <summary>
 /// Live entries on Design projects. Times are UTC; <paramref name="From"/> is inclusive and <paramref name="To"/>
@@ -67,7 +68,8 @@ public sealed record WorkProject(
     DateTime CreatedAt,
     string? Icon,
     string? Tint,
-    string? Location);
+    string? Location,
+    string Code);
 
 /// <summary>One person's live work on one project.</summary>
 public sealed record Contribution(long ProjectId, long UserId, string UserName, int Minutes, int Entries, DateTime LastStartedAt);

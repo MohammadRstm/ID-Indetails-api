@@ -73,6 +73,21 @@ Rules (`Business/Requirements/MyRequirements.cs`):
 - The caller sees the paid flag, the reason and the decision and rejection notes, but not who decided (`person`, `decidedByName` and `endedByName` are left out).
 - Who is off, for the "Off" flags, is `GET /api/time-off/away`, open to anyone signed in; it never shows the reason or the paid flag.
 
+## My salary advances
+
+| Method and path | Needs | Purpose |
+|---|---|---|
+| `GET /api/me/salary-advances` | Signed in | `{ canAsk, cannotAskBecause, currency, items }`: whether the caller may ask now, why not, the currency of their pay and their own advances, newest first |
+| `POST /api/me/salary-advances` | Signed in | `{ amount, reason }`: asks for part of their pay early. Returns `201` |
+| `POST /api/me/salary-advances/{id}/withdraw` | Signed in | Takes back a request that is still pending |
+
+- Anyone with pay set can ask: employees, site staff, admins and super admins. An advance is part of their pay handed over early, in the currency of their pay, and comes off what they are handed in the months a super admin chooses. The rules, who decides and what it changes are in [company.md](company.md#salary-advances).
+- `cannotAskBecause` is `salary_advance_no_pay` (no pay set today), `salary_advance_pending` (a request is waiting for a decision) or `salary_advance_open` (the last advance isn't paid back yet); `canAsk` is false with any of them, and asking then answers `422` with the same code. `currency` is null with no pay set.
+- The form never shows or checks the caller's pay: the cap (a month's pay) is checked when a super admin approves. The amount is above zero and the reason is required (500 characters at most).
+- Each item has its `status` (`pending`, `approved`, `declined`, `withdrawn` or `cancelled`), what was asked for (`askedAmount`) and given (`amount`), the `reason`, `decisionNote`, the day it was given, its `months` and what is still to pay back (`left`, null until it is given), and, once settled, how (`settledKind`: `cash` or `written_off`, and `settledOn`).
+- Each month in `months` says what it plans to take (`planned`) and whether it has closed. **`taken` is always null in the caller's own list:** in a short month it would show what they were paid. They never see their pay, nor who decided, recorded or settled it.
+- Someone else's advance reads as `404`, and withdrawing a request that was already decided is `422 salary_advance_decided`. Their requests and decisions reach them as notifications without amounts ([notifications.md](notifications.md)).
+
 ## My board layouts
 
 | Method and path | Needs | Purpose |
@@ -113,12 +128,33 @@ The phones that receive the caller's pushes ([notifications.md](notifications.md
 - **Defaults.** Until the person saves their own, `GET` answers 22:00 to 07:00 with nothing muted and `isDefault: true`.
 - Stored in `user_notification_settings` and `user_notification_mutes`. Nobody reads or changes anyone else's.
 
-## Reporting a bug
+## Contact the developer
+
+Anyone signed in, staff or a client in the portal, can write to the developer. It used to be "Report a bug"; the route
+kept its name.
 
 | Endpoint | Who | What |
 |---|---|---|
-| `POST /api/bug-reports` | Signed in | `{ title, description, steps, page }`: emails the report to `BugReports:ToAddress` (`204`). Nothing is stored |
+| `POST /api/bug-reports` | Signed in (staff) | `{ description, details, page, installedApp, error, recentErrors }`: emails the message to `BugReports:ToAddress` and a copy to the sender (`204`). Nothing is stored |
+| `POST /api/portal/contact` | Portal token | The same, from a client ([client-portal.md](client-portal.md#endpoints)) |
 
-- `title` (one line, up to 120 characters) and `description` are required; `description` and `steps` take up to 4000 characters. `page` is the client path it happened on and must be a bare path (`/design/projects/12`): a query or fragment is refused, so a token in a link can't travel with it.
-- The API adds who sent it (name, user id, email, role and domain), the time and the browser (`User-Agent`, one line, at most 300 characters). Every value is HTML-encoded in the email (`Services/Email/Implementation/SupportEmails.cs`). The recipient is configuration and is never sent to the client.
-- Five reports per person per hour (`RateLimiting:BugReportPermitsPerHour`, `429` past it). If the email can't be sent the answer is `503 email_delivery_failed`, and the failure is logged.
+- `description` (what they were trying to do, and what happened) is required; it and `details` (anything else) take up
+  to 4000 characters. `page` is the client path it was sent from and must be a bare path (`/design/projects/12`): a
+  query or fragment is refused, so a token in a link can't travel with it.
+- `error` is the error they came from, when they followed an error's "Contact the developer" link: `{ ref, at,
+  message }`. `ref` is the error response's trace id (or the reference shown to them) and `at` when it happened; a page
+  that failed in the browser has no `ref` but the browser's own `message` (one line, at most 300 characters). One of
+  the two is needed. `recentErrors` are the requests that failed lately in that browser (at most 5), as before.
+- The API adds who sent it (name, user id or portal account id, email, and role and domain, or that it is a client),
+  the time, whether it came from the installed app or a browser tab, and the browser (`User-Agent`, one line, at most
+  300 characters). The error's time is shown in UTC, as the log has it, and in company time, with the short reference
+  to search the log for ([deployment.md](deployment.md#tracing-an-error-back)). Every value is HTML-encoded in the
+  email (`Services/Email/Implementation/SupportEmails.cs`).
+- **Replies** go to the sender: the email's Reply-To is their address.
+- **The sender's copy** has their own words and the error's reference, none of what the API adds. If only the copy
+  fails, it is logged and the message still counts as sent.
+- **Where it goes:** `BugReports:ToAddress` (`BUG_REPORTS_TO` on the server) is never sent to the client.
+  `BugReports:WhatsAppNumber` (`BUG_REPORTS_WHATSAPP`, digits with the country code, default `96171317958`) is
+  public: `GET /api/company/branding` returns it as `supportWhatsApp`, so the sign-in pages can show the WhatsApp link.
+- Five messages per person per hour, staff or client (`RateLimiting:BugReportPermitsPerHour`, `429` past it). If the
+  email can't be sent the answer is `503 email_delivery_failed`, and the failure is logged.

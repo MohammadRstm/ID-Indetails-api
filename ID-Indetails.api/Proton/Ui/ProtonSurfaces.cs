@@ -8,7 +8,7 @@ namespace ID_Indetails.api.Proton.Ui;
 /// What opening a surface needs: the endpoint whose permission it needs (the one its form saves through, or the one
 /// its page reads), the record it is for, the business it lives in, and whether what it does emails someone.
 /// </summary>
-/// <param name="Endpoint">Null for what every signed-in person may open (the bug report, a chat, a settings page they can see).</param>
+/// <param name="Endpoint">Null for what every signed-in person may open (Contact the developer, a chat, a settings page they can see).</param>
 /// <param name="Record">The kind of record the surface is for, when it is for one: its id must be one the user can see.</param>
 /// <param name="OnlyIn">The one business it exists in; null for both, or for a company surface.</param>
 /// <param name="Company">It lives in the company area, not a business.</param>
@@ -46,7 +46,7 @@ public static class ProtonSurfaces
         [ProtonSurface.MessagePerson] = new("a chat", null, ProtonRefType.Person),
         [ProtonSurface.MessageTeam] = new("the department chat", null, ProtonRefType.Team),
         [ProtonSurface.LogWork] = new("the log work form", ProtonEndpoint.OfWrite<WorkEntriesController>(nameof(WorkEntriesController.Create)), OnlyIn: DomainCodes.Design),
-        [ProtonSurface.ReportBug] = new("the report a problem form", null, EmailsSomeone: true),
+        [ProtonSurface.ReportBug] = new("the Contact the developer form", null, EmailsSomeone: true),
         [ProtonSurface.SettingsSection] = new("settings", null),
         [ProtonSurface.CompanyOverviewTab] = new("the company overview", ProtonEndpoint.Of<CompanyOverviewController>(nameof(CompanyOverviewController.Get)), Company: true),
         // the Website area: saving there changes the public website, which opening never does

@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Billing;
 using ID_Indetails.api.Business.Clients;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Billing;
 using ID_Indetails.api.DTO.Response.Billing;
@@ -592,7 +593,7 @@ public sealed class InvoiceService(
         {
             Id = i.Id,
             Domain = i.Project.DomainCode,
-            Project = new InvoiceProjectResponse(i.Project.Id, i.Project.Title, i.Project.Location),
+            Project = new InvoiceProjectResponse(i.Project.Id, i.Project.Title, ProjectCodeRules.Full(i.Project.ProjectCode, i.Project.BuildingCode), i.Project.Location),
             Client = new InvoiceClientResponse(i.Client.Id, ClientRules.DisplayName(i.Client.Name, i.Client.Organisation)),
             Number = i.Number,
             Status = shownStatus,

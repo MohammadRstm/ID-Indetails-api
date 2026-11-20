@@ -207,6 +207,9 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
         var pending = reply.PendingAction.ShouldNotBeNull();
         pending.Preview.Changes.ShouldContain(c => c.Label == "Client" && c.After == project.Client.DisplayName);
         pending.Preview.Changes.ShouldContain(c => c.Label == "Departments");
+        // the card shows the code it will have: the next of the quarter, and the name's initials
+        var code = pending.Preview.Changes.Single(c => c.Label == "Code").After;
+        code.ShouldEndWith("-MA");
         (await CountAsync(db => db.Projects.CountAsync(p => p.Title == "Mobile App"))).ShouldBe(0);
 
         var confirmed = await ConfirmAsync(superAdmin, pending.Id, reply.ConversationId);
@@ -218,6 +221,37 @@ public class ProtonActionTests(ProtonApiFactory api) : IClassFixture<ProtonApiFa
         created.Status.ShouldBe(ProjectStatus.Active);
         created.TargetDate.ShouldBe(new DateOnly(2027, 3, 31));
         created.Departments!.ShouldHaveSingleItem().Id.ShouldBe(department);
+        created.Code.ShouldBe(code);
+    }
+
+    [Fact]
+    public async Task An_update_may_change_the_codes_but_never_to_another_projects_code()
+    {
+        var (superAdmin, project) = await DesignProjectAsync();
+        var other = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+
+        var taken = await ProposeAsync(superAdmin, "propose_update_project", new { project_id = project.Id, project_code = other.ProjectCode });
+        taken.PendingAction.ShouldBeNull();
+        api.Anthropic.ToolResults(1).ShouldHaveSingleItem().ToJsonString().ShouldContain("already the code of");
+
+        var reply = await ProposeAsync(superAdmin, "propose_update_project", new { project_id = project.Id, building_code = "wr" }, taken.ConversationId);
+        reply.PendingAction!.Preview.Changes.ShouldHaveSingleItem().ShouldBe(new ProtonChange("Building code", project.BuildingCode, "WR"));
+        (await ConfirmAsync(superAdmin, reply.PendingAction.Id, reply.ConversationId)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await (await Client.GetAsync($"/api/projects/{project.Id}", superAdmin.AccessToken)).ReadAsync<ProjectResponse>())
+            .Code.ShouldBe($"{project.ProjectCode}-WR");
+    }
+
+    [Fact]
+    public async Task An_update_may_change_the_colour_by_its_palette_name()
+    {
+        var (superAdmin, project) = await DesignProjectAsync();
+        await _steps.ExecuteAsync("UPDATE projects SET tint = '#123456' WHERE id = @id", ("@id", project.Id));
+
+        var reply = await ProposeAsync(superAdmin, "propose_update_project", new { project_id = project.Id, color = "Jade" });
+        reply.PendingAction!.Preview.Changes.ShouldHaveSingleItem().ShouldBe(new ProtonChange("Colour", "#123456", "jade (#2A7F62)"));
+        (await ConfirmAsync(superAdmin, reply.PendingAction.Id, reply.ConversationId)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await (await Client.GetAsync($"/api/projects/{project.Id}", superAdmin.AccessToken)).ReadAsync<ProjectResponse>())
+            .Tint.ShouldBe("#2A7F62");
     }
 
     [Fact]

@@ -59,7 +59,7 @@ public class AccessTokenRevocationTests(ApiFactory api) : IClassFixture<ApiFacto
 
         // endpoints that only ask for a signed-in person included
         await (await Client.GetAsync("/api/notifications", auth.AccessToken)).ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
-        await (await Client.PostJsonAsync("/api/bug-reports", new { title = "Still here", description = "After leaving" }, auth.AccessToken))
+        await (await Client.PostJsonAsync("/api/bug-reports", new { description = "Still here, after leaving" }, auth.AccessToken))
             .ShouldFailWithAsync(401, ErrorCodes.Unauthenticated);
     }
 

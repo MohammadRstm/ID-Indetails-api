@@ -12,7 +12,7 @@ using Microsoft.Net.Http.Headers;
 
 namespace ID_Indetails.api.Controllers;
 
-/// <summary>Photos and videos. Upload first, then attach the returned id; see docs/files.md.</summary>
+/// <summary>Photos, videos and voice notes. Upload first, then attach the returned id; see docs/files.md.</summary>
 [ApiController]
 [Route("api/files")]
 [Authorize]
@@ -30,7 +30,20 @@ public sealed class FilesController(IFileService fileService) : ControllerBase
     [RequestSizeLimit(FileRules.MaxVideoBytes + EnvelopeBytes)]
     [Consumes("multipart/form-data")]
     [DisableFormBinding]
-    public async Task<ActionResult<FileResponse>> Upload(CancellationToken cancellationToken)
+    public Task<ActionResult<FileResponse>> Upload(CancellationToken cancellationToken)
+        => ReceiveAsync(fileService.UploadAsync, cancellationToken);
+
+    /// <summary>A voice note (WebM, Ogg or MP4 audio, up to 10 MB), told apart from video by this route; otherwise as <see cref="Upload"/>.</summary>
+    [HttpPost("voice")]
+    [EnableRateLimiting(RateLimitPolicies.Upload)]
+    [RequestSizeLimit(FileRules.MaxAudioBytes + EnvelopeBytes)]
+    [Consumes("multipart/form-data")]
+    [DisableFormBinding]
+    public Task<ActionResult<FileResponse>> UploadVoice(CancellationToken cancellationToken)
+        => ReceiveAsync(fileService.UploadVoiceAsync, cancellationToken);
+
+    private async Task<ActionResult<FileResponse>> ReceiveAsync(
+        Func<Stream, string?, long, CancellationToken, Task<FileResponse>> store, CancellationToken cancellationToken)
     {
         var boundary = MediaTypeHeaderValue.TryParse(Request.ContentType, out var type) ? HeaderUtilities.RemoveQuotes(type.Boundary).Value : null;
         if (string.IsNullOrEmpty(boundary))
@@ -46,8 +59,7 @@ public sealed class FilesController(IFileService fileService) : ControllerBase
                 && HeaderUtilities.RemoveQuotes(disposition.Name).Value == "file")
             {
                 var name = HeaderUtilities.RemoveQuotes(disposition.FileNameStar.HasValue ? disposition.FileNameStar : disposition.FileName).Value;
-                return StatusCode(StatusCodes.Status201Created,
-                    await fileService.UploadAsync(section.Body, name, Request.ContentLength ?? 0, cancellationToken));
+                return StatusCode(StatusCodes.Status201Created, await store(section.Body, name, Request.ContentLength ?? 0, cancellationToken));
             }
         }
 

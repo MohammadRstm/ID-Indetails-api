@@ -104,13 +104,13 @@ public sealed class MigratedDatabaseFixture : IAsyncLifetime
         return reset.Append(restore).Append("COMMIT; SET FOREIGN_KEY_CHECKS = 1;").ToString();
     }
 
-    private static IdIndetailsDbContext NewContext(string connectionString) => new(
+    internal static IdIndetailsDbContext NewContext(string connectionString) => new(
         new DbContextOptionsBuilder<IdIndetailsDbContext>()
             .UseMySql(connectionString, DatabaseServiceCollectionExtensions.MySqlServerVersion)
             .UseSnakeCaseNamingConvention()
             .Options);
 
-    private static string ConnectionTo(string database)
+    internal static string ConnectionTo(string database)
         => new MySqlConnectionStringBuilder(TestDatabaseSettings.AdminConnectionString()) { Database = database }.ConnectionString;
 
     private static async Task<bool> HasRowsAsync(MySqlConnection connection, string table)

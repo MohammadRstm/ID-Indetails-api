@@ -27,6 +27,7 @@ public static class PushText
         [NotificationKinds.PocketRequested] = new("Pocket money", "A site asks for pocket money. Open ID InDetails to decide."),
         [NotificationKinds.PocketRoundOff] = new("Pocket money", "A site's profit can be rounded off into the pocket money. Open ID InDetails to see it."),
         [NotificationKinds.ChangeBlocked] = new("Project money", "A change was stopped to keep a project above zero profit. Open ID InDetails to decide."),
+        [NotificationKinds.PayChangeHeld] = new("Pay", "A pay change was held to keep a project above zero profit. Open ID InDetails to decide."),
         [NotificationKinds.ProfitLow] = new("Project money", "A project is close to zero profit."),
         [NotificationKinds.ProfitAtZero] = new("Project money", "A project is at zero profit or below."),
         [NotificationKinds.InvoiceOverdue] = new("Invoices", "An invoice needs your attention."),
@@ -41,6 +42,12 @@ public static class PushText
         [NotificationKinds.ClientAdded] = new("Clients", "A new client was added."),
         [NotificationKinds.PayChanged] = new("Pay and hours", "Pay and hours update."),
         [NotificationKinds.HoursShort] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceRequested] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceWithdrawn] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceApproved] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceDeclined] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceRecorded] = new("Pay and hours", "Pay and hours update."),
+        [NotificationKinds.SalaryAdvanceUnsettled] = new("Pay and hours", "Pay and hours update."),
     };
 
     /// <summary>A notification's push, from its kind, who acted, its project, its payload and its digest count.</summary>
@@ -54,6 +61,8 @@ public static class PushText
 
         var actor = Named(actorName, Someone);
         var project = Named(projectTitle, AProject);
+        // a general meeting has no project
+        var onProject = string.IsNullOrWhiteSpace(projectTitle) ? "" : $" on {project}";
         return kind switch
         {
             NotificationKinds.RequirementAssigned => new("New requirement", $"{actor} assigned you a requirement on {project}."),
@@ -118,9 +127,12 @@ public static class PushText
                 : $"{project} has had no work for a while."),
 
             NotificationKinds.MeetingScheduled => new("Meeting set", $"{actor} set a meeting on {project}."),
-            NotificationKinds.MeetingInvited => new("Meeting", $"{actor} invited you to a meeting."),
-            NotificationKinds.MeetingMoved => new("Meeting moved", $"{actor} moved a meeting you're in."),
-            NotificationKinds.MeetingCancelled => new("Meeting cancelled", $"{actor} cancelled a meeting you were in."),
+            NotificationKinds.MeetingInvited => new("Meeting", $"{actor} invited you to a meeting{onProject}."),
+            NotificationKinds.MeetingMoved => new("Meeting moved", $"{actor} moved a meeting you're in{onProject}."),
+            NotificationKinds.MeetingCancelled => new("Meeting cancelled", $"{actor} cancelled a meeting you were in{onProject}."),
+            NotificationKinds.MeetingSoon => new("Meeting soon", Text(payload, "startTime") is { } time
+                ? $"Your meeting{onProject} starts at {time}."
+                : $"Your meeting{onProject} starts soon."),
 
             NotificationKinds.MaterialsAdded => new("Expenses added", Int(payload, "count") is > 1 and var expenses
                 ? $"{actor} added {expenses} expenses on {project}."
@@ -158,10 +170,11 @@ public static class PushText
 
     /// <summary>A chat message: who sent it and the start of what they wrote.</summary>
     /// <param name="teamName">Null for a direct message.</param>
-    public static PushMessageText ForMessage(string senderName, string? teamName, string? body, string messageKind, bool hasAttachments, bool mentioned)
+    /// <param name="voiceOnly">The message's only attachment is a voice note.</param>
+    public static PushMessageText ForMessage(string senderName, string? teamName, string? body, string messageKind, bool hasAttachments, bool mentioned, bool voiceOnly = false)
     {
         var sender = Named(senderName, Someone);
-        var preview = Preview(body) ?? (hasAttachments ? "Sent a photo or video." : "Sent a message.");
+        var preview = Preview(body) ?? AttachmentPreview(hasAttachments, voiceOnly);
         if (teamName is null)
         {
             return new(sender, preview);
@@ -174,8 +187,11 @@ public static class PushText
     }
 
     /// <summary>"Announcements", with who wrote it before the preview.</summary>
-    public static PushMessageText ForAnnouncement(string senderName, string? body, bool hasAttachments)
-        => new("Announcements", $"{Named(senderName, Someone)}: {Preview(body) ?? (hasAttachments ? "Sent a photo or video." : "Sent a message.")}");
+    public static PushMessageText ForAnnouncement(string senderName, string? body, bool hasAttachments, bool voiceOnly = false)
+        => new("Announcements", $"{Named(senderName, Someone)}: {Preview(body) ?? AttachmentPreview(hasAttachments, voiceOnly)}");
+
+    private static string AttachmentPreview(bool hasAttachments, bool voiceOnly)
+        => voiceOnly ? "Sent a voice message." : hasAttachments ? "Sent a photo or video." : "Sent a message.";
 
     public static PushMessageText LogReminder()
         => new("Log your hours", "Your working day ends soon and some of today's hours aren't logged yet.");

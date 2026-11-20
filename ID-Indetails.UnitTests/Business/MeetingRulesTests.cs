@@ -59,6 +59,24 @@ public class MeetingRulesTests
     }
 
     [Fact]
+    public void A_project_meeting_invites_nobody_or_people_who_see_the_project()
+    {
+        var invitable = new HashSet<long> { 2, 3 };
+
+        MeetingRules.CheckInvitees([], invitable).ShouldBeNull();
+        MeetingRules.CheckInvitees([2, 3], invitable).ShouldBeNull();
+        MeetingRules.CheckInvitees([2, 9], invitable)!.Field.ShouldBe("attendeeIds");
+    }
+
+    [Fact]
+    public void A_reminder_goes_once_per_start_time_so_a_moved_meeting_is_reminded_again()
+    {
+        MeetingRules.ReminderKey(42, Ten).ShouldBe("meeting-soon-42-202609280700");
+        MeetingRules.ReminderKey(42, Ten.AddMinutes(30)).ShouldNotBe(MeetingRules.ReminderKey(42, Ten));
+        MeetingRules.ReminderKey(long.MaxValue, Ten).Length.ShouldBeLessThanOrEqualTo(64);
+    }
+
+    [Fact]
     public void A_meeting_lasts_at_least_5_minutes_within_one_day()
     {
         MeetingRules.CheckTimes(Ten, Ten.AddMinutes(5), Day, Day).ShouldBeNull();

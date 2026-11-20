@@ -41,9 +41,8 @@ public sealed class CreateInvitationRequestValidator : AbstractValidator<CreateI
 
         RuleFor(x => x.Pay!).ChildRules(pay =>
         {
-            pay.RuleFor(p => p.Basis).IsInEnum().WithMessage("Pay basis must be hourly or monthly.");
             pay.RuleFor(p => p.Amount).Amount("Pay amount", allowZero: false);
-            pay.RuleFor(p => p.OvertimeRate).OvertimeRate(p => p.Basis, p => p.Amount);
+            pay.RuleFor(p => p.OvertimeRate).OvertimeRate(p => p.Amount);
             pay.RuleFor(p => p.Currency).Currency();
         }).When(x => x.Pay is not null);
     }

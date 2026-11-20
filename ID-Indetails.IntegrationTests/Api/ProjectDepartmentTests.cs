@@ -106,6 +106,63 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Hours_waiting_for_approval_hold_their_time_and_once_approved_count_outside_the_departments()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
+        var architecture = await _steps.DesignDepartmentAsync();
+        var structure = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Structure");
+        var (_, _, engineer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await _steps.PutInTeamAsync(engineer.User.Id, structure.Id);
+        var project = await ProjectAsync(superAdmin, [architecture]);
+        var start = WorkEntryTestSteps.HoursAgoOnOneDay(4, 45);
+
+        var refused = await (await Work.TryLogAsync(engineer.AccessToken, project.Id, start, 45))
+            .ShouldFailWithAsync(422, ErrorCodes.DepartmentNotOnProject);
+        refused.Message.ShouldBe($"Your department isn't part of {project.Title}. Your hours wait for approval.");
+
+        // waiting, they show on the logger's day and hold their time: nothing else is logged over them
+        var day = WorkEntryTestSteps.CompanyDay(start);
+        var mine = await (await Client.GetAsync($"/api/me/day?date={day:yyyy-MM-dd}", engineer.AccessToken)).ReadAsync<MyDayResponse>();
+        mine.Waiting.ShouldHaveSingleItem().ProjectId.ShouldBe(project.Id);
+        var other = await ProjectAsync(superAdmin, [structure.Id]);
+        await (await Work.TryLogAsync(engineer.AccessToken, other.Id, start, 30)).ShouldFailWithAsync(422, ErrorCodes.EntryOverlaps);
+
+        // approved: these hours alone go through, in Structure, which isn't added: under "other", with no share
+        var waitingId = await _steps.ScalarAsync<long>(
+            "SELECT id FROM blocked_changes WHERE project_id = @p AND kind = 'work_entry_department'", ("@p", project.Id));
+        (await Client.PostEmptyAsync($"/api/blocked-changes/{waitingId}/force", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await _steps.ScalarAsync<long>(
+                "SELECT team_id FROM work_entries WHERE user_id = @u AND project_id = @p", ("@u", engineer.User.Id), ("@p", project.Id)))
+            .ShouldBe(structure.Id);
+        var departments = await DepartmentsAsync(superAdmin, project.Id);
+        departments.Departments.Select(d => d.Id).ShouldBe([architecture]);
+        departments.Other!.Minutes.ShouldBe(45);
+        (await NotificationsAsync(engineer.User.Id, NotificationKinds.WorkEntryReleased, project.Id)).ShouldBe(1);
+        (await (await Client.GetAsync($"/api/me/day?date={day:yyyy-MM-dd}", engineer.AccessToken)).ReadAsync<MyDayResponse>()).Waiting.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Hours_waiting_for_approval_turned_down_are_dropped_and_their_logger_hears_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        await Work.SetDesignSettingsAsync(superAdmin.AccessToken);
+        var architecture = await _steps.DesignDepartmentAsync();
+        var structure = await _steps.CreateTeamAsync(superAdmin, DomainCodes.Design, "Structure");
+        var (_, _, engineer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        await _steps.PutInTeamAsync(engineer.User.Id, structure.Id);
+        var project = await ProjectAsync(superAdmin, [architecture]);
+        await (await Work.TryLogAsync(engineer.AccessToken, project.Id, WorkEntryTestSteps.HoursAgoOnOneDay(4, 45), 45))
+            .ShouldFailWithAsync(422, ErrorCodes.DepartmentNotOnProject);
+        var waitingId = await _steps.ScalarAsync<long>(
+            "SELECT id FROM blocked_changes WHERE project_id = @p AND kind = 'work_entry_department'", ("@p", project.Id));
+
+        (await Client.PostEmptyAsync($"/api/blocked-changes/{waitingId}/dismiss", superAdmin.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM work_entries WHERE user_id = @u", ("@u", engineer.User.Id))).ShouldBe(0);
+        (await NotificationsAsync(engineer.User.Id, NotificationKinds.WorkEntryReleased, project.Id)).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Hours_from_a_department_not_on_the_project_wait_until_it_is_added()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
@@ -121,18 +178,15 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
         // kept, not logged: the owner and the super admins are told
         var refused = await (await Work.TryLogAsync(engineer.AccessToken, project.Id, start, 45))
             .ShouldFailWithAsync(422, ErrorCodes.DepartmentNotOnProject);
-        refused.Message.ShouldContain(structure.Name);
+        refused.Message.ShouldContain(project.Title);
         (await _steps.ScalarAsync<long>("SELECT COUNT(*) FROM work_entries WHERE user_id = @u", ("@u", engineer.User.Id))).ShouldBe(0);
         (await _steps.ScalarAsync<string>(
                 "SELECT status FROM blocked_changes WHERE project_id = @p AND kind = 'work_entry_department'", ("@p", project.Id)))
             .ShouldBe("pending");
         (await NotificationsAsync(owner.User.Id, NotificationKinds.LogDepartmentBlocked, project.Id)).ShouldBe(1);
         (await NotificationsAsync(superAdmin.User.Id, NotificationKinds.LogDepartmentBlocked, project.Id)).ShouldBe(1);
-        // they go through on their own, never by forcing
         var waitingId = await _steps.ScalarAsync<long>(
             "SELECT id FROM blocked_changes WHERE project_id = @p AND kind = 'work_entry_department'", ("@p", project.Id));
-        await (await Client.PostEmptyAsync($"/api/blocked-changes/{waitingId}/force", superAdmin.AccessToken))
-            .ShouldFailWithAsync(422, ErrorCodes.DepartmentStillMissing);
 
         // the owner adds Structure: the hours go through, in Structure, and their logger hears it
         (await Client.PutJsonAsync($"/api/projects/{project.Id}/departments",
@@ -165,12 +219,12 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         // 14,320,000 LBP a month is 89,500 LBP an hour in February 2026 (160 paid hours)
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 14_320_000m, currency = "LBP", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 14_320_000m, currency = "LBP", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await ProjectAsync(superAdmin, [architecture]);
 
-        // 3 hours in Architecture on Tuesday 10 February 2026 (09:00-12:00 in Beirut) and the paid hour of break: 4 hours,
-        // 358,000 LBP, on a day with no LBP rate yet
+        // 3 hours in Architecture on Tuesday 10 February 2026 (09:00-12:00 in Beirut) and their share of the paid break
+        // (3 of the 7 required hours: 26 minutes): 206 minutes, 307,283.33 LBP, on a day with no LBP rate yet
         await _steps.ExecuteAsync(
             "INSERT INTO work_entries (user_id, project_id, team_id, description, started_at, ended_at, created_at) " +
             "VALUES (@u, @p, @t, 'Drawings', '2026-02-10 07:00:00', '2026-02-10 10:00:00', UTC_TIMESTAMP(3))",
@@ -178,7 +232,7 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
 
         var money = (await DepartmentsAsync(superAdmin, project.Id)).Departments.Single(d => d.Id == architecture).Money!;
         money.Minutes.ShouldBe(180);
-        money.Unconverted.ShouldBe([new CurrencyAmountResponse("LBP", 358_000m)]);
+        money.Unconverted.ShouldBe([new CurrencyAmountResponse("LBP", 307_283.33m)]);
         money.Cost.ShouldBe(0m);
         money.Left.ShouldBe(money.Budget);
         var person = money.People.ShouldHaveSingleItem();
@@ -190,11 +244,11 @@ public class ProjectDepartmentTests(ApiFactory api) : IClassFixture<ApiFactory>
             .IsSuccessStatusCode.ShouldBeTrue();
         var converted = (await DepartmentsAsync(superAdmin, project.Id)).Departments.Single(d => d.Id == architecture).Money!;
         converted.Unconverted.ShouldBeEmpty();
-        converted.Cost.ShouldBe(4m);
-        converted.Left.ShouldBe(converted.Budget - 4m);
+        converted.Cost.ShouldBe(3.43m);
+        converted.Left.ShouldBe(converted.Budget - 3.43m);
         var month = converted.People.ShouldHaveSingleItem().Months.ShouldHaveSingleItem();
         month.HourlyRate.ShouldBe(1m);
-        month.Cost.ShouldBe(4m);
+        month.Cost.ShouldBe(3.43m);
     }
 
     [Fact]

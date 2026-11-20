@@ -140,7 +140,7 @@ public class NotificationFlowTests(ApiFactory api) : IClassFixture<ApiFactory>
         (await OfKindAsync(admin.AccessToken, NotificationKinds.InvitationAccepted)).ShouldContain(n => n.SubjectId == employee.User.Id);
         (await OfKindAsync(superAdmin.AccessToken, NotificationKinds.InvitationAccepted)).ShouldContain(n => n.SubjectId == employee.User.Id);
 
-        var pay = await Client.PostJsonAsync($"/api/employees/{employee.User.Id}/pay", new { basis = "monthly", amount = 1500, currency = "usd" }, admin.AccessToken);
+        var pay = await Client.PostJsonAsync($"/api/employees/{employee.User.Id}/pay", new { amount = 1500, currency = "usd" }, admin.AccessToken);
         ((int)pay.StatusCode).ShouldBe(201, await pay.Content.ReadAsStringAsync());
         var payChanged = (await OfKindAsync(employee.AccessToken, NotificationKinds.PayChanged)).ShouldHaveSingleItem();
         payChanged.Payload!.Value.TryGetProperty("amount", out _).ShouldBeFalse();

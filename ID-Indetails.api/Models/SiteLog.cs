@@ -12,7 +12,11 @@ public class SiteLog
 
     public long UserId { get; set; }
 
+    /// <summary>What happened, in words. Empty when the log is a voice note only.</summary>
     public string Body { get; set; } = string.Empty;
+
+    /// <summary>The voice note recorded with the log, from the writer's own upload; null when there is none.</summary>
+    public long? VoiceFileId { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

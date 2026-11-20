@@ -59,4 +59,10 @@ public interface IClientRepository
     void Add(Client client);
 
     void Remove(Client client);
+
+    /// <summary>
+    /// Takes the client off the activity that names it (a deleted project's trace does), keeping the activity, so the
+    /// client's row can go. Runs at once, inside the caller's transaction.
+    /// </summary>
+    Task UnlinkActivityAsync(long clientId, CancellationToken cancellationToken = default);
 }

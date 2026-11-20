@@ -1,4 +1,5 @@
 using ID_Indetails.api.Business.Pay;
+using ID_Indetails.api.Business.Payroll;
 using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.WorkingTime;
 using ID_Indetails.api.Enums;
@@ -45,8 +46,8 @@ public static class ProjectFinance
     /// <param name="OvertimeRate">What an hour of overtime costs before the multiplier: the pay's own.</param>
     public sealed record PayRate(long UserId, DateOnly EffectiveFrom, decimal HourlyCost, string Currency, decimal OvertimeRate);
 
-    /// <summary>A row of someone's pay history.</summary>
-    public sealed record PayRecord(long UserId, DateOnly EffectiveFrom, PayBasis Basis, decimal Amount, string Currency, decimal OvertimeRate);
+    /// <summary>A row of someone's pay history: a monthly salary.</summary>
+    public sealed record PayRecord(long UserId, DateOnly EffectiveFrom, decimal Amount, string Currency, decimal OvertimeRate);
 
     /// <param name="PocketNet">Execution: what pocket money paid to the project less what was moved from it into the pocket.</param>
     public sealed record Facts(bool IsClientWork, bool IsDone, int ProgressPct, decimal Revenue, int LabourMinutes, decimal PocketNet = 0);
@@ -132,9 +133,9 @@ public static class ProjectFinance
             .ToList();
 
     /// <summary>
-    /// One person's pay history as hourly costs over time: hourly pay at its rate, and a monthly salary at its rate in each
-    /// month (<see cref="PayRules.HourlyRate"/>), one rate a month up to <paramref name="until"/>, each with the pay's
-    /// overtime rate. Ordered by date.
+    /// One person's pay history as hourly costs over time: each salary at its rate in each month
+    /// (<see cref="PayRules.HourlyRate"/>), one rate a month up to <paramref name="until"/>, each with the pay's overtime
+    /// rate. Ordered by date.
     /// Months paid as a fixed salary (<see cref="RoleHistory.FixedSalaryMonth"/>) cost nothing: that salary is a company
     /// cost, counted once on the company overview, and pricing their hours would also give it away. A role change only
     /// touches the months it falls in and after, so promoting someone never changes what their earlier months cost.
@@ -151,10 +152,10 @@ public static class ProjectFinance
             var from = pay.EffectiveFrom;
             do
             {
-                rates.Add(new PayRate(pay.UserId, from, PayRules.HourlyRate(pay.Basis, pay.Amount, from, calendar), pay.Currency, pay.OvertimeRate));
+                rates.Add(new PayRate(pay.UserId, from, PayRules.HourlyRate(pay.Amount, from, calendar), pay.Currency, pay.OvertimeRate));
                 from = new DateOnly(from.Year, from.Month, 1).AddMonths(1);
             }
-            while (pay.Basis == PayBasis.Monthly && from < end);
+            while (from < end);
         }
 
         return ByRole(rates, roles);
@@ -189,6 +190,27 @@ public static class ProjectFinance
     /// <summary>The rate in force on the day, from a person's history ordered by date; their earliest rate for days before it.</summary>
     public static PayRate RateOn(IReadOnlyList<PayRate> history, DateOnly day)
         => history.LastOrDefault(r => r.EffectiveFrom <= day) ?? history[0];
+
+    /// <summary>
+    /// A person's hourly cost over a month: each working day's rate weighted by its paid hours, so a month with a pay
+    /// change shows the rate its days were paid at together (the month's blended rate, as Salaries has it). Null for a
+    /// month with no working days on their calendar.
+    /// </summary>
+    public static PayRate? MonthRate(IReadOnlyList<PayRate> history, DateOnly month, PersonCalendar calendar)
+    {
+        var start = new DateOnly(month.Year, month.Month, 1);
+        var days = HoursLedger.Days(start, start.AddMonths(1))
+            .Select(d => (Day: d, Minutes: calendar.HoursOn(d)?.Span ?? 0))
+            .Where(d => d.Minutes > 0)
+            .ToList();
+        if (days.Count == 0)
+        {
+            return null;
+        }
+
+        var cost = days.Sum(d => RateOn(history, d.Day).HourlyCost * d.Minutes) / days.Sum(d => d.Minutes);
+        return RateOn(history, days[0].Day) with { EffectiveFrom = start, HourlyCost = Math.Round(cost, 4, MidpointRounding.AwayFromZero) };
+    }
 
     public static Costs ToUsd(IEnumerable<CostItem> items, ExchangeRateTable rates)
     {

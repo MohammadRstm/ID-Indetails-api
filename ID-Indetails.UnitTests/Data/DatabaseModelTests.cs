@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_106_tables_with_snake_case_names()
+    public void Model_has_all_109_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(106);
+        tables.Count.ShouldBe(109);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -49,6 +49,8 @@ public class DatabaseModelTests
             "project_department_plans",
             // a BOQ line's recorded progress is part of the line (removed from a draft, it goes) and goes with the project too
             "boq_line_progress", "boq_line_progress",
+            // the months an advance takes from are part of it
+            "salary_advance_repayments",
         };
 
         var cascading = Model.GetEntityTypes()
@@ -127,6 +129,8 @@ public class DatabaseModelTests
         CheckNames<ProjectBudgetLine>().ShouldContain("ck_project_budget_lines_amount_non_negative");
         CheckNames<ProjectDepartmentPlan>().ShouldContain("ck_project_department_plans_planned_minutes_positive");
         CheckNames<BoqLineProgress>().ShouldContain("ck_boq_line_progress_executed_quantity_non_negative");
+        CheckNames<SalaryAdvance>().ShouldContain("ck_salary_advances_given_on");
+        CheckNames<SalaryAdvanceRepayment>().ShouldContain("ck_salary_advance_repayments_month");
     }
 
     [Fact]

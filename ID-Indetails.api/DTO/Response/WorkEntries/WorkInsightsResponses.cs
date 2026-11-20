@@ -27,7 +27,8 @@ public sealed record ProjectContributorResponse(
     DateTime LastStartedAt,
     IReadOnlyList<int> Weekly,
     LabourCostResponse? LabourCost,
-    int OutsideScopeMinutes = 0);
+    int OutsideScopeMinutes = 0,
+    int BreakMinutes = 0);
 
 /// <summary>A Design project's logged work, for the admin project page.</summary>
 /// <param name="TotalOvertimeMinutes">The part of <paramref name="TotalMinutes"/> that is overtime; the rest is normal time.</param>

@@ -30,7 +30,7 @@ Every notification goes through one sender (`INotificationSender`), which applie
 - only active people who can see the notification's domain;
 - no money in payloads, so a notification can't reveal amounts to someone who later loses `financial:view`. The page it links to checks permissions as usual.
 
-Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged`, `work_digest` and `hours_missed_list` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`). The time-off kinds sent to the super admins (`time_off_requested`, `time_off_undecided`, `time_off_withdrawn`, `time_off_ended`, `time_off_online`, `time_off_hours`) need `time_off:decide`. No time-off notification carries the reason, and only `time_off_approved` carries whether it is paid ([time-off.md](time-off.md)).
+Reading checks again. A notification sent because of what the reader could see (someone's hours, money, salaries) is only listed, counted and openable while they still hold that permission: `work_logged`, `work_digest` and `hours_missed_list` need `work_entry:view_all`, `hours_short` needs `salary:view`, and the money kinds need `financial:view` (`Business/Notifications/NotificationAccess.cs`). The salary advance kinds sent to those who give advances (`salary_advance_requested`, `salary_advance_withdrawn`, `salary_advance_unsettled`) need `salary_advance:manage`; the three sent to the person (`salary_advance_approved`, `salary_advance_declined`, `salary_advance_recorded`) need nothing. No salary advance notification carries an amount: [company.md](company.md#salary-advances). The time-off kinds sent to the super admins (`time_off_requested`, `time_off_undecided`, `time_off_withdrawn`, `time_off_ended`, `time_off_online`, `time_off_hours`) need `time_off:decide`. No time-off notification carries the reason, and only `time_off_approved` carries whether it is paid ([time-off.md](time-off.md)).
 
 "Holders of a permission" means the active people who hold it and can see the domain, super admins and people granted it from the other domain included. "The domain's people" means the active admins and employees whose home domain it is; super admins are left out of these broadcasts.
 
@@ -48,10 +48,10 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `entry_comment` | The work entry's author | the work entry | `authorName`, `text`, `entryDescription` |
 | `log_department_blocked` | The project's owner and every super admin, when someone logs hours on a project their department isn't on (see [projects.md](projects.md#departments)). Rolling per project and department (`log-department-{projectId}-{teamId}`) | the blocked change | `projectTitle`, `personName`, `departmentName`, `teamId` |
 | `work_entry_released` | The person whose hours waited for their department, once it was added. Rolling per project and outcome | the project | `projectTitle`, `released`, `reason` (when not released) |
-| `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a meeting | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
-| `meeting_invited` | A general meeting's attendees, when they are added | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
-| `meeting_moved` | A general meeting's attendees, when its time changes | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
-| `meeting_cancelled` | A general meeting's attendees, when it is deleted or they are taken out | the meeting | `authorName`, `topic`, `startsAt`, `endsAt` |
+| `meeting_scheduled` | Holders of `meeting:manage`, when someone without it sets a project meeting; those of them it invites get `meeting_invited` instead | the meeting | `authorName`, `projectTitle`, `topic`, `startsAt`, `endsAt` |
+| `meeting_invited` | A general meeting's attendees and a project meeting's invitees, when they are added (as it is set, or later) | the meeting (a project meeting's carries its project) | `authorName`, `projectTitle` (null for a general meeting), `topic`, `startsAt`, `endsAt` |
+| `meeting_moved` | The same people, when its time changes | the meeting | the same |
+| `meeting_cancelled` | The same people, when it is deleted or they are taken out | the meeting | the same |
 | `materials_added` | Holders of `material:manage` | the project | `count`, `projectTitle` (someone recorded expenses on a site; the kind keeps its name, the text says "Expenses added") |
 | `labour_week_submitted` | Holders of `labour_report:manage` | the project | `weekStart`, `updated`, `projectTitle` |
 | `project_created` | The domain's people | the project | `projectTitle` |
@@ -77,12 +77,19 @@ Project news (new projects, status changes, added requirements) follows the doma
 | `time_off_ended` | Holders of `time_off:decide`, when someone leaves, moves out of Design or becomes an admin and had open time off | the person | `name`, `userId`, `why` |
 | `time_off_online` | Holders of `time_off:decide`, when someone on time off uses the app. Once a day per request (`time-off-online-{requestId}-{yyyyMMdd}`) | the person | `name`, `userId`, `lastDay` |
 | `time_off_hours` | Holders of `time_off:decide`, when someone on time off tries to log or change hours. Once an hour per request (`time-off-hours-{requestId}-{yyyyMMddHH}`) | the person | `name`, `userId`, `lastDay` |
+| `salary_advance_requested` | Holders of `salary_advance:manage` who see the person's domain (every super admin for a super admin), never the person asking, when someone asks for a salary advance | the advance (`salary_advance`) | `name` (never the amount nor the reason) |
+| `salary_advance_withdrawn` | The same, when the person takes back a pending request | the advance | `name` |
+| `salary_advance_approved` | The person, when a super admin approves their request | the advance | none (`{}`) |
+| `salary_advance_declined` | The person, when a super admin declines it | the advance | none (`{}`) |
+| `salary_advance_recorded` | The person, when a super admin records an advance they handed over without a request | the advance | none (`{}`) |
+| `salary_advance_unsettled` | Holders of `salary_advance:manage`, the person who deactivated them aside, when someone is deactivated with an advance still to pay back | the person (`user`) | `name`, `userId` |
 | `client_added` | Holders of `client:manage` in the client's domain | the client | `name`, `organisation` |
 | `invoice_issued` | Holders of `financial:view` | the invoice | `number` |
 | `payment_recorded` | Holders of `financial:view` | the payment | `invoiceNumber`, `isInitial` |
 | `pocket_requested` | Holders of `financial:view` who see Execution | the pocket money request | none |
 | `pocket_round_off` | Holders of `financial:view` who see Execution, the mover too (it comes from the system), when a move into the pocket money leaves a site's profit off a whole thousand. One rolling notification per site: key `pocket-round-off:{siteId}`, unread again with each such move (see [execution.md](execution.md), "Pocket money") | the site | none |
 | `change_blocked` | Holders of `financial:view` in the project's domain, the requester aside, when the profit floor refused a change (see [projects.md](projects.md), "Profit floor") | the blocked change | `projectTitle`, `kind` (never the amount) |
+| `pay_change_held` | The super admins, when a pay change was held at the profit floor (see [projects.md](projects.md), "Profit floor"); read under `employee:pay_manage` | the blocked change | `personName`, `effectiveFrom`, `projectTitle` (the hardest hit), `projectCount` (never an amount) |
 | `portal_client_message` | Staff taking part in a project's client portal discussion, when a client writes in its chat. Rolling per project (`portal_chat:{projectId}`) | — | `projectTitle`, `authorName` (never the text) |
 | `portal_client_comment` | The project's manager and the file's uploader (everyone taking part on the staff side when neither does), when a client comments on a file. Rolling per file (`portal_comments:{itemId}`) | the item | `projectTitle`, `authorName`, `itemTitle` |
 | `portal_mention` | Staff mentioned in a client portal message or comment, once each (`portal_mention:m{id}` / `c{id}`) | `message` or `comment` (subject id: the item, for comments) | `projectTitle`, `authorName`, `itemTitle` |
@@ -93,7 +100,7 @@ Project news (new projects, status changes, added requirements) follows the doma
 
 ## Scheduled notifications
 
-Nobody's action sends these, so they have no actor. A background timer (`Jobs/NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default); `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
+Nobody's action sends these, so they have no actor. A background timer (`Jobs/NotificationScheduler`) runs every check when the API starts and then every `NotificationScheduler:IntervalMinutes` (60 by default), except the meeting reminders, which it runs every minute; `NotificationScheduler:Enabled` switches it off, as the integration tests do. Each check runs on its own, so one that fails is logged and retried on the next tick without stopping the others.
 
 Every scheduled notification carries a key (`digest_key`) and goes to a person only once per key, however often the checks run. What was sent is remembered in `notification_sent_keys` (person and key), not by the notification, so it still holds after the notification is deleted (see [Keeping notifications](#keeping-notifications)). Its key stops a second API instance from sending it twice. Invoice, profit and portal-mention notifications that go once (`SendOnceAsync`) work the same way.
 
@@ -118,6 +125,7 @@ Every scheduled notification carries a key (`digest_key`) and goes to a person o
 | `invoice_send_due` | A scheduled invoice with no address to email reached its day, so it isn't issued. Key `invoice-send-due:{id}:{sendOn}` | Whoever scheduled it, to send it themselves | the invoice | `sendOn` |
 | `invoice_send_failed` | A scheduled invoice's email failed; it is tried again on every run. Key `invoice-send-failed:{id}:{sendOn}` | Whoever scheduled it | the invoice | `sendTo` |
 | `invoice_reminder_due` | An overdue invoice is due a reminder, but there is no address to email it to. Key `invoice-reminder-due:{id}` | Holders of `invoice:send` in its domain, to chase it themselves | the invoice | `number` |
+| `meeting_soon` | A meeting starts within 10 minutes (`MeetingRules.ReminderMinutes`), checked every minute. A meeting set less than 10 minutes ahead is reminded at once (within a minute, next to its invitation); none is sent once it has started. Key `meeting-soon-{id}-{startsAt}` (`yyyyMMddHHmm`), so a moved meeting is reminded again, and someone invited after the reminder went out still gets it. A notification and its push, so mutes and quiet hours apply as to the other meeting kinds (`Services/Meetings/Implementation/MeetingReminders.cs`) | A project meeting's invitees and a general meeting's attendees, never whoever set it | the meeting (a project meeting's carries its project) | `projectTitle`, `topic`, `startsAt`, `endsAt`, `startTime` (`HH:mm` company time, for the push) |
 
 The same timer also runs the domains' auto-archive (see [projects.md](projects.md), "Status"). Percentages (`usedPct`, `marginPct`) are money information, so they only go to holders of `financial:view`, and no notification carries an amount (N5).
 
@@ -145,7 +153,7 @@ Queued pushes live in memory: one queued when the API stops is lost, but the not
 | Part | Content |
 |---|---|
 | Title and body | Short text written by the server (`Business/Push/PushText.cs`). Other kinds may name the project and who acted ("Rana assigned you a requirement on Villa Haddad"). Messages show the sender and the first 100 characters |
-| Money kinds | A fixed neutral text, never a client's name, an amount, a margin, a cost or pay, nor the project's title: "Payment recorded. Open ID InDetails to see it.", "An invoice needs your attention.", "An invoice couldn't be sent automatically.", "Billing update. Open ID InDetails to see it.", "A project's money needs a look.", "A new client was added.", "Pay and hours update." |
+| Money kinds | A fixed neutral text, never a client's name, an amount, a margin, a cost or pay, nor the project's title: "Payment recorded. Open ID InDetails to see it.", "An invoice needs your attention.", "An invoice couldn't be sent automatically.", "Billing update. Open ID InDetails to see it.", "A project's money needs a look.", "A new client was added.", "Pay and hours update." (also the text of `pay_changed`, `hours_short` and every `salary_advance_*` kind) |
 | `data` | Ids only: `{ forUserId, kind, notificationId?, target }`. `kind` is a notification kind, `message`, `log_reminder` or `labour_week_reminder`. `target` is the screen to open (`Business/Push/PushTarget.cs`): a project (with `section`), a requirement, a work entry, a chat (`teamId` or the sender's `userId`; the page `announcements` for Announcements, whose pushes are titled "Announcements" and name the sender before the preview), a labour week, a person, a client, an invoice, a payment, or a page (`notifications`, `work`, ...) |
 | `badge` | Unread notifications (as the bell counts them) plus unread messages |
 | `channelId` | The Android channel: the category below, `reminders` for the log reminder, `quiet` during quiet hours |
@@ -159,9 +167,9 @@ A rolling digest (`work_digest`, `requirements_added`) pushes in full at most on
 | `work` | `work_logged`, `work_digest`, `entry_comment`, `log_department_blocked`, `work_entry_released`, `weekly_summary`, `hours_excused`, `schedule_changed`, `hours_missed`, `hours_missed_list` |
 | `requirements` | `requirement_assigned`, `requirements_added`, `requirement_done`, `requirement_due_soon`, `requirement_overdue` |
 | `projects` | `project_created`, `project_status_changed`, `project_owner_set`, `project_nearly_done`, `project_idle` |
-| `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled` |
+| `meetings` | `meeting_scheduled`, `meeting_invited`, `meeting_moved`, `meeting_cancelled`, `meeting_soon` |
 | `sites` | `materials_added`, `labour_week_submitted`, `labour_week_reminder`, `boq_submitted`, `boq_draft_edited` |
-| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `pocket_round_off`, `change_blocked`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short` |
+| `money` | the `invoice_*` kinds, `payment_recorded`, `pocket_requested`, `pocket_round_off`, `change_blocked`, `pay_change_held`, `profit_low`, `profit_at_zero`, `project_closed`, `project_cost_high`, `client_added`, `pay_changed`, `hours_short`, and the six `salary_advance_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `recorded`, `unsettled`) |
 | `people` | `invitation_accepted`, `role_changed`, `domain_changed`, `team_changed`, `permissions_changed`, and the twelve `time_off_*` kinds (`requested`, `withdrawn`, `approved`, `declined`, `rejected`, `expired`, `undecided`, `starts`, `back`, `ended`, `online`, `hours`) |
 | `messages` | `message` (mentions and direct messages included), the client portal's `portal_client_message`, `portal_client_comment` and `portal_mention`, and `project_file_comment` |
 
@@ -180,7 +188,7 @@ The website gets the phone app's pushes, with the same text, data and checks, th
 
 ### Reminders
 
-Push only: no notification row, so the website's bell is unchanged. The notification scheduler checks them every hour; each goes to a person at most once a day, remembered in memory (a restart can repeat one).
+Push only: no notification row, so the website's bell is unchanged. The notification scheduler checks them every hour; each goes to a person at most once a day, remembered in memory (a restart can repeat one). The meeting reminder (`meeting_soon`) is a notification instead, with a key that survives restarts ([Scheduled notifications](#scheduled-notifications)).
 
 | Kind | When | To |
 |---|---|---|

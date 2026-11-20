@@ -60,9 +60,8 @@ public sealed class ChangePayRequestValidator : AbstractValidator<ChangePayReque
 {
     public ChangePayRequestValidator()
     {
-        RuleFor(x => x.Basis).IsInEnum().WithMessage("Pay basis must be hourly or monthly.");
         RuleFor(x => x.Amount).Amount("Pay amount", allowZero: false);
-        RuleFor(x => x.OvertimeRate).OvertimeRate(x => x.Basis, x => x.Amount);
+        RuleFor(x => x.OvertimeRate).OvertimeRate(x => x.Amount);
         RuleFor(x => x.Currency).Currency();
         RuleFor(x => x.Note).MaximumLength(255).WithMessage("Note must be at most 255 characters.");
     }

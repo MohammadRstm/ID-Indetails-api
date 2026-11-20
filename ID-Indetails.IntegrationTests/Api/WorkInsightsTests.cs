@@ -23,7 +23,7 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, lead) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         // 30 an hour on a monthly salary in February 2026 (4,800 ÷ 160 paid hours).
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",
-            new { basis = "monthly", amount = 4800m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 4800m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         (await Client.PutJsonAsync($"/api/users/{lead.User.Id}/permissions",
             new { changes = new[] { new { code = PermissionCodes.WorkEntryViewAll, action = "grant", reason = "Team lead" } } },
@@ -47,8 +47,9 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var first = work.Contributors[0];
         first.UserId.ShouldBe(anna.User.Id);
         first.SharePct.ShouldBe(75);
-        // 3 hours at 30, plus her paid hour of break at 30.
-        first.LabourCost!.Usd.ShouldBe(120m);
+        // 3 hours at 30, plus her share of the paid break: 3 of the 7 required hours, so 26 of its 60 minutes at 30.
+        first.LabourCost!.Usd.ShouldBe(103m);
+        first.BreakMinutes.ShouldBe(26);
         work.Contributors[1].Weekly.Sum().ShouldBe(60);
         work.Contributors[1].LabourCost!.UnpricedMinutes.ShouldBe(60);
 
@@ -120,9 +121,10 @@ public class WorkInsightsTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
-        // Paid by the hour, so today's rate is the same whatever month the test runs in.
+        // A salary an hour of which is worth 10 this month, whatever month the test runs in.
+        var thisMonth = TestPay.DayOf(DateTime.UtcNow);
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "hourly", amount = 10m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = TestPay.SalaryAt(10m, thisMonth), currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 

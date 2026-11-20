@@ -123,6 +123,7 @@ public static class ProtonCoverage
         Action("Projects.UpdatePayment", "propose_project_money", T2, ProtonFamily.Money),
         Action("Projects.UpdateBilling", "propose_project_billing", T2, ProtonFamily.Money),
         Planned("Projects.UpdateStaff", T1, ProtonFamily.Core),
+        Open("Projects.SwapColor", "it changes another project's colour too: Proton opens the colour picker, where the swap is shown"),
         Open("Projects.SetPhoto", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
         Open("Projects.RemovePhoto", "the photo is chosen and taken off in the same place on the project's page: it opens it"),
         Action("ProjectDepartments.Set", "propose_project_departments", T1, ProtonFamily.Core),
@@ -196,6 +197,7 @@ public static class ProtonCoverage
         Open("Boqs.Keep", "keeping others' changes to a BOQ draft is its author's, on the BOQs page; Proton doesn't do it yet"),
         Open("Projects.Delete", "it can't be undone and needs the project's name typed in the app: Proton opens the project"),
         Open("Files.Upload", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
+        Open("Files.UploadVoice", "it is a recording made on the person's own device, which Proton doesn't have: it opens the place to record it"),
 
         // Project expenses (Design) and an Execution site's costs
         Action("Expenses.Create", "propose_add_expense", T2, ProtonFamily.Money),
@@ -235,6 +237,9 @@ public static class ProtonCoverage
         Action("Overhead.ChangeCurrency", "propose_overhead", T2, ProtonFamily.Money),
         Action("Overhead.Cancel", "propose_overhead", T2, ProtonFamily.Money),
         Action("Overhead.Resume", "propose_overhead", T2, ProtonFamily.Money),
+        Action("Overhead.CreateOneOff", "propose_overhead", T2, ProtonFamily.Money),
+        Action("Overhead.UpdateOneOff", "propose_overhead", T2, ProtonFamily.Money),
+        Action("Overhead.DeleteOneOff", "propose_overhead", T2, ProtonFamily.Money),
         Action("Company.UpdateSettings", "propose_company_settings", T2, ProtonFamily.CompanyRules),
         Action("DomainSettings.Save", "propose_domain_settings", T2, ProtonFamily.CompanyRules),
         Open("Company.SetLogo", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
@@ -254,6 +259,14 @@ public static class ProtonCoverage
         Open("TimeOff.Approve", "super admins approve time off on Company › Time off; Proton doesn't decide it yet"),
         Open("TimeOff.Decline", "super admins decline time off on Company › Time off; Proton doesn't decide it yet"),
         Open("TimeOff.Reject", "super admins take approved time off back on Company › Time off; Proton doesn't do it yet"),
+        Open("MySalaryAdvances.Ask", "pay amounts never reach Proton: a salary advance is asked for on the person's profile"),
+        Open("MySalaryAdvances.Withdraw", "pay amounts never reach Proton: a request for an advance is taken back on the person's profile"),
+        Open("SalaryAdvances.Record", "pay amounts never reach Proton: advances are given on Company › Salaries"),
+        Open("SalaryAdvances.Approve", "pay amounts never reach Proton: advances are approved on Company › Salaries"),
+        Open("SalaryAdvances.Decline", "pay amounts never reach Proton: requests for an advance are declined on Company › Salaries"),
+        Open("SalaryAdvances.ChangeMonths", "pay amounts never reach Proton: an advance's months are changed on Company › Salaries"),
+        Open("SalaryAdvances.Cancel", "pay amounts never reach Proton: an advance is cancelled on Company › Salaries"),
+        Open("SalaryAdvances.Settle", "pay amounts never reach Proton: what is left of an advance is settled on Company › Salaries"),
         ReadOnly("MyTime.OvertimePreview", "an employee's own overtime preview"),
 
         // People and access
@@ -264,6 +277,7 @@ public static class ProtonCoverage
         Action("Employees.RestoreSignIn", "propose_end_sessions", T2, ProtonFamily.Access),
         Open("Employees.ChangeEmail", "it takes a password or a sign-in address, which never go through a chat: Proton opens the form", externalSend: true),
         Open("Employees.ChangePay", "pay amounts never reach Proton: it opens the person's pay"),
+        ReadOnly("Employees.PreviewPay", "the pay form's preview of what a pay change does"),
         Action("Employees.ChangeRole", "propose_employee_access", T2, ProtonFamily.Access),
         Action("Employees.Move", "propose_employee_access", T2, ProtonFamily.Access),
         Open("Employees.SetPhoto", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
@@ -300,6 +314,8 @@ public static class ProtonCoverage
         Open("Auth.ChangePassword", "it takes a password or a sign-in address, which never go through a chat: Proton opens the form"),
         Open("Auth.ChangeEmail", "it takes a password or a sign-in address, which never go through a chat: Proton opens the form"),
         Elsewhere("Setup.CreateSuperAdmin", "the first super admin, made with the setup key before anyone can sign in"),
+        Elsewhere("DevSignIn.SignIn", "the development sign-in, from the sign-in page before there is a session (Development only)"),
+        Elsewhere("DevSignIn.PortalSignIn", "the development sign-in to the client portal, from the sign-in page (Development only)"),
         // the phone app: its sign-in, its device for pushes, and the person's push settings
         Elsewhere("MobileAuth.Login", "the phone app's own sign-in"),
         Elsewhere("MobileAuth.Refresh", "the phone app rotating its own sign-in token"),
@@ -323,6 +339,7 @@ public static class ProtonCoverage
         Elsewhere("PortalAuth.ResetPassword", "a client's new password, with their emailed token"),
         Elsewhere("PortalInvitations.Validate", "a client opening their own invitation"),
         Elsewhere("PortalInvitations.Accept", "a client accepting their own invitation, with a new password"),
+        Elsewhere("Portal.Contact", "a client's own message to the developer, from the portal", externalSend: true),
         // a project's files: uploads come from the person's device; arranging them and their comments are actions
         Open("ProjectFiles.StartUpload", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),
         Open("ProjectFiles.PartLinks", "it needs a file from the person's own device, which Proton doesn't have: it opens the place to upload it"),

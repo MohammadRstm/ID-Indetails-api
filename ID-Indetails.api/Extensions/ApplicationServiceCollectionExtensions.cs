@@ -227,6 +227,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IPayrollRepository, PayrollRepository>();
         services.AddScoped<IHourExcuseRepository, HourExcuseRepository>();
         services.AddScoped<ITimeOffRepository, TimeOffRepository>();
+        services.AddScoped<ISalaryAdvanceRepository, SalaryAdvanceRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IProjectDeletionRepository, ProjectDeletionRepository>();
@@ -315,6 +316,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMyTimeService, MyTimeService>();
         services.AddScoped<IHourExcuseService, HourExcuseService>();
         services.AddScoped<ITimeOffService, TimeOffService>();
+        services.AddScoped<ISalaryAdvanceSchedules, SalaryAdvanceSchedules>();
+        services.AddScoped<IPayChangeEffects, PayChangeEffects>();
+        services.AddScoped<ISalaryAdvanceService, SalaryAdvanceService>();
         services.AddScoped<ITimeOffWatch, TimeOffWatch>();
         services.AddScoped<ITimeOffSchedule, TimeOffSchedule>();
         services.AddScoped<IProjectPayService, ProjectPayService>();
@@ -351,6 +355,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<IMyWorkService, MyWorkService>();
         services.AddScoped<IWorkInsightsService, WorkInsightsService>();
         services.AddScoped<IMeetingService, MeetingService>();
+        services.AddScoped<IMeetingReminders, MeetingReminders>();
         services.AddScoped<IReportService, ReportService>();
         services.AddScoped<IUtilizationService, UtilizationService>();
         services.AddScoped<IMoneyRollupService, MoneyRollupService>();

@@ -749,6 +749,7 @@ public sealed class BoqService(
         return new BoqDocument(
             Detail(boq, await boqs.NamesAsync(UserIds([boq]), cancellationToken), seesPrice: true),
             project.Title,
+            ProjectCodeRules.Full(project.ProjectCode, project.BuildingCode),
             project.Location,
             project.Client is { } client ? ClientRules.DisplayName(client.Name, client.Organisation) : string.Empty);
     }

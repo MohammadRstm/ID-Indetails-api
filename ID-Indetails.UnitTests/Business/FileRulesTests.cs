@@ -25,6 +25,47 @@ public class FileRulesTests
     }
 
     [Fact]
+    public void Voice_notes_are_recognised_from_their_first_bytes()
+    {
+        FileRules.DetectVoice(Header(0x1A, 0x45, 0xDF, 0xA3))!.ShouldBe(new FileRules.Detected(FileKind.Audio, "audio/webm", ".webm"));
+        FileRules.DetectVoice(Encoding.ASCII.GetBytes("OggS\0\u0002\0\0\0\0\0\0"))!.ShouldBe(new FileRules.Detected(FileKind.Audio, "audio/ogg", ".ogg"));
+        FileRules.DetectVoice(IsoMedia("M4A "))!.ShouldBe(new FileRules.Detected(FileKind.Audio, "audio/mp4", ".m4a"));
+        FileRules.DetectVoice(IsoMedia("isom"))!.MimeType.ShouldBe("audio/mp4");
+        FileRules.DetectVoice(IsoMedia("mp42"))!.MimeType.ShouldBe("audio/mp4");
+    }
+
+    [Fact]
+    public void Anything_that_is_not_a_recording_is_refused_as_a_voice_note()
+    {
+        FileRules.DetectVoice(Header(0xFF, 0xD8, 0xFF, 0xE0)).ShouldBeNull();
+        FileRules.DetectVoice(Header(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)).ShouldBeNull();
+        FileRules.DetectVoice(IsoMedia("heic")).ShouldBeNull();
+        FileRules.DetectVoice(IsoMedia("qt  ")).ShouldBeNull();
+        FileRules.DetectVoice(Encoding.ASCII.GetBytes("%PDF-1.7 hello world")).ShouldBeNull();
+        FileRules.DetectVoice([0x1A, 0x45]).ShouldBeNull();
+    }
+
+    [Fact]
+    public void Ogg_is_not_a_photo_or_video_and_audio_is_told_by_its_type()
+    {
+        FileRules.Detect(Encoding.ASCII.GetBytes("OggS\0\u0002\0\0\0\0\0\0")).ShouldBeNull();
+        FileRules.KindOf("audio/webm").ShouldBe(FileKind.Audio);
+        FileRules.KindOf("audio/ogg").ShouldBe(FileKind.Audio);
+        FileRules.KindOf("audio/mp4").ShouldBe(FileKind.Audio);
+        FileRules.KindOf("video/webm").ShouldBe(FileKind.Video);
+        FileRules.KindOf("image/webp").ShouldBe(FileKind.Image);
+    }
+
+    [Fact]
+    public void Voice_notes_go_up_to_10_MB()
+    {
+        FileRules.CheckSize(FileKind.Audio, FileRules.MaxAudioBytes).ShouldBeNull();
+        var tooBig = FileRules.CheckSize(FileKind.Audio, FileRules.MaxAudioBytes + 1)!;
+        tooBig.Code.ShouldBe(ErrorCodes.FileTooLarge);
+        tooBig.Message.ShouldBe("Voice notes can be at most 10 MB.");
+    }
+
+    [Fact]
     public void Anything_else_is_refused_whatever_it_is_called()
     {
         FileRules.Detect(Encoding.ASCII.GetBytes("%PDF-1.7 hello world")).ShouldBeNull();

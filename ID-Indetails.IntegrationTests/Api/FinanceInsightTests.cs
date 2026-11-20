@@ -149,7 +149,7 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (designerEmail, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         // 1,600 a month is 10 an hour in February 2026 (160 paid hours)
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, token)).IsSuccessStatusCode.ShouldBeTrue();
+            new { amount = 1600m, currency = "USD", effectiveFrom = "2026-01-01" }, token)).IsSuccessStatusCode.ShouldBeTrue();
         var client = await Projects.CreateClientAsync(token, DomainCodes.Design);
         var created = await Client.PostJsonAsync("/api/projects", new
         {
@@ -164,7 +164,7 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         var project = await created.ReadAsync<ProjectResponse>();
 
         // a VO of 2,000 (all Architecture's), a 300 expense, and 3 hours in Architecture on Tuesday 10 February 2026
-        // (09:00-12:00 in Beirut) with the paid hour of break: 40 of labour
+        // (09:00-12:00 in Beirut) with their share of the paid break (3 of the 7 required hours: 26 minutes): 34.33 of labour
         var vo = await Client.PostJsonAsync($"/api/projects/{project.Id}/design-vos", new
         {
             title = "Guest house",
@@ -186,8 +186,8 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         ((int)response.StatusCode).ShouldBe(200, body);
         var insight = JsonSerializer.Deserialize<ProjectInsightResponse>(body, ApiClientExtensions.Json)!;
 
-        // the same figures as the project's money: 12,000 agreed, 13,320 with TVA, 340 spent
-        money.Cost.Labour.ShouldBe(40m);
+        // the same figures as the project's money: 12,000 agreed, 13,320 with TVA, 334.33 spent
+        money.Cost.Labour.ShouldBe(34.33m);
         insight.ShouldSatisfyAllConditions(
             i => i.Domain.ShouldBe(DomainCodes.Design),
             i => i.BillingType.ShouldBe(BillingType.Client),
@@ -198,7 +198,7 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
             i => i.Cost.Labour.ShouldBe(money.Cost.Labour),
             i => i.Cost.Expenses.ShouldBe(300m),
             i => i.Cost.Total.ShouldBe(money.Cost.Total),
-            i => i.AgreedProfit.ShouldBe(11_660m),
+            i => i.AgreedProfit.ShouldBe(11_665.67m),
             i => i.AgreedProfit.ShouldBe(money.Profit),
             i => i.Margin.ShouldBe(money.Margin),
             i => i.Standing.ShouldBe(ProfitStanding.Fine),
@@ -212,7 +212,7 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         Steps(insight).ShouldBe([
             (BridgeStepKind.BasePrice, 10_000m),
             (BridgeStepKind.VariationOrders, 2_000m),
-            (BridgeStepKind.Labour, -40m),
+            (BridgeStepKind.Labour, -34.33m),
             (BridgeStepKind.Expenses, -300m)]);
         insight.Bridge.Sum(s => s.Amount).ShouldBe(insight.AgreedProfit);
 
@@ -225,9 +225,9 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
             r => r.Share.ShouldBe(1m),
             r => r.Budget.ShouldBe(12_000m),
             r => r.Budget.ShouldBe(architectureMoney.Budget),
-            r => r.Cost.ShouldBe(40m),
+            r => r.Cost.ShouldBe(34.33m),
             r => r.Cost.ShouldBe(architectureMoney.Cost),
-            r => r.Left.ShouldBe(11_960m),
+            r => r.Left.ShouldBe(11_965.67m),
             r => r.Minutes.ShouldBe(180),
             r => r.LabourShare.ShouldBe(1m),
             r => r.Unconverted.ShouldBeEmpty(),
@@ -503,7 +503,8 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         // kinds in snake_case, names in camelCase
         json.EnumerateObject().Select(p => p.Name).ShouldBe(["domain", "today", "checked", "projects", "counts", "basis"], ignoreOrder: true);
         var group = json.GetProperty("projects").EnumerateArray().Single(p => p.GetProperty("projectId").GetInt64() == project.Id);
-        group.EnumerateObject().Select(p => p.Name).ShouldBe(["projectId", "title", "status", "risks"], ignoreOrder: true);
+        group.EnumerateObject().Select(p => p.Name).ShouldBe(["projectId", "title", "code", "status", "risks"], ignoreOrder: true);
+        group.GetProperty("code").GetString().ShouldBe(project.Code);
         group.GetProperty("status").GetString().ShouldBe("active");
         var atZero = group.GetProperty("risks")[0];
         atZero.EnumerateObject().Select(p => p.Name).ShouldBe(["kind", "amount", "fact", "rule"], ignoreOrder: true);
@@ -594,7 +595,7 @@ public class FinanceInsightTests(ApiFactory api) : IClassFixture<ApiFactory>
         var lastMonth = thisMonth.AddMonths(-1);
         var (designerEmail, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         (await Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-                new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = lastMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token))
+                new { amount = 1600m, currency = "USD", effectiveFrom = lastMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token))
             .IsSuccessStatusCode.ShouldBeTrue();
         var client = await Projects.CreateClientAsync(token, DomainCodes.Design);
         var created = await Client.PostJsonAsync("/api/projects", new

@@ -24,12 +24,12 @@ public class ProjectPayTests(ApiFactory api) : IClassFixture<ApiFactory>
         await command.ExecuteNonQueryAsync();
     }
 
-    private async Task<AuthResponse> PaidDesignerAsync(AuthResponse superAdmin, string basis, decimal amount)
+    private async Task<AuthResponse> PaidDesignerAsync(AuthResponse superAdmin, decimal amount)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         (await Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
-            new { basis, amount, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         return person;
     }
@@ -44,14 +44,14 @@ public class ProjectPayTests(ApiFactory api) : IClassFixture<ApiFactory>
     public async Task Each_project_pays_its_hours_at_each_persons_rate_without_breaks()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
-        var salaried = await PaidDesignerAsync(superAdmin, "monthly", 1760m); // 10 an hour in June (176 paid hours)
-        var hourly = await PaidDesignerAsync(superAdmin, "hourly", 20m);
+        var salaried = await PaidDesignerAsync(superAdmin, 1760m); // 10 an hour in June (176 paid hours)
+        var senior = await PaidDesignerAsync(superAdmin, 3520m); // 20 an hour
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
 
         // An 8-hour day each (7h in schedule and 1h over). Both are far short of their June hours, so the
         // extra hour makes up the shortfall and is paid at the plain rate; no paid break is added.
         await LogAsync(salaried.User.Id, project.Id, "2026-06-01");
-        await LogAsync(hourly.User.Id, project.Id, "2026-06-02");
+        await LogAsync(senior.User.Id, project.Id, "2026-06-02");
 
         var response = await Client.GetAsync("/api/company/project-pay?unit=month&date=2026-06-15", superAdmin.AccessToken);
         response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
@@ -64,9 +64,9 @@ public class ProjectPayTests(ApiFactory api) : IClassFixture<ApiFactory>
         group.People.Single(p => p.UserId == salaried.User.Id).ShouldSatisfyAllConditions(
             p => p.Pay.ShouldBe(80m),
             p => p.MonthlySalary.ShouldBe(1760m));
-        group.People.Single(p => p.UserId == hourly.User.Id).ShouldSatisfyAllConditions(
+        group.People.Single(p => p.UserId == senior.User.Id).ShouldSatisfyAllConditions(
             p => p.Pay.ShouldBe(160m),
-            p => p.MonthlySalary.ShouldBeNull());
+            p => p.MonthlySalary.ShouldBe(3520m));
         group.NormalMinutes.ShouldBe(2 * 480);
         report.Totals.ShouldHaveSingleItem().Total.ShouldBe(240m);
 

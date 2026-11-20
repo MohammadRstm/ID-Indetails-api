@@ -27,7 +27,9 @@ RUN ConnectionStrings__Default="Server=placeholder;Database=placeholder" \
 
 # --- migrations: run once, before the new API starts -----------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS migrations
-# Ubuntu's security fixes, without waiting for the base image to be rebuilt with them.
+# Ubuntu's security fixes, without waiting for the base image to be rebuilt with them. A new SECURITY_REFRESH (CI
+# passes the day) fetches them again instead of reusing the cached layer; a deployment builds this stage uncached.
+ARG SECURITY_REFRESH
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 COPY --from=migrations-build --chown=root:root /out/efbundle /efbundle
 USER $APP_UID
@@ -38,6 +40,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 WORKDIR /app
 # Ubuntu's security fixes, without waiting for the base image to be rebuilt with them. ffmpeg (with ffprobe) lets
 # Proton take pictures through a project's video to read it (Proton/Files/ProtonVideoFrames.cs); nothing else uses it.
+# A new SECURITY_REFRESH (CI passes the day) fetches them again; a deployment builds this stage uncached.
+ARG SECURITY_REFRESH
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*

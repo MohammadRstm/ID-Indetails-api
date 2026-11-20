@@ -40,6 +40,10 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         // the client looks the icon up by name: only names, nothing a lookup could turn into something else
         RuleFor(x => x.Icon).Matches("^[A-Za-z0-9_-]+$").WithMessage("Icon must be one of the app's icon names.");
         RuleFor(x => x.Tint).ProjectTint();
+        RuleFor(x => x.ProjectCode).Must(ProjectCodeRules.IsProjectCode).When(x => x.ProjectCode is not null)
+            .WithMessage(ProjectCodeRules.ProjectCodeMessage);
+        RuleFor(x => x.BuildingCode).Must(ProjectCodeRules.IsBuildingCode).When(x => x.BuildingCode is not null)
+            .WithMessage(ProjectCodeRules.BuildingCodeMessage);
         RuleFor(x => x.DomainCode).ValidBusiness().When(x => x.DomainCode is not null);
         RuleFor(x => x.BillingType).IsInEnum().WithMessage("Billing type must be client or internal.");
         RuleFor(x => x.ClientId).GreaterThan(0).When(x => x.ClientId is not null).WithMessage("Client is invalid.");
@@ -50,6 +54,7 @@ public sealed class CreateProjectRequestValidator : AbstractValidator<CreateProj
         RuleFor(x => x.TvaRate).TvaRate();
         RuleFor(x => x.LabourDefaults!).SetValidator(new SetLabourDefaultsRequestValidator()).When(x => x.LabourDefaults is not null);
         RuleForEach(x => x.DepartmentIds).GreaterThan(0).WithMessage("A department is invalid.");
+        RuleFor(x => x.CfaPrice).CfaPrice();
     }
 }
 
@@ -126,6 +131,38 @@ public sealed class UpdateProjectRequestValidator : AbstractValidator<UpdateProj
         RuleFor(x => x.Icon).Matches("^[A-Za-z0-9_-]+$").WithMessage("Icon must be one of the app's icon names.");
         RuleFor(x => x.Tint).ProjectTint();
         RuleFor(x => x.OwnerId).GreaterThan(0).WithMessage("Owner is required.");
+        RuleFor(x => x.ProjectCode).Must(ProjectCodeRules.IsProjectCode).When(x => x.ProjectCode is not null)
+            .WithMessage(ProjectCodeRules.ProjectCodeMessage);
+        RuleFor(x => x.BuildingCode).Must(ProjectCodeRules.IsBuildingCode).When(x => x.BuildingCode is not null)
+            .WithMessage(ProjectCodeRules.BuildingCodeMessage);
+        RuleFor(x => x.CfaPrice).CfaPrice();
+    }
+}
+
+public sealed class ProjectColorsQueryValidator : AbstractValidator<ProjectColorsQuery>
+{
+    public ProjectColorsQueryValidator()
+    {
+        RuleFor(x => x.Domain).ValidBusiness();
+    }
+}
+
+public sealed class SwapProjectColorRequestValidator : AbstractValidator<SwapProjectColorRequest>
+{
+    public SwapProjectColorRequestValidator()
+    {
+        RuleFor(x => x.OtherProjectId).GreaterThan(0).WithMessage("Pick the project to swap colours with.");
+    }
+}
+
+public sealed class NextProjectCodeQueryValidator : AbstractValidator<NextProjectCodeQuery>
+{
+    public NextProjectCodeQueryValidator()
+    {
+        RuleFor(x => x.Domain).ValidBusiness();
+        RuleFor(x => x.Check).MaximumLength(ProjectCodeRules.MaxProjectCodeLength)
+            .WithMessage($"A project code is at most {ProjectCodeRules.MaxProjectCodeLength} characters.");
+        RuleFor(x => x.ProjectId).GreaterThan(0).When(x => x.ProjectId is not null).WithMessage("Project is invalid.");
     }
 }
 
@@ -173,8 +210,7 @@ internal static class ProjectRuleExtensions
         => rule.Null().WithMessage("The work price comes from the agreed BOQs: it can't be typed in.");
 
     public static IRuleBuilderOptions<T, string?> ProjectTint<T>(this IRuleBuilder<T, string?> rule)
-        => rule.Matches("^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
-            .WithMessage("Tint must be a colour like #1F6FEB.");
+        => rule.Must(v => v is null || ProjectColorRules.IsColor(v)).WithMessage(ProjectColorRules.ColorMessage);
 }
 
 public sealed class ProjectReportQueryValidator : AbstractValidator<ProjectReportQuery>

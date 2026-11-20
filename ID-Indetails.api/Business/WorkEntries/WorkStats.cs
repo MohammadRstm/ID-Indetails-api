@@ -58,6 +58,17 @@ public static class WorkStats
     public static IReadOnlyList<DayTotal> Daily(IEnumerable<Worked> worked)
         => worked.GroupBy(w => w.Day).OrderBy(g => g.Key).Select(g => new DayTotal(g.Key, g.Sum(w => w.Minutes))).ToList();
 
+    /// <summary>For each day with work, the project with the most minutes that day; a tie goes to the lower project id.</summary>
+    public static IReadOnlyDictionary<DateOnly, long> TopProjectByDay(IEnumerable<Worked> worked)
+        => worked
+            .GroupBy(w => w.Day)
+            .ToDictionary(
+                day => day.Key,
+                day => day.GroupBy(w => w.ProjectId)
+                    .OrderByDescending(p => p.Sum(w => w.Minutes))
+                    .ThenBy(p => p.Key)
+                    .First().Key);
+
     /// <summary>Days with work between the two days (inclusive), and the longest run of consecutive such days.</summary>
     public static (int ActiveDays, int LongestStreak) Streaks(IEnumerable<Worked> worked, DateOnly from, DateOnly to)
     {

@@ -70,6 +70,21 @@ public class PrivilegeRulesTests
     }
 
     [Fact]
+    public void The_givers_salary_advance_notifications_need_the_permission_but_the_persons_own_do_not()
+    {
+        var without = NotificationAccess.HiddenKinds(Actor(RoleCodes.Admin, PermissionCodes.SalaryView));
+        without.ShouldContain(NotificationKinds.SalaryAdvanceRequested);
+        without.ShouldContain(NotificationKinds.SalaryAdvanceWithdrawn);
+        without.ShouldContain(NotificationKinds.SalaryAdvanceUnsettled);
+        without.ShouldNotContain(NotificationKinds.SalaryAdvanceApproved);
+        without.ShouldNotContain(NotificationKinds.SalaryAdvanceDeclined);
+        without.ShouldNotContain(NotificationKinds.SalaryAdvanceRecorded);
+
+        NotificationAccess.HiddenKinds(Actor(RoleCodes.SuperAdmin, PermissionCodes.SalaryAdvanceManage))
+            .ShouldNotContain(k => k.StartsWith("salary_advance_", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_delivery_recorded_as_an_email_names_a_real_address()
     {
         var validator = new RecordDeliveryRequestValidator();

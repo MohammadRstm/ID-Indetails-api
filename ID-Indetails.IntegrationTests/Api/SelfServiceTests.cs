@@ -62,7 +62,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
+        var me = await JuneMonthAsync(superAdmin, project.Id, 1760m);
 
         // Every page, however many months have passed since January 2026.
         var first = await OkAsync<MyHoursResponse>(Client.GetAsync("/api/me/hours", me.AccessToken));
@@ -105,8 +105,8 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
-        var colleague = await JuneMonthAsync(superAdmin, project.Id, "hourly", 12m);
+        var me = await JuneMonthAsync(superAdmin, project.Id, 1760m);
+        var colleague = await JuneMonthAsync(superAdmin, project.Id, 2112m);
         await AddWorkAsync(colleague, project.Id, new DateTime(2026, 6, 6, 6, 0, 0, DateTimeKind.Utc), minutes: 240);
         await ExecuteAsync("UPDATE projects SET icon = 'pen', tint = '#2F6FEB' WHERE id = @p", ("@p", project.Id));
 
@@ -142,7 +142,7 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
-        var me = await JuneMonthAsync(superAdmin, project.Id, "monthly", 1760m);
+        var me = await JuneMonthAsync(superAdmin, project.Id, 1760m);
 
         (await Client.GetAsync("/api/me/pay?month=2026-06", me.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await Client.GetAsync("/api/me/pay", me.AccessToken)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -180,12 +180,12 @@ public class SelfServiceTests(ApiFactory api) : IClassFixture<ApiFactory>
     /// A Design employee who joined on 1 January 2026, with one 8-hour day on Monday 1 June (7h inside their
     /// hours, 1h beyond what the day requires) and an unpaid day off on Tuesday 2 June.
     /// </summary>
-    private async Task<AuthResponse> JuneMonthAsync(AuthResponse superAdmin, long projectId, string basis, decimal amount)
+    private async Task<AuthResponse> JuneMonthAsync(AuthResponse superAdmin, long projectId, decimal amount)
     {
         var (_, _, person) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await _steps.SetJoinedOnAsync(person.User.Id, "2026-01-01");
         await OkAsync<object>(Client.PostJsonAsync($"/api/employees/{person.User.Id}/pay",
-            new { basis, amount, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken), status: null);
+            new { amount, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken), status: null);
         await AddWorkAsync(person, projectId, new DateTime(2026, 6, 1, 6, 0, 0, DateTimeKind.Utc), minutes: 480);
         await OkAsync<object>(Client.PostJsonAsync($"/api/employees/{person.User.Id}/hour-excuses",
             new { month = "2026-06", kind = "days", days = new[] { "2026-06-02" }, isPaid = false }, superAdmin.AccessToken), status: null);

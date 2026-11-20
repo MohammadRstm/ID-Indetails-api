@@ -38,6 +38,6 @@ public class ProjectMeeting
 
     public Project? Project { get; set; }
 
-    /// <summary>A general meeting's people; a project meeting has none.</summary>
+    /// <summary>A general meeting's people, or a project meeting's invitees.</summary>
     public ICollection<MeetingAttendee> Attendees { get; set; } = new List<MeetingAttendee>();
 }
