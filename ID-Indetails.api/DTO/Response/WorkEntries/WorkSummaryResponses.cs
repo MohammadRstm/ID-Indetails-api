@@ -5,7 +5,8 @@ namespace ID_Indetails.api.DTO.Response.WorkEntries;
 
 public sealed record WeekTotalResponse(DateOnly WeekStart, int Minutes, int Entries);
 
-public sealed record DayTotalResponse(DateOnly Day, int Minutes);
+/// <param name="Tint">The colour of the project with the most time that day, to draw the day in; null on a day without work.</param>
+public sealed record DayTotalResponse(DateOnly Day, int Minutes, string? Tint);
 
 /// <param name="OvertimeMinutes">The part of <paramref name="Minutes"/> that is overtime; the rest is normal time.</param>
 public sealed record ProjectTimeResponse(
@@ -57,9 +58,11 @@ public sealed record ContributorResponse(long Id, string Name);
 public sealed record LastActivityResponse(long PersonId, string PersonName, DateTime StartedAt);
 
 /// <summary>An open Design project with the caller's own time on it. Other people's hours stay private.</summary>
+/// <param name="Code">The full code, ID26Q4001-VK.</param>
 public sealed record MyProjectResponse(
     long Id,
     string Title,
+    string Code,
     string? Description,
     string? Icon,
     string? Tint,
@@ -96,9 +99,15 @@ public sealed record MyProjectWorkResponse(
 
 /// <summary>One company-time-zone day: the caller's entries and the domain's meetings, earliest first. Meetings are not work time.</summary>
 /// <param name="OvertimeMinutes">The part of <paramref name="LoggedMinutes"/> that is overtime; the rest is normal time.</param>
+/// <param name="Waiting">Hours of the caller's waiting for approval that day (their department isn't on the project): not logged yet, but
+/// holding their time.</param>
 public sealed record MyDayResponse(
     DateOnly Date,
     int LoggedMinutes,
     int OvertimeMinutes,
     IReadOnlyList<WorkEntryResponse> Entries,
-    IReadOnlyList<MeetingResponse> Meetings);
+    IReadOnlyList<MeetingResponse> Meetings,
+    IReadOnlyList<WaitingHoursResponse> Waiting);
+
+/// <summary>Hours waiting for approval: the blocked change's id, the project, what was said and when.</summary>
+public sealed record WaitingHoursResponse(long Id, long ProjectId, string ProjectTitle, string Description, DateTime StartedAt, DateTime EndedAt);

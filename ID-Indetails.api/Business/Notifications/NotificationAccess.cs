@@ -24,6 +24,7 @@ public static class NotificationAccess
         [NotificationKinds.PocketRequested] = PermissionCodes.FinancialView,
         [NotificationKinds.PocketRoundOff] = PermissionCodes.FinancialView,
         [NotificationKinds.ChangeBlocked] = PermissionCodes.FinancialView,
+        [NotificationKinds.PayChangeHeld] = PermissionCodes.EmployeePayManage,
         [NotificationKinds.ProfitLow] = PermissionCodes.FinancialView,
         [NotificationKinds.ProfitAtZero] = PermissionCodes.FinancialView,
         [NotificationKinds.TimeOffRequested] = PermissionCodes.TimeOffDecide,
@@ -32,6 +33,9 @@ public static class NotificationAccess
         [NotificationKinds.TimeOffEnded] = PermissionCodes.TimeOffDecide,
         [NotificationKinds.TimeOffOnline] = PermissionCodes.TimeOffDecide,
         [NotificationKinds.TimeOffHours] = PermissionCodes.TimeOffDecide,
+        [NotificationKinds.SalaryAdvanceRequested] = PermissionCodes.SalaryAdvanceManage,
+        [NotificationKinds.SalaryAdvanceWithdrawn] = PermissionCodes.SalaryAdvanceManage,
+        [NotificationKinds.SalaryAdvanceUnsettled] = PermissionCodes.SalaryAdvanceManage,
     };
 
     /// <summary>The kinds <paramref name="reader"/> may no longer read.</summary>

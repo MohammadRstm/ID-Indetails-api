@@ -37,4 +37,8 @@ A client of a domain the caller can't see reads as `404`. Adding one in such a d
 
 ## Activity
 
-`client_added`, `client_updated`, `client_archived`, `client_restored`, `client_deleted` (with the name in the payload). The client is the event's subject (`subject_type = 'client'`). `activity_events.client_id` is left empty, because it is a restricting foreign key and would stop a client with history from being deleted.
+`client_added`, `client_updated`, `client_archived`, `client_restored`, `client_deleted` (with the name in the payload). The client is the event's subject (`subject_type = 'client'`), and `activity_events.client_id` is left empty.
+
+`activity_events.client_id` is a restricting foreign key.
+- **Where it is set:** only on a deleted project's trace (`project_deleted`, see [projects.md](projects.md)). That is how the trace still shows under its client once the project row is gone.
+- **When the client is deleted:** those events are unlinked (`client_id` set to null) first, in the same transaction. The activity stays, and the client can go. Before this, deleting a client whose project had been deleted failed with a 500.

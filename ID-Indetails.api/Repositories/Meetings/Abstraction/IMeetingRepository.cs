@@ -5,6 +5,9 @@ namespace ID_Indetails.api.Repositories.Meetings.Abstraction;
 
 public sealed record MeetingPerson(long Id, string Name);
 
+/// <param name="Team">Their team's name, if they are in one.</param>
+public sealed record MeetingPersonCard(long Id, string Name, long? PhotoFileId, string? Team);
+
 /// <param name="ProjectId">Null for a general meeting.</param>
 /// <param name="Domain">The project's domain, or a general meeting's own; null for a company-wide meeting.</param>
 public sealed record MeetingView(
@@ -53,6 +56,12 @@ public interface IMeetingRepository
 
     /// <summary>Those of the given people who are active, for choosing attendees.</summary>
     Task<IReadOnlyList<MeetingInvitee>> ActivePeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>The given people, by name.</summary>
+    Task<IReadOnlyList<MeetingPersonCard>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default);
+
+    /// <summary>Live meetings with invitees or attendees that start after <paramref name="after"/> and by <paramref name="by"/>. Not tracked.</summary>
+    Task<IReadOnlyList<MeetingView>> StartingAsync(DateTime after, DateTime by, CancellationToken cancellationToken = default);
 
     void Add(ProjectMeeting meeting);
 }

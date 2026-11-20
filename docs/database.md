@@ -42,7 +42,8 @@ The database is the second line of defence. The API must still filter every quer
 | Execution site costs and pricing | `project_staff`, `site_logs`, `pocket_entries`, `pocket_requests`, `site_expenses`, `supervision_withdrawals`, `labour_weeks`, `labour_week_days`, `project_labour_defaults`, `boqs`, `boq_lines`, `boq_deliveries`, `boq_sequences` |
 | Billing (cash ledger) | `invoices`, `invoice_lines`, `invoice_deliveries`, `invoice_sequences`, `payments`, `billing_settings`, `exchange_rates` |
 | Working time, hours ledger and time off | `working_time_policies`, `user_schedules`, `user_schedule_days`, `hour_excuses`, `hour_excuse_days`, `time_off_requests` |
-| Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `account_labels`, `company_settings`, `domain_settings` |
+| Salary advances | `salary_advances`, `salary_advance_repayments` |
+| Company layer | `overhead_groups`, `overhead_items`, `overhead_amounts`, `one_off_expenses`, `account_labels`, `company_settings`, `domain_settings` |
 
 ## Execution pricing
 
@@ -88,6 +89,7 @@ bytes live in the content store, never in MySQL or on the server's disk. See [cl
 - An active user has a password and a name.
 - Internal projects have no client and zero revenue; revenue is never negative; progress is 0–100.
 - Execution projects are always client work and always have a work price; Design projects have none (`ck_projects_execution_money_fields`).
+- A project code (`projects.project_code`, such as ID26Q4001) is used once per domain (`ix_projects_domain_code_project_code`); the building code (`projects.building_code`) is not unique. Their form is checked by the API, not the database ([projects.md](projects.md#project-codes)).
 - A supervision rate is a fraction from 0 to 1.
 - A site expense has either quantity and unit cost or a lump-sum amount, and one of the five categories.
 - No labour day falls on a Sunday.
@@ -108,6 +110,7 @@ bytes live in the content store, never in MySQL or on the server's disk. See [cl
 - A refresh token is the website's or the phone app's, and its revoke reason is one of the four known.
 - A push token belongs to one device; quiet hours are both set or both empty, each a minute of the day; a category is muted once per person.
 - A site expense's client reference is unique per person who added it.
+- A salary advance has a status (pending, approved, declined, withdrawn or cancelled), an amount (and an asked amount) above zero, and a day given (`given_on`) exactly when it is approved or cancelled. It is settled (`settled_kind` cash or written_off, with the amount above zero and the day) all or nothing, and only when approved. Its person and everyone who asked, decided, cancelled or settled it can't be deleted (RESTRICT). Its repayment months go with it (the one cascade): each is the first day of a month, once per advance, with an amount above zero.
 - A payment's and a site expense's account label must be an `account_labels` row (a label that is used can't be deleted); supervision taken is more than zero and belongs to a site.
 - `company_settings` has exactly one possible row.
 
@@ -202,7 +205,27 @@ The `ProjectBudgets` migration (11 Nov 2026) adds a project's cost budget, in ve
 
 - `project_budgets` (id, `project_id`, `version` int, `effective_from` date, `reason` varchar(500), `set_by_id`, `set_at`), unique on `(project_id, version)`, with foreign keys to `projects` (CASCADE: a project deleted by mistake takes its budget with it) and to `users` (RESTRICT).
 - `project_budget_lines` (id, `budget_id`, `team_id` bigint null, `category` varchar(40) null, `amount_usd` decimal(18,2)), unique on `(budget_id, team_id)` and on `(budget_id, category)`, with foreign keys to `project_budgets` (CASCADE) and `teams` (RESTRICT), and the checks `ck_project_budget_lines_amount_non_negative` (`amount_usd >= 0`) and `ck_project_budget_lines_one_key` (exactly one of `team_id` and `category`).
-- No data changes. `Down` drops both tables. The model now has 104 tables.
+- No data changes. `Down` drops both tables.
+
+The `OneOffExpenses` migration (11 Nov 2026) adds `one_off_expenses` ([company.md](company.md#one-off-expenses)): `name` (150), `group_id` (a foreign key to `overhead_groups`, RESTRICT), `currency`, `amount` (`decimal(18,2)`, checked above zero by `ck_one_off_expenses_amount_positive`), `spent_on` (a date, indexed), `created_at`, `created_by_id` (a foreign key to `users`, RESTRICT) and `updated_at`. It creates the table only: no existing table or data changes. `Down` drops it. The model now has 103 tables.
+
+The `SiteLogVoiceNotes` migration (11 Nov 2026) adds `site_logs.voice_file_id` (bigint, null) with `ix_site_logs_voice_file_id` and the foreign key `fk_site_logs_files_voice_file_id` to `files` (RESTRICT), the way `work_entries.attachment_file_id` points to its file: a daily log's voice note ([execution.md](execution.md#site-staff-and-daily-logs)). Existing logs keep NULL, and `body` stays NOT NULL (empty for a voice-only log). No data change; `Down` drops the foreign key, the index and the column.
+
+The `SalaryAdvances` migration (13 Nov 2026) is additive ([company.md](company.md#salary-advances)). It adds two tables and seeds one permission; no existing table or row changes, and there is no backfill:
+- `salary_advances`: the person (`user_id`), `amount` and `asked_amount` (`decimal(18,2)`; null when a super admin recorded it directly), `currency`, `status`, `reason`, who created it and when, `decided_at`, `decided_by_id` and `decision_note`, `given_on`, `cancelled_at` and `cancelled_by_id`, and the settlement (`settled_kind`, `settled_amount`, `settled_on`, `settled_by_id`, `settlement_note`). The checks are `ck_salary_advances_status`, `_settled_kind`, `_amount_positive`, `_given_on` and `_settled`; every user column is a foreign key (RESTRICT). Indexed on (`user_id`, `status`) and (`status`, `created_at`).
+- `salary_advance_repayments`: `advance_id` (cascade), `month` and `amount`, one row per month an advance plans to take from, with `ck_salary_advance_repayments_month` (the first day of a month) and `_amount_positive`, and a unique index on (`advance_id`, `month`). What each month actually took is never stored: it is worked out from Salaries.
+- The `salary_advance:manage` permission, held by super admins.
+- `Down` drops both tables and the permission.
+
+The `RemovePayBasis` migration (15 Nov 2026) removes hourly pay ([employees.md](employees.md#pay)). It first turns each `user_pay_history` row with `basis = 'hourly'` into a monthly one: the amount stays as it is and `overtime_rate` becomes `ROUND(amount / 184, 2)`, the rate a salary is given. Monthly rows aren't touched: amount, currency, overtime rate and `effective_from` stay exactly as they were. It then drops `ck_user_pay_history_basis` and the `basis` column. `Down` adds the column back as `'monthly'` for every row, with its check; the hourly rows can't come back.
+
+The `SupersededPayEntries` migration (15 Nov 2026) lets a pay change correct what follows it ([employees.md](employees.md#pay)). It adds to `user_pay_history`: `superseded_at` (datetime(3), null) and `superseded_by_id` (a foreign key to `users`, null, with `ix_user_pay_history_superseded_by_id`), with `ck_user_pay_history_superseded` (both set or both empty), and the stored generated column `active_effective_from` (`effective_from` while active, NULL once superseded). The unique index on (`user_id`, `effective_from`) becomes `ix_user_pay_history_user_id_active_effective_from` on (`user_id`, `active_effective_from`); the new index is made first, so `user_id`'s foreign key always has one. No data changes: every row stays active. `Down` deletes the superseded rows (only active ones fit the old index) and restores the old index.
+
+The `PayChangeHolds` migration (15 Nov 2026) adds `pay_change` to `ck_blocked_changes_kind`, for a pay change held at the profit floor ([projects.md](projects.md), "Profit floor"). Nothing else changes: the person, the request, the projects and the pay version live in the blocked change's payload. `Down` deletes the held pay changes and restores the check.
+
+The `ProjectColors` migration (17 Nov 2026) only moves data: every project without a colour (`projects.tint` null or empty) gets one of the palette ([projects.md](projects.md#colours)), the active and on-hold projects first, in turn, so the first sixteen differ. Colours already set are kept, and no column changes. `Down` leaves the colours, since they can't be told from colours people chose afterwards.
+
+The `ProjectPalette` migration (18 Nov 2026) only moves data: every project gets a colour of the new thirty-colour palette ([projects.md](projects.md#colours)), replacing the sixteen colours and any picked on the old colour wheel. Each business on its own, its active and on-hold projects first, oldest first, so up to thirty differ; the palette is walked seven at a time so neighbours differ a lot. No column changes; `Down` keeps the new colours.
 
 The `DepartmentPlans` migration (11 Nov 2026) adds the hours planned for each department of a Design project
 ([projects.md](projects.md#planned-hours)):

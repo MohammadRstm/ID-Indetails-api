@@ -4,6 +4,7 @@ using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.Employees;
 using ID_Indetails.api.Business.Pay;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Request.Files;
@@ -26,6 +27,9 @@ using ID_Indetails.api.Services.Company.Abstraction;
 using ID_Indetails.api.Services.Employees.Abstraction;
 using ID_Indetails.api.Services.Files.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
+using ID_Indetails.api.Services.Payroll.Abstraction;
+using ID_Indetails.api.Services.Projects.Abstraction;
+using ID_Indetails.api.Services.Projects.Implementation;
 using ID_Indetails.api.Services.Realtime.Abstraction;
 using ID_Indetails.api.Services.TimeOff.Abstraction;
 
@@ -49,6 +53,9 @@ public sealed class EmployeeService(
     IPresence presence,
     IWorkingTimeService workingTime,
     ITimeOffWatch timeOff,
+    ISalaryAdvanceService salaryAdvances,
+    IPayChangeEffects payEffects,
+    IProfitFloor floor,
     IClock clock) : IEmployeeService
 {
     private const string NotFoundMessage = "Employee not found.";
@@ -153,6 +160,7 @@ public sealed class EmployeeService(
         await invitations.RevokePendingForUserAsync(user.Id, now, cancellationToken);
         activity.Add(UserEvent(user, ActivityEventKinds.EmployeeDeactivated, actor.UserId, period is null ? null : new { lastWorkingDay = lastDay }));
         await timeOff.EndAsync(user, actor.UserId, "They left.", cancellationToken);
+        await salaryAdvances.NoteLeavingAsync(user, actor.UserId, cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -292,8 +300,6 @@ public sealed class EmployeeService(
         var (decision, denial) = EmployeeRules.CheckRoleChange(actor, TargetOf(user), request.Role, request.DomainCode, superAdmins);
         Throw(denial);
         Throw(await CheckHandOutAsync(actor, user.Id, decision!.Role, decision.Domain, cancellationToken));
-        var pay = await employees.GetPayInForceAsync(user.Id, clock.CompanyToday, cancellationToken);
-        Throw(PayRules.CheckRoleChange(decision.Role, pay?.Basis));
 
         var previousRole = user.RoleCode;
         var previousDomain = user.DomainCode;
@@ -407,26 +413,18 @@ public sealed class EmployeeService(
 
         var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
         Throw(EmployeeRules.CheckPayChange(actor, TargetOf(user)));
-        Throw(PayRules.CheckBasis(user.RoleCode, user.DomainCode, request.Basis));
 
-        var effectiveFrom = request.EffectiveFrom ?? clock.CompanyToday;
-        var latest = await employees.GetLatestPayDateAsync(user.Id, cancellationToken);
-        Throw(PayChangePolicy.Check(effectiveFrom, clock.CompanyToday, latest));
-
-        var pay = new UserPayHistory
+        // the profit floor: measured before and after, unless a super admin is forcing a held change through
+        var from = request.EffectiveFrom ?? clock.CompanyToday;
+        var version = await employees.PayVersionAsync(user.Id, cancellationToken);
+        var before = floor.Forcing ? null : await payEffects.MeasureAsync(user.Id, from, cancellationToken);
+        var (pay, _) = await StagePayChangeAsync(user, request, actor.UserId, cancellationToken);
+        if (before is not null)
         {
-            UserId = user.Id,
-            EffectiveFrom = effectiveFrom,
-            Basis = request.Basis,
-            Amount = request.Amount,
-            Currency = request.Currency.ToUpperInvariant(),
-            OvertimeRate = request.OvertimeRate ?? PayRules.SuggestedOvertimeRate(
-                request.Basis, request.Amount, await workingTime.OvertimeThresholdOnAsync(effectiveFrom, cancellationToken)),
-            Note = Clean(request.Note),
-            CreatedAt = clock.UtcNow,
-            CreatedById = actor.UserId,
-        };
-        users.AddPayHistory(pay);
+            HoldAtTheFloor(user, request, from, version, before, await payEffects.MeasureAsync(user.Id, from, cancellationToken), actor.UserId);
+        }
+
+        var effectiveFrom = pay.EffectiveFrom;
 
         // Amounts stay out of the activity feed, which people without financial access can read.
         activity.Add(UserEvent(user, ActivityEventKinds.PayChanged, actor.UserId, new { effectiveFrom }));
@@ -436,6 +434,123 @@ public sealed class EmployeeService(
         await transaction.CommitAsync(cancellationToken);
 
         return ToPay(pay);
+    }
+
+    public async Task<PayPreviewResponse> PreviewPayAsync(long userId, ChangePayRequest request, CancellationToken cancellationToken = default)
+    {
+        var actor = await ActorAsync(cancellationToken);
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+        var user = await VisibleUserForUpdateAsync(actor, userId, cancellationToken);
+        Throw(EmployeeRules.CheckPayChange(actor, TargetOf(user)));
+        var from = request.EffectiveFrom ?? clock.CompanyToday;
+        var before = await payEffects.MeasureAsync(user.Id, from, cancellationToken);
+        var (pay, replaced) = await StagePayChangeAsync(user, request, actor.UserId, cancellationToken);
+        var after = await payEffects.MeasureAsync(user.Id, from, cancellationToken);
+
+        // nothing of it is kept: the transaction ends without a commit, which rolls the change back
+        unitOfWork.DiscardChanges();
+        return PreviewOf(pay.EffectiveFrom, replaced, before, after, actor);
+    }
+
+    /// <summary>
+    /// Makes a pay change within the caller's transaction (<see cref="PayChangePolicy"/>): every active entry from its day
+    /// onward is marked superseded and saved first, as the new entry may share a day with one of them, then the new entry
+    /// is added and saved. Returns the new entry and what it replaced, as it was.
+    /// </summary>
+    private async Task<(UserPayHistory Pay, IReadOnlyList<PayResponse> Replaced)> StagePayChangeAsync(
+        User user,
+        ChangePayRequest request,
+        long actorId,
+        CancellationToken cancellationToken)
+    {
+        var effectiveFrom = request.EffectiveFrom ?? clock.CompanyToday;
+        var currency = request.Currency.ToUpperInvariant();
+        var active = await employees.ActivePayAsync(user.Id, cancellationToken);
+        Throw(PayChangePolicy.Check(effectiveFrom, clock.CompanyToday, currency, active.LastOrDefault(p => p.EffectiveFrom < effectiveFrom)?.Currency));
+
+        var now = clock.UtcNow;
+        var replaced = active.Where(p => p.EffectiveFrom >= effectiveFrom).ToList();
+        var replacedAsItWas = replaced.Select(ToPay).ToList();
+        foreach (var row in replaced)
+        {
+            row.SupersededAt = now;
+            row.SupersededById = actorId;
+        }
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var pay = new UserPayHistory
+        {
+            UserId = user.Id,
+            EffectiveFrom = effectiveFrom,
+            Amount = request.Amount,
+            Currency = currency,
+            OvertimeRate = request.OvertimeRate ?? PayRules.SuggestedOvertimeRate(
+                request.Amount, await workingTime.OvertimeThresholdOnAsync(effectiveFrom, cancellationToken)),
+            Note = Clean(request.Note),
+            CreatedAt = now,
+            CreatedById = actorId,
+        };
+        users.AddPayHistory(pay);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return (pay, replacedAsItWas);
+    }
+
+    /// <summary>
+    /// Holds the pay change (its transaction rolls back and it is kept as a blocked change) when it takes a running client
+    /// project's profit to zero or below. The hardest-hit project names it; the payload keeps the request, every project
+    /// it reaches, and the pay version it was held at, so forcing it after another pay change is refused.
+    /// </summary>
+    private static void HoldAtTheFloor(User user, ChangePayRequest request, DateOnly from, long version, PayEffects before, PayEffects after, long requestedById)
+    {
+        var reached = after.Projects
+            .Where(a => a.HeldToFloor && ProfitFloorRules.ReachesZero(before.Projects.Single(b => b.ProjectId == a.ProjectId).Profit, a.Profit))
+            .OrderBy(a => a.Profit)
+            .ToList();
+        if (reached.Count == 0)
+        {
+            return;
+        }
+
+        var worst = reached[0];
+        var held = new HeldPayChange(worst.ProjectId, user.Id, request, version, reached.Select(p => p.ProjectId).ToList());
+        throw new PayChangeHeldException(
+            worst.ProjectId,
+            worst.Title,
+            worst.Domain,
+            JsonSerializer.Serialize(held, ProfitFloor.Json),
+            requestedById,
+            PersonName.Of(user.FirstName, user.LastName, user.Email),
+            from,
+            reached.Count);
+    }
+
+    /// <summary>The preview from the effects before and after; project money only where the caller may see it.</summary>
+    private static PayPreviewResponse PreviewOf(DateOnly from, IReadOnlyList<PayResponse> replaced, PayEffects before, PayEffects after, UserAccess actor)
+    {
+        var months = after.Months.Select(a =>
+        {
+            var b = before.Months.Single(m => m.Start == a.Start);
+            return new PayPreviewMonthResponse(a.Start, b.Salary, b.Currency, a.Salary, a.Currency, b.Advance, a.Advance, a.AdvanceCurrency ?? b.AdvanceCurrency);
+        }).ToList();
+
+        var projects = after.Projects
+            .Where(a => actor.Has(PermissionCodes.FinancialView) && actor.CanSee(a.Domain))
+            .Select(a => (Before: before.Projects.Single(b => b.ProjectId == a.ProjectId), After: a))
+            .Where(p => p.Before.Labour != p.After.Labour)
+            .Select(p => new PayPreviewProjectResponse(
+                p.After.ProjectId,
+                p.After.Title,
+                p.Before.Labour,
+                p.After.Labour,
+                p.Before.Profit,
+                p.After.Profit,
+                p.After.HeldToFloor && ProfitFloorRules.ReachesZero(p.Before.Profit, p.After.Profit)))
+            .OrderBy(p => p.ProfitAfter)
+            .ToList();
+
+        return new PayPreviewResponse(from, replaced, months, projects);
     }
 
     public async Task<CurrentUserResponse> UpdateMyProfileAsync(
@@ -656,7 +771,7 @@ public sealed class EmployeeService(
     };
 
     private static PayResponse ToPay(UserPayHistory p)
-        => new(p.Id, p.EffectiveFrom, p.Basis, p.Amount, p.Currency, p.OvertimeRate, p.Note, p.CreatedAt, p.CreatedById);
+        => new(p.Id, p.EffectiveFrom, p.Amount, p.Currency, p.OvertimeRate, p.Note, p.CreatedAt, p.CreatedById, p.SupersededAt, p.SupersededById);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

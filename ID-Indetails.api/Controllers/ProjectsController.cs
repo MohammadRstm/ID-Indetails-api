@@ -35,6 +35,18 @@ public sealed class ProjectsController(
     public Task<ProjectListTotalsResponse> Totals([FromQuery] ProjectListQuery query, CancellationToken cancellationToken)
         => projectService.TotalsAsync(query, cancellationToken);
 
+    /// <summary>For the colour picker: the palette, and which of the business's open projects has each colour.</summary>
+    [HttpGet("colors")]
+    [HasAnyPermission(PermissionCodes.ProjectCreate, PermissionCodes.ProjectEdit)]
+    public Task<IReadOnlyList<ProjectColorResponse>> Colors([FromQuery] ProjectColorsQuery query, CancellationToken cancellationToken)
+        => projectService.ColorsAsync(query, cancellationToken);
+
+    /// <summary>For the project form: the code a new project would get, and whether the one typed is taken.</summary>
+    [HttpGet("next-code")]
+    [HasAnyPermission(PermissionCodes.ProjectCreate, PermissionCodes.ProjectEdit)]
+    public Task<NextProjectCodeResponse> NextCode([FromQuery] NextProjectCodeQuery query, CancellationToken cancellationToken)
+        => projectService.NextCodeAsync(query, cancellationToken);
+
     /// <summary>Money is included only for callers with financial access.</summary>
     [HttpGet("{projectId:long}")]
     [HasPermission(PermissionCodes.ProjectView)]
@@ -81,6 +93,12 @@ public sealed class ProjectsController(
     [HasPermission(PermissionCodes.ProjectEdit)]
     public Task<ProjectResponse> UpdateStaff(long projectId, UpdateProjectStaffRequest request, CancellationToken cancellationToken)
         => projectService.UpdateStaffAsync(projectId, request, cancellationToken);
+
+    /// <summary>Trades colours with another project of the same business: both change at once.</summary>
+    [HttpPost("{projectId:long}/swap-color")]
+    [HasPermission(PermissionCodes.ProjectEdit)]
+    public Task<ProjectResponse> SwapColor(long projectId, SwapProjectColorRequest request, CancellationToken cancellationToken)
+        => projectService.SwapColorAsync(projectId, request, cancellationToken);
 
     /// <summary>The project's own photo, shown instead of its icon tile, from the caller's upload.</summary>
     [HttpPut("{projectId:long}/photo")]

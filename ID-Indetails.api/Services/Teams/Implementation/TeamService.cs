@@ -89,36 +89,51 @@ public sealed class TeamService(
         var actor = await ActorAsync(cancellationToken);
         var team = await VisibleTeamAsync(actor, teamId, cancellationToken);
 
+        if (await RefusalOfAsync(team, cancellationToken) is { } refusal)
+        {
+            throw new BusinessRuleException(refusal.Code, refusal.Message);
+        }
+
+        activity.Add(TeamEvent(team, ActivityEventKinds.TeamDeleted, actor.UserId, new { name = team.Name }));
+        teams.Remove(team);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<string?> DeleteRefusalAsync(long teamId, CancellationToken cancellationToken = default)
+    {
+        var team = await VisibleTeamAsync(await ActorAsync(cancellationToken), teamId, cancellationToken);
+        return (await RefusalOfAsync(team, cancellationToken))?.Message;
+    }
+
+    /// <summary>Why a department can't be deleted, the first reason that holds; null when it can.</summary>
+    private async Task<(string Code, string Message)?> RefusalOfAsync(Team team, CancellationToken cancellationToken)
+    {
         if (await teams.HasPeopleAsync(team.Id, cancellationToken))
         {
-            throw new BusinessRuleException(
-                ErrorCodes.TeamNotEmpty, "Only an empty department can be deleted. Move its people to another department first.");
+            return (ErrorCodes.TeamNotEmpty, "Only an empty department can be deleted. Move its people to another department first.");
         }
 
         // a project's budget is split between its departments: a department on one stays
         if (await departments.ProjectCountAsync(team.Id, cancellationToken) is > 0 and var count)
         {
-            throw new BusinessRuleException(ErrorCodes.TeamOnProjects,
+            return (ErrorCodes.TeamOnProjects,
                 $"{team.Name} is a department of {(count == 1 ? "a project" : $"{count} projects")}, so it can't be deleted. Rename it instead.");
         }
 
         // a project's cost budget keeps its department lines, even once the department is off the project
         if (await budgets.HasTeamAsync(team.Id, cancellationToken))
         {
-            throw new BusinessRuleException(ErrorCodes.TeamOnProjects,
-                $"{team.Name} has a line in a project's cost budget, so it can't be deleted. Rename it instead.");
+            return (ErrorCodes.TeamOnProjects,
+                $"{team.Name} has a line in a project's cost budget, so it can't be deleted: the budget's history would lose it. Rename it instead.");
         }
 
         // Its chat history is kept, and the chat can't outlive the team.
         if (await teams.HasChatAsync(team.Id, cancellationToken))
         {
-            throw new BusinessRuleException(
-                ErrorCodes.TeamHasChat, "This department's chat has messages, so the department can't be deleted. Rename it instead.");
+            return (ErrorCodes.TeamHasChat, "This department's chat has messages, so the department can't be deleted. Rename it instead.");
         }
 
-        activity.Add(TeamEvent(team, ActivityEventKinds.TeamDeleted, actor.UserId, new { name = team.Name }));
-        teams.Remove(team);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        return null;
     }
 
     private Task<UserAccess> ActorAsync(CancellationToken cancellationToken)

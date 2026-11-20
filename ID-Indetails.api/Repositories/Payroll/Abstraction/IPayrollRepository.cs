@@ -17,7 +17,11 @@ public interface IPayrollRepository
         DateOnly employedSince,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The active pay rows (superseded ones are filtered out).</summary>
     Task<IReadOnlyList<UserPayHistory>> PayHistoryAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>The projects someone logged live work on from <paramref name="fromUtc"/>, not tracked: what a change of their pay re-prices.</summary>
+    Task<IReadOnlyList<Project>> ProjectsWorkedOnAsync(long userId, DateTime fromUtc, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyDictionary<long, string>> RolesAsync(IReadOnlyCollection<long> userIds, CancellationToken cancellationToken = default);
 
@@ -57,6 +61,6 @@ public sealed record WorkEntryTime(long Id, long UserId, long ProjectId, DateTim
 
 public sealed record RoleChangeRow(long UserId, DateTime OccurredAt, string From, string To);
 
-public sealed record ProjectLabel(long Id, string Title, string? ClientName, string? ClientOrganisation);
+public sealed record ProjectLabel(long Id, string Title, string? ClientName, string? ClientOrganisation, string Code);
 
 public sealed record ProjectLook(string? Icon, string? Tint);

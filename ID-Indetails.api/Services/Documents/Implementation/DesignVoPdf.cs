@@ -22,7 +22,7 @@ public static class DesignVoPdf
         PdfLayout.AddFacts(
             section,
             [new Fact("Prepared for", document.ClientName)],
-            [new Fact("Project", document.ProjectTitle, document.ProjectLocation)],
+            [Fact.Project(document.ProjectTitle, document.ProjectCode, document.ProjectLocation)],
             [new Fact("Date", PdfLayout.Date(date))]);
         PdfLayout.AddTitle(section, vo.Title, $"{Label} {vo.Number}");
 

@@ -2,6 +2,8 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Auth;
 using ID_Indetails.api.DTO.Response.Meetings;
 using ID_Indetails.api.DTO.Response.WorkEntries;
+using ID_Indetails.api.Services.Notifications.Abstraction;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 
 namespace ID_Indetails.IntegrationTests.Api;
@@ -227,15 +229,128 @@ public class MeetingTests(ApiFactory api) : IClassFixture<ApiFactory>
         await (await Client.PostJsonAsync("/api/meetings",
             new { startsAt = start, endsAt = start.AddHours(1), domain = DomainCodes.Execution, attendeeIds = new[] { employee.User.Id } },
             admin.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
-        // a project meeting has no attendees
+        // a project meeting invites nobody unless asked, and only people who see its project
         var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var projectMeeting = await (await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
             new { startsAt = start, endsAt = start.AddHours(1) }, admin.AccessToken)).ReadAsync<MeetingResponse>();
         projectMeeting.Domain.ShouldBe(DomainCodes.Design);
         projectMeeting.Attendees.ShouldBeEmpty();
         await (await Client.PutJsonAsync($"/api/meetings/{projectMeeting.Id}",
-            new { startsAt = start, endsAt = start.AddHours(1), attendeeIds = new[] { employee.User.Id } }, admin.AccessToken))
+            new { startsAt = start, endsAt = start.AddHours(1), attendeeIds = new[] { siteWorker.User.Id } }, admin.AccessToken))
             .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+    }
+
+    [Fact]
+    public async Task A_project_meeting_s_invitees_hear_when_it_is_set_moved_or_cancelled_and_everyone_on_it_still_sees_it()
+    {
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, invitee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, colleague) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        var start = Start();
+
+        // who may be invited: everyone who sees the project, but whoever asks
+        var invitable = (await (await Client.GetAsync($"/api/projects/{project.Id}/meetings/invitees", employee.AccessToken))
+            .ReadAsync<List<MeetingInviteeResponse>>()).Select(p => p.Id).ToList();
+        invitable.ShouldContain(invitee.User.Id);
+        invitable.ShouldContain(admin.User.Id);
+        invitable.ShouldContain(superAdmin.User.Id);
+        invitable.ShouldNotContain(employee.User.Id);
+        invitable.ShouldNotContain(siteWorker.User.Id);
+        await (await Client.GetAsync($"/api/projects/{project.Id}/meetings/invitees", siteWorker.AccessToken)).ShouldFailWithAsync(404, ErrorCodes.NotFound);
+
+        var response = await Client.PostJsonAsync($"/api/projects/{project.Id}/meetings",
+            new { startsAt = start, endsAt = start.AddHours(1), topic = "Facade review", attendeeIds = new[] { invitee.User.Id, admin.User.Id } },
+            employee.AccessToken);
+        ((int)response.StatusCode).ShouldBe(201, await response.Content.ReadAsStringAsync());
+        var meeting = await response.ReadAsync<MeetingResponse>();
+        meeting.Attendees.Select(a => a.Id).ShouldBe(new[] { admin.User.Id, invitee.User.Id }, ignoreOrder: true);
+
+        (await NotifiedAsync(invitee, "meeting_invited", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(colleague, "meeting_invited", meeting.Id)).ShouldBe(0);
+        (await _steps.ScalarAsync<long>(
+            "SELECT project_id FROM notifications WHERE recipient_id = @r AND kind = 'meeting_invited' AND subject_id = @m",
+            ("@r", invitee.User.Id), ("@m", meeting.Id))).ShouldBe(project.Id);
+        // an invited manager gets the invitation instead of the news that a meeting was set
+        (await NotifiedAsync(admin, "meeting_invited", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(admin, "meeting_scheduled", meeting.Id)).ShouldBe(0);
+        (await NotifiedAsync(superAdmin, "meeting_scheduled", meeting.Id)).ShouldBe(1);
+        // everyone on the project still sees it
+        (await ListAsync(colleague, $"?projectId={project.Id}")).ShouldContain(m => m.Id == meeting.Id);
+
+        await (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start, endsAt = start.AddHours(1), attendeeIds = new[] { siteWorker.User.Id } }, employee.AccessToken))
+            .ShouldFailWithAsync(400, ErrorCodes.ValidationFailed);
+
+        // added later, someone is invited; moved, those in it hear; taken out, it is cancelled for them
+        (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start, endsAt = start.AddHours(1), topic = "Facade review", attendeeIds = new[] { invitee.User.Id, admin.User.Id, colleague.User.Id } },
+            employee.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        (await NotifiedAsync(colleague, "meeting_invited", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(invitee, "meeting_invited", meeting.Id)).ShouldBe(1);
+
+        var moved = await (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start.AddHours(1), endsAt = start.AddHours(2), topic = "Facade review" }, employee.AccessToken)).ReadAsync<MeetingResponse>();
+        moved.Attendees.Count.ShouldBe(3);
+        (await NotifiedAsync(invitee, "meeting_moved", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(colleague, "meeting_moved", meeting.Id)).ShouldBe(1);
+
+        (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = start.AddHours(1), endsAt = start.AddHours(2), attendeeIds = new[] { colleague.User.Id } }, employee.AccessToken))
+            .IsSuccessStatusCode.ShouldBeTrue();
+        (await NotifiedAsync(invitee, "meeting_cancelled", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(colleague, "meeting_cancelled", meeting.Id)).ShouldBe(0);
+
+        (await Client.DeleteAsync($"/api/meetings/{meeting.Id}", employee.AccessToken)).StatusCode.ShouldBe(System.Net.HttpStatusCode.NoContent);
+        (await NotifiedAsync(colleague, "meeting_cancelled", meeting.Id)).ShouldBe(1);
+    }
+
+    private async Task RemindAsync()
+    {
+        await using var scope = api.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IScheduledNotifications>().RunAsync(ScheduledCheck.MeetingReminders);
+    }
+
+    [Fact]
+    public async Task Invitees_and_attendees_are_reminded_in_the_ten_minutes_before_a_meeting_once_per_start_time()
+    {
+        // a meeting 5 minutes from now, which has to start and end on one company day
+        var now = DateTime.UtcNow;
+        var soon = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc).AddMinutes(5);
+        if (WorkEntryTestSteps.CompanyDay(soon) != WorkEntryTestSteps.CompanyDay(soon.AddMinutes(10)))
+        {
+            return;
+        }
+
+        var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, admin) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Admin, DomainCodes.Design);
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, invitee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, attendee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var project = await Projects.CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
+        async Task<MeetingResponse> SetAsync(string path, DateTime startsAt, long attendeeId, AuthResponse by)
+            => await (await Client.PostJsonAsync(path, new { startsAt, endsAt = startsAt.AddMinutes(5), attendeeIds = new[] { attendeeId } }, by.AccessToken))
+                .ReadAsync<MeetingResponse>();
+        var meeting = await SetAsync($"/api/projects/{project.Id}/meetings", soon, invitee.User.Id, employee);
+        var general = await SetAsync("/api/meetings", soon, attendee.User.Id, admin);
+        var later = await SetAsync($"/api/projects/{project.Id}/meetings", Start(), invitee.User.Id, employee);
+
+        await RemindAsync();
+        await RemindAsync();
+        (await NotifiedAsync(invitee, "meeting_soon", meeting.Id)).ShouldBe(1);
+        (await NotifiedAsync(employee, "meeting_soon", meeting.Id)).ShouldBe(0);
+        (await NotifiedAsync(attendee, "meeting_soon", meeting.Id)).ShouldBe(0);
+        (await NotifiedAsync(attendee, "meeting_soon", general.Id)).ShouldBe(1);
+        (await NotifiedAsync(invitee, "meeting_soon", later.Id)).ShouldBe(0);
+
+        // moved, it is reminded again
+        (await Client.PutJsonAsync($"/api/meetings/{meeting.Id}",
+            new { startsAt = soon.AddMinutes(1), endsAt = soon.AddMinutes(6) }, employee.AccessToken)).IsSuccessStatusCode.ShouldBeTrue();
+        await RemindAsync();
+        (await NotifiedAsync(invitee, "meeting_soon", meeting.Id)).ShouldBe(2);
     }
 
     [Fact]

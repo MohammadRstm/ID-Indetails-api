@@ -337,7 +337,7 @@ public class ProtonFinanceInsightTests(ProtonApiFactory api) : IClassFixture<Pro
         var thisMonth = new DateOnly(today.Year, today.Month, 1);
         var (designerEmail, _, designer) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         await OkAsync(Client.PostJsonAsync($"/api/employees/{designer.User.Id}/pay",
-            new { basis = "monthly", amount = 1600m, currency = "USD", effectiveFrom = thisMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token));
+            new { amount = 1600m, currency = "USD", effectiveFrom = thisMonth.AddMonths(-1).ToString("yyyy-MM-dd") }, token));
         var project = await Projects.CreateProjectAsync(token, DomainCodes.Design);
         var (start, end) = WorkToday();
         await new WorkEntryTestSteps(_steps).InsertAsync(designer.User.Id, project.Id, start, end);

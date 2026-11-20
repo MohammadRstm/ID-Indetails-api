@@ -26,8 +26,9 @@ People management covers everyone with an account: super admins, admins and empl
 | `POST /api/employees/{id}/sessions/restore` | `session:manage` | Lets them sign in again; the sessions that were ended stay ended |
 | `PUT /api/employees/{id}/role` | `employee:manage` | Changes the role |
 | `PUT /api/employees/{id}/domain` | `employee:manage` | Moves someone to the other domain |
-| `GET /api/employees/{id}/pay` | `employee:pay_manage` | Pay history, newest first |
-| `POST /api/employees/{id}/pay` | `employee:pay_manage` | Adds a pay change |
+| `GET /api/employees/{id}/pay` | `employee:pay_manage` | Pay history, newest first, superseded entries included (`supersededAt`, `supersededById`) |
+| `POST /api/employees/{id}/pay` | `employee:pay_manage` | A pay change from a day: it replaces every active entry from that day on |
+| `POST /api/employees/{id}/pay/preview` | `employee:pay_manage` | What that same change would do, without making it |
 | `PUT /api/me/profile` | Signed in | Own first name, last name and phone |
 | `GET /api/teams` | Signed in | Teams of the caller's visible domains, with member counts |
 | `POST /api/teams` | `team:manage` | Creates a team |
@@ -76,6 +77,7 @@ Whoever holds `employee:change_email` (super admins by default) sets someone's n
 Employment is kept as dated periods (`employment_periods`): accepting the invitation starts the first one, leaving ends it, and being taken back starts a new one. Pay, the hours ledger and project pay count only the days inside a period (`Business/Payroll/Employment.cs`, `Business/Employees/EmploymentRules.cs`).
 
 - **Time off** ends with the employment: pending requests are cancelled and approved time off stops today, keeping the days already taken ([time-off.md](time-off.md)).
+- **A salary advance** still to pay back is not touched: the final month takes what it can of what is left, up to the final pay, and anything still left stays open and shows as unsettled. Deactivating such a person sends `salary_advance_unsettled` to the other holders of `salary_advance:manage`, without an amount, so a super admin can mark the rest repaid in cash or write it off ([company.md](company.md#salary-advances)). Someone taken back before it is settled keeps it.
 - **Deactivating** sets the status to `deactivated`, records when (`users.deactivated_at`), and ends the person's period on their **last working day**: today unless given, never in the future (`400 last_working_day_invalid`) or before the period started, and never so far back that a closed month would change (`422 month_closed`; on the 1st, last month is still open). That day is paid. It also revokes every refresh token and any pending invitation link, and drops the cached permissions. The person's access token stops working at once: permission checks find no permissions, and `/auth/me` answers `401`. Their history is kept, and `leftOn` shows the last working day.
 - **Reactivating** clears `deactivated_at` and makes them `active` again if they had signed up, or `invited` if they never did (send them a fresh link with `POST /api/invitations/{id}/resend`). For someone who worked here:
   - back the day after their last working day (or the same day): their period simply goes on;
@@ -108,14 +110,25 @@ Employment is kept as dated periods (`employment_periods`): accepting the invita
 
 ## Pay
 
-`POST /api/employees/{id}/pay` with `{ "basis": "monthly", "amount": 1200, "currency": "USD", "effectiveFrom": "2026-06-01", "note": "Raise" }`:
+Everyone is paid a monthly salary: there is no hourly pay (removed 15 Nov 2026; the `basis` column went with it, and the one hourly row in production, a test account, became a monthly row with its amount unchanged).
 
-- `effectiveFrom` defaults to today in the company time zone and can never be in the future.
-- It must be **after the latest existing change**. The history is only ever added to at the end, so nothing is ever rewritten or silently cancelled. A mistake is corrected with a new, later change.
-- A change dated in the past still re-prices work done since that day, because salaries and labour costs are always calculated from the history.
+`POST /api/employees/{id}/pay` with `{ "amount": 1200, "currency": "USD", "effectiveFrom": "2026-06-01", "note": "Raise" }`:
+
+- `effectiveFrom` defaults to today in the company time zone. It may be any earlier day, closed months included, but never a future one (`400 pay_date_in_future`).
+- **A change dated D replaces every active entry from D onward** (15 Nov 2026). Those entries are kept, marked `superseded_at` and `superseded_by_id`, and the entries before D stay. A mistake is fixed by a change dated on the wrong entry's day; a change dated before someone joined simply sets their first salary, as days outside employment are never paid. Superseded entries are hidden from everything but the pay history (a global query filter), and a unique index on (`user_id`, `active_effective_from`) keeps one active entry per day.
+- **A change of currency starts on the 1st of a month** (`400 pay_currency_change_not_first`), so each month is paid in one currency. The first salary may start any day.
+- Everything worked out from pay follows the new history at once: Salaries, its PDF and CSV, the year, project labour and Project pay, the company overview, MyTime and advance repayments. Nothing is stored but an advance's settled amount and write-off.
+- **Pay is per day** (see [company.md](company.md), "Salaries"): each working day someone is employed earns the salary in force that day × its paid minutes ÷ the month's, so a month with a change is split at it.
+- Only a change that lands notifies the employee (`pay_changed`, with the day and no amount).
+- **The profit floor:** a change that would take a running client project's profit to zero or below is held for the super admins, who alone force or dismiss it (`422 pay_change_held`, see [projects.md](projects.md), "Profit floor").
+
+**The preview** (`POST /api/employees/{id}/pay/preview`, the same body) makes the change inside a transaction, measures it, and rolls it back, so it shows exactly what the change lands:
+- `replaces`: the active entries from its day on that it would replace.
+- `months`: each month from its day's month to this one, with `salaryBefore`/`salaryAfter` and `currencyBefore`/`currencyAfter` as Salaries works them out (null where no pay covers the month), and what salary advances take from it (`advanceBefore`, `advanceAfter`, `advanceCurrency`). Repayments of closed months are recalculated too; an advance's stored settled amount isn't.
+- `projects`: for callers with `financial:view` in the project's domain, every project whose labour moves, with its `labourBefore`/`labourAfter` and `profitBefore`/`profitAfter` in USD, and `reachesZero` when a running client project held to the profit floor would drop to zero or below. Worst profit first.
 - **A salary has no fixed hourly rate.** An hour of it in a month is the salary ÷ the paid hours (break included) the person's schedule gives that month (`PayRules.HourlyRate`): 3,000 a month on Monday–Friday, 9 to 5, is 18.75 an hour in February 2026 (160 paid hours) and 16.30 in July (184). The salary stays the same every month; this rate prices deductions and the normal hours of project labour.
-- **Overtime has its own rate, stored with the pay** (`overtime_rate`, 28 Oct 2026). `overtimeRate` on a pay change or an invitation's pay is what an hour of a salary's overtime is paid at, before the company's multiplier. Left empty, it is the salary ÷ the overtime threshold's hours in force when the pay starts (184; 184 too when none is set), to the cent, for everyone whatever their schedule (`PayRules.SuggestedOvertimeRate`): 4,232 a month gives 23 an hour. It must be more than zero and no more than the salary (`400`). Hourly pay is its own overtime rate and takes none (`400` if one is sent). It follows each pay change; to change only the overtime rate, add a pay change with the same salary. Execution staff, admins and super admins earn no overtime, but their records get the suggested rate too. Pay records returned by the API carry `overtimeRate`.
-- **Admins and super admins are paid a fixed monthly salary** (`PayRules.HasFixedSalary`, by role). Hourly pay is refused for them (`400 fixed_salary_paid_monthly`), on a pay change or an invitation, and inviting one needs their salary (`400 validation_failed` on `pay`). Changing someone paid by the hour into an admin or super admin is refused until they have a monthly salary (`422 fixed_salary_needs_monthly_pay`), on a role change or an automatic one through permissions.
+- **Overtime has its own rate, stored with the pay** (`overtime_rate`, 28 Oct 2026). `overtimeRate` on a pay change or an invitation's pay is what an hour of a salary's overtime is paid at, before the company's multiplier. Left empty, it is the salary ÷ the overtime threshold's hours in force when the pay starts (184; 184 too when none is set), to the cent, for everyone whatever their schedule (`PayRules.SuggestedOvertimeRate`): 4,232 a month gives 23 an hour. It must be more than zero and no more than the salary (`400`). It follows each pay change; to change only the overtime rate, add a pay change with the same salary. Execution staff, admins and super admins earn no overtime, but their records get the suggested rate too. Pay records returned by the API carry `overtimeRate`.
+- **Admins and super admins are paid a fixed salary** (`PayRules.HasFixedSalary`, by role): their pay never depends on hours. Inviting one needs their salary (`400 validation_failed` on `pay`).
 
 ## Teams (departments)
 

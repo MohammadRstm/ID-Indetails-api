@@ -71,8 +71,10 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
     public async Task<IReadOnlyList<UserPayHistory>> GetPayHistoryAsync(long userId, CancellationToken cancellationToken = default)
         => await db.UserPayHistory
             .AsNoTracking()
+            .IgnoreQueryFilters()
             .Where(p => p.UserId == userId)
             .OrderByDescending(p => p.EffectiveFrom)
+            .ThenByDescending(p => p.Id)
             .ToListAsync(cancellationToken);
 
     public Task<UserPayHistory?> GetPayInForceAsync(long userId, DateOnly day, CancellationToken cancellationToken = default)
@@ -82,10 +84,17 @@ public sealed class EmployeeRepository(IdIndetailsDbContext db) : IEmployeeRepos
             .OrderByDescending(p => p.EffectiveFrom)
             .FirstOrDefaultAsync(cancellationToken);
 
-    public Task<DateOnly?> GetLatestPayDateAsync(long userId, CancellationToken cancellationToken = default)
-        => db.UserPayHistory
+    public async Task<long> PayVersionAsync(long userId, CancellationToken cancellationToken = default)
+        => await db.UserPayHistory
+            .IgnoreQueryFilters()
             .Where(p => p.UserId == userId)
-            .MaxAsync(p => (DateOnly?)p.EffectiveFrom, cancellationToken);
+            .MaxAsync(p => (long?)p.Id, cancellationToken) ?? 0;
+
+    public async Task<IReadOnlyList<UserPayHistory>> ActivePayAsync(long userId, CancellationToken cancellationToken = default)
+        => await db.UserPayHistory
+            .Where(p => p.UserId == userId)
+            .OrderBy(p => p.EffectiveFrom)
+            .ToListAsync(cancellationToken);
 
     public async Task<int> LockActiveSuperAdminsAsync(CancellationToken cancellationToken = default)
         => (await db.Database

@@ -42,6 +42,11 @@ public sealed class FileClaims(ICurrentUser currentUser, IFileRepository files, 
 
         return kind is null || FileRules.KindOf(file.MimeType) == kind
             ? file
-            : throw new BusinessRuleException(ErrorCodes.FileTypeNotAllowed, kind == FileKind.Image ? "This needs a photo." : "This needs a video.");
+            : throw new BusinessRuleException(ErrorCodes.FileTypeNotAllowed, kind switch
+            {
+                FileKind.Image => "This needs a photo.",
+                FileKind.Audio => "A voice note must be a recording.",
+                _ => "This needs a video.",
+            });
     }
 }

@@ -40,7 +40,7 @@ ID InDetails is a company of architectural engineers. This repository is the API
 **Proton**, the AI assistant, answers questions and fills in forms.
 
 - **Domains** are the company's businesses, and almost everything belongs to one:
-  - **Design** runs on logged hours: work entries, overtime, pay by the hour.
+  - **Design** runs on logged hours: work entries and overtime, priced from each person's monthly salary.
   - **Execution** runs construction sites on BOQs and VOs (which set the price of the work), cost-only site expenses,
     weekly ground labour and site staff with daily logs. Payments and expenses are filed under company account labels,
     and the supervision the company takes from a site is recorded. **Pocket money** is money super admins set aside from Execution sites by hand and pay back, on request, to sites that run short.
@@ -116,26 +116,55 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
   - **Profit floor:** a client project with an agreed amount can't have its profit lowered to zero or below. The change
     is refused (`profit_floor`) and kept as a blocked change, which only someone with `financial:view` can force
     through, once. Changes that raise profit always pass ([projects.md](docs/projects.md), "Profit floor").
+  - **A pay change** that takes a running client project to zero profit is held (`pay_change_held`, blocked change
+    `pay_change`): only super admins are told, with no amounts, and only they force or dismiss it, never on their own
+    pay. A forced change stays the requester's, and the employee hears of it only when it lands.
   - Supervision taken (the company withdrawing its supervision fee) is not a cost. Cash in account = received − cost −
     supervision taken − moved to the pocket + paid by it. A payment's money is never edited; only its account label can
     change.
+  - **Cost budgets** (optional): a project's cost budget is kept in versions (`project_budgets`, `project_budget_lines`),
+    each with a reason, set with `financial:write` (Design) or `project:pricing_manage` (Execution). Each line's cost
+    comes from the shared calculator (department labour, expenses, site expenses by category, ground labour), never a
+    second formula. A department with a line in any version can't be deleted.
+  - **Design progress by hours** (optional): a department's logged minutes ÷ its planned minutes
+    (`project_department_plans`, one plan per department, set with `project:edit`, each change a `department_plan_set`
+    activity event). Planned hours go to whoever sees the departments; logged minutes and progress only with
+    `financial:view` or `work_entry:view_all`, since a department can be one person.
 - **Pay:**
+  - Everyone is paid a monthly salary: there is no hourly pay (removed 15 November 2026).
+  - **Pay is per day.** Each working day someone is employed earns the salary in force that day × its paid minutes ÷
+    the month's paid minutes, so a month is split at a pay change. Work, paid breaks, overtime and whole days off use
+    their own day's rate; undated minutes (a shortfall, excuse minutes) use the month's blended rate.
+  - **Pay changes** ask from when: today by default, any earlier day, closed months included, never a future one. A
+    change dated D replaces every active entry from D onward (kept as superseded), so a mistake is fixed by a change
+    dated on its day. A currency change starts on the 1st. Everything derived from pay is live and follows at once;
+    only an advance's settled amount and write-off are stored. The form previews the effect first
+    (`POST /api/employees/{id}/pay/preview`).
   - The break is a dated company setting. While it is above 0 it is paid but not logged (9–5 with a 60-minute break
-    requires 7h and pays 8h). From 1 December 2026 it is 0: the whole 8-hour day is logged and required, and earlier
-    months keep their paid break.
-  - The hourly rate is the salary ÷ that month's scheduled paid hours.
+    requires 7h and pays 8h). Since 19 November 2026 it is 60 again (it was 0 from 16 to 18 November, when the padded
+    hour was trimmed from the 8-hour days), and the planned 0 from 1 December is dropped.
+  - **The break goes to projects** (19 November 2026): a day with its required hours logged shares the whole break across
+    its projects by the in-hours minutes worked on each, in whole minutes; a day logged in part shares that part (5 of 7
+    hours, 5/7 of it), and the rest is a company cost, counted with paid leave. Projects show each contributor's break
+    minutes (`breakMinutes`).
+  - The hourly rate of a day is its salary ÷ that month's scheduled paid hours.
   - From 1 November 2026 a salary's overtime is paid only past the month's threshold: max(the working time's
     `overtimeThresholdHours`, 184; the month's expected hours), counting every logged hour plus paid excuses. It is
-    fixed whatever the joining date. The premium is a company cost, never put on projects. Hourly pay is unchanged.
+    fixed whatever the joining date. The premium is a company cost, never put on projects.
     Employees see their overtime minutes as before; only Salaries shows what is paid ([company.md](docs/company.md),
     "The overtime threshold").
   - Fixed salaries: admins, super admins and Execution site staff are on a pure monthly salary and never log hours.
     Their pay is a company cost: the company overview takes it off the net profit, never a project.
-  - Paid leave on Design (a salary's paid excuses and paid time off, an hourly employee's paid time off) is a company
-    cost too, its own line in the company overview.
+  - Paid leave on Design (paid excuses and paid time off) is a company cost too, its own line in the company overview.
+  - **Salary advances:** part of someone's pay handed over early, in their pay's currency. It changes when cash leaves,
+    never what anyone earns, the hourly rate, project cost or the overview; only a written-off rest is a company
+    expense, on its day. Anyone with pay asks; holders of `salary_advance:manage` (super admins) approve with the months
+    it comes off, decline, or record one. At most a month's pay, one at a time. Each month takes its share, never more
+    than its pay, and the rest moves on. A leaving month takes everything left, and settling takes only what is left
+    after the current month ([company.md](docs/company.md), "Salary advances").
   - Project profit is agreed revenue - project costs; overhead counts only at company level.
 - **Privacy:** employees never see their colleagues' hours or pay.
-- **Site staff:** an Execution site needs no staff to be created; staff are put on it when it needs them, and can all be taken off again. Each one is an active Execution employee. Staff write daily logs, which they can edit until midnight. Execution employees are paid monthly only.
+- **Site staff:** an Execution site needs no staff to be created; staff are put on it when it needs them, and can all be taken off again. Each one is an active Execution employee. Staff write daily logs, which they can edit until midnight.
 - **Project type and area** (decided 9 November 2026, not built yet): projects get two optional fields, a type (villa,
   apartment, commercial, interior, ...) and an area in m², set on the project form and editable any time. Financial
   Intelligence compares a project with past ones of the same type and size, and falls back to domain, price band and

@@ -30,7 +30,8 @@ public sealed class CompanySettingsService(
     IFileClaims fileClaims,
     IFileRepository files,
     IFileStorage storage,
-    IClock clock) : ICompanySettingsService
+    IClock clock,
+    IOptions<BugReportOptions> developer) : ICompanySettingsService
 {
     private const string CacheKey = "company:settings";
 
@@ -138,7 +139,8 @@ public sealed class CompanySettingsService(
     public async Task<BrandingResponse> BrandingAsync(CancellationToken cancellationToken = default)
     {
         var settings = await GetAsync(cancellationToken);
-        return new BrandingResponse(settings.IsSetUp ? settings.Name : null, settings.LogoFileId is not null, settings.LogoFileId);
+        return new BrandingResponse(
+            settings.IsSetUp ? settings.Name : null, settings.LogoFileId is not null, settings.LogoFileId, developer.Value.WhatsAppNumber);
     }
 
     public async Task<FileContent> OpenLogoAsync(CancellationToken cancellationToken = default)

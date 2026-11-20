@@ -26,6 +26,12 @@ public sealed class MeetingsController(IMeetingService meetingService) : Control
     public Task<IReadOnlyList<MeetingResponse>> ListForProject(long projectId, CancellationToken cancellationToken)
         => meetingService.ListForProjectAsync(projectId, cancellationToken);
 
+    /// <summary>Who may be invited to the project's meetings: everyone who sees the project but the caller, by name.</summary>
+    [HttpGet("projects/{projectId:long}/meetings/invitees")]
+    [HasAnyPermission(PermissionCodes.MeetingCreate, PermissionCodes.MeetingManage)]
+    public Task<IReadOnlyList<MeetingInviteeResponse>> Invitees(long projectId, CancellationToken cancellationToken)
+        => meetingService.InviteesAsync(projectId, cancellationToken);
+
     [HttpPost("projects/{projectId:long}/meetings")]
     [HasAnyPermission(PermissionCodes.MeetingCreate, PermissionCodes.MeetingManage)]
     public async Task<ActionResult<MeetingResponse>> Create(long projectId, SaveMeetingRequest request, CancellationToken cancellationToken)
@@ -38,8 +44,8 @@ public sealed class MeetingsController(IMeetingService meetingService) : Control
         => StatusCode(StatusCodes.Status201Created, await meetingService.CreateGeneralAsync(request, cancellationToken));
 
     /// <summary>
-    /// Moves, resizes or renames a meeting, and changes a general meeting's people: any with meeting:manage, your own
-    /// with meeting:create.
+    /// Moves, resizes or renames a meeting, and changes a general meeting's people or a project meeting's invitees: any
+    /// with meeting:manage, your own with meeting:create.
     /// </summary>
     [HttpPut("meetings/{id:long}")]
     [HasAnyPermission(PermissionCodes.MeetingCreate, PermissionCodes.MeetingManage)]

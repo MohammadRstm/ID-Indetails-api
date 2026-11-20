@@ -1,8 +1,8 @@
 namespace ID_Indetails.api.Enums;
 
 /// <summary>
-/// What a refused change was: one the profit floor refused, or hours logged by someone whose department isn't on the
-/// project (<see cref="WorkEntryDepartment"/>), kept until it is added.
+/// What a refused change was: one the profit floor refused (a pay change among them, <see cref="PayChange"/>), or hours
+/// logged by someone whose department isn't on the project (<see cref="WorkEntryDepartment"/>), kept until it is added.
 /// </summary>
 public enum BlockedChangeKind
 {
@@ -25,6 +25,12 @@ public enum BlockedChangeKind
     WorkEntryDepartment,
     /// <summary>Applying a Design variation order that lowers the price.</summary>
     DesignVo,
+
+    /// <summary>
+    /// A pay change whose re-pricing would take a running client project's profit to zero or below. Only super admins
+    /// see, force or dismiss it.
+    /// </summary>
+    PayChange,
 }
 
 /// <summary>Where a refused change stands.</summary>

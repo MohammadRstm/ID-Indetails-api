@@ -48,8 +48,11 @@ public sealed class WorkEntryService(
     IOvertimeService overtime,
     IProfitFloor floor,
     ITimeOffWatch timeOff,
+    IBlockedChangeRepository blockedChanges,
     IClock clock) : IWorkEntryService
 {
+    public bool LetOutsideDepartment { get; set; }
+
     public async Task<WorkEntryResponse> CreateAsync(SaveWorkEntryRequest request, CancellationToken cancellationToken = default)
     {
         var actor = await ActorAsync(cancellationToken);
@@ -246,6 +249,12 @@ public sealed class WorkEntryService(
             throw ProjectDepartmentRules.NoDepartment().ToException();
         }
 
+        // approved by the project's owner or a super admin: these hours only, under "other"
+        if (LetOutsideDepartment && logged is not null)
+        {
+            return theirs;
+        }
+
         var name = (await departments.CandidatesAsync([theirs], cancellationToken)).Single().Name;
         if (logged is null)
         {
@@ -337,8 +346,12 @@ public sealed class WorkEntryService(
             return;
         }
 
-        var others = await entries.SpansAsync(userId, changed.Min(s => s.Start), changed.Max(s => s.End), cancellationToken);
-        Throw(WorkEntryRules.CheckOverlap(changed, others));
+        var from = changed.Min(s => s.Start);
+        var to = changed.Max(s => s.End);
+        var others = await entries.SpansAsync(userId, from, to, cancellationToken);
+        // hours waiting for approval hold their time too
+        var waiting = WaitingHours.Spans(await blockedChanges.WaitingHoursAsync(userId, cancellationToken), ProfitFloor.Json, from, to);
+        Throw(WorkEntryRules.CheckOverlap(changed, [.. others, .. waiting]));
     }
 
     private void AddMoveEvents(IEnumerable<WorkEntry> moved, long actorId)

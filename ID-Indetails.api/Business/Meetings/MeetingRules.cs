@@ -12,6 +12,10 @@ namespace ID_Indetails.api.Business.Meetings;
 /// <item>General meetings have no project: whoever manages meetings sets them, for the people they choose (at least
 /// one). They belong to a domain, or to the whole company, and are seen by their attendees, whoever set them, and
 /// whoever manages meetings where they belong (see <see cref="CanSeeGeneral"/>).</item>
+/// <item>A project meeting may also have invitees, chosen among the people who see the project. Everyone on the project
+/// still sees it; its invitees are the ones told about it (see <see cref="CheckInvitees"/>).</item>
+/// <item>A meeting's invitees or attendees are reminded in the <see cref="ReminderMinutes"/> before it starts, and never
+/// once it has: a meeting set less than that ahead is reminded at once.</item>
 /// <item>People with <c>meeting:create</c> set project meetings and move or remove their own; <c>meeting:manage</c> covers every meeting.</item>
 /// <item>A meeting starts and ends on the same company-time-zone day, and lasts at least 5 minutes. Past days are fine.</item>
 /// <item>Meetings are not work time: they never count in hours, and don't block logging.</item>
@@ -23,6 +27,9 @@ public static class MeetingRules
     public const int MaxTopicLength = 200;
     public const int MaxDescriptionLength = 2000;
     public const int MaxAttendees = 100;
+
+    /// <summary>How long before a meeting starts its people are reminded.</summary>
+    public const int ReminderMinutes = 10;
 
     /// <param name="Domain">Null for a company-wide meeting.</param>
     public sealed record GeneralMeeting(string? Domain, long? CreatedById, IReadOnlyCollection<long> AttendeeIds);
@@ -71,6 +78,17 @@ public static class MeetingRules
             ? null
             : RuleDenial.Invalid(ErrorCodes.ValidationFailed, "attendeeIds", "Choose the attendees from the people of this meeting's domain.");
     }
+
+    /// <summary>A project meeting's invitees are optional, and each one sees the project.</summary>
+    /// <param name="inviteeIds">Everyone chosen but whoever sets it.</param>
+    /// <param name="invitable">The active people who see the project.</param>
+    public static RuleDenial? CheckInvitees(IReadOnlyCollection<long> inviteeIds, IReadOnlySet<long> invitable)
+        => inviteeIds.All(invitable.Contains)
+            ? null
+            : RuleDenial.Invalid(ErrorCodes.ValidationFailed, "attendeeIds", "Invite people who can see this project.");
+
+    /// <summary>Once per person and start time, so a moved meeting is reminded again.</summary>
+    public static string ReminderKey(long meetingId, DateTime startsAt) => $"meeting-soon-{meetingId}-{startsAt:yyyyMMddHHmm}";
 
     /// <param name="startDay">The company-time-zone day the meeting starts on.</param>
     /// <param name="endDay">The company-time-zone day of the last minute of the meeting.</param>

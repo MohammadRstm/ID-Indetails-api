@@ -138,6 +138,18 @@ public sealed class BlockedChangeRecorder(
             return;
         }
 
+        if (refused is PayChangeHeldException held)
+        {
+            // pay is the super admins' alone, and the notification never says how much
+            await notifications.SendAsync(
+                new NotificationDraft(NotificationKinds.PayChangeHeld, refused.RequestedById, refused.Domain, refused.ProjectId, "blocked_change", change.Id,
+                    new { personName = held.PersonName, effectiveFrom = held.EffectiveFrom, projectTitle = refused.ProjectTitle, projectCount = held.ProjectCount }),
+                await notifications.SuperAdminsAsync(cancellationToken),
+                cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         // the payload never holds amounts: whoever opens it reads them under financial:view
         await notifications.SendAsync(
             new NotificationDraft(NotificationKinds.ChangeBlocked, refused.RequestedById, refused.Domain, refused.ProjectId, "blocked_change", change.Id,

@@ -149,6 +149,12 @@ public sealed class ProposeDeleteTeamTool(ITeamService teams) : ProtonActionTool
             throw new ProtonToolInputException($"{team.Name} still has {team.MemberCount} member(s): they move to another department from their profiles first.");
         }
 
+        // the app's own reasons, said before any card: a project, a cost budget's history, its chat
+        if (await teams.DeleteRefusalAsync(team.Id, cancellationToken) is { } refusal)
+        {
+            throw new ProtonToolInputException(refusal);
+        }
+
         return (new DeleteTeamArgs(team.Id),
             new ProtonPreview($"Delete the department {team.Name}", [new ProtonChange("Department", team.Name, "deleted")],
                 "A department whose chat has messages is kept: the app refuses to delete it.", Confirm: ProtonConfirm.Typed, Phrase: team.Name, Irreversible: true),

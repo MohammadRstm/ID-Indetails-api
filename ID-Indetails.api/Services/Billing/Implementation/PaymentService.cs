@@ -303,7 +303,7 @@ public sealed class PaymentService(
     {
         Id = p.Id,
         Domain = p.Project.DomainCode,
-        Project = new InvoiceProjectResponse(p.Project.Id, p.Project.Title, p.Project.Location),
+        Project = new InvoiceProjectResponse(p.Project.Id, p.Project.Title, ProjectCodeRules.Full(p.Project.ProjectCode, p.Project.BuildingCode), p.Project.Location),
         Client = new InvoiceClientResponse(p.Client.Id, ClientRules.DisplayName(p.Client.Name, p.Client.Organisation)),
         InvoiceId = p.InvoiceId,
         InvoiceNumber = p.Invoice?.Number,

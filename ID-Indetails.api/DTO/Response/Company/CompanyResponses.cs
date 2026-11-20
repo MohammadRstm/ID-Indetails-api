@@ -26,7 +26,8 @@ public sealed record CompanySettingsResponse(
 /// <param name="Name">Null until the company settings are saved.</param>
 /// <param name="HasLogo">Whether <c>GET /api/company/logo</c> has an image.</param>
 /// <param name="LogoFileId">The logo's file, which changes with every new logo: a client can add it to the logo's address so a cached image is never shown.</param>
-public sealed record BrandingResponse(string? Name, bool HasLogo, long? LogoFileId);
+/// <param name="SupportWhatsApp">The developer's WhatsApp number, digits only (wa.me/{number}), for "Contact the developer" and the sign-in pages.</param>
+public sealed record BrandingResponse(string? Name, bool HasLogo, long? LogoFileId, string SupportWhatsApp);
 
 /// <param name="RequiredMinutesPerDay">Hours required on a working day: the span minus the break (the break is paid).</param>
 /// <param name="OvertimeThresholdHours">A salary's overtime is paid only past this many hours a month; 0 pays all of it.</param>
@@ -98,7 +99,33 @@ public sealed record OverheadResponse(
     IReadOnlyList<OverheadGroupTotalResponse> GroupTotals);
 
 /// <param name="Month">First day of the month.</param>
-public sealed record OverheadMonthResponse(DateOnly Month, IReadOnlyList<CurrencyTotalResponse> Totals);
+/// <param name="Totals">The month's recurring overhead, one total per currency.</param>
+/// <param name="OneOffTotals">The month's one-off expenses, one total per currency.</param>
+public sealed record OverheadMonthResponse(
+    DateOnly Month,
+    IReadOnlyList<CurrencyTotalResponse> Totals,
+    IReadOnlyList<CurrencyTotalResponse> OneOffTotals);
+
+/// <param name="CanEdit">The caller may change or remove it: they hold <c>overhead:manage</c> and its month is still the current one.</param>
+public sealed record OneOffExpenseResponse(
+    long Id,
+    string Name,
+    OverheadGroupSummaryResponse Group,
+    string Currency,
+    decimal Amount,
+    DateOnly SpentOn,
+    DateTime CreatedAt,
+    bool CanEdit);
+
+/// <param name="Month">First day of the month.</param>
+/// <param name="IsOpen">The month is the current company month: its one-offs can still be changed.</param>
+/// <param name="Items">Newest day first.</param>
+/// <param name="Totals">One total per currency, never converted.</param>
+public sealed record OneOffExpenseListResponse(
+    DateOnly Month,
+    bool IsOpen,
+    IReadOnlyList<OneOffExpenseResponse> Items,
+    IReadOnlyList<CurrencyTotalResponse> Totals);
 
 /// <summary>A label payments and expenses are filed under.</summary>
 /// <param name="Archived">It can't be picked any more but stays on what already carries it.</param>

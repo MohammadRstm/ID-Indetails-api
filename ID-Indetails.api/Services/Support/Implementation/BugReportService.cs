@@ -4,6 +4,7 @@ using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Request.Support;
 using ID_Indetails.api.Exceptions.Base;
 using ID_Indetails.api.Repositories.Auth.Abstraction;
+using ID_Indetails.api.Repositories.Portal.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Email.Abstraction;
 using ID_Indetails.api.Services.Email.Implementation;
@@ -12,10 +13,15 @@ using Microsoft.Extensions.Options;
 
 namespace ID_Indetails.api.Services.Support.Implementation;
 
-/// <summary>Bug reports go by email to <see cref="BugReportOptions.ToAddress"/>; nothing is stored.</summary>
+/// <summary>
+/// Messages to the developer go by email to <see cref="BugReportOptions.ToAddress"/>, and the sender gets a copy;
+/// nothing is stored.
+/// </summary>
 public sealed class BugReportService(
     ICurrentUser currentUser,
+    ICurrentPortalAccount currentPortalAccount,
     IUserRepository users,
+    IPortalAccountRepository portalAccounts,
     IEmailSender emailSender,
     IClock clock,
     IOptions<BugReportOptions> options,
@@ -28,32 +34,60 @@ public sealed class BugReportService(
     {
         var user = await users.GetByIdAsync(currentUser.Id, cancellationToken)
             ?? throw new UnauthenticatedException(ErrorCodes.Unauthenticated, "You need to sign in.");
+        var sender = new ContactSender(
+            $"{user.FirstName} {user.LastName}".Trim(), user.Email, $"user {user.Id}", $"{user.RoleCode} · {user.DomainCode ?? "company"}");
+
+        await SendAsync(request, sender, userAgent, cancellationToken);
+        logger.LogInformation("Message to the developer sent by user {UserId}.", user.Id);
+    }
+
+    public async Task SendFromClientAsync(ReportBugRequest request, string? userAgent, CancellationToken cancellationToken = default)
+    {
+        var account = await portalAccounts.GetByIdAsync(currentPortalAccount.Id, cancellationToken)
+            ?? throw new UnauthenticatedException(ErrorCodes.Unauthenticated, "You need to sign in.");
+        var name = $"{account.FirstName} {account.LastName}".Trim();
+        var sender = new ContactSender(name.Length > 0 ? name : account.Email, account.Email, $"portal account {account.Id}", "client, in the portal");
+
+        await SendAsync(request, sender, userAgent, cancellationToken);
+        logger.LogInformation("Message to the developer sent by portal account {PortalAccountId}.", account.Id);
+    }
+
+    private async Task SendAsync(ReportBugRequest request, ContactSender sender, string? userAgent, CancellationToken cancellationToken)
+    {
         var report = new BugReport(
-            request.Title.Trim(),
             request.Description.Trim(),
-            string.IsNullOrWhiteSpace(request.Steps) ? null : request.Steps.Trim(),
+            string.IsNullOrWhiteSpace(request.Details) ? null : request.Details.Trim(),
             request.Page,
-            user.Id,
-            $"{user.FirstName} {user.LastName}".Trim(),
-            user.Email,
-            user.RoleCode,
-            user.DomainCode,
+            sender,
             OneLine(userAgent),
-            clock.UtcNow,
+            request.InstalledApp,
+            Stamp(clock.UtcNow),
+            request.Error is { } error ? new ContactError(error.Ref, Stamp(error.At.ToUniversalTime()), error.Message?.Trim()) : null,
             request.RecentErrors.Select(e => new ReportedError(e.Ref, e.Status, e.Path, e.At.ToUniversalTime())).ToList());
+        var productName = emailOptions.Value.ProductName;
 
         try
         {
-            await emailSender.SendAsync(SupportEmails.BugReport(emailOptions.Value.ProductName, options.Value.ToAddress, report), cancellationToken);
+            await emailSender.SendAsync(SupportEmails.BugReport(productName, options.Value.ToAddress, report), cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Could not email the bug report from user {UserId}.", user.Id);
-            throw new ServiceUnavailableException(ErrorCodes.EmailDeliveryFailed, "Your report couldn't be sent. Please try again in a few minutes.", ex);
+            logger.LogError(ex, "Could not email the message to the developer from {Account}.", sender.Account);
+            throw new ServiceUnavailableException(ErrorCodes.EmailDeliveryFailed, "Your message couldn't be sent. Please try again in a few minutes, or use WhatsApp.", ex);
         }
 
-        logger.LogInformation("Bug report sent by user {UserId}.", user.Id);
+        // the message has gone: a copy that fails to send is only logged
+        try
+        {
+            await emailSender.SendAsync(SupportEmails.BugReportCopy(productName, report), cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not email {Account} the copy of their message to the developer.", sender.Account);
+        }
     }
+
+    private StampedTime Stamp(DateTime utc) => new(utc, clock.ToCompanyTime(utc));
 
     private static string? OneLine(string? value)
     {

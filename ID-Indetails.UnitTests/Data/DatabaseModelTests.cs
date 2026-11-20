@@ -16,11 +16,11 @@ public class DatabaseModelTests
         => Entity<T>().GetCheckConstraints().Select(c => c.ModelName).ToList();
 
     [Fact]
-    public void Model_has_all_105_tables_with_snake_case_names()
+    public void Model_has_all_108_tables_with_snake_case_names()
     {
         var tables = Model.GetEntityTypes().Select(e => e.GetTableName()!).ToList();
 
-        tables.Count.ShouldBe(105);
+        tables.Count.ShouldBe(108);
         tables.ShouldAllBe(t => t == t.ToLowerInvariant() && !t.Contains(' '));
     }
 
@@ -47,6 +47,8 @@ public class DatabaseModelTests
             "project_budgets", "project_budget_lines",
             // a department's planned hours go with the project in the same way
             "project_department_plans",
+            // the months an advance takes from are part of it
+            "salary_advance_repayments",
         };
 
         var cascading = Model.GetEntityTypes()
@@ -124,6 +126,8 @@ public class DatabaseModelTests
         CheckNames<ProjectBudgetLine>().ShouldContain("ck_project_budget_lines_one_key");
         CheckNames<ProjectBudgetLine>().ShouldContain("ck_project_budget_lines_amount_non_negative");
         CheckNames<ProjectDepartmentPlan>().ShouldContain("ck_project_department_plans_planned_minutes_positive");
+        CheckNames<SalaryAdvance>().ShouldContain("ck_salary_advances_given_on");
+        CheckNames<SalaryAdvanceRepayment>().ShouldContain("ck_salary_advance_repayments_month");
     }
 
     [Fact]

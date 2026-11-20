@@ -25,6 +25,12 @@ public interface IBlockedChangeRepository
     /// <summary>A project's changes of <paramref name="kind"/> still pending, oldest first.</summary>
     Task<IReadOnlyList<BlockedChange>> PendingAsync(long projectId, BlockedChangeKind kind, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The person's hours waiting for approval on a project their department isn't on (<see cref="BlockedChangeKind.WorkEntryDepartment"/>,
+    /// still pending), oldest first, each with its project's title. Not tracked.
+    /// </summary>
+    Task<IReadOnlyList<(BlockedChange Change, string ProjectTitle)>> WaitingHoursAsync(long userId, CancellationToken cancellationToken = default);
+
     /// <summary>These projects' changes still pending, of every kind, oldest first.</summary>
     Task<IReadOnlyList<BlockedChange>> PendingAsync(IReadOnlyCollection<long> projectIds, CancellationToken cancellationToken = default);
 

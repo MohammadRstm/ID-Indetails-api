@@ -5,4 +5,5 @@ public enum FileKind
 {
     Image,
     Video,
+    Audio,
 }

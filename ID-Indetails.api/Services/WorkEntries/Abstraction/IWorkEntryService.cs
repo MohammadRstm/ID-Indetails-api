@@ -6,6 +6,12 @@ namespace ID_Indetails.api.Services.WorkEntries.Abstraction;
 /// <summary>Logging, editing, deleting and restoring the caller's own work entries.</summary>
 public interface IWorkEntryService
 {
+    /// <summary>
+    /// Set while an approved log is replayed: hours from a department that isn't on the project go through anyway, counted in
+    /// that department (the project's departments list them under "other", with no share of the price).
+    /// </summary>
+    bool LetOutsideDepartment { get; set; }
+
     Task<WorkEntryResponse> CreateAsync(SaveWorkEntryRequest request, CancellationToken cancellationToken = default);
 
     Task<WorkEntryResponse> UpdateAsync(long id, SaveWorkEntryRequest request, CancellationToken cancellationToken = default);

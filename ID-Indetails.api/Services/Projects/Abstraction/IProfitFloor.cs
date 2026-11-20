@@ -1,3 +1,4 @@
+using ID_Indetails.api.DTO.Request.Employees;
 using ID_Indetails.api.DTO.Response.Projects;
 using ID_Indetails.api.Enums;
 using ID_Indetails.api.Exceptions.Base;
@@ -33,6 +34,12 @@ public sealed record ProfitBefore(Project Project, decimal? Profit);
 /// <param name="ItemId">The site expense or work entry it changes, when it changes one.</param>
 /// <param name="WeekStart">A labour week's first day.</param>
 public sealed record BlockedRequest<T>(long ProjectId, T Request, long? ItemId = null, DateOnly? WeekStart = null);
+
+/// <summary>
+/// A held pay change, as its blocked change keeps it: the person, the request, every project it takes to zero profit
+/// (the hardest hit first, <paramref name="ProjectId"/>), and the pay version it was held at (<c>PayVersionAsync</c>).
+/// </summary>
+public sealed record HeldPayChange(long ProjectId, long UserId, ChangePayRequest Request, long PayVersion, IReadOnlyList<long> ProjectIds);
 
 /// <summary>
 /// Keeps a refused change once its transaction has rolled back, and alerts whoever decides it: whoever sees the

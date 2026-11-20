@@ -21,6 +21,7 @@ using ID_Indetails.api.Repositories.TimeOff.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Finance.Abstraction;
+using ID_Indetails.api.Services.Meetings.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.Payroll.Abstraction;
 using ID_Indetails.api.Services.Projects.Abstraction;
@@ -54,6 +55,7 @@ namespace ID_Indetails.api.Services.Notifications.Implementation;
 /// <item>Auto-archive: see <see cref="IProjectAutoArchive"/>.</item>
 /// <item>Log-your-hours and labour-week reminders, pushes only: see <see cref="IPushReminders"/>.</item>
 /// <item>Time off: see <see cref="ITimeOffSchedule"/>.</item>
+/// <item>Meeting reminders, every minute: see <see cref="IMeetingReminders"/>.</item>
 /// </list>
 /// </summary>
 public sealed class ScheduledNotifications(
@@ -75,6 +77,7 @@ public sealed class ScheduledNotifications(
     IPayrollInputs payrollInputs,
     ITimeOffRepository timeOff,
     ITimeOffSchedule timeOffSchedule,
+    IMeetingReminders meetingReminders,
     IUnitOfWork unitOfWork,
     ILiveUpdates live,
     IPushQueue pushes,
@@ -104,6 +107,7 @@ public sealed class ScheduledNotifications(
             ScheduledCheck.LabourWeekReminders => reminders.LabourWeeksAsync(cancellationToken),
             ScheduledCheck.MissedHours => MissedHoursAsync(cancellationToken),
             ScheduledCheck.TimeOff => timeOffSchedule.RunAsync(cancellationToken),
+            ScheduledCheck.MeetingReminders => meetingReminders.RunAsync(cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(check)),
         });
         await unitOfWork.SaveChangesAsync(cancellationToken);

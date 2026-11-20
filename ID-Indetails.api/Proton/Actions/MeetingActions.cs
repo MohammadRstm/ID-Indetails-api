@@ -38,6 +38,9 @@ public sealed record ScheduleMeetingInput : ProtonActionInput
     public string? Topic { get; init; }
 
     public string? Description { get; init; }
+
+    [Description("People to invite, besides the user (ids from find), each someone who sees the project. They are told in the app and reminded 10 minutes before. Leave out to invite nobody: everyone on the project still sees it.")]
+    public IReadOnlyList<long>? InviteeIds { get; init; }
 }
 
 /// <summary>Sets a meeting on a project, through POST /api/projects/{id}/meetings once confirmed.</summary>
@@ -47,8 +50,8 @@ public sealed class ProposeScheduleMeetingTool(IProjectService projects, IMeetin
     public override string Name => "propose_schedule_meeting";
 
     public override string Description =>
-        "Propose setting a meeting on a project's calendar (a time slot in the app, no invitation is emailed). " +
-        "Times are the company's. Nothing changes until the user confirms the card.";
+        "Propose setting a meeting on a project's calendar (a time slot in the app, no invitation is emailed), optionally " +
+        "inviting people who see the project. Times are the company's. Nothing changes until the user confirms the card.";
 
     public override ProtonActionRisk Risk => ProtonActionRisk.Low;
 
@@ -61,14 +64,21 @@ public sealed class ProposeScheduleMeetingTool(IProjectService projects, IMeetin
     {
         var project = await projects.GetAsync(input.ProjectId, cancellationToken);
         MeetingRules.CheckProject(project.Status).ThrowIfDenied();
-        var request = MeetingText.RequestOf(clock, input.Day, input.Start, input.Minutes ?? 60, MeetingText.Clean(input.Topic), MeetingText.Clean(input.Description));
-        MeetingText.CheckTimes(clock, request);
+        var times = MeetingText.RequestOf(clock, input.Day, input.Start, input.Minutes ?? 60, MeetingText.Clean(input.Topic), MeetingText.Clean(input.Description));
+        MeetingText.CheckTimes(clock, times);
+        var invitees = await MeetingText.InviteesAsync(meetings, project.Id, input.InviteeIds, context.Access.UserId, cancellationToken);
+        var request = times with { AttendeeIds = invitees.Select(p => p.Id).ToList() };
 
         var changes = new List<ProtonChange>
         {
             new("When", null, MeetingText.When(clock, request)),
             new("Topic", null, request.Topic ?? "none"),
         };
+        if (invitees.Count > 0)
+        {
+            changes.Add(new ProtonChange("Invited", null, string.Join(", ", invitees.Select(p => p.Name))));
+        }
+
         if (request.Description is not null)
         {
             changes.Add(new ProtonChange("Description", null, ProtonText.Cut(request.Description, 200)!));
@@ -342,6 +352,22 @@ internal static class MeetingText
             ?? throw new NotFoundException("Meeting not found.");
 
     public static string NameOf(EmployeeResponse person) => $"{person.FirstName} {person.LastName}".Trim();
+
+    /// <summary>The people chosen but the user, each someone who sees the project (the meeting service's own list).</summary>
+    public static async Task<IReadOnlyList<MeetingInviteeResponse>> InviteesAsync(
+        IMeetingService meetings, long projectId, IReadOnlyList<long>? ids, long userId, CancellationToken cancellationToken)
+    {
+        var chosen = (ids ?? []).Distinct().Where(id => id != userId).ToList();
+        if (chosen.Count == 0)
+        {
+            return [];
+        }
+
+        var invitable = (await meetings.InviteesAsync(projectId, cancellationToken)).ToDictionary(p => p.Id);
+        return chosen.All(invitable.ContainsKey)
+            ? chosen.Select(id => invitable[id]).ToList()
+            : throw new ProtonToolInputException("Invite only people who can see this project (ids from find).");
+    }
 
     /// <summary>
     /// The business a general meeting belongs to, as the meeting service decides: the one asked for (which the user must

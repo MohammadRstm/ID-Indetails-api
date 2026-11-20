@@ -61,6 +61,21 @@ public sealed class MeetingRepository(IdIndetailsDbContext db) : IMeetingReposit
             .Select(u => new MeetingInvitee(u.Id, u.DomainCode))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<MeetingPersonCard>> PeopleAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken = default)
+        => (await db.Users
+                .AsNoTracking()
+                .Where(u => ids.Contains(u.Id))
+                .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email, u.PhotoFileId, Team = u.Team == null ? null : u.Team.Name })
+                .ToListAsync(cancellationToken))
+            .Select(u => new MeetingPersonCard(u.Id, PersonName.Of(u.FirstName, u.LastName, u.Email), u.PhotoFileId, u.Team))
+            .OrderBy(p => p.Name)
+            .ToList();
+
+    public Task<IReadOnlyList<MeetingView>> StartingAsync(DateTime after, DateTime by, CancellationToken cancellationToken = default)
+        => ViewsAsync(
+            db.ProjectMeetings.Where(m => m.DeletedAt == null && m.StartsAt > after && m.StartsAt <= by && m.Attendees.Any()),
+            cancellationToken);
+
     public void Add(ProjectMeeting meeting) => db.ProjectMeetings.Add(meeting);
 
     private async Task<IReadOnlyList<MeetingView>> ViewsAsync(IQueryable<ProjectMeeting> meetings, CancellationToken cancellationToken)

@@ -1,6 +1,5 @@
 using ID_Indetails.api.DTO.Request.Auth;
 using ID_Indetails.api.DTO.Request.Invitations;
-using ID_Indetails.api.Enums;
 using ID_Indetails.api.Validators.Auth;
 using ID_Indetails.api.Validators.Invitations;
 using Shouldly;
@@ -74,7 +73,7 @@ public class AuthValidatorTests
     public void Inviting_an_admin_or_super_admin_needs_their_salary()
     {
         var validator = new CreateInvitationRequestValidator();
-        var salary = new InvitationPayRequest { Basis = PayBasis.Monthly, Amount = 2500, Currency = "USD" };
+        var salary = new InvitationPayRequest { Amount = 2500, Currency = "USD" };
 
         validator.Validate(new CreateInvitationRequest { Email = "a@b.co", Role = "admin", DomainCode = "design" })
             .Errors.ShouldContain(e => e.PropertyName == "Pay");
@@ -95,7 +94,7 @@ public class AuthValidatorTests
             Email = "a@b.co",
             Role = "employee",
             DomainCode = "design",
-            Pay = new InvitationPayRequest { Basis = PayBasis.Monthly, Amount = 0, Currency = "DOLLARS" },
+            Pay = new InvitationPayRequest { Amount = 0, Currency = "DOLLARS" },
         };
 
         var errors = validator.Validate(request).Errors.Select(e => e.PropertyName).ToList();

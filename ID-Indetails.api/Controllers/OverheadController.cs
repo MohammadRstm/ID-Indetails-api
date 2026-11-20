@@ -25,6 +25,33 @@ public sealed class OverheadController(IOverheadService overhead) : ControllerBa
     public Task<IReadOnlyList<OverheadMonthResponse>> Monthly([FromQuery] int months, CancellationToken cancellationToken)
         => overhead.MonthlyAsync(Math.Clamp(months == 0 ? 13 : months, 1, MaxMonths), cancellationToken);
 
+    /// <summary>The one-off expenses of a month (<c>YYYY-MM</c>; this month by default), newest day first, never a future month.</summary>
+    [HttpGet("one-offs")]
+    [HasAnyPermission(PermissionCodes.CompanyView, PermissionCodes.OverheadManage)]
+    public Task<OneOffExpenseListResponse> OneOffs([FromQuery] string? month, CancellationToken cancellationToken)
+        => overhead.OneOffsAsync(month, cancellationToken);
+
+    /// <summary>A cost paid once, dated this month up to today.</summary>
+    [HttpPost("one-offs")]
+    [HasPermission(PermissionCodes.OverheadManage)]
+    public async Task<ActionResult<OneOffExpenseResponse>> CreateOneOff(SaveOneOffExpenseRequest request, CancellationToken cancellationToken)
+        => StatusCode(StatusCodes.Status201Created, await overhead.CreateOneOffAsync(request, cancellationToken));
+
+    /// <summary>Changes a one-off expense of this month (<c>422 one_off_locked</c> once its month has closed).</summary>
+    [HttpPut("one-offs/{id:long}")]
+    [HasPermission(PermissionCodes.OverheadManage)]
+    public Task<OneOffExpenseResponse> UpdateOneOff(long id, SaveOneOffExpenseRequest request, CancellationToken cancellationToken)
+        => overhead.UpdateOneOffAsync(id, request, cancellationToken);
+
+    /// <summary>Removes a one-off expense of this month (<c>422 one_off_locked</c> once its month has closed).</summary>
+    [HttpDelete("one-offs/{id:long}")]
+    [HasPermission(PermissionCodes.OverheadManage)]
+    public async Task<IActionResult> DeleteOneOff(long id, CancellationToken cancellationToken)
+    {
+        await overhead.RemoveOneOffAsync(id, cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>Every category, first to last ("Other" last), with how many lines use each.</summary>
     [HttpGet("groups")]
     [HasAnyPermission(PermissionCodes.CompanyView, PermissionCodes.OverheadManage)]

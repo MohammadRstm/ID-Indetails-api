@@ -39,7 +39,7 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
 
         // an employee may bring in employees, never an admin (their own second mailbox, say)
         ((int)(await InviteAsync(recruiter, RoleCodes.Employee)).StatusCode).ShouldBe(201);
-        await (await InviteAsync(recruiter, RoleCodes.Admin, new { basis = "monthly", amount = 2000m, currency = "USD" }))
+        await (await InviteAsync(recruiter, RoleCodes.Admin, new { amount = 2000m, currency = "USD" }))
             .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
         await (await Client.PutJsonAsync($"/api/employees/{colleague.User.Id}/role", new { role = RoleCodes.Admin }, recruiter.AccessToken))
             .ShouldFailWithAsync(403, ErrorCodes.PermissionChangeNotAllowed);
@@ -77,7 +77,7 @@ public class PrivilegeAndPrivacyTests(ApiFactory api) : IClassFixture<ApiFactory
         await (await InviteAsync(admin, RoleCodes.Employee)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
         await ChangeAsync(superAdmin, admin.User.Id, "grant", PermissionCodes.EmployeeInvite);
 
-        await (await InviteAsync(admin, RoleCodes.Employee, new { basis = "hourly", amount = 10m, currency = "USD" }))
+        await (await InviteAsync(admin, RoleCodes.Employee, new { amount = 1000m, currency = "USD" }))
             .ShouldFailWithAsync(403, ErrorCodes.InvitationNotAllowed);
         ((int)(await InviteAsync(admin, RoleCodes.Employee)).StatusCode).ShouldBe(201);
     }

@@ -19,8 +19,10 @@ docker compose -f docker-compose.prod.yml exec -T -e MYSQL_PWD="$MYSQL_ROOT_PASS
     mysqldump -uroot --single-transaction --routines --triggers --set-gtid-purged=OFF "$MYSQL_DATABASE" \
     | gzip > "backups/db-$stamp.sql.gz"
 
+# The container runs as root so it can read every uploaded file, then gives the backups back to this script's user:
+# otherwise the chmod below fails on them and old backups are never deleted.
 docker run --rm -v id-indetails_files:/files:ro -v "$PWD/backups:/out" alpine:3 \
-    tar -czf "/out/files-$stamp.tar.gz" -C /files .
+    sh -c 'tar -czf "/out/files-$1.tar.gz" -C /files . && chown -R "$2" /out' sh "$stamp" "$(id -u):$(id -g)"
 
 chmod 600 backups/*
 find backups -type f -mtime +14 -delete

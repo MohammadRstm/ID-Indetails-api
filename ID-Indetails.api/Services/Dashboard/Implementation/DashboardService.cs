@@ -1,6 +1,7 @@
 using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Auth;
 using ID_Indetails.api.Business.Common;
+using ID_Indetails.api.Business.Projects;
 using ID_Indetails.api.Business.Requirements;
 using ID_Indetails.api.Constants;
 using ID_Indetails.api.DTO.Response.Common;
@@ -41,7 +42,7 @@ public sealed class DashboardService(
             statuses.Where(s => s.Status == ProjectStatus.Active).Sum(s => s.Count),
             await summaries.ActiveClientCountAsync(domain, cancellationToken),
             statuses.Select(s => new StatusTotalResponse(s.Status, s.Count)).OrderBy(s => s.Status).ToList(),
-            running.Select(p => new RunningProjectResponse(p.Id, p.Title, p.StartDate, today.DayNumber - p.StartDate.DayNumber)).ToList());
+            running.Select(p => new RunningProjectResponse(p.Id, p.Title, p.Code, p.StartDate, today.DayNumber - p.StartDate.DayNumber)).ToList());
     }
 
     public async Task<UpcomingDeadlinesResponse> DeadlinesAsync(string domain, CancellationToken cancellationToken = default)
@@ -61,7 +62,8 @@ public sealed class DashboardService(
                     r.Deadline!.Value,
                     RequirementRules.IsOverdue(r.Deadline, r.IsDone, today),
                     r.Deadline!.Value.DayNumber - today.DayNumber,
-                    new DeadlineProjectResponse(r.Project.Id, r.Project.Title, r.Project.Icon, r.Project.Tint),
+                    new DeadlineProjectResponse(
+                        r.Project.Id, r.Project.Title, ProjectCodeRules.Full(r.Project.ProjectCode, r.Project.BuildingCode), r.Project.Icon, r.Project.Tint),
                     r.Assignees
                         .Select(a => new PersonRefResponse(a.UserId, PersonName.Of(a.User.FirstName, a.User.LastName, a.User.Email)))
                         .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)

@@ -18,34 +18,35 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
         var (_, _, admin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Design);
         var (_, _, anna) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
         var (_, _, executionAdmin) = await _steps.MoneyAdminAsync(superAdmin, DomainCodes.Execution);
-        // 30 an hour, paid by the hour: one of her hours lands in this quarter, whatever month the test runs in, and a
-        // salary's hourly rate would change with that month.
+        // A salary of 4,800 with an overtime rate of 30: an hour of it is worth 30 in February 2026's 160 paid hours.
         (await Client.PostJsonAsync($"/api/employees/{anna.User.Id}/pay",
-            new { basis = "hourly", amount = 30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
+            new { amount = 4800m, overtimeRate = 30m, currency = "USD", effectiveFrom = "2026-01-01" }, superAdmin.AccessToken))
             .IsSuccessStatusCode.ShouldBeTrue();
         var brand = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
         var web = await Projects.CreateProjectAsync(admin.AccessToken, DomainCodes.Design);
 
-        // Tuesday 10 February 2026 (Beirut is UTC+2): 2 hours on brand and 1 on web within hours, so the paid hour of
-        // break is shared 40/20 minutes: brand 60 + 20, web 30 + 10.
+        // Tuesday 10 February 2026 (Beirut is UTC+2): 2 hours on brand and 1 on web within hours. 3 of the 7 required hours
+        // share 26 minutes of the paid break, 18/8 in whole minutes (the remainder to brand): brand 60 + 9, web 30 + 4.
         await Work.InsertAsync(anna.User.Id, brand.Id, "2026-02-10 07:00:00", "2026-02-10 09:00:00");
         await Work.InsertAsync(anna.User.Id, web.Id, "2026-02-10 11:00:00", "2026-02-10 12:00:00");
 
-        // An evening hour on the first day of this quarter: outside hours, so no break, 30.
+        // An evening hour on the first day of this quarter: outside hours, so no break. It is overtime at 30 until the
+        // overtime threshold of 1 November 2026; past it, projects price every hour at its month's own rate.
         var beirut = TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut");
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, beirut));
         var quarterStart = new DateOnly(today.Year, (today.Month - 1) / 3 * 3 + 1, 1);
         var evening = TimeZoneInfo.ConvertTimeToUtc(quarterStart.ToDateTime(new TimeOnly(20, 0)), beirut);
         await Work.InsertAsync(anna.User.Id, brand.Id, evening.ToString("yyyy-MM-dd HH:mm:ss"), evening.AddHours(1).ToString("yyyy-MM-dd HH:mm:ss"));
+        var eveningCost = quarterStart < new DateOnly(2026, 11, 1) ? 30m : Math.Round(TestPay.HourOf(4800m, quarterStart), 2, MidpointRounding.AwayFromZero);
 
         var response = await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", admin.AccessToken);
         ((int)response.StatusCode).ShouldBe(200, await response.Content.ReadAsStringAsync());
         var cost = await response.ReadAsync<EmployeeLabourCostResponse>();
         cost.EntryCount.ShouldBe(3);
-        cost.ThisQuarter.Usd.ShouldBe(30m);
-        cost.AllTime.Usd.ShouldBe(150m);
+        cost.ThisQuarter.Usd.ShouldBe(eveningCost);
+        cost.AllTime.Usd.ShouldBe(103m + eveningCost);
         cost.AllTime.UnpricedMinutes.ShouldBe(0);
-        cost.ByProject.Select(p => (p.ProjectId, p.Cost.Usd)).ShouldBe([(brand.Id, 110m), (web.Id, 40m)]);
+        cost.ByProject.Select(p => (p.ProjectId, p.Cost.Usd)).ShouldBe([(brand.Id, 69m + eveningCost), (web.Id, 34m)]);
         cost.ByProject[0].Title.ShouldBe(brand.Title);
 
         await (await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", anna.AccessToken)).ShouldFailWithAsync(403, ErrorCodes.Forbidden);
@@ -62,6 +63,6 @@ public class PersonLabourCostTests(ApiFactory api) : IClassFixture<ApiFactory>
         hidden.AllTime.Usd.ShouldBe(0m);
         hidden.ByProject.ShouldBeEmpty();
         (await (await Client.GetAsync($"/api/employees/{anna.User.Id}/labour-cost", superAdmin.AccessToken))
-            .ReadAsync<EmployeeLabourCostResponse>()).AllTime.Usd.ShouldBe(150m);
+            .ReadAsync<EmployeeLabourCostResponse>()).AllTime.Usd.ShouldBe(103m + eveningCost);
     }
 }

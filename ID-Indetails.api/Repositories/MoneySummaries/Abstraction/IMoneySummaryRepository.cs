@@ -26,7 +26,7 @@ public sealed record AgreedChangeRow(long ProjectId, DateTime OccurredAt, decima
 
 public sealed record StatusCountRow(ProjectStatus Status, int Count);
 
-public sealed record RunningProjectRow(long Id, string Title, DateOnly StartDate);
+public sealed record RunningProjectRow(long Id, string Title, string Code, DateOnly StartDate);
 
 public sealed record ExpenseDetailRow(long Id, long ProjectId, string Label, string Category, string Currency, decimal Amount, DateOnly SpentOn);
 

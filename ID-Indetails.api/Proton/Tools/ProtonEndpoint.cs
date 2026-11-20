@@ -40,7 +40,7 @@ public sealed record ProtonEndpoint(string Name, IReadOnlyList<string> Policies,
     /// Write endpoints with no permission of their own: changing the signed-in person's own name, phone, photo and
     /// Proton switch, their own phones and push settings (their service touches only the caller's), sending a message
     /// (which their service limits to the chats the sender may write in), marking their own chats and notifications
-    /// read, their own dashboard card order, a bug report, and writing in, editing, deleting from or reading the
+    /// read, their own dashboard card order, a message to the developer, and writing in, editing, deleting from or reading the
     /// discussion with a project's client, which its service limits to the staff taking part in it. proton:use is
     /// their policy here.
     /// </summary>

@@ -108,18 +108,22 @@ public class ProtonEverydayActionsTests(ProtonApiFactory api) : IClassFixture<Pr
     public async Task A_meeting_is_set_and_moved_in_company_time()
     {
         var (_, _, superAdmin) = await _steps.ActiveSuperAdminAsync();
+        var (_, _, employee) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Design);
+        var (_, _, siteWorker) = await _steps.InviteAndAcceptAsync(superAdmin, RoleCodes.Employee, DomainCodes.Execution);
         var project = await new ProjectTestSteps(_steps).CreateProjectAsync(superAdmin.AccessToken, DomainCodes.Design);
         var day = WorkEntryTestSteps.CompanyDay(DateTime.UtcNow).AddDays(3);
         DateTime Beirut(int hour, int minute)
             => TimeZoneInfo.ConvertTimeToUtc(day.ToDateTime(new TimeOnly(hour, minute)), TimeZoneInfo.FindSystemTimeZoneById("Asia/Beirut"));
 
         var (set, _) = await ProposeAsync(superAdmin, "propose_schedule_meeting",
-            new { project_id = project.Id, day = day.ToString("yyyy-MM-dd"), start = "14:30", minutes = 45, topic = "Site review" });
+            new { project_id = project.Id, day = day.ToString("yyyy-MM-dd"), start = "14:30", minutes = 45, topic = "Site review", invitee_ids = new[] { employee.User.Id } });
         set.PendingAction!.Preview.Changes[0].After.ShouldEndWith("14:30–15:15");
+        set.PendingAction!.Preview.Changes.ShouldContain(c => c.Label == "Invited");
         await ConfirmAsync(superAdmin, set);
         var meeting = (await GetAsync<List<MeetingResponse>>(superAdmin, $"/api/projects/{project.Id}/meetings")).ShouldHaveSingleItem();
         meeting.StartsAt.ShouldBe(Beirut(14, 30));
         meeting.Minutes.ShouldBe(45);
+        meeting.Attendees.ShouldHaveSingleItem().Id.ShouldBe(employee.User.Id);
 
         var (move, _) = await ProposeAsync(superAdmin, "propose_update_meeting", new { project_id = project.Id, meeting_id = meeting.Id, start = "16:00" });
         move.PendingAction!.Preview.Changes.ShouldHaveSingleItem().Label.ShouldBe("When");
@@ -129,6 +133,11 @@ public class ProtonEverydayActionsTests(ProtonApiFactory api) : IClassFixture<Pr
 
         var (_, invalid) = await ProposeAsync(superAdmin, "propose_schedule_meeting", new { project_id = project.Id, day = day.ToString("yyyy-MM-dd"), start = "2pm" });
         invalid["message"]!.GetValue<string>().ShouldContain("HH:mm");
+
+        // only people who see the project can be invited
+        var (_, outsider) = await ProposeAsync(superAdmin, "propose_schedule_meeting",
+            new { project_id = project.Id, day = day.ToString("yyyy-MM-dd"), start = "10:00", invitee_ids = new[] { siteWorker.User.Id } });
+        outsider["message"]!.GetValue<string>().ShouldContain("can see this project");
     }
 
     [Fact]

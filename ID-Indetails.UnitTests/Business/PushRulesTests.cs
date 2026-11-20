@@ -74,6 +74,10 @@ public class PushRulesTests
         PushTarget.ForNotification(NotificationKinds.RequirementsAdded, 7, DomainCodes.Design, "requirement", 71, null)
             .ShouldBe(new PushTarget { Type = PushTarget.Project, Id = 7, Domain = DomainCodes.Design, Section = "requirements" });
         PushTarget.ForNotification(NotificationKinds.MeetingScheduled, 7, DomainCodes.Execution, "meeting", 3, null).Section.ShouldBe("meetings");
+        // a project meeting's invitees open its project's meetings, a general meeting's people their meetings page
+        PushTarget.ForNotification(NotificationKinds.MeetingSoon, 7, DomainCodes.Design, "meeting", 3, null)
+            .ShouldBe(new PushTarget { Type = PushTarget.Project, Id = 7, Domain = DomainCodes.Design, Section = "meetings" });
+        PushTarget.ForNotification(NotificationKinds.MeetingInvited, null, null, "meeting", 3, null).ShouldBe(PushTarget.OfPage("meetings"));
         PushTarget.ForNotification(NotificationKinds.MaterialsAdded, 9, DomainCodes.Execution, "project", 9, null).Section.ShouldBe("materials");
         PushTarget.ForNotification(NotificationKinds.ProjectStatusChanged, 7, DomainCodes.Design, "project", 7, null)
             .ShouldBe(new PushTarget { Type = PushTarget.Project, Id = 7, Domain = DomainCodes.Design });

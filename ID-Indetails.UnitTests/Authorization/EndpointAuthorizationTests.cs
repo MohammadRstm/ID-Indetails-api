@@ -19,6 +19,8 @@ public class EndpointAuthorizationTests
     [
         "AuthController.Login", "AuthController.Refresh", "AuthController.Logout", "AuthController.ForgotPassword", "AuthController.ResetPassword",
         "CompanyController.Branding", "CompanyController.Logo",
+        // the development sign-in: its controller is part of the app in the Development environment only
+        "DevSignInController.Accounts", "DevSignInController.SignIn", "DevSignInController.PortalSignIn",
         "InvitationsController.Validate", "InvitationsController.Accept",
         "LocalContentStoreController.PutPart", "LocalContentStoreController.Download",
         "MobileAuthController.Login", "MobileAuthController.Refresh", "MobileAuthController.Logout",
