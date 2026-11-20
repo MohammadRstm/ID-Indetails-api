@@ -14,4 +14,7 @@ public interface ITeamService
 
     /// <summary>Only a team nobody is in (and with no group chat) can be deleted.</summary>
     Task DeleteAsync(long teamId, CancellationToken cancellationToken = default);
+
+    /// <summary>Why the department can't be deleted (people, a project, a cost budget line, its chat); null when it can.</summary>
+    Task<string?> DeleteRefusalAsync(long teamId, CancellationToken cancellationToken = default);
 }
