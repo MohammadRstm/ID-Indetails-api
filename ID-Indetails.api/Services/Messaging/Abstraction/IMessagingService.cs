@@ -11,6 +11,18 @@ public interface IMessagingService
 
     Task<MessagesBadgeResponse> BadgeAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The badge, for the caller's own device: what it loads has reached them, so their received markers move up to
+    /// the newest messages (the second grey tick), and the senders are told.
+    /// </summary>
+    Task<MessagesBadgeResponse> ReceiveAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Who has seen a message, who has received it, and who hasn't: for its sender, the super admins in team chats, and
+    /// whoever may announce in Announcements.
+    /// </summary>
+    Task<MessageReceiptsResponse> ReceiptsAsync(long messageId, CancellationToken cancellationToken = default);
+
     /// <summary>Someone's unread messages, counted as their badge counts them (for the app icon's badge on a push). 0 for anyone inactive.</summary>
     Task<int> UnreadCountForAsync(long userId, CancellationToken cancellationToken = default);
 
