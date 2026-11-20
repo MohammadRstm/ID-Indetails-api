@@ -141,6 +141,7 @@ public class IdIndetailsDbContext(DbContextOptions<IdIndetailsDbContext> options
     public DbSet<MessageMention> MessageMentions => Set<MessageMention>();
     public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
     public DbSet<ConversationRead> ConversationReads => Set<ConversationRead>();
+    public DbSet<MessageRead> MessageReads => Set<MessageRead>();
     public DbSet<StoredFile> Files => Set<StoredFile>();
     public DbSet<UserBoardLayout> UserBoardLayouts => Set<UserBoardLayout>();
     public DbSet<UserDevice> UserDevices => Set<UserDevice>();
