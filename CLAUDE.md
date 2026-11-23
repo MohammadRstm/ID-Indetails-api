@@ -126,6 +126,10 @@ Feature work usually touches the API and the client together: one `MR-<Topic>` b
     each with a reason, set with `financial:write` (Design) or `project:pricing_manage` (Execution). Each line's cost
     comes from the shared calculator (department labour, expenses, site expenses by category, ground labour), never a
     second formula. A department with a line in any version can't be deleted.
+  - **Design progress by hours** (optional): a department's logged minutes ÷ its planned minutes
+    (`project_department_plans`, one plan per department, set with `project:edit`, each change a `department_plan_set`
+    activity event). Planned hours go to whoever sees the departments; logged minutes and progress only with
+    `financial:view` or `work_entry:view_all`, since a department can be one person.
 - **Pay:**
   - Everyone is paid a monthly salary: there is no hourly pay (removed 15 November 2026).
   - **Pay is per day.** Each working day someone is employed earns the salary in force that day × its paid minutes ÷
