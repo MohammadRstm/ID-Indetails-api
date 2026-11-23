@@ -39,7 +39,7 @@ A domain's money as the dashboards, the Financials page, the projects list and t
 
 ### Expense categories
 
-Each business keeps its own list (23 Nov 2026, `Business/Expenses/ExpenseCategoryRules.cs`, table `expense_categories`): Design's for project expenses, Execution's for site expenses. The migration seeded the ones the code had (Design: assets, services, contractor, software, travel, hardware, other; Execution: materials, contractor, equipment, fees, other), so every expense already recorded keeps its category.
+Each business keeps its own list (23 Nov 2026, `Business/Expenses/ExpenseCategoryRules.cs`, table `expense_categories`): Design's for project expenses, Execution's for site expenses. The migration seeded the ones the code had (Design: assets, services, contractor, software, travel, hardware, other; Execution: materials, contractor, equipment, fees, other), with the names the app showed ("Assets & licences" for assets), so every expense already recorded keeps its category.
 
 | Method and path | Who | Purpose |
 |---|---|---|

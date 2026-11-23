@@ -56,7 +56,7 @@ namespace ID_Indetails.api.Data.Migrations
             migrationBuilder.Sql(
                 """
                 INSERT INTO `expense_categories` (`domain_code`, `code`, `name`, `sort_order`, `created_at`) VALUES
-                    ('design', 'assets', 'Assets', 0, UTC_TIMESTAMP(3)),
+                    ('design', 'assets', 'Assets & licences', 0, UTC_TIMESTAMP(3)),
                     ('design', 'services', 'Services', 1, UTC_TIMESTAMP(3)),
                     ('design', 'contractor', 'Contractor', 2, UTC_TIMESTAMP(3)),
                     ('design', 'software', 'Software', 3, UTC_TIMESTAMP(3)),
