@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using ID_Indetails.api.Authorization;
 using ID_Indetails.api.Business.Common;
 using ID_Indetails.api.Business.WorkEntries;
 using ID_Indetails.api.Constants;
@@ -11,7 +12,6 @@ using ID_Indetails.api.Models;
 using ID_Indetails.api.Repositories.Activity.Abstraction;
 using ID_Indetails.api.Repositories.Common.Abstraction;
 using ID_Indetails.api.Repositories.WorkEntries.Abstraction;
-using ID_Indetails.api.Services.Auth.Abstraction;
 using ID_Indetails.api.Services.Common.Abstraction;
 using ID_Indetails.api.Services.Notifications.Abstraction;
 using ID_Indetails.api.Services.WorkEntries.Abstraction;
